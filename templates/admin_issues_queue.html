@@ -104,7 +104,7 @@
                                 </small>
                             </div>
                             <div class="text-end">
-                                <span class="badge bg-warning text-dark">
+                                <span class="badge bg-secondary text-dark">
                                     {{ issue.status|replace('_', ' ')|title }}
                                 </span>
                             </div>
@@ -198,8 +198,8 @@
                             <div class="text-end">
                                 <span class="badge
                                     {% if issue.status == 'elevated' %}bg-warning text-dark
-                                    {% elif issue.status == 'developer_review' %}bg-info
-                                    {% elif issue.status == 'developer_resolved' %}bg-success
+                                    {% elif issue.status == 'developer_review' %}bg-warning
+                                    {% elif issue.status == 'developer_resolved' %}bg-info
                                     {% else %}bg-secondary{% endif %}">
                                     {{ issue.status|replace('_', ' ')|title }}
                                 </span>
@@ -235,12 +235,12 @@
                         <p>Once escalated, the issue will appear in the <strong>Escalated</strong> section. When an issue has been escalated, our team will see your (the teacher's) username, a non-identifying reference to the student, original issue provided by the students, and any additional details you provide. In addition, if you opt to send class information to us, we will also see the class identifier. <strong>Our team will never see student name or other identifying information about them.</strong></p>
                         <p>At any given point, students will see a <strong>status badge</strong> on their support page. This status badge will indicate the current state of their ticket and it can be one of the following:</p>
                         <ul>
-                            <li><span class="badge bg-primary">Submitted</span> — The issue has been submitted and is pending review by the teacher.</li>
-                            <li><span class="badge bg-info">Teacher Review</span> — The issue is being reviewed by the teacher.</li>
-                            <li><span class="badge bg-success">Resolved</span> — The issue has been resolved by the teacher.</li>
-                            <li><span class="badge bg-warning text-dark">Elevated</span> — The issue has been escalated to the support team by the teacher.</li>
-                            <li><span class="badge bg-warning text-dark">Developer Review</span> — The issue is being reviewed by the support team.</li>
-                            <li><span class="badge bg-success">Resolved - See Teacher</span> — The issue has been resolved by the support team.</li>
+                            <li><span class="badge bg-secondary text-dark">Submitted</span> The issue has been submitted and is pending review by the teacher.</li>
+                            <li><span class="badge bg-secondary text-dark">Teacher Review</span> The issue is being reviewed by the teacher.</li>
+                            <li><span class="badge bg-success">Resolved</span> The issue has been resolved by the teacher.</li>
+                            <li><span class="badge bg-warning text-dark">Elevated</span> The issue has been escalated to the support team by the teacher.</li>
+                            <li><span class="badge bg-warning text-dark">Developer Review</span> The issue is being reviewed by the support team.</li>
+                            <li><span class="badge bg-info">Resolved - See Teacher</span> The issue has been resolved by the support team.</li>
                         </ul>
                     </div>
                 </div>
