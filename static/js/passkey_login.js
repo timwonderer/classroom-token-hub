@@ -177,6 +177,7 @@ function setupPasskeyAuthFlow({
             const startResponse = await fetch(startUrl, {
                 method: 'POST',
                 headers,
+                body: JSON.stringify({ username })
             });
 
             const options = await startResponse.json();

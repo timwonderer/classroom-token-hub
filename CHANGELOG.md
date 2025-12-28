@@ -8,6 +8,11 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+- **Passkey Authentication** - Fixed missing username parameter in passkey authentication start request causing 500 error
+- **Content Security Policy** - Added `https://static.cloudflareinsights.com` to `connect-src` directive to allow Cloudflare analytics
+- **Content Security Policy** - Added `worker-src 'self' blob:` directive to allow Web Workers used by passwordless.dev library
+
 ### Added
 - **Issue Resolution & Escalation System** - Structured, teacher-mediated issue handling system
   - **Student Features**:
