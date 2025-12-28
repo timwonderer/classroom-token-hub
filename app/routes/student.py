@@ -2924,10 +2924,19 @@ def setup_complete():
 
 
 # -------------------- HELP AND SUPPORT - ISSUE RESOLUTION SYSTEM --------------------
+# -------------------- HELP AND SUPPORT - ISSUE RESOLUTION SYSTEM --------------------
 
+@student_bp.route('/help-support', methods=['GET'])
 @student_bp.route('/help-support', methods=['GET'])
 @login_required
 def help_support():
+    """
+    Help and Support page with issue resolution system.
+    Shows knowledge base and student's submitted issues.
+    """
+    from app.models import Issue
+    from app.utils.issue_categories import init_default_categories
+
     """
     Help and Support page with issue resolution system.
     Shows knowledge base and student's submitted issues.
@@ -2994,7 +3003,9 @@ def submit_general_issue():
             )
 
             flash("Your issue has been submitted. Your teacher will review it soon.", "success")
+            flash("Your issue has been submitted. Your teacher will review it soon.", "success")
             return redirect(url_for('student.help_support'))
+
 
         except Exception as e:
             db.session.rollback()
@@ -3056,9 +3067,18 @@ def report_transaction_issue(transaction_id):
             db.session.rollback()
             current_app.logger.error(f"Error submitting transaction issue: {str(e)}")
             flash("An error occurred while submitting your issue. Please try again.", "error")
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error submitting transaction issue: {str(e)}")
+            flash("An error occurred while submitting your issue. Please try again.", "error")
 
     return render_template('student_submit_issue.html',
+    return render_template('student_submit_issue.html',
                          current_page='help',
+                         page_title='Report Transaction Issue',
+                         form=form,
+                         issue_type='transaction',
+                         transaction=transaction)
                          page_title='Report Transaction Issue',
                          form=form,
                          issue_type='transaction',
