@@ -112,6 +112,9 @@
                             <a href="{{ url_for('admin.announcements') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'announcements' %}active{% endif %}">
                                 <span class="material-symbols-outlined">campaign</span> Announcements
                             </a>
+                            <a href="{{ url_for('admin.issues_queue') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'issues' %}active{% endif %}">
+                                <span class="material-symbols-outlined">flag</span> Student Issues
+                            </a>
                         </div>
                     </div>
                 </div>
