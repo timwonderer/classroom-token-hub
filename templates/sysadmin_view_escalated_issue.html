@@ -65,6 +65,24 @@
 
                     <hr>
 
+                    <!-- Bug Bounty Reward Eligibility -->
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Bug Bounty Reward Eligibility</h6>
+                        <p class="mb-0">
+                            <i class="bi bi-gift me-2"></i>
+                            {% if issue.eligible_for_reward %}
+                                <span class="badge bg-warning text-dark">Yes</span>
+                                {% if issue.reward_amount %}
+                                <span class="text-muted ms-2">Amount: ${{ "%.2f"|format(issue.reward_amount) }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge bg-secondary">No</span>
+                            {% endif %}
+                        </p>
+                    </div>
+
+                    <hr>
+
                     <!-- Escalation Reason -->
                     <div class="mb-3">
                         <h6 class="text-muted mb-2">Escalation Reason</h6>
@@ -218,6 +236,16 @@
                             </label>
                         </div>
 
+                        <div class="mb-3" id="reward_amount_field" style="display: none;">
+                            <label for="reward_amount" class="form-label">Reward Amount</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="reward_amount" name="reward_amount"
+                                       min="0" step="0.01" placeholder="0.00">
+                            </div>
+                            <small class="form-text text-muted">Enter the bug bounty reward amount.</small>
+                        </div>
+
                         <button type="submit" class="btn btn-success w-100">
                             <i class="bi bi-check-circle me-2"></i>Mark as Resolved
                         </button>
@@ -261,4 +289,26 @@
 </div>
 
 <script src="{{ static_url('js/timezone-utils.js') }}"></script>
+
+<script>
+// Toggle reward amount field based on checkbox
+document.addEventListener('DOMContentLoaded', function() {
+    const checkbox = document.getElementById('eligible_for_reward');
+    const amountField = document.getElementById('reward_amount_field');
+    const amountInput = document.getElementById('reward_amount');
+
+    if (checkbox && amountField) {
+        checkbox.addEventListener('change', function() {
+            if (this.checked) {
+                amountField.style.display = 'block';
+                amountInput.required = true;
+            } else {
+                amountField.style.display = 'none';
+                amountInput.required = false;
+                amountInput.value = '';
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

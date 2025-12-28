@@ -1943,6 +1943,7 @@ def resolve_escalated_issue(issue_id):
 
     resolution_note = request.form.get('resolution_note', '').strip()
     eligible_for_reward = request.form.get('eligible_for_reward') == 'on'
+    reward_amount = request.form.get('reward_amount', '').strip()
 
     try:
         old_status = issue.status
@@ -1951,6 +1952,16 @@ def resolve_escalated_issue(issue_id):
         issue.sysadmin_notes = resolution_note
         issue.sysadmin_id = session.get('sysadmin_id')
         issue.eligible_for_reward = eligible_for_reward
+
+        # Set reward amount if eligible
+        if eligible_for_reward and reward_amount:
+            try:
+                issue.reward_amount = float(reward_amount)
+            except ValueError:
+                flash("Invalid reward amount. Please enter a valid number.", "error")
+                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+        else:
+            issue.reward_amount = None
 
         # Record status change
         from app.utils.issue_helpers import record_status_change
