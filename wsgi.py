@@ -7,11 +7,16 @@ imports. All routes have been modularized into blueprints (Stages 4-5).
 For gunicorn: wsgi:app
 """
 
+# Set timezone to UTC to ensure all datetime operations use UTC
+import os
+import time
+os.environ['TZ'] = 'UTC'
+time.tzset()  # Apply timezone change
+
 from flask import render_template, request, session
 from datetime import datetime, timedelta, timezone
 import traceback
 import collections
-import os
 
 # -------------------- APPLICATION FACTORY --------------------
 # Import and create the Flask application using the factory pattern

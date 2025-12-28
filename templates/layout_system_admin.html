@@ -118,6 +118,10 @@
                 <span class="material-symbols-outlined">bug_report</span> User Reports
             </a>
 
+            <a href="{{ url_for('sysadmin.escalated_issues') }}" class="{% if current_page == 'issues' %}active{% endif %}">
+                <span class="material-symbols-outlined">support_agent</span> Escalated Issues
+            </a>
+
             <div style="margin-top: auto;">
                 <hr style="border-color: rgba(212, 168, 87, 0.2); margin: 1rem 0;">
                 <a href="{{ url_for('sysadmin.passkey_settings') }}" class="{% if current_page == 'passkey_settings' %}active{% endif %}">

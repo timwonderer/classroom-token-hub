@@ -170,7 +170,12 @@
         elements.forEach(element => {
             const utcString = element.dataset.timestamp;
             const format = element.dataset.format || 'full';
-            
+
+            // Debug: log the timestamp value
+            if (utcString) {
+                console.log('Converting timestamp:', utcString, 'to', format);
+            }
+
             if (utcString) {
                 if (format === 'date') {
                     element.textContent = formatDate(utcString);

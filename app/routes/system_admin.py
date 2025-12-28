@@ -27,7 +27,7 @@ from app.models import (
     DeletionRequestType, DeletionRequestStatus, TeacherBlock, StudentBlock, UserReport,
     FeatureSettings, TeacherOnboarding, RentSettings, BankingSettings,
     DemoStudent, HallPassSettings, PayrollFine, PayrollReward,
-    PayrollSettings, StoreItem, Announcement
+    PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory
 )
 from app.auth import system_admin_required, SESSION_TIMEOUT_MINUTES
 from forms import SystemAdminLoginForm, SystemAdminInviteForm
@@ -1865,3 +1865,103 @@ def announcement_toggle(announcement_id):
         db.session.rollback()
         current_app.logger.error(f"Error toggling system announcement: {e}")
         return jsonify({'status': 'error', 'message': 'An internal error occurred while updating the announcement.'}), 500
+
+
+# ================== ESCALATED ISSUES ==================
+
+@sysadmin_bp.route('/issues')
+@system_admin_required
+def escalated_issues():
+    """
+    System admin view of all escalated issues from teachers.
+    Shows issues that have been escalated for developer/sysadmin review.
+    """
+    from app.utils.helpers import format_utc_iso
+
+    # Get all escalated issues (elevated, developer_review, developer_resolved)
+    issues = Issue.query.filter(
+        Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
+    ).order_by(Issue.escalated_at.desc()).all()
+
+    # Separate by status
+    pending_issues = [i for i in issues if i.status == 'elevated']
+    in_review_issues = [i for i in issues if i.status == 'developer_review']
+    resolved_issues = [i for i in issues if i.status == 'developer_resolved']
+
+    return render_template('sysadmin_escalated_issues.html',
+                         current_page='issues',
+                         page_title='Escalated Issues',
+                         pending_issues=pending_issues,
+                         in_review_issues=in_review_issues,
+                         resolved_issues=resolved_issues,
+                         format_utc_iso=format_utc_iso)
+
+
+@sysadmin_bp.route('/issues/<int:issue_id>')
+@system_admin_required
+def view_escalated_issue(issue_id):
+    """View detailed information about a specific escalated issue."""
+    from app.utils.helpers import format_utc_iso
+
+    # Get the issue and verify it's escalated
+    issue = Issue.query.filter(
+        Issue.id == issue_id,
+        Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
+    ).first_or_404()
+
+    # Mark as being reviewed if still in elevated status
+    if issue.status == 'elevated':
+        issue.status = 'developer_review'
+
+        # Record status change
+        from app.utils.issue_helpers import record_status_change
+        record_status_change(issue, 'elevated', 'developer_review', 'sysadmin', session.get('sysadmin_id'))
+
+        db.session.commit()
+
+    # Get status history
+    history = IssueStatusHistory.query.filter_by(
+        issue_id=issue.id
+    ).order_by(IssueStatusHistory.changed_at.desc()).all()
+
+    return render_template('sysadmin_view_escalated_issue.html',
+                         current_page='issues',
+                         page_title=f'Issue #{issue.id}',
+                         issue=issue,
+                         history=history,
+                         format_utc_iso=format_utc_iso)
+
+
+@sysadmin_bp.route('/issues/<int:issue_id>/resolve', methods=['POST'])
+@system_admin_required
+def resolve_escalated_issue(issue_id):
+    """Mark an escalated issue as resolved by sysadmin."""
+    issue = Issue.query.filter(
+        Issue.id == issue_id,
+        Issue.status.in_(['elevated', 'developer_review'])
+    ).first_or_404()
+
+    resolution_note = request.form.get('resolution_note', '').strip()
+    eligible_for_reward = request.form.get('eligible_for_reward') == 'on'
+
+    try:
+        old_status = issue.status
+        issue.status = 'developer_resolved'
+        issue.sysadmin_resolved_at = datetime.now(timezone.utc)
+        issue.sysadmin_notes = resolution_note
+        issue.sysadmin_id = session.get('sysadmin_id')
+        issue.eligible_for_reward = eligible_for_reward
+
+        # Record status change
+        from app.utils.issue_helpers import record_status_change
+        record_status_change(issue, old_status, 'developer_resolved', 'sysadmin', session.get('sysadmin_id'))
+
+        db.session.commit()
+        flash("Issue has been marked as resolved.", "success")
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error resolving escalated issue {issue_id}: {e}")
+        flash("An error occurred while resolving the issue.", "error")
+
+    return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
