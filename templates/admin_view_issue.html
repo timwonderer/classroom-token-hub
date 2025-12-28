@@ -1,6 +1,6 @@
 {% extends "layout_admin.html" %}
 
-{% block page_title %}Issue Details for #{{ issue.id }}{% endblock %}
+{% block page_title %}Student Support Ticket Details: Issue #{{ issue.id }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -15,17 +15,15 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="mb-0">
-                            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">
-                                description
-                            </span>Issue Descriptions
-                        </h4>
+                        <h5 class="mb-0">
+                            Student Submission
+                        </h5>
                         <span class="badge
                             {% if issue.status == 'submitted' or issue.status == 'teacher_review' %}bg-warning text-dark
-                            {% elif issue.status == 'teacher_resolved' %}bg-success text-white
-                            {% elif issue.status == 'elevated' or issue.status == 'developer_review' %}bg-warning
-                            {% elif issue.status == 'developer_resolved' %}bg-info
-                            {% else %}bg-dark{% endif %}">
+                            {% elif issue.status == 'teacher_resolved' %}bg-success
+                            {% elif issue.status == 'elevated' or issue.status == 'developer_review' %}bg-info
+                            {% elif issue.status == 'developer_resolved' %}bg-success
+                            {% else %}bg-secondary{% endif %}">
                             {{ issue.status|replace('_', ' ')|title }}
                         </span>
                     </div>
@@ -98,7 +96,7 @@
             <!-- Related Transaction (if applicable) -->
             {% if issue.related_transaction_id %}
             <div class="card shadow-sm mb-4">
-                <div class="card-header bg-info text-white">
+                <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
                         <i class="bi bi-receipt me-2"></i>Related Transaction
                     </h5>
@@ -145,7 +143,7 @@
             <!-- Context Snapshot -->
             {% if issue.context_snapshot %}
             <div class="card shadow-sm mb-4">
-                <div class="card-header">
+                <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
                         <i class="bi bi-info-circle me-2"></i>System Context
                     </h5>
@@ -312,9 +310,9 @@
                 </div>
             </div>
             {% elif issue.status in ['elevated', 'developer_review', 'developer_resolved'] %}
-            <div class="card shadow-sm mb-4 border-info">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0">
+            <div class="card shadow-sm mb-4 border-warning">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0 text-black">
                         <i class="bi bi-arrow-up-circle me-2"></i>Escalated
                     </h5>
                 </div>
@@ -341,7 +339,7 @@
 
             <!-- Status History -->
             <div class="card shadow-sm">
-                <div class="card-header">
+                <div class="card-header bg-primary text-white">
                     <h6 class="mb-0">
                         <i class="bi bi-clock-history me-2"></i>Status History
                     </h6>
