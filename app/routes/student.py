@@ -2951,11 +2951,14 @@ def help_support():
         join_code=class_context['join_code']
     ).order_by(Issue.submitted_at.desc()).limit(20).all()
 
+    from app.utils.helpers import format_utc_iso
+
     return render_template('student_help_support_new.html',
                          current_page='help',
                          page_title='Help & Support',
                          my_issues=my_issues,
-                         help_content=HELP_ARTICLES['student'])
+                         help_content=HELP_ARTICLES['student'],
+                         format_utc_iso=format_utc_iso)
 
 
 @student_bp.route('/help-support/submit-issue', methods=['GET', 'POST'])
