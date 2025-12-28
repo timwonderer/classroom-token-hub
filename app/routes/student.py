@@ -2977,7 +2977,7 @@ def submit_general_issue():
     form = StudentIssueSubmissionForm()
 
     # Populate category choices
-    form.category_id.choices = [('', 'Select an issue type...')] + get_active_categories('general')
+    form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('general')
 
     if form.validate_on_submit():
         try:
@@ -3030,7 +3030,7 @@ def report_transaction_issue(transaction_id):
     form = TransactionIssueSubmissionForm()
 
     # Populate category choices
-    form.category_id.choices = [('', 'Select an issue type...')] + get_active_categories('transaction')
+    form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('transaction')
 
     if form.validate_on_submit():
         try:

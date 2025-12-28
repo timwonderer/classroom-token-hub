@@ -11,7 +11,7 @@ import hashlib
 import secrets
 
 from app.extensions import db
-from app.models import Issue, IssueStatusHistory, IssueResolutionAction, Transaction, Student
+from app.models import Issue, IssueStatusHistory, IssueResolutionAction, Transaction, Student, StudentBlock
 from app.utils.helpers import generate_anonymous_code
 from app.utils.ip_handler import get_real_ip
 
@@ -51,14 +51,24 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
         'ip_address': get_real_ip() if request else None,
     }
 
-    # Get current balances
-    from app.routes.student import get_balances
-    balances = get_balances(student.id, join_code)
-    snapshot['balances'] = {
-        'checking': balances.get('checking_balance', 0),
-        'savings': balances.get('savings_balance', 0),
-        'total': balances.get('total_balance', 0)
-    }
+    # Get current balances from StudentBlock
+    student_block = StudentBlock.query.filter_by(
+        student_id=student.id,
+        join_code=join_code
+    ).first()
+
+    if student_block:
+        snapshot['balances'] = {
+            'checking': student_block.checking_balance or 0,
+            'savings': student_block.savings_balance or 0,
+            'total': (student_block.checking_balance or 0) + (student_block.savings_balance or 0)
+        }
+    else:
+        snapshot['balances'] = {
+            'checking': 0,
+            'savings': 0,
+            'total': 0
+        }
 
     # If transaction-specific, include transaction details
     if related_transaction_id:
