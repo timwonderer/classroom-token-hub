@@ -171,11 +171,6 @@
             const utcString = element.dataset.timestamp;
             const format = element.dataset.format || 'full';
 
-            // Debug: log the timestamp value
-            if (utcString) {
-                console.log('Converting timestamp:', utcString, 'to', format);
-            }
-
             if (utcString) {
                 if (format === 'date') {
                     element.textContent = formatDate(utcString);
@@ -210,7 +205,6 @@
                     }
                 } catch (e) {
                     // If supportedValuesOf fails, proceed anyway (timezone was already detected successfully)
-                    console.debug('Could not validate timezone, proceeding anyway:', e);
                 }
             }
             
@@ -226,7 +220,6 @@
             if (response.ok) {
                 const data = await response.json();
                 if (data.status === 'success') {
-                    console.log(`Timezone synced to server: ${timezone}`);
                     return true;
                 }
             }

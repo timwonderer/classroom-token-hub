@@ -31,7 +31,7 @@ from forms import (
 )
 
 # Import utility functions
-from app.utils.helpers import generate_anonymous_code, is_safe_url, render_template_with_fallback as render_template
+from app.utils.helpers import generate_anonymous_code, is_safe_url, format_utc_iso, render_template_with_fallback as render_template
 from app.utils.constants import THEME_PROMPTS
 from app.utils.turnstile import verify_turnstile_token
 from app.utils.demo_sessions import cleanup_demo_student_data
@@ -2950,8 +2950,6 @@ def help_support():
         student_id=student.id,
         join_code=class_context['join_code']
     ).order_by(Issue.submitted_at.desc()).limit(20).all()
-
-    from app.utils.helpers import format_utc_iso
 
     return render_template('student_help_support_new.html',
                          current_page='help',

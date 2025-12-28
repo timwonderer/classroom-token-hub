@@ -33,7 +33,7 @@ from app.auth import system_admin_required, SESSION_TIMEOUT_MINUTES
 from forms import SystemAdminLoginForm, SystemAdminInviteForm
 
 # Import utility functions
-from app.utils.helpers import is_safe_url
+from app.utils.helpers import is_safe_url, format_utc_iso
 from app.utils.passwordless_client import get_passwordless_client, decode_credential_id
 from app.utils.encryption import encrypt_totp, decrypt_totp
 
@@ -1876,8 +1876,6 @@ def escalated_issues():
     System admin view of all escalated issues from teachers.
     Shows issues that have been escalated for developer/sysadmin review.
     """
-    from app.utils.helpers import format_utc_iso
-
     # Get all escalated issues (elevated, developer_review, developer_resolved)
     issues = Issue.query.filter(
         Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
@@ -1901,23 +1899,11 @@ def escalated_issues():
 @system_admin_required
 def view_escalated_issue(issue_id):
     """View detailed information about a specific escalated issue."""
-    from app.utils.helpers import format_utc_iso
-
     # Get the issue and verify it's escalated
     issue = Issue.query.filter(
         Issue.id == issue_id,
         Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
     ).first_or_404()
-
-    # Mark as being reviewed if still in elevated status
-    if issue.status == 'elevated':
-        issue.status = 'developer_review'
-
-        # Record status change
-        from app.utils.issue_helpers import record_status_change
-        record_status_change(issue, 'elevated', 'developer_review', 'sysadmin', session.get('sysadmin_id'))
-
-        db.session.commit()
 
     # Get status history
     history = IssueStatusHistory.query.filter_by(
@@ -1930,6 +1916,33 @@ def view_escalated_issue(issue_id):
                          issue=issue,
                          history=history,
                          format_utc_iso=format_utc_iso)
+
+
+@sysadmin_bp.route('/issues/<int:issue_id>/start-review', methods=['POST'])
+@system_admin_required
+def start_review_escalated_issue(issue_id):
+    """Mark an escalated issue as being reviewed by sysadmin."""
+    issue = Issue.query.filter(
+        Issue.id == issue_id,
+        Issue.status == 'elevated'
+    ).first_or_404()
+
+    try:
+        issue.status = 'developer_review'
+
+        # Record status change
+        from app.utils.issue_helpers import record_status_change
+        record_status_change(issue, 'elevated', 'developer_review', 'sysadmin', session.get('sysadmin_id'))
+
+        db.session.commit()
+        flash("Issue marked as being reviewed.", "success")
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error starting review for issue {issue_id}: {e}")
+        flash("An error occurred while starting the review.", "error")
+
+    return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
 
 
 @sysadmin_bp.route('/issues/<int:issue_id>/resolve', methods=['POST'])

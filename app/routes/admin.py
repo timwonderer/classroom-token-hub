@@ -7393,8 +7393,6 @@ def issues_queue():
         Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
     ).order_by(Issue.escalated_at.desc()).all()
 
-    from app.utils.helpers import format_utc_iso
-
     return render_template('admin_issues_queue.html',
                          current_page='issues',
                          page_title='Student Issues',

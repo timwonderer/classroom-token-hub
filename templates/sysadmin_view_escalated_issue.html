@@ -210,6 +210,26 @@
 
         <!-- Sidebar -->
         <div class="col-lg-4">
+            <!-- Start Review Button (for elevated status) -->
+            {% if issue.status == 'elevated' %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-play-circle me-2"></i>Start Review
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-3">Mark this issue as being reviewed to acknowledge it and begin investigation.</p>
+                    <form method="POST" action="{{ url_for('sysadmin.start_review_escalated_issue', issue_id=issue.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-info w-100">
+                            <i class="bi bi-play-circle me-2"></i>Start Review
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Actions Card -->
             {% if issue.status in ['elevated', 'developer_review'] %}
             <div class="card shadow-sm mb-4">
