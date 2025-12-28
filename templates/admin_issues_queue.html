@@ -97,7 +97,7 @@
                                 </p>
                                 <small class="text-muted">
                                     <i class="bi bi-clock me-1"></i>
-                                    Submitted <span class="local-timestamp" data-timestamp="{{ issue.submitted_at.isoformat() }}Z"></span>
+                                    Submitted <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.submitted_at) }}"></span>
                                     {% if issue.class_label %}
                                     | <i class="bi bi-door-open me-1"></i>{{ issue.class_label }}
                                     {% endif %}
@@ -146,7 +146,7 @@
                                 </p>
                                 <small class="text-muted">
                                     <i class="bi bi-check-circle me-1"></i>
-                                    Resolved <span class="local-timestamp" data-timestamp="{{ issue.teacher_resolved_at.isoformat() }}Z"></span>
+                                    Resolved <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.teacher_resolved_at) }}"></span>
                                 </small>
                             </div>
                             <div class="text-end">
@@ -192,7 +192,7 @@
                                 </p>
                                 <small class="text-muted">
                                     <i class="bi bi-arrow-up-circle me-1"></i>
-                                    Escalated <span class="local-timestamp" data-timestamp="{{ issue.escalated_at.isoformat() }}Z"></span>
+                                    Escalated <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
                                 </small>
                             </div>
                             <div class="text-end">
