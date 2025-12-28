@@ -61,26 +61,18 @@
         }
 
         .troubleshooting {
-            background: #f8f9fa;
             padding: 1.5rem;
             margin-bottom: 2rem;
         }
 
         .troubleshooting h5 {
-            color: #d32f2f;
             margin-bottom: 1rem;
             font-weight: 600;
         }
 
-        .troubleshooting ul {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
 
         .troubleshooting li {
             padding: 0.5rem 0;
-            color: #555;
         }
 
         .actions {
@@ -110,23 +102,24 @@
 <body>
     <div class="error-container">
         <div class="error-header">
+            <span class="material-symbols-outlined mb-2" style="font-size:3rem; vertical-align: middle;">gpp_bad</span>
             <h1>403</h1>
             <p>Access Forbidden</p>
         </div>
 
         <div class="error-body">
             <div class="alert alert-danger" role="alert">
-                <strong>Access Denied!</strong> You don't have permission to access this page. This page is restricted and requires specific permissions to view.
+               You don't have permission to access this page. This page is restricted and requires specific permissions to view.
             </div>
 
-            <div class="troubleshooting">
+            <div class="troubleshooting alert alert-info" role="alert">
                 <h5>Troubleshooting Steps</h5>
                 <ul>
-                    <li>• Check your account type - you might be logged in as a student but trying to access an admin-only page (or vice versa)</li>
-                    <li>• Re-authenticate - your session may have expired. Try logging out and logging back in</li>
-                    <li>• Verify the URL - make sure you're accessing the correct page for your account type</li>
-                    <li>• Contact your teacher/admin - if you believe you should have access, ask them to check your permissions</li>
-                    <li>• Clear your browser cache - sometimes old session data can cause permission issues</li>
+                    <li>You might be logged in as a student but trying to access a teacher page (or vice versa)</li>
+                    <li>Your session may have expired. Try logging out and logging back in</li>
+                    <li>Make sure you're accessing the correct page for your account type</li>
+                    <li>If you believe you should have access, ask your teacher or administrator to check your permissions</li>
+                    <li>Sometimes old session data can cause permission issues. Try clearing your history and try again.</li>
                 </ul>
             </div>
 
