@@ -7474,6 +7474,7 @@ def resolve_issue(issue_id):
             denial_reason = request.form.get('denial_reason', '').strip()
             issue.teacher_resolution = 'Denied'
             issue.teacher_notes = denial_reason
+            teacher_notes = denial_reason
             record_resolution_action(
                 issue, 'deny_issue', 'teacher', admin_id,
                 action_description=denial_reason

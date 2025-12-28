@@ -1046,8 +1046,8 @@ class Issue(db.Model):
     escalated_at = db.Column(db.DateTime, nullable=True)
     escalation_reason = db.Column(db.String(200), nullable=True)
     teacher_diagnostic_note = db.Column(db.Text, nullable=True)  # Teacher's diagnostic for sysadmin
-    share_class_name_with_sysadmin = db.Column(db.Boolean, default=False)  # Teacher consent for class disclosure
-    eligible_for_reward = db.Column(db.Boolean, default=False)  # Teacher marks if student may receive reward for legitimate bug
+    share_class_name_with_sysadmin = db.Column(db.Boolean, default=False, nullable=False)  # Teacher consent for class disclosure
+    eligible_for_reward = db.Column(db.Boolean, default=False, nullable=False)  # Teacher marks if student may receive reward for legitimate bug
 
     # Sysadmin review and resolution
     sysadmin_id = db.Column(db.Integer, db.ForeignKey('system_admins.id'), nullable=True)
