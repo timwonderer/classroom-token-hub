@@ -1,0 +1,205 @@
+{% extends "layout_student.html" %}
+
+{% block page_icon %}help_outline{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-4" id="helpTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="kb-tab" data-bs-toggle="tab" data-bs-target="#kb" type="button" role="tab" aria-controls="kb" aria-selected="true">
+                <i class="bi bi-book-half me-2"></i>Knowledge Base
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="report-tab" data-bs-toggle="tab" data-bs-target="#report" type="button" role="tab" aria-controls="report" aria-selected="false">
+                <i class="bi bi-flag-fill me-2"></i>Report an Issue
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="myissues-tab" data-bs-toggle="tab" data-bs-target="#myissues" type="button" role="tab" aria-controls="myissues" aria-selected="false">
+                <i class="bi bi-list-ul me-2"></i>My Issues
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="helpTabsContent">
+        <!-- Knowledge Base Tab -->
+        <div class="tab-pane fade show active" id="kb" role="tabpanel" aria-labelledby="kb-tab">
+            <div class="row g-4">
+                <!-- How To -->
+                <div class="col-lg-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0"><i class="bi bi-rocket-takeoff-fill me-2"></i>How To Guides</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="accordion" id="howToAccordion">
+                                {% for article in help_content.how_to %}
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="heading{{ article.id }}">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ article.id }}" aria-expanded="false" aria-controls="collapse{{ article.id }}">
+                                            {{ article.title }}
+                                        </button>
+                                    </h2>
+                                    <div id="collapse{{ article.id }}" class="accordion-collapse collapse" aria-labelledby="heading{{ article.id }}" data-bs-parent="#howToAccordion">
+                                        <div class="accordion-body">
+                                            {{ article.content | safe }}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Troubleshooting -->
+                <div class="col-lg-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-secondary text-white">
+                            <h5 class="mb-0"><i class="bi bi-question-circle-fill me-2"></i>Troubleshooting</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="accordion" id="troubleshootAccordion">
+                                {% for article in help_content.troubleshooting %}
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="heading{{ article.id }}">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ article.id }}" aria-expanded="false" aria-controls="collapse{{ article.id }}">
+                                            {{ article.title }}
+                                        </button>
+                                    </h2>
+                                    <div id="collapse{{ article.id }}" class="accordion-collapse collapse" aria-labelledby="heading{{ article.id }}" data-bs-parent="#troubleshootAccordion">
+                                        <div class="accordion-body">
+                                            {{ article.content | safe }}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Report Issue Tab -->
+        <div class="tab-pane fade" id="report" role="tabpanel" aria-labelledby="report-tab">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-flag-fill me-2"></i>Report an Issue</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        <strong>How This Works:</strong> When you report an issue, your teacher will review it first.
+                        If it's a bug, they may escalate it to the developers and you could receive a reward!
+                    </div>
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="card h-100 hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-exclamation-triangle-fill display-4 text-warning mb-3"></i>
+                                    <h5 class="card-title">General Issue</h5>
+                                    <p class="card-text text-muted">
+                                        Report problems like features not working, clock-in issues, or incorrect balances.
+                                    </p>
+                                    <a href="{{ url_for('student.submit_general_issue') }}" class="btn btn-primary">
+                                        <i class="bi bi-flag-fill me-2"></i>Report General Issue
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="card h-100 hover-shadow">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-receipt display-4 text-danger mb-3"></i>
+                                    <h5 class="card-title">Transaction Issue</h5>
+                                    <p class="card-text text-muted">
+                                        Report issues with a specific transaction from your ledger (wrong amount, duplicate, etc.).
+                                    </p>
+                                    <a href="{{ url_for('student.ledger') }}" class="btn btn-danger">
+                                        <i class="bi bi-receipt me-2"></i>Go to Ledger
+                                    </a>
+                                    <p class="mt-2 small text-muted">Click the <i class="bi bi-question-circle"></i> icon next to any transaction</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- My Issues Tab -->
+        <div class="tab-pane fade" id="myissues" role="tabpanel" aria-labelledby="myissues-tab">
+            <div class="card shadow-sm">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>My Submitted Issues</h5>
+                </div>
+                <div class="card-body">
+                    {% if my_issues %}
+                        <div class="list-group">
+                            {% for issue in my_issues %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <h6 class="mb-1">
+                                                {{ issue.category.name }}
+                                                {% if issue.related_transaction_id %}
+                                                <span class="badge bg-secondary">Transaction #{{ issue.related_transaction_id }}</span>
+                                                {% endif %}
+                                            </h6>
+                                            <span class="badge
+                                                {% if issue.status == 'submitted' %}bg-primary
+                                                {% elif issue.status == 'teacher_review' %}bg-info
+                                                {% elif issue.status == 'teacher_resolved' %}bg-success
+                                                {% elif issue.status == 'elevated' %}bg-warning text-dark
+                                                {% elif issue.status == 'developer_review' %}bg-warning text-dark
+                                                {% elif issue.status == 'developer_resolved' %}bg-success
+                                                {% else %}bg-secondary{% endif %}">
+                                                {{ issue.get_student_visible_status() }}
+                                            </span>
+                                        </div>
+                                        <p class="mb-1 mt-2 small">
+                                            {{ issue.student_explanation[:150] }}{% if issue.student_explanation|length > 150 %}...{% endif %}
+                                        </p>
+                                        <small class="text-muted">
+                                            Submitted
+                                            {% if issue.submitted_at %}
+                                                <span class="local-timestamp" data-timestamp="{{ issue.submitted_at.isoformat() }}Z"></span>
+                                            {% else %}
+                                                N/A
+                                            {% endif %}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="bi bi-inbox fs-1 text-muted"></i>
+                            <p class="text-muted mt-2">You haven't submitted any issues yet.</p>
+                            <p class="text-muted">If you have a problem, use the "Report an Issue" tab above.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.hover-shadow {
+    transition: box-shadow 0.3s ease-in-out;
+}
+
+.hover-shadow:hover {
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+}
+</style>
+{% endblock %}

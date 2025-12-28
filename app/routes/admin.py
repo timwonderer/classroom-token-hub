@@ -7345,10 +7345,201 @@ def passkey_settings():
     """Passkey management page for teachers."""
     admin_id = session.get('admin_id')
     admin = Admin.query.get_or_404(admin_id)
-    
+
     # Get all passkeys for this teacher
     credentials = AdminCredential.query.filter_by(admin_id=admin_id).order_by(AdminCredential.created_at.desc()).all()
-    
+
     return render_template('admin_passkey_settings.html',
                          admin=admin,
                          credentials=credentials)
+
+
+# ==================== ISSUE RESOLUTION SYSTEM - TEACHER ROUTES ====================
+
+@admin_bp.route('/issues')
+@admin_required
+def issues_queue():
+    """
+    Teacher issue review queue.
+    Shows all student-submitted issues for this teacher's classes.
+    """
+    from app.models import Issue
+    from app.utils.issue_categories import init_default_categories
+
+    admin_id = session.get('admin_id')
+    join_code = session.get('join_code')
+
+    # Initialize default categories if they don't exist
+    init_default_categories()
+
+    # Filter by join code if one is selected, otherwise show all issues for this teacher
+    if join_code:
+        issues_query = Issue.query.filter_by(teacher_id=admin_id, join_code=join_code)
+    else:
+        issues_query = Issue.query.filter_by(teacher_id=admin_id)
+
+    # Get issues by status
+    pending_issues = issues_query.filter(
+        Issue.status.in_(['submitted', 'teacher_review'])
+    ).order_by(Issue.submitted_at.desc()).all()
+
+    resolved_issues = issues_query.filter_by(
+        status='teacher_resolved'
+    ).order_by(Issue.teacher_resolved_at.desc()).limit(20).all()
+
+    escalated_issues = issues_query.filter(
+        Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
+    ).order_by(Issue.escalated_at.desc()).all()
+
+    return render_template('admin_issues_queue.html',
+                         current_page='issues',
+                         page_title='Student Issues',
+                         pending_issues=pending_issues,
+                         resolved_issues=resolved_issues,
+                         escalated_issues=escalated_issues)
+
+
+@admin_bp.route('/issues/<int:issue_id>')
+@admin_required
+def view_issue(issue_id):
+    """View detailed information about a specific issue."""
+    from app.models import Issue
+
+    admin_id = session.get('admin_id')
+
+    # Get the issue and verify it belongs to this teacher
+    issue = Issue.query.filter_by(id=issue_id, teacher_id=admin_id).first_or_404()
+
+    # Mark as being reviewed if still in submitted status
+    if issue.status == 'submitted':
+        from app.utils.issue_helpers import update_issue_status
+        update_issue_status(issue, 'teacher_review', 'teacher', admin_id)
+        issue.teacher_reviewed_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+    return render_template('admin_view_issue.html',
+                         current_page='issues',
+                         page_title=f'Issue #{issue.id}',
+                         issue=issue)
+
+
+@admin_bp.route('/issues/<int:issue_id>/resolve', methods=['POST'])
+@admin_required
+def resolve_issue(issue_id):
+    """
+    Resolve an issue at the teacher level.
+    Can apply various resolution actions depending on issue type.
+    """
+    from app.models import Issue, Transaction
+    from app.utils.issue_helpers import update_issue_status, record_resolution_action
+
+    admin_id = session.get('admin_id')
+
+    # Get the issue and verify it belongs to this teacher
+    issue = Issue.query.filter_by(id=issue_id, teacher_id=admin_id).first_or_404()
+
+    action_type = request.form.get('action_type')
+    teacher_notes = request.form.get('teacher_notes', '').strip()
+
+    try:
+        # Apply resolution based on action type
+        if action_type == 'reverse_transaction' and issue.related_transaction_id:
+            # Void the transaction
+            transaction = Transaction.query.get(issue.related_transaction_id)
+            if transaction and transaction.student_id == issue.student_id:
+                before_value = f"is_void={transaction.is_void}"
+                transaction.is_void = True
+                after_value = f"is_void={transaction.is_void}"
+
+                record_resolution_action(
+                    issue, 'reverse_transaction', 'teacher', admin_id,
+                    action_description=f"Voided transaction #{transaction.id}",
+                    related_transaction_id=transaction.id,
+                    before_value=before_value,
+                    after_value=after_value
+                )
+
+                issue.teacher_resolution = 'Transaction Reversed'
+
+        elif action_type == 'manual_adjustment':
+            # Teacher handles manually (no automatic action)
+            issue.teacher_resolution = 'Manual Adjustment'
+            record_resolution_action(
+                issue, 'manual_adjustment', 'teacher', admin_id,
+                action_description=teacher_notes
+            )
+
+        elif action_type == 'deny_issue':
+            # Deny the issue
+            denial_reason = request.form.get('denial_reason', '').strip()
+            issue.teacher_resolution = 'Denied'
+            issue.teacher_notes = denial_reason
+            record_resolution_action(
+                issue, 'deny_issue', 'teacher', admin_id,
+                action_description=denial_reason
+            )
+
+        # Update issue status
+        update_issue_status(issue, 'teacher_resolved', 'teacher', admin_id, notes=teacher_notes)
+        issue.teacher_resolved_at = datetime.now(timezone.utc)
+        issue.teacher_notes = teacher_notes
+        issue.closed_at = datetime.now(timezone.utc)
+        issue.closed_by_type = 'teacher'
+
+        db.session.commit()
+
+        flash("Issue resolved successfully.", "success")
+        return redirect(url_for('admin.issues_queue'))
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error resolving issue: {str(e)}")
+        flash("An error occurred while resolving the issue. Please try again.", "error")
+        return redirect(url_for('admin.view_issue', issue_id=issue_id))
+
+
+@admin_bp.route('/issues/<int:issue_id>/escalate', methods=['POST'])
+@admin_required
+def escalate_issue(issue_id):
+    """
+    Escalate an issue to sysadmin (developer).
+    Teacher marks the issue for developer investigation.
+    """
+    from app.models import Issue
+    from app.utils.issue_helpers import update_issue_status
+
+    admin_id = session.get('admin_id')
+
+    # Get the issue and verify it belongs to this teacher
+    issue = Issue.query.filter_by(id=issue_id, teacher_id=admin_id).first_or_404()
+
+    escalation_reason = request.form.get('escalation_reason', '').strip()
+    diagnostic_note = request.form.get('diagnostic_note', '').strip()
+    share_class_name = request.form.get('share_class_name') == 'on'
+    eligible_for_reward = request.form.get('eligible_for_reward') == 'on'
+
+    if not escalation_reason:
+        flash("Please provide an escalation reason.", "error")
+        return redirect(url_for('admin.view_issue', issue_id=issue_id))
+
+    try:
+        # Update issue with escalation details
+        issue.escalation_reason = escalation_reason
+        issue.teacher_diagnostic_note = diagnostic_note
+        issue.share_class_name_with_sysadmin = share_class_name
+        issue.eligible_for_reward = eligible_for_reward
+        issue.escalated_at = datetime.now(timezone.utc)
+
+        # Update status
+        update_issue_status(issue, 'elevated', 'teacher', admin_id, notes=f"Escalated: {escalation_reason}")
+
+        db.session.commit()
+
+        flash("Issue escalated to developer successfully.", "success")
+        return redirect(url_for('admin.issues_queue'))
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error escalating issue: {str(e)}")
+        flash("An error occurred while escalating the issue. Please try again.", "error")
+        return redirect(url_for('admin.view_issue', issue_id=issue_id))

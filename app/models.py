@@ -957,6 +957,200 @@ class UserReport(db.Model):
     reviewed_by = db.relationship('SystemAdmin', backref='reviewed_reports', foreign_keys=[reviewed_by_sysadmin_id])
 
 
+# ---- Issue Resolution System Models ----
+
+class IssueCategory(db.Model):
+    """
+    Predefined categories for student issue reports.
+    Categories guide students to provide relevant context for their issue.
+    """
+    __tablename__ = 'issue_categories'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    description = db.Column(db.Text, nullable=True)
+    category_type = db.Column(db.String(50), nullable=False)  # 'transaction', 'general'
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    display_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=_utc_now)
+
+    # Relationships
+    issues = db.relationship('Issue', backref='category', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<IssueCategory {self.name} ({self.category_type})>'
+
+
+class Issue(db.Model):
+    """
+    Core issue tracking model for the Issue Resolution & Escalation system.
+
+    This system provides a safe, auditable, non-communicative mechanism for handling
+    errors, disputes, and system issues. Students submit issues which are reviewed
+    by teachers and potentially escalated to sysadmins.
+
+    Key principles:
+    - No direct student-to-sysadmin communication
+    - Teachers are first and primary decision-makers
+    - All issues tied to concrete system records when possible
+    - Clear lifecycle, ownership, and audit trail
+    - Non-identifying data for sysadmin review
+    """
+    __tablename__ = 'issues'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Student identification (non-identifying for sysadmin)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
+    student_first_name = db.Column(db.String(100), nullable=False)  # Cached for display
+    student_last_initial = db.Column(db.String(1), nullable=False)
+
+    # Opaque identifier for sysadmin investigations (non-reversible)
+    opaque_student_reference = db.Column(db.String(64), nullable=False, index=True)
+
+    # Class context
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=False, index=True)
+    class_label = db.Column(db.String(50), nullable=True)  # Cached class name
+
+    # Issue categorization
+    category_id = db.Column(db.Integer, db.ForeignKey('issue_categories.id'), nullable=False)
+    issue_type = db.Column(db.String(50), nullable=False)  # 'transaction', 'general'
+
+    # Student submission (immutable after submission)
+    student_explanation = db.Column(db.Text, nullable=False)
+    student_expected_outcome = db.Column(db.Text, nullable=True)
+    submitted_at = db.Column(db.DateTime, default=_utc_now, nullable=False, index=True)
+
+    # Context attachment (transaction/record-specific issues)
+    related_transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True)
+    related_record_type = db.Column(db.String(50), nullable=True)  # 'transaction', 'tap_event', 'rent_payment', etc.
+    related_record_id = db.Column(db.Integer, nullable=True)  # Generic ID for other record types
+
+    # System context snapshot (automatic, immutable)
+    context_snapshot = db.Column(db.JSON, nullable=True)  # Ledger state, amounts, timestamps, etc.
+    page_url = db.Column(db.String(500), nullable=True)
+    system_metadata = db.Column(db.JSON, nullable=True)  # Recent events, browser info, etc.
+
+    # Status tracking
+    status = db.Column(db.String(50), default='submitted', nullable=False, index=True)
+    # Allowed statuses: 'submitted', 'teacher_review', 'teacher_resolved', 'elevated', 'developer_review', 'developer_resolved'
+
+    # Teacher review and resolution
+    teacher_reviewed_at = db.Column(db.DateTime, nullable=True)
+    teacher_notes = db.Column(db.Text, nullable=True)  # Separate from student content
+    teacher_resolution = db.Column(db.String(100), nullable=True)  # Type of resolution applied
+    teacher_resolved_at = db.Column(db.DateTime, nullable=True)
+
+    # Escalation to sysadmin
+    escalated_at = db.Column(db.DateTime, nullable=True)
+    escalation_reason = db.Column(db.String(200), nullable=True)
+    teacher_diagnostic_note = db.Column(db.Text, nullable=True)  # Teacher's diagnostic for sysadmin
+    share_class_name_with_sysadmin = db.Column(db.Boolean, default=False)  # Teacher consent for class disclosure
+    eligible_for_reward = db.Column(db.Boolean, default=False)  # Teacher marks if student may receive reward for legitimate bug
+
+    # Sysadmin review and resolution
+    sysadmin_id = db.Column(db.Integer, db.ForeignKey('system_admins.id'), nullable=True)
+    sysadmin_reviewed_at = db.Column(db.DateTime, nullable=True)
+    sysadmin_notes = db.Column(db.Text, nullable=True)  # Separate from teacher/student content, visible to teacher only
+    sysadmin_resolved_at = db.Column(db.DateTime, nullable=True)
+
+    # Closure
+    closed_at = db.Column(db.DateTime, nullable=True)
+    closed_by_type = db.Column(db.String(20), nullable=True)  # 'teacher', 'sysadmin', 'system'
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now)
+
+    # Relationships
+    student = db.relationship('Student', backref=db.backref('issues', lazy='dynamic'))
+    teacher = db.relationship('Admin', backref=db.backref('class_issues', lazy='dynamic'))
+    sysadmin = db.relationship('SystemAdmin', backref=db.backref('reviewed_issues', lazy='dynamic'))
+    related_transaction = db.relationship('Transaction', backref='related_issues')
+    status_history = db.relationship('IssueStatusHistory', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueStatusHistory.changed_at.desc()')
+    resolution_actions = db.relationship('IssueResolutionAction', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueResolutionAction.created_at.desc()')
+
+    # Indexes
+    __table_args__ = (
+        db.Index('ix_issues_teacher_status', 'teacher_id', 'status'),
+        db.Index('ix_issues_student_status', 'student_id', 'status'),
+        db.Index('ix_issues_join_code_status', 'join_code', 'status'),
+    )
+
+    def get_student_visible_status(self):
+        """Return simplified status badge for student view."""
+        status_map = {
+            'submitted': 'Submitted',
+            'teacher_review': 'Teacher Review',
+            'teacher_resolved': 'Resolved',
+            'elevated': 'Elevated',
+            'developer_review': 'Developer Review',
+            'developer_resolved': 'Resolved - See Teacher'
+        }
+        return status_map.get(self.status, 'Unknown')
+
+    def is_locked(self):
+        """Check if issue is locked from further student edits (after escalation)."""
+        return self.status in ['elevated', 'developer_review', 'developer_resolved']
+
+    def __repr__(self):
+        return f'<Issue #{self.id} ({self.status}) - Student {self.student_first_name} {self.student_last_initial}.>'
+
+
+class IssueStatusHistory(db.Model):
+    """
+    Tracks all status changes for an issue.
+    Provides complete audit trail for issue lifecycle.
+    """
+    __tablename__ = 'issue_status_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    previous_status = db.Column(db.String(50), nullable=True)
+    new_status = db.Column(db.String(50), nullable=False)
+    changed_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    changed_by_type = db.Column(db.String(20), nullable=False)  # 'student', 'teacher', 'sysadmin', 'system'
+    changed_by_id = db.Column(db.Integer, nullable=True)  # ID of user who made the change
+    notes = db.Column(db.Text, nullable=True)
+
+    def __repr__(self):
+        return f'<IssueStatusHistory Issue#{self.issue_id}: {self.previous_status} → {self.new_status}>'
+
+
+class IssueResolutionAction(db.Model):
+    """
+    Tracks resolution actions taken on an issue.
+    Records what teachers did to resolve transaction/record disputes.
+    """
+    __tablename__ = 'issue_resolution_actions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    action_type = db.Column(db.String(100), nullable=False)
+    # Action types: 'reverse_transaction', 'correct_amount', 'correct_time', 'waive_fee', 'deny_issue', 'manual_adjustment', etc.
+
+    action_description = db.Column(db.Text, nullable=True)
+    performed_by_type = db.Column(db.String(20), nullable=False)  # 'teacher', 'sysadmin'
+    performed_by_id = db.Column(db.Integer, nullable=False)
+
+    # Related changes (for audit trail)
+    related_transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True)
+    amount_changed = db.Column(db.Float, nullable=True)
+    before_value = db.Column(db.Text, nullable=True)
+    after_value = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+
+    # Relationships
+    related_transaction = db.relationship('Transaction')
+
+    def __repr__(self):
+        return f'<IssueResolutionAction Issue#{self.issue_id}: {self.action_type}>'
+
+
 # ---- Admin Model ----
 class Admin(db.Model):
     __tablename__ = 'admins'

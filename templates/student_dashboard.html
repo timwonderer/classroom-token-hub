@@ -274,8 +274,17 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="fw-bold {{ 'text-success' if t.amount > 0 else 'text-danger' }}">
-                            {{ '+' if t.amount > 0 else '' }}{{ "%.2f"|format(t.amount) }}
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="fw-bold {{ 'text-success' if t.amount > 0 else 'text-danger' }}">
+                                {{ '+' if t.amount > 0 else '' }}{{ "%.2f"|format(t.amount) }}
+                            </div>
+                            <!-- Report Issue Icon -->
+                            <a href="{{ url_for('student.report_transaction_issue', transaction_id=t.id) }}"
+                               class="btn btn-sm btn-link text-muted p-0"
+                               title="Report an issue with this transaction"
+                               data-bs-toggle="tooltip">
+                                <span class="material-symbols-outlined fs-6">help</span>
+                            </a>
                         </div>
                     </div>
                 </div>

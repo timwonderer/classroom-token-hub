@@ -410,3 +410,33 @@ class SystemAdminAnnouncementForm(FlaskForm):
     is_active = BooleanField('Display Immediately', default=True)
     expires_at = DateField('Expiration Date (optional)', format='%Y-%m-%d', validators=[Optional()])
     submit = SubmitField('Post Announcement')
+
+
+# ---- Issue Resolution Forms ----
+
+class StudentIssueSubmissionForm(FlaskForm):
+    """Form for students to submit general (non-transaction) issues."""
+    category_id = SelectField('Issue Type', coerce=int, validators=[DataRequired(message="Please select an issue type.")])
+    explanation = TextAreaField('What happened?', validators=[
+        DataRequired(message="Please describe what happened."),
+        Length(max=1000, message="Description must be 1000 characters or less.")
+    ])
+    expected_outcome = TextAreaField('What did you expect to happen?', validators=[
+        Optional(),
+        Length(max=500, message="Expected outcome must be 500 characters or less.")
+    ])
+    submit = SubmitField('Submit Issue')
+
+
+class TransactionIssueSubmissionForm(FlaskForm):
+    """Form for students to report transaction-specific issues."""
+    category_id = SelectField('Issue Type', coerce=int, validators=[DataRequired(message="Please select an issue type.")])
+    explanation = TextAreaField('What\'s wrong with this transaction?', validators=[
+        DataRequired(message="Please explain the issue."),
+        Length(max=1000, message="Explanation must be 1000 characters or less.")
+    ])
+    expected_outcome = TextAreaField('What should it be instead?', validators=[
+        Optional(),
+        Length(max=500, message="Expected outcome must be 500 characters or less.")
+    ])
+    submit = SubmitField('Submit Issue')

@@ -2923,68 +2923,143 @@ def setup_complete():
     return render_template('student_setup_complete.html', student_name=student.first_name)
 
 
-# -------------------- HELP AND SUPPORT --------------------
+# -------------------- HELP AND SUPPORT - ISSUE RESOLUTION SYSTEM --------------------
 
-@student_bp.route('/help-support', methods=['GET', 'POST'])
+@student_bp.route('/help-support', methods=['GET'])
 @login_required
 def help_support():
-    """Help and Support page with bug reporting, suggestions, and documentation."""
+    """
+    Help and Support page with issue resolution system.
+    Shows knowledge base and student's submitted issues.
+    """
+    from app.models import Issue
+    from app.utils.issue_categories import init_default_categories
+
     student = get_logged_in_student()
+    class_context = get_current_class_context()
 
-    if request.method == 'POST':
-        # Handle bug report submission
-        report_type = request.form.get('report_type', 'bug')
-        error_code = request.form.get('error_code', '')
-        title = request.form.get('title', '').strip()
-        description = request.form.get('description', '').strip()
-        steps_to_reproduce = request.form.get('steps_to_reproduce', '').strip()
-        expected_behavior = request.form.get('expected_behavior', '').strip()
-        page_url = request.form.get('page_url', '').strip()
+    if not class_context:
+        flash("Please select a class first.", "warning")
+        return redirect(url_for('student.dashboard'))
 
-        # Validation
-        if not title or not description:
-            flash("Please provide both a title and description for your report.", "error")
-            return redirect(url_for('student.help_support'))
+    # Initialize default categories if they don't exist
+    init_default_categories()
 
-        # Generate anonymous code derived from a secret to prevent reversal by admins
-        anonymous_code = generate_anonymous_code(f"student:{student.id}")
+    # Get student's issues for current class (last 20)
+    my_issues = Issue.query.filter_by(
+        student_id=student.id,
+        join_code=class_context['join_code']
+    ).order_by(Issue.submitted_at.desc()).limit(20).all()
 
-        # Create report
-        try:
-            report = UserReport(
-                anonymous_code=anonymous_code,
-                user_type='student',
-                report_type=report_type,
-                error_code=error_code if error_code else None,
-                title=title,
-                description=description,
-                steps_to_reproduce=steps_to_reproduce if steps_to_reproduce else None,
-                expected_behavior=expected_behavior if expected_behavior else None,
-                page_url=page_url if page_url else None,
-                ip_address=get_real_ip(),
-                user_agent=request.headers.get('User-Agent'),
-                _student_id=student.id,  # Hidden from sysadmin, used only for rewards
-                status='new'
-            )
-            db.session.add(report)
-            db.session.commit()
-
-            flash("Thank you for your report! If it's a legitimate bug, you may receive a reward.", "success")
-            return redirect(url_for('student.help_support'))
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error submitting report: {str(e)}")
-            flash("An error occurred while submitting your report. Please try again.", "error")
-            return redirect(url_for('student.help_support'))
-
-    # Get student's previous reports (last 10)
-    my_reports = UserReport.query.filter_by(_student_id=student.id).order_by(UserReport.submitted_at.desc()).limit(10).all()
-
-    return render_template('student_help_support.html',
+    return render_template('student_help_support_new.html',
                          current_page='help',
                          page_title='Help & Support',
-                         my_reports=my_reports,
+                         my_issues=my_issues,
                          help_content=HELP_ARTICLES['student'])
+
+
+@student_bp.route('/help-support/submit-issue', methods=['GET', 'POST'])
+@login_required
+def submit_general_issue():
+    """Submit a general (non-transaction) issue."""
+    from app.models import TeacherBlock
+    from app.utils.issue_categories import get_active_categories
+    from app.utils.issue_helpers import create_issue
+    from forms import StudentIssueSubmissionForm
+
+    student = get_logged_in_student()
+    class_context = get_current_class_context()
+
+    if not class_context:
+        flash("Please select a class first.", "warning")
+        return redirect(url_for('student.dashboard'))
+
+    form = StudentIssueSubmissionForm()
+
+    # Populate category choices
+    form.category_id.choices = [('', 'Select an issue type...')] + get_active_categories('general')
+
+    if form.validate_on_submit():
+        try:
+            issue = create_issue(
+                student=student,
+                teacher_id=class_context['teacher_id'],
+                join_code=class_context['join_code'],
+                category_id=form.category_id.data,
+                explanation=form.explanation.data,
+                expected_outcome=form.expected_outcome.data
+            )
+
+            flash("Your issue has been submitted. Your teacher will review it soon.", "success")
+            return redirect(url_for('student.help_support'))
+
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error submitting issue: {str(e)}")
+            flash("An error occurred while submitting your issue. Please try again.", "error")
+
+    return render_template('student_submit_issue.html',
+                         current_page='help',
+                         page_title='Report an Issue',
+                         form=form,
+                         issue_type='general')
+
+
+@student_bp.route('/help-support/transaction/<int:transaction_id>/report', methods=['GET', 'POST'])
+@login_required
+def report_transaction_issue(transaction_id):
+    """Report an issue with a specific transaction."""
+    from app.utils.issue_categories import get_active_categories
+    from app.utils.issue_helpers import create_issue
+    from forms import TransactionIssueSubmissionForm
+
+    student = get_logged_in_student()
+    class_context = get_current_class_context()
+
+    if not class_context:
+        flash("Please select a class first.", "warning")
+        return redirect(url_for('student.dashboard'))
+
+    # Get the transaction and verify it belongs to this student and class
+    transaction = Transaction.query.filter_by(
+        id=transaction_id,
+        student_id=student.id,
+        join_code=class_context['join_code']
+    ).first_or_404()
+
+    form = TransactionIssueSubmissionForm()
+
+    # Populate category choices
+    form.category_id.choices = [('', 'Select an issue type...')] + get_active_categories('transaction')
+
+    if form.validate_on_submit():
+        try:
+            issue = create_issue(
+                student=student,
+                teacher_id=class_context['teacher_id'],
+                join_code=class_context['join_code'],
+                category_id=form.category_id.data,
+                explanation=form.explanation.data,
+                expected_outcome=form.expected_outcome.data,
+                related_transaction_id=transaction_id,
+                related_record_type='transaction',
+                related_record_id=transaction_id
+            )
+
+            flash("Your transaction issue has been submitted. Your teacher will review it soon.", "success")
+            return redirect(url_for('student.help_support'))
+
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error submitting transaction issue: {str(e)}")
+            flash("An error occurred while submitting your issue. Please try again.", "error")
+
+    return render_template('student_submit_issue.html',
+                         current_page='help',
+                         page_title='Report Transaction Issue',
+                         form=form,
+                         issue_type='transaction',
+                         transaction=transaction)
 
 
 # ================== TEACHER ACCOUNT RECOVERY ==================
