@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
         * {
@@ -30,7 +31,7 @@
         .error-container {
             background: white;
 
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 10px 10px rgba(0, 0, 0, 0.3);
             max-width: 900px;
             width: 100%;
             overflow: hidden;
@@ -182,9 +183,8 @@
 <body>
     <div class="error-container">
         <div class="error-header">
-            <subtitle>Internal Server Error</subtitle>
             <h1>500</h1>
-            <p>Something went wrong during your last operation.</p>
+            <p style="font-size:2rem">Internal Server Error</p>
         </div>
 
         <div class="error-body">
@@ -212,7 +212,7 @@
                 <a href="/" class="btn bg-primary text-white">Return to Login Page</a>
                 <a href="javascript:history.back()" class="btn bg-primary text-white">Go Back to Last Page</a>
                 <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener noreferrer" class="btn bg-secondary text-white">
-                    Check System Status
+                    Check System Status <span class="material-symbols-outlined" style="vertical-align: middle;">open_in_new</span>
                 </a>
             </div>
 
