@@ -4,16 +4,7 @@
 
 {% block content %}
 <div class="container-fluid">
-    <div class="d-flex mb-4">
-        <div class="mb-0 alert alert-info" role="alert">
-            <p style="font-size:18pt; font-weight:bold;"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 32px;">live_help</span> Understanding the Student Issues Workflow</p>
-            <p>When students have problems with the app or their accounts, they will submit a support ticket along with relevant information. These tickets will first arrive here under the <strong>Pending Review</strong> tab.</p>
-            <p> As a teacher, you can review each support ticket and take action to either <strong>resolve</strong>, <strong>close</strong>, or <strong>escalate</strong> the issue to the developer. Throughout this process, your students will never directly contact the developer. Instead, you will be the point of contact for all escalated isssues to protect student privacy.</p>
-            <p>If you resolve or close the ticket, it will move to the <strong>Resolved</strong> tab. If you escalate the issue to the developer, it will move to the <strong>Escalated</strong> tab, where the developer will review and address the issue directly. Students will be able to track the status of their ticket through a badge attached to the ticket. Students will not be able to make changes to the ticket once it is submitted.</p>
-
-        </div>
-      
-    </div>
+    
 
     <!-- Stats Cards -->
     <div class="row g-3 mb-4">
@@ -106,14 +97,14 @@
                                 </p>
                                 <small class="text-muted">
                                     <i class="bi bi-clock me-1"></i>
-                                    Submitted <span class="local-timestamp" data-timestamp="{{ issue.submitted_at.isoformat() }}Z"></span>
+                                    Submitted <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.submitted_at) }}"></span>
                                     {% if issue.class_label %}
                                     | <i class="bi bi-door-open me-1"></i>{{ issue.class_label }}
                                     {% endif %}
                                 </small>
                             </div>
                             <div class="text-end">
-                                <span class="badge bg-warning text-dark">
+                                <span class="badge bg-secondary text-dark">
                                     {{ issue.status|replace('_', ' ')|title }}
                                 </span>
                             </div>
@@ -155,7 +146,7 @@
                                 </p>
                                 <small class="text-muted">
                                     <i class="bi bi-check-circle me-1"></i>
-                                    Resolved <span class="local-timestamp" data-timestamp="{{ issue.teacher_resolved_at.isoformat() }}Z"></span>
+                                    Resolved <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.teacher_resolved_at) }}"></span>
                                 </small>
                             </div>
                             <div class="text-end">
@@ -201,14 +192,14 @@
                                 </p>
                                 <small class="text-muted">
                                     <i class="bi bi-arrow-up-circle me-1"></i>
-                                    Escalated <span class="local-timestamp" data-timestamp="{{ issue.escalated_at.isoformat() }}Z"></span>
+                                    Escalated <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
                                 </small>
                             </div>
                             <div class="text-end">
                                 <span class="badge
                                     {% if issue.status == 'elevated' %}bg-warning text-dark
-                                    {% elif issue.status == 'developer_review' %}bg-info
-                                    {% elif issue.status == 'developer_resolved' %}bg-success
+                                    {% elif issue.status == 'developer_review' %}bg-warning
+                                    {% elif issue.status == 'developer_resolved' %}bg-info
                                     {% else %}bg-secondary{% endif %}">
                                     {{ issue.status|replace('_', ' ')|title }}
                                 </span>
@@ -227,6 +218,35 @@
                 </div>
             {% endif %}
         </div>
+        <!-- Help Accordion -->
+        <div class="accordion mt-4 alert alert-info" id="helpAccordion">
+            <div class="accordion-item ">
+                <h2 class="accordion-header" id="headingHelp">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseHelp" aria-expanded="false" aria-controls="collapseHelp">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">contact_support</span>
+                        <strong>Handling Student Issues - Help Guide</strong>
+                    </button>
+                </h2>
+                <div id="collapseHelp" class="accordion-collapse collapse" aria-labelledby="headingHelp" data-bs-parent="#helpAccordion">
+                    <div class="accordion-body" >
+                        <p>When students have issues with Classroom Token Hub, they will submit a <strong>support ticket</strong> with relevant information attached. Once they submit the ticket, they will not be able to modify it to maintain the integrity of the support ticket.</p>
+                        <p>This ticket will first arrive here, under the <strong>Pending Review</strong> section. Depending on the nature of the issue, you will be provided with relevant options to <strong>resolve</strong> or <strong>escalate</strong> the issue. Once the support ticket is resolved or closed, it will move to the <strong>Resolved</strong> section.</p>
+                        <p>For issues that are due to technical problems or bugs, you can opt to <strong>escalate</strong> the issue to our support team. When you select this option, you will be able to provide additional information that could be helpful to our team in identifying and fixing the problem. <strong>Students will not be able to directly submit a ticket to our team due to privacy and security concerns.</strong></p>
+                        <p>Once escalated, the issue will appear in the <strong>Escalated</strong> section. When an issue has been escalated, our team will see your (the teacher's) username, a non-identifying reference to the student, original issue provided by the students, and any additional details you provide. In addition, if you opt to send class information to us, we will also see the class identifier. <strong>Our team will never see student name or other identifying information about them.</strong></p>
+                        <p>At any given point, students will see a <strong>status badge</strong> on their support page. This status badge will indicate the current state of their ticket and it can be one of the following:</p>
+                        <ul>
+                            <li><span class="badge bg-secondary text-dark">Submitted</span> The issue has been submitted and is pending review by the teacher.</li>
+                            <li><span class="badge bg-secondary text-dark">Teacher Review</span> The issue is being reviewed by the teacher.</li>
+                            <li><span class="badge bg-success">Resolved</span> The issue has been resolved by the teacher.</li>
+                            <li><span class="badge bg-warning text-dark">Elevated</span> The issue has been escalated to the support team by the teacher.</li>
+                            <li><span class="badge bg-warning text-dark">Developer Review</span> The issue is being reviewed by the support team.</li>
+                            <li><span class="badge bg-info">Resolved - See Teacher</span> The issue has been resolved by the support team.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
     </div>
 </div>
 {% endblock %}

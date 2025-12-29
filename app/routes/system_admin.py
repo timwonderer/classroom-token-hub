@@ -1961,7 +1961,7 @@ def resolve_escalated_issue(issue_id):
     try:
         old_status = issue.status
         issue.status = 'developer_resolved'
-        issue.sysadmin_resolved_at = datetime.now(timezone.utc)
+        issue.sysadmin_resolved_at = datetime.utcnow()
         issue.sysadmin_notes = resolution_note
         issue.sysadmin_id = session.get('sysadmin_id')
         issue.eligible_for_reward = eligible_for_reward
