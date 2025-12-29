@@ -12,3 +12,4 @@ GPT_instruction.md
 instance/
 local.db
 .vscode/
+.claude/settings.local.json
