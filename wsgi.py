@@ -167,7 +167,7 @@ def create_sysadmin():
     # Clear the terminal screen
     os.system('cls' if os.name == 'nt' else 'clear')
 
-    print("\n✅ System admin account created and screen cleared for security.")
+    print("\nSystem admin account created and screen cleared for security.")
     print(f"   Username: {username}")
     print("   TOTP secret has been encrypted and stored in the database.\n")
 
