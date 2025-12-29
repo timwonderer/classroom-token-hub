@@ -398,7 +398,16 @@ class SystemAdminAnnouncementForm(FlaskForm):
         ('all_teachers', 'All Teachers'),
         ('teacher_all_classes', 'All Classes of Specific Teacher')
     ], validators=[DataRequired()])
-    target_teacher = SelectField('Target Teacher', choices=[], validators=[Optional()], coerce=int)
+
+    # Custom coerce function to handle empty string (when "-- Select Teacher --" is chosen)
+    @staticmethod
+    def _coerce_teacher_id(value):
+        """Coerce teacher ID, treating empty string as None."""
+        if value == '' or value is None:
+            return None
+        return int(value)
+
+    target_teacher = SelectField('Target Teacher', choices=[], validators=[Optional()], coerce=_coerce_teacher_id)
     title = StringField('Announcement Title', validators=[DataRequired(), Length(min=1, max=200)])
     message = TextAreaField('Message', validators=[DataRequired()])
     priority = SelectField('Priority', choices=[
