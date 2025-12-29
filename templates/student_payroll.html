@@ -66,6 +66,7 @@
                                     <th>Date</th>
                                     <th>Action</th>
                                     <th>Time</th>
+                                    <th>Report</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -90,6 +91,14 @@
                                         {% else %}
                                             N/A
                                         {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('student.report_tap_event_issue', tap_event_id=event.id) }}"
+                                           class="btn btn-sm btn-link text-muted p-0"
+                                           title="Report an issue with this attendance record"
+                                           data-bs-toggle="tooltip">
+                                            <span class="material-symbols-outlined fs-6">help</span>
+                                        </a>
                                     </td>
                                 </tr>
                                 {% endfor %}
