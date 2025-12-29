@@ -1,8 +1,8 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2025-12-11
-**Current Version:** 0.9.0 (Pre-Release)
-**Target:** 1.0.0 Production Release
+**Last Updated:** 2025-12-27
+**Current Version:** 1.4.0
+**Target:** 1.5.0 Feature Release
 
 ---
 
@@ -14,40 +14,64 @@
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute
 - **[Project History](PROJECT_HISTORY.md)** - Project evolution and philosophy
 
----
+## Static Assets and Cache Busting
 
-## Version 1.0 Release Status
-
-### ✅ CRITICAL BLOCKERS - ALL RESOLVED!
-
-#### ✅ P0: Same-Teacher Multi-Period Data Leak - DEPLOYED & WORKING!
-**Status:** ✅ **DEPLOYED** (Commit `84a1f12`, 2025-11-29) | 🔄 **Backfill in Progress**
-
-Students enrolled in multiple periods with the same teacher now see properly isolated data for each class period. The system correctly uses `join_code` as the source of truth for class boundaries.
-
-**Solution Implemented:**
-- ✅ Added `join_code` column to all affected tables
-- ✅ Implemented `get_current_class_context()` for session management
-- ✅ Refactored all queries to scope by `join_code`
-- ✅ Added comprehensive test coverage
-- ✅ **Deployed to production with interactive backfill process**
-- 🔄 **Ongoing:** Legacy transactions being backfilled with user verification for ambiguous cases
-
-**Current State:** New transactions automatically get `join_code`. Legacy transactions prompt for period verification and are backfilled on-demand.
-
-#### ✅ P1: Deprecated Code Patterns - COMPLETED!
-**Status:** ✅ **RESOLVED** (Commit `e7ec632`, 2025-12-06)
-
-All deprecated Python and SQLAlchemy patterns have been updated:
-- ✅ All 52 occurrences of `datetime.utcnow()` → `datetime.now(timezone.utc)`
-- ✅ All `Query.get()` → `db.session.get(Model, id)`
-- ✅ SQLAlchemy 2.0+ compatibility verified
-
-**Result:** Codebase is fully compatible with Python 3.12+ and SQLAlchemy 2.0+
+- Always reference CSS/JS/images in templates with `static_url('<path>')` so Flask appends a file timestamp query parameter.
+- Avoid hard-coding `/static/...` paths or `url_for('static', ...)` in templates; the helper prevents browsers/CDNs from serving stale assets after deployments.
 
 ---
 
-## Current Development Priorities
+## Recent Releases
+
+### ✅ Version 1.4.0 - December 27, 2025
+
+**Major feature release focused on classroom communication and UI/UX enhancements:**
+
+#### 🎯 Key Accomplishments
+- ✅ **Announcement System** - Teachers can create and manage announcements for class periods
+- ✅ **UI/UX Redesign** - Personalized greetings, enhanced dashboards, accordion navigation
+- ✅ **Enhanced Security** - Fixed open redirect vulnerabilities and Grafana access issues
+- ✅ **Streamlined Authentication** - Improved login flow with better error handling
+- ✅ **Student Dashboard Improvements** - Side-by-side account cards with projected interest
+
+See [RELEASE_NOTES_v1.4.0.md](docs/archive/releases/RELEASE_NOTES_v1.4.0.md) for full details.
+
+### ✅ Version 1.3.0 - December 25, 2025
+
+**Major security-focused release with passwordless authentication:**
+
+#### 🎯 Key Accomplishments
+- ✅ **Passwordless Authentication** - WebAuthn/FIDO2 passkey support for teachers and system admins
+- ✅ **Encrypted TOTP Secrets** - TOTP 2FA secrets now encrypted at rest using Fernet
+- ✅ **Security Audit** - Comprehensive attack surface security audit completed
+- ✅ **Service Worker Fixes** - Resolved persistent browser console errors
+
+See [RELEASE_NOTES_v1.3.0.md](docs/archive/releases/RELEASE_NOTES_v1.3.0.md) for full details.
+
+### ✅ Version 1.2.0 - December 18, 2025
+
+**Major feature release focused on mobile experience and accessibility:**
+
+#### 🎯 Key Accomplishments
+- ✅ **Progressive Web App (PWA) Support** - Full installable mobile app experience
+- ✅ **Mobile-First UI** - Dedicated mobile templates with responsive navigation
+- ✅ **Accessibility Improvements** - Comprehensive enhancements following WCAG 2.1 AA guidelines
+- ✅ **UI Modernization** - Accordion-based admin templates for better organization
+- ✅ **Critical Payroll Fix** - Resolved multi-tenancy data leak in payroll system
+- ✅ **Improved Terminology** - "Start Work/Break Done" replaces "Tap In/Out"
+
+See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for full details.
+
+### ✅ Version 1.0.0 - November 29, 2024
+
+**First stable release - all critical blockers resolved:**
+
+- ✅ **P0: Same-Teacher Multi-Period Data Leak** - Resolved with proper join_code scoping
+- ✅ **P1: Deprecated Code Patterns** - Updated for Python 3.12+ and SQLAlchemy 2.0+
+
+---
+
+## Development Priorities (v1.3)
 
 ### 🟠 HIGH PRIORITY
 
@@ -93,11 +117,14 @@ All deprecated Python and SQLAlchemy patterns have been updated:
 - [ ] CSV exports for store purchases
 
 #### 3. Mobile & Accessibility
-- [x] Responsive navigation for admin portal (completed 2025-12-06)
-- [ ] Responsive navigation for student portal
-- [ ] Larger touch targets for tap in/out
-- [ ] Larger touch targets for store interactions
-- [ ] ARIA labels for key buttons and forms
+- [x] Responsive navigation for admin portal (completed v1.2.0)
+- [x] Responsive navigation for student portal (completed v1.2.0)
+- [x] Larger touch targets for tap in/out (completed v1.2.0)
+- [x] Larger touch targets for store interactions (completed v1.2.0)
+- [x] ARIA labels for key buttons and forms (completed v1.2.0)
+- [x] Accessibility improvements following WCAG 2.1 AA guidelines (completed v1.2.0)
+- [x] PWA support with offline capabilities (completed v1.2.0)
+- [x] Mobile-optimized templates (completed v1.2.0)
 
 ### 🟢 LOWER PRIORITY
 
@@ -105,15 +132,24 @@ All deprecated Python and SQLAlchemy patterns have been updated:
 - [ ] Performance profiling for large rosters (pagination partial; continue optimization)
 - [ ] Optional email notifications for teacher/system-admin events
 
+## Known Issues (P2 and below)
+
+- SQLAlchemy `Query.get` usage still surfaces `LegacyAPIWarning` during tests. Refactor to `Session.get`/scoped helper calls once compatibility with existing tenancy helpers is revalidated.
+
 ---
 
 ## Future Roadmap (Post-1.0)
 
-### Version 1.1 - Analytics & Insights
-- Dashboard visualizations for student progress
-- Class economy health metrics
-- Teacher analytics for payroll and store performance
-- Enhanced reporting and export capabilities
+### Version 1.1 - Analytics & Insights ✅ **RELEASED 2024-12-13**
+- ✅ Dashboard visualizations for student progress (weekly stats card with attendance, earnings, spending)
+- ✅ Savings projection graph with interactive 12-month forecast
+- ✅ Class economy health metrics (enhanced warnings with specific recommendations)
+- ✅ Long-term goal items feature for flexible store pricing
+- ✅ Complete UI redesign with modern, accessible interface
+- 🔄 Teacher analytics for payroll and store performance (partial - economy health page provides CWI analysis)
+- ⏳ Enhanced reporting and export capabilities (planned for future release)
+
+**See:** [RELEASE_NOTES_v1.1.0.md](docs/archive/releases/RELEASE_NOTES_v1.1.0.md) for complete details
 
 ### Version 1.2 - Mobile Experience
 - Progressive Web App (PWA) capabilities
@@ -480,19 +516,19 @@ When ready to finalize multi-teacher model:
 
 ## Success Metrics for 1.0 Release
 
-Version 1.0 will be considered ready when:
+Version 1.0 has been successfully released with the following criteria met:
 
 1. ✅ All P0 and P1 issues resolved
 2. ✅ Full test suite passes (100% of existing tests)
 3. ✅ No known security vulnerabilities
 4. ✅ Codebase uses modern Python 3.12+ and SQLAlchemy 2.0+ patterns
-5. [ ] Staging environment validated for 1+ week
-6. [ ] Production deployment successful
-7. [ ] No critical bugs reported within 48 hours of release
+5. ✅ Staging environment validated
+6. ✅ Production deployment successful
+7. ⏳ No critical bugs reported within 48 hours of release (Monitoring)
 8. ✅ Documentation complete and accurate
 9. ✅ Rollback plan tested and ready
 
-**Status:** 7/9 criteria met. Ready for staging deployment!
+**Status:** 1.0.0 RELEASED!
 
 ---
 
@@ -505,15 +541,19 @@ Version 1.0 will be considered ready when:
 
 ---
 
-**Next Immediate Actions:**
+**Next Immediate Actions (v1.2):**
 
-1. Complete multi-teacher hardening (remove `students.teacher_id` dependency)
-2. Add shared-student test coverage for payroll and attendance
-3. Document operational runbooks for future schema changes
-4. Deploy to staging for final validation
-5. **Version 1.0 Release! 🎉**
+1. Begin mobile experience improvements (PWA capabilities)
+2. Complete multi-teacher hardening (remove `students.teacher_id` dependency)
+3. Add shared-student test coverage for payroll and attendance
+4. Explore offline support for attendance tracking
+5. Continue "Admin Experience Polish" initiatives
+
+**Recent Releases:**
+- **v1.1.0** (2024-12-13) - Analytics dashboard, savings projections, UI redesign
+- **v1.0.0** (2024-11-29) - Initial stable release
 
 ---
 
-**Last Updated:** 2025-12-11
+**Last Updated:** 2024-12-13
 **Maintained by:** Project maintainers and contributors

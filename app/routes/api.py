@@ -16,14 +16,16 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from werkzeug.security import check_password_hash
 
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import (
     Student, StoreItem, StudentItem, Transaction, TapEvent,
     HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
-    StudentTeacher, TeacherBlock
+    StudentTeacher, TeacherBlock, StudentBlock
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
 from app.routes.student import get_current_teacher_id
+from app.utils.join_code import generate_join_code
+from app.utils.name_utils import hash_last_name_parts
 
 # Import external modules
 from attendance import (
@@ -38,12 +40,63 @@ from payroll import get_pay_rate_for_block
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 
+# -------------------- TIPS API --------------------
+
+@api_bp.route('/tips/<user_type>')
+@limiter.exempt
+def get_tips(user_type):
+    """
+    Return tips for login loading screens as JSON.
+
+    Endpoint: GET /api/tips/<user_type>
+    User types: 'student' or 'teacher'
+
+    Exempt from rate limiting because it's called on every login page load.
+    """
+    if user_type == 'student':
+        tips = [
+            "You don't have to stay logged in after starting work. You'll continue to earn minutes even when you're away from the page.",
+            "Check your balance regularly to track your earnings and plan your spending wisely.",
+            "Your teacher can award bonus tokens for exceptional work or good behavior.",
+            "Remember to log your attendance every day to earn your payroll minutes.",
+            "The shop refreshes with new items regularly - check back often for deals!",
+            "Save up for big purchases by setting financial goals for yourself.",
+            "Hall passes deduct from your balance - plan your breaks wisely.",
+            "Insurance can protect your balance from unexpected classroom events.",
+            "Ask your teacher about bonus opportunities to earn extra tokens.",
+            "Keep track of your transaction history to understand your spending habits."
+        ]
+    elif user_type == 'teacher':
+        tips = [
+            "Students don't have to stay logged in after starting work. They'll continue to earn minutes even when away from the page.",
+            "Use the bulk transaction feature to quickly award or deduct tokens from multiple students.",
+            "Set up automated payroll to save time on manual attendance tracking.",
+            "The analytics dashboard shows spending trends to help you understand student behavior.",
+            "Create custom store items to incentivize specific behaviors or achievements.",
+            "Use insurance policies to teach students about risk management and financial protection.",
+            "Rent settings can simulate monthly expenses to teach budgeting skills.",
+            "Check the transaction log regularly to monitor unusual spending patterns.",
+            "Bonus tokens are a great way to reward exceptional effort or good citizenship.",
+            "Export your class data regularly for backup and analysis purposes."
+        ]
+    else:
+        return jsonify({"error": "Invalid user type. Use 'student' or 'teacher'."}), 400
+
+    return jsonify({"tips": tips})
+
+
 # -------------------- STORE API --------------------
 
-def _charge_overdraft_fee_if_needed(student, banking_settings):
+def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_code):
     """
     Check if student's checking balance is negative and charge overdraft fee if enabled.
     Returns (fee_charged, fee_amount) tuple.
+
+    Args:
+        student: Student object
+        banking_settings: BankingSettings object
+        teacher_id: Teacher ID for multi-tenancy isolation
+        join_code: Join code for multi-tenancy isolation
     """
     if not banking_settings or not banking_settings.overdraft_fee_enabled:
         return False, 0.0
@@ -90,9 +143,11 @@ def _charge_overdraft_fee_if_needed(student, banking_settings):
                 fee_amount = max(0, banking_settings.overdraft_fee_progressive_cap - abs(total_fees_this_month))
 
     if fee_amount > 0:
-        # Charge the fee
+        # CRITICAL FIX: Add teacher_id and join_code to overdraft fee transaction
         overdraft_fee_tx = Transaction(
             student_id=student.id,
+            teacher_id=teacher_id,  # CRITICAL: Add teacher_id for multi-tenancy
+            join_code=join_code,  # CRITICAL: Add join_code for period isolation
             amount=-fee_amount,
             account_type='checking',
             type='overdraft_fee',
@@ -260,7 +315,7 @@ def purchase_item():
                     db.session.flush()  # Flush to update balances
 
             # Check if overdraft fee should be charged (after overdraft protection)
-            fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings)
+            fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_code)
 
             # Commit all transactions together
             db.session.commit()
@@ -352,13 +407,20 @@ def purchase_item():
                 db.session.flush()  # Flush to update balances
 
         # Check if overdraft fee should be charged (after overdraft protection)
-        fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings)
+        fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_code)
 
         # --- Collective Item Logic ---
         if item.item_type == 'collective':
-            # Check if all students in the same block have purchased this item
-            students_in_block = Student.query.filter_by(block=student.block).all()
-            student_ids_in_block = {s.id for s in students_in_block}
+            # SECURITY FIX: Check if all students in the same block AND same join_code have purchased
+            # Must scope by join_code to prevent cross-period data leaks
+            from app.models import StudentBlock
+
+            # Get student IDs in this specific class period (join_code + block combination)
+            student_blocks = StudentBlock.query.filter_by(
+                period=student.block,
+                join_code=join_code
+            ).all()
+            student_ids_in_block = {sb.student_id for sb in student_blocks}
 
             purchased_students_count = db.session.query(func.count(func.distinct(StudentItem.student_id))).filter(
                 StudentItem.store_item_id == item.id,
@@ -1268,6 +1330,7 @@ def attendance_history():
 # -------------------- ATTENDANCE API --------------------
 
 @api_bp.route('/tap', methods=['POST'])
+@limiter.limit("100 per minute")
 def handle_tap():
     data = request.get_json()
     safe_data = {k: ('***' if k == 'pin' else v) for k, v in data.items()}
@@ -1295,9 +1358,20 @@ def handle_tap():
 
     current_app.logger.info(f"TAP DEBUG: student_id={getattr(student, 'id', None)}, valid_periods={valid_periods}, period={period}, action={action}")
 
-    if period not in valid_periods or action not in ["tap_in", "tap_out"]:
+    # Support both old and new action names
+    action_map = {
+        "tap_in": "start_work",
+        "tap_out": "stop_work",
+        "start_work": "start_work",
+        "stop_work": "stop_work"
+    }
+
+    if period not in valid_periods or action not in action_map:
         current_app.logger.warning(f"TAP ERROR: Invalid period or action: period={period}, valid_periods={valid_periods}, action={action}")
         return jsonify({"error": "Invalid period or action"}), 400
+
+    # Normalize action to new terminology
+    normalized_action = action_map[action]
 
     join_code = get_join_code_for_student_period(student.id, period)
     if not join_code:
@@ -1334,10 +1408,10 @@ def handle_tap():
 
     # Check if tap is disabled for this period
     if not student_block.tap_enabled:
-        return jsonify({"error": "Tap in/out is currently disabled for this period."}), 403
+        return jsonify({"error": "Start Work / Break is currently disabled for this period."}), 403
 
     # --- Check "done for the day" lock ---
-    if action == "tap_in":
+    if normalized_action == "start_work":
         # Use Pacific timezone for "done for the day" check
         pacific = pytz.timezone('America/Los_Angeles')
         now_pacific = now.astimezone(pacific)
@@ -1348,11 +1422,11 @@ def handle_tap():
             student_block.done_for_day_date = None
             db.session.commit()
         if student_block.done_for_day_date == today_pacific:
-            return jsonify({"error": "You are done for the day. You cannot tap in again until tomorrow."}), 403
+            return jsonify({"error": "You are done for the day. You cannot Start Work again until tomorrow."}), 403
 
 
-    # --- Hall Pass Logic for Tap Out ---
-    if action == 'tap_out':
+    # --- Hall Pass Logic for Stop Work ---
+    if normalized_action == 'stop_work':
         reason = data.get("reason")
         if not reason:
             return jsonify({"error": "A reason is required for a hall pass."}), 400
@@ -1438,7 +1512,7 @@ def handle_tap():
             # Since the student is just requesting, they are still 'active'.
             # We need to return the current state to the UI.
             is_active = True
-            last_payroll_time = get_last_payroll_time()
+            last_payroll_time = get_last_payroll_time(student_id=student.id)
             duration = calculate_unpaid_attendance_seconds(student.id, period, last_payroll_time, join_code=join_code)
             rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period))
             projected_pay = duration * rate_per_second
@@ -1457,13 +1531,13 @@ def handle_tap():
                 }
             })
 
-    # --- Standard Tap In/Out Logic ---
+    # --- Standard Start/Stop Work Logic ---
     try:
-        status = "active" if action == "tap_in" else "inactive"
-        reason = data.get("reason") if action == "tap_out" else None
+        status = "active" if normalized_action == "start_work" else "inactive"
+        reason = data.get("reason") if normalized_action == "stop_work" else None
 
         # Auto-tap-out from other periods when tapping into a new period
-        if action == "tap_in":
+        if normalized_action == "start_work":
             # Find all other periods where student is currently active
             for other_period in valid_periods:
                 if other_period == period:
@@ -1500,7 +1574,7 @@ def handle_tap():
         )
         if latest_event and latest_event.status == status:
             current_app.logger.info(f"Duplicate {action} ignored for student {student.id} in period {period}")
-            last_payroll_time = get_last_payroll_time()
+            last_payroll_time = get_last_payroll_time(student_id=student.id)
             duration = calculate_unpaid_attendance_seconds(student.id, period, last_payroll_time, join_code=join_code)
             return jsonify({
                 "status": "ok",
@@ -1508,8 +1582,8 @@ def handle_tap():
                 "duration": duration
             })
 
-        # Check daily limit when tapping IN
-        if action == "tap_in":
+        # Check daily limit when Starting Work
+        if normalized_action == "start_work":
             from payroll import get_daily_limit_seconds
             from attendance import calculate_period_attendance_utc_range
 
@@ -1540,8 +1614,8 @@ def handle_tap():
                         "error": f"Daily limit of {hours_limit:.1f} hours reached for this period. Please try again tomorrow."
                     }), 400
 
-        # When tapping in, automatically return any active hall pass
-        if action == "tap_in":
+        # When Starting Work, automatically return any active hall pass
+        if normalized_action == "start_work":
             active_hall_pass = HallPassLog.query.filter_by(
                 student_id=student.id,
                 period=period,
@@ -1564,7 +1638,7 @@ def handle_tap():
         )
         db.session.add(event)
 
-        # Update "done for the day" status when tapping out with reason "done"
+        # Update "done for the day" status when Stopping Work with reason "done"
         pacific = pytz.timezone('America/Los_Angeles')
         now_pacific = now.astimezone(pacific)
         today_pacific = now_pacific.date()
@@ -1572,8 +1646,8 @@ def handle_tap():
         if student_block.done_for_day_date and student_block.done_for_day_date != today_pacific:
             student_block.done_for_day_date = None
             current_app.logger.info(f"Cleared done_for_day_date for student {student.id} in period {period} (new day)")
-        # Set or clear done_for_day_date based on tap out reason
-        if action == "tap_out":
+        # Set or clear done_for_day_date based on stop work reason
+        if normalized_action == "stop_work":
             if reason and reason.lower() in ['done', 'done for the day']:
                 student_block.done_for_day_date = today_pacific
                 current_app.logger.info(f"Student {student.id} marked as done for the day in period {period}")
@@ -1598,7 +1672,7 @@ def handle_tap():
         .first()
     )
     is_active = latest_event.status == "active" if latest_event else False
-    last_payroll_time = get_last_payroll_time()
+    last_payroll_time = get_last_payroll_time(student_id=student.id)
     duration = calculate_unpaid_attendance_seconds(student.id, period, last_payroll_time, join_code=join_code)
 
     rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period))
@@ -1622,15 +1696,13 @@ def get_tap_entries(student_id):
     if not admin:
         return jsonify({"error": "Unauthorized"}), 401
 
-    from app.models import Student, TapEvent
-    student = Student.query.get(student_id)
-    if not student:
-        return jsonify({"error": "Student not found"}), 404
+    from app.models import TapEvent
+    from app.auth import get_student_for_admin
 
-    # Check if admin has access to this student via StudentTeacher association
-    # SECURITY: Only use StudentTeacher table, NOT the deprecated teacher_id field
-    if student.teachers.filter_by(id=admin.id).count() == 0:
-        return jsonify({"error": "Access denied"}), 403
+    # SECURITY FIX: Use scoped helper to verify admin owns this student
+    student = get_student_for_admin(student_id)
+    if not student:
+        return jsonify({"error": "Student not found or access denied"}), 404
 
     # Get all tap events for this student
     events = TapEvent.query.filter_by(
@@ -1695,16 +1767,17 @@ def delete_tap_entry(event_id):
     if not admin:
         return jsonify({"error": "Unauthorized"}), 401
 
-    from app.models import TapEvent, Student
+    from app.models import TapEvent
+    from app.auth import get_student_for_admin
+
     event = TapEvent.query.get(event_id)
     if not event:
         return jsonify({"error": "Tap entry not found"}), 404
 
-    # Check if admin has access to this student via StudentTeacher association
-    # SECURITY: Only use StudentTeacher table, NOT the deprecated teacher_id field
-    student = Student.query.get(event.student_id)
-    if not student or student.teachers.filter_by(id=admin.id).count() == 0:
-        return jsonify({"error": "Access denied"}), 403
+    # SECURITY FIX: Use scoped helper to verify admin owns this student
+    student = get_student_for_admin(event.student_id)
+    if not student:
+        return jsonify({"error": "Student not found or access denied"}), 404
 
     # Mark as deleted
     event.is_deleted = True
@@ -1738,14 +1811,13 @@ def update_student_block_settings():
     if not student_id or not period or tap_enabled is None:
         return jsonify({"error": "Missing required fields"}), 400
 
-    from app.models import Student, StudentBlock
-    student = Student.query.get(student_id)
-    if not student:
-        return jsonify({"error": "Student not found"}), 404
+    from app.models import StudentBlock
+    from app.auth import get_student_for_admin
 
-    # Check if admin has access to this student (many-to-many or legacy teacher_id)
-    if not (student.teachers.filter_by(id=admin.id).first() or student.teacher_id == admin.id):
-        return jsonify({"error": "Access denied"}), 403
+    # SECURITY FIX: Use scoped helper AND removed deprecated teacher_id check
+    student = get_student_for_admin(student_id)
+    if not student:
+        return jsonify({"error": "Student not found or access denied"}), 404
 
     # Get or create StudentBlock record
     student_block = StudentBlock.query.filter_by(
@@ -1829,8 +1901,17 @@ def check_and_auto_tapout_if_limit_reached(student):
         )
 
         if latest_event and latest_event.status == "active":
+            # Get teacher_id for this block (needed for settings lookup)
+            teacher_id = None
+            # Try to find seat for this block
+            seat = TeacherBlock.query.filter_by(student_id=student.id, block=block_original, is_claimed=True).first()
+            if seat:
+                teacher_id = seat.teacher_id
+            elif student.teacher_id:
+                teacher_id = student.teacher_id
+
             # Get daily limit for this period (use original case for settings lookup)
-            daily_limit = get_daily_limit_seconds(block_original)
+            daily_limit = get_daily_limit_seconds(block_original, teacher_id=teacher_id)
 
             if daily_limit:
                 # Calculate today's completed attendance using proper Pacific day boundaries
@@ -1854,6 +1935,18 @@ def check_and_auto_tapout_if_limit_reached(student):
                         f"Auto-tapping out student {student.id} from {period_upper} - daily limit of {hours_limit} hours reached (total: {today_attendance/3600:.2f}h)"
                     )
 
+                    # Prioritize join_code from the active event we are closing
+                    join_code = latest_event.join_code
+                    if not join_code:
+                        # Fallback for legacy events without a join_code
+                        join_code = get_join_code_for_student_period(student.id, period_upper)
+
+                    if not join_code:
+                        current_app.logger.warning(
+                            f"Unable to resolve join_code for student {student.id} in period {period_upper} for auto-tap-out. TapEvent ID is {latest_event.id}."
+                        )
+                        continue
+
                     # Calculate when they SHOULD have been tapped out (at exactly the limit)
                     # If they've been active for 90 minutes and limit is 75, tap them out 15 minutes ago
                     overage_seconds = today_attendance - daily_limit
@@ -1865,7 +1958,8 @@ def check_and_auto_tapout_if_limit_reached(student):
                         period=period_upper,
                         status="inactive",
                         timestamp=tapout_timestamp,
-                        reason=f"Daily limit ({hours_limit:.1f}h) reached"
+                        reason=f"Daily limit ({hours_limit:.1f}h) reached",
+                        join_code=join_code
                     )
                     db.session.add(tap_out_event)
 
@@ -1925,7 +2019,23 @@ def set_timezone():
              is_authenticated = True
              session['last_activity'] = now.isoformat()
 
-    # Check Student Session (if not already authenticated as admin)
+    # Check System Admin Session (if not already authenticated)
+    if not is_authenticated and session.get('sysadmin_id'):
+        last_activity = session.get('last_activity')
+        if last_activity:
+            try:
+                last_activity_dt = datetime.fromisoformat(last_activity)
+                if (now - last_activity_dt) < timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+                    is_authenticated = True
+                    session['last_activity'] = now.isoformat()
+            except ValueError:
+                pass
+        else:
+            # If no last_activity but sysadmin_id is set, treat as active
+            is_authenticated = True
+            session['last_activity'] = now.isoformat()
+
+    # Check Student Session (if not already authenticated as admin or sysadmin)
     if not is_authenticated and 'student_id' in session:
         login_time_str = session.get('login_time')
         if login_time_str:
@@ -1978,6 +2088,7 @@ def create_demo_student():
         insurance_plan = data.get('insurance_plan', 'none')
         period = data.get('period', 'A')
         rent_enabled = bool(data.get('rent_enabled', True))
+        join_code = generate_join_code()
 
         # Generate a unique session ID for this demo
         demo_session_id = secrets.token_urlsafe(32)
@@ -2003,11 +2114,37 @@ def create_demo_student():
         db.session.add(demo_student)
         db.session.flush()  # Get the student ID
 
+        # Link demo student to admin for scoped queries
+        demo_link = StudentTeacher(student_id=demo_student.id, admin_id=admin_id)
+        db.session.add(demo_link)
+
+        # Create a claimed seat for this demo student so student routes have class context
+        demo_seat = TeacherBlock(
+            teacher_id=admin_id,
+            block=period,
+            class_label=f"Demo {period}",
+            first_name='Demo',
+            last_initial='S',
+            last_name_hash_by_part=hash_last_name_parts('S', demo_student.salt),
+            dob_sum=0,
+            salt=demo_student.salt,
+            first_half_hash=secrets.token_hex(32),
+            join_code=join_code,
+            student_id=demo_student.id,
+            is_claimed=True,
+            claimed_at=datetime.now(timezone.utc)
+        )
+        db.session.add(demo_seat)
+
+        # Ensure tap settings exist for the demo block
+        db.session.add(StudentBlock(student_id=demo_student.id, period=period, tap_enabled=True))
+
         # Create initial balance transactions
         if checking_balance > 0:
             checking_tx = Transaction(
                 student_id=demo_student.id,
                 teacher_id=admin_id,
+                join_code=join_code,
                 amount=checking_balance,
                 account_type='checking',
                 type='admin_adjustment',
@@ -2019,6 +2156,7 @@ def create_demo_student():
             savings_tx = Transaction(
                 student_id=demo_student.id,
                 teacher_id=admin_id,
+                join_code=join_code,
                 amount=savings_balance,
                 account_type='savings',
                 type='admin_adjustment',

@@ -409,7 +409,38 @@ class SystemAdmin(db.Model):
     __tablename__ = 'system_admins'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    totp_secret = db.Column(db.String(32), nullable=False)
+    totp_secret = db.Column(db.String(200), nullable=False)  # Stores base64-encoded encrypted TOTP secret
+
+
+class SystemAdminCredential(db.Model):
+    """
+    Stores WebAuthn/FIDO2 credentials for system admin passwordless authentication.
+    Each credential represents a passkey or security key registered to a system admin.
+    """
+    __tablename__ = 'system_admin_credentials'
+
+    id = db.Column(db.Integer, primary_key=True)
+    sysadmin_id = db.Column(db.Integer, db.ForeignKey('system_admins.id', ondelete='CASCADE'), nullable=False)
+
+    # WebAuthn credential data
+    credential_id = db.Column(db.LargeBinary, unique=True, nullable=False, index=True)  # Base64url decoded credential ID
+    public_key = db.Column(db.LargeBinary, nullable=True)  # COSE-encoded public key
+    sign_count = db.Column(db.Integer, default=0, nullable=False)  # For clone detection
+
+    # Authenticator metadata
+    transports = db.Column(db.String(255))  # Comma-separated: "usb,nfc,ble,internal"
+    authenticator_name = db.Column(db.String(100))  # User-friendly name e.g., "YubiKey 5C"
+    aaguid = db.Column(db.String(36))  # Authenticator Attestation GUID (optional)
+
+    # Timestamps (all UTC)
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    last_used = db.Column(db.DateTime)
+
+    # Relationships
+    sysadmin = db.relationship('SystemAdmin', backref=db.backref('credentials', lazy='dynamic', cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<SystemAdminCredential {self.authenticator_name or "Unnamed"} for SysAdmin {self.sysadmin_id}>'
 
 
 class Transaction(db.Model):
@@ -448,6 +479,10 @@ class StudentBlock(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
     period = db.Column(db.String(10), nullable=False)
+
+    # CRITICAL: join_code is the source of truth for class isolation
+    # Links this student-period combination to a specific class economy
+    join_code = db.Column(db.String(20), nullable=True, index=True)
 
     # Toggle for enabling/disabling tap in/out for this student in this period
     tap_enabled = db.Column(db.Boolean, default=True, nullable=False)
@@ -547,6 +582,7 @@ class StoreItem(db.Model):
     auto_delist_date = db.Column(db.DateTime, nullable=True)
     auto_expiry_days = db.Column(db.Integer, nullable=True) # days student has to use the item
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    is_long_term_goal = db.Column(db.Boolean, default=False, nullable=False) # if true, exclude from CWI balance checks
 
     # Bundle settings
     is_bundle = db.Column(db.Boolean, default=False, nullable=False)
@@ -750,6 +786,7 @@ class InsurancePolicy(db.Model):
     tier_category_id = db.Column(db.Integer, nullable=True)  # Groups policies that are mutually exclusive
     tier_name = db.Column(db.String(100), nullable=True)  # Display name for the tier (e.g., "Paycheck Protection")
     tier_color = db.Column(db.String(20), nullable=True)  # Color theme for the tier (e.g., "primary", "success", "warning")
+    tier_level = db.Column(db.String(20), nullable=True)  # Basic, mid-tier, premium placement within a group
 
     # Settings mode: simple or advanced
     settings_mode = db.Column(db.String(20), nullable=True, default='advanced')  # simple or advanced
@@ -920,14 +957,211 @@ class UserReport(db.Model):
     reviewed_by = db.relationship('SystemAdmin', backref='reviewed_reports', foreign_keys=[reviewed_by_sysadmin_id])
 
 
+# ---- Issue Resolution System Models ----
+
+class IssueCategory(db.Model):
+    """
+    Predefined categories for student issue reports.
+    Categories guide students to provide relevant context for their issue.
+    """
+    __tablename__ = 'issue_categories'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    description = db.Column(db.Text, nullable=True)
+    category_type = db.Column(db.String(50), nullable=False)  # 'transaction', 'general'
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    display_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=_utc_now)
+
+    # Relationships
+    issues = db.relationship('Issue', backref='category', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<IssueCategory {self.name} ({self.category_type})>'
+
+
+class Issue(db.Model):
+    """
+    Core issue tracking model for the Issue Resolution & Escalation system.
+
+    This system provides a safe, auditable, non-communicative mechanism for handling
+    errors, disputes, and system issues. Students submit issues which are reviewed
+    by teachers and potentially escalated to sysadmins.
+
+    Key principles:
+    - No direct student-to-sysadmin communication
+    - Teachers are first and primary decision-makers
+    - All issues tied to concrete system records when possible
+    - Clear lifecycle, ownership, and audit trail
+    - Non-identifying data for sysadmin review
+    """
+    __tablename__ = 'issues'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Student identification (non-identifying for sysadmin)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
+    student_first_name = db.Column(db.String(100), nullable=False)  # Cached for display
+    student_last_initial = db.Column(db.String(1), nullable=False)
+
+    # Opaque identifier for sysadmin investigations (non-reversible)
+    opaque_student_reference = db.Column(db.String(64), nullable=False, index=True)
+
+    # Class context
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=False, index=True)
+    class_label = db.Column(db.String(50), nullable=True)  # Cached class name
+
+    # Issue categorization
+    category_id = db.Column(db.Integer, db.ForeignKey('issue_categories.id'), nullable=False)
+    issue_type = db.Column(db.String(50), nullable=False)  # 'transaction', 'general'
+
+    # Student submission (immutable after submission)
+    student_explanation = db.Column(db.Text, nullable=False)
+    student_expected_outcome = db.Column(db.Text, nullable=True)
+    submitted_at = db.Column(db.DateTime, default=_utc_now, nullable=False, index=True)
+
+    # Context attachment (transaction/record-specific issues)
+    related_transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True)
+    related_record_type = db.Column(db.String(50), nullable=True)  # 'transaction', 'tap_event', 'rent_payment', etc.
+    related_record_id = db.Column(db.Integer, nullable=True)  # Generic ID for other record types
+
+    # System context snapshot (automatic, immutable)
+    context_snapshot = db.Column(db.JSON, nullable=True)  # Ledger state, amounts, timestamps, etc.
+    page_url = db.Column(db.String(500), nullable=True)
+    system_metadata = db.Column(db.JSON, nullable=True)  # Recent events, browser info, etc.
+
+    # Status tracking
+    status = db.Column(db.String(50), default='submitted', nullable=False, index=True)
+    # Allowed statuses: 'submitted', 'teacher_review', 'teacher_resolved', 'elevated', 'developer_review', 'developer_resolved'
+
+    # Teacher review and resolution
+    teacher_reviewed_at = db.Column(db.DateTime, nullable=True)
+    teacher_notes = db.Column(db.Text, nullable=True)  # Separate from student content
+    teacher_resolution = db.Column(db.String(100), nullable=True)  # Type of resolution applied
+    teacher_resolved_at = db.Column(db.DateTime, nullable=True)
+
+    # Escalation to sysadmin
+    escalated_at = db.Column(db.DateTime, nullable=True)
+    escalation_reason = db.Column(db.String(200), nullable=True)
+    teacher_diagnostic_note = db.Column(db.Text, nullable=True)  # Teacher's diagnostic for sysadmin
+    share_class_name_with_sysadmin = db.Column(db.Boolean, default=False, nullable=False)  # Teacher consent for class disclosure
+    eligible_for_reward = db.Column(db.Boolean, default=False, nullable=False)  # Teacher marks if student may receive reward for legitimate bug
+
+    # Sysadmin review and resolution
+    sysadmin_id = db.Column(db.Integer, db.ForeignKey('system_admins.id'), nullable=True)
+    sysadmin_reviewed_at = db.Column(db.DateTime, nullable=True)
+    sysadmin_notes = db.Column(db.Text, nullable=True)  # Separate from teacher/student content, visible to teacher only
+    sysadmin_resolved_at = db.Column(db.DateTime, nullable=True)
+
+    # Closure
+    closed_at = db.Column(db.DateTime, nullable=True)
+    closed_by_type = db.Column(db.String(20), nullable=True)  # 'teacher', 'sysadmin', 'system'
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now)
+
+    # Relationships
+    student = db.relationship('Student', backref=db.backref('issues', lazy='dynamic'))
+    teacher = db.relationship('Admin', backref=db.backref('class_issues', lazy='dynamic'))
+    sysadmin = db.relationship('SystemAdmin', backref=db.backref('reviewed_issues', lazy='dynamic'))
+    related_transaction = db.relationship('Transaction', backref='related_issues')
+    status_history = db.relationship('IssueStatusHistory', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueStatusHistory.changed_at.desc()')
+    resolution_actions = db.relationship('IssueResolutionAction', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueResolutionAction.created_at.desc()')
+
+    # Indexes
+    __table_args__ = (
+        db.Index('ix_issues_teacher_status', 'teacher_id', 'status'),
+        db.Index('ix_issues_student_status', 'student_id', 'status'),
+        db.Index('ix_issues_join_code_status', 'join_code', 'status'),
+    )
+
+    def get_student_visible_status(self):
+        """Return simplified status badge for student view."""
+        status_map = {
+            'submitted': 'Submitted',
+            'teacher_review': 'Teacher Review',
+            'teacher_resolved': 'Resolved',
+            'elevated': 'Elevated',
+            'developer_review': 'Developer Review',
+            'developer_resolved': 'Resolved - See Teacher'
+        }
+        return status_map.get(self.status, 'Unknown')
+
+    def is_locked(self):
+        """Check if issue is locked from further student edits (after escalation)."""
+        return self.status in ['elevated', 'developer_review', 'developer_resolved']
+
+    def __repr__(self):
+        return f'<Issue #{self.id} ({self.status}) - Student {self.student_first_name} {self.student_last_initial}.>'
+
+
+class IssueStatusHistory(db.Model):
+    """
+    Tracks all status changes for an issue.
+    Provides complete audit trail for issue lifecycle.
+    """
+    __tablename__ = 'issue_status_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    previous_status = db.Column(db.String(50), nullable=True)
+    new_status = db.Column(db.String(50), nullable=False)
+    changed_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    changed_by_type = db.Column(db.String(20), nullable=False)  # 'student', 'teacher', 'sysadmin', 'system'
+    changed_by_id = db.Column(db.Integer, nullable=True)  # ID of user who made the change
+    notes = db.Column(db.Text, nullable=True)
+
+    def __repr__(self):
+        return f'<IssueStatusHistory Issue#{self.issue_id}: {self.previous_status} → {self.new_status}>'
+
+
+class IssueResolutionAction(db.Model):
+    """
+    Tracks resolution actions taken on an issue.
+    Records what teachers did to resolve transaction/record disputes.
+    """
+    __tablename__ = 'issue_resolution_actions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    action_type = db.Column(db.String(100), nullable=False)
+    # Action types: 'reverse_transaction', 'correct_amount', 'correct_time', 'waive_fee', 'deny_issue', 'manual_adjustment', etc.
+
+    action_description = db.Column(db.Text, nullable=True)
+    performed_by_type = db.Column(db.String(20), nullable=False)  # 'teacher', 'sysadmin'
+    performed_by_id = db.Column(db.Integer, nullable=False)
+
+    # Related changes (for audit trail)
+    related_transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True)
+    amount_changed = db.Column(db.Float, nullable=True)
+    before_value = db.Column(db.Text, nullable=True)
+    after_value = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+
+    # Relationships
+    related_transaction = db.relationship('Transaction')
+
+    def __repr__(self):
+        return f'<IssueResolutionAction Issue#{self.issue_id}: {self.action_type}>'
+
+
 # ---- Admin Model ----
 class Admin(db.Model):
     __tablename__ = 'admins'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     display_name = db.Column(db.String(100), nullable=True)  # Teacher's display name (defaults to username if not set)
-    # TOTP-only: store secret, remove password_hash
-    totp_secret = db.Column(db.String(32), nullable=False)
+    # TOTP-only: store secret (base64-encoded encrypted data)
+    totp_secret = db.Column(db.String(200), nullable=False)  # Stores base64-encoded encrypted TOTP secret
+    # Account recovery: Hashed DOB sum (similar to student system)
+    dob_sum_hash = db.Column(db.String(64), nullable=True)  # Hashed Sum of MM + DD + YYYY
+    salt = db.Column(db.LargeBinary(16), nullable=True)  # Salt for DOB sum hash
     created_at = db.Column(db.DateTime, default=_utc_now, nullable=True)  # Nullable for existing records
     last_login = db.Column(db.DateTime, nullable=True)
     has_assigned_students = db.Column(db.Boolean, default=False, nullable=False)  # One-time setup flag
@@ -935,6 +1169,86 @@ class Admin(db.Model):
     def get_display_name(self):
         """Return display_name if set, otherwise fall back to username"""
         return self.display_name if self.display_name else self.username
+
+
+class AdminCredential(db.Model):
+    """
+    Stores WebAuthn/FIDO2 credentials for teacher passwordless authentication.
+    Each credential represents a passkey or security key registered to a teacher admin.
+    """
+    __tablename__ = 'admin_credentials'
+
+    id = db.Column(db.Integer, primary_key=True)
+    admin_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+
+    # WebAuthn credential data
+    credential_id = db.Column(db.LargeBinary, unique=True, nullable=False, index=True)  # Base64url decoded credential ID
+    public_key = db.Column(db.LargeBinary, nullable=True)  # COSE-encoded public key (empty for passwordless.dev)
+    sign_count = db.Column(db.Integer, default=0, nullable=False)  # For clone detection
+
+    # Authenticator metadata
+    transports = db.Column(db.String(255))  # Comma-separated: "usb,nfc,ble,internal"
+    authenticator_name = db.Column(db.String(100))  # User-friendly name e.g., "iPhone Touch ID"
+    aaguid = db.Column(db.String(36))  # Authenticator Attestation GUID (optional)
+
+    # Timestamps (all UTC)
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    last_used = db.Column(db.DateTime)
+
+    # Relationships
+    admin = db.relationship('Admin', backref=db.backref('credentials', lazy='dynamic', cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<AdminCredential {self.authenticator_name or "Unnamed"} for Admin {self.admin_id}>'
+
+
+# ---- Account Recovery Models ----
+class RecoveryRequest(db.Model):
+    """Teacher account recovery request - requires student verification"""
+    __tablename__ = 'recovery_requests'
+
+    id = db.Column(db.Integer, primary_key=True)
+    admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    dob_sum_hash = db.Column(db.String(64), nullable=True)  # Hashed input for verification trail
+
+    # Status tracking
+    status = db.Column(
+        db.Enum('pending', 'verified', 'expired', 'cancelled', name='recovery_request_status_enum'),
+        nullable=False,
+        default='pending'
+    )  # pending, verified, expired, cancelled
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)  # Auto-expire after X days
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+    # Partial progress - allows teacher to save progress and resume later
+    partial_codes = db.Column(db.JSON, nullable=True)  # Array of entered codes (not yet validated)
+    resume_pin_hash = db.Column(db.String(64), nullable=True)  # Hashed PIN to resume progress
+    resume_new_username = db.Column(db.String(100), nullable=True)  # Temporary storage for new username
+
+    # Relationships
+    admin = db.relationship('Admin', backref=db.backref('recovery_requests', lazy='dynamic'))
+    verification_codes = db.relationship('StudentRecoveryCode', backref='recovery_request', lazy='dynamic', cascade='all, delete-orphan')
+
+
+class StudentRecoveryCode(db.Model):
+    """Student verification code for teacher account recovery"""
+    __tablename__ = 'student_recovery_codes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    recovery_request_id = db.Column(db.Integer, db.ForeignKey('recovery_requests.id'), nullable=False, index=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
+
+    # Verification code (6-digit, hashed)
+    code_hash = db.Column(db.String(64), nullable=True)  # NULL until student verifies
+    verified_at = db.Column(db.DateTime, nullable=True)
+
+    # Notification tracking
+    notified_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    dismissed = db.Column(db.Boolean, default=False, nullable=False)  # Student dismissed notification
+
+    # Relationships
+    student = db.relationship('Student', backref=db.backref('recovery_codes', lazy='dynamic'))
 
 
 # ---- Payroll Settings Model ----
@@ -1260,3 +1574,107 @@ class TeacherOnboarding(db.Model):
     def needs_onboarding(self):
         """Check if teacher needs to complete onboarding."""
         return not self.is_completed and not self.is_skipped
+
+
+# -------------------- ANNOUNCEMENT MODEL --------------------
+class Announcement(db.Model):
+    """
+    Announcements for teachers and system administrators.
+
+    Teacher Announcements:
+    - Teachers post to specific class periods (scoped by join_code)
+    - Only visible to students in that class period
+
+    System Admin Announcements:
+    - System admins post with broader audience types
+    - Can target: all students, all teachers, specific teacher's classes, or everyone
+    - Teachers cannot see these in their announcement management
+    """
+    __tablename__ = 'announcements'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Author (one of these will be set)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=True)
+    system_admin_id = db.Column(db.Integer, db.ForeignKey('system_admins.id', ondelete='CASCADE'), nullable=True)
+
+    # Audience targeting
+    join_code = db.Column(db.String(20), nullable=True, index=True)  # For teacher/sysadmin specific class announcements
+    audience_type = db.Column(db.String(30), default='class', nullable=False)  # 'class', 'system_wide', 'all_teachers', 'all_students', 'teacher_all_classes', 'specific_class'
+    target_teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=True)  # For 'teacher_all_classes' audience type
+
+    # Announcement content
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+
+    # Display settings
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    priority = db.Column(db.String(20), default='normal', nullable=False)  # 'low', 'normal', 'high', 'urgent'
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=True)  # Optional expiration
+
+    # Relationships
+    teacher = db.relationship('Admin', foreign_keys=[teacher_id], backref=db.backref('announcements', lazy='dynamic', passive_deletes=True))
+    system_admin = db.relationship('SystemAdmin', foreign_keys=[system_admin_id], backref=db.backref('announcements', lazy='dynamic', passive_deletes=True))
+    target_teacher = db.relationship('Admin', foreign_keys=[target_teacher_id], backref=db.backref('targeted_announcements', lazy='dynamic', passive_deletes=True))
+
+    # Indexes
+    __table_args__ = (
+        db.Index('ix_announcements_join_code_active', 'join_code', 'is_active'),
+        db.Index('ix_announcements_teacher_join_code', 'teacher_id', 'join_code'),
+        db.Index('ix_announcements_audience_type', 'audience_type', 'is_active'),
+        db.Index('ix_announcements_system_admin', 'system_admin_id', 'is_active'),
+    )
+
+    def __repr__(self):
+        author = f"Teacher {self.teacher_id}" if self.teacher_id else f"SysAdmin {self.system_admin_id}"
+        return f'<Announcement {self.id} - {self.title[:30]} ({author}, {self.audience_type})>'
+
+    def is_expired(self):
+        """Check if announcement has expired."""
+        if self.expires_at is None:
+            return False
+        return datetime.now(timezone.utc) > self.expires_at
+
+    def should_display(self):
+        """Check if announcement should be displayed."""
+        return self.is_active and not self.is_expired()
+
+    def get_priority_class(self):
+        """Get CSS class for announcement priority."""
+        priority_classes = {
+            'low': 'alert-secondary',
+            'normal': 'alert-info',
+            'high': 'alert-warning',
+            'urgent': 'alert-danger'
+        }
+        return priority_classes.get(self.priority, 'alert-info')
+
+    def get_priority_icon(self):
+        """Get icon for announcement priority."""
+        priority_icons = {
+            'low': '📌',
+            'normal': '📢',
+            'high': '⚠️',
+            'urgent': '🚨'
+        }
+        return priority_icons.get(self.priority, '📢')
+
+    def get_audience_label(self):
+        """Get human-readable label for audience type."""
+        labels = {
+            'class': 'Class Period',
+            'system_wide': 'Everyone (System-Wide)',
+            'all_teachers': 'All Teachers',
+            'all_students': 'All Students',
+            'teacher_all_classes': 'Teacher\'s All Classes',
+            'specific_class': 'Specific Class'
+        }
+        return labels.get(self.audience_type, 'Unknown')
+
+    def is_system_admin_announcement(self):
+        """Check if this is a system admin announcement."""
+        return self.system_admin_id is not None

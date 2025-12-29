@@ -5,6 +5,417 @@ All notable changes to the Classroom Token Hub project will be documented in thi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows semantic versioning principles.
 
+
+## [Unreleased]
+
+### Added
+- **Issue Resolution & Escalation System** - Structured, teacher-mediated issue handling system
+  - **Student Features**:
+    - New Help & Support interface with 3 tabs: Knowledge Base, Report an Issue, My Issues
+    - Submit general issues (clock-in problems, features not working, balance incorrect, etc.)
+    - Report transaction-specific issues directly from transaction history
+    - Help icons next to each transaction in Recent Activity for quick issue reporting
+    - Character-limited submissions (1000 chars) to encourage concise reporting
+    - Automatic context capture: balances, transaction history, system metadata
+    - Status badges (Submitted, Teacher Review, Resolved, Elevated, Developer Review) - no messaging
+    - View all submitted issues with status tracking
+  - **Teacher Features**:
+    - Issue review queue with pending/resolved/escalated tabs
+    - Detailed issue view showing student explanation, context, and transaction details
+    - Resolution actions:
+      - Reverse/void transactions directly from issue interface
+      - Manual adjustment (teacher handles offline)
+      - Deny issue with required explanation
+    - Escalate to developer with:
+      - Required escalation reason
+      - Diagnostic notes for investigation
+      - Optional class name sharing checkbox (default: opaque reference only)
+      - **"Student may receive reward"** checkbox for legitimate bug reports
+    - Complete status history and resolution action audit trail
+  - **Technical Implementation**:
+    - 4 new database models: `Issue`, `IssueCategory`, `IssueStatusHistory`, `IssueResolutionAction`
+    - Default categories: 6 transaction types + 6 general issue types
+    - Opaque student references for sysadmin privacy (non-reversible hashes)
+    - Multi-tenancy scoping by `join_code` for proper class isolation
+    - Context snapshots preserve ledger state at time of submission
+    - Complete audit trail with timestamps and attribution
+    - Immutable student submissions after creation
+  - **Design Principles**:
+    - No direct student-to-sysadmin communication
+    - Teachers are first-line decision makers
+    - Evidence-based issue tracking (tied to concrete transactions/records)
+    - Data minimization for sysadmin review
+    - Status badges only (non-communicative design)
+  - Routes:
+    - Student: `/student/help-support`, `/student/help-support/submit-issue`, `/student/help-support/transaction/<id>/report`
+    - Teacher: `/admin/issues`, `/admin/issues/<id>`, `/admin/issues/<id>/resolve`, `/admin/issues/<id>/escalate`
+
+### Changed
+
+### Fixed
+
+### Security
+- Enhanced privacy protection in issue resolution system through opaque student references
+- Teacher-controlled data disclosure to sysadmins (optional class name sharing)
+
+## [1.4.0] - 2025-12-27
+
+### Added
+- **Announcement System** - Teachers can create and manage announcements for their class periods
+  - Display announcements on student dashboards with dismiss capability
+  - Filter announcements by class period
+  - Toggle announcement visibility (active/inactive)
+  - Create, edit, and delete announcements with rich formatting
+  - System admins can create global announcements visible across all classes
+  - Announcements link added to admin navigation under Classroom section
+- **UI/UX Improvements** - Comprehensive redesign of dashboard and navigation interfaces
+  - **Personalized Greetings**:
+    - Teacher dashboard displays centered "Hi, [Display Name]" greeting with info icon tooltip linking to settings
+    - Student dashboard shows dynamic time-based greeting with first name
+    - Mid-day greetings randomize between friendly options: "Howdy", "Good day to you", "Good to see you again", "Great timing", "Let us get started"
+    - Morning (5am-12pm): "Good morning"
+    - Afternoon (12pm-5pm): Random friendly greeting
+    - Evening (5pm-5am): "Good evening"
+  - **Enhanced Student Dashboard**:
+    - Removed redundant left navigation sidebar for cleaner layout
+    - Added side-by-side account balance cards for Checking and Savings accounts
+    - Light gray card backgrounds for better visibility
+    - Savings account displays projected monthly interest when balance > 0
+    - Encouragement message when savings balance is $0 to promote saving habits
+    - Fully responsive design (side-by-side on desktop, stacked on mobile)
+  - **Accordion-Style Admin Navigation**:
+    - Reorganized sidebar navigation into collapsible accordion categories
+    - Categories: Classroom, Economy, Bills, Settings
+    - Bootstrap accordion ensures only one section open at a time for cleaner interface
+    - Consolidated Settings section: Personalization, Passkey, Features, Help & Support
+    - Removed non-functional "Mobile Site" link from navigation
+    - Custom CSS styling for dark sidebar theme with smooth transitions
+  - **Improved Sign Out Button**: Enhanced contrast with red filled button and white text
+  - **Streamlined Authentication Flow**:
+    - Login forms present two authentication method buttons upfront
+    - "Use my authenticator" button reveals TOTP field with Back button
+    - "Use my passkey" button triggers WebAuthn flow with automatic fallback to TOTP on failure
+    - Applied to both admin and system admin login pages
+    - Cleaner, more intuitive authentication experience with proper error handling
+
+### Changed
+- **Dependency Updates** - Updated key dependencies for security and stability
+  - Updated `click` from 8.1.8 to 8.3.1
+  - Updated `beautifulsoup4` from 4.13.4 to 4.14.3
+  - Updated `requests` from 2.32.3 to 2.32.4
+
+### Security
+- **CodeQL Security Alerts Remediation** - Addressed 62 security alerts identified by CodeQL scanning (#737)
+  - **Clear-text Logging of Sensitive Information**:
+    - Remove TOTP secret printing from `create_admin.py`, `wsgi.py`, and seed scripts
+    - TOTP secrets now encrypted in database with secure access only
+    - Prevents TOTP secrets from appearing in logs, console output, or command history
+  - **DOM XSS Vulnerabilities**:
+    - Fixed `innerHTML` usage in `templates/student_transfer.html`
+    - Fixed `innerHTML` usage in `static/js/attendance.js`
+    - Replaced with safe DOM manipulation using `createElement` and `textContent`
+    - Prevents XSS attacks via user-controlled data
+  - **GitHub Actions Workflow Permissions**:
+    - Added explicit permissions to `toggle-maintenance.yml`, `check-migrations.yml`, and `deploy.yml`
+    - Follows principle of least privilege for workflow security
+    - Reduces workflow attack surface
+  - **Documentation**: Added `SECURITY_FIXES_SUMMARY.md` with complete analysis of all 62 alerts
+  - **Summary**: Fixed 23+ real security issues, suppressed 2 false positives, reviewed 37 false positives (already mitigated)
+- **Enhanced Open Redirect Protection** - Improved URL validation in student class enrollment redirects
+  - Upgraded `_is_safe_url()` function to use same-origin validation
+  - Now uses `urljoin()` to resolve relative URLs against application's base URL
+  - Validates that redirect targets match the application's scheme and domain
+  - Prevents protocol-relative URLs and external redirects
+  - Added explicit security annotations (`# nosec`) with justification at all redirect points
+  - Addresses all 9 CodeQL security scanner findings for URL redirection vulnerabilities
+  - Affects student add-class flow redirect handling (`app/routes/student.py:710-877`)
+
+### Fixed
+- **Teacher Invite Code Validation** - Fixed critical bugs preventing teacher signup with invite codes (#738)
+  - **Whitespace Handling**: Strip whitespace from invite codes during creation and validation
+  - **Timezone Comparison Error**: Fixed TypeError when comparing invite code expiration dates (timezone-aware vs timezone-naive datetimes)
+  - **TOTP Form Validation**: Properly handle TOTP confirmation form submission separate from initial signup form
+  - **Form Field Population**: Use AdminTOTPConfirmForm for TOTP submissions instead of AdminSignupForm
+  - **Date String Handling**: Pass date string instead of integer for dob_sum field in TOTP confirmation
+  - Added comprehensive debug logging for invite code creation and validation
+  - Added cleanup script (`cleanup_invite_codes.py`) for existing codes with whitespace
+  - Ensures consistency between invite code creation and validation across system admin and CLI tools
+- **TOTP Setup UI** - Updated TOTP setup page to match new brand theme
+  - Replaced hardcoded colors with CSS variables (--primary, --secondary, etc.)
+  - Updated gradient and logo to match refreshed brand
+  - Added pattern background to match signup page design
+  - Improved button hover states for consistency
+- **Onboarding Templates** - Updated color scheme and text for better consistency with new brand theme
+- **Admin Dashboard**: Removed duplicate greeting that was appearing in both page header and content section
+- **Student Dashboard**: Improved account balance cards with clearer styling using light backgrounds instead of semi-transparent overlays for better readability
+- **Mobile Responsiveness**: Enhanced responsive behavior with proper Bootstrap column classes (col-12 col-md-6)
+- **Grafana Access Issue** - Fixed "connection refused" error when accessing Grafana from system admin dashboard
+  - **Root Cause**: Nginx `proxy_pass` had trailing slash that stripped URL path, causing infinite redirects
+  - **Dual-Layer Solution** for maximum reliability:
+    - **Flask Proxy (Fallback)**: Added `/sysadmin/grafana` route that proxies to Grafana service
+      - Works immediately without Nginx configuration changes
+      - Maintains system admin authentication via `@system_admin_required`
+      - Configurable via `GRAFANA_URL` environment variable (defaults to `http://localhost:3000`)
+      - Rate-limit exempt for smooth dashboard operation
+      - Graceful error handling with user-friendly messages
+      - Added `requests==2.32.3` dependency
+    - **Nginx Fix (Production)**: Corrected configuration provided in `nginx-grafana-fix.conf`
+      - Remove trailing slash from `proxy_pass http://127.0.0.1:3000/` → `proxy_pass http://127.0.0.1:3000`
+      - Nginx intercepts requests before Flask (faster performance)
+      - Auto-fallback to Flask proxy if Nginx not configured
+  - See `GRAFANA_FIX_GUIDE.md` for detailed implementation guide
+
+## [1.3.0] - 2025-12-25
+
+### Added
+- **Passwordless Authentication for Teachers** - Implemented WebAuthn/FIDO2 passkey authentication for teacher admins
+  - Supports hardware security keys (YubiKey, Google Titan Key, etc.)
+  - Supports platform authenticators (Touch ID, Face ID, Windows Hello)
+  - Supports synced passkeys across devices
+  - Phishing-resistant authentication (domain-bound credentials)
+  - New `/admin/passkey/settings` page for passkey management
+  - Backend routes for passkey registration and authentication
+  - Database model `AdminCredential` for storing passkey metadata
+  - TOTP authentication remains available as backup option
+  - Full CSRF protection and rate limiting on all passkey endpoints
+  - Passkey settings link added to teacher navigation sidebar
+- **Passwordless Authentication for System Admins** - Implemented WebAuthn/FIDO2 passkey authentication using passwordless.dev
+  - Supports hardware security keys (YubiKey, Google Titan Key, etc.)
+  - Supports platform authenticators (Touch ID, Face ID, Windows Hello)
+  - Supports synced passkeys across devices
+  - Phishing-resistant authentication (domain-bound credentials)
+  - New `/sysadmin/passkey/settings` page for passkey management
+  - Backend routes for passkey registration and authentication
+  - Frontend integration with passwordless.dev JavaScript SDK
+  - Database model `SystemAdminCredential` for storing passkey metadata
+  - TOTP authentication remains available alongside passkeys
+  - Self-hosted ready: Infrastructure supports future migration to py-webauthn library
+  - Requires environment variables: `PASSWORDLESS_API_KEY`, `PASSWORDLESS_API_PUBLIC`
+  - Full CSRF protection and rate limiting on all passkey endpoints
+  - Tracks credential usage timestamps for security auditing
+  - Uses official Bitwarden Passwordless SDK (`passwordless==2.0.0`) for type-safe API interactions
+- **Security Remediation Tools and Documentation** - Complete implementation guides and fixed workflow files
+  - Step-by-step remediation guide: `docs/security/SECURITY_REMEDIATION_GUIDE.md`
+  - Fixed workflow files with SSH host key verification: `.github/workflows/*.FIXED`
+  - Automated SSH security setup script: `scripts/setup-ssh-security.sh`
+  - Includes fixes for: SSH MITM vulnerability, secrets management hardening, dependency updates
+  - Ready-to-use workflow files with improved security posture
+
+### Security
+- **Encrypted TOTP Secrets at Rest** - TOTP 2FA secrets now encrypted in database using Fernet (AES-128-CBC)
+  - Added `encrypt_totp()` and `decrypt_totp()` helper functions in `app/utils/encryption.py`
+  - All new admin/system admin accounts store encrypted TOTP secrets (base64-encoded)
+  - Backward compatible: `decrypt_totp()` handles both encrypted and legacy plaintext secrets transparently
+  - **MIGRATION REQUIRED**: Column length expanded from VARCHAR(32) to VARCHAR(200) - See `MIGRATION_TOTP_ENCRYPTION.md`
+  - Defense in depth: Database compromise alone no longer sufficient to generate valid 2FA codes
+  - **Note:** Still requires `ENCRYPTION_KEY` security - future migration to AWS Secrets Manager/Vault recommended
+  - Files changed: `app/utils/encryption.py`, `app/models.py`, `app/routes/admin.py`, `app/routes/system_admin.py`, `wsgi.py`, `create_admin.py`
+- **Removed Sensitive Information from Application Logs** - Eliminated logging of usernames, hashes, and PII
+  - Removed username logging from student login, admin login, admin signup, and admin recovery flows
+  - Removed partial hash logging from student authentication
+  - Removed student name and DOB sum logging from bulk upload process
+  - Impact: Prevents accidental exposure of PII in development logs, log files, or screenshots
+  - Note: Production deployments should configure `LOG_LEVEL=WARNING` or higher to minimize log output
+- **CRITICAL: Fixed PromptPwnd AI Prompt Injection Vulnerability** - Disabled vulnerable `summary.yml` GitHub Actions workflow
+  - Workflow used AI inference (`actions/ai-inference@v1`) with untrusted user input from issue titles/bodies
+  - Attack vector: Any user could create an issue with malicious prompt injection to leak `GITHUB_TOKEN` or manipulate workflows
+  - Remediation: Disabled workflow by renaming to `summary.yml.DISABLED`
+  - Impact: No exploitation detected - vulnerability fixed proactively
+  - Documentation: See `docs/security/PROMPTPWND_REMEDIATION.md` for full details
+  - Reference: [Aikido Security PromptPwnd Disclosure](https://www.aikido.dev/blog/promptpwnd-ai-prompt-injection-in-github-actions) (December 2025)
+- **Comprehensive Attack Surface Security Audit Completed** - Full security review of codebase, CI/CD, and infrastructure
+  - Audited: GitHub Actions workflows, authentication, authorization, encryption, multi-tenancy, dependencies, and API security
+  - Findings: 16 total findings (2 critical, 2 high, 3 medium, 4 low, 5 informational)
+  - Critical issues: AI prompt injection (fixed), SSH host key verification disabled (open)
+  - Strengths: Excellent CSRF protection, SQL injection prevention, XSS mitigation, PII encryption, multi-tenancy isolation
+  - Recommendations: Enable SSH host key verification, update cryptography package, improve secrets management
+  - Documentation: See `docs/security/COMPREHENSIVE_ATTACK_SURFACE_AUDIT_2025.md` for complete report
+- **Fixed Username Enumeration Vulnerability in Passkey Authentication** - Generic error messages prevent attackers from discovering valid usernames
+  - Changed "No passkeys registered" to generic "Invalid credentials" error
+  - Prevents reconnaissance attacks to enumerate valid accounts
+- **Passkey Endpoints Allowed Through Maintenance Mode** - System admin and teacher passkey authentication endpoints now bypass maintenance mode
+  - Allows administrators to authenticate during maintenance windows
+  - Matches existing behavior for standard login endpoints
+
+### Changed
+- **Improved Store Management Overview Page** - Replaced "Active Store Items" section with more actionable information
+  - Now displays "Pending Redemption Requests" table showing items awaiting teacher approval
+  - Shows "Recent Purchases" table with the 10 most recent student purchases
+  - Each pending redemption includes student name, item, request time, details, and quick review link
+  - Recent purchases show student name, item, price, purchase time, and current status
+  - Fixed markdown rendering issue in item descriptions (was showing raw "####" markdown syntax)
+  - More useful for teachers to see what requires their attention rather than what's already in their store
+
+### Fixed
+- **Service Worker Cache Errors** - Fixed persistent browser console errors from Service Worker
+  - Stopped caching `chrome-extension://` URLs (was causing repeated errors)
+  - Stopped caching POST/PUT/DELETE requests (HTTP method not cacheable)
+  - Removed non-existent `brand-logo.svg` from static assets cache list
+  - Bumped cache version to v7 to force fresh cache on next page load
+  - Created `shouldCache()` helper function to centralize cache eligibility logic
+- **Passkey Registration ReferenceError** - Fixed JavaScript error preventing passkey registration
+  - Variable was renamed from `credId` to `credentialId` but one reference wasn't updated
+  - Would have caused all passkey registration attempts to fail with `ReferenceError: credId is not defined`
+  - Caught by AI code review tools (Copilot and Gemini)
+- **Broken Service Worker cacheFirst() Function** - Fixed corrupted function from bad merge
+  - Function had duplicate code blocks and missing logic
+  - Restored proper cache-first strategy with network fallback
+
+## [1.2.1] - 2025-12-21
+
+### Added
+- **Comprehensive Legacy Account Migration Script** - Complete migration tool for transitioning all legacy accounts to new multi-tenancy system
+  - Migrates students with `teacher_id` to claim-based enrollment system
+  - Creates missing `StudentTeacher` associations and `TeacherBlock` entries
+  - Backfills `join_code` for all TeacherBlock entries
+  - Backfills `join_code` for transactions, tap events, and related tables with proper multi-tenancy isolation
+  - **FIXED:** Transaction backfill now matches on BOTH `student_id` AND `teacher_id` to ensure correct period assignment for students in multiple periods with same teacher
+  - **FIXED:** Block names normalized to uppercase for consistency across database
+  - **OPTIMIZED:** Phase 5 backfill uses CTE with `DISTINCT ON` instead of correlated subqueries for significantly better performance on large datasets
+  - Includes dry-run mode for safe preview before applying changes
+  - Provides comprehensive verification and error reporting
+  - Located at: `scripts/comprehensive_legacy_migration.py`
+- **Comprehensive Test Suite for Legacy Migration** - Full test coverage for migration script
+  - Tests all 5 migration phases including Phase 5 (related tables backfill)
+  - Tests critical multi-period student scenarios
+  - Tests idempotency and error handling
+  - Tests block casing normalization
+  - Tests rollback on errors
+  - Tests CTE performance optimization for Phase 5
+  - Tests tables with and without period columns
+  - Located at: `tests/test_comprehensive_legacy_migration.py`
+- **Legacy Account Migration Documentation** - Complete guide for migration process
+  - Historical context and migration strategy
+  - Step-by-step deployment instructions
+  - Troubleshooting common issues
+  - Post-migration verification procedures
+  - Roadmap for deprecating `teacher_id` column
+  - Located at: `docs/operations/LEGACY_ACCOUNT_MIGRATION.md`
+- **Join Code Schema Audit Tool** - `scripts/inspect_join_code_columns.py` lists which tables have or are missing `join_code` to support multi-tenancy audits
+- **StudentBlock Join Code Migration** - Added idempotent migration (`a1b2c3d4e5f8`) to create `join_code` column and index on `student_blocks`, with safeguards for partially applied schemas
+
+### Changed
+- Preparing for final deprecation of `teacher_id`-based linkage system
+- All legacy data now ready for migration to `join_code`-based multi-tenancy
+- Hardened migration best practices documentation for avoiding duplicate-column errors in `student_blocks` hotfix scenarios
+- Refreshed maintenance page copy and styling for clearer outage messaging
+
+### Fixed
+- Closed multi-tenancy gaps by adding `join_code` propagation to overdraft fees, bonus/bulk payroll postings, insurance reimbursements, manual payments, and bug-report rewards
+- Improved bonus join_code lookup performance to reduce N+1 queries during mass payouts
+
+## [1.2.0] - 2025-12-18
+
+### Added
+- **Progressive Web App (PWA) Support** - Full PWA implementation for improved mobile experience
+  - Web app manifest with app metadata and icon configuration
+  - Service worker with intelligent caching strategies (cache-first for static assets, network-first for CDN resources)
+  - Offline fallback page with user-friendly offline experience
+  - PWA installation capability on mobile devices (Add to Home Screen)
+  - Multi-tenancy-safe caching that excludes authenticated routes
+  - Automatic cache cleanup and version management
+- **Mobile Experience Enhancements** - Dedicated mobile templates for student portal with responsive navigation and improved touch targets
+- **Accessibility Improvements** - Enhancements following WCAG 2.1 AA guidelines
+  - Added ARIA labels to mobile navigation and interactive elements
+  - Improved keyboard navigation support
+  - Enhanced screen reader compatibility
+  - Better color contrast ratios
+- **UI Documentation** - Added `docs/PWA_ICON_REQUIREMENTS.md` and `TEMPLATE_REDESIGN_RECOMMENDATIONS.md`
+  - PWA icon asset generation instructions
+  - UI redesign patterns and guidelines
+  - Best practices for accordion/collapsible patterns
+  - Color scheme guidelines for consistent visual hierarchy
+
+### Changed
+- **Attendance Terminology** - Renamed "Tap In/Out" to "Start Work/Break Done" for clarity
+  - Updated user-facing text throughout student portal
+  - Updated frontend API actions and documentation
+  - Maintained backward compatibility in database actions
+- **Admin UI Redesigns** - Modernized admin templates with collapsible accordion sections
+  - **Insurance Policy Edit Page** - Eliminated overflow issues with progressive disclosure layout
+  - **Store Item Edit Page** - Reduced scrolling with accordion sections for Bundle, Bulk Discount, and Advanced settings
+  - **Rent Settings Page** - Better organization with collapsible sections
+  - **Feature Settings** - Simplified to single-column, collapsible cards
+  - Added visual "Active" badges to accordion headers indicating when sections have configured settings
+- **Mobile Dashboard** - Simplified single-column layout with attendance card and tap buttons
+- **Mobile Store** - Improved item list layout with larger purchase buttons
+- **Theme Consistency** - Aligned mobile templates with main application theme colors
+
+### Fixed
+- **Critical: Multi-Tenancy Payroll Bug** - Fixed payroll calculations leaking data across class periods (#664)
+  - Ensured all payroll queries properly scoped by join_code
+  - Added multi-tenancy tests for payroll system
+- **Payroll JSON Error** - Fixed "Run Payroll Now" button returning HTML instead of JSON (#668)
+  - Resolved "Unexpected token '<!DOCTYPE'" error
+  - Properly returns JSON response for AJAX requests
+- **Timezone Handling** - Fixed timezone comparison error in payroll calculation (#666)
+  - Corrected UTC normalization for payroll scheduling
+  - Fixed edge cases with daylight saving time transitions
+- **PWA Icon Rendering** - Fixed Material Symbols icons not loading in PWA mode (#672, #676)
+  - Root cause: Service Worker intercepting Google Fonts with incorrect caching strategy
+  - Solution: Service Worker now bypasses Google Fonts, letting browser handle natively
+  - Added font preload and fallback CSS for Material Symbols
+- **Mobile PWA Navigation** - Restored icons and removed horizontal scrolling (#674)
+  - Tightened bottom navigation layout for small screens
+  - Added overflow-x protection and responsive media queries
+- **Desktop PWA Rendering** - Added PWA support to desktop templates for mobile viewing (#675)
+  - Added PWA meta tags (theme-color, apple-mobile-web-app-capable)
+  - Added mobile bottom navigation when sidebar is hidden
+- **Auto Tap-Out Regression** - Fixed test failures due to missing teacher_id context in auto tap-out logic (#670)
+
+### Technical
+- Service worker cache bumped to v5 to force updates
+- Added comprehensive multi-tenancy tests for payroll
+- Improved mobile responsiveness across all admin templates
+- Enhanced documentation organization and clarity
+
+## [1.1.1] - 2025-12-15
+
+### Fixed
+- Secured teacher recovery verification by hashing date-of-birth sums and migrating existing records to the new salted hash format (#637)
+- Hardened student login redirects and UTC-normalized dashboard earnings/spending calculations to prevent redirect abuse and negative totals (#638)
+- Applied the green theme to standalone admin/auth pages and corrected admin heading hierarchy to resolve styling regressions (#635, #639)
+- Added cache-busting static asset helper defaults and fallback coverage to stop `static_url` undefined errors across templates (#628-633)
+- Stopped insurance management and edit screens from crashing when legacy forms lack the tier grouping field (#640)
+- Added one-time prompt for legacy insurance policies and supporting script to encourage migration to tiered plans (#641)
+
+## [1.1.0] - 2024-12-13
+
+### Added
+- **Student Analytics Dashboard** - Weekly statistics showing days tapped in, minutes attended, earnings, and spending
+- **Savings Projection Graph** - Interactive 12-month visualization of savings growth on bank page using Chart.js
+- **Long-Term Goal Items** - Option to mark store items that should be exempt from CWI balance checks (for expensive class rewards)
+- **Enhanced Economy Health Warnings** - Specific recommended ranges and actionable guidance for all economy settings
+- **Weekly Analytics Calculations** - Backend logic to calculate unique days tapped, total minutes, and transaction summaries
+- **Savings Projection Algorithm** - Respects simple/compound interest and compounding frequency settings
+
+### Changed
+- **Complete UI Redesign** - Modern interface with softer colors, improved navigation, and better layout
+- **Color Scheme** - Reduced brightness and contrast for better eye comfort (primary: #1a4d47, secondary: #d4a574)
+- **Student Dashboard Layout** - Added sticky left sidebar navigation for quick access to all features
+- **Economy Health Messages** - Improved warnings with absolute values and specific dollar recommendations
+- **Tab Navigation** - Fixed CSS scoping to restore visibility across 15+ multi-tab pages
+
+### Fixed
+- **Critical: Restored Pending Actions section** on admin dashboard (store approvals, hall passes, insurance claims were missing)
+- **Critical: Fixed invisible tabs** on Student Management, Store Management, and other multi-tab pages
+- **Fixed missing navigation links** on login screens (account setup, recovery, privacy/terms)
+- **Fixed CSS scoping issue** where `.nav-link` styles were applied globally instead of scoped to sidebar
+- **Added missing Bootstrap Icons CSS** imports to admin and student layouts
+- **Added missing utility classes** (`.btn-white`, `.icon-circle`) for redesigned UI
+
+### Technical
+- Database migration `a7b8c9d0e1f2` adds `is_long_term_goal` column to `store_items` table
+- Updated `economy_balance.py` to skip long-term goal items in CWI validation
+- Added Chart.js (v4.4.0) for savings projection visualization
+- Improved query performance for weekly analytics calculations
+- Updated forms.py with `is_long_term_goal` BooleanField
+
+## [1.0.0] - 2024-11-29
+
+### Milestone
+First stable release of Classroom Token Hub! All critical security issues resolved and production-ready.
+
 ## [Unreleased] - Version 0.9.0 (Pre-1.0 Candidate)
 
 ### Project Status
@@ -163,4 +574,4 @@ When adding entries:
 - Keep entries concise but informative
 - Update the date when moving Unreleased to a version
 
-**Last Updated:** 2025-12-04
+**Last Updated:** 2025-12-27

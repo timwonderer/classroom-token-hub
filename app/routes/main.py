@@ -9,7 +9,7 @@ from flask import Blueprint, redirect, url_for, jsonify, current_app, session, r
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import Admin
 from app.utils.helpers import render_template_with_fallback as render_template, is_safe_url
 
@@ -122,6 +122,23 @@ def privacy():
 def terms():
     """Render the Terms of Service page."""
     return render_template('tos.html')
+
+
+@main_bp.route('/offline')
+def offline():
+    """Render the offline fallback page."""
+    return render_template('offline.html')
+
+
+@main_bp.route('/sw.js')
+@limiter.exempt
+def service_worker():
+    """Serve the service worker file from the root scope.
+
+    Exempt from rate limiting because browsers check this frequently
+    for PWA updates and it's a static file that doesn't need protection.
+    """
+    return current_app.send_static_file('sw.js')
 
 
 # -------------------- HALL PASS TERMINALS (NO AUTH REQUIRED) --------------------

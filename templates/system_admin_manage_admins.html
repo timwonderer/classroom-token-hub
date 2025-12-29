@@ -53,6 +53,9 @@
                     {% endif %}
                   </td>
                   <td>
+                    <button class="btn btn-sm btn-warning me-1" onclick="reset2FA('{{ admin.id }}', '{{ admin.username }}')">
+                      Reset 2FA
+                    </button>
                     <button class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal{{ admin.id }}">
                       Delete
                     </button>
@@ -132,4 +135,71 @@
     </div>
   </div>
 </div>
+
+<!-- Hidden CSRF Token for AJAX -->
+<input type="hidden" id="csrf_token" value="{{ csrf_token() }}">
+
+<!-- Reset 2FA Result Modal -->
+<div class="modal fade" id="reset2FAModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">2FA Reset Successful</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body text-center">
+        <div class="alert alert-success">
+          Two-factor authentication has been reset for <strong id="resetUsername"></strong>.
+        </div>
+        <p>Please have the teacher scan this QR code immediately:</p>
+        <img id="resetQRCode" src="" alt="QR Code" class="img-fluid mb-3" style="border: 1px solid #ddd; padding: 10px; max-width: 200px;">
+        <p class="text-muted small mb-1">Or manually enter this secret:</p>
+        <code id="resetSecret" class="d-block p-2 bg-light mb-3" style="font-size: 1.1em; letter-spacing: 1px;"></code>
+        <div class="alert alert-warning small text-start">
+          <i class="bi bi-exclamation-triangle-fill"></i>
+          <strong>Important:</strong> The old 2FA code will stop working immediately. The teacher must set up this new code to log in.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function reset2FA(adminId, username) {
+  if (!confirm(`Are you sure you want to reset 2FA for ${username}? The old code will stop working immediately.`)) {
+    return;
+  }
+
+  // Get CSRF token
+  const csrfToken = document.getElementById('csrf_token').value;
+
+  fetch(`/sysadmin/admins/${adminId}/reset-totp`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': csrfToken
+    }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      document.getElementById('resetUsername').textContent = data.username;
+      document.getElementById('resetQRCode').src = 'data:image/png;base64,' + data.qr_code;
+      document.getElementById('resetSecret').textContent = data.totp_secret;
+
+      const modal = new bootstrap.Modal(document.getElementById('reset2FAModal'));
+      modal.show();
+    } else {
+      alert('Error: ' + data.message);
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('An error occurred while resetting 2FA.');
+  });
+}
+</script>
 {% endblock %}
