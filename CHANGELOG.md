@@ -10,6 +10,14 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 - Fixed `time.tzset()` Windows compatibility issue in wsgi.py - now only calls tzset() on Unix-like systems
+- Fixed admin signup crash when using SQLite - handles datetime fields stored as strings
+
+### Changed
+- Improved `flask create-sysadmin` command to display TOTP secret and QR code during account creation
+  - Shows scannable QR code in terminal for easy authenticator app setup
+  - Displays plaintext secret for manual entry backup
+  - Auto-clears terminal after user confirmation for security
+  - Secret remains encrypted in database after initial display
 
 ### Added
 - **Issue Resolution & Escalation System** - Structured, teacher-mediated issue handling system
