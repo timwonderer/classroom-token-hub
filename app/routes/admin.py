@@ -7423,7 +7423,8 @@ def view_issue(issue_id):
     return render_template('admin_view_issue.html',
                          current_page='issues',
                          page_title=f'Issue #{issue.id}',
-                         issue=issue)
+                         issue=issue,
+                         format_utc_iso=format_utc_iso)
 
 
 @admin_bp.route('/issues/<int:issue_id>/resolve', methods=['POST'])
