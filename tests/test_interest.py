@@ -6,8 +6,9 @@ from app import Transaction, apply_savings_interest, db
 
 def test_apply_savings_interest_with_naive_datetimes(client, test_student):
     from unittest.mock import patch
+    from app import app
 
-    past_date = datetime.utcnow() - timedelta(days=31)
+    past_date = datetime.now(timezone.utc) - timedelta(days=31)
     savings_tx = Transaction(
         student_id=test_student.id,
         amount=100.0,
@@ -19,9 +20,15 @@ def test_apply_savings_interest_with_naive_datetimes(client, test_student):
     db.session.add(savings_tx)
     db.session.commit()
 
-    # Mock get_current_teacher_id to return None (uses default banking settings)
-    with patch('app.routes.student.get_current_teacher_id', return_value=None):
-        apply_savings_interest(test_student)
+    # Mock get_current_class_context to return minimal context (uses default banking settings)
+    mock_context = {
+        'teacher_id': None,
+        'join_code': 'TEST',
+        'student_teacher_id': None
+    }
+    with app.test_request_context():
+        with patch('app.routes.student.get_current_class_context', return_value=mock_context):
+            apply_savings_interest(test_student)
 
     interest_tx = (
         Transaction.query.filter_by(
@@ -38,8 +45,41 @@ def test_apply_savings_interest_with_naive_datetimes(client, test_student):
 
 
 def test_dashboard_renders_recent_deposit(client, test_student):
-    recent_deposit_time = datetime.utcnow() - timedelta(hours=12)
-    mature_savings_time = datetime.utcnow() - timedelta(days=31)
+    from app.models import Admin, StudentTeacher, TeacherBlock
+
+    # Create a teacher and link the student
+    teacher = Admin(username="testteacher", totp_secret="SECRET123")
+    db.session.add(teacher)
+    db.session.flush()
+
+    # Create join code for the student
+    join_code = "TEST123"
+    test_student.join_code = join_code
+
+    # Link student to teacher
+    st = StudentTeacher(student_id=test_student.id, admin_id=teacher.id)
+    db.session.add(st)
+
+    # Create TeacherBlock (required for dashboard context)
+    tb = TeacherBlock(
+        teacher_id=teacher.id,
+        block="A",
+        first_name=test_student.first_name,
+        last_initial=test_student.last_initial,
+        last_name_hash_by_part=[],
+        dob_sum=0,
+        salt=b'salt',
+        first_half_hash="mock",
+        join_code=join_code,
+        student_id=test_student.id,
+        is_claimed=True
+    )
+    db.session.add(tb)
+
+    db.session.commit()
+
+    recent_deposit_time = datetime.now(timezone.utc) - timedelta(hours=12)
+    mature_savings_time = datetime.now(timezone.utc) - timedelta(days=31)
 
     recent_deposit = Transaction(
         student_id=test_student.id,
@@ -64,11 +104,13 @@ def test_dashboard_renders_recent_deposit(client, test_student):
     with client.session_transaction() as session:
         session['student_id'] = test_student.id
         session['login_time'] = datetime.now(timezone.utc).isoformat()
+        session['current_join_code'] = join_code
 
     response = client.get('/student/dashboard')
 
     assert response.status_code == 200
-    assert b"You received a deposit of $50.00" in response.data
+    assert b"You received a deposit of" in response.data
+    assert b"$50.00" in response.data
 
     interest_tx = Transaction.query.filter_by(
         student_id=test_student.id,

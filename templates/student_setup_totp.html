@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
         * {
             box-sizing: border-box;
@@ -198,11 +199,11 @@
         }
     </style>
 </head>
-<body>
+<body class="student-theme">
     <div class="totp-wrapper">
         <div class="branding-side">
             <div class="branding-content">
-                <img src="{{ url_for('static', filename='images/student-logo.svg') }}" alt="Student Logo">
+                <img src="{{ static_url('images/student-logo-192.png') }}" alt="Student Logo">
                 <h2>Secure Access</h2>
                 <p>Use your authenticator app to keep your account safe.</p>
             </div>

@@ -1,0 +1,252 @@
+{% extends "layout_admin.html" %}
+
+{% block page_title %}Student Issues{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    
+
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-warning bg-light">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Pending Review</h6>
+                            <h3 class="mb-0">{{ pending_issues|length }}</h3>
+                        </div>
+                        <i class="bi bi-clock-history fs-1 text-warning"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-success bg-light">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Resolved</h6>
+                            <h3 class="mb-0">{{ resolved_issues|length }}</h3>
+                        </div>
+                        <i class="bi bi-check-circle-fill fs-1 text-success"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-info bg-light">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Escalated</h6>
+                            <h3 class="mb-0">{{ escalated_issues|length }}</h3>
+                        </div>
+                        <i class="bi bi-arrow-up-circle-fill fs-1 text-info"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-4" id="issuesTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab">
+                <i class="bi bi-clock-history me-2"></i>Pending Review
+                {% if pending_issues|length > 0 %}
+                <span class="badge bg-warning text-dark ms-2">{{ pending_issues|length }}</span>
+                {% endif %}
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="resolved-tab" data-bs-toggle="tab" data-bs-target="#resolved" type="button" role="tab">
+                <i class="bi bi-check-circle me-2"></i>Resolved
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="escalated-tab" data-bs-toggle="tab" data-bs-target="#escalated" type="button" role="tab">
+                <i class="bi bi-arrow-up-circle me-2"></i>Escalated to Developer
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="issuesTabsContent">
+        <!-- Pending Tab -->
+        <div class="tab-pane fade show active" id="pending" role="tabpanel">
+            {% if pending_issues %}
+                <div class="list-group">
+                    {% for issue in pending_issues %}
+                    <a href="{{ url_for('admin.view_issue', issue_id=issue.id) }}" class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center mb-2">
+                                    <h6 class="mb-0 me-2">
+                                        <i class="bi bi-person-fill me-1"></i>
+                                        {{ issue.student_first_name }} {{ issue.student_last_initial }}.
+                                    </h6>
+                                    <span class="badge bg-secondary">{{ issue.category.name }}</span>
+                                    {% if issue.related_transaction_id %}
+                                    <span class="badge bg-info ms-2">
+                                        <i class="bi bi-receipt me-1"></i>Transaction #{{ issue.related_transaction_id }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <p class="mb-1 text-muted small">
+                                    {{ issue.student_explanation[:200] }}{% if issue.student_explanation|length > 200 %}...{% endif %}
+                                </p>
+                                <small class="text-muted">
+                                    <i class="bi bi-clock me-1"></i>
+                                    Submitted <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.submitted_at) }}"></span>
+                                    {% if issue.class_label %}
+                                    | <i class="bi bi-door-open me-1"></i>{{ issue.class_label }}
+                                    {% endif %}
+                                </small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-secondary text-dark">
+                                    {{ issue.status|replace('_', ' ')|title }}
+                                </span>
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="bi bi-check-circle-fill fs-1 text-success mb-3"></i>
+                        <h5 class="text-muted">No pending issues</h5>
+                        <p class="text-muted mb-0">All caught up! There are no issues waiting for your review.</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Resolved Tab -->
+        <div class="tab-pane fade" id="resolved" role="tabpanel">
+            {% if resolved_issues %}
+                <div class="list-group">
+                    {% for issue in resolved_issues %}
+                    <a href="{{ url_for('admin.view_issue', issue_id=issue.id) }}" class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center mb-2">
+                                    <h6 class="mb-0 me-2">
+                                        <i class="bi bi-person-fill me-1"></i>
+                                        {{ issue.student_first_name }} {{ issue.student_last_initial }}.
+                                    </h6>
+                                    <span class="badge bg-secondary">{{ issue.category.name }}</span>
+                                    {% if issue.teacher_resolution %}
+                                    <span class="badge bg-success ms-2">{{ issue.teacher_resolution }}</span>
+                                    {% endif %}
+                                </div>
+                                <p class="mb-1 text-muted small">
+                                    {{ issue.student_explanation[:200] }}{% if issue.student_explanation|length > 200 %}...{% endif %}
+                                </p>
+                                <small class="text-muted">
+                                    <i class="bi bi-check-circle me-1"></i>
+                                    Resolved <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.teacher_resolved_at) }}"></span>
+                                </small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge bg-success">Resolved</span>
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="bi bi-inbox fs-1 text-muted mb-3"></i>
+                        <h5 class="text-muted">No resolved issues</h5>
+                        <p class="text-muted mb-0">Issues you've resolved will appear here.</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+
+        <!-- Escalated Tab -->
+        <div class="tab-pane fade" id="escalated" role="tabpanel">
+            {% if escalated_issues %}
+                <div class="list-group">
+                    {% for issue in escalated_issues %}
+                    <a href="{{ url_for('admin.view_issue', issue_id=issue.id) }}" class="list-group-item list-group-item-action">
+                        <div class="d-flex w-100 justify-content-between align-items-start">
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center mb-2">
+                                    <h6 class="mb-0 me-2">
+                                        <i class="bi bi-person-fill me-1"></i>
+                                        {{ issue.student_first_name }} {{ issue.student_last_initial }}.
+                                    </h6>
+                                    <span class="badge bg-secondary">{{ issue.category.name }}</span>
+                                    {% if issue.eligible_for_reward %}
+                                    <span class="badge bg-warning text-dark ms-2">
+                                        <i class="bi bi-gift-fill me-1"></i>Reward Eligible
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <p class="mb-1 text-muted small">
+                                    <strong>Escalation Reason:</strong> {{ issue.escalation_reason }}
+                                </p>
+                                <small class="text-muted">
+                                    <i class="bi bi-arrow-up-circle me-1"></i>
+                                    Escalated <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
+                                </small>
+                            </div>
+                            <div class="text-end">
+                                <span class="badge
+                                    {% if issue.status == 'elevated' %}bg-warning text-dark
+                                    {% elif issue.status == 'developer_review' %}bg-warning
+                                    {% elif issue.status == 'developer_resolved' %}bg-info
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ issue.status|replace('_', ' ')|title }}
+                                </span>
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="card">
+                    <div class="card-body text-center py-5">
+                        <i class="bi bi-inbox fs-1 text-muted mb-3"></i>
+                        <h5 class="text-muted">No escalated issues</h5>
+                        <p class="text-muted mb-0">Issues you escalate to developers will appear here.</p>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+        <!-- Help Accordion -->
+        <div class="accordion mt-4" id="helpAccordion">
+            <div class="accordion-item ">
+                <h2 class="accordion-header " id="headingHelp">
+                    <button class="accordion-button collapsed alert alert-info" type="button" data-bs-toggle="collapse" data-bs-target="#collapseHelp" aria-expanded="false" aria-controls="collapseHelp">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">contact_support</span>
+                        <strong>Handling Student Issues - Help Guide</strong>
+                    </button>
+                </h2>
+                <div id="collapseHelp" class="accordion-collapse collapse" aria-labelledby="headingHelp" data-bs-parent="#helpAccordion">
+                    <div class="accordion-body mt-2">
+                        <p>When students have issues with Classroom Token Hub, they will submit a <strong>support ticket</strong> with relevant information attached. Once they submit the ticket, they will not be able to modify it to maintain the integrity of the support ticket.</p>
+                        <p>This ticket will first arrive here, under the <strong>Pending Review</strong> section. Depending on the nature of the issue, you will be provided with relevant options to <strong>resolve</strong> or <strong>escalate</strong> the issue. Once the support ticket is resolved or closed, it will move to the <strong>Resolved</strong> section.</p>
+                        <p>For issues that are due to technical problems or bugs, you can opt to <strong>escalate</strong> the issue to our support team. When you select this option, you will be able to provide additional information that could be helpful to our team in identifying and fixing the problem. <strong>Students will not be able to directly submit a ticket to our team due to privacy and security concerns.</strong></p>
+                        <p>Once escalated, the issue will appear in the <strong>Escalated</strong> section. When an issue has been escalated, our team will see your (the teacher's) username, a non-identifying reference to the student, original issue provided by the students, and any additional details you provide. In addition, if you opt to send class information to us, we will also see the class identifier. <strong>Our team will never see student name or other identifying information about them.</strong></p>
+                        <p>At any given point, students will see a <strong>status badge</strong> on their support page. This status badge will indicate the current state of their ticket and it can be one of the following:</p>
+                        <ul>
+                            <li><span class="badge bg-secondary text-dark">Submitted</span> The issue has been submitted and is pending review by the teacher.</li>
+                            <li><span class="badge bg-secondary text-dark">Teacher Review</span> The issue is being reviewed by the teacher.</li>
+                            <li><span class="badge bg-success">Resolved</span> The issue has been resolved by the teacher.</li>
+                            <li><span class="badge bg-warning text-dark">Elevated</span> The issue has been escalated to the support team by the teacher.</li>
+                            <li><span class="badge bg-warning text-dark">Developer Review</span> The issue is being reviewed by the support team.</li>
+                            <li><span class="badge bg-info">Resolved - See Teacher</span> The issue has been resolved by the support team.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    </div>
+</div>
+{% endblock %}

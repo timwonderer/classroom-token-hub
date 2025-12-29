@@ -11,7 +11,9 @@ from datetime import timezone
 from urllib.parse import urlparse, urljoin
 import hashlib
 import hmac
-from flask import request, current_app, session, render_template
+import os
+
+from flask import request, current_app, session, render_template, url_for
 from jinja2 import TemplateNotFound
 from markupsafe import Markup
 import markdown
@@ -24,6 +26,28 @@ def render_template_with_fallback(template_name, **context):
     """
     Renders a template, falling back to a mobile version if the user is on a mobile device.
     """
+    # Ensure static_url helper is always available even if Jinja globals/context processors are missing
+    static_url_func = current_app.jinja_env.globals.get('static_url')
+
+    if not static_url_func:
+        current_app.logger.warning("static_url missing from Jinja globals; using fallback with cache-busting")
+
+        def _fallback_static_url(filename: str):
+            if not filename:
+                return url_for('static', filename=filename)
+
+            file_path = os.path.join(current_app.static_folder, filename)
+            try:
+                version = int(os.stat(file_path).st_mtime)
+                return url_for('static', filename=filename, v=version)
+            except (OSError, TypeError) as exc:
+                current_app.logger.debug(f"Could not add cache buster for {filename}: {exc}")
+                return url_for('static', filename=filename)
+
+        static_url_func = _fallback_static_url
+
+    context.setdefault('static_url', static_url_func)
+
     if session.get('force_desktop'):
         return render_template(template_name, **context)
 
@@ -118,13 +142,14 @@ def render_markdown(text):
     allowed_protocols = ['http', 'https', 'mailto']
 
     # Sanitize HTML to prevent XSS attacks
-    sanitized_html = bleach.clean(
-        html,
+    cleaner = bleach.Cleaner(
         tags=allowed_tags,
         attributes=allowed_attributes,
         protocols=allowed_protocols,
-        strip=True
+        strip=True,
+        strip_comments=True,
     )
+    sanitized_html = cleaner.clean(html)
 
     # Return as Markup so Jinja2 doesn't double-escape it
     return Markup(sanitized_html)

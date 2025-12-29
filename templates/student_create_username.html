@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
         * {
             margin: 0;
@@ -147,19 +148,11 @@
             margin-top: 20px;
 
             color: #6c757d;
-            border-style:solid;
-            border-color:red;
-            border-width:1px;
+            
             font-size:8pt;
         }
 
-        .dev-notice {
-
-            color: #dc3545;
-            font-weight: 500;
-
-
-        }
+      
 
         .form-label {
             font-weight: 500;
@@ -187,7 +180,7 @@
     </style>
 </head>
 
-<body>
+<body class="student-theme">
     <div class="login-wrapper">
         <!-- Left side: Setup Form -->
         <div class="login-form-side">
@@ -231,21 +224,13 @@
                 </form>
 
                 <div class="footer-info text-center">
-                     <p class="dev-notice">
-                        You are using an app that is currently in limited BETA testing. There is a 120% chance you will encounter bugs or issues. Please be patient while we work out the wrinkles!</p>
-
-                    <p class="mt-3 small">
-                        For questions or concerns, contact the developer at
-                        <a href="mailto:timothy.cs.chang@gmail.com">timothy.cs.chang@gmail.com</a>
-                    </p>
-
-                    <div class="mt-2">
+                     <div class="mt-2">
                         <a href="{{ url_for('main.privacy') }}" class="small">Click here to learn about how we use your information</a>
-                        <span class="mx-2">|</span>
+                        <br>
                         <a href="{{ url_for('main.terms') }}" class="small">Click here to read our terms of service</a>
                     </div>
 
-                    <small class="text-muted d-block mt-3">Pre-Release Testing v0.10.0</small>
+                    <small class="text-muted d-block mt-3">v1.0 Stable Release</small>
                 </div>
             </div>
         </div>
@@ -254,7 +239,7 @@
         <div class="branding-side">
             <div class="branding-content">
                 <div class="branding-logo-card">
-                    <img src="{{ url_for('static', filename='images/student-logo.svg') }}" alt="Student Logo">
+                    <img src="{{ static_url('images/student-logo-192.png') }}" alt="Student Logo">
                 </div>
             </div>
         </div>

@@ -3,15 +3,13 @@
 {% block title %}Student Management{% endblock %}
 {% block page_icon %}school{% endblock %}
 
+{# Helper macro to display class label with fallback #}
+{% macro class_label(block) -%}
+{{ class_labels_by_block.get(block|upper, block|upper) }}
+{%- endmacro %}
+
 {% block extra_styles %}
 <style>
-    .student-card {
-        transition: all 0.2s ease;
-    }
-    .student-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
     .block-tab-content {
         min-height: 400px;
     }
@@ -27,7 +25,7 @@
 <ul class="nav nav-tabs mb-4" id="studentTabs" role="tablist">
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="roster-tab" data-bs-toggle="tab" data-bs-target="#roster" type="button" role="tab">
-      <span class="material-symbols-outlined me-1" style="vertical-align: middle;">groups</span>Student Roster
+      <span class="material-symbols-outlined me-1" style="vertical-align: middle;">groups</span>Class Roster
     </button>
   </li>
   <li class="nav-item" role="presentation">
@@ -37,7 +35,7 @@
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="individual-upload-tab" data-bs-toggle="tab" data-bs-target="#individual-upload" type="button" role="tab">
-      <span class="material-symbols-outlined me-1" style="vertical-align: middle;">person_add</span>Add Individual
+      <span class="material-symbols-outlined me-1" style="vertical-align: middle;">person_add</span>Individual Upload
     </button>
   </li>
 </ul>
@@ -45,9 +43,9 @@
 <div class="tab-content" id="studentTabContent">
   <!-- ROSTER TAB -->
   <div class="tab-pane fade show active" id="roster" role="tabpanel">
-    <div class="card shadow">
-          <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-          <h5 class="mb-0"><span class="material-symbols-outlined me-2" style="vertical-align: middle;">groups</span>Student Roster by Block</h5>
+      <div class="card shadow">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0 fs-3"><span class="material-symbols-outlined me-2 align-middle fs-1">groups</span>Class Roster</h5>
           <div>
             <a href="{{ url_for('admin.export_students') }}" class="btn btn-light btn-sm me-2">
               <span class="material-symbols-outlined me-1" style="vertical-align: middle;">download</span> Export All
@@ -55,7 +53,7 @@
           </div>
         </div>
       <div class="card-body">
-        <!-- Block Filter Tabs -->
+        <!-- Class Filter Tabs -->
         <ul class="nav nav-pills mb-3" id="blockTabs" role="tablist">
           {% for block in blocks %}
           <li class="nav-item" role="presentation">
@@ -68,7 +66,7 @@
               {% if block == "Unassigned" %}
                 <span class="material-symbols-outlined me-1" style="vertical-align: middle;">help</span>{{ block }}
               {% else %}
-                Block {{ block|upper }}
+                {{ class_label(block) }}
               {% endif %}
               {% set all_students_in_block = students_by_block[block] if block in students_by_block else [] %}
               {% set claimed_count = all_students_in_block|selectattr('username_hash')|list|length %}
@@ -85,7 +83,7 @@
           {% endfor %}
         </ul>
 
-        <!-- Block Content -->
+        <!-- Class Content -->
         <div class="tab-content block-tab-content" id="blockTabContent">
           {% for block in blocks %}
           <div class="tab-pane fade {% if loop.first %}show active{% endif %}"
@@ -96,12 +94,12 @@
             <!-- Join Code Section -->
             {% if block != "Unassigned" and join_codes_by_block.get(block|upper) %}
             <div class="card border-success mb-3">
-              <div class="card-header bg-success bg-opacity-10">
-                <div class="d-flex justify-content-between align-items-center">
-                  <h6 class="mb-0 text-success">
-                    <span class="material-symbols-outlined me-2" style="vertical-align: middle;">key</span>
-                    Join Code for Block {{ block|upper }}
-                  </h6>
+                <div class="card-header bg-success bg-opacity-10">
+                  <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 text-success fs-4">
+                      <span class="material-symbols-outlined me-2 align-middle">key</span>
+                      Join Code for {{ class_label(block) }}
+                    </h6>
                   {% set block_students_list = students_by_block[block] if block in students_by_block else [] %}
                   {% set unclaimed_students_in_block = block_students_list|rejectattr('username_hash')|list|length %}
                   {% set unclaimed_seats_in_block = unclaimed_seats_by_block.get(block|upper, 0) %}
@@ -123,13 +121,13 @@
                     <p class="mb-2"><strong>Students use this code to claim their accounts:</strong></p>
                     <div class="d-flex align-items-center gap-2">
                       <div class="input-group">
-                        <label for="join-code-{{ block }}" class="visually-hidden">Join code for Block {{ block|upper }}</label>
-                        <input type="text"
-                               class="form-control form-control-lg font-monospace text-center fw-bold"
-                               id="join-code-{{ block }}"
-                               value="{{ join_codes_by_block[block|upper] }}"
-                               readonly
-                               style="font-size: 1.5rem; letter-spacing: 0.2em; background-color: #fff;">
+                        <label for="join-code-{{ block }}" class="visually-hidden">Join code for {{ class_label(block) }}</label>
+                          <input type="text"
+                                 class="form-control form-control-lg font-monospace text-center fw-bold fs-3"
+                                 id="join-code-{{ block }}"
+                                 value="{{ join_codes_by_block[block|upper] }}"
+                                 readonly
+                                 style="letter-spacing: 0.2em; background-color: #fff;">
                         <button class="btn btn-outline-success btn-lg join-code-copy-btn"
                                 type="button"
                                 data-block="{{ block }}"
@@ -141,7 +139,7 @@
                   </div>
                   <div class="col-md-4">
                     <div class="alert alert-info mb-0 small">
-                      <span class="material-symbols-outlined me-1" style="vertical-align: middle; font-size: 18px;">info</span>
+                        <span class="material-symbols-outlined me-1 align-middle fs-6">info</span>
                       <strong>Student Instructions:</strong>
                       <ol class="mb-0 mt-1 ps-3">
                         <li>Go to student sign-in page</li>
@@ -165,11 +163,17 @@
             {% set total_unclaimed = unclaimed_seats|length + unclaimed_students|length %}
             {% if block != "Unassigned" and total_unclaimed > 0 %}
             <div class="card border-warning mb-3">
-              <div class="card-header bg-warning bg-opacity-10">
-                <h6 class="mb-0 text-dark">
-                  <span class="material-symbols-outlined me-2" style="vertical-align: middle;">pending</span>
-                  Unclaimed Seats ({{ total_unclaimed }})
-                </h6>
+                <div class="card-header bg-warning bg-opacity-10 d-flex justify-content-between align-items-center">
+                  <h6 class="mb-0 text-dark fs-4">
+                    <span class="material-symbols-outlined me-2 align-middle">pending</span>
+                    Unclaimed Seats ({{ total_unclaimed }})
+                  </h6>
+                  {% if unclaimed_seats|length > 0 or unclaimed_students|length > 0 %}
+                  <button type="button" class="btn btn-sm btn-outline-danger" onclick="deleteAllPendingInBlock('{{ block }}', {{ unclaimed_seats|length }}, {{ unclaimed_students|length }})">
+                    <span class="material-symbols-outlined me-1 align-middle fs-6">delete_sweep</span>
+                    Delete All Unclaimed
+                  </button>
+                  {% endif %}
               </div>
               <div class="card-body">
                 <p class="text-muted mb-3">These students are in your roster but haven't set up their username yet. Share the join code above with them.</p>
@@ -177,10 +181,10 @@
                   <table class="table table-sm table-striped">
                     <thead class="table-light">
                       <tr>
-                        <th>Name</th>
-                        <th>Added</th>
-                        <th>Status</th>
-                        <th>Actions</th>
+                        <th scope="col">Name</th>
+                        <th scope="col">Added</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -195,7 +199,11 @@
                         <td>
                           <span class="badge bg-warning text-dark">Waiting for Claim</span>
                         </td>
-                        <td>-</td>
+                        <td>
+                          <button type="button" class="btn btn-sm btn-outline-danger" onclick="deletePendingStudent({{ seat.id }}, '{{ seat.first_name }} {{ seat.last_initial }}.')" aria-label="Delete pending student {{ seat.first_name }} {{ seat.last_initial }}.">
+                            <span class="material-symbols-outlined align-middle fs-6" aria-hidden="true">delete</span>
+                          </button>
+                        </td>
                       </tr>
                       {% endfor %}
                       {% for student in unclaimed_students %}
@@ -212,9 +220,17 @@
                           <span class="badge bg-warning text-dark">Needs Username</span>
                         </td>
                         <td>
-                          <a href="{{ url_for('admin.student_detail', student_id=student.id) }}" class="btn btn-sm btn-outline-primary">
-                            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;">visibility</span>
+                          <a href="{{ url_for('admin.student_detail', student_id=student.id) }}" class="btn btn-sm btn-outline-primary" aria-label="View details for {{ student.full_name }}">
+                            <span class="material-symbols-outlined align-middle fs-6" aria-hidden="true">visibility</span>
                           </a>
+                          <button type="button" class="btn btn-sm btn-outline-danger"
+                                  data-bs-toggle="modal"
+                                  data-bs-target="#deleteStudentModal"
+                                  data-student-id="{{ student.id }}"
+                                  data-student-name="{{ student.full_name }}"
+                                  aria-label="Delete student {{ student.full_name }}">
+                            <span class="material-symbols-outlined align-middle fs-6" aria-hidden="true">delete</span>
+                          </button>
                         </td>
                       </tr>
                       {% endfor %}
@@ -232,9 +248,9 @@
             {% if claimed_students %}
               <div class="card border-success mb-3">
                 <div class="card-header bg-success bg-opacity-10">
-                  <h6 class="mb-0 text-success">
-                    <span class="material-symbols-outlined me-2" style="vertical-align: middle;">check_circle</span>
-                    Claimed Students ({{ claimed_students|length }})
+                  <h6 class="mb-0 text-success fs-4">
+                    <span class="material-symbols-outlined me-2 align-middle">check_circle</span>
+                    Active Students ({{ claimed_students|length }})
                   </h6>
                 </div>
                 <div class="card-body">
@@ -245,11 +261,11 @@
                     <strong><span class="selected-count">0</span> students selected</strong>
                   </div>
                   <div>
-                    <button type="button" class="btn btn-info btn-sm me-2" onclick="tapOutSelected('{{ block }}')">
-                      <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 18px;">logout</span> Tap Out Selected
-                    </button>
-                    <button type="button" class="btn btn-secondary btn-sm me-2" onclick="tapOutAllBlock('{{ block }}')">
-                      <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 18px;">logout</span> Tap Out Entire Block
+                      <button type="button" class="btn btn-info btn-sm me-2" onclick="tapOutSelected('{{ block }}')">
+                        <span class="material-symbols-outlined align-middle fs-5">logout</span> Tap Out Selected
+                      </button>
+                      <button type="button" class="btn btn-secondary btn-sm me-2" onclick="tapOutAllBlock('{{ block }}')">
+                        <span class="material-symbols-outlined align-middle fs-5">logout</span> Tap Out Entire Class
                     </button>
                     <button type="button" class="btn btn-danger btn-sm" onclick="bulkDeleteStudents('{{ block }}')">
                       <span class="material-symbols-outlined" style="vertical-align: middle;">delete</span> Delete Selected
@@ -263,7 +279,7 @@
 
                 <div class="mb-2">
                   <button type="button" class="btn btn-sm btn-outline-danger me-2" onclick="deleteEntireBlock('{{ block }}')">
-                    <span class="material-symbols-outlined" style="vertical-align: middle;">delete_forever</span> Delete All Students in Block {{ block|upper }}
+                    <span class="material-symbols-outlined" style="vertical-align: middle;">delete_forever</span> Delete All Students in {{ class_label(block) }}
                   </button>
                 </div>
 
@@ -271,24 +287,24 @@
                 <table class="table table-hover table-striped" id="students-table-{{ block }}">
                   <thead class="table-dark">
                     <tr>
-                      <th style="width: 40px;">
-                        <input type="checkbox" class="form-check-input select-all-checkbox" onchange="toggleSelectAll('{{ block }}', this)">
+                      <th style="width: 40px;" scope="col">
+                        <input type="checkbox" class="form-check-input select-all-checkbox" onchange="toggleSelectAll('{{ block }}', this)" aria-label="Select all students">
                       </th>
-                      <th>Name</th>
-                      <th>Username</th>
-                      <th>Checking</th>
-                      <th>Savings</th>
-                      <th>Total Earnings</th>
-                      <th>Hall Passes</th>
-                      <th>Setup Status</th>
-                      <th>Actions</th>
+                      <th scope="col">Name</th>
+                      <th scope="col">Username</th>
+                      <th scope="col">Checking</th>
+                      <th scope="col">Savings</th>
+                      <th scope="col">Total Earnings</th>
+                      <th scope="col">Hall Passes</th>
+                      <th scope="col">Setup Status</th>
+                      <th scope="col">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {% for student in claimed_students %}
                     <tr class="student-row" data-student-id="{{ student.id }}">
                       <td>
-                        <input type="checkbox" class="form-check-input student-checkbox" value="{{ student.id }}" onchange="updateBulkToolbar('{{ block }}')">
+                        <input type="checkbox" class="form-check-input student-checkbox" value="{{ student.id }}" onchange="updateBulkToolbar('{{ block }}')" aria-label="Select {{ student.full_name }}">
                       </td>
                       <td>
                         <a href="{{ url_for('admin.student_detail', student_id=student.id) }}" class="fw-bold text-decoration-none">
@@ -304,7 +320,7 @@
                       <td>${{ "%.2f"|format(student.savings_balance) }}</td>
                       <td class="text-success">${{ "%.2f"|format(student.total_earnings) }}</td>
                       <td>
-                        <span class="badge bg-primary">{{ student.hall_passes }}</span>
+                        <span class="badge bg-primary text-white">{{ student.hall_passes }}</span>
                       </td>
                       <td>
                         {% if student.has_completed_setup %}
@@ -341,7 +357,7 @@
               </div>
             {% else %}
               <div class="alert alert-info">
-                <span class="material-symbols-outlined me-2" style="vertical-align: middle;">info</span>No students have claimed accounts in Block {{ block|upper }} yet.
+                <span class="material-symbols-outlined me-2" style="vertical-align: middle;">info</span>No students have claimed accounts in {{ class_label(block) }} yet.
               </div>
             {% endif %}
           </div>
@@ -361,13 +377,13 @@
         <div class="row">
           <div class="col-lg-6 mb-4">
             <div class="card border-primary h-100">
-              <div class="card-header bg-primary bg-opacity-10">
-                <h6 class="mb-0 text-primary"><span class="material-symbols-outlined me-2" style="vertical-align: middle;">info</span>Instructions</h6>
-              </div>
+                <div class="card-header bg-primary bg-opacity-10">
+                  <h6 class="mb-0 text-white"><span class="material-symbols-outlined me-2 align-middle">info</span>Instructions</h6>
+                </div>
               <div class="card-body">
                 <ol class="mb-3">
                   <li class="mb-2">Download the CSV template using the button below</li>
-                  <li class="mb-2">Fill in student information (First Name, Last Name, Date of Birth in MM/DD/YYYY format, Period/Block)</li>
+                  <li class="mb-2">Fill in student information (First Name, Last Name, Date of Birth in MM/DD/YYYY format, Class/Block)</li>
                   <li class="mb-2">Save the file as CSV format</li>
                   <li class="mb-2">Upload the completed file</li>
                 </ol>
@@ -420,7 +436,7 @@
   <!-- INDIVIDUAL UPLOAD TAB -->
   <div class="tab-pane fade" id="individual-upload" role="tabpanel">
     <div class="card shadow">
-      <div class="card-header bg-info text-white">
+      <div class="card-header bg-primary text-white">
         <h5 class="mb-0"><span class="material-symbols-outlined me-2" style="vertical-align: middle;">person_add</span>Add Individual Student</h5>
       </div>
       <div class="card-body">
@@ -429,9 +445,9 @@
             <form action="{{ url_for('admin.add_individual_student') }}" method="post">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-              <div class="card border-info mb-3">
-                <div class="card-header bg-info bg-opacity-10">
-                  <h6 class="mb-0 text-info"><span class="material-symbols-outlined me-2" style="vertical-align: middle;">person</span>Student Information</h6>
+              <div class="card  mb-3">
+                <div class="card-header bg-primary bg-opacity-10">
+                  <h6 class="mb-0 text-white"><span class="material-symbols-outlined me-2" style="vertical-align: middle;">person</span>Student Information</h6>
                 </div>
                 <div class="card-body">
                   <div class="row">
@@ -457,12 +473,12 @@
                       <div class="form-text">Format: MM/DD/YYYY</div>
                     </div>
                     <div class="col-md-6 mb-3">
-                      <label for="block" class="form-label fw-bold">Block/Period <span class="text-danger">*</span></label>
+                      <label for="block" class="form-label fw-bold">Class <span class="text-danger">*</span></label>
                       <select class="form-select" id="block" name="block" required>
                         <option value="">Select a block...</option>
                         {% for block in blocks %}
                         {% if block != "Unassigned" %}
-                        <option value="{{ block }}">Block {{ block|upper }}</option>
+                        <option value="{{ block }}">{{ class_label(block) }}</option>
                         {% endif %}
                         {% endfor %}
                       </select>
@@ -526,10 +542,10 @@
             </div>
           </div>
 
-          <!-- Block Assignment -->
+          <!-- Class Assignment -->
           <div class="card border-info mb-3">
             <div class="card-header bg-info bg-opacity-10">
-              <h6 class="mb-0 text-info"><span class="material-symbols-outlined me-2" style="vertical-align: middle;">calendar_today</span>Block Assignment</h6>
+              <h6 class="mb-0 text-info"><span class="material-symbols-outlined me-2" style="vertical-align: middle;">calendar_today</span>Class Assignment</h6>
             </div>
             <div class="card-body">
               <p class="text-muted small mb-2">Select all blocks this student attends (can select multiple):</p>
@@ -540,7 +556,7 @@
                   <div class="form-check">
                     <input class="form-check-input block-checkbox" type="checkbox" name="blocks" value="{{ block }}" id="edit_block_{{ block }}">
                     <label class="form-check-label" for="edit_block_{{ block }}">
-                      Block {{ block|upper }}
+                      {{ class_label(block) }}
                     </label>
                   </div>
                 </div>
@@ -904,6 +920,101 @@ function deleteEntireBlock(block) {
   });
 }
 
+function deletePendingStudent(teacherBlockId, studentName) {
+  const confirmation = confirm(
+    `⚠️ Are you sure you want to delete the pending roster entry for ${studentName}?\n\n` +
+    `This student has not yet claimed their account. This action will remove them from your roster.\n\n` +
+    `This action CANNOT be undone!`
+  );
+
+  if (!confirmation) return;
+
+  // Send delete request
+  fetch('/admin/pending-students/delete', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+    },
+    body: JSON.stringify({ teacher_block_id: teacherBlockId })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      alert(data.message);
+      location.reload();
+    } else {
+      alert('Error: ' + data.message);
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Network error occurred while deleting pending student.');
+  });
+}
+
+function deleteAllPendingInBlock(block, unclaimedSeatsCount, unclaimedStudentsCount) {
+  const totalCount = unclaimedSeatsCount + unclaimedStudentsCount;
+  const confirmation = confirm(
+    `⚠️ WARNING: You are about to delete ALL ${totalCount} unclaimed roster entries in Block ${block.toUpperCase()}.\n\n` +
+    `This includes:\n` +
+    `• ${unclaimedSeatsCount} unclaimed seat(s) (TeacherBlock entries)\n` +
+    `• ${unclaimedStudentsCount} legacy unclaimed student(s) (Students without usernames)\n\n` +
+    `These are students who have been added to your roster but haven't claimed their accounts yet.\n\n` +
+    `Students who have already claimed their accounts will NOT be affected.\n\n` +
+    `This action CANNOT be undone!\n\n` +
+    `Are you sure you want to continue?`
+  );
+
+  if (!confirmation) return;
+
+  // Helper function to delete a type of unclaimed students
+  const deleteUnclaimedType = (endpoint, errorPrefix) => {
+    return fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+      },
+      body: JSON.stringify({ block: block })
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === 'success') {
+        return data.deleted_count;
+      } else {
+        throw new Error(`${errorPrefix}: ${data.message}`);
+      }
+    });
+  };
+
+  // Use Promise.all to delete both types in parallel
+  const promises = [];
+  
+  // Delete pending TeacherBlock entries if any
+  if (unclaimedSeatsCount > 0) {
+    promises.push(deleteUnclaimedType('/admin/pending-students/bulk-delete', 'Pending students'));
+  }
+  
+  // Delete legacy unclaimed students if any
+  if (unclaimedStudentsCount > 0) {
+    promises.push(deleteUnclaimedType('/admin/legacy-unclaimed-students/bulk-delete', 'Legacy unclaimed students'));
+  }
+  
+  // Wait for all deletions to complete
+  Promise.all(promises)
+    .then(deletedCounts => {
+      const totalDeleted = deletedCounts.reduce((sum, count) => sum + count, 0);
+      alert(`✓ Successfully deleted ${totalDeleted} unclaimed student(s) from Block ${block.toUpperCase()}`);
+      location.reload();
+    })
+    .catch(error => {
+      console.error('Error:', error);
+      alert('Error: ' + error.message);
+      location.reload(); // Reload anyway to show current state
+    });
+}
+
 function tapOutSelected(block) {
   const table = document.getElementById(`students-table-${block}`);
   const checkboxes = table.querySelectorAll('.student-checkbox:checked');
@@ -1014,5 +1125,7 @@ function tapOutAllBlock(block) {
     alert('Network error occurred while tapping out block.');
   });
 }
+
+// (Tap toggle controls moved to Attendance page)
 </script>
 {% endblock %}

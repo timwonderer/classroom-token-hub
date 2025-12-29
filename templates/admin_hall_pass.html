@@ -8,13 +8,13 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-end align-items-center mb-4">
         <div>
-            <a href="/hall-pass/verification" target="_blank" class="btn btn-primary me-2">
+            <a href="/hall-pass/verification?teacher_id={{ session['admin_id'] }}" target="_blank" class="btn btn-primary me-2">
                 <span class="material-symbols-outlined">tv</span> Verification Display
             </a>
-            <a href="/hall-pass/terminal" target="_blank" class="btn btn-secondary me-2">
+            <a href="/hall-pass/terminal?teacher_id={{ session['admin_id'] }}" target="_blank" class="btn btn-secondary me-2">
                 <span class="material-symbols-outlined">computer</span> Terminal
             </a>
-            <a href="/hall-pass/queue" target="_blank" class="btn btn-info">
+            <a href="/hall-pass/queue?teacher_id={{ session['admin_id'] }}" target="_blank" class="btn btn-info">
                 <span class="material-symbols-outlined">list_alt</span> Queue Display
             </a>
         </div>
@@ -180,17 +180,24 @@
                     <!-- Filters -->
                     <div class="row g-3 mb-4">
                         <div class="col-md-3">
-                            <label for="filterPeriod" class="form-label small fw-bold">Period/Block</label>
+                            <label for="filterPeriod" class="form-label small fw-bold">Period</label>
                             <select class="form-select form-select-sm" id="filterPeriod">
                                 <option value="">All Periods</option>
-                                <option value="1">Period 1</option>
-                                <option value="2">Period 2</option>
-                                <option value="3">Period 3</option>
-                                <option value="4">Period 4</option>
-                                <option value="5">Period 5</option>
-                                <option value="6">Period 6</option>
-                                <option value="7">Period 7</option>
-                                <option value="8">Period 8</option>
+                                {% if available_periods %}
+                                    {% for period in available_periods %}
+                                        <option value="{{ period }}">{{ period }}</option>
+                                    {% endfor %}
+                                {% else %}
+                                    <!-- Fallback to numeric periods if no data available -->
+                                    <option value="1">Period 1</option>
+                                    <option value="2">Period 2</option>
+                                    <option value="3">Period 3</option>
+                                    <option value="4">Period 4</option>
+                                    <option value="5">Period 5</option>
+                                    <option value="6">Period 6</option>
+                                    <option value="7">Period 7</option>
+                                    <option value="8">Period 8</option>
+                                {% endif %}
                             </select>
                         </div>
                         <div class="col-md-3">
@@ -428,14 +435,8 @@ function renderHistoryTable(records) {
     }
 
     const html = records.map(record => {
-        const requestTime = new Date(record.request_time);
-        const formattedTime = requestTime.toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true
-        });
+        // Use centralized timezone utility for consistent formatting
+        const formattedTime = window.TimezoneUtils?.formatTimestamp(record.request_time) || record.request_time || '—';
 
         let statusBadge = '';
         switch (record.status) {

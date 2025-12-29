@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
         .material-symbols-outlined {
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
@@ -65,13 +66,8 @@
             padding: 2rem;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
             text-align: center;
-            transition: all 0.3s ease;
         }
 
-        .stat-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
-        }
 
         .stat-number {
             font-size: 3.5rem;
@@ -131,13 +127,8 @@
             background: #f7fafc;
             border-radius: 12px;
             border-left: 4px solid #667eea;
-            transition: all 0.3s ease;
         }
 
-        .queue-item:hover {
-            transform: translateX(5px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
 
         .queue-position {
             font-size: 1.8rem;
@@ -243,6 +234,10 @@
     </div>
 
     <script>
+        // Get teacher_id from URL parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const teacherId = urlParams.get('teacher_id');
+        
         function formatTime(isoString) {
             const date = new Date(isoString);
             return date.toLocaleTimeString(undefined, {
@@ -326,11 +321,19 @@
         }
 
         function fetchQueue() {
-            fetch('/api/hall-pass/queue')
+            // Build URL with teacher_id if available
+            let url = '/api/hall-pass/queue';
+            if (teacherId) {
+                url += `?teacher_id=${teacherId}`;
+            }
+            
+            fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     if (data.status === 'success') {
                         renderQueue(data);
+                    } else {
+                        console.error('Error response from queue API:', data?.message || 'Unknown error');
                     }
                 })
                 .catch(error => {

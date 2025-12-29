@@ -12,11 +12,12 @@ import pytz
 from datetime import datetime, date, timezone
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, request, render_template, session, g
+from flask import Flask, request, render_template, session, g, url_for
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
 
 # Validate required environment variables
 required_env_vars = ["SECRET_KEY", "DATABASE_URL", "FLASK_ENV", "ENCRYPTION_KEY", "PEPPER_KEY"]
@@ -36,6 +37,15 @@ from app.utils.constants import THEME_PROMPTS
 def url_encode_filter(s):
     """URL-encode a string for use in URLs."""
     return urllib.parse.quote_plus(s)
+
+
+def nl2br_filter(s):
+    """Convert newlines to <br> tags for HTML display."""
+    from markupsafe import Markup
+    if s is None:
+        return ''
+    # Replace \n with <br> and return as safe HTML
+    return Markup(str(s).replace('\n', '<br>\n'))
 
 
 def format_datetime(value, fmt='%Y-%m-%d %I:%M %p'):
@@ -101,9 +111,10 @@ def create_app():
         SECRET_KEY=os.environ["SECRET_KEY"],
         SQLALCHEMY_DATABASE_URI=os.environ["DATABASE_URL"],
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
-        SESSION_COOKIE_SECURE=True,
+        SESSION_COOKIE_SECURE=os.environ["FLASK_ENV"] == "production",  # Only require HTTPS in production
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_PATH="/",
         TEMPLATES_AUTO_RELOAD=True,
         TURNSTILE_SITE_KEY=os.getenv("TURNSTILE_SITE_KEY"),
         TURNSTILE_SECRET_KEY=os.getenv("TURNSTILE_SECRET_KEY"),
@@ -149,6 +160,7 @@ def create_app():
     app.jinja_env.filters['urlencode'] = url_encode_filter
     app.jinja_env.filters['format_datetime'] = format_datetime
     app.jinja_env.filters['markdown'] = render_markdown
+    app.jinja_env.filters['nl2br'] = nl2br_filter
 
     # Add built-in functions to Jinja2 globals
     app.jinja_env.globals['min'] = min
@@ -202,7 +214,13 @@ def create_app():
             return None
 
         # Allow system admin login/logout routes so admins can establish a bypass session.
-        if request.endpoint in {"sysadmin.login", "sysadmin.logout"}:
+        # Also allow passkey authentication endpoints for passwordless login.
+        if request.endpoint in {
+            "sysadmin.login",
+            "sysadmin.logout",
+            "sysadmin.passkey_auth_start",
+            "sysadmin.passkey_auth_finish"
+        }:
             return None
 
         # --- Bypass Logic --------------------------------------------------
@@ -335,6 +353,28 @@ def create_app():
 
         return None
 
+    def build_static_url(filename: str):
+        """Return static asset URLs with a cache-busting query parameter."""
+        if not filename:
+            return url_for('static', filename=filename)
+
+        file_path = os.path.join(app.static_folder, filename)
+        try:
+            version = int(os.stat(file_path).st_mtime)
+            return url_for('static', filename=filename, v=version)
+        except (OSError, TypeError) as exc:
+            app.logger.debug(f"Could not add cache buster for {filename}: {exc}")
+            return url_for('static', filename=filename)
+
+    # Make the helper available even in contexts where context processors
+    # might not run (e.g., background tasks rendering templates).
+    app.jinja_env.globals['static_url'] = build_static_url
+
+    @app.context_processor
+    def inject_static_url():
+        """Ensure static_url helper is always available in templates."""
+        return {'static_url': build_static_url}
+
     # -------------------- CONTEXT PROCESSORS --------------------
     @app.context_processor
     def inject_global_settings():
@@ -377,6 +417,103 @@ def create_app():
             app.logger.warning(f"Could not load feature settings, falling back to defaults: {e}")
             from app.models import FeatureSettings
             return {'feature_settings': FeatureSettings.get_defaults()}
+
+    @app.context_processor
+    def inject_class_context():
+        """Inject current class context and available classes for student navigation."""
+        try:
+            from app.auth import get_logged_in_student
+            from app.models import TeacherBlock, Admin
+            from flask import session
+
+            student = get_logged_in_student()
+            if not student:
+                return {'current_class_context': None, 'available_classes': []}
+
+            # Get all claimed seats for this student
+            claimed_seats = TeacherBlock.query.filter_by(
+                student_id=student.id,
+                is_claimed=True
+            ).order_by(TeacherBlock.teacher_id, TeacherBlock.block).all()
+
+            if not claimed_seats:
+                return {'current_class_context': None, 'available_classes': []}
+
+            # Get current join code from session
+            current_join_code = session.get('current_join_code')
+
+            # Find current seat or default to first
+            current_seat = next(
+                (seat for seat in claimed_seats if seat.join_code == current_join_code),
+                claimed_seats[0]
+            )
+
+            # Build list of available classes with teacher names
+            # Fetch all teachers at once to avoid N+1 query
+            teacher_ids = [seat.teacher_id for seat in claimed_seats]
+            teachers = {t.id: t for t in Admin.query.filter(Admin.id.in_(teacher_ids)).all()}
+            
+            available_classes = []
+            for seat in claimed_seats:
+                teacher = teachers.get(seat.teacher_id)
+                available_classes.append({
+                    'join_code': seat.join_code,
+                    'teacher_name': teacher.get_display_name() if teacher else 'Unknown',
+                    'block': seat.block,
+                    'block_display': seat.get_class_label(),
+                    'is_current': seat.join_code == current_seat.join_code
+                })
+
+            # Build current class context - reuse teacher from dictionary
+            current_teacher = teachers.get(current_seat.teacher_id)
+            current_class_context = {
+                'join_code': current_seat.join_code,
+                'teacher_name': current_teacher.get_display_name() if current_teacher else 'Unknown',
+                'teacher_id': current_seat.teacher_id,
+                'block': current_seat.block,
+                'block_display': current_seat.get_class_label()
+            }
+
+            return {
+                'current_class_context': current_class_context,
+                'available_classes': available_classes,
+                'current_seat': current_seat  # Add seat object for template access
+            }
+        except Exception as e:
+            app.logger.warning(f"Could not load class context: {e}")
+            return {'current_class_context': None, 'available_classes': []}
+
+    @app.context_processor
+    def inject_current_admin():
+        """Inject current admin object into all templates."""
+        try:
+            from app.models import Admin
+            from flask import session
+
+            admin_id = session.get('admin_id')
+            if admin_id:
+                admin = Admin.query.get(admin_id)
+                return {'current_admin': admin}
+            return {'current_admin': None}
+        except Exception as e:
+            app.logger.warning(f"Could not load current admin: {e}")
+            return {'current_admin': None}
+
+    @app.context_processor
+    def inject_current_sysadmin():
+        """Inject current system admin object into all templates."""
+        try:
+            from app.models import SystemAdmin
+            from flask import session
+
+            sysadmin_id = session.get('sysadmin_id')
+            if sysadmin_id:
+                sysadmin = SystemAdmin.query.get(sysadmin_id)
+                return {'current_sysadmin': sysadmin}
+            return {'current_sysadmin': None}
+        except Exception as e:
+            app.logger.warning(f"Could not load current system admin: {e}")
+            return {'current_sysadmin': None}
 
     # -------------------- REGISTER BLUEPRINTS --------------------
     from app.routes.main import main_bp
@@ -428,14 +565,14 @@ def create_app():
 
         # Content Security Policy (CSP)
         # Restricts resource loading to prevent XSS attacks
-        # Adjusted for Google Fonts, Material Icons, Cloudflare Turnstile, and jsdelivr CDN (Bootstrap, EasyMDE, zxcvbn)
+        # Adjusted for Google Fonts, Material Icons, Cloudflare Turnstile, jsdelivr CDN (Bootstrap, EasyMDE, zxcvbn), Font Awesome, and Passwordless.dev
         csp_directives = [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://cdn.jsdelivr.net",
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net",
-            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net",
+            "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdn.passwordless.dev",
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
+            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
             "img-src 'self' data: https:",
-            "connect-src 'self' https://challenges.cloudflare.com",
+            "connect-src 'self' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.passwordless.dev https://v4.passwordless.dev",
             "frame-src https://challenges.cloudflare.com",
             "base-uri 'self'",
             "form-action 'self'",

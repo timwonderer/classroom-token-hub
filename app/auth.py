@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import sqlalchemy as sa
-from flask import session, flash, redirect, url_for, request, current_app
+from flask import session, flash, redirect, url_for, request, current_app, jsonify
 
 
 # -------------------- SESSION CONFIGURATION --------------------
@@ -79,6 +79,9 @@ def login_required(f):
             # Admins must also have a student context when bypassing login_required
             if 'student_id' not in session:
                 session['view_as_student'] = False
+                # Return JSON for API requests
+                if request.path.startswith('/api/'):
+                    return jsonify({"status": "error", "error": "No student context"}), 401
                 flash("Select a student before viewing the student experience.")
                 return redirect(url_for('admin.dashboard'))
 
@@ -87,6 +90,9 @@ def login_required(f):
                 demo_session_id = session.get('demo_session_id')
                 if not demo_session_id:
                     session['view_as_student'] = False
+                    # Return JSON for API requests
+                    if request.path.startswith('/api/'):
+                        return jsonify({"status": "error", "error": "Demo session expired"}), 401
                     flash("Demo session expired. Start a new demo to continue.")
                     return redirect(url_for('admin.dashboard'))
 
@@ -94,7 +100,22 @@ def login_required(f):
                 demo_session = DemoStudent.query.filter_by(session_id=demo_session_id).first()
                 now = datetime.now(timezone.utc)
 
-                if not demo_session or not demo_session.is_active or now > demo_session.expires_at:
+                expires_at = None
+                if demo_session and isinstance(demo_session.expires_at, datetime):
+                    if demo_session.expires_at.tzinfo is None:
+                        # Treat naive timestamps as UTC to avoid shifting into earlier local time
+                        expires_at = demo_session.expires_at.replace(tzinfo=timezone.utc)
+                    else:
+                        expires_at = demo_session.expires_at
+                else:
+                    # If missing/invalid, refresh expiry window to prevent false expirations mid-redirect
+                    expires_at = now + timedelta(minutes=10)
+                    if demo_session:
+                        demo_session.expires_at = expires_at
+                        from app.extensions import db
+                        db.session.commit()
+
+                if not demo_session or not demo_session.is_active or (expires_at and now > expires_at):
                     try:
                         if demo_session:
                             from app.extensions import db  # Imported lazily to avoid circular import
@@ -109,7 +130,9 @@ def login_required(f):
                         session.pop('is_demo', None)
                         session.pop('demo_session_id', None)
                         session['view_as_student'] = False
-
+                        # Return JSON for API requests
+                        if request.path.startswith('/api/'):
+                            return jsonify({"status": "error", "error": "Demo session expired"}), 401
                         flash("Demo session expired. Start a new demo to continue.")
                         return redirect(url_for('admin.dashboard'))
                     except Exception:
@@ -123,6 +146,9 @@ def login_required(f):
                         session.pop('is_demo', None)
                         session.pop('demo_session_id', None)
                         session['view_as_student'] = False
+                        # Return JSON for API requests
+                        if request.path.startswith('/api/'):
+                            return jsonify({"status": "error", "error": "Demo session expired"}), 401
                         flash("Demo session expired. Start a new demo to continue.")
                         return redirect(url_for('admin.dashboard'))
 
@@ -132,6 +158,9 @@ def login_required(f):
 
         # Regular student authentication check
         if 'student_id' not in session:
+            # Return JSON for API requests
+            if request.path.startswith('/api/'):
+                return jsonify({"status": "error", "error": "User not logged in or session expired"}), 401
             encoded_next = urllib.parse.quote(request.path, safe="")
             return redirect(f"{url_for('student.login')}?next={encoded_next}")
 
@@ -142,6 +171,9 @@ def login_required(f):
             session.pop('student_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
+            # Return JSON for API requests
+            if request.path.startswith('/api/'):
+                return jsonify({"status": "error", "error": "Session is invalid. Please log in again."}), 401
             flash("Session is invalid. Please log in again.")
             return redirect(url_for('student.login'))
 
@@ -151,6 +183,9 @@ def login_required(f):
             session.pop('student_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
+            # Return JSON for API requests
+            if request.path.startswith('/api/'):
+                return jsonify({"status": "error", "error": "Session expired. Please log in again."}), 401
             flash("Session expired. Please log in again.")
             encoded_next = urllib.parse.quote(request.path, safe="")
             return redirect(f"{url_for('student.login')}?next={encoded_next}")
@@ -255,31 +290,41 @@ def get_admin_student_query(include_unassigned=True):
     """Return a Student query scoped to the current admin's ownership.
 
     System admins are allowed to see all students. Regular admins only see
-    students they own, with optional access to unassigned students during
-    migration.
+    students linked to them via the StudentTeacher association table.
+    
+    CRITICAL SECURITY NOTE: We ONLY use the StudentTeacher table as the source of truth.
+    The teacher_id column on Student is DEPRECATED and should NOT be used for scoping
+    because it can contain stale data from deleted teachers or data migration issues.
+    
+    Args:
+        include_unassigned (bool): [DEPRECATED] No longer used. Kept for backward compatibility.
     """
-    from app.models import Student, StudentTeacher  # Imported lazily to avoid circular import
+    from app.models import Student, StudentTeacher, DemoStudent  # Imported lazily to avoid circular import
 
     if session.get("is_system_admin"):
-        return Student.query
+        demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
+        return Student.query.filter(~Student.id.in_(demo_ids_subq))
 
     admin = get_current_admin()
     if not admin:
         return Student.query.filter(sa.text("0=1"))
 
+    # Get student IDs that are explicitly linked to this admin via StudentTeacher table
+    # This is the ONLY source of truth for student-teacher associations
     shared_student_ids = (
         StudentTeacher.query.with_entities(StudentTeacher.student_id)
         .filter(StudentTeacher.admin_id == admin.id)
         .subquery()
     )
 
-    filters = [
-        Student.teacher_id == admin.id,
+    # SECURITY FIX: Only use StudentTeacher associations, NOT the deprecated teacher_id column
+    # The old code used: sa.or_(Student.teacher_id == admin.id, Student.id.in_(shared_student_ids))
+    # This caused multi-tenancy leaks when teacher_id had stale data
+    demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
+    return Student.query.filter(
         Student.id.in_(shared_student_ids),
-    ]
-    if include_unassigned:
-        filters.append(Student.teacher_id.is_(None))
-    return Student.query.filter(sa.or_(*filters))
+        ~Student.id.in_(demo_ids_subq)
+    )
 
 
 def get_student_for_admin(student_id, include_unassigned=True):

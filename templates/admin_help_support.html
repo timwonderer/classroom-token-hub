@@ -1,8 +1,13 @@
 {% extends "layout_admin.html" %}
+{% set page_title = "Help and Support" %}
+{% set current_page = "help" %}
+{% block title %}Help and Support{% endblock %}
+{% set help_content = help_content|default({'how_to': [], 'troubleshooting': []}, true) %}
 
 {% block content %}
 <div class="container-fluid">
-    <h2 class="mb-4"><i class="bi bi-life-preserver me-2"></i>Help & Support</h2>
+
+    <h1 class="visually-hidden">{{ 'Help & Support'|safe }}</h1>
 
     <!-- Tabs -->
     <ul class="nav nav-tabs mb-4" id="helpTabs" role="tablist">
@@ -27,78 +32,230 @@
         <!-- Knowledge Base Tab -->
         <div class="tab-pane fade show active" id="kb" role="tabpanel" aria-labelledby="kb-tab">
             <div class="row g-4">
-                <!-- Quick Start -->
+                <!-- How To -->
                 <div class="col-lg-6">
                     <div class="card shadow-sm h-100">
                         <div class="card-header bg-info text-white">
-                            <h5 class="mb-0"><i class="bi bi-rocket-takeoff-fill me-2"></i>Quick Start Guide</h5>
+                            <h5 class="mb-0"><i class="bi bi-book me-2"></i>How To Guides</h5>
                         </div>
                         <div class="card-body">
-                            <ol class="list-group list-group-numbered list-group-flush">
-                                <li class="list-group-item">
-                                    <strong>Add Students:</strong> Go to the <a href="{{ url_for('admin.students') }}">Students</a> page. Upload your roster CSV or add students manually. Share the generated Join Codes with your students.
-                                </li>
-                                <li class="list-group-item">
-                                    <strong>Set Up Payroll:</strong> Configure pay rates (e.g., $15/hr) in <a href="{{ url_for('admin.payroll') }}">Payroll Settings</a>. Run payroll periodically to pay students for attendance.
-                                </li>
-                                <li class="list-group-item">
-                                    <strong>Stock the Store:</strong> Add items in <a href="{{ url_for('admin.store_management') }}">Store Management</a>. Use "Delayed" items for physical rewards that require redemption.
-                                </li>
-                                <li class="list-group-item">
-                                    <strong>Enable Rent:</strong> In <a href="{{ url_for('admin.rent_settings') }}">Rent Settings</a>, enable rent to simulate real-world expenses.
-                                </li>
-                                <li class="list-group-item">
-                                    <strong>Create Insurance:</strong> Offer protection plans in the <a href="{{ url_for('admin.insurance_management') }}">Insurance</a> tab.
-                                </li>
-                            </ol>
+                            <div class="accordion" id="howToAccordion">
+                                {% for article in help_content.how_to|default([]) %}
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="heading{{ article.id }}">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ article.id }}" aria-expanded="false" aria-controls="collapse{{ article.id }}">
+                                            {{ article.title }}
+                                        </button>
+                                    </h2>
+                                    <div id="collapse{{ article.id }}" class="accordion-collapse collapse" aria-labelledby="heading{{ article.id }}" data-bs-parent="#howToAccordion">
+                                        <div class="accordion-body">
+                                            {{ article.content | safe }}
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- FAQ / Self Help -->
+                <!-- Troubleshooting -->
                 <div class="col-lg-6">
                     <div class="card shadow-sm h-100">
                         <div class="card-header bg-secondary text-white">
-                            <h5 class="mb-0"><i class="bi bi-question-circle-fill me-2"></i>Frequently Asked Questions</h5>
+                            <h5 class="mb-0"><i class="bi bi-question-circle-fill me-2"></i>Troubleshooting</h5>
                         </div>
                         <div class="card-body">
-                            <div class="accordion" id="faqAccordion">
+                            <div class="accordion" id="troubleshootAccordion">
+                                {% for article in help_content.troubleshooting|default([]) %}
                                 <div class="accordion-item">
-                                    <h2 class="accordion-header" id="headingOne">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
-                                            How do students log in?
+                                    <h2 class="accordion-header" id="heading{{ article.id }}">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ article.id }}" aria-expanded="false" aria-controls="collapse{{ article.id }}">
+                                            {{ article.title }}
                                         </button>
                                     </h2>
-                                    <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#faqAccordion">
+                                    <div id="collapse{{ article.id }}" class="accordion-collapse collapse" aria-labelledby="heading{{ article.id }}" data-bs-parent="#troubleshootAccordion">
                                         <div class="accordion-body">
-                                            Students use the <strong>Join Code</strong> (found on the Students page) to claim their account. They will then set their own Username, PIN, and Passphrase.
+                                            {{ article.content | safe }}
                                         </div>
                                     </div>
                                 </div>
-                                <div class="accordion-item">
-                                    <h2 class="accordion-header" id="headingTwo">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
-                                            How do I reset a student's PIN?
-                                        </button>
-                                    </h2>
-                                    <div id="collapseTwo" class="accordion-collapse collapse" aria-labelledby="headingTwo" data-bs-parent="#faqAccordion">
-                                        <div class="accordion-body">
-                                            Go to the Student Detail page and click "Edit Student". There is an option to "Reset Login", which will require the student to re-claim their account and set a new PIN.
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="accordion-item">
-                                    <h2 class="accordion-header" id="headingThree">
-                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
-                                            Can I undo a transaction?
-                                        </button>
-                                    </h2>
-                                    <div id="collapseThree" class="accordion-collapse collapse" aria-labelledby="headingThree" data-bs-parent="#faqAccordion">
-                                        <div class="accordion-body">
-                                            Yes. Go to <a href="{{ url_for('admin.banking') }}">Banking</a>, find the transaction, and click the "Void" button.
-                                        </div>
-                                    </div>
-                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Classroom Economy Guide -->
+            <div class="row g-4 mt-2">
+                <div class="col-12">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Classroom Economy Monetary System — Teacher Guide</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="lead">This guide explains the logic behind how the Classroom Economy App handles money, prices, and financial decisions. It is designed to help you set fair, consistent numbers across your classes—even if each class has different wages or economic conditions.</p>
+
+                            <hr>
+
+                            <h6 class="fw-bold mt-4"><i class="bi bi-1-circle-fill me-2"></i>How the System Is Anchored</h6>
+                            <p>Every class has a different schedule, different behavior patterns, and different needs. Instead of using a fixed $1000/month model, the app estimates:</p>
+
+                            <div class="alert alert-info">
+                                <h6 class="fw-bold"><i class="bi bi-graph-up-arrow me-2"></i>Classroom Wage Index (CWI)</h6>
+                                <p class="mb-0"><strong>CWI = What a student earns in one week if they attend fully.</strong></p>
+                                <p class="mb-0 mt-2">This becomes the baseline for all pricing in your simulated economy.</p>
+                                <p class="mb-0 mt-2">Because everything is proportional to the CWI, you can adjust wages or create inflation without breaking the system.</p>
+                            </div>
+
+                            <hr>
+
+                            <h6 class="fw-bold mt-4"><i class="bi bi-2-circle-fill me-2"></i>How Prices Stay Fair and Understandable</h6>
+                            <p>The system follows several principles to keep the economy realistic but not overwhelming:</p>
+
+                            <h6 class="fw-bold mt-3">2.1 Reasonable Trade-Offs</h6>
+                            <p>Prices should push students to make choices:</p>
+                            <ul>
+                                <li>buy insurance vs. risk paying out-of-pocket</li>
+                                <li>save vs. spend</li>
+                                <li>invest vs. borrow</li>
+                            </ul>
+                            <p>But no single mistake should ruin them.</p>
+
+                            <h6 class="fw-bold mt-3">2.2 Proportional Pricing</h6>
+                            <p>Rent, store items, fines, and insurance all scale relative to weekly earnings. This ensures fairness even when different classes earn different amounts.</p>
+
+                            <h6 class="fw-bold mt-3">2.3 Predictable Cost Structure</h6>
+                            <p>Every major cost has a recommended ratio to the CWI (explained below). This keeps your economy internally consistent and easy to explain to students.</p>
+
+                            <hr>
+
+                            <h6 class="fw-bold mt-4"><i class="bi bi-3-circle-fill me-2"></i>Recommended Ratios for Pricing</h6>
+                            <p>These ratios work for nearly all classes and automatically adjust when you change wages.</p>
+
+                            <div class="table-responsive mt-3">
+                                <table class="table table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Category</th>
+                                            <th>Recommended Range</th>
+                                            <th>Purpose</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>Rent</strong></td>
+                                            <td>2.0–2.5 × CWI</td>
+                                            <td>Significant but manageable</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Insurance Premium</strong></td>
+                                            <td>5–12% of CWI</td>
+                                            <td>Worthwhile but not abusable</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Fines & Penalties</strong></td>
+                                            <td>5–15% of CWI</td>
+                                            <td>Push responsibility, not break budgets</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <h6 class="fw-bold mt-4">Store Item Tiers</h6>
+                            <p>Organized into tiers for clarity:</p>
+                            <div class="table-responsive">
+                                <table class="table table-bordered">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Item Tier</th>
+                                            <th>% of CWI</th>
+                                            <th>Typical Use</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td><span class="badge bg-secondary">Basic</span></td>
+                                            <td>2–5%</td>
+                                            <td>pencils, small conveniences</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge bg-primary">Standard</span></td>
+                                            <td>5–10%</td>
+                                            <td>bathroom pass, late pass</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge bg-warning text-dark">Premium</span></td>
+                                            <td>10–25%</td>
+                                            <td>big perks</td>
+                                        </tr>
+                                        <tr>
+                                            <td><span class="badge bg-danger">Luxury</span></td>
+                                            <td>25–50%</td>
+                                            <td>rare/auction items</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <hr>
+
+                            <h6 class="fw-bold mt-4"><i class="bi bi-4-circle-fill me-2"></i>Student Experience Goals</h6>
+                            <p>A well-balanced economy ensures:</p>
+                            <ul>
+                                <li>A week of perfect attendance covers rent with some left over</li>
+                                <li>Students can save at least 10–20% after rent and insurance</li>
+                                <li>High performers can afford premium store items</li>
+                                <li>Risky decisions (like skipping insurance) come with teachable consequences</li>
+                                <li>Insurance premiums feel worthwhile relative to potential claims</li>
+                            </ul>
+
+                            <hr>
+
+                            <h6 class="fw-bold mt-4"><i class="bi bi-5-circle-fill me-2"></i>Customizing Your Class Economy</h6>
+                            <p>You can modify:</p>
+                            <ul>
+                                <li>Wage rates and expected weekly hours</li>
+                                <li>Rent amounts and payment frequencies</li>
+                                <li>Store item prices</li>
+                                <li>Fine amounts</li>
+                                <li>Insurance premiums and coverage limits</li>
+                            </ul>
+                            <p class="text-muted">Because the system uses proportional pricing based on CWI, your economy will remain balanced even as you adjust settings.</p>
+
+                            <hr>
+
+                            <h6 class="fw-bold mt-4"><i class="bi bi-check2-circle me-2"></i>Quick Teacher Checklist</h6>
+                            <p>Before launching:</p>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="check1">
+                                <label class="form-check-label" for="check1">Set your pay rate and expected weekly hours on the Payroll page</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="check2">
+                                <label class="form-check-label" for="check2">Configure rent (if using) to 2.0–2.5× CWI</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="check3">
+                                <label class="form-check-label" for="check3">Create store items with prices that match student earning potential</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="check4">
+                                <label class="form-check-label" for="check4">Set insurance premiums (if using) to 5–12% of CWI</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="check5">
+                                <label class="form-check-label" for="check5">Configure fines (if using) within 5–15% of CWI</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="check6">
+                                <label class="form-check-label" for="check6">Review the CWI balance check to ensure students can save at least 10%</label>
+                            </div>
+
+                            <div class="alert alert-success mt-4">
+                                <i class="bi bi-lightbulb-fill me-2"></i>
+                                <strong>Tip:</strong> You can view your current CWI and recommended settings on the <a href="{{ url_for('admin.payroll') }}" class="alert-link">Payroll Management</a> page under the Overview tab.
                             </div>
                         </div>
                     </div>
@@ -194,7 +351,11 @@
                                     <div>
                                         <h6 class="mb-1">{{ report.title }}</h6>
                                         <small class="text-muted">
-                                            {{ report.submitted_at.strftime('%m/%d/%Y %I:%M %p') }}
+                                            {% if report.submitted_at %}
+                                                <span class="local-timestamp" data-timestamp="{{ report.submitted_at.isoformat() }}Z"></span>
+                                            {% else %}
+                                                N/A
+                                            {% endif %}
                                         </small>
                                     </div>
                                     <span class="badge

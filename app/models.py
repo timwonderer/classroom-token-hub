@@ -35,8 +35,9 @@ class TeacherBlock(db.Model):
     __tablename__ = 'teacher_blocks'
 
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
-    block = db.Column(db.String(10), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+    block = db.Column(db.String(10), nullable=False)  # Legacy technical identifier
+    class_label = db.Column(db.String(50), nullable=True)  # Teacher-customizable display name for this class
 
     # Student identifiers (used for matching during claim)
     first_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=False)
@@ -61,11 +62,11 @@ class TeacherBlock(db.Model):
     is_claimed = db.Column(db.Boolean, default=False, nullable=False)
 
     # Timestamps
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utc_now)
     claimed_at = db.Column(db.DateTime, nullable=True)
 
     # Relationships
-    teacher = db.relationship('Admin', backref=db.backref('roster_seats', lazy='dynamic'))
+    teacher = db.relationship('Admin', backref=db.backref('roster_seats', lazy='dynamic', passive_deletes=True))
     student = db.relationship('Student', backref='roster_seats')
 
     # Indexes for efficient lookups
@@ -74,6 +75,10 @@ class TeacherBlock(db.Model):
         db.Index('ix_teacher_blocks_teacher_block', 'teacher_id', 'block'),
         db.Index('ix_teacher_blocks_claimed', 'is_claimed'),
     )
+
+    def get_class_label(self):
+        """Return class_label if set, otherwise fall back to block"""
+        return self.class_label if self.class_label else self.block
 
     def __repr__(self):
         status = "claimed" if self.is_claimed else "unclaimed"
@@ -128,6 +133,8 @@ class Student(db.Model):
     has_completed_setup = db.Column(db.Boolean, default=False)
     # Privacy-aligned DOB sum for username generation (non-reversible)
     dob_sum = db.Column(db.Integer, nullable=True)
+    # Track if student has completed the legacy profile migration
+    has_completed_profile_migration = db.Column(db.Boolean, default=False)
 
     @property
     def full_name(self):
@@ -144,27 +151,131 @@ class Student(db.Model):
     def savings_balance(self):
         return round(sum(tx.amount for tx in self.transactions if tx.account_type == 'savings' and not tx.is_void), 2)
 
-    def get_checking_balance(self, teacher_id):
-        """Get checking balance scoped to a specific teacher's economy."""
-        return round(sum(
-            tx.amount for tx in self.transactions
-            if tx.account_type == 'checking' and not tx.is_void and tx.teacher_id == teacher_id
-        ), 2)
+    def get_active_insurance(self, teacher_id):
+        """Return the active insurance enrollment scoped to a teacher, if any."""
+        if not teacher_id:
+            return None
 
-    def get_savings_balance(self, teacher_id):
-        """Get savings balance scoped to a specific teacher's economy."""
-        return round(sum(
-            tx.amount for tx in self.transactions
-            if tx.account_type == 'savings' and not tx.is_void and tx.teacher_id == teacher_id
-        ), 2)
+        return StudentInsurance.query.join(
+            InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id
+        ).filter(
+            StudentInsurance.student_id == self.id,
+            StudentInsurance.status == 'active',
+            InsurancePolicy.teacher_id == teacher_id
+        ).first()
 
-    def get_total_earnings(self, teacher_id):
-        """Get total earnings scoped to a specific teacher's economy."""
-        return round(sum(
-            tx.amount for tx in self.transactions
-            if tx.teacher_id == teacher_id and tx.amount > 0 and not tx.is_void
-            and not (tx.description or "").startswith("Transfer")
-        ), 2)
+    def get_checking_balance(self, teacher_id=None, join_code=None):
+        """
+        Get checking balance scoped to a specific class economy.
+
+        CRITICAL: For proper period isolation, callers should pass join_code.
+        The teacher_id parameter is deprecated and only kept for backward compatibility.
+
+        Args:
+            teacher_id: DEPRECATED - Only for backward compatibility
+            join_code: The unique class identifier for period-level isolation
+
+        Returns:
+            float: The checking balance rounded to 2 decimal places
+        """
+        if join_code:
+            # Proper scoping by join_code (period-level isolation)
+            # Include legacy transactions with NULL join_code but matching teacher_id
+            return round(sum(
+                tx.amount for tx in self.transactions
+                if tx.account_type == 'checking' and not tx.is_void and (
+                    tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id)
+                )
+            ), 2)
+        elif teacher_id:
+            # DEPRECATED: Only use this for backward compatibility during migration
+            # This will show aggregated balance across all periods with same teacher
+            return round(sum(
+                tx.amount for tx in self.transactions
+                if tx.account_type == 'checking' and not tx.is_void and tx.teacher_id == teacher_id
+            ), 2)
+        else:
+            # No scope provided - return total across all classes
+            return round(sum(
+                tx.amount for tx in self.transactions
+                if tx.account_type == 'checking' and not tx.is_void
+            ), 2)
+
+    def get_savings_balance(self, teacher_id=None, join_code=None):
+        """
+        Get savings balance scoped to a specific class economy.
+
+        CRITICAL: For proper period isolation, callers should pass join_code.
+        The teacher_id parameter is deprecated and only kept for backward compatibility.
+
+        Args:
+            teacher_id: DEPRECATED - Only for backward compatibility
+            join_code: The unique class identifier for period-level isolation
+
+        Returns:
+            float: The savings balance rounded to 2 decimal places
+        """
+        if join_code:
+            # Proper scoping by join_code (period-level isolation)
+            # Include legacy transactions with NULL join_code but matching teacher_id
+            return round(sum(
+                tx.amount for tx in self.transactions
+                if tx.account_type == 'savings' and not tx.is_void and (
+                    tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id)
+                )
+            ), 2)
+        elif teacher_id:
+            # DEPRECATED: Only use this for backward compatibility during migration
+            # This will show aggregated balance across all periods with same teacher
+            return round(sum(
+                tx.amount for tx in self.transactions
+                if tx.account_type == 'savings' and not tx.is_void and tx.teacher_id == teacher_id
+            ), 2)
+        else:
+            # No scope provided - return total across all classes
+            return round(sum(
+                tx.amount for tx in self.transactions
+                if tx.account_type == 'savings' and not tx.is_void
+            ), 2)
+
+    def get_total_earnings(self, teacher_id=None, join_code=None):
+        """
+        Get total earnings scoped to a specific class economy.
+
+        CRITICAL: For proper period isolation, callers should pass join_code.
+        The teacher_id parameter is deprecated and only kept for backward compatibility.
+
+        Args:
+            teacher_id: DEPRECATED - Only for backward compatibility
+            join_code: The unique class identifier for period-level isolation
+
+        Returns:
+            float: The total earnings rounded to 2 decimal places
+        """
+        if join_code:
+            # Proper scoping by join_code (period-level isolation)
+            # Include legacy transactions with NULL join_code but matching teacher_id
+            return round(sum(
+                tx.amount for tx in self.transactions
+                if (tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id))
+                and tx.amount > 0 and not tx.is_void
+                and not (tx.description or "").startswith("Transfer")
+            ), 2)
+        elif teacher_id:
+            # DEPRECATED: Only use this for backward compatibility during migration
+            # This will show aggregated earnings across all periods with same teacher
+            return round(sum(
+                tx.amount for tx in self.transactions
+                if tx.teacher_id == teacher_id and tx.amount > 0 and not tx.is_void
+                and not (tx.description or "").startswith("Transfer")
+            ), 2)
+        else:
+            # No scope provided - return total across all classes
+            return round(sum(
+                tx.amount for tx in self.transactions
+                if tx.amount > 0 and not tx.is_void
+                and not (tx.description or "").startswith("Transfer")
+            ), 2)
 
     def get_all_teachers(self):
         """
@@ -222,7 +333,7 @@ class AdminInviteCode(db.Model):
     expires_at = db.Column(db.DateTime, nullable=True)
     used = db.Column(db.Boolean, default=False)
     # All times stored as UTC (see header note)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utc_now)
 
 
 class StudentTeacher(db.Model):
@@ -230,7 +341,7 @@ class StudentTeacher(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
     admin_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=True)
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=True)
 
     __table_args__ = (
         db.UniqueConstraint('student_id', 'admin_id', name='uq_student_teachers_student_admin'),
@@ -271,15 +382,16 @@ class DeletionRequest(db.Model):
     __tablename__ = 'deletion_requests'
     id = db.Column(db.Integer, primary_key=True)
     admin_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
-    request_type = db.Column(db.Enum(DeletionRequestType), nullable=False)
+    request_type = db.Column(db.Enum(DeletionRequestType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     period = db.Column(db.String(10), nullable=True)  # Specified for period deletions only
     reason = db.Column(db.Text, nullable=True)  # Optional reason from teacher
-    status = db.Column(db.Enum(DeletionRequestStatus), default=DeletionRequestStatus.PENDING, nullable=False)
+    status = db.Column(db.Enum(DeletionRequestStatus, values_callable=lambda x: [e.value for e in x]), default=DeletionRequestStatus.PENDING, nullable=False)
     requested_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
     resolved_at = db.Column(db.DateTime, nullable=True)
     resolved_by = db.Column(db.Integer, db.ForeignKey('system_admins.id'), nullable=True)
 
     # Relationships
+    # No ORM cascade needed - explicit deletion in system_admin.py:871 + DB CASCADE
     admin = db.relationship('Admin', backref=db.backref('deletion_requests', lazy='dynamic'))
     resolver = db.relationship('SystemAdmin', backref=db.backref('resolved_deletion_requests', lazy='dynamic'))
 
@@ -297,7 +409,38 @@ class SystemAdmin(db.Model):
     __tablename__ = 'system_admins'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    totp_secret = db.Column(db.String(32), nullable=False)
+    totp_secret = db.Column(db.String(200), nullable=False)  # Stores base64-encoded encrypted TOTP secret
+
+
+class SystemAdminCredential(db.Model):
+    """
+    Stores WebAuthn/FIDO2 credentials for system admin passwordless authentication.
+    Each credential represents a passkey or security key registered to a system admin.
+    """
+    __tablename__ = 'system_admin_credentials'
+
+    id = db.Column(db.Integer, primary_key=True)
+    sysadmin_id = db.Column(db.Integer, db.ForeignKey('system_admins.id', ondelete='CASCADE'), nullable=False)
+
+    # WebAuthn credential data
+    credential_id = db.Column(db.LargeBinary, unique=True, nullable=False, index=True)  # Base64url decoded credential ID
+    public_key = db.Column(db.LargeBinary, nullable=True)  # COSE-encoded public key
+    sign_count = db.Column(db.Integer, default=0, nullable=False)  # For clone detection
+
+    # Authenticator metadata
+    transports = db.Column(db.String(255))  # Comma-separated: "usb,nfc,ble,internal"
+    authenticator_name = db.Column(db.String(100))  # User-friendly name e.g., "YubiKey 5C"
+    aaguid = db.Column(db.String(36))  # Authenticator Attestation GUID (optional)
+
+    # Timestamps (all UTC)
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    last_used = db.Column(db.DateTime)
+
+    # Relationships
+    sysadmin = db.relationship('SystemAdmin', backref=db.backref('credentials', lazy='dynamic', cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<SystemAdminCredential {self.authenticator_name or "Unnamed"} for SysAdmin {self.sysadmin_id}>'
 
 
 class Transaction(db.Model):
@@ -305,33 +448,81 @@ class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
+
+    # CRITICAL: join_code is the source of truth for class isolation
+    # Each join code represents a distinct class economy, even if same teacher
+    # Example: Teacher has Period A (join=MATH1A) and Period B (join=MATH3B)
+    # Student in both periods should see separate balances/transactions
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+
     amount = db.Column(db.Float, nullable=False)
     # All times stored as UTC (see header note)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=_utc_now)
     account_type = db.Column(db.String(20), default='checking')
     description = db.Column(db.String(255))
     is_void = db.Column(db.Boolean, default=False)
     type = db.Column(db.String(50))  # optional field to describe the transaction type
     # All times stored as UTC
-    date_funds_available = db.Column(db.DateTime, default=datetime.utcnow)
+    date_funds_available = db.Column(db.DateTime, default=_utc_now)
 
     # Relationship to track which teacher created this transaction
     teacher = db.relationship('Admin', backref=db.backref('transactions', lazy='dynamic'))
 
 
 # ---- TapEvent Model (append-only) ----
+class StudentBlock(db.Model):
+    """
+    Stores per-student, per-period settings and state.
+    """
+    __tablename__ = 'student_blocks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
+    period = db.Column(db.String(10), nullable=False)
+
+    # CRITICAL: join_code is the source of truth for class isolation
+    # Links this student-period combination to a specific class economy
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+
+    # Toggle for enabling/disabling tap in/out for this student in this period
+    tap_enabled = db.Column(db.Boolean, default=True, nullable=False)
+
+    # When student marks "done for the day", store the date (Pacific time)
+    # This locks them out until 11:59 PM same day
+    done_for_day_date = db.Column(db.Date, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=_utc_now)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now)
+
+    student = db.relationship("Student", backref=db.backref("student_blocks", passive_deletes=True))
+
+    __table_args__ = (
+        db.UniqueConstraint('student_id', 'period', name='uq_student_blocks_student_period'),
+        db.Index('ix_student_blocks_student_id', 'student_id'),
+        db.Index('ix_student_blocks_period', 'period'),
+    )
+
+
 class TapEvent(db.Model):
     __tablename__ = 'tap_events'
 
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     period = db.Column(db.String(10), nullable=False)
+    # CRITICAL: join_code scopes attendance to a specific class economy
+    join_code = db.Column(db.String(20), nullable=True, index=True)
     status = db.Column(db.String(10), nullable=False)  # 'active' or 'inactive'
     # All times stored as UTC (see header note)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    timestamp = db.Column(db.DateTime, default=_utc_now)
     reason = db.Column(db.String(50), nullable=True)
 
+    # Flag to indicate if this event was deleted by a teacher
+    is_deleted = db.Column(db.Boolean, default=False, nullable=False, index=True)
+    deleted_at = db.Column(db.DateTime, nullable=True)
+    deleted_by = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='SET NULL'), nullable=True)
+
     student = db.relationship("Student", backref="tap_events")
+    deleted_by_admin = db.relationship("Admin", foreign_keys=[deleted_by])
 
 
 # ---- Hall Pass Log Model ----
@@ -343,7 +534,12 @@ class HallPassLog(db.Model):
     status = db.Column(db.String(20), default='pending', nullable=False) # pending, approved, rejected, left, returned
     pass_number = db.Column(db.String(3), nullable=True, unique=True) # Format: letter + 2 digits (e.g., A42)
     period = db.Column(db.String(10), nullable=True) # Which period the request was made in
-    request_time = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # CRITICAL: join_code is the source of truth for class isolation
+    # Each hall pass request should be scoped to the specific class/period
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+
+    request_time = db.Column(db.DateTime, default=_utc_now, nullable=False)
     decision_time = db.Column(db.DateTime, nullable=True)
     left_time = db.Column(db.DateTime, nullable=True)
     return_time = db.Column(db.DateTime, nullable=True)
@@ -354,7 +550,8 @@ class HallPassLog(db.Model):
 class HallPassSettings(db.Model):
     __tablename__ = 'hall_pass_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Queue system toggle
     queue_enabled = db.Column(db.Boolean, default=True, nullable=False)
@@ -362,14 +559,15 @@ class HallPassSettings(db.Model):
     # Queue limit (when queue + currently out >= this number, restrict certain passes)
     queue_limit = db.Column(db.Integer, default=10, nullable=False)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utc_now)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now)
 
     # Relationships
     teacher = db.relationship('Admin', backref=db.backref('hall_pass_settings', lazy='dynamic'))
 
 
 # -------------------- STORE MODELS --------------------
+
 class StoreItem(db.Model):
     __tablename__ = 'store_items'
     id = db.Column(db.Integer, primary_key=True)
@@ -377,12 +575,14 @@ class StoreItem(db.Model):
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
     price = db.Column(db.Float, nullable=False)
+    tier = db.Column(db.String(20), nullable=True) # basic, standard, premium, luxury (teacher-only organizational label)
     item_type = db.Column(db.String(20), nullable=False, default='delayed') # immediate, delayed, collective
     inventory = db.Column(db.Integer, nullable=True) # null for unlimited
     limit_per_student = db.Column(db.Integer, nullable=True) # null for no limit
     auto_delist_date = db.Column(db.DateTime, nullable=True)
     auto_expiry_days = db.Column(db.Integer, nullable=True) # days student has to use the item
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    is_long_term_goal = db.Column(db.Boolean, default=False, nullable=False) # if true, exclude from CWI balance checks
 
     # Bundle settings
     is_bundle = db.Column(db.Boolean, default=False, nullable=False)
@@ -404,13 +604,54 @@ class StoreItem(db.Model):
     teacher = db.relationship('Admin', backref=db.backref('store_items', lazy='dynamic'))
     student_items = db.relationship('StudentItem', backref='store_item', lazy=True)
 
+    # Many-to-many relationship for block visibility
+    visible_blocks = db.relationship(
+        'StoreItemBlock',
+        backref='store_item',
+        lazy='dynamic',
+        cascade='all, delete-orphan'
+    )
+
+    @property
+    def blocks_list(self):
+        """Return list of block names this item is visible to (empty list means all blocks)."""
+        return [b.block for b in self.visible_blocks]
+
+    def set_blocks(self, block_list):
+        """Set the blocks this item is visible to. Pass empty list for all blocks."""
+        # Clear existing blocks
+        StoreItemBlock.query.filter_by(store_item_id=self.id).delete()
+        # Add new blocks
+        if block_list:
+            db.session.add_all([
+                StoreItemBlock(store_item_id=self.id, block=block.strip().upper())
+                for block in block_list
+            ])
+
+
+class StoreItemBlock(db.Model):
+    """Association model for store item block visibility."""
+    __tablename__ = 'store_item_blocks'
+    store_item_id = db.Column(db.Integer, db.ForeignKey('store_items.id', ondelete='CASCADE'), primary_key=True)
+    block = db.Column(db.String(10), primary_key=True)
+
+    __table_args__ = (
+        db.Index('ix_store_item_blocks_item', 'store_item_id'),
+        db.Index('ix_store_item_blocks_block', 'block'),
+    )
+
 
 class StudentItem(db.Model):
     __tablename__ = 'student_items'
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     store_item_id = db.Column(db.Integer, db.ForeignKey('store_items.id'), nullable=False)
-    purchase_date = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # CRITICAL: join_code is the source of truth for class isolation
+    # Each purchase should be scoped to the specific class/period where it was made
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+
+    purchase_date = db.Column(db.DateTime, default=_utc_now)
     expiry_date = db.Column(db.DateTime, nullable=True)
     # purchased, pending (for collective), processing, completed, expired, redeemed
     status = db.Column(db.String(20), default='purchased', nullable=False)
@@ -430,7 +671,8 @@ class StudentItem(db.Model):
 class RentSettings(db.Model):
     __tablename__ = 'rent_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Main toggle
     is_enabled = db.Column(db.Boolean, default=True)
@@ -458,7 +700,7 @@ class RentSettings(db.Model):
     prevent_purchase_when_late = db.Column(db.Boolean, default=False)
 
     # Metadata
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now)
 
     # Relationships
     teacher = db.relationship('Admin', backref=db.backref('rent_settings', lazy='dynamic'))
@@ -474,10 +716,15 @@ class RentPayment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     period = db.Column(db.String(10), nullable=False)  # Block/Period (e.g., 'A', 'B', 'C')
+
+    # CRITICAL: join_code is the source of truth for class isolation
+    # Each rent payment should be scoped to the specific class/period
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+
     amount_paid = db.Column(db.Float, nullable=False)
     period_month = db.Column(db.Integer, nullable=False)  # Month (1-12)
     period_year = db.Column(db.Integer, nullable=False)  # Year (e.g., 2025)
-    payment_date = db.Column(db.DateTime, default=datetime.utcnow)
+    payment_date = db.Column(db.DateTime, default=_utc_now)
     was_late = db.Column(db.Boolean, default=False)
     late_fee_charged = db.Column(db.Float, default=0.0)
 
@@ -493,7 +740,7 @@ class RentWaiver(db.Model):
     periods_count = db.Column(db.Integer, nullable=False)  # Number of rent periods to skip
     reason = db.Column(db.Text, nullable=True)
     created_by_admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utc_now)
 
     student = db.relationship('Student', backref='rent_waivers')
     created_by = db.relationship('Admin', backref='rent_waivers_created')
@@ -539,22 +786,59 @@ class InsurancePolicy(db.Model):
     tier_category_id = db.Column(db.Integer, nullable=True)  # Groups policies that are mutually exclusive
     tier_name = db.Column(db.String(100), nullable=True)  # Display name for the tier (e.g., "Paycheck Protection")
     tier_color = db.Column(db.String(20), nullable=True)  # Color theme for the tier (e.g., "primary", "success", "warning")
+    tier_level = db.Column(db.String(20), nullable=True)  # Basic, mid-tier, premium placement within a group
 
     # Settings mode: simple or advanced
     settings_mode = db.Column(db.String(20), nullable=True, default='advanced')  # simple or advanced
 
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utc_now)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now)
 
     # Relationships
     teacher = db.relationship('Admin', foreign_keys=[teacher_id], backref='insurance_policies_owned')
     student_policies = db.relationship('StudentInsurance', backref='policy', lazy='dynamic')
     claims = db.relationship('InsuranceClaim', backref='policy', lazy='dynamic')
 
+    # Many-to-many relationship for block visibility
+    visible_blocks = db.relationship(
+        'InsurancePolicyBlock',
+        backref='policy',
+        lazy='dynamic',
+        cascade='all, delete-orphan'
+    )
+
+    @property
+    def blocks_list(self):
+        """Return list of block names this policy is visible to (empty list means all blocks)."""
+        return [b.block for b in self.visible_blocks]
+
+    def set_blocks(self, block_list):
+        """Set the blocks this policy is visible to. Pass empty list for all blocks."""
+        # Clear existing blocks
+        InsurancePolicyBlock.query.filter_by(policy_id=self.id).delete()
+        # Add new blocks
+        if block_list:
+            db.session.add_all([
+                InsurancePolicyBlock(policy_id=self.id, block=block.strip().upper())
+                for block in block_list
+            ])
+
     @property
     def is_monetary_claim(self):
         return self.claim_type != 'non_monetary'
+
+
+class InsurancePolicyBlock(db.Model):
+    """Association model for insurance policy block visibility."""
+    __tablename__ = 'insurance_policy_blocks'
+    policy_id = db.Column(db.Integer, db.ForeignKey('insurance_policies.id', ondelete='CASCADE'), primary_key=True)
+    block = db.Column(db.String(10), primary_key=True)
+
+    __table_args__ = (
+        db.Index('ix_insurance_policy_blocks_policy', 'policy_id'),
+        db.Index('ix_insurance_policy_blocks_block', 'block'),
+    )
 
 
 class StudentInsurance(db.Model):
@@ -563,8 +847,12 @@ class StudentInsurance(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     policy_id = db.Column(db.Integer, db.ForeignKey('insurance_policies.id'), nullable=False)
 
+    # CRITICAL: join_code is the source of truth for class isolation
+    # Each insurance enrollment should be scoped to the specific class/period
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+
     status = db.Column(db.String(20), default='active')  # active, cancelled, suspended
-    purchase_date = db.Column(db.DateTime, default=datetime.utcnow)
+    purchase_date = db.Column(db.DateTime, default=_utc_now)
     cancel_date = db.Column(db.DateTime, nullable=True)
     last_payment_date = db.Column(db.DateTime, nullable=True)
     next_payment_due = db.Column(db.DateTime, nullable=True)
@@ -590,7 +878,7 @@ class InsuranceClaim(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
 
     incident_date = db.Column(db.DateTime, nullable=False)  # When incident occurred
-    filed_date = db.Column(db.DateTime, default=datetime.utcnow)
+    filed_date = db.Column(db.DateTime, default=_utc_now)
     description = db.Column(db.Text, nullable=False)
     claim_amount = db.Column(db.Float, nullable=True)  # For monetary claims: requested amount
     claim_item = db.Column(db.Text, nullable=True)  # For non-monetary claims: what they're claiming
@@ -614,7 +902,7 @@ class InsuranceClaim(db.Model):
 class ErrorLog(db.Model):
     __tablename__ = 'error_logs'
     id = db.Column(db.Integer, primary_key=True)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = db.Column(db.DateTime, default=_utc_now, nullable=False, index=True)
     error_type = db.Column(db.String(100), nullable=True)  # Type of error (e.g., Exception class name)
     error_message = db.Column(db.Text, nullable=True)  # Error message
     request_path = db.Column(db.String(500), nullable=True)  # URL path that caused the error
@@ -644,7 +932,7 @@ class UserReport(db.Model):
     page_url = db.Column(db.String(500), nullable=True)  # URL where error occurred
 
     # Metadata
-    submitted_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    submitted_at = db.Column(db.DateTime, default=_utc_now, nullable=False, index=True)
     ip_address = db.Column(db.String(50), nullable=True)
     user_agent = db.Column(db.String(500), nullable=True)
 
@@ -669,30 +957,312 @@ class UserReport(db.Model):
     reviewed_by = db.relationship('SystemAdmin', backref='reviewed_reports', foreign_keys=[reviewed_by_sysadmin_id])
 
 
+# ---- Issue Resolution System Models ----
+
+class IssueCategory(db.Model):
+    """
+    Predefined categories for student issue reports.
+    Categories guide students to provide relevant context for their issue.
+    """
+    __tablename__ = 'issue_categories'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False, unique=True)
+    description = db.Column(db.Text, nullable=True)
+    category_type = db.Column(db.String(50), nullable=False)  # 'transaction', 'general'
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    display_order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=_utc_now)
+
+    # Relationships
+    issues = db.relationship('Issue', backref='category', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<IssueCategory {self.name} ({self.category_type})>'
+
+
+class Issue(db.Model):
+    """
+    Core issue tracking model for the Issue Resolution & Escalation system.
+
+    This system provides a safe, auditable, non-communicative mechanism for handling
+    errors, disputes, and system issues. Students submit issues which are reviewed
+    by teachers and potentially escalated to sysadmins.
+
+    Key principles:
+    - No direct student-to-sysadmin communication
+    - Teachers are first and primary decision-makers
+    - All issues tied to concrete system records when possible
+    - Clear lifecycle, ownership, and audit trail
+    - Non-identifying data for sysadmin review
+    """
+    __tablename__ = 'issues'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Student identification (non-identifying for sysadmin)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
+    student_first_name = db.Column(db.String(100), nullable=False)  # Cached for display
+    student_last_initial = db.Column(db.String(1), nullable=False)
+
+    # Opaque identifier for sysadmin investigations (non-reversible)
+    opaque_student_reference = db.Column(db.String(64), nullable=False, index=True)
+
+    # Class context
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=False, index=True)
+    class_label = db.Column(db.String(50), nullable=True)  # Cached class name
+
+    # Issue categorization
+    category_id = db.Column(db.Integer, db.ForeignKey('issue_categories.id'), nullable=False)
+    issue_type = db.Column(db.String(50), nullable=False)  # 'transaction', 'general'
+
+    # Student submission (immutable after submission)
+    student_explanation = db.Column(db.Text, nullable=False)
+    student_expected_outcome = db.Column(db.Text, nullable=True)
+    submitted_at = db.Column(db.DateTime, default=_utc_now, nullable=False, index=True)
+
+    # Context attachment (transaction/record-specific issues)
+    related_transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True)
+    related_record_type = db.Column(db.String(50), nullable=True)  # 'transaction', 'tap_event', 'rent_payment', etc.
+    related_record_id = db.Column(db.Integer, nullable=True)  # Generic ID for other record types
+
+    # System context snapshot (automatic, immutable)
+    context_snapshot = db.Column(db.JSON, nullable=True)  # Ledger state, amounts, timestamps, etc.
+    page_url = db.Column(db.String(500), nullable=True)
+    system_metadata = db.Column(db.JSON, nullable=True)  # Recent events, browser info, etc.
+
+    # Status tracking
+    status = db.Column(db.String(50), default='submitted', nullable=False, index=True)
+    # Allowed statuses: 'submitted', 'teacher_review', 'teacher_resolved', 'elevated', 'developer_review', 'developer_resolved'
+
+    # Teacher review and resolution
+    teacher_reviewed_at = db.Column(db.DateTime, nullable=True)
+    teacher_notes = db.Column(db.Text, nullable=True)  # Separate from student content
+    teacher_resolution = db.Column(db.String(100), nullable=True)  # Type of resolution applied
+    teacher_resolved_at = db.Column(db.DateTime, nullable=True)
+
+    # Escalation to sysadmin
+    escalated_at = db.Column(db.DateTime, nullable=True)
+    escalation_reason = db.Column(db.String(200), nullable=True)
+    teacher_diagnostic_note = db.Column(db.Text, nullable=True)  # Teacher's diagnostic for sysadmin
+    share_class_name_with_sysadmin = db.Column(db.Boolean, default=False, nullable=False)  # Teacher consent for class disclosure
+    eligible_for_reward = db.Column(db.Boolean, default=False, nullable=False)  # Teacher marks if student may receive reward for legitimate bug
+
+    # Sysadmin review and resolution
+    sysadmin_id = db.Column(db.Integer, db.ForeignKey('system_admins.id'), nullable=True)
+    sysadmin_reviewed_at = db.Column(db.DateTime, nullable=True)
+    sysadmin_notes = db.Column(db.Text, nullable=True)  # Separate from teacher/student content, visible to teacher only
+    sysadmin_resolved_at = db.Column(db.DateTime, nullable=True)
+
+    # Closure
+    closed_at = db.Column(db.DateTime, nullable=True)
+    closed_by_type = db.Column(db.String(20), nullable=True)  # 'teacher', 'sysadmin', 'system'
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now)
+
+    # Relationships
+    student = db.relationship('Student', backref=db.backref('issues', lazy='dynamic'))
+    teacher = db.relationship('Admin', backref=db.backref('class_issues', lazy='dynamic'))
+    sysadmin = db.relationship('SystemAdmin', backref=db.backref('reviewed_issues', lazy='dynamic'))
+    related_transaction = db.relationship('Transaction', backref='related_issues')
+    status_history = db.relationship('IssueStatusHistory', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueStatusHistory.changed_at.desc()')
+    resolution_actions = db.relationship('IssueResolutionAction', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueResolutionAction.created_at.desc()')
+
+    # Indexes
+    __table_args__ = (
+        db.Index('ix_issues_teacher_status', 'teacher_id', 'status'),
+        db.Index('ix_issues_student_status', 'student_id', 'status'),
+        db.Index('ix_issues_join_code_status', 'join_code', 'status'),
+    )
+
+    def get_student_visible_status(self):
+        """Return simplified status badge for student view."""
+        status_map = {
+            'submitted': 'Submitted',
+            'teacher_review': 'Teacher Review',
+            'teacher_resolved': 'Resolved',
+            'elevated': 'Elevated',
+            'developer_review': 'Developer Review',
+            'developer_resolved': 'Resolved - See Teacher'
+        }
+        return status_map.get(self.status, 'Unknown')
+
+    def is_locked(self):
+        """Check if issue is locked from further student edits (after escalation)."""
+        return self.status in ['elevated', 'developer_review', 'developer_resolved']
+
+    def __repr__(self):
+        return f'<Issue #{self.id} ({self.status}) - Student {self.student_first_name} {self.student_last_initial}.>'
+
+
+class IssueStatusHistory(db.Model):
+    """
+    Tracks all status changes for an issue.
+    Provides complete audit trail for issue lifecycle.
+    """
+    __tablename__ = 'issue_status_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    previous_status = db.Column(db.String(50), nullable=True)
+    new_status = db.Column(db.String(50), nullable=False)
+    changed_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    changed_by_type = db.Column(db.String(20), nullable=False)  # 'student', 'teacher', 'sysadmin', 'system'
+    changed_by_id = db.Column(db.Integer, nullable=True)  # ID of user who made the change
+    notes = db.Column(db.Text, nullable=True)
+
+    def __repr__(self):
+        return f'<IssueStatusHistory Issue#{self.issue_id}: {self.previous_status} → {self.new_status}>'
+
+
+class IssueResolutionAction(db.Model):
+    """
+    Tracks resolution actions taken on an issue.
+    Records what teachers did to resolve transaction/record disputes.
+    """
+    __tablename__ = 'issue_resolution_actions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), nullable=False, index=True)
+
+    action_type = db.Column(db.String(100), nullable=False)
+    # Action types: 'reverse_transaction', 'correct_amount', 'correct_time', 'waive_fee', 'deny_issue', 'manual_adjustment', etc.
+
+    action_description = db.Column(db.Text, nullable=True)
+    performed_by_type = db.Column(db.String(20), nullable=False)  # 'teacher', 'sysadmin'
+    performed_by_id = db.Column(db.Integer, nullable=False)
+
+    # Related changes (for audit trail)
+    related_transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True)
+    amount_changed = db.Column(db.Float, nullable=True)
+    before_value = db.Column(db.Text, nullable=True)
+    after_value = db.Column(db.Text, nullable=True)
+
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+
+    # Relationships
+    related_transaction = db.relationship('Transaction')
+
+    def __repr__(self):
+        return f'<IssueResolutionAction Issue#{self.issue_id}: {self.action_type}>'
+
+
 # ---- Admin Model ----
 class Admin(db.Model):
     __tablename__ = 'admins'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
-    # TOTP-only: store secret, remove password_hash
-    totp_secret = db.Column(db.String(32), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=True)  # Nullable for existing records
+    display_name = db.Column(db.String(100), nullable=True)  # Teacher's display name (defaults to username if not set)
+    # TOTP-only: store secret (base64-encoded encrypted data)
+    totp_secret = db.Column(db.String(200), nullable=False)  # Stores base64-encoded encrypted TOTP secret
+    # Account recovery: Hashed DOB sum (similar to student system)
+    dob_sum_hash = db.Column(db.String(64), nullable=True)  # Hashed Sum of MM + DD + YYYY
+    salt = db.Column(db.LargeBinary(16), nullable=True)  # Salt for DOB sum hash
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=True)  # Nullable for existing records
     last_login = db.Column(db.DateTime, nullable=True)
     has_assigned_students = db.Column(db.Boolean, default=False, nullable=False)  # One-time setup flag
+
+    def get_display_name(self):
+        """Return display_name if set, otherwise fall back to username"""
+        return self.display_name if self.display_name else self.username
+
+
+class AdminCredential(db.Model):
+    """
+    Stores WebAuthn/FIDO2 credentials for teacher passwordless authentication.
+    Each credential represents a passkey or security key registered to a teacher admin.
+    """
+    __tablename__ = 'admin_credentials'
+
+    id = db.Column(db.Integer, primary_key=True)
+    admin_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+
+    # WebAuthn credential data
+    credential_id = db.Column(db.LargeBinary, unique=True, nullable=False, index=True)  # Base64url decoded credential ID
+    public_key = db.Column(db.LargeBinary, nullable=True)  # COSE-encoded public key (empty for passwordless.dev)
+    sign_count = db.Column(db.Integer, default=0, nullable=False)  # For clone detection
+
+    # Authenticator metadata
+    transports = db.Column(db.String(255))  # Comma-separated: "usb,nfc,ble,internal"
+    authenticator_name = db.Column(db.String(100))  # User-friendly name e.g., "iPhone Touch ID"
+    aaguid = db.Column(db.String(36))  # Authenticator Attestation GUID (optional)
+
+    # Timestamps (all UTC)
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    last_used = db.Column(db.DateTime)
+
+    # Relationships
+    admin = db.relationship('Admin', backref=db.backref('credentials', lazy='dynamic', cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<AdminCredential {self.authenticator_name or "Unnamed"} for Admin {self.admin_id}>'
+
+
+# ---- Account Recovery Models ----
+class RecoveryRequest(db.Model):
+    """Teacher account recovery request - requires student verification"""
+    __tablename__ = 'recovery_requests'
+
+    id = db.Column(db.Integer, primary_key=True)
+    admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    dob_sum_hash = db.Column(db.String(64), nullable=True)  # Hashed input for verification trail
+
+    # Status tracking
+    status = db.Column(
+        db.Enum('pending', 'verified', 'expired', 'cancelled', name='recovery_request_status_enum'),
+        nullable=False,
+        default='pending'
+    )  # pending, verified, expired, cancelled
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)  # Auto-expire after X days
+    completed_at = db.Column(db.DateTime, nullable=True)
+
+    # Partial progress - allows teacher to save progress and resume later
+    partial_codes = db.Column(db.JSON, nullable=True)  # Array of entered codes (not yet validated)
+    resume_pin_hash = db.Column(db.String(64), nullable=True)  # Hashed PIN to resume progress
+    resume_new_username = db.Column(db.String(100), nullable=True)  # Temporary storage for new username
+
+    # Relationships
+    admin = db.relationship('Admin', backref=db.backref('recovery_requests', lazy='dynamic'))
+    verification_codes = db.relationship('StudentRecoveryCode', backref='recovery_request', lazy='dynamic', cascade='all, delete-orphan')
+
+
+class StudentRecoveryCode(db.Model):
+    """Student verification code for teacher account recovery"""
+    __tablename__ = 'student_recovery_codes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    recovery_request_id = db.Column(db.Integer, db.ForeignKey('recovery_requests.id'), nullable=False, index=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
+
+    # Verification code (6-digit, hashed)
+    code_hash = db.Column(db.String(64), nullable=True)  # NULL until student verifies
+    verified_at = db.Column(db.DateTime, nullable=True)
+
+    # Notification tracking
+    notified_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    dismissed = db.Column(db.Boolean, default=False, nullable=False)  # Student dismissed notification
+
+    # Relationships
+    student = db.relationship('Student', backref=db.backref('recovery_codes', lazy='dynamic'))
 
 
 # ---- Payroll Settings Model ----
 class PayrollSettings(db.Model):
     __tablename__ = 'payroll_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global/default settings
     pay_rate = db.Column(db.Float, nullable=False, default=0.25)  # $ per minute
     payroll_frequency_days = db.Column(db.Integer, nullable=False, default=14)
     next_payroll_date = db.Column(db.DateTime, nullable=True)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utc_now)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now)
 
     # Optional: different rates for different scenarios
     overtime_multiplier = db.Column(db.Float, default=1.0)
@@ -718,6 +1288,10 @@ class PayrollSettings(db.Model):
     first_pay_date = db.Column(db.DateTime, nullable=True)  # First payday
     rounding_mode = db.Column(db.String(20), nullable=False, default='down')  # 'up' or 'down'
 
+    # Economy Balance Check Field
+    # NOTE: This is NOT used for actual payroll calculations - only for economy balance validation
+    expected_weekly_hours = db.Column(db.Float, nullable=True, default=5.0)  # Expected class hours per week
+
     # Relationships
     teacher = db.relationship('Admin', backref=db.backref('payroll_settings', lazy='dynamic'))
 
@@ -734,7 +1308,7 @@ class PayrollReward(db.Model):
     description = db.Column(db.Text, nullable=True)
     amount = db.Column(db.Float, nullable=False)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utc_now)
 
     # Relationships
     teacher = db.relationship('Admin', backref=db.backref('payroll_rewards', lazy='dynamic'))
@@ -752,7 +1326,7 @@ class PayrollFine(db.Model):
     description = db.Column(db.Text, nullable=True)
     amount = db.Column(db.Float, nullable=False)  # Positive value, will be deducted
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utc_now)
 
     # Relationships
     teacher = db.relationship('Admin', backref=db.backref('payroll_fines', lazy='dynamic'))
@@ -765,7 +1339,8 @@ class PayrollFine(db.Model):
 class BankingSettings(db.Model):
     __tablename__ = 'banking_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Interest settings for savings
     savings_apy = db.Column(db.Float, default=0.0)  # Annual Percentage Yield (e.g., 5.0 for 5%)
@@ -794,8 +1369,8 @@ class BankingSettings(db.Model):
 
     # Metadata
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utc_now)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now)
 
     # Relationships
     teacher = db.relationship('Admin', backref=db.backref('banking_settings', lazy='dynamic'))
@@ -821,7 +1396,7 @@ class DemoStudent(db.Model):
 
     # Session tracking
     session_id = db.Column(db.String(255), nullable=False, unique=True)  # Flask session ID
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False)  # Auto-cleanup after 10 minutes
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     ended_at = db.Column(db.DateTime, nullable=True)
@@ -864,7 +1439,7 @@ class FeatureSettings(db.Model):
     """
     __tablename__ = 'feature_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
     block = db.Column(db.String(10), nullable=True)  # NULL = global defaults for teacher
 
     # Feature toggles - all default to True (enabled)
@@ -880,11 +1455,11 @@ class FeatureSettings(db.Model):
     bug_rewards_enabled = db.Column(db.Boolean, default=True, nullable=False)
 
     # Timestamps
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=_utc_now)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now)
 
     # Relationships
-    teacher = db.relationship('Admin', backref=db.backref('feature_settings', lazy='dynamic'))
+    teacher = db.relationship('Admin', backref=db.backref('feature_settings', lazy='dynamic', passive_deletes=True))
 
     # Unique constraint: one settings row per teacher-block combination
     __table_args__ = (
@@ -941,7 +1516,7 @@ class TeacherOnboarding(db.Model):
     """
     __tablename__ = 'teacher_onboarding'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, unique=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False, unique=True)
 
     # Onboarding status
     is_completed = db.Column(db.Boolean, default=False, nullable=False)
@@ -956,13 +1531,13 @@ class TeacherOnboarding(db.Model):
     steps_completed = db.Column(db.JSON, default=dict, nullable=False)
 
     # Timestamps
-    started_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    started_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
     completed_at = db.Column(db.DateTime, nullable=True)
     skipped_at = db.Column(db.DateTime, nullable=True)
-    last_activity_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    last_activity_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
 
     # Relationships
-    teacher = db.relationship('Admin', backref=db.backref('onboarding', uselist=False))
+    teacher = db.relationship('Admin', backref=db.backref('onboarding', uselist=False, passive_deletes=True))
 
     def __repr__(self):
         status = 'completed' if self.is_completed else ('skipped' if self.is_skipped else 'in_progress')
@@ -999,3 +1574,107 @@ class TeacherOnboarding(db.Model):
     def needs_onboarding(self):
         """Check if teacher needs to complete onboarding."""
         return not self.is_completed and not self.is_skipped
+
+
+# -------------------- ANNOUNCEMENT MODEL --------------------
+class Announcement(db.Model):
+    """
+    Announcements for teachers and system administrators.
+
+    Teacher Announcements:
+    - Teachers post to specific class periods (scoped by join_code)
+    - Only visible to students in that class period
+
+    System Admin Announcements:
+    - System admins post with broader audience types
+    - Can target: all students, all teachers, specific teacher's classes, or everyone
+    - Teachers cannot see these in their announcement management
+    """
+    __tablename__ = 'announcements'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Author (one of these will be set)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=True)
+    system_admin_id = db.Column(db.Integer, db.ForeignKey('system_admins.id', ondelete='CASCADE'), nullable=True)
+
+    # Audience targeting
+    join_code = db.Column(db.String(20), nullable=True, index=True)  # For teacher/sysadmin specific class announcements
+    audience_type = db.Column(db.String(30), default='class', nullable=False)  # 'class', 'system_wide', 'all_teachers', 'all_students', 'teacher_all_classes', 'specific_class'
+    target_teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=True)  # For 'teacher_all_classes' audience type
+
+    # Announcement content
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+
+    # Display settings
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    priority = db.Column(db.String(20), default='normal', nullable=False)  # 'low', 'normal', 'high', 'urgent'
+
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=True)  # Optional expiration
+
+    # Relationships
+    teacher = db.relationship('Admin', foreign_keys=[teacher_id], backref=db.backref('announcements', lazy='dynamic', passive_deletes=True))
+    system_admin = db.relationship('SystemAdmin', foreign_keys=[system_admin_id], backref=db.backref('announcements', lazy='dynamic', passive_deletes=True))
+    target_teacher = db.relationship('Admin', foreign_keys=[target_teacher_id], backref=db.backref('targeted_announcements', lazy='dynamic', passive_deletes=True))
+
+    # Indexes
+    __table_args__ = (
+        db.Index('ix_announcements_join_code_active', 'join_code', 'is_active'),
+        db.Index('ix_announcements_teacher_join_code', 'teacher_id', 'join_code'),
+        db.Index('ix_announcements_audience_type', 'audience_type', 'is_active'),
+        db.Index('ix_announcements_system_admin', 'system_admin_id', 'is_active'),
+    )
+
+    def __repr__(self):
+        author = f"Teacher {self.teacher_id}" if self.teacher_id else f"SysAdmin {self.system_admin_id}"
+        return f'<Announcement {self.id} - {self.title[:30]} ({author}, {self.audience_type})>'
+
+    def is_expired(self):
+        """Check if announcement has expired."""
+        if self.expires_at is None:
+            return False
+        return datetime.now(timezone.utc) > self.expires_at
+
+    def should_display(self):
+        """Check if announcement should be displayed."""
+        return self.is_active and not self.is_expired()
+
+    def get_priority_class(self):
+        """Get CSS class for announcement priority."""
+        priority_classes = {
+            'low': 'alert-secondary',
+            'normal': 'alert-info',
+            'high': 'alert-warning',
+            'urgent': 'alert-danger'
+        }
+        return priority_classes.get(self.priority, 'alert-info')
+
+    def get_priority_icon(self):
+        """Get icon for announcement priority."""
+        priority_icons = {
+            'low': '📌',
+            'normal': '📢',
+            'high': '⚠️',
+            'urgent': '🚨'
+        }
+        return priority_icons.get(self.priority, '📢')
+
+    def get_audience_label(self):
+        """Get human-readable label for audience type."""
+        labels = {
+            'class': 'Class Period',
+            'system_wide': 'Everyone (System-Wide)',
+            'all_teachers': 'All Teachers',
+            'all_students': 'All Students',
+            'teacher_all_classes': 'Teacher\'s All Classes',
+            'specific_class': 'Specific Class'
+        }
+        return labels.get(self.audience_type, 'Unknown')
+
+    def is_system_admin_announcement(self):
+        """Check if this is a system admin announcement."""
+        return self.system_admin_id is not None

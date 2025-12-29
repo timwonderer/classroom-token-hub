@@ -42,10 +42,14 @@ Teacher/admin accounts.
 |---|---|---|
 | `id` | Integer | Primary key. |
 | `username` | String(80) | Unique username. |
+| `display_name` | String(100), nullable | Customizable display name shown in UI (falls back to username). |
 | `totp_secret` | String(32) | TOTP secret for login. |
 | `created_at` | DateTime | Creation timestamp. |
 | `last_login` | DateTime | Last login time. |
 | `has_assigned_students` | Boolean | One-time setup flag. |
+
+**Helper Methods**
+- `get_display_name()`: Returns display_name if set, otherwise username.
 
 ### `system_admins`
 Super-user accounts with global visibility.
@@ -75,7 +79,8 @@ Roster seats created during CSV uploads so students can self-claim via join code
 |---|---|---|
 | `id` | Integer | Primary key. |
 | `teacher_id` | Integer | FK to `admins.id`. |
-| `block` | String(10) | Class block identifier. |
+| `block` | String(10) | Class block identifier (technical). |
+| `class_label` | String(50), nullable | Teacher-customizable display name for this class (e.g., "AP Biology"). |
 | `first_name` | PIIEncryptedType | Encrypted first name from roster. |
 | `last_initial` | String(1) | Last initial from roster. |
 | `last_name_hash_by_part` | JSON | Hashes for fuzzy last-name matching. |
@@ -84,16 +89,20 @@ Roster seats created during CSV uploads so students can self-claim via join code
 | `join_code` | String(20) | Shared join code for the block. |
 | `student_id` | Integer | Claimed student FK. |
 | `is_claimed` | Boolean | Claim status. |
+
+**Helper Methods**
+- `get_class_label()`: Returns class_label if set, otherwise block.
 | `claimed_at` | DateTime | Claim timestamp. |
 
-### `transactions`
-Ledger entries for checking/savings accounts, scoped by teacher economy.
+### `transaction`
+Ledger entries for checking/savings accounts, scoped by join code (class economy).
 
 | Column | Type | Description |
 |---|---|---|
 | `id` | Integer | Primary key. |
 | `student_id` | Integer | FK to `students.id`. |
-| `teacher_id` | Integer (nullable) | FK to `admins.id` indicating which teacher economy the transaction belongs to. |
+| `teacher_id` | Integer (nullable) | FK to `admins.id` indicating which teacher created the transaction (legacy scope). |
+| `join_code` | String(20), nullable | Source of truth for class/period isolation. Indexed for performance. |
 | `amount` | Float | Positive/negative amount. |
 | `timestamp` | DateTime | Transaction timestamp. |
 | `account_type` | String(20) | `checking` or `savings`. |
@@ -117,6 +126,24 @@ Append-only log of tap in/out actions.
 | `status` | String(10) | `active` or `inactive`. |
 | `timestamp` | DateTime | Event timestamp. |
 | `reason` | String(50) | Optional reason. |
+| `join_code` | String(20) | Source of truth for class/period scoping. Indexed. |
+| `is_deleted` | Boolean | Soft-delete flag for teacher removals. |
+| `deleted_at` | DateTime | Timestamp when deleted. |
+| `deleted_by` | Integer | FK to `admins.id` for who deleted. |
+
+### `student_blocks`
+Per-student, per-period state (attendance gating, join-code mapping).
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `student_id` | Integer | FK to `students.id` (CASCADE). |
+| `period` | String(10) | Class period label. |
+| `join_code` | String(20) | Source of truth for class isolation. Indexed. |
+| `tap_enabled` | Boolean | Whether tap in/out is enabled for this period. |
+| `done_for_day_date` | Date | Pacific-date stamp when student marks done for day. |
+| `created_at` | DateTime | Creation timestamp. |
+| `updated_at` | DateTime | Last update timestamp. |
 
 ### `hall_pass_logs`
 Tracks hall pass lifecycle.

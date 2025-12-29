@@ -13,6 +13,11 @@
           <a class="nav-link {% if current_page == 'students' %}active{% endif %}" href="{{ url_for('admin.students') }}">Students</a>
         </li>
         <li class="nav-item">
+          <a class="nav-link {% if current_page == 'announcements' %}active{% endif %}" href="{{ url_for('admin.announcements') }}">
+            <i class="bi bi-megaphone"></i> Announcements
+          </a>
+        </li>
+        <li class="nav-item">
           <a class="nav-link {% if current_page == 'hall_pass' %}active{% endif %}" href="{{ url_for('admin.hall_pass') }}">Hall Pass</a>
         </li>
         <li class="nav-item">
@@ -28,6 +33,9 @@
             <span class="badge bg-warning text-dark ms-1">!</span>
             {% endif %}
           </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link {% if current_page == 'economy_health' %}active{% endif %}" href="{{ url_for('admin.economy_health') }}">Economy Health</a>
         </li>
         <li class="nav-item">
           <a class="nav-link {% if current_page == 'help' %}active{% endif %}" href="{{ url_for('admin.help_support') }}">Help & Support</a>

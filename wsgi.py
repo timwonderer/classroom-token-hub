@@ -7,11 +7,16 @@ imports. All routes have been modularized into blueprints (Stages 4-5).
 For gunicorn: wsgi:app
 """
 
+# Set timezone to UTC to ensure all datetime operations use UTC
+import os
+import time
+os.environ['TZ'] = 'UTC'
+time.tzset()  # Apply timezone change
+
 from flask import render_template, request, session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import traceback
 import collections
-import os
 
 # -------------------- APPLICATION FACTORY --------------------
 # Import and create the Flask application using the factory pattern
@@ -100,6 +105,7 @@ def ensure_admin_command():
 def create_sysadmin():
     """Create initial system admin account interactively."""
     import pyotp
+    from app.utils.encryption import encrypt_totp
     username = input("Enter system admin username: ").strip()
     if not username:
         print("Username is required.")
@@ -109,13 +115,13 @@ def create_sysadmin():
         print(f"System admin '{username}' already exists.")
         return
     totp_secret = pyotp.random_base32()
-    sysadmin = SystemAdmin(username=username, totp_secret=totp_secret)
+    sysadmin = SystemAdmin(username=username, totp_secret=encrypt_totp(totp_secret))
     db.session.add(sysadmin)
     db.session.commit()
     print(f"✅ System admin '{username}' created successfully.")
-    print(f"🔑 TOTP secret for authenticator app: {totp_secret}")
-    uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=username, issuer_name="Classroom Economy SysAdmin")
-    print(f"📱 QR Code URI: {uri}")
+    print("🔑 TOTP secret has been encrypted and stored securely in the database.")
+    print("   For security reasons, the plaintext secret is not displayed.")
+    print("   Access it through secure administrative channels only.")
 
 
 # -------------------- APPLICATION HOOKS --------------------
@@ -214,7 +220,7 @@ def log_error_to_db(error_type=None, error_message=None, stack_trace=None, log_o
 
         # Create error log entry
         error_log = ErrorLog(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             error_type=error_type,
             error_message=error_message,
             request_path=request_path,
@@ -291,7 +297,7 @@ def not_found_error(error):
         app._404_cache = {}
 
     # Clean old entries (older than 1 hour)
-    current_time = datetime.utcnow()
+    current_time = datetime.now(timezone.utc)
     app._404_cache = {k: v for k, v in app._404_cache.items()
                       if (current_time - v).total_seconds() < 3600}
 
