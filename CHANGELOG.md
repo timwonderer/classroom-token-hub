@@ -8,6 +8,9 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+- Fixed `time.tzset()` Windows compatibility issue in wsgi.py - now only calls tzset() on Unix-like systems
+
 ### Added
 - **Issue Resolution & Escalation System** - Structured, teacher-mediated issue handling system
   - **Student Features**:

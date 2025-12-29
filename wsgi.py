@@ -10,8 +10,13 @@ For gunicorn: wsgi:app
 # Set timezone to UTC to ensure all datetime operations use UTC
 import os
 import time
+import platform
+
 os.environ['TZ'] = 'UTC'
-time.tzset()  # Apply timezone change
+
+# tzset() is not available on Windows
+if platform.system() != 'Windows':
+    time.tzset()  # Apply timezone change
 
 from flask import render_template, request, session
 from datetime import datetime, timedelta, timezone
