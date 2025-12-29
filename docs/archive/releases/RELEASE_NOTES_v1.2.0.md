@@ -429,7 +429,7 @@ None reported at release time.
 
 ## 📝 Full Changelog
 
-See [CHANGELOG.md](../../../CHANGELOG.md) for the complete list of changes.
+See [CHANGELOG.md](../../CHANGELOG.md) for the complete list of changes.
 
 ---
 

@@ -2,6 +2,33 @@
 
 This directory contains utility scripts for development, operations, and maintenance of the Classroom Token Hub application.
 
+## Account & Admin Utilities
+
+#### `create_admin.py`
+Creates teacher or system admin accounts.
+
+**Usage:**
+```bash
+python scripts/create_admin.py admin <username>
+python scripts/create_admin.py sysadmin <username>
+```
+
+#### `manage_invites.py`
+Create, list, or expire admin invite codes.
+
+**Usage:**
+```bash
+python scripts/manage_invites.py --help
+```
+
+#### `cleanup_invite_codes.py`
+Normalizes existing invite codes by trimming whitespace.
+
+**Usage:**
+```bash
+python scripts/cleanup_invite_codes.py
+```
+
 ## Operational Scripts
 
 ### Firewall Management
@@ -148,6 +175,46 @@ python scripts/debug_student_state.py
 
 ## Development Scripts
 
+### `setup_jules.sh`
+Bootstrap helper for local development environments.
+
+**Usage:**
+```bash
+bash scripts/setup_jules.sh
+```
+
+### `seed_dummy_students.py`
+Seeds the database with sample students for development and demos.
+
+**Usage:**
+```bash
+python scripts/seed_dummy_students.py
+```
+
+### `check_syntax.py`
+Validates Python syntax across migration files.
+
+**Usage:**
+```bash
+python scripts/check_syntax.py
+```
+
+### `generate_revision_id.py`
+Generates a unique Alembic-style migration revision ID.
+
+**Usage:**
+```bash
+python scripts/generate_revision_id.py
+```
+
+### `add_join_code_column.py`
+SQLite-only helper to add `join_code` to `student_blocks`.
+
+**Usage:**
+```bash
+python scripts/add_join_code_column.py
+```
+
 ### `setup-hooks.sh`
 Installs git hooks for migration safety checks. **Run this after cloning the repository!**
 
@@ -217,7 +284,7 @@ When adding new scripts to this directory:
 ## Related Documentation
 
 - **[Operations Guides](../docs/operations/)** - Operational procedures using these scripts
-- **[Contributing Guide](../CONTRIBUTING.md)** - Development workflow and git hooks
+- **[Contributing Guide](../.github/CONTRIBUTING.md)** - Development workflow and git hooks
 - **[Deployment Guide](../docs/DEPLOYMENT.md)** - Production deployment procedures
 
 ---

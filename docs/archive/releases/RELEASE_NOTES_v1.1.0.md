@@ -172,10 +172,10 @@ The improved Economy Health page now shows:
 
 ## 🔗 Documentation Updates
 
-- Updated CHANGELOG.md with all changes
+- Updated ../../CHANGELOG.md with all changes
 - Added economy health tips to teacher manual
 - Documented analytics calculations
-- Updated DEVELOPMENT.md roadmap
+- Updated ../../development/DEVELOPMENT.md roadmap
 
 ---
 
@@ -187,7 +187,7 @@ Thanks to all contributors who helped test and provide feedback on the UI redesi
 
 ## 📝 Full Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for the complete list of changes.
+See [CHANGELOG.md](../../CHANGELOG.md) for the complete list of changes.
 
 ---
 
