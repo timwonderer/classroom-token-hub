@@ -259,7 +259,7 @@
                                 <tr {% if tx.is_void %}class="table-secondary text-decoration-line-through"{% endif %}>
                                     <td>
                                         {% if tx.timestamp %}
-                                            <span class="local-timestamp" data-timestamp=\"{{ format_utc_iso(tx.timestamp) }}\"></span>
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
                                         {% else %}
                                             N/A
                                         {% endif %}
@@ -319,7 +319,7 @@
                                 <tr {% if tx.is_void %}class="table-secondary text-decoration-line-through"{% endif %}>
                                     <td>
                                         {% if tx.timestamp %}
-                                            <span class="local-timestamp" data-timestamp=\"{{ format_utc_iso(tx.timestamp) }}\"></span>
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
                                         {% else %}
                                             N/A
                                         {% endif %}
