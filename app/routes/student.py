@@ -3069,7 +3069,7 @@ def report_tap_event_issue(tap_event_id):
     """Report an issue with a specific tap event (clock in/out record)."""
     from app.utils.issue_categories import get_active_categories
     from app.utils.issue_helpers import create_issue
-    from forms import TransactionIssueSubmissionForm
+    from forms import StudentIssueSubmissionForm
 
     student = get_logged_in_student()
     class_context = get_current_class_context()
@@ -3085,7 +3085,7 @@ def report_tap_event_issue(tap_event_id):
         join_code=class_context['join_code']
     ).first_or_404()
 
-    form = TransactionIssueSubmissionForm()
+    form = StudentIssueSubmissionForm()
 
     # Populate category choices with general categories (includes "Clock In/Out Not Working")
     form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('general')
