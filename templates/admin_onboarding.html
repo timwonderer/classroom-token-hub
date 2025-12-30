@@ -1,6 +1,6 @@
 {% extends "layout_admin.html" %}
 {% set page_title = "Getting Started" %}
-{% block title %}Getting Started - Classroom Economy{% endblock %}
+{% block title %}Getting Started - Classroom Token Hub{% endblock %}
 {% block page_icon %}rocket_launch{% endblock %}
 
 {% block extra_head %}
@@ -211,8 +211,8 @@
         </div>
     </div>
 
-    <!-- Step 2: Feature Selection -->
-    <div class="step-content {% if current_step == 2 %}active{% endif %}" id="step-features">
+    <!-- Step 2: Roster Upload -->
+    <div class="step-content {% if current_step == 2 %}active{% endif %}" id="step-roster">
         <div class="card shadow">
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0">
@@ -539,7 +539,7 @@
 <script>
 const csrfTokenMeta = document.querySelector('meta[name="csrf-token"]');
 const csrfToken = csrfTokenMeta ? csrfTokenMeta.content : '';
-const stepOrder = ['welcome', 'features', 'periods', 'roster', 'settings'];
+const stepOrder = ['welcome', 'roster', 'features', 'settings'];
 let currentStepIndex = {{ current_step - 1 }};
 
 function toggleFeature(card, feature) {

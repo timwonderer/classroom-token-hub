@@ -6561,10 +6561,9 @@ def onboarding():
 
     Guides new teachers through initial setup:
     1. Welcome & Overview
-    2. Feature Selection
-    3. Period Setup
-    4. Roster Upload
-    5. Quick Settings
+    2. Roster Upload (students/periods)
+    3. Feature Selection
+    4. Feature Setup (payroll required, other features based on selection)
     """
     admin_id = session.get('admin_id')
 
@@ -6579,7 +6578,7 @@ def onboarding():
     # Get admin info
     admin = Admin.query.get(admin_id)
 
-    # Define steps
+    # Define steps (new order: welcome, roster, features, settings)
     steps = [
         {
             'id': 'welcome',
@@ -6588,28 +6587,22 @@ def onboarding():
             'description': 'Get started with Classroom Economy'
         },
         {
-            'id': 'features',
-            'title': 'Select Features',
-            'icon': 'tune',
-            'description': 'Choose which features to enable'
-        },
-        {
-            'id': 'periods',
-            'title': 'Set Up Periods',
-            'icon': 'calendar_today',
-            'description': 'Configure your class periods'
-        },
-        {
             'id': 'roster',
             'title': 'Upload Roster',
             'icon': 'upload_file',
             'description': 'Add your students'
         },
         {
+            'id': 'features',
+            'title': 'Select Features',
+            'icon': 'tune',
+            'description': 'Choose which features to enable'
+        },
+        {
             'id': 'settings',
-            'title': 'Quick Settings',
+            'title': 'Feature Setup',
             'icon': 'settings',
-            'description': 'Configure basic settings'
+            'description': 'Configure your features'
         }
     ]
 
@@ -6654,19 +6647,25 @@ def onboarding_step(step_name):
                 global_settings = FeatureSettings(teacher_id=admin_id, block=None)
                 db.session.add(global_settings)
 
+            # Payroll is mandatory, always enable it
+            global_settings.payroll_enabled = True
+
+            # Enable other features based on selection
             for feature, enabled in features_data.items():
-                feature_column = f"{feature}_enabled"
-                if hasattr(global_settings, feature_column):
-                    setattr(global_settings, feature_column, bool(enabled))
+                if feature != 'payroll':  # Skip payroll as it's already forced to True
+                    feature_column = f"{feature}_enabled"
+                    if hasattr(global_settings, feature_column):
+                        setattr(global_settings, feature_column, bool(enabled))
 
             global_settings.updated_at = datetime.now(timezone.utc)
 
-        elif step_name == 'periods':
-            # Periods are set up via the regular student upload flow
+        elif step_name == 'roster':
+            # Roster upload handled by upload_students route
+            # This just marks the step as completed
             pass
 
-        # Advance to next step
-        step_order = ['welcome', 'features', 'periods', 'roster', 'settings']
+        # Advance to next step (new order: welcome, roster, features, settings)
+        step_order = ['welcome', 'roster', 'features', 'settings']
         try:
             current_index = step_order.index(step_name)
             if current_index < len(step_order) - 1:
