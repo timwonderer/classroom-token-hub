@@ -91,15 +91,7 @@
                     <h5 class="mb-0"><i class="bi bi-flag-fill me-2"></i>Report an Issue</h5>
                 </div>
                 <div class="card-body">
-                    <div class="alert alert-info">
-                    <p style="font-size:15pt;font-weight:bold"><span class="material-symbols-outlined" style="font-size: 30px;vertical-align: middle;">live_help</span> How to report an issue</p>
-                    <p> When something is not working correctly, you can report the problem to your teacher. There are two kinds of problems you can report:</p>
-                    <ul>
-                        <li><strong>Transaction / Record Issue:</strong> If you notice there's a mistake in a specific log entry, you can click on the <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">help</span> icon next to that entry to report it directly. This helps your teacher quickly find and fix the issue.</li>
-                        <li><strong>General Issue:</strong> For other problems like features not working or clock-in issues, you can use the "Report General Issue" button below to let your teacher know.</li>
-                    </ul>
-                    <p>After reporting your issue, your teacher will review it and decide what to do next. You can track the status of your report in the <strong>"My Issues"</strong> tab. If the issue is something your teacher cannot fix, they will <strong>escalate</strong> the issue to the app developer. If what you have found is a real bug, you can receive a reward.</p>
-                    </div>
+                  
 
                     <div class="row g-3">
                         <div class="col-md-6">
@@ -108,7 +100,7 @@
                                     <i class="bi bi-exclamation-triangle-fill display-4 text-warning mb-3"></i>
                                     <h5 class="card-title">General Issue</h5>
                                     <p class="card-text text-muted">
-                                        Report problems like features not working, clock-in issues, or incorrect balances.
+                                        When the app is not working correctly such as giving error messages or opening a blank page.
                                     </p>
                                     <a href="{{ url_for('student.submit_general_issue') }}" class="btn btn-primary">
                                         <i class="bi bi-flag-fill me-2"></i>Report General Issue
@@ -121,18 +113,39 @@
                             <div class="card h-100 hover-shadow">
                                 <div class="card-body text-center">
                                     <i class="bi bi-receipt display-4 text-danger mb-3"></i>
-                                    <h5 class="card-title">Transaction Issue</h5>
+                                    <h5 class="card-title">Something wrong with your transaction, payroll, or attendance record?</h5>
                                     <p class="card-text text-muted">
-                                        Report issues with a specific transaction from your ledger (wrong amount, duplicate, etc.).
+                                        Reports about transactions and attendance records can be made directly from where the log is located.</p> 
+                                        <p class="card-text text-muted">Just click on the <span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">help</span> icon next to the entry you wish to report.
                                     </p>
 
-                                    <p class="mt-2 text-start">You will report a transaction or log entry by clicking on the <span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">help</span> icon next to it</p>
+                                    
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+              <div class="accordion mt-4 mb-3" id="reportIssueHelpAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="reportIssueHelpHeading">
+                                <button class="accordion-button collapsed bg-success text-white" type="button" data-bs-toggle="collapse" data-bs-target="#reportIssueHelpBody" aria-expanded="false" aria-controls="reportIssueHelpBody">
+                                    <span class="material-symbols-outlined me-2" style="font-size: 24px; vertical-align: middle;">live_help</span>
+                                    How to report an issue
+                                </button>
+                            </h2>
+                            <div id="reportIssueHelpBody" class="accordion-collapse collapse" aria-labelledby="reportIssueHelpHeading" data-bs-parent="#reportIssueHelpAccordion">
+                                <div class="accordion-body" style="padding: 1.5rem;">
+                                    <p>When something is not working correctly, you can report the problem to your teacher. There are two kinds of problems you can report:</p>
+                                    <ul>
+                                        <li><strong>Transaction / Record Issue:</strong> If you notice there's a mistake in a specific log entry, you can click on the <span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">help</span> icon next to that entry to report it directly. This helps your teacher quickly find and fix the issue.</li>
+                                        <li><strong>General Issue:</strong> For other problems like features not working or clock-in issues, you can use the "Report General Issue" button below to let your teacher know.</li>
+                                    </ul>
+                                    <p>After reporting your issue, your teacher will review it and decide what to do next. You can track the status of your report in the <strong>"My Issues"</strong> tab. If the issue is something your teacher cannot fix, they will <strong>escalate</strong> the issue to the app developer. If what you have found is a real bug, you can receive a reward.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
         </div>
 
         <!-- My Issues Tab -->
