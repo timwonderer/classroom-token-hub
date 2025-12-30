@@ -568,7 +568,7 @@ def create_app():
         # Adjusted for Google Fonts, Material Icons, Cloudflare Turnstile, jsdelivr CDN (Bootstrap, EasyMDE, zxcvbn), Font Awesome, and Passwordless.dev
         csp_directives = [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdn.passwordless.dev",
+            "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdn.passwordless.dev",
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
             "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
             "img-src 'self' data: https:",

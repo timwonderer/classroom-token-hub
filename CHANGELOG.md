@@ -13,7 +13,9 @@ and this project follows semantic versioning principles.
 - **Passkey Registration** - Fixed credential ID extraction from passwordless.dev SDK response by using correct destructuring pattern `{ token, error }`
 - **Content Security Policy** - Added `https://static.cloudflareinsights.com` to `connect-src` directive to allow Cloudflare analytics
 - **Content Security Policy** - Added `worker-src 'self' blob:` directive to allow Web Workers used by passwordless.dev library
-- **Content Security Policy** - Added `'unsafe-eval'` to `script-src` directive to allow passwordless.dev library to function properly
+
+### Security
+- **Content Security Policy** - Removed unnecessary `'unsafe-eval'` directive from `script-src` to strengthen XSS protection (passwordless.dev library does not require dynamic code execution)
 
 ### Added
 - **Issue Resolution & Escalation System** - Structured, teacher-mediated issue handling system
