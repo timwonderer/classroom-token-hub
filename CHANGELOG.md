@@ -33,7 +33,6 @@ and this project follows semantic versioning principles.
   - Report buttons added to all tap event tables in Work & Pay > Attendance Record tab
   - Uses same issue resolution workflow as transaction reporting
   - Students can report up to 20 most recent tap events per block
-### Added
 - **Issue Resolution & Escalation System** - Structured, teacher-mediated issue handling system
   - **Student Features**:
     - New Help & Support interface with 3 tabs: Knowledge Base, Report an Issue, My Issues
