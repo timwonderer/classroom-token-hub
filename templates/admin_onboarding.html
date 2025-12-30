@@ -1173,9 +1173,10 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function completeOnboarding() {
-    // Save quick settings first
-    const payRate = document.getElementById('payRate') ? document.getElementById('payRate').value : document.getElementById('payRateAdv').value;
-    const payFrequency = document.getElementById('payFrequency') ? document.getElementById('payFrequency').value : document.getElementById('payFrequencyAdv').value;
+    // Save quick settings first - check which payroll mode is active
+    const isBasicMode = document.getElementById('payrollModeBasic').checked;
+    const payRate = isBasicMode ? document.getElementById('payRate').value : document.getElementById('payRateAdv').value;
+    const payFrequency = isBasicMode ? document.getElementById('payFrequency').value : document.getElementById('payFrequencyAdv').value;
     const interestRate = document.getElementById('interestRate') ? document.getElementById('interestRate').value : null;
     const overdraftProtection = document.getElementById('overdraftProtection') ? document.getElementById('overdraftProtection').checked : null;
 

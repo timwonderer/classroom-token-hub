@@ -549,10 +549,6 @@ root {
                         }
                     });
 
-                    // Hide optional tasks if feature not enabled
-                    const enabledFeatures = data.enabled_features || {};
-                    hideDisabledFeatures(enabledFeatures);
-
                     updateProgress();
                 }
             })
@@ -596,10 +592,6 @@ root {
 
     // Note: We show ALL features now, not just enabled ones
     // Teachers can skip features they don't want to use
-    function hideDisabledFeatures(enabledFeatures) {
-        // No longer hiding features - show all and let teacher skip
-    }
-
     // Update progress badge
     function updateProgress() {
         const allTasks = document.querySelectorAll('.gs-item:not([style*="display: none"])');

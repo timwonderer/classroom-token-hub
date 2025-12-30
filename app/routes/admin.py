@@ -6779,10 +6779,24 @@ def onboarding_status():
     join_code = session.get('current_join_code')
 
     try:
-        # Get teacher's feature settings
-        feature_settings = FeatureSettings.query.filter_by(
+        # First, get the TeacherBlock to retrieve the block identifier
+        teacher_block = TeacherBlock.query.filter_by(
             teacher_id=admin_id,
             join_code=join_code
+        ).first()
+
+        if not teacher_block:
+            return jsonify({
+                'status': 'error',
+                'message': 'Class period not found'
+            }), 404
+
+        block = teacher_block.block
+
+        # Get teacher's feature settings using teacher_id and block
+        feature_settings = FeatureSettings.query.filter_by(
+            teacher_id=admin_id,
+            block=block
         ).first()
 
         # Initialize completion status
@@ -6800,48 +6814,51 @@ def onboarding_status():
 
         # Check roster: has at least one student
         student_count = StudentBlock.query.filter_by(
-            join_code=join_code,
-            is_active=True
+            join_code=join_code
         ).count()
         completion['roster'] = student_count > 0
 
         # Check payroll: has payroll settings configured
-        payroll_settings = PayrollSettings.query.filter_by(join_code=join_code).first()
+        payroll_settings = PayrollSettings.query.filter_by(
+            teacher_id=admin_id,
+            block=block
+        ).first()
         completion['payroll'] = payroll_settings is not None
 
-        # Check store: has at least one store item
+        # Check store: has at least one store item for this block
         if feature_settings and feature_settings.store_enabled:
-            store_items = StoreItemBlock.query.filter_by(join_code=join_code).count()
+            store_items = StoreItemBlock.query.filter_by(block=block).count()
             completion['store'] = store_items > 0
 
         # Check banking: has banking settings configured
         if feature_settings and feature_settings.banking_enabled:
-            banking_settings = BankingSettings.query.filter_by(join_code=join_code).first()
+            banking_settings = BankingSettings.query.filter_by(
+                teacher_id=admin_id,
+                block=block
+            ).first()
             completion['banking'] = banking_settings is not None
 
         # Check rent: has rent settings configured
         if feature_settings and feature_settings.rent_enabled:
-            rent_settings = RentSettings.query.filter_by(join_code=join_code).first()
+            rent_settings = RentSettings.query.filter_by(
+                teacher_id=admin_id,
+                block=block
+            ).first()
             completion['rent'] = rent_settings is not None
 
-        # Check insurance: has at least one insurance policy
+        # Check insurance: has at least one insurance policy for this block
         if feature_settings and feature_settings.insurance_enabled:
-            insurance_policies = InsurancePolicyBlock.query.filter_by(join_code=join_code).count()
+            insurance_policies = InsurancePolicyBlock.query.filter_by(block=block).count()
             completion['insurance'] = insurance_policies > 0
 
         # Check hall pass: always available (mark as complete if they've accessed it)
         # For now, we'll mark it as incomplete until they configure it
         completion['hall_pass'] = False
 
-        # Check personalization: check if display_name is set on TeacherBlock
-        teacher_block = TeacherBlock.query.filter_by(
-            teacher_id=admin_id,
-            join_code=join_code
-        ).first()
+        # Check personalization: check if class_label is set on TeacherBlock
         completion['personalization'] = (
-            teacher_block and
-            teacher_block.display_name and
-            teacher_block.display_name.strip() != ''
+            teacher_block.class_label and
+            teacher_block.class_label.strip() != ''
         )
 
         # Passkey is always incomplete (to be revamped)
@@ -6854,7 +6871,7 @@ def onboarding_status():
 
     except Exception as e:
         current_app.logger.error(f"Error checking onboarding status: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': 'Failed to retrieve onboarding status'}), 500
 
 
 @admin_bp.route('/onboarding/skip-task', methods=['POST'])
@@ -6876,13 +6893,8 @@ def onboarding_skip_task():
             onboarding_record = TeacherOnboarding(teacher_id=admin_id)
             db.session.add(onboarding_record)
 
-        # Initialize steps_completed if it's None
-        if not onboarding_record.steps_completed:
-            onboarding_record.steps_completed = {}
-
-        # Mark task as skipped (store as True to indicate it's "completed" via skip)
-        onboarding_record.steps_completed[task_name] = True
-        onboarding_record.last_activity_at = datetime.now(timezone.utc)
+        # Mark task as skipped using the existing method (store as True to indicate it's "completed" via skip)
+        onboarding_record.mark_step_completed(task_name)
 
         db.session.commit()
 
@@ -6894,7 +6906,7 @@ def onboarding_skip_task():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error skipping task: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': 'Failed to skip task'}), 500
 
 
 # ==================== ECONOMY BALANCE CHECKER API ====================
