@@ -1,3 +1,7 @@
+<link href="{{ static_url('css/style.css') }}" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
 <!-- Getting Started Widget - Floating onboarding checklist -->
 <div id="gettingStartedWidget" class="getting-started-widget" style="display: none;">
     <!-- Circular Bubble (Collapsed State) -->
@@ -13,7 +17,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center gap-2">
                     <span class="material-symbols-outlined">rocket_launch</span>
-                    <h6 class="mb-0 fw-bold">Getting Started</h6>
+                    <h6 class="mb-0">Getting Started</h6>
                 </div>
                 <div class="d-flex align-items-center gap-2">
                     <span class="gs-progress-badge" id="gsProgressBadge">0/9</span>
@@ -26,13 +30,15 @@
 
         <!-- Panel Body -->
         <div class="gs-panel-body">
-        <p class="text-muted small mb-3">Complete these tasks to set up your classroom economy:</p>
+        <p class="text-primary  mb-3">To help you get started, we have compiled a list of settings you may want to visit to set up your classroom economy system!</p>
 
         <!-- Checklist Items -->
         <div class="gs-checklist">
             <!-- REQUIRED TASKS -->
             <div class="gs-section-header">
-                <span class="badge bg-danger">Required</span>
+                
+                <span class="badge bg-danger" style="font-size: 0.9rem;"><i class="bi bi-exclamation-circle"></i> REQUIRED TASKS</span>
+                <p class="text-danger small mt-2 mb-0">These tasks are required because your classroom economy system won't function properly without them.</p>
             </div>
 
             <!-- Upload Roster -->
@@ -69,7 +75,8 @@
 
             <!-- OPTIONAL FEATURES -->
             <div class="gs-section-header mt-3">
-                <span class="badge bg-secondary">Optional Features</span>
+                <span class="badge bg-secondary" style="font-size: 0.9rem;"><i class="bi bi-bookmark-star"></i> ADDITIONAL FEATURES</span>
+                <p class="text-primary small mt-2 mb-0">These features are optional but can enhance your classroom economy experience. Feel free to skip any that don't fit your needs.</p>
             </div>
 
             <!-- Configure Store (Optional) -->
@@ -218,6 +225,9 @@
 </div>
 
 <style>
+root {
+    font-family:'Inter', sans-serif;
+}
 .getting-started-widget {
     position: fixed;
     bottom: 24px;
@@ -229,32 +239,27 @@
 .gs-bubble {
     width: 64px;
     height: 64px;
-    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+    background: var(--primary);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3), 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 12px #00000033;
     transition: all 0.3s ease;
     position: relative;
-    animation: slideInUp 0.3s ease-out, bubblePulse 2s ease-in-out infinite;
+    animation: slideInUp 0.3s ease-out;
+    border-style: solid;
+    border-color:var(--secondary);
 }
 
 .gs-bubble:hover {
     transform: scale(1.1);
-    box-shadow: 0 6px 16px rgba(13, 110, 253, 0.4), 0 3px 6px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
     animation: slideInUp 0.3s ease-out;
 }
 
-@keyframes bubblePulse {
-    0%, 100% {
-        box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3), 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    50% {
-        box-shadow: 0 4px 12px rgba(13, 110, 253, 0.5), 0 2px 4px rgba(0, 0, 0, 0.15);
-    }
-}
+
 
 .gs-bubble-icon {
     color: white;
@@ -272,7 +277,6 @@
     padding: 2px 6px;
     font-size: 11px;
     font-weight: 700;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
     min-width: 24px;
     text-align: center;
 }
@@ -292,13 +296,13 @@
     background: white;
     border-radius: 12px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-    border: 2px solid #0d6efd;
+    border: 2px solid var(--primary);
     animation: slideInUp 0.3s ease-out;
 }
 
 .gs-panel-header {
     padding: 16px;
-    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+    background: var(--primary);
     color: white;
     border-radius: 10px 10px 0 0;
     cursor: pointer;
