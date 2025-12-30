@@ -8,6 +8,9 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+- **Content Security Policy** - Restored `'unsafe-eval'` directive to `script-src` CSP policy as it is required by passwordless.dev library's minified build (uses `new Function()` internally)
+
 ## [1.5.0] - 2025-12-29
 
 ### Added
