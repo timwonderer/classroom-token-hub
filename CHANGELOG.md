@@ -21,53 +21,53 @@ and this project follows semantic versioning principles.
 
 ### Changed
 - Improved `flask create-sysadmin` command to display TOTP secret and QR code during account creation
-- Shows scannable QR code in terminal for easy authenticator app setup
-- Displays plaintext secret for manual entry backup
-- Auto-clears terminal after user confirmation for security
-- Secret remains encrypted in database after initial display
+  - Shows scannable QR code in terminal for easy authenticator app setup
+  - Displays plaintext secret for manual entry backup
+  - Auto-clears terminal after user confirmation for security
+  - Secret remains encrypted in database after initial display
 
 
 ### Added
 - **Issue Resolution & Escalation System** - Structured, teacher-mediated issue handling system
-- **Student Features**:
-  - New Help & Support interface with 3 tabs: Knowledge Base, Report an Issue, My Issues
-  - Submit general issues (clock-in problems, features not working, balance incorrect, etc.)
-  - Report transaction-specific issues directly from transaction history
-  - Help icons next to each transaction in Recent Activity for quick issue reporting
-  - Character-limited submissions (1000 chars) to encourage concise reporting
-  - Automatic context capture: balances, transaction history, system metadata
-  - Status badges (Submitted, Teacher Review, Resolved, Elevated, Developer Review) - no messaging
-  - View all submitted issues with status tracking
-- **Teacher Features**:
-  - Issue review queue with pending/resolved/escalated tabs
-  - Detailed issue view showing student explanation, context, and transaction details
-  - Resolution actions:
-    - Reverse/void transactions directly from issue interface
+  - **Student Features**:
+    - New Help & Support interface with 3 tabs: Knowledge Base, Report an Issue, My Issues
+    - Submit general issues (clock-in problems, features not working, balance incorrect, etc.)
+    - Report transaction-specific issues directly from transaction history
+    - Help icons next to each transaction in Recent Activity for quick issue reporting
+    - Character-limited submissions (1000 chars) to encourage concise reporting
+    - Automatic context capture: balances, transaction history, system metadata
+    - Status badges (Submitted, Teacher Review, Resolved, Elevated, Developer Review) - no messaging
+    - View all submitted issues with status tracking
+  - **Teacher Features**:
+    - Issue review queue with pending/resolved/escalated tabs
+    - Detailed issue view showing student explanation, context, and transaction details
+    - Resolution actions:
+      - Reverse/void transactions directly from issue interface
       - Manual adjustment (teacher handles offline)
       - Deny issue with required explanation
     - Escalate to developer with:
       - Required escalation reason
       - Diagnostic notes for investigation
       - Optional class name sharing checkbox (default: opaque reference only)
-- **"Student may receive reward"** checkbox for legitimate bug reports
-  - Complete status history and resolution action audit trail
-- **Technical Implementation**:
-  - 4 new database models: `Issue`, `IssueCategory`, `IssueStatusHistory`, `IssueResolutionAction`
-  - Default categories: 6 transaction types + 6 general issue types
-  - Opaque student references for sysadmin privacy (non-reversible hashes)
-  - Multi-tenancy scoping by `join_code` for proper class isolation
-  - Context snapshots preserve ledger state at time of submission
-  - Complete audit trail with timestamps and attribution
-  - Immutable student submissions after creation
-- **Design Principles**:
-  - No direct student-to-sysadmin communication
-  - Teachers are first-line decision makers
-  - Evidence-based issue tracking (tied to concrete transactions/records)
-  - Data minimization for sysadmin review
-  - Status badges only (non-communicative design)
-- Routes:
-  - Student: `/student/help-support`, `/student/help-support/submit-issue`, `/student/help-support/transaction/<id>/report`
-  - Teacher: `/admin/issues`, `/admin/issues/<id>`, `/admin/issues/<id>/resolve`, `/admin/issues/<id>/escalate`
+      - **"Student may receive reward"** checkbox for legitimate bug reports
+    - Complete status history and resolution action audit trail
+  - **Technical Implementation**:
+    - 4 new database models: `Issue`, `IssueCategory`, `IssueStatusHistory`, `IssueResolutionAction`
+    - Default categories: 6 transaction types + 6 general issue types
+    - Opaque student references for sysadmin privacy (non-reversible hashes)
+    - Multi-tenancy scoping by `join_code` for proper class isolation
+    - Context snapshots preserve ledger state at time of submission
+    - Complete audit trail with timestamps and attribution
+    - Immutable student submissions after creation
+  - **Design Principles**:
+    - No direct student-to-sysadmin communication
+    - Teachers are first-line decision makers
+    - Evidence-based issue tracking (tied to concrete transactions/records)
+    - Data minimization for sysadmin review
+    - Status badges only (non-communicative design)
+  - Routes:
+    - Student: `/student/help-support`, `/student/help-support/submit-issue`, `/student/help-support/transaction/<id>/report`
+    - Teacher: `/admin/issues`, `/admin/issues/<id>`, `/admin/issues/<id>/resolve`, `/admin/issues/<id>/escalate`
 
 ### Security
 - Enhanced privacy protection in issue resolution system through opaque student references

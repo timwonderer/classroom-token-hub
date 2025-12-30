@@ -7424,7 +7424,7 @@ def view_issue(issue_id):
     if issue.status == 'submitted':
         from app.utils.issue_helpers import update_issue_status
         update_issue_status(issue, 'teacher_review', 'teacher', admin_id)
-        issue.teacher_reviewed_at = datetime.utcnow()
+        issue.teacher_reviewed_at = datetime.now(timezone.utc)
         db.session.commit()
 
     return render_template('admin_view_issue.html',
@@ -7492,9 +7492,9 @@ def resolve_issue(issue_id):
 
         # Update issue status
         update_issue_status(issue, 'teacher_resolved', 'teacher', admin_id, notes=teacher_notes)
-        issue.teacher_resolved_at = datetime.utcnow()
+        issue.teacher_resolved_at = datetime.now(timezone.utc)
         issue.teacher_notes = teacher_notes
-        issue.closed_at = datetime.utcnow()
+        issue.closed_at = datetime.now(timezone.utc)
         issue.closed_by_type = 'teacher'
 
         db.session.commit()
@@ -7539,7 +7539,7 @@ def escalate_issue(issue_id):
         issue.teacher_diagnostic_note = diagnostic_note
         issue.share_class_name_with_sysadmin = share_class_name
         issue.eligible_for_reward = eligible_for_reward
-        issue.escalated_at = datetime.utcnow()
+        issue.escalated_at = datetime.now(timezone.utc)
 
         # Update status
         update_issue_status(issue, 'elevated', 'teacher', admin_id, notes=f"Escalated: {escalation_reason}")

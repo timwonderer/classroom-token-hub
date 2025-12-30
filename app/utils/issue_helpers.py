@@ -135,7 +135,7 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
         student, join_code, related_transaction_id, related_record_type, related_record_id
     )
 
-    now_utc = datetime.utcnow()
+    now_utc = datetime.now(timezone.utc)
 
     # Create the issue
     issue = Issue(
@@ -191,7 +191,7 @@ def record_status_change(issue, previous_status, new_status, changed_by_type, ch
         changed_by_type=changed_by_type,
         changed_by_id=changed_by_id,
         notes=notes,
-        changed_at=datetime.utcnow()
+        changed_at=datetime.now(timezone.utc)
     )
 
     db.session.add(history)
@@ -224,7 +224,7 @@ def record_resolution_action(issue, action_type, performed_by_type, performed_by
         amount_changed=amount_changed,
         before_value=before_value,
         after_value=after_value,
-        created_at=datetime.utcnow()
+        created_at=datetime.now(timezone.utc)
     )
 
     db.session.add(action)
@@ -243,6 +243,6 @@ def update_issue_status(issue, new_status, changed_by_type, changed_by_id, notes
     """
     previous_status = issue.status
     issue.status = new_status
-    issue.updated_at = datetime.utcnow()
+    issue.updated_at = datetime.now(timezone.utc)
 
     record_status_change(issue, previous_status, new_status, changed_by_type, changed_by_id, notes)
