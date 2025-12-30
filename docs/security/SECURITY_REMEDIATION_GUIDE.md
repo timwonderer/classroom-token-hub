@@ -390,7 +390,7 @@ flask run
 
 #### Step 6: Update CHANGELOG
 
-Add to `CHANGELOG.md`:
+Add to `../CHANGELOG.md`:
 
 ```markdown
 ### Security
@@ -404,7 +404,7 @@ Add to `CHANGELOG.md`:
 
 1. Commit changes:
    ```bash
-   git add requirements.txt CHANGELOG.md
+   git add requirements.txt docs/CHANGELOG.md
    git commit -m "SECURITY: Update cryptography package to [VERSION]"
    git push
    ```

@@ -122,7 +122,7 @@ The repository has experienced recurring "multiple heads" errors during deployme
 
 - Prefer scoped helpers over ad-hoc filters for tenant access.
 - Keep try/except blocks off import statements (per repo guidance).
-- Update documentation (`DEVELOPMENT.md`) when milestone status changes.
+- Update documentation (`../docs/development/DEVELOPMENT.md`) when milestone status changes.
 
 ## Checklist Before PR
 
@@ -184,7 +184,7 @@ If **Yes**, confirm:
 - [ ] I have commented my code where necessary, particularly in hard-to-understand areas
 - [ ] I have updated the documentation accordingly
 - [ ] My changes generate no new warnings or errors
-- [ ] I have read and followed the [contributing guidelines](../CONTRIBUTING.md)
+- [ ] I have read and followed the [contributing guidelines](../.github/CONTRIBUTING.md)
 
 ## Related Issues
 

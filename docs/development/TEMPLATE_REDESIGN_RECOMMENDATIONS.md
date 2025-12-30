@@ -154,7 +154,7 @@ For any template redesign:
 - [ ] Test on mobile (320px, 768px, 1024px widths)
 - [ ] Verify all form fields still submit correctly
 - [ ] Check accessibility (keyboard navigation, screen readers)
-- [ ] Document changes in CHANGELOG.md
+- [ ] Document changes in ../CHANGELOG.md
 
 ---
 

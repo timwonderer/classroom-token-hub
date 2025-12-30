@@ -19,8 +19,8 @@ This guide describes how to stand up the read-only style demo endpoints that pow
    - Create a system admin with `flask create-sysadmin` and log in to create a dedicated teacher (e.g., `demo_teacher`).
 
 2) **Seed safe sample data**  
-   - Option A: Upload a CSV using `student_upload_template.csv`.  
-   - Option B: Run `python seed_dummy_students.py` for quick placeholder students (no real PII).  
+   - Option A: Upload a CSV using `app/resources/student_upload_template.csv`.  
+   - Option B: Run `python scripts/seed_dummy_students.py` for quick placeholder students (no real PII).  
    - Add a few store items and attendance/payroll settings via the admin UI to make the teacher dashboard feel real.
 
 3) **Create a live demo student session (for the iframe)**  

@@ -110,7 +110,7 @@ Teachers now have a powerful announcement system for communicating with their st
 Comprehensively addressed 62 security alerts identified by CodeQL scanning (#737):
 
 **Clear-text Logging of Sensitive Information**
-- Removed TOTP secret printing from `create_admin.py`
+- Removed TOTP secret printing from `scripts/create_admin.py`
 - Removed TOTP secret printing from `wsgi.py` CLI command
 - Removed TOTP secrets from seed script output
 - TOTP secrets now encrypted in database with secure access only
@@ -136,7 +136,7 @@ Comprehensively addressed 62 security alerts identified by CodeQL scanning (#737
 - All 62 alerts addressed appropriately
 
 **Documentation**
-- Added `SECURITY_FIXES_SUMMARY.md` with complete analysis of all alerts
+- Added `../../security/SECURITY_FIXES_SUMMARY.md` with complete analysis of all alerts
 - Documents remaining alerts as false positives with justification
 
 ### Enhanced Open Redirect Protection
@@ -174,13 +174,13 @@ Resolved "connection refused" error when accessing Grafana from system admin das
 - Initially added `requests==2.32.3` dependency, which was later updated (see Dependency Updates section).
 
 **Nginx Fix (Production)**
-- Corrected configuration provided in `nginx-grafana-fix.conf`
+- Corrected configuration provided in `deploy/nginx/nginx-grafana-fix.conf`
 - Remove trailing slash from `proxy_pass http://127.0.0.1:3000/` → `proxy_pass http://127.0.0.1:3000`
 - Nginx intercepts requests before Flask (faster performance)
 - Auto-fallback to Flask proxy if Nginx not configured
 
 **Documentation**
-- See `GRAFANA_FIX_GUIDE.md` for detailed implementation guide
+- See `../../operations/GRAFANA_FIX_GUIDE.md` for detailed implementation guide
 
 ---
 
@@ -194,7 +194,7 @@ Fixed critical bugs preventing teacher signup with invite codes (#738):
 - Strip whitespace from invite codes during creation and validation
 - Prevents copy-paste errors where whitespace causes "invalid invite code" errors
 - Ensures consistency between code creation (system admin/CLI) and validation (signup)
-- Added cleanup script (`cleanup_invite_codes.py`) for existing codes with whitespace
+- Added cleanup script (`../../scripts/cleanup_invite_codes.py`) for existing codes with whitespace
 
 **Timezone Comparison Error**
 - Fixed TypeError when comparing invite code expiration dates
@@ -272,8 +272,8 @@ None - This is a feature and UI-focused release with no schema changes
 - `app/templates/system_admin_login.html` - Streamlined authentication flow
 - `app/templates/admin_signup_totp.html` - TOTP setup UI with new brand theme
 - `app/templates/admin_onboarding.html` - Updated color scheme and text
-- `cleanup_invite_codes.py` - New script for cleaning up whitespace in existing invite codes
-- `manage_invites.py` - Updated to strip whitespace from invite codes
+- `../../scripts/cleanup_invite_codes.py` - New script for cleaning up whitespace in existing invite codes
+- `../../scripts/manage_invites.py` - Updated to strip whitespace from invite codes
 - `static/css/style.css` - Minor style updates for onboarding
 
 ### Security Improvements
@@ -298,12 +298,12 @@ None - This is a feature and UI-focused release with no schema changes
 
 2. **Grafana Access**
    - Flask proxy works immediately without configuration
-   - For optimal performance, update Nginx configuration (see `nginx-grafana-fix.conf`)
+   - For optimal performance, update Nginx configuration (see `deploy/nginx/nginx-grafana-fix.conf`)
    - Set `GRAFANA_URL` environment variable if Grafana is not on localhost:3000
 
 3. **Teacher Signup Fixes**
    - Teacher signup with invite codes now works reliably
-   - If you have existing invite codes with whitespace issues, run `python cleanup_invite_codes.py`
+   - If you have existing invite codes with whitespace issues, run `python scripts/cleanup_invite_codes.py`
    - TOTP setup page now matches new brand theme
 
 4. **UI Changes**
@@ -316,7 +316,7 @@ None - This is a feature and UI-focused release with no schema changes
 1. **Security Scanner**
    - All CodeQL security alerts now resolved (62 total, including 9 URL redirection findings)
    - Review `_is_safe_url()` implementation in `app/routes/student.py`
-   - See `SECURITY_FIXES_SUMMARY.md` for detailed analysis
+   - See `../../security/SECURITY_FIXES_SUMMARY.md` for detailed analysis
 
 2. **Dependencies**
    - Run `pip install -r requirements.txt` to update dependencies:
@@ -336,13 +336,13 @@ None - This is a feature and UI-focused release with no schema changes
 ## 📖 Documentation Updates
 
 ### New Documentation
-- `GRAFANA_FIX_GUIDE.md` - Grafana access troubleshooting and configuration
+- `../../operations/GRAFANA_FIX_GUIDE.md` - Grafana access troubleshooting and configuration
 
 ### Updated Documentation
-- `CHANGELOG.md` - Updated with all v1.4.0 changes
-- `CLAUDE.md` - Updated version to 1.4.0
+- `../../CHANGELOG.md` - Updated with all v1.4.0 changes
+- `../../ai/CLAUDE.md` - Updated version to 1.4.0
 - `README.md` - Updated project status for v1.4.0
-- `DEVELOPMENT.md` - Updated current version
+- `../../development/DEVELOPMENT.md` - Updated current version
 
 ---
 
@@ -412,7 +412,7 @@ After upgrading to v1.4.0, test the following:
 - [Full Changelog](../../CHANGELOG.md#140---2025-12-27)
 - [Version 1.3.0 Release Notes](RELEASE_NOTES_v1.3.0.md)
 - [Project README](../../README.md)
-- [Development Priorities](../../DEVELOPMENT.md)
+- [Development Priorities](../../development/DEVELOPMENT.md)
 
 ---
 
@@ -421,7 +421,7 @@ After upgrading to v1.4.0, test the following:
 If you encounter any issues with this release:
 
 1. Check the [CHANGELOG](../../CHANGELOG.md) for known issues
-2. Review the [Documentation](../../docs/README.md)
+2. Review the [Documentation](../../README.md)
 3. Report bugs via GitHub Issues
 
 ---

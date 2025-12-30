@@ -755,7 +755,7 @@ class PIIEncryptedType(TypeDecorator):
 
 The application properly implements multi-tenancy isolation using `join_code`:
 
-**Critical Pattern (from CLAUDE.md):**
+**Critical Pattern (from ../ai/CLAUDE.md):**
 > Every query involving student data MUST be scoped by `join_code`
 
 **Example from `app/routes/api.py:184-190`:**
@@ -778,7 +778,7 @@ teacher_id = context['teacher_id']
 **Documented Extensively:**
 - `.claude/rules/multi-tenancy.md`
 - `docs/security/MULTI_TENANCY_AUDIT.md`
-- `CLAUDE.md` (Golden Rule)
+- `../ai/CLAUDE.md` (Golden Rule)
 
 ✅ **NO ACTION REQUIRED** - Excellent isolation implementation
 
