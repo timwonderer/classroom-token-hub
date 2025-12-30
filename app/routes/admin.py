@@ -6207,7 +6207,7 @@ def update_period_feature_settings(period):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error updating period feature settings: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': 'An internal error occurred.'}), 500
 
 
 @admin_bp.route('/feature-settings/copy', methods=['POST'])
