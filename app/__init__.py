@@ -14,9 +14,13 @@ from logging.handlers import RotatingFileHandler
 
 from flask import Flask, request, render_template, session, g, url_for
 from dotenv import load_dotenv
+from pathlib import Path
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from project root
+# Explicitly specify path to ensure .env is found regardless of working directory
+project_root = Path(__file__).parent.parent
+dotenv_path = project_root / '.env'
+load_dotenv(dotenv_path=dotenv_path)
 
 # TEMPORARY DIAGNOSTIC: Log passwordless.dev environment variables
 import logging
