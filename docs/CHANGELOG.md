@@ -579,8 +579,8 @@ The project is ready for version 1.0 release. All critical blockers have been re
 ## Documentation Maintenance
 
 This changelog tracks significant changes to the codebase. For:
-- **Current development tasks**: See [docs/development/TODO.md](docs/development/TODO.md)
-- **Planned features**: See [docs/development/TODO.md](docs/development/TODO.md) Roadmap section
+- **Current development tasks**: See [docs/development/DEVELOPMENT.md](docs/development/DEVELOPMENT.md)
+- **Planned features**: See [docs/development/DEVELOPMENT.md](docs/development/DEVELOPMENT.md) Roadmap section
 - **Technical details**: See [docs/technical-reference/architecture.md](docs/technical-reference/architecture.md)
 
 ## Changelog Guidelines

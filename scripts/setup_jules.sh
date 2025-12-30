@@ -107,10 +107,10 @@ if [ ! -f ".env" ]; then
         ENCRYPTION_KEY=$(openssl rand -base64 32)
         PEPPER_KEY=$(python3 -c "import secrets; print(secrets.token_hex(32))")
 
-        # Replace placeholder values in .env
-        sed -i "s|your-secret-key-here-generate-with-secrets-token-urlsafe|$SECRET_KEY|g" .env
-        sed -i "s|your-encryption-key-here-generate-with-openssl-rand-base64-32|$ENCRYPTION_KEY|g" .env
-        sed -i "s|your-pepper-key-here-generate-with-secrets-token-hex|$PEPPER_KEY|g" .env
+        # Replace placeholder values in .env (portable across Linux and macOS)
+        sed "s|your-secret-key-here-generate-with-secrets-token-urlsafe|$SECRET_KEY|g" .env > .env.tmp && mv .env.tmp .env
+        sed "s|your-encryption-key-here-generate-with-openssl-rand-base64-32|$ENCRYPTION_KEY|g" .env > .env.tmp && mv .env.tmp .env
+        sed "s|your-pepper-key-here-generate-with-secrets-token-hex|$PEPPER_KEY|g" .env > .env.tmp && mv .env.tmp .env
 
         print_status "Generated secure keys for SECRET_KEY, ENCRYPTION_KEY, and PEPPER_KEY"
     else

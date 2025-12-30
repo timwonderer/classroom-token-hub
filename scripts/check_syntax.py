@@ -32,5 +32,5 @@ def check_migration_syntax(migrations_dir: Path):
         return 0
 
 if __name__ == '__main__':
-    migrations_dir = Path('/home/user/classroom-economy/migrations/versions')
+    migrations_dir = Path(__file__).resolve().parent.parent / 'migrations' / 'versions'
     exit(check_migration_syntax(migrations_dir))

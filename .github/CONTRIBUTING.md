@@ -18,7 +18,7 @@ Thank you for your interest in contributing to the Classroom Token Hub project!
     pip install -r requirements.txt
     ```
 5.  **Configure your environment variables:**
-    Create a `.env` file and populate it with the required variables listed in `DEPLOYMENT.md`.
+    Create a `.env` file and populate it with the required variables listed in `docs/DEPLOYMENT.md`.
 6.  **Run the database migrations:**
     ```bash
     flask db upgrade

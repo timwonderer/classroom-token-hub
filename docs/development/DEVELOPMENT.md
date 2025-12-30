@@ -8,9 +8,9 @@
 
 ## Quick Links
 
-- **[Architecture Guide](docs/technical-reference/architecture.md)** - System design and patterns
-- **[Database Schema](docs/technical-reference/database_schema.md)** - Current data models
-- **[API Reference](docs/technical-reference/api_reference.md)** - REST API documentation
+- **[Architecture Guide](../technical-reference/architecture.md)** - System design and patterns
+- **[Database Schema](../technical-reference/database_schema.md)** - Current data models
+- **[API Reference](../technical-reference/api_reference.md)** - REST API documentation
 - **[Contributing Guide](../../.github/CONTRIBUTING.md)** - How to contribute
 - **[Project History](../project/PROJECT_HISTORY.md)** - Project evolution and philosophy
 
