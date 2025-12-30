@@ -38,7 +38,7 @@ and this project follows semantic versioning principles.
   - Automatic context capture: balances, transaction history, system metadata
   - Status badges (Submitted, Teacher Review, Resolved, Elevated, Developer Review) - no messaging
   - View all submitted issues with status tracking
- - **Teacher Features**:
+- **Teacher Features**:
   - Issue review queue with pending/resolved/escalated tabs
   - Detailed issue view showing student explanation, context, and transaction details
   - Resolution actions:
@@ -72,7 +72,9 @@ and this project follows semantic versioning principles.
 ### Security
 - Enhanced privacy protection in issue resolution system through opaque student references
 - Teacher-controlled data disclosure to sysadmins (optional class name sharing)
-- **Content Security Policy** - Removed unnecessary `'unsafe-eval'` directive from `script-src` to strengthen XSS protection (passwordless.dev library does not require dynamic code execution)## [1.4.0] - 2025-12-27
+- **Content Security Policy** - Removed unnecessary `'unsafe-eval'` directive from `script-src` to strengthen XSS protection (passwordless.dev library does not require dynamic code execution)
+
+## [1.4.0] - 2025-12-27
 
 ### Added
 - **Announcement System** - Teachers can create and manage announcements for their class periods
