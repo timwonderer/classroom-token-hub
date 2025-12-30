@@ -14,6 +14,9 @@ and this project follows semantic versioning principles.
 - **Passkey Authentication** - Fixed token destructuring in `signinWithDiscoverable()` to properly handle error responses from passwordless.dev SDK
 - **Deployment** - Added verification steps to confirm environment variables are properly written to `.env` and loaded by systemd service
 
+### Added
+- **Diagnostic Logging** - Temporary logging in app initialization to verify passwordless.dev API keys are loaded at runtime
+
 ## [1.5.0] - 2025-12-29
 
 ### Added

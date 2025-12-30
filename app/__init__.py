@@ -18,6 +18,21 @@ from dotenv import load_dotenv
 # Load environment variables
 load_dotenv()
 
+# TEMPORARY DIAGNOSTIC: Log passwordless.dev environment variables
+import logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+passwordless_key = os.getenv("PASSWORDLESS_API_KEY")
+passwordless_public = os.getenv("PASSWORDLESS_API_PUBLIC")
+if passwordless_key:
+    logger.info(f"✓ PASSWORDLESS_API_KEY loaded (length: {len(passwordless_key)})")
+else:
+    logger.warning("⚠ PASSWORDLESS_API_KEY is NOT loaded")
+if passwordless_public:
+    logger.info(f"✓ PASSWORDLESS_API_PUBLIC loaded (length: {len(passwordless_public)})")
+else:
+    logger.warning("⚠ PASSWORDLESS_API_PUBLIC is NOT loaded")
+
 
 # Validate required environment variables
 required_env_vars = ["SECRET_KEY", "DATABASE_URL", "FLASK_ENV", "ENCRYPTION_KEY", "PEPPER_KEY"]
