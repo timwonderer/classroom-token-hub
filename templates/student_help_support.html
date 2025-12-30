@@ -174,7 +174,7 @@
                                         <h6 class="mb-1">{{ report.title }}</h6>
                                         <small class="text-muted">
                                             {% if report.submitted_at %}
-                                                <span class="local-timestamp" data-timestamp="{{ report.submitted_at.isoformat() }}Z"></span>
+                                                <span class="local-timestamp" data-timestamp="{{ format_utc_iso(report.submitted_at) }}"></span>
                                             {% else %}
                                                 N/A
                                             {% endif %}

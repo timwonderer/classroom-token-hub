@@ -105,7 +105,7 @@
                             </div>
                             <div class="overflow-hidden">
                                 <h6 class="mb-0 fw-semibold text-truncate" style="font-size: 0.95rem;">{{ tx.description }}</h6>
-                                <small class="text-muted local-timestamp" data-timestamp="{{ tx.timestamp.isoformat() }}">
+                                <small class="text-muted local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}">
                                     {{ tx.timestamp.strftime('%b %d') }}
                                 </small>
                             </div>

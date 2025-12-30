@@ -46,7 +46,7 @@
                     </div>
                     <small class="text-muted">
                         {% if event.timestamp %}
-                            <span class="local-timestamp" data-timestamp="{{ event.timestamp.isoformat() }}Z"></span>
+                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(event.timestamp) }}"></span>
                         {% else %}
                             N/A
                         {% endif %}

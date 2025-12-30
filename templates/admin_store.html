@@ -113,7 +113,7 @@
               <tr>
                 <td>{{ student_item.student.first_name }} {{ student_item.student.last_initial }}.</td>
                 <td>{{ student_item.store_item.name }}</td>
-                <td><small class="text-muted local-timestamp" data-timestamp="{{ student_item.redemption_date.isoformat() }}Z"></small></td>
+                <td><small class="text-muted local-timestamp" data-timestamp="{{ format_utc_iso(student_item.redemption_date) }}"></small></td>
                 <td>
                   {% if student_item.redemption_details %}
                     <div class="text-muted small">{{ student_item.redemption_details | markdown | safe }}</div>
@@ -167,7 +167,7 @@
                 <td>{{ student_item.student.first_name }} {{ student_item.student.last_initial }}.</td>
                 <td>{{ student_item.store_item.name }}</td>
                 <td>${{ "%.2f"|format(student_item.store_item.price) }}</td>
-                <td><small class="text-muted local-timestamp" data-timestamp="{{ student_item.purchase_date.isoformat() }}Z"></small></td>
+                <td><small class="text-muted local-timestamp" data-timestamp="{{ format_utc_iso(student_item.purchase_date) }}"></small></td>
                 <td>
                   {% if student_item.status == 'purchased' %}
                     <span class="badge bg-success">Purchased</span>
@@ -517,7 +517,7 @@
                     <td>{{ item.name }}</td>
                     <td>
                         {% if student_item.purchase_date %}
-                            <span class="local-timestamp" data-timestamp="{{ student_item.purchase_date.isoformat() }}Z"></span>
+                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(student_item.purchase_date) }}"></span>
                         {% else %}
                             N/A
                         {% endif %}
