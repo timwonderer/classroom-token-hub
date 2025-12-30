@@ -14,8 +14,8 @@ This directory contains historical release notes for Classroom Token Hub.
 
 ## Current Releases
 
-For the latest release information, see [CHANGELOG.md](../../../CHANGELOG.md) in the project root.
+For the latest release information, see [CHANGELOG.md](../../CHANGELOG.md).
 
 ---
 
-**Note:** These release notes have been archived for historical reference. For current development status and upcoming features, see [DEVELOPMENT.md](../../../DEVELOPMENT.md).
+**Note:** These release notes have been archived for historical reference. For current development status and upcoming features, see [development/DEVELOPMENT.md](../../development/DEVELOPMENT.md).

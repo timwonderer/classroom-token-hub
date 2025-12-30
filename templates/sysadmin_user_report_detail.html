@@ -67,7 +67,7 @@
                         <strong>Submitted:</strong>
                         <span class="ms-2">
                             {% if report.submitted_at %}
-                                <span class="local-timestamp" data-timestamp="{{ report.submitted_at.isoformat() }}Z"></span>
+                                <span class="local-timestamp" data-timestamp="{{ format_utc_iso(report.submitted_at) }}"></span>
                             {% else %}
                                 N/A
                             {% endif %}
@@ -121,7 +121,7 @@
 
                     {% if report.reviewed_at %}
                     <div class="text-muted small">
-                        <i class="bi bi-clock me-1"></i>Reviewed: <span class="local-timestamp" data-timestamp="{{ report.reviewed_at.isoformat() }}Z"></span>
+                        <i class="bi bi-clock me-1"></i>Reviewed: <span class="local-timestamp" data-timestamp="{{ format_utc_iso(report.reviewed_at) }}"></span>
                     </div>
                     {% endif %}
                 </div>
@@ -194,7 +194,7 @@
                             <small class="text-muted">
                                 Sent:
                                 {% if report.reward_sent_at %}
-                                    <span class="local-timestamp" data-timestamp="{{ report.reward_sent_at.isoformat() }}Z"></span>
+                                    <span class="local-timestamp" data-timestamp="{{ format_utc_iso(report.reward_sent_at) }}"></span>
                                 {% else %}
                                     N/A
                                 {% endif %}

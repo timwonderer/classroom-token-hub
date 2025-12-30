@@ -13,9 +13,17 @@ and this project follows semantic versioning principles.
 - **Passkey Registration** - Fixed credential ID extraction from passwordless.dev SDK response by using correct destructuring pattern `{ token, error }`
 - **Content Security Policy** - Added `https://static.cloudflareinsights.com` to `connect-src` directive to allow Cloudflare analytics
 - **Content Security Policy** - Added `worker-src 'self' blob:` directive to allow Web Workers used by passwordless.dev library
+- Fixed `time.tzset()` Windows compatibility issue in wsgi.py - now only calls tzset() on Unix-like systems
+- Fixed admin signup crash when using SQLite - handles datetime fields stored as strings
 
-### Security
-- **Content Security Policy** - Removed unnecessary `'unsafe-eval'` directive from `script-src` to strengthen XSS protection (passwordless.dev library does not require dynamic code execution)
+### Changed
+- Improved `flask create-sysadmin` command to display TOTP secret and QR code during account creation
+  - Shows scannable QR code in terminal for easy authenticator app setup
+  - Displays plaintext secret for manual entry backup
+  - Auto-clears terminal after user confirmation for security
+  - Secret remains encrypted in database after initial display
+  - **Content Security Policy** - Removed unnecessary `'unsafe-eval'` directive from `script-src` to strengthen XSS protection (passwordless.dev library does not require dynamic code execution)
+
 
 ### Added
 - **Issue Resolution & Escalation System** - Structured, teacher-mediated issue handling system

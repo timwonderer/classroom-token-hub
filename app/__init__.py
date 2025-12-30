@@ -165,6 +165,7 @@ def create_app():
     # Add built-in functions to Jinja2 globals
     app.jinja_env.globals['min'] = min
     app.jinja_env.globals['max'] = max
+    app.jinja_env.globals['format_utc_iso'] = format_utc_iso
 
     def is_maintenance_mode_enabled():
         """Return True when maintenance mode is enabled via environment variable."""

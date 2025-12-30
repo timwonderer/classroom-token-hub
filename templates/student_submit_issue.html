@@ -44,7 +44,7 @@
                             <div class="col-sm-6">
                                 <strong>Date:</strong>
                                 {% if transaction.timestamp %}
-                                    <span class="local-timestamp" data-timestamp="{{ transaction.timestamp.isoformat() }}Z"></span>
+                                    <span class="local-timestamp" data-timestamp="{{ format_utc_iso(transaction.timestamp) }}"></span>
                                 {% else %}
                                     N/A
                                 {% endif %}

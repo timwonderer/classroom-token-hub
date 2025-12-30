@@ -59,7 +59,7 @@
             <tr>
               <td>
                 {% if tx.timestamp %}
-                  <span class="local-timestamp" data-timestamp="{{ tx.timestamp.isoformat() }}Z"></span>
+                  <span class="local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
                 {% else %}
                   —
                 {% endif %}

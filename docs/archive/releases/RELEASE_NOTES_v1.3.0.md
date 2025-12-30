@@ -248,7 +248,7 @@ Replaced "Active Store Items" section with more actionable information:
 **1. TOTP Secret Encryption**
 - Column: `admins.totp_secret` and `system_admins.totp_secret`
 - Change: VARCHAR(32) → VARCHAR(200)
-- See: `docs/operations/MIGRATION_TOTP_ENCRYPTION.md`
+- See: `../../security/MIGRATION_TOTP_ENCRYPTION.md`
 
 **2. Admin Credentials Table**
 - Table: `admin_credentials`
