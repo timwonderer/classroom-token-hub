@@ -109,7 +109,7 @@ For critical issues:
 1. Check the relevant operational guide in this directory
 2. Review error logs via the System Admin portal
 3. Consult the [Troubleshooting section](../README.md#troubleshooting) in main docs
-4. Review recent changes in [CHANGELOG.md](../../CHANGELOG.md)
+4. Review recent changes in [CHANGELOG.md](../CHANGELOG.md)
 
 ---
 

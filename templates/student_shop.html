@@ -177,7 +177,7 @@
                         <p class="text-muted small mb-2">
                             <strong>Purchased:</strong>
                             {% if student_item.purchase_date %}
-                                <span class="local-timestamp" data-timestamp="{{ student_item.purchase_date.isoformat() }}Z"></span>
+                                <span class="local-timestamp" data-timestamp="{{ format_utc_iso(student_item.purchase_date) }}"></span>
                             {% else %}
                                 N/A
                             {% endif %}

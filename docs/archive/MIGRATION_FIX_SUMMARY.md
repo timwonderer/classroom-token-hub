@@ -65,7 +65,7 @@ The `add_join_code_to_transaction` migration was created with:
 
 All migrations were verified using custom Python scripts:
 1. **check_migrations.py** - Analyzed revision chain for structural issues
-2. **check_syntax.py** - Validated Python syntax of all migration files
+2. **scripts/check_syntax.py** - Validated Python syntax of all migration files
 3. **verify_chain.py** - Verified complete traversal path from root to head
 
 ### Final Verification Results:

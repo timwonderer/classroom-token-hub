@@ -146,8 +146,8 @@ An interactive banking and classroom management platform for teaching students a
 
 ### Testing with Sample Data
 
-- Use `student_upload_template.csv` as a reference for CSV roster uploads
-- Run `python seed_dummy_students.py` to seed the database with sample students
+- Use `app/resources/student_upload_template.csv` as a reference for CSV roster uploads
+- Run `python scripts/seed_dummy_students.py` to seed the database with sample students
 
 ---
 
@@ -165,14 +165,14 @@ An interactive banking and classroom management platform for teaching students a
 - **[Architecture Guide](docs/technical-reference/architecture.md)** — System design and patterns
 - **[Database Schema](docs/technical-reference/database_schema.md)** — Up-to-date database reference
 - **[API Reference](docs/technical-reference/api_reference.md)** — REST API documentation
-- **[Development Priorities](DEVELOPMENT.md)** — Current priorities, roadmap, and tasks
-- **[Changelog](CHANGELOG.md)** — Version history and notable changes
+- **[Development Priorities](docs/development/DEVELOPMENT.md)** — Current priorities, roadmap, and tasks
+- **[Changelog](docs/CHANGELOG.md)** — Version history and notable changes
 
 ### Deployment & Operations
 
 - **[Deployment Guide](docs/DEPLOYMENT.md)** — Production deployment instructions
 - **[Operations Guides](docs/operations/)** — Operational procedures and troubleshooting
-- **[Contributing Guide](CONTRIBUTING.md)** — How to contribute to the project
+- **[Contributing Guide](.github/CONTRIBUTING.md)** — How to contribute to the project
 
 ---
 
@@ -222,6 +222,8 @@ classroom-economy/
 ├── migrations/               # Database migrations
 ├── docs/                     # Documentation
 ├── scripts/                  # Utility scripts
+├── deploy/                   # Deployment configuration (nginx, etc.)
+├── tools/                    # Editor/tooling helpers
 ├── wsgi.py                   # WSGI entry point
 └── requirements.txt          # Python dependencies
 ```
@@ -251,16 +253,16 @@ flask db downgrade                 # Rollback
 ```bash
 flask run                     # Run development server
 flask create-sysadmin         # Create system admin
-python create_admin.py        # Create teacher account
-python manage_invites.py      # Manage admin invites
-python seed_dummy_students.py # Seed test data
+python scripts/create_admin.py        # Create teacher account
+python scripts/manage_invites.py      # Manage admin invites
+python scripts/seed_dummy_students.py # Seed test data
 ```
 
 ---
 
 ## Roadmap
 
-Active development priorities and the path to version 1.0 are tracked in [DEVELOPMENT.md](DEVELOPMENT.md).
+Active development priorities and the path to version 1.0 are tracked in [docs/development/DEVELOPMENT.md](docs/development/DEVELOPMENT.md).
 
 **Version 1.0 Status:** All critical blockers (P0 and P1) have been resolved! The platform is ready for staging deployment and final validation before production release.
 
@@ -278,11 +280,11 @@ curl http://your-domain/health
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! Please see [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) for guidelines.
 
 **Before contributing:**
 1. Review the [Architecture Guide](docs/technical-reference/architecture.md)
-2. Check [DEVELOPMENT.md](DEVELOPMENT.md) for current priorities
+2. Check [docs/development/DEVELOPMENT.md](docs/development/DEVELOPMENT.md) for current priorities
 3. Ensure all tests pass
 4. Follow the existing code style
 

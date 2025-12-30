@@ -10,8 +10,13 @@ For gunicorn: wsgi:app
 # Set timezone to UTC to ensure all datetime operations use UTC
 import os
 import time
+import platform
+
 os.environ['TZ'] = 'UTC'
-time.tzset()  # Apply timezone change
+
+# tzset() is not available on Windows
+if platform.system() != 'Windows':
+    time.tzset()  # Apply timezone change
 
 from flask import render_template, request, session
 from datetime import datetime, timedelta, timezone
@@ -105,23 +110,66 @@ def ensure_admin_command():
 def create_sysadmin():
     """Create initial system admin account interactively."""
     import pyotp
+    import qrcode
+    from io import BytesIO
     from app.utils.encryption import encrypt_totp
+
     username = input("Enter system admin username: ").strip()
     if not username:
         print("Username is required.")
         return
+
     existing = SystemAdmin.query.filter_by(username=username).first()
     if existing:
         print(f"System admin '{username}' already exists.")
         return
+
+    # Generate TOTP secret
     totp_secret = pyotp.random_base32()
+
+    # Create TOTP URI for QR code
+    totp_uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(
+        name=username,
+        issuer_name="Classroom Token Hub"
+    )
+
+    # Save to database with encrypted secret
     sysadmin = SystemAdmin(username=username, totp_secret=encrypt_totp(totp_secret))
     db.session.add(sysadmin)
     db.session.commit()
-    print(f"✅ System admin '{username}' created successfully.")
-    print("🔑 TOTP secret has been encrypted and stored securely in the database.")
-    print("   For security reasons, the plaintext secret is not displayed.")
-    print("   Access it through secure administrative channels only.")
+
+    # Display results
+    print(f"\n✅ System admin '{username}' created successfully!")
+    print("\n" + "="*70)
+    print("📱 SCAN THIS QR CODE WITH YOUR AUTHENTICATOR APP")
+    print("="*70)
+
+    # Generate and display QR code in terminal
+    qr = qrcode.QRCode(border=2)
+    qr.add_data(totp_uri)
+    qr.make(fit=True)
+    qr.print_ascii(invert=True)
+
+    print("\n" + "="*70)
+    print("🔑 TOTP SECRET (store this securely as backup):")
+    print(f"   {totp_secret}")
+    print("="*70)
+    print("\n⚠️  IMPORTANT: Save this secret in a secure location!")
+    print("   This is the ONLY time it will be displayed in plaintext.")
+    print("   The secret is encrypted in the database for security.")
+    print("\n   Manual entry URI:")
+    print(f"   {totp_uri}")
+    print("="*70)
+
+    # Wait for user confirmation before clearing
+    input("\n✅ Press ENTER after saving the secret to clear this screen...")
+
+    # Clear the terminal screen
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+    print("\nSystem admin account created and screen cleared for security.")
+    print(f"   Username: {username}")
+    print("   TOTP secret has been encrypted and stored in the database.\n")
 
 
 # -------------------- APPLICATION HOOKS --------------------

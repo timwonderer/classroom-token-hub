@@ -12,57 +12,67 @@ and this project follows semantic versioning principles.
 - **Transaction Issue Reporting** - Added report buttons to all transaction tables in Banking/Finances page (Checking and Savings tabs), allowing students to report issues on any visible transaction (up to 50 most recent), not just the 5 shown on dashboard
 - **Issue Resolution Display** - Fixed `developer_resolved` status showing as "Escalated" instead of "Resolved by Developer" in teacher view
 - **Issue Context Snapshot** - Fixed incorrect balance calculation in context_snapshot by using Student model's `get_checking_balance()` and `get_savings_balance()` methods instead of non-existent `get_balances()` function
+- **Passkey Authentication** - Fixed missing username parameter in passkey authentication start request causing 500 error
+- **Passkey Registration** - Fixed credential ID extraction from passwordless.dev SDK response by using correct destructuring pattern `{ token, error }`
+- **Content Security Policy** - Added `https://static.cloudflareinsights.com` to `connect-src` directive to allow Cloudflare analytics
+- **Content Security Policy** - Added `worker-src 'self' blob:` directive to allow Web Workers used by passwordless.dev library
+- Fixed `time.tzset()` Windows compatibility issue in wsgi.py - now only calls tzset() on Unix-like systems
+- Fixed admin signup crash when using SQLite - handles datetime fields stored as strings
+
+### Changed
+- Improved `flask create-sysadmin` command to display TOTP secret and QR code during account creation
+- Shows scannable QR code in terminal for easy authenticator app setup
+- Displays plaintext secret for manual entry backup
+- Auto-clears terminal after user confirmation for security
+- Secret remains encrypted in database after initial display
+
+
 ### Added
 - **Issue Resolution & Escalation System** - Structured, teacher-mediated issue handling system
-  - **Student Features**:
-    - New Help & Support interface with 3 tabs: Knowledge Base, Report an Issue, My Issues
-    - Submit general issues (clock-in problems, features not working, balance incorrect, etc.)
-    - Report transaction-specific issues directly from transaction history
-    - Help icons next to each transaction in Recent Activity for quick issue reporting
-    - Character-limited submissions (1000 chars) to encourage concise reporting
-    - Automatic context capture: balances, transaction history, system metadata
-    - Status badges (Submitted, Teacher Review, Resolved, Elevated, Developer Review) - no messaging
-    - View all submitted issues with status tracking
-  - **Teacher Features**:
-    - Issue review queue with pending/resolved/escalated tabs
-    - Detailed issue view showing student explanation, context, and transaction details
-    - Resolution actions:
-      - Reverse/void transactions directly from issue interface
+- **Student Features**:
+  - New Help & Support interface with 3 tabs: Knowledge Base, Report an Issue, My Issues
+  - Submit general issues (clock-in problems, features not working, balance incorrect, etc.)
+  - Report transaction-specific issues directly from transaction history
+  - Help icons next to each transaction in Recent Activity for quick issue reporting
+  - Character-limited submissions (1000 chars) to encourage concise reporting
+  - Automatic context capture: balances, transaction history, system metadata
+  - Status badges (Submitted, Teacher Review, Resolved, Elevated, Developer Review) - no messaging
+  - View all submitted issues with status tracking
+ - **Teacher Features**:
+  - Issue review queue with pending/resolved/escalated tabs
+  - Detailed issue view showing student explanation, context, and transaction details
+  - Resolution actions:
+    - Reverse/void transactions directly from issue interface
       - Manual adjustment (teacher handles offline)
       - Deny issue with required explanation
     - Escalate to developer with:
       - Required escalation reason
       - Diagnostic notes for investigation
       - Optional class name sharing checkbox (default: opaque reference only)
-      - **"Student may receive reward"** checkbox for legitimate bug reports
-    - Complete status history and resolution action audit trail
-  - **Technical Implementation**:
-    - 4 new database models: `Issue`, `IssueCategory`, `IssueStatusHistory`, `IssueResolutionAction`
-    - Default categories: 6 transaction types + 6 general issue types
-    - Opaque student references for sysadmin privacy (non-reversible hashes)
-    - Multi-tenancy scoping by `join_code` for proper class isolation
-    - Context snapshots preserve ledger state at time of submission
-    - Complete audit trail with timestamps and attribution
-    - Immutable student submissions after creation
-  - **Design Principles**:
-    - No direct student-to-sysadmin communication
-    - Teachers are first-line decision makers
-    - Evidence-based issue tracking (tied to concrete transactions/records)
-    - Data minimization for sysadmin review
-    - Status badges only (non-communicative design)
-  - Routes:
-    - Student: `/student/help-support`, `/student/help-support/submit-issue`, `/student/help-support/transaction/<id>/report`
-    - Teacher: `/admin/issues`, `/admin/issues/<id>`, `/admin/issues/<id>/resolve`, `/admin/issues/<id>/escalate`
-
-### Changed
-
-### Fixed
+- **"Student may receive reward"** checkbox for legitimate bug reports
+  - Complete status history and resolution action audit trail
+- **Technical Implementation**:
+  - 4 new database models: `Issue`, `IssueCategory`, `IssueStatusHistory`, `IssueResolutionAction`
+  - Default categories: 6 transaction types + 6 general issue types
+  - Opaque student references for sysadmin privacy (non-reversible hashes)
+  - Multi-tenancy scoping by `join_code` for proper class isolation
+  - Context snapshots preserve ledger state at time of submission
+  - Complete audit trail with timestamps and attribution
+  - Immutable student submissions after creation
+- **Design Principles**:
+  - No direct student-to-sysadmin communication
+  - Teachers are first-line decision makers
+  - Evidence-based issue tracking (tied to concrete transactions/records)
+  - Data minimization for sysadmin review
+  - Status badges only (non-communicative design)
+- Routes:
+  - Student: `/student/help-support`, `/student/help-support/submit-issue`, `/student/help-support/transaction/<id>/report`
+  - Teacher: `/admin/issues`, `/admin/issues/<id>`, `/admin/issues/<id>/resolve`, `/admin/issues/<id>/escalate`
 
 ### Security
 - Enhanced privacy protection in issue resolution system through opaque student references
 - Teacher-controlled data disclosure to sysadmins (optional class name sharing)
-
-## [1.4.0] - 2025-12-27
+- **Content Security Policy** - Removed unnecessary `'unsafe-eval'` directive from `script-src` to strengthen XSS protection (passwordless.dev library does not require dynamic code execution)## [1.4.0] - 2025-12-27
 
 ### Added
 - **Announcement System** - Teachers can create and manage announcements for their class periods

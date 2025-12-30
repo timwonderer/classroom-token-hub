@@ -157,9 +157,14 @@
             button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Complete on your device...';
 
             // Step 3: Perform WebAuthn registration
-            const result = await p.register(token);
+            const { token: verificationToken, error } = await p.register(token);
 
-            if (!result) {
+            if (error) {
+                console.error('Passwordless.dev error:', error);
+                throw new Error(error.title || 'Registration failed');
+            }
+
+            if (!verificationToken) {
                 throw new Error('Registration was cancelled or failed');
             }
 
@@ -171,7 +176,7 @@
 
             button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving...';
 
-            // Step 5: Save to backend
+            // Step 5: Save to backend - use the verification token as credential ID
             const finishResponse = await fetch('{{ url_for("sysadmin.passkey_register_finish") }}', {
                 method: 'POST',
                 headers: {
@@ -179,7 +184,7 @@
                     'X-CSRFToken': csrfToken
                 },
                 body: JSON.stringify({
-                    credentialId: result.credentialId || result.token, // Use credentialId if available
+                    credentialId: verificationToken,
                     authenticatorName: friendlyName
                 })
             });

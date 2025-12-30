@@ -165,6 +165,7 @@ def create_app():
     # Add built-in functions to Jinja2 globals
     app.jinja_env.globals['min'] = min
     app.jinja_env.globals['max'] = max
+    app.jinja_env.globals['format_utc_iso'] = format_utc_iso
 
     def is_maintenance_mode_enabled():
         """Return True when maintenance mode is enabled via environment variable."""
@@ -572,8 +573,9 @@ def create_app():
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
             "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
             "img-src 'self' data: https:",
-            "connect-src 'self' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.passwordless.dev https://v4.passwordless.dev",
+            "connect-src 'self' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.passwordless.dev https://v4.passwordless.dev https://static.cloudflareinsights.com",
             "frame-src https://challenges.cloudflare.com",
+            "worker-src 'self' blob:",
             "base-uri 'self'",
             "form-action 'self'",
         ]

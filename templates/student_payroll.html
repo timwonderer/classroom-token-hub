@@ -73,7 +73,7 @@
                                 <tr>
                                     <td>
                                         {% if event.timestamp %}
-                                            <span class="local-timestamp" data-timestamp="{{ event.timestamp.isoformat() }}Z" data-format="compact-date"></span>
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(event.timestamp) }}" data-format="compact-date"></span>
                                         {% else %}
                                             N/A
                                         {% endif %}
@@ -86,7 +86,7 @@
                                     </td>
                                     <td>
                                         {% if event.timestamp %}
-                                            <span class="local-timestamp" data-timestamp="{{ event.timestamp.isoformat() }}Z" data-format="time"></span>
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(event.timestamp) }}" data-format="time"></span>
                                         {% else %}
                                             N/A
                                         {% endif %}
