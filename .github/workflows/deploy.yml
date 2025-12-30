@@ -95,11 +95,24 @@ jobs:
           # Add Passwordless.dev keys if provided
           if [ -n "${PASSWORDLESS_API_KEY}" ]; then
             echo "PASSWORDLESS_API_KEY=${PASSWORDLESS_API_KEY}" >> .env
-            echo "✓ Passwordless.dev API key configured"
+            echo "✓ Passwordless.dev API key configured (length: ${#PASSWORDLESS_API_KEY})"
           fi
           if [ -n "${PASSWORDLESS_API_PUBLIC}" ]; then
             echo "PASSWORDLESS_API_PUBLIC=${PASSWORDLESS_API_PUBLIC}" >> .env
-            echo "✓ Passwordless.dev public key configured"
+            echo "✓ Passwordless.dev public key configured (length: ${#PASSWORDLESS_API_PUBLIC})"
+          fi
+
+          # Verify .env file contains the keys
+          echo "Verifying .env file contents..."
+          if grep -q "^PASSWORDLESS_API_KEY=" .env; then
+            echo "✓ PASSWORDLESS_API_KEY found in .env"
+          else
+            echo "⚠ PASSWORDLESS_API_KEY not found in .env"
+          fi
+          if grep -q "^PASSWORDLESS_API_PUBLIC=" .env; then
+            echo "✓ PASSWORDLESS_API_PUBLIC found in .env"
+          else
+            echo "⚠ PASSWORDLESS_API_PUBLIC not found in .env"
           fi
 
           # SECURITY: Verify file permissions
@@ -139,6 +152,17 @@ jobs:
 
           echo 'Restarting Gunicorn...'
           sudo systemctl restart gunicorn
+
+          echo 'Verifying environment variables are loaded...'
+          # Check if gunicorn process has the environment variables
+          if sudo systemctl show gunicorn | grep -q "EnvironmentFile"; then
+            echo "✓ Gunicorn service has EnvironmentFile configured"
+          else
+            echo "⚠ Warning: EnvironmentFile not found in service configuration"
+          fi
+
+          # Verify the service file syntax
+          sudo systemctl cat gunicorn | grep -A 2 "EnvironmentFile" || echo "⚠ EnvironmentFile directive not found"
 
           echo 'Deployment completed successfully.'
 
