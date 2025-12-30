@@ -123,6 +123,20 @@ jobs:
           flask db upgrade
 
 
+          echo 'Ensuring Gunicorn service has EnvironmentFile configured...'
+          # Check if EnvironmentFile is already in the service
+          if ! sudo grep -q "EnvironmentFile=/root/classroom-economy/.env" /etc/systemd/system/gunicorn.service 2>/dev/null; then
+            echo "⚠ Warning: Adding EnvironmentFile to gunicorn.service"
+            # Backup the service file
+            sudo cp /etc/systemd/system/gunicorn.service /etc/systemd/system/gunicorn.service.bak
+            # Add EnvironmentFile after [Service] section
+            sudo sed -i '/^\[Service\]/a EnvironmentFile=/root/classroom-economy/.env' /etc/systemd/system/gunicorn.service
+            sudo systemctl daemon-reload
+            echo "✓ EnvironmentFile added to gunicorn.service"
+          else
+            echo "✓ EnvironmentFile already configured"
+          fi
+
           echo 'Restarting Gunicorn...'
           sudo systemctl restart gunicorn
 
