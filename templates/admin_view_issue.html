@@ -1,6 +1,6 @@
 {% extends "layout_admin.html" %}
 
-{% block page_title %}Issue Details for #{{ issue.id }}{% endblock %}
+{% block page_title %}Student Support Ticket Details: Issue #{{ issue.id }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -15,17 +15,15 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
                     <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="mb-0">
-                            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">
-                                description
-                            </span>Issue Descriptions
-                        </h4>
+                        <h5 class="mb-0">
+                            Student Submission
+                        </h5>
                         <span class="badge
                             {% if issue.status == 'submitted' or issue.status == 'teacher_review' %}bg-warning text-dark
-                            {% elif issue.status == 'teacher_resolved' %}bg-success text-white
-                            {% elif issue.status == 'elevated' or issue.status == 'developer_review' %}bg-warning
-                            {% elif issue.status == 'developer_resolved' %}bg-info
-                            {% else %}bg-dark{% endif %}">
+                            {% elif issue.status == 'teacher_resolved' %}bg-success
+                            {% elif issue.status == 'elevated' or issue.status == 'developer_review' %}bg-info
+                            {% elif issue.status == 'developer_resolved' %}bg-success
+                            {% else %}bg-secondary{% endif %}">
                             {{ issue.status|replace('_', ' ')|title }}
                         </span>
                     </div>
@@ -79,7 +77,7 @@
                             <h6 class="text-muted mb-2">Submitted</h6>
                             <p class="mb-0">
                                 <i class="bi bi-clock me-2"></i>
-                                <span class="local-timestamp" data-timestamp="{{ issue.submitted_at.isoformat() }}Z"></span>
+                                <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.submitted_at) }}"></span>
                             </p>
                         </div>
                         {% if issue.teacher_reviewed_at %}
@@ -87,7 +85,7 @@
                             <h6 class="text-muted mb-2">First Reviewed</h6>
                             <p class="mb-0">
                                 <i class="bi bi-eye me-2"></i>
-                                <span class="local-timestamp" data-timestamp="{{ issue.teacher_reviewed_at.isoformat() }}Z"></span>
+                                <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.teacher_reviewed_at) }}"></span>
                             </p>
                         </div>
                         {% endif %}
@@ -98,7 +96,7 @@
             <!-- Related Transaction (if applicable) -->
             {% if issue.related_transaction_id %}
             <div class="card shadow-sm mb-4">
-                <div class="card-header bg-info text-white">
+                <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
                         <i class="bi bi-receipt me-2"></i>Related Transaction
                     </h5>
@@ -145,7 +143,7 @@
             <!-- Context Snapshot -->
             {% if issue.context_snapshot %}
             <div class="card shadow-sm mb-4">
-                <div class="card-header">
+                <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
                         <i class="bi bi-info-circle me-2"></i>System Context
                     </h5>
@@ -228,7 +226,7 @@
                                     {% endif %}
                                     <small class="text-muted">
                                         By {{ action.performed_by_type|title }} at
-                                        <span class="local-timestamp" data-timestamp="{{ action.created_at.isoformat() }}Z"></span>
+                                        <span class="local-timestamp" data-timestamp="{{ format_utc_iso(action.created_at) }}"></span>
                                     </small>
                                 </div>
                             </div>
@@ -307,14 +305,49 @@
                     </div>
                     {% endif %}
                     <p class="text-muted small mb-0 mt-2">
-                        Resolved <span class="local-timestamp" data-timestamp="{{ issue.teacher_resolved_at.isoformat() }}Z"></span>
+                        Resolved <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.teacher_resolved_at) }}"></span>
                     </p>
                 </div>
             </div>
-            {% elif issue.status in ['elevated', 'developer_review', 'developer_resolved'] %}
-            <div class="card shadow-sm mb-4 border-info">
-                <div class="card-header bg-info text-white">
+            {% elif issue.status == 'developer_resolved' %}
+            <div class="card shadow-sm mb-4 border-success">
+                <div class="card-header bg-success text-white">
                     <h5 class="mb-0">
+                        <i class="bi bi-check-circle me-2"></i>Resolved by Developer
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2"><strong>Original Escalation Reason:</strong> {{ issue.escalation_reason }}</p>
+                    {% if issue.sysadmin_notes %}
+                    <p class="mb-2"><strong>Developer Notes:</strong></p>
+                    <div class="bg-light p-2 rounded">
+                        <p class="mb-0 small">{{ issue.sysadmin_notes }}</p>
+                    </div>
+                    {% endif %}
+                    {% if issue.teacher_diagnostic_note %}
+                    <p class="mb-2"><strong>Your Diagnostic Notes:</strong></p>
+                    <div class="bg-light p-2 rounded">
+                        <p class="mb-0 small">{{ issue.teacher_diagnostic_note }}</p>
+                    </div>
+                    {% endif %}
+                    {% if issue.eligible_for_reward %}
+                    <div class="alert alert-success mt-3 mb-0">
+                        <i class="bi bi-gift-fill me-2"></i>
+                        <strong>Student was marked eligible for bug reward</strong>
+                    </div>
+                    {% endif %}
+                    <p class="text-muted small mb-0 mt-2">
+                        Escalated <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
+                        {% if issue.sysadmin_resolved_at %}
+                        • Resolved <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.sysadmin_resolved_at) }}"></span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+            {% elif issue.status in ['elevated', 'developer_review'] %}
+            <div class="card shadow-sm mb-4 border-warning">
+                <div class="card-header bg-warning">
+                    <h5 class="mb-0 text-black">
                         <i class="bi bi-arrow-up-circle me-2"></i>Escalated
                     </h5>
                 </div>
@@ -333,7 +366,7 @@
                     </div>
                     {% endif %}
                     <p class="text-muted small mb-0 mt-2">
-                        Escalated <span class="local-timestamp" data-timestamp="{{ issue.escalated_at.isoformat() }}Z"></span>
+                        Escalated <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
                     </p>
                 </div>
             </div>
@@ -341,7 +374,7 @@
 
             <!-- Status History -->
             <div class="card shadow-sm">
-                <div class="card-header">
+                <div class="card-header bg-primary text-white">
                     <h6 class="mb-0">
                         <i class="bi bi-clock-history me-2"></i>Status History
                     </h6>
@@ -358,7 +391,7 @@
                                     <div class="fw-bold">{{ history.new_status|replace('_', ' ')|title }}</div>
                                     <small class="text-muted">
                                         By {{ history.changed_by_type|title }} •
-                                        <span class="local-timestamp" data-timestamp="{{ history.changed_at.isoformat() }}Z"></span>
+                                        <span class="local-timestamp" data-timestamp="{{ format_utc_iso(history.changed_at) }}"></span>
                                     </small>
                                     {% if history.notes %}
                                     <p class="mb-0 small text-muted mt-1">{{ history.notes }}</p>

@@ -8,7 +8,7 @@ Welcome to the Classroom Token Hub documentation! This index points you to the m
 
 1. Review the [project README](../README.md) for a high-level overview and setup steps.
 2. Skim the [Architecture Guide](technical-reference/architecture.md) for structure, conventions, and security notes.
-3. Check [Development Priorities](../DEVELOPMENT.md) for current priorities, roadmap, and active tasks.
+3. Check [Development Priorities](development/DEVELOPMENT.md) for current priorities, roadmap, and active tasks.
 4. If you are operating the app, keep the [Deployment Guide](DEPLOYMENT.md) and [Operations README](operations/README.md) handy.
 
 ---
@@ -27,7 +27,7 @@ Welcome to the Classroom Token Hub documentation! This index points you to the m
 - **[Timezone Handling](technical-reference/TIMEZONE_HANDLING.md)** — UTC storage and timezone conversion patterns.
 
 ### 🎯 Development
-- **[Development Priorities](../DEVELOPMENT.md)** — Current priorities, roadmap, version 1.0 status, and active tasks.
+- **[Development Priorities](development/DEVELOPMENT.md)** — Current priorities, roadmap, version 1.0 status, and active tasks.
 - **[Economy Balance Checker](development/ECONOMY_BALANCE_CHECKER.md)** — CWI implementation guide and API reference.
 - **[Deprecated Code Patterns](development/DEPRECATED_CODE_PATTERNS.md)** — Code modernization tracking for Python 3.12+ and SQLAlchemy 2.0+.
 - **[System Admin Interface](development/SYSADMIN_INTERFACE_DESIGN.md)** — Capabilities and UX principles for sysadmin flows.
@@ -37,11 +37,15 @@ Welcome to the Classroom Token Hub documentation! This index points you to the m
 - **[Testing Summary](development/TESTING_SUMMARY.md)** — Test coverage and validation results.
 - **[Migration Status](development/MIGRATION_STATUS_REPORT.md)** — Database migration status tracking.
 
+### 🗂 Project & Planning
+- **[Project History](project/PROJECT_HISTORY.md)** — Philosophy, evolution, and milestone context.
+- **[Implementation Progress](project/IMPLEMENTATION_PROGRESS.md)** — Feature-by-feature delivery tracking.
+
 ### 🚀 Deployment & Operations
 - **[Deployment Guide](DEPLOYMENT.md)** — Environment variables, CI/CD references, and production checklist.
 - **[Operations Guides](operations/)** — Cleanup, demo session hygiene, and PII audit procedures.
 - **[Multi-Tenancy Fix Deployment](operations/MULTI_TENANCY_FIX_DEPLOYMENT.md)** — Deployment procedures for multi-tenancy fixes.
-- **[Changelog](../CHANGELOG.md)** — Notable changes and release notes.
+- **[Changelog](CHANGELOG.md)** — Notable changes and release notes.
 
 ### 🔒 Security
 - **[Security Audit 2025](security/SECURITY_AUDIT_2025.md)** — Comprehensive security audit findings.
@@ -70,9 +74,9 @@ Welcome to the Classroom Token Hub documentation! This index points you to the m
 - **How do I add students?** → [Teacher Manual – Student Management](user-guides/teacher_manual.md#student-management)
 - **How do I run payroll?** → [Teacher Manual – Payroll](user-guides/teacher_manual.md#payroll)
 - **What's the database structure?** → [Database Schema](technical-reference/database_schema.md)
-- **Where are tenancy helpers?** → [`app/auth.py`](../app/auth.py) and [Development Priorities – Multi-Tenancy](../DEVELOPMENT.md#multi-tenancy-architecture)
+- **Where are tenancy helpers?** → [`app/auth.py`](../app/auth.py) and [Development Priorities – Multi-Tenancy](development/DEVELOPMENT.md#multi-tenancy-architecture)
 - **How do I clean demo sessions?** → [Operations – Demo Sessions](operations/DEMO_SESSIONS.md)
-- **What are current development priorities?** → [Development Priorities](../DEVELOPMENT.md)
+- **What are current development priorities?** → [Development Priorities](development/DEVELOPMENT.md)
 - **How does the economy system work?** → [Economy Specification](technical-reference/ECONOMY_SPECIFICATION.md)
 
 ---
@@ -92,14 +96,14 @@ Welcome to the Classroom Token Hub documentation! This index points you to the m
 | [Architecture Guide](technical-reference/architecture.md) | Developers | System architecture and patterns | 2025-11-23 |
 | [Database Schema](technical-reference/database_schema.md) | Developers | Current models and relationships | 2025-11-23 |
 | [API Reference](technical-reference/api_reference.md) | Developers | REST API documentation | 2025-11-23 |
-| [Student Guide](user-guides/student_guide.md) | Students | How to use the platform | 2025-11-18 |
-| [Teacher Manual](user-guides/teacher_manual.md) | Teachers | Admin features and workflows | 2025-11-18 |
-| [Development Priorities](../DEVELOPMENT.md) | Developers | Current tasks, roadmap, and version status | 2025-12-21 |
+| [Student Guide](user-guides/student_guide.md) | Students | How to use the platform | 2025-12-28 |
+| [Teacher Manual](user-guides/teacher_manual.md) | Teachers | Admin features and workflows | 2025-12-28 |
+| [Development Priorities](development/DEVELOPMENT.md) | Developers | Current tasks, roadmap, and version status | 2025-12-21 |
 | [Deployment Guide](DEPLOYMENT.md) | DevOps | Deployment instructions | 2025-11-25 |
 | [Economy Specification](technical-reference/ECONOMY_SPECIFICATION.md) | Developers | Financial system spec | 2025-12-11 |
 | [Migration Guide](development/MIGRATION_GUIDE.md) | Developers | Database migration help | 2025-11-18 |
 | [Operations Guides](operations/) | Ops | Operational procedures | 2025-11-28 |
-| [Changelog](../CHANGELOG.md) | All | Version history and changes | 2025-12-27 |
+| [Changelog](CHANGELOG.md) | All | Version history and changes | 2025-12-27 |
 | [README](../README.md) | All | Project overview and quick start | 2025-12-21 |
 
 ---

@@ -8,6 +8,25 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+- **Transaction Issue Reporting** - Added report buttons to all transaction tables in Banking/Finances page (Checking and Savings tabs), allowing students to report issues on any visible transaction (up to 50 most recent), not just the 5 shown on dashboard
+- **Issue Resolution Display** - Fixed `developer_resolved` status showing as "Escalated" instead of "Resolved by Developer" in teacher view
+- **Issue Context Snapshot** - Fixed incorrect balance calculation in context_snapshot by using Student model's `get_checking_balance()` and `get_savings_balance()` methods instead of non-existent `get_balances()` function
+- **Passkey Authentication** - Fixed missing username parameter in passkey authentication start request causing 500 error
+- **Passkey Registration** - Fixed credential ID extraction from passwordless.dev SDK response by using correct destructuring pattern `{ token, error }`
+- **Content Security Policy** - Added `https://static.cloudflareinsights.com` to `connect-src` directive to allow Cloudflare analytics
+- **Content Security Policy** - Added `worker-src 'self' blob:` directive to allow Web Workers used by passwordless.dev library
+- Fixed `time.tzset()` Windows compatibility issue in wsgi.py - now only calls tzset() on Unix-like systems
+- Fixed admin signup crash when using SQLite - handles datetime fields stored as strings
+
+### Changed
+- Improved `flask create-sysadmin` command to display TOTP secret and QR code during account creation
+  - Shows scannable QR code in terminal for easy authenticator app setup
+  - Displays plaintext secret for manual entry backup
+  - Auto-clears terminal after user confirmation for security
+  - Secret remains encrypted in database after initial display
+
+
 ### Added
 - **Attendance Issue Reporting** - Students can now report issues with specific attendance/tap events (clock in/out records) directly from the Work & Pay page
   - New route `/help-support/tap-event/<id>/report` for reporting attendance record issues
@@ -56,13 +75,10 @@ and this project follows semantic versioning principles.
     - Student: `/student/help-support`, `/student/help-support/submit-issue`, `/student/help-support/transaction/<id>/report`
     - Teacher: `/admin/issues`, `/admin/issues/<id>`, `/admin/issues/<id>/resolve`, `/admin/issues/<id>/escalate`
 
-### Changed
-
-### Fixed
-
 ### Security
 - Enhanced privacy protection in issue resolution system through opaque student references
 - Teacher-controlled data disclosure to sysadmins (optional class name sharing)
+- **Content Security Policy** - Removed unnecessary `'unsafe-eval'` directive from `script-src` to strengthen XSS protection (passwordless.dev library does not require dynamic code execution)
 
 ## [1.4.0] - 2025-12-27
 

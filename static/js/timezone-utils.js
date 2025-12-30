@@ -132,6 +132,31 @@
     }
 
     /**
+     * Format timestamp as compact date only
+     * Format: "Dec 3"
+     */
+    function formatCompactDate(utcString, timezoneName = null) {
+        if (!utcString) return '—';
+
+        try {
+            const date = new Date(utcString);
+            if (isNaN(date.getTime())) return '—';
+
+            const tz = timezoneName || detectTimezone();
+            const options = {
+                timeZone: tz,
+                month: 'short',
+                day: 'numeric'
+            };
+
+            return date.toLocaleString('en-US', options);
+        } catch (e) {
+            console.error('Error formatting compact date:', e);
+            return utcString;
+        }
+    }
+
+    /**
      * Format timestamp as time only
      * Format: "2:30 PM PST"
      */
@@ -176,6 +201,8 @@
                     element.textContent = formatDate(utcString);
                 } else if (format === 'time') {
                     element.textContent = formatTime(utcString);
+                } else if (format === 'compact-date' || format === 'MMM D') {
+                    element.textContent = formatCompactDate(utcString);
                 } else {
                     element.textContent = formatTimestamp(utcString);
                 }
@@ -258,6 +285,7 @@
         detectTimezone: detectTimezone,
         formatTimestamp: formatTimestamp,
         formatDate: formatDate,
+        formatCompactDate: formatCompactDate,
         formatTime: formatTime,
         convertAllTimestamps: convertAllTimestamps,
         syncTimezoneToServer: syncTimezoneToServer,

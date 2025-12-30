@@ -11,7 +11,7 @@ import hashlib
 import secrets
 
 from app.extensions import db
-from app.models import Issue, IssueStatusHistory, IssueResolutionAction, Transaction, Student, StudentBlock
+from app.models import Issue, IssueStatusHistory, IssueResolutionAction, Transaction, Student
 from app.utils.helpers import generate_anonymous_code
 from app.utils.ip_handler import get_real_ip
 
@@ -51,24 +51,14 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
         'ip_address': get_real_ip() if request else None,
     }
 
-    # Get current balances from StudentBlock
-    student_block = StudentBlock.query.filter_by(
-        student_id=student.id,
-        join_code=join_code
-    ).first()
-
-    if student_block:
-        snapshot['balances'] = {
-            'checking': student_block.checking_balance or 0,
-            'savings': student_block.savings_balance or 0,
-            'total': (student_block.checking_balance or 0) + (student_block.savings_balance or 0)
-        }
-    else:
-        snapshot['balances'] = {
-            'checking': 0,
-            'savings': 0,
-            'total': 0
-        }
+    # Get current balances (scoped by join_code)
+    checking_balance = student.get_checking_balance(join_code=join_code)
+    savings_balance = student.get_savings_balance(join_code=join_code)
+    snapshot['balances'] = {
+        'checking': checking_balance,
+        'savings': savings_balance,
+        'total': checking_balance + savings_balance
+    }
 
     # If transaction-specific, include transaction details
     if related_transaction_id:
@@ -145,6 +135,8 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
         student, join_code, related_transaction_id, related_record_type, related_record_id
     )
 
+    now_utc = datetime.now(timezone.utc)
+
     # Create the issue
     issue = Issue(
         student_id=student.id,
@@ -163,7 +155,10 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
         related_record_id=related_record_id,
         context_snapshot=context_snapshot,
         page_url=request.url if request else None,
-        status='submitted'
+        status='submitted',
+        submitted_at=now_utc,
+        created_at=now_utc,
+        updated_at=now_utc
     )
 
     db.session.add(issue)
@@ -195,7 +190,8 @@ def record_status_change(issue, previous_status, new_status, changed_by_type, ch
         new_status=new_status,
         changed_by_type=changed_by_type,
         changed_by_id=changed_by_id,
-        notes=notes
+        notes=notes,
+        changed_at=datetime.now(timezone.utc)
     )
 
     db.session.add(history)
@@ -227,7 +223,8 @@ def record_resolution_action(issue, action_type, performed_by_type, performed_by
         related_transaction_id=related_transaction_id,
         amount_changed=amount_changed,
         before_value=before_value,
-        after_value=after_value
+        after_value=after_value,
+        created_at=datetime.now(timezone.utc)
     )
 
     db.session.add(action)

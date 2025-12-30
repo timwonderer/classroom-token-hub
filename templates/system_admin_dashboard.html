@@ -122,7 +122,7 @@
                                             <span class="badge bg-danger me-2">{{ error.error_type }}</span>
                                             <small class="text-muted">
                                                 {% if error.timestamp %}
-                                                    <span class="local-timestamp" data-timestamp="{{ error.timestamp.isoformat() }}Z"></span>
+                                                    <span class="local-timestamp" data-timestamp="{{ format_utc_iso(error.timestamp) }}"></span>
                                                 {% else %}
                                                     N/A
                                                 {% endif %}
@@ -207,7 +207,7 @@
                                     <td>
                                         <small class="text-muted">
                                             {% if admin.last_login %}
-                                                <span class="local-timestamp" data-timestamp="{{ admin.last_login.isoformat() }}Z"></span>
+                                                <span class="local-timestamp" data-timestamp="{{ format_utc_iso(admin.last_login) }}"></span>
                                             {% else %}
                                                 Never
                                             {% endif %}

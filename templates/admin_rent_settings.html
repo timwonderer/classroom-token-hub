@@ -582,7 +582,7 @@
                       <td>{{ waiver.student.full_name }}</td>
                       <td>{{ waiver.periods_count }}</td>
                       <td>
-                        <span class="local-timestamp" data-timestamp="{{ waiver.waiver_end_date.isoformat() }}Z"></span>
+                        <span class="local-timestamp" data-timestamp="{{ format_utc_iso(waiver.waiver_end_date) }}"></span>
                       </td>
                       <td>{{ waiver.reason or '-' }}</td>
                       <td>

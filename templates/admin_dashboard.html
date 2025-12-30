@@ -105,7 +105,7 @@
                     </div>
                     <span class="text-secondary fw-medium">Next Payroll</span>
                 </div>
-                <h5 class="fw-bold mb-1 text-dark local-timestamp" data-format="MMM D" data-timestamp="{{ next_payroll_date.isoformat() }}">
+                <h5 class="fw-bold mb-1 text-dark local-timestamp" data-format="MMM D" data-timestamp="{{ format_utc_iso(next_payroll_date) }}">
                     {{ next_payroll_date.strftime('%b %d') }}
                 </h5>
                 <div class="text-secondary small">Est: ${{ "{:,.0f}".format(total_payroll_estimate) }}</div>
@@ -241,7 +241,7 @@
                                 <small class="text-muted"><i class="bi bi-signpost me-1"></i>{{ pass.reason }}</small>
                                 <br>
                                 <small class="text-muted">
-                                    <span class="local-timestamp" data-timestamp="{{ pass.request_time.isoformat() }}Z"></span>
+                                    <span class="local-timestamp" data-timestamp="{{ format_utc_iso(pass.request_time) }}"></span>
                                 </small>
                             </div>
                             <div>
@@ -275,7 +275,7 @@
                                 {% endif %}
                                 <br>
                                 <small class="text-muted">
-                                    <span class="local-timestamp" data-timestamp="{{ claim.filed_date.isoformat() }}Z"></span>
+                                    <span class="local-timestamp" data-timestamp="{{ format_utc_iso(claim.filed_date) }}"></span>
                                 </small>
                             </div>
                             <div>
@@ -331,7 +331,7 @@
                                                 <div class="fw-medium text-dark">
                                                     {{ student.full_name if student else 'Unknown' }}
                                                 </div>
-                                                <div class="small text-secondary local-timestamp" data-timestamp="{{ tx.timestamp.isoformat() }}">
+                                                <div class="small text-secondary local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}">
                                                     {{ tx.timestamp.strftime('%H:%M') }}
                                                 </div>
                                             </div>
@@ -381,7 +381,7 @@
                             <div class="flex-grow-1">
                                 <div class="d-flex justify-content-between">
                                     <span class="fw-medium text-dark">{{ log.student_name }}</span>
-                                    <span class="small text-secondary local-timestamp" data-timestamp="{{ log.timestamp.isoformat() }}">
+                                    <span class="small text-secondary local-timestamp" data-timestamp="{{ format_utc_iso(log.timestamp) }}">
                                         {{ log.timestamp.strftime('%H:%M') }}
                                     </span>
                                 </div>
