@@ -101,9 +101,11 @@ classroom-economy/
 ├── payroll.py                # Payroll calculation logic
 ├── attendance.py             # Attendance tracking logic
 ├── hash_utils.py             # Cryptographic utilities
-├── create_admin.py           # CLI tool for creating admin accounts
-├── manage_invites.py         # Admin invite management CLI
-├── seed_dummy_students.py    # Test data seeding utility
+├── scripts/create_admin.py   # CLI tool for creating admin accounts
+├── scripts/manage_invites.py # Admin invite management CLI
+├── scripts/seed_dummy_students.py # Test data seeding utility
+├── deploy/                   # Deployment configuration (nginx, etc.)
+├── tools/                    # Editor/tooling helpers
 │
 ├── app/                      # Main application package
 │   ├── __init__.py           # Application factory (create_app)
@@ -562,13 +564,13 @@ flask run
 
 **Seeding Test Data:**
 ```bash
-python seed_dummy_students.py   # Creates sample students
+python scripts/seed_dummy_students.py   # Creates sample students
 ```
 
 **Creating Admin Accounts:**
 ```bash
-python create_admin.py          # Interactive CLI
-python manage_invites.py        # Manage invite codes
+python scripts/create_admin.py          # Interactive CLI
+python scripts/manage_invites.py        # Manage invite codes
 ```
 
 ### Deployment
@@ -623,7 +625,7 @@ gunicorn --bind=0.0.0.0 --timeout 600 wsgi:app
 - **Transaction voids:** Use `is_void` flag, don't delete transactions
 - **Migration conflicts:** Review migrations carefully before applying
 - **Session data:** Student/admin sessions are separate, can't mix
-- **CSV uploads:** Use `student_upload_template.csv` format
+- **CSV uploads:** Use `app/resources/student_upload_template.csv` format
 
 ---
 
@@ -711,10 +713,10 @@ flask create-sysadmin              # Create system admin
 pytest tests/ -v                   # Run tests
 
 # Database
-python seed_dummy_students.py      # Seed test data
+python scripts/seed_dummy_students.py      # Seed test data
 python scripts/dev-utilities/diagnose_migrations.py  # Check migration chain
-python create_admin.py             # Create admin account
-python manage_invites.py           # Manage invite codes
+python scripts/create_admin.py             # Create admin account
+python scripts/manage_invites.py           # Manage invite codes
 
 # Deployment
 gunicorn --bind=0.0.0.0 --timeout 600 wsgi:app

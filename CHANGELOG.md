@@ -8,7 +8,23 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+- **Content Security Policy** - Restored `'unsafe-eval'` directive to `script-src` CSP policy as it is required by passwordless.dev library's minified build (uses `new Function()` internally)
+- **Passkey Authentication** - Fixed environment variables not loading by specifying explicit path to `.env` file in `load_dotenv()` call - ensures environment is loaded regardless of gunicorn working directory
+- **Passkey Authentication** - Fixed token destructuring in `signinWithDiscoverable()` to properly handle error responses from passwordless.dev SDK
+- **Deployment** - Added verification steps to confirm environment variables are properly written to `.env` and loaded by systemd service
+
 ### Added
+- **Diagnostic Logging** - Temporary logging in app initialization to verify passwordless.dev API keys are loaded at runtime
+
+## [1.5.0] - 2025-12-29
+
+### Added
+- **Attendance Issue Reporting** - Students can now report issues with specific attendance/tap events (clock in/out records) directly from the Work & Pay page
+  - New route `/help-support/tap-event/<id>/report` for reporting attendance record issues
+  - Report buttons added to all tap event tables in Work & Pay > Attendance Record tab
+  - Uses same issue resolution workflow as transaction reporting
+  - Students can report up to 20 most recent tap events per block
 - **Issue Resolution & Escalation System** - Structured, teacher-mediated issue handling system
   - **Student Features**:
     - New Help & Support interface with 3 tabs: Knowledge Base, Report an Issue, My Issues
@@ -51,12 +67,39 @@ and this project follows semantic versioning principles.
     - Teacher: `/admin/issues`, `/admin/issues/<id>`, `/admin/issues/<id>/resolve`, `/admin/issues/<id>/escalate`
 
 ### Changed
+- Improved `flask create-sysadmin` command to display TOTP secret and QR code during account creation
+  - Shows scannable QR code in terminal for easy authenticator app setup
+  - Displays plaintext secret for manual entry backup
+  - Auto-clears terminal after user confirmation for security
+  - Secret remains encrypted in database after initial display
+- Issue resolution UI refresh and workflow refinements
+- Issue management and reporting refactor
+- Standardized UTC timestamp formatting
 
 ### Fixed
+- **Transaction Issue Reporting** - Added report buttons to all transaction tables in Banking/Finances page (Checking and Savings tabs), allowing students to report issues on any visible transaction (up to 50 most recent), not just the 5 shown on dashboard
+- **Issue Resolution Display** - Fixed `developer_resolved` status showing as "Escalated" instead of "Resolved by Developer" in teacher view
+- **Issue Context Snapshot** - Fixed incorrect balance calculation in context_snapshot by using Student model's `get_checking_balance()` and `get_savings_balance()` methods instead of non-existent `get_balances()` function
+- **Passkey Authentication** - Fixed missing username parameter in passkey authentication start request causing 500 error
+- **Passkey Registration** - Fixed credential ID extraction from passwordless.dev SDK response by using correct destructuring pattern `{ token, error }`
+- **Content Security Policy** - Added `https://static.cloudflareinsights.com` to `connect-src` directive to allow Cloudflare analytics
+- **Content Security Policy** - Added `worker-src 'self' blob:` directive to allow Web Workers used by passwordless.dev library
+- Fixed `time.tzset()` Windows compatibility issue in wsgi.py - now only calls tzset() on Unix-like systems
+- Fixed admin signup crash when using SQLite - handles datetime fields stored as strings
+- System Admin announcements form `ValueError` by adding a custom `coerce` for the `target_teacher` field
 
 ### Security
 - Enhanced privacy protection in issue resolution system through opaque student references
 - Teacher-controlled data disclosure to sysadmins (optional class name sharing)
+- **Content Security Policy** - Removed unnecessary `'unsafe-eval'` directive from `script-src` to strengthen XSS protection (passwordless.dev library does not require dynamic code execution)
+
+### Documentation
+- Reorganized documentation structure for improved navigation
+
+### Dependencies
+- Bump `requests` from 2.32.4 to 2.32.5
+- Bump `markdown` from 3.7 to 3.10
+- Bump `webfactory/ssh-agent` from 0.9.0 to 0.9.1
 
 ## [1.4.0] - 2025-12-27
 
@@ -230,36 +273,6 @@ and this project follows semantic versioning principles.
   - Strengths: Excellent CSRF protection, SQL injection prevention, XSS mitigation, PII encryption, multi-tenancy isolation
   - Recommendations: Enable SSH host key verification, update cryptography package, improve secrets management
   - Documentation: See `docs/security/COMPREHENSIVE_ATTACK_SURFACE_AUDIT_2025.md` for complete report
-- **Fixed Username Enumeration Vulnerability in Passkey Authentication** - Generic error messages prevent attackers from discovering valid usernames
-  - Changed "No passkeys registered" to generic "Invalid credentials" error
-  - Prevents reconnaissance attacks to enumerate valid accounts
-- **Passkey Endpoints Allowed Through Maintenance Mode** - System admin and teacher passkey authentication endpoints now bypass maintenance mode
-  - Allows administrators to authenticate during maintenance windows
-  - Matches existing behavior for standard login endpoints
-
-### Changed
-- **Improved Store Management Overview Page** - Replaced "Active Store Items" section with more actionable information
-  - Now displays "Pending Redemption Requests" table showing items awaiting teacher approval
-  - Shows "Recent Purchases" table with the 10 most recent student purchases
-  - Each pending redemption includes student name, item, request time, details, and quick review link
-  - Recent purchases show student name, item, price, purchase time, and current status
-  - Fixed markdown rendering issue in item descriptions (was showing raw "####" markdown syntax)
-  - More useful for teachers to see what requires their attention rather than what's already in their store
-
-### Fixed
-- **Service Worker Cache Errors** - Fixed persistent browser console errors from Service Worker
-  - Stopped caching `chrome-extension://` URLs (was causing repeated errors)
-  - Stopped caching POST/PUT/DELETE requests (HTTP method not cacheable)
-  - Removed non-existent `brand-logo.svg` from static assets cache list
-  - Bumped cache version to v7 to force fresh cache on next page load
-  - Created `shouldCache()` helper function to centralize cache eligibility logic
-- **Passkey Registration ReferenceError** - Fixed JavaScript error preventing passkey registration
-  - Variable was renamed from `credId` to `credentialId` but one reference wasn't updated
-  - Would have caused all passkey registration attempts to fail with `ReferenceError: credId is not defined`
-  - Caught by AI code review tools (Copilot and Gemini)
-- **Broken Service Worker cacheFirst() Function** - Fixed corrupted function from bad merge
-  - Function had duplicate code blocks and missing logic
-  - Restored proper cache-first strategy with network fallback
 
 ## [1.2.1] - 2025-12-21
 

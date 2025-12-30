@@ -10,7 +10,7 @@ git clone <repository-url>
 cd classroom-economy
 
 # Run the setup script
-./setup_jules.sh
+./scripts/setup_jules.sh
 ```
 
 The setup script will:
@@ -166,7 +166,7 @@ Follow the prompts and scan the QR code with your authenticator app (Google Auth
 
 ### 7. (Optional) Seed Test Data
 ```bash
-python seed_dummy_students.py
+python scripts/seed_dummy_students.py
 ```
 
 ## Running the Application
@@ -261,7 +261,7 @@ cp classroom_economy_backup_20251204.db classroom_economy.db
 - If stuck, see migration troubleshooting in `/docs/DEPLOYMENT.md`
 
 ### Permission Errors
-- Ensure setup script is executable: `chmod +x setup_jules.sh`
+- Ensure setup script is executable: `chmod +x scripts/setup_jules.sh`
 - Check file ownership: `ls -la .env`
 
 ### Python Version Issues

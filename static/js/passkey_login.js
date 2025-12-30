@@ -177,6 +177,7 @@ function setupPasskeyAuthFlow({
             const startResponse = await fetch(startUrl, {
                 method: 'POST',
                 headers,
+                body: JSON.stringify({ username })
             });
 
             const options = await startResponse.json();
@@ -189,7 +190,12 @@ function setupPasskeyAuthFlow({
             }
 
             const client = new Passwordless.Client({ apiUrl: 'https://v4.passwordless.dev' });
-            const token = await client.signinWithDiscoverable(options);
+            const { token, error } = await client.signinWithDiscoverable(options);
+
+            if (error) {
+                console.error('Passwordless.dev error:', error);
+                throw new Error(error.title || error.detail || 'Authentication failed');
+            }
 
             if (!token) {
                 throw new Error('Authentication was cancelled or failed');

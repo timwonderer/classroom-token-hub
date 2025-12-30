@@ -1,4 +1,5 @@
 venv/
+.venv/
 __pycache__/
 *.pyc
 instance/
@@ -12,3 +13,4 @@ GPT_instruction.md
 instance/
 local.db
 .vscode/
+.claude/settings.local.json

@@ -51,24 +51,14 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
         'ip_address': get_real_ip() if request else None,
     }
 
-    # Get current balances from StudentBlock
-    student_block = StudentBlock.query.filter_by(
-        student_id=student.id,
-        join_code=join_code
-    ).first()
-
-    if student_block:
-        snapshot['balances'] = {
-            'checking': student_block.checking_balance or 0,
-            'savings': student_block.savings_balance or 0,
-            'total': (student_block.checking_balance or 0) + (student_block.savings_balance or 0)
-        }
-    else:
-        snapshot['balances'] = {
-            'checking': 0,
-            'savings': 0,
-            'total': 0
-        }
+    # Get current balances (scoped by join_code)
+    checking_balance = student.get_checking_balance(join_code=join_code)
+    savings_balance = student.get_savings_balance(join_code=join_code)
+    snapshot['balances'] = {
+        'checking': checking_balance,
+        'savings': savings_balance,
+        'total': checking_balance + savings_balance
+    }
 
     # If transaction-specific, include transaction details
     if related_transaction_id:

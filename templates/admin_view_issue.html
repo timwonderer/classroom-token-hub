@@ -98,7 +98,7 @@
             <!-- Related Transaction (if applicable) -->
             {% if issue.related_transaction_id %}
             <div class="card shadow-sm mb-4">
-                <div class="card-header bg-info text-white">
+                <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
                         <i class="bi bi-receipt me-2"></i>Related Transaction
                     </h5>
@@ -145,7 +145,7 @@
             <!-- Context Snapshot -->
             {% if issue.context_snapshot %}
             <div class="card shadow-sm mb-4">
-                <div class="card-header">
+                <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
                         <i class="bi bi-info-circle me-2"></i>System Context
                     </h5>
@@ -311,9 +311,9 @@
                     </p>
                 </div>
             </div>
-            {% elif issue.status in ['elevated', 'developer_review', 'developer_resolved'] %}
-            <div class="card shadow-sm mb-4 border-info">
-                <div class="card-header bg-info text-white">
+            {% elif issue.status == 'developer_resolved' %}
+            <div class="card shadow-sm mb-4 border-success">
+                <div class="card-header bg-success text-white">
                     <h5 class="mb-0">
                         <i class="bi bi-check-circle me-2"></i>Resolved by Developer
                     </h5>
@@ -376,7 +376,7 @@
 
             <!-- Status History -->
             <div class="card shadow-sm">
-                <div class="card-header">
+                <div class="card-header bg-primary text-white">
                     <h6 class="mb-0">
                         <i class="bi bi-clock-history me-2"></i>Status History
                     </h6>

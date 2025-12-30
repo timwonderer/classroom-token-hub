@@ -909,8 +909,15 @@ def signup():
             flash(msg, "error")
             return redirect(url_for('admin.signup'))
         if code_row.expires_at:
+            # Handle both datetime objects and strings (SQLite quirk)
+            if isinstance(code_row.expires_at, str):
+                from dateutil import parser
+                expires_dt = parser.parse(code_row.expires_at)
+            else:
+                expires_dt = code_row.expires_at
+
             # Database stores UTC times as naive, make them aware for comparison
-            expires_aware = code_row.expires_at.replace(tzinfo=timezone.utc) if code_row.expires_at.tzinfo is None else code_row.expires_at
+            expires_aware = expires_dt.replace(tzinfo=timezone.utc) if expires_dt.tzinfo is None else expires_dt
             if expires_aware < datetime.now(timezone.utc):
                 current_app.logger.warning(f"🛑 Admin signup failed: invite code expired")
                 msg = "Invite code expired."
