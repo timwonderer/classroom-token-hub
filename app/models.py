@@ -1505,11 +1505,10 @@ class TeacherOnboarding(db.Model):
     Tracks onboarding progress for teachers.
 
     New teachers are guided through an initial setup process that helps them:
-    1. Understand the platform features
-    2. Configure feature toggles
-    3. Set up their first period/block
-    4. Upload their roster
-    5. Configure basic settings (payroll, rent, etc.)
+    1. Welcome & Overview
+    2. Upload roster (creates periods automatically)
+    3. Select features (payroll mandatory)
+    4. Configure feature settings
 
     Once completed, teachers can access the regular dashboard.
     Onboarding can be skipped but the flag is preserved for potential re-entry.
@@ -1524,10 +1523,10 @@ class TeacherOnboarding(db.Model):
 
     # Step tracking (for resume functionality)
     current_step = db.Column(db.Integer, default=1, nullable=False)
-    total_steps = db.Column(db.Integer, default=5, nullable=False)
+    total_steps = db.Column(db.Integer, default=4, nullable=False)
 
     # Detailed step completion tracking (JSON for flexibility)
-    # Format: {"welcome": true, "features": true, "periods": false, "roster": false, "settings": false}
+    # Format: {"welcome": true, "roster": false, "features": false, "settings": false}
     steps_completed = db.Column(db.JSON, default=dict, nullable=False)
 
     # Timestamps
