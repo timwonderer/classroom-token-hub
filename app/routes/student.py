@@ -1567,6 +1567,14 @@ def apply_savings_interest(student, annual_rate=0.045):
 @login_required
 def insurance_marketplace():
     """Insurance marketplace - browse and manage policies."""
+    def normalize_to_utc(dt):
+        """Ensure datetime objects are timezone-aware in UTC for safe comparisons."""
+        if not dt:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+
     # Check if insurance feature is enabled
     if not is_feature_enabled('insurance'):
         flash("The insurance feature is currently disabled for your class.", "warning")
@@ -1581,6 +1589,7 @@ def insurance_marketplace():
         return redirect(url_for('student.dashboard'))
 
     teacher_id = context['teacher_id']
+    now_utc = datetime.now(timezone.utc)
 
     # FIX: Get student's active policies scoped to current class only
     my_policies = StudentInsurance.query.join(
@@ -1622,7 +1631,8 @@ def insurance_marketplace():
             ).order_by(StudentInsurance.cancel_date.desc()).first()
 
             if cancelled and cancelled.cancel_date:
-                days_since_cancel = (datetime.now(timezone.utc) - cancelled.cancel_date).days
+                cancel_dt = normalize_to_utc(cancelled.cancel_date)
+                days_since_cancel = (now_utc - cancel_dt).days
                 if days_since_cancel < policy.repurchase_wait_days:
                     can_purchase[policy.id] = False
                     repurchase_blocks[policy.id] = policy.repurchase_wait_days - days_since_cancel
@@ -1656,6 +1666,9 @@ def insurance_marketplace():
     # Check which tier the student has already selected from
     enrolled_tiers = set()
     for enrollment in my_policies:
+        # Normalize dates for safe comparisons in templates
+        enrollment.coverage_start_date = normalize_to_utc(enrollment.coverage_start_date)
+        enrollment.cancel_date = normalize_to_utc(enrollment.cancel_date)
         if enrollment.policy.tier_category_id:
             enrolled_tiers.add(enrollment.policy.tier_category_id)
 
@@ -1668,7 +1681,7 @@ def insurance_marketplace():
                           can_purchase=can_purchase,
                           repurchase_blocks=repurchase_blocks,
                           my_claims=my_claims,
-                          now=datetime.now(timezone.utc))
+                          now=now_utc)
 
 
 @student_bp.route('/insurance/purchase/<int:policy_id>', methods=['POST'])
