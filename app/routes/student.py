@@ -46,6 +46,16 @@ from payroll import get_pay_rate_for_block
 # Create blueprint
 student_bp = Blueprint('student', __name__, url_prefix='/student')
 
+# -------------------- DATETIME HELPERS --------------------
+
+def normalize_to_utc(dt):
+    """Ensure datetime objects are timezone-aware in UTC for safe comparisons."""
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
 
 # -------------------- PERIOD SELECTION HELPERS --------------------
 
@@ -1567,14 +1577,6 @@ def apply_savings_interest(student, annual_rate=0.045):
 @login_required
 def insurance_marketplace():
     """Insurance marketplace - browse and manage policies."""
-    def normalize_to_utc(dt):
-        """Ensure datetime objects are timezone-aware in UTC for safe comparisons."""
-        if not dt:
-            return None
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
-
     # Check if insurance feature is enabled
     if not is_feature_enabled('insurance'):
         flash("The insurance feature is currently disabled for your class.", "warning")
@@ -1858,9 +1860,15 @@ def file_claim(policy_id):
         period_end = next_month.replace(day=1) - timedelta(seconds=1)
         return period_start, period_end
 
+    # Normalize coverage dates for safe comparisons
+    enrollment.coverage_start_date = normalize_to_utc(enrollment.coverage_start_date)
+    enrollment.cancel_date = normalize_to_utc(enrollment.cancel_date)
+    now_utc = datetime.now(timezone.utc)
+
     # Check if coverage has started
-    if not enrollment.coverage_start_date or enrollment.coverage_start_date > datetime.now(timezone.utc):
-        errors.append(f"Coverage has not started yet. Please wait until {enrollment.coverage_start_date.strftime('%B %d, %Y') if enrollment.coverage_start_date else 'coverage starts'}.")
+    if not enrollment.coverage_start_date or enrollment.coverage_start_date > now_utc:
+        wait_until = enrollment.coverage_start_date.strftime('%B %d, %Y') if enrollment.coverage_start_date else 'coverage starts'
+        errors.append(f"Coverage has not started yet. Please wait until {wait_until}.")
 
     # Check if payment is current
     if not enrollment.payment_current:
@@ -1897,7 +1905,7 @@ def file_claim(policy_id):
         claimed_tx_subq = db.session.query(InsuranceClaim.transaction_id).filter(
             InsuranceClaim.transaction_id.isnot(None)
         )
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=policy.claim_time_limit_days)
+        cutoff_date = now_utc - timedelta(days=policy.claim_time_limit_days)
         tx_query = (
             Transaction.query
             .filter(Transaction.student_id == student.id)
@@ -1956,14 +1964,14 @@ def file_claim(policy_id):
                 flash("This transaction already has a claim. Each transaction can only be claimed once.", "danger")
                 return redirect(url_for('student.file_claim', policy_id=policy_id))
 
-            incident_date_value = selected_transaction.timestamp
+            incident_date_value = normalize_to_utc(selected_transaction.timestamp)
             claim_amount_value = abs(selected_transaction.amount)
             transaction_id_value = selected_transaction.id
 
-            days_since_incident = (datetime.now(timezone.utc) - incident_date_value).days
+            days_since_incident = (now_utc - incident_date_value).days
         else:
-            incident_date_value = datetime.combine(form.incident_date.data, datetime.min.time())
-            days_since_incident = (datetime.now(timezone.utc) - incident_date_value).days
+            incident_date_value = normalize_to_utc(datetime.combine(form.incident_date.data, datetime.min.time()))
+            days_since_incident = (now_utc - incident_date_value).days
 
         if policy.claim_type == 'non_monetary':
             if not form.claim_item.data:
@@ -2049,12 +2057,17 @@ def view_policy(enrollment_id):
         InsuranceClaim.filed_date.desc()
     ).all()
 
+    # Normalize dates for safe comparisons in template
+    enrollment.coverage_start_date = normalize_to_utc(enrollment.coverage_start_date)
+    enrollment.cancel_date = normalize_to_utc(enrollment.cancel_date)
+    now_utc = datetime.now(timezone.utc)
+
     return render_template('student_view_policy.html',
                           student=student,
                           enrollment=enrollment,
                           policy=enrollment.policy,
                           claims=claims,
-                          now=datetime.now(timezone.utc))
+                          now=now_utc)
 
 
 # -------------------- SHOPPING --------------------
