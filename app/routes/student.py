@@ -1577,6 +1577,14 @@ def apply_savings_interest(student, annual_rate=0.045):
 @login_required
 def insurance_marketplace():
     """Insurance marketplace - browse and manage policies."""
+    def normalize_to_utc(dt):
+        """Ensure datetime objects are timezone-aware in UTC for safe comparisons."""
+        if not dt:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+
     # Check if insurance feature is enabled
     if not is_feature_enabled('insurance'):
         flash("The insurance feature is currently disabled for your class.", "warning")
