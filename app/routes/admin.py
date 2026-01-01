@@ -6884,6 +6884,16 @@ def onboarding_status():
             })
 
         # Get the TeacherBlock to retrieve the block identifier
+        # If join_code is not set in session, try to use the teacher's first TeacherBlock
+        if not join_code:
+            first_teacher_block = TeacherBlock.query.filter_by(
+                teacher_id=admin_id
+            ).first()
+            if first_teacher_block:
+                join_code = first_teacher_block.join_code
+                # Set it in session for future requests
+                session['current_join_code'] = join_code
+
         teacher_block = TeacherBlock.query.filter_by(
             teacher_id=admin_id,
             join_code=join_code
