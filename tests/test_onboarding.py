@@ -275,4 +275,5 @@ def test_onboarding_status_endpoint_no_class_period(client):
     
     assert data['status'] == 'success'
     assert data['dismissed'] is False
+    assert data['no_class_period'] is True
     assert data['completion'] == {}

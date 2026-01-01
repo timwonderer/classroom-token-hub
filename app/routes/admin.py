@@ -6890,10 +6890,11 @@ def onboarding_status():
         ).first()
 
         if not teacher_block:
-            # No class period selected yet - return empty completion
+            # No class period selected yet - indicate this so frontend can show appropriate message
             return jsonify({
                 'status': 'success',
                 'dismissed': False,
+                'no_class_period': True,
                 'completion': {}
             })
 
@@ -6959,6 +6960,7 @@ def onboarding_status():
         return jsonify({
             'status': 'success',
             'dismissed': False,
+            'no_class_period': False,
             'completion': completion
         })
 
