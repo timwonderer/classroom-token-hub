@@ -6888,7 +6888,7 @@ def onboarding_status():
         if not join_code:
             first_teacher_block = TeacherBlock.query.filter_by(
                 teacher_id=admin_id
-            ).first()
+            ).order_by(TeacherBlock.id).first()
             if first_teacher_block:
                 join_code = first_teacher_block.join_code
                 # Set it in session for future requests
@@ -6931,7 +6931,6 @@ def onboarding_status():
 
         # Roster: has at least one student in ANY class OR marked complete
         # Use StudentTeacher to get all students for this teacher
-        from app.models import StudentTeacher
         student_count = StudentTeacher.query.filter_by(admin_id=admin_id).count()
         completion['roster'] = student_count > 0 or onboarding_record.is_widget_task_completed('roster')
 
@@ -6940,9 +6939,7 @@ def onboarding_status():
         completion['payroll'] = payroll_settings is not None or onboarding_record.is_widget_task_completed('payroll')
 
         # Store: has at least one store item for ANY block OR marked complete
-        store_items = 0
-        if all_blocks:
-            store_items = StoreItemBlock.query.filter(StoreItemBlock.block.in_(all_blocks)).count()
+        store_items = StoreItem.query.filter_by(teacher_id=admin_id).count()
         completion['store'] = store_items > 0 or onboarding_record.is_widget_task_completed('store')
 
         # Banking: has banking settings configured for ANY block OR marked complete
@@ -6954,9 +6951,7 @@ def onboarding_status():
         completion['rent'] = rent_settings is not None or onboarding_record.is_widget_task_completed('rent')
 
         # Insurance: has at least one insurance policy for ANY block OR marked complete
-        insurance_policies = 0
-        if all_blocks:
-            insurance_policies = InsurancePolicyBlock.query.filter(InsurancePolicyBlock.block.in_(all_blocks)).count()
+        insurance_policies = InsurancePolicy.query.filter_by(teacher_id=admin_id).count()
         completion['insurance'] = insurance_policies > 0 or onboarding_record.is_widget_task_completed('insurance')
 
         # Hall pass: check if hall pass settings exist for ANY block OR marked complete
