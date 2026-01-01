@@ -152,6 +152,31 @@
                             <div class="markdown-content">
                                 {{ content | safe }}
                             </div>
+
+                            <!-- Related Articles -->
+                            {% if related and related|length > 0 %}
+                            <div class="related-articles mt-5 pt-4 border-top">
+                                <h4 class="mb-3">
+                                    <span class="material-symbols-outlined" style="vertical-align: middle;">bookmark</span>
+                                    Related Articles
+                                </h4>
+                                <div class="row g-3">
+                                    {% for article in related %}
+                                    <div class="col-md-6">
+                                        <div class="card h-100 border-primary border-opacity-25">
+                                            <div class="card-body">
+                                                <h6 class="card-title">
+                                                    <a href="{{ article.url }}" class="text-decoration-none stretched-link">
+                                                        {{ article.title }}
+                                                    </a>
+                                                </h6>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
 
                         <!-- Table of Contents (if present) -->

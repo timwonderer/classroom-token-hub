@@ -158,6 +158,50 @@ def build_breadcrumbs(category, page=None):
     return breadcrumbs
 
 
+def get_related_articles(related_paths):
+    """
+    Get metadata for related article paths.
+
+    Args:
+        related_paths: List of related doc paths or string
+
+    Returns:
+        list: List of dicts with 'title' and 'url' for each related article
+    """
+    if not related_paths:
+        return []
+
+    # Handle string (single path) or list
+    if isinstance(related_paths, str):
+        related_paths = [related_paths]
+
+    articles = []
+    for path in related_paths:
+        try:
+            # Remove leading slash if present
+            path = path.lstrip('/')
+
+            # Try to find the file
+            doc_file = (DOCS_ROOT / path).with_suffix('.md')
+
+            if not doc_file.exists():
+                current_app.logger.warning(f"Related article not found: {path}")
+                continue
+
+            # Get metadata
+            metadata = get_doc_metadata(doc_file)
+            if metadata:
+                articles.append({
+                    'title': metadata.get('title', path),
+                    'url': f'/docs/{path}'
+                })
+        except Exception as e:
+            current_app.logger.warning(f"Error loading related article {path}: {e}")
+            continue
+
+    return articles
+
+
 # -------------------- ROUTES --------------------
 
 @docs_bp.route('/')
@@ -211,6 +255,10 @@ def view_doc(doc_path):
         # Build breadcrumbs
         breadcrumbs = build_breadcrumbs(category, page)
 
+        # Get related articles
+        related_paths = metadata.get('related', [])
+        related_articles = get_related_articles(related_paths)
+
         # Get user role for filtering
         user_role = None
         if session.get('admin_id'):
@@ -229,6 +277,7 @@ def view_doc(doc_path):
             current_category=category,
             breadcrumbs=breadcrumbs,
             roles=metadata.get('roles', []),
+            related=related_articles,
             user_role=user_role,
             doc_path=doc_path,
         )
