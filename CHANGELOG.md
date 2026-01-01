@@ -16,6 +16,14 @@ and this project follows semantic versioning principles.
   - Improved navigation and file organization
 
 ### Fixed
+- **Getting Started Widget** - Fixed onboarding widget state persistence issues
+  - Widget state now persists to database instead of browser localStorage
+  - Widget dismissal and task completion now sync across logins and devices
+  - Skipped tasks are now properly marked as complete in the widget
+  - Added `widget_tasks_completed`, `widget_dismissed`, and `widget_dismissed_at` fields to `TeacherOnboarding` model
+  - Updated `/admin/onboarding/status` endpoint to check both actual setup AND manually skipped tasks
+  - Added `/admin/onboarding/dismiss-widget` endpoint to persist widget dismissal
+  - Widget state is per-teacher (not per-block) for consistent onboarding experience
 - **Multi-Tenancy Violation** - Fixed critical bug where `HallPassSettings` records were created without `teacher_id`, violating NOT NULL constraint and breaking multi-tenancy isolation
   - Fixed `/api/hall-pass/settings` endpoint to scope settings by `teacher_id` from session
   - Fixed hall pass creation in `/tap` endpoint to retrieve `teacher_id` from `join_code` via `TeacherBlock` lookup
