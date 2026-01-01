@@ -7157,6 +7157,10 @@ def api_economy_validate(feature):
             'frequency_type': data.get('frequency_type', data.get('frequency', 'monthly')),
             'custom_frequency_value': data.get('custom_frequency_value'),
             'custom_frequency_unit': data.get('custom_frequency_unit'),
+            # Insurance-specific parameters for coverage and period cap validation
+            'max_claim_amount': data.get('max_claim_amount'),
+            'max_payout_per_period': data.get('max_payout_per_period'),
+            'claim_type': data.get('claim_type'),
         }
 
         warnings, recommendations, ratio = checker.validate_feature_value(
