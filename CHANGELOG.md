@@ -6,7 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows semantic versioning principles.
 
 
-## [Unreleased]
+## [1.6.0] - 2026-01-01
+
+### Added
+- **Documentation Organization** - Improved repository structure and documentation consistency
+  - Consolidated duplicate script files into scripts/ directory
+  - Standardized file paths and references across documentation
+  - Removed obsolete root-level duplicates
+  - Improved navigation and file organization
 
 ### Fixed
 - **Multi-Tenancy Violation** - Fixed critical bug where `HallPassSettings` records were created without `teacher_id`, violating NOT NULL constraint and breaking multi-tenancy isolation
@@ -17,9 +24,17 @@ and this project follows semantic versioning principles.
 - **Passkey Authentication** - Fixed environment variables not loading by specifying explicit path to `.env` file in `load_dotenv()` call - ensures environment is loaded regardless of gunicorn working directory
 - **Passkey Authentication** - Fixed token destructuring in `signinWithDiscoverable()` to properly handle error responses from passwordless.dev SDK
 - **Deployment** - Added verification steps to confirm environment variables are properly written to `.env` and loaded by systemd service
+- **File Organization** - Fixed inconsistent paths for student upload template and script references
 
-### Added
-- **Diagnostic Logging** - Temporary logging in app initialization to verify passwordless.dev API keys are loaded at runtime
+### Changed
+- Consolidated duplicate scripts into scripts/ directory (seed_dummy_students.py, create_admin.py, etc.)
+- Removed duplicate nginx configuration file from root
+- Updated documentation to reference correct file paths
+
+### Documentation
+- Improved repository organization and file structure
+- Updated path references throughout documentation
+- Removed obsolete duplicate files
 
 ## [1.5.0] - 2025-12-29
 
