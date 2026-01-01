@@ -524,12 +524,14 @@ def create_app():
     from app.routes.system_admin import sysadmin_bp
     from app.routes.student import student_bp
     from app.routes.admin import admin_bp
+    from app.routes.docs import docs_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(sysadmin_bp)
     app.register_blueprint(student_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(docs_bp)
 
     # -------------------- SECURITY HEADERS --------------------
     @app.after_request
