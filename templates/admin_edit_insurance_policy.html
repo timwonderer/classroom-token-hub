@@ -65,7 +65,7 @@
             </div>
             <div class="mb-0">
               {{ form.claim_type.label(class="form-label fw-bold") }}
-              {{ form.claim_type(class="form-select", id="edit_claim_type") }}
+              {{ form.claim_type(class="form-select", id="edit_claim_type", **{'data-economy-trigger': '#edit_premium'}) }}
               <div class="alert alert-light border mt-2 mb-0">
                 <small>
                   <strong>Transactions-based:</strong> Link claims to a specific student transaction.<br>
@@ -91,7 +91,12 @@
                 {{ form.premium.label(class="form-label fw-bold") }}
                 <div class="input-group">
                   <span class="input-group-text">$</span>
-                  {{ form.premium(class="form-control", placeholder="0.00", **{'data-economy-validate': 'insurance'}) }}
+                  {{ form.premium(class="form-control", placeholder="0.00", id="edit_premium", **{
+                    'data-economy-validate': 'insurance',
+                    'data-economy-coverage-target': '#edit_max_claim_amount',
+                    'data-economy-period-target': '#edit_max_payout_per_period',
+                    'data-economy-claim-type-target': '#edit_claim_type'
+                  }) }}
                 </div>
                 <small class="text-muted">Cost per cycle</small>
               </div>
@@ -172,7 +177,7 @@
                     {{ form.max_claim_amount.label(class="form-label fw-bold") }}
                     <div class="input-group">
                       <span class="input-group-text">$</span>
-                      {{ form.max_claim_amount(class="form-control", placeholder="0.00") }}
+                      {{ form.max_claim_amount(class="form-control", placeholder="0.00", id="edit_max_claim_amount", **{'data-economy-trigger': '#edit_premium'}) }}
                     </div>
                     <small class="text-muted">Max payout per claim (0 = ∞)</small>
                   </div>
@@ -180,7 +185,7 @@
                     {{ form.max_payout_per_period.label(class="form-label fw-bold") }}
                     <div class="input-group">
                       <span class="input-group-text">$</span>
-                      {{ form.max_payout_per_period(class="form-control", placeholder="0.00") }}
+                      {{ form.max_payout_per_period(class="form-control", placeholder="0.00", id="edit_max_payout_per_period", **{'data-economy-trigger': '#edit_premium'}) }}
                     </div>
                     <small class="text-muted">Max total payout per period (0 = ∞)</small>
                   </div>
@@ -480,7 +485,7 @@
               <li><strong>Price with CWI in mind:</strong> <span class="tip-pricing">Keep premium costs between 5-12% of weekly expected income (CWI) to ensure affordability</span></li>
               <li><strong>Waiting periods:</strong> 3-7 days prevents immediate claims after purchase while remaining student-friendly</li>
               <li><strong>Bundle discounts:</strong> 10-20% off encourages students to buy multiple policies together</li>
-              <li><strong>Balance coverage:</strong> Set max payouts 2-4x higher than premiums to ensure claims feel worthwhile</li>
+              <li><strong>Balance coverage:</strong> Set max claim amounts 3-5x the premium, and period caps 6-10x the premium</li>
               <li><strong>Enable autopay:</strong> Auto-deduction reduces payment friction and improves participation rates</li>
               <li><strong>Monitor claims:</strong> Review claim patterns monthly to adjust coverage limits and identify abuse</li>
             </ul>

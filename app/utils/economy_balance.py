@@ -91,6 +91,11 @@ class EconomyBalanceChecker:
     INSURANCE_MAX_RATIO = 0.12
     INSURANCE_DEFAULT_RATIO = 0.08
 
+    COVERAGE_MIN_MULTIPLIER = 3
+    COVERAGE_MAX_MULTIPLIER = 5
+    PERIOD_MIN_MULTIPLIER = 6
+    PERIOD_MAX_MULTIPLIER = 10
+
     FINE_MIN_RATIO = 0.05
     FINE_MAX_RATIO = 0.15
     FINE_DEFAULT_RATIO = 0.10
@@ -155,6 +160,26 @@ class EconomyBalanceChecker:
             return value * (7 / freq_value)
 
         return value
+
+    def _evaluate_insurance_limit_state(
+        self,
+        value: Optional[float],
+        min_value: float,
+        max_value: float,
+    ) -> Optional[str]:
+        """
+        Determine whether an insurance limit is low, high, or balanced.
+
+        Returns:
+            'low', 'high', 'balanced', or None if value is missing or non-positive.
+        """
+        if value is None or value <= 0:
+            return None
+        if value < min_value:
+            return "low"
+        if value > max_value:
+            return "high"
+        return "balanced"
 
     def calculate_cwi(self, payroll_settings, expected_weekly_hours: float = None) -> CWICalculation:
         """
@@ -335,6 +360,73 @@ class EconomyBalanceChecker:
                     recommended_max=recommended_max if policy.charge_frequency == 'weekly' else None,
                     cwi_ratio=premium_ratio
                 ))
+
+            if policy.claim_type != 'non_monetary' and premium > 0:
+                coverage_min = premium * self.COVERAGE_MIN_MULTIPLIER
+                coverage_max = premium * self.COVERAGE_MAX_MULTIPLIER
+                period_min = premium * self.PERIOD_MIN_MULTIPLIER
+                period_max = premium * self.PERIOD_MAX_MULTIPLIER
+
+                max_claim_amount = float(policy.max_claim_amount or 0)
+                max_payout_per_period = float(policy.max_payout_per_period or 0)
+
+                def build_limit_warning(
+                    value: float,
+                    min_value: float,
+                    max_value: float,
+                    feature: str,
+                    low_msg: str,
+                    high_msg: str,
+                    balanced_msg: str,
+                ) -> Optional[BalanceWarning]:
+                    state = self._evaluate_insurance_limit_state(value, min_value, max_value)
+                    if not state:
+                        return None
+
+                    if state == "low":
+                        level = WarningLevel.WARNING
+                        message = low_msg
+                    elif state == "high":
+                        level = WarningLevel.WARNING
+                        message = high_msg
+                    else:
+                        level = WarningLevel.INFO
+                        message = balanced_msg
+
+                    return BalanceWarning(
+                        feature=f"{feature}: {policy.title}",
+                        level=level,
+                        message=message,
+                        current_value=value,
+                        recommended_min=min_value,
+                        recommended_max=max_value,
+                        cwi_ratio=None
+                    )
+
+                coverage_warning = build_limit_warning(
+                    max_claim_amount,
+                    coverage_min,
+                    coverage_max,
+                    "Coverage",
+                    f"Max claim (${max_claim_amount:.2f}) is low relative to premium.",
+                    f"Max claim (${max_claim_amount:.2f}) exceeds {self.COVERAGE_MAX_MULTIPLIER}x premium. Confirm this is intentional.",
+                    f"Max claim is balanced at ${max_claim_amount:.2f} ({self.COVERAGE_MIN_MULTIPLIER}-{self.COVERAGE_MAX_MULTIPLIER}x premium)."
+                )
+
+                period_warning = build_limit_warning(
+                    max_payout_per_period,
+                    period_min,
+                    period_max,
+                    "Period Cap",
+                    f"Period cap (${max_payout_per_period:.2f}) may be too low for multiple claims.",
+                    f"Period cap (${max_payout_per_period:.2f}) exceeds {self.PERIOD_MAX_MULTIPLIER}x premium. Confirm this is intentional.",
+                    f"Period cap is balanced at ${max_payout_per_period:.2f} ({self.PERIOD_MIN_MULTIPLIER}-{self.PERIOD_MAX_MULTIPLIER}x premium)."
+                )
+
+                if coverage_warning:
+                    warnings.append(coverage_warning)
+                if period_warning:
+                    warnings.append(period_warning)
 
         return warnings
 
@@ -586,7 +678,15 @@ class EconomyBalanceChecker:
 
         return warnings, recommendations, ratio
 
-    def validate_insurance_value(self, premium: float, frequency: str, cwi: float) -> Tuple[List[Dict[str, str]], Dict[str, float], float]:
+    def validate_insurance_value(
+        self,
+        premium: float,
+        frequency: str,
+        cwi: float,
+        max_claim_amount: Optional[float] = None,
+        max_payout_per_period: Optional[float] = None,
+        claim_type: Optional[str] = None,
+    ) -> Tuple[List[Dict[str, str]], Dict[str, float], float]:
         weekly_value = self._normalize_to_weekly(premium, frequency)
         ratio = weekly_value / cwi if cwi > 0 else 0
 
@@ -642,6 +742,58 @@ class EconomyBalanceChecker:
                 'level': 'success',
                 'message': f'Premium is balanced at ${premium:.2f}/{frequency}',
             })
+
+        if claim_type != 'non_monetary' and premium > 0:
+            coverage_min = premium * self.COVERAGE_MIN_MULTIPLIER
+            coverage_max = premium * self.COVERAGE_MAX_MULTIPLIER
+            period_min = premium * self.PERIOD_MIN_MULTIPLIER
+            period_max = premium * self.PERIOD_MAX_MULTIPLIER
+
+            def add_limit_warning(
+                value: Optional[float],
+                min_value: float,
+                max_value: float,
+                low_builder,
+                high_builder,
+                balanced_builder,
+            ) -> None:
+                state = self._evaluate_insurance_limit_state(value, min_value, max_value)
+                if not state:
+                    return
+
+                current_value = float(value)
+                if state == "low":
+                    level = 'warning'
+                    message = low_builder(current_value)
+                elif state == "high":
+                    level = 'warning'
+                    message = high_builder(current_value)
+                else:
+                    level = 'success'
+                    message = balanced_builder(current_value)
+
+                warnings.append({
+                    'level': level,
+                    'message': message,
+                })
+
+            add_limit_warning(
+                max_claim_amount,
+                coverage_min,
+                coverage_max,
+                lambda value: f'Max claim (${value:.2f}) is low relative to premium.',
+                lambda value: f'Max claim (${value:.2f}) exceeds {self.COVERAGE_MAX_MULTIPLIER}x premium. Confirm this is intentional.',
+                lambda value: f'Max claim is balanced at ${value:.2f} ({self.COVERAGE_MIN_MULTIPLIER}-{self.COVERAGE_MAX_MULTIPLIER}x premium).',
+            )
+
+            add_limit_warning(
+                max_payout_per_period,
+                period_min,
+                period_max,
+                lambda value: f'Period cap (${value:.2f}) may be too low for multiple claims.',
+                lambda value: f'Period cap (${value:.2f}) exceeds {self.PERIOD_MAX_MULTIPLIER}x premium. Confirm this is intentional.',
+                lambda value: f'Period cap is balanced at ${value:.2f} ({self.PERIOD_MIN_MULTIPLIER}-{self.PERIOD_MAX_MULTIPLIER}x premium).',
+            )
 
         return warnings, recommendations, ratio
 
@@ -724,7 +876,14 @@ class EconomyBalanceChecker:
                 kwargs.get('custom_frequency_unit'),
             )
         if feature == 'insurance':
-            return self.validate_insurance_value(value, kwargs.get('frequency', 'weekly'), cwi)
+            return self.validate_insurance_value(
+                value,
+                kwargs.get('frequency', 'weekly'),
+                cwi,
+                kwargs.get('max_claim_amount'),
+                kwargs.get('max_payout_per_period'),
+                kwargs.get('claim_type'),
+            )
         if feature == 'fine':
             return self.validate_fine_value(value, cwi)
         if feature == 'store_item':
