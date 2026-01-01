@@ -492,7 +492,6 @@ root {
 // Getting Started Widget functionality
 (function() {
     let widgetDismissed = false;
-    let widgetExpanded = false;
 
     // Initialize widget
     function initGettingStartedWidget() {
@@ -516,10 +515,27 @@ root {
                         return;
                     }
 
+                    // Check if no class period is selected
+                    if (data.no_class_period) {
+                        // Show widget but with a message about selecting a class period
+                        const widget = document.getElementById('gettingStartedWidget');
+                        if (widget) {
+                            widget.style.display = 'block';
+                        }
+                        showNoClassPeriodMessage();
+                        return;
+                    }
+
                     // Show widget
                     const widget = document.getElementById('gettingStartedWidget');
                     if (widget) {
                         widget.style.display = 'block';
+                    }
+
+                    // Remove any "no class period" message if it exists
+                    const noClassMsg = document.querySelector('.gs-no-class-period');
+                    if (noClassMsg) {
+                        noClassMsg.remove();
                     }
 
                     const completion = data.completion || {};
@@ -619,6 +635,31 @@ root {
         }
     }
 
+    // Show message when no class period is selected
+    function showNoClassPeriodMessage() {
+        const body = document.querySelector('.gs-panel-body');
+        if (body && !document.querySelector('.gs-no-class-period')) {
+            // Clear existing checklist
+            const checklist = document.querySelector('.gs-checklist');
+            if (checklist) {
+                checklist.style.display = 'none';
+            }
+
+            const message = document.createElement('div');
+            message.className = 'alert alert-info gs-no-class-period';
+            message.innerHTML = `
+                <div class="d-flex align-items-start gap-2">
+                    <span class="material-symbols-outlined">info</span>
+                    <div>
+                        <strong>Select a Class Period First</strong>
+                        <p class="mb-0 mt-2">To start setting up your classroom economy, please select or create a class period from the class period dropdown in the navigation bar.</p>
+                    </div>
+                </div>
+            `;
+            body.insertBefore(message, body.firstChild);
+        }
+    }
+
     // Make panel header also collapsible (click anywhere on header to collapse)
     const gsPanelHeader = document.querySelector('.gs-panel-header');
     if (gsPanelHeader) {
@@ -636,7 +677,7 @@ root {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('[name=csrf-token]').content
+                    'X-CSRFToken': document.querySelector('[name="csrf-token"]').content
                 }
             })
             .then(response => response.json())
@@ -650,14 +691,12 @@ root {
                     }, 300);
                 } else {
                     console.error('Failed to dismiss widget:', data.message);
+                    alert('Could not dismiss the getting started guide. Please try again.');
                 }
             })
             .catch(error => {
                 console.error('Error dismissing widget:', error);
-                // Still hide widget on error for better UX
-                widgetDismissed = true;
-                const widget = document.getElementById('gettingStartedWidget');
-                widget.style.display = 'none';
+                alert('An error occurred while dismissing the getting started guide. Please try again.');
             });
         }
     };
