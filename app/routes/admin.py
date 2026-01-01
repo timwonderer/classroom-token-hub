@@ -1099,7 +1099,7 @@ def recover():
 
         if teacher.dob_sum_hash != expected_hash:
             current_app.logger.warning(f"🛑 Admin recovery failed: DOB sum mismatch for teacher {teacher_id}")
-            flash("Unable to verify your identity. Please check your DOB sum.", "error")
+            flash("Unable to verify your identity. Please check your date of birth.", "error")
             return render_template("admin_recover.html", form=form)
 
         # Enforce 'One from each period' policy
@@ -1482,30 +1482,35 @@ def resume_credentials():
 @admin_bp.route('/setup-recovery', methods=['GET', 'POST'])
 @admin_required
 def setup_recovery():
-    """Prompt legacy teachers to set up account recovery (DOB sum)."""
+    """Prompt legacy teachers to set up account recovery (date of birth)."""
     admin = Admin.query.get(session['admin_id'])
 
     if request.method == 'POST':
         dob_sum_str = request.form.get('dob_sum', '').strip()
+        if not dob_sum_str:
+            flash("Please enter your date of birth.", "error")
+            return render_template('admin_setup_recovery.html')
 
         try:
-            dob_sum = int(dob_sum_str)
-            if dob_sum <= 0:
-                raise ValueError("Positive number required")
-
-            # Hash and save
-            salt = get_random_salt()
-            dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
-
-            admin.dob_sum_hash = dob_sum_hash
-            admin.salt = salt
-            db.session.commit()
-
-            flash("Recovery setup complete! You can now use the student-assisted recovery feature if needed.", "success")
-            return redirect(url_for('admin.dashboard'))
-
+            if "-" in dob_sum_str:
+                dob_input = datetime.strptime(dob_sum_str, "%Y-%m-%d").date()
+            else:
+                dob_input = datetime.strptime(dob_sum_str, "%m/%d/%Y").date()
+            dob_sum = dob_input.month + dob_input.day + dob_input.year
         except ValueError:
-            flash("Invalid Date of Birth Sum. Please enter a number (e.g. 2028).", "error")
+            flash("Invalid date of birth. Please use the date picker.", "error")
+            return render_template('admin_setup_recovery.html')
+
+        # Hash and save
+        salt = get_random_salt()
+        dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
+
+        admin.dob_sum_hash = dob_sum_hash
+        admin.salt = salt
+        db.session.commit()
+
+        flash("Recovery setup complete! You can now use the student-assisted recovery feature if needed.", "success")
+        return redirect(url_for('admin.dashboard'))
 
     return render_template('admin_setup_recovery.html')
 
@@ -1893,7 +1898,19 @@ def edit_student():
     # Update DOB sum if provided (and recalculate second_half_hash)
     dob_sum_str = request.form.get('dob_sum', '').strip()
     if dob_sum_str:
-        new_dob_sum = int(dob_sum_str)
+        try:
+            if "-" in dob_sum_str:
+                dob_input = datetime.strptime(dob_sum_str, "%Y-%m-%d").date()
+                new_dob_sum = dob_input.month + dob_input.day + dob_input.year
+            elif "/" in dob_sum_str:
+                dob_input = datetime.strptime(dob_sum_str, "%m/%d/%Y").date()
+                new_dob_sum = dob_input.month + dob_input.day + dob_input.year
+            else:
+                new_dob_sum = int(dob_sum_str)
+        except ValueError:
+            flash("Invalid date of birth. Please use the date picker.", "error")
+            return redirect(url_for('admin.students'))
+
         if new_dob_sum != student.dob_sum:
             student.dob_sum = new_dob_sum
             # Regenerate second_half_hash (DOB sum hash)
@@ -2410,8 +2427,15 @@ def add_individual_student():
         last_initial = last_name[0].upper()
 
         # Parse DOB and calculate sum
-        month, day, year = map(int, dob_str.split('/'))
-        dob_sum = month + day + year
+        try:
+            if "-" in dob_str:
+                dob_input = datetime.strptime(dob_str, "%Y-%m-%d").date()
+            else:
+                dob_input = datetime.strptime(dob_str, "%m/%d/%Y").date()
+            dob_sum = dob_input.month + dob_input.day + dob_input.year
+        except ValueError:
+            flash("Invalid date of birth. Please use the date picker.", "error")
+            return redirect(url_for('admin.students'))
 
         # Generate salt
         salt = get_random_salt()
@@ -2536,7 +2560,7 @@ def add_individual_student():
 
         flash(f"Successfully added {first_name} {last_initial}. to block {block}.", "success")
     except ValueError:
-        flash("Invalid date format. Use MM/DD/YYYY.", "error")
+        flash("Invalid date of birth. Please use the date picker.", "error")
     except Exception as e:
         db.session.rollback()
         flash(f"Error adding student: {str(e)}", "error")
@@ -2571,8 +2595,15 @@ def add_manual_student():
         last_initial = last_name[0].upper()
 
         # Parse DOB and calculate sum
-        month, day, year = map(int, dob_str.split('/'))
-        dob_sum = month + day + year
+        try:
+            if "-" in dob_str:
+                dob_input = datetime.strptime(dob_str, "%Y-%m-%d").date()
+            else:
+                dob_input = datetime.strptime(dob_str, "%m/%d/%Y").date()
+            dob_sum = dob_input.month + dob_input.day + dob_input.year
+        except ValueError:
+            flash("Invalid date of birth. Please use the date picker.", "error")
+            return redirect(url_for('admin.students'))
 
         # Generate salt
         salt = get_random_salt()
@@ -2706,7 +2737,7 @@ def add_manual_student():
 
         flash(f"Successfully created {first_name} {last_initial}. in block {block} (manual mode).", "success")
     except ValueError:
-        flash("Invalid date format. Use MM/DD/YYYY.", "error")
+        flash("Invalid date of birth. Please use the date picker.", "error")
     except Exception as e:
         db.session.rollback()
         flash(f"Error creating student: {str(e)}", "error")

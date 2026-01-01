@@ -145,7 +145,7 @@
                         <li>Go to student sign-in page</li>
                         <li>Click "First Time? Set Up Account"</li>
                         <li>Enter this join code</li>
-                        <li>Provide first name, last name, and DOB sum</li>
+                        <li>Provide first name, last name, and date of birth</li>
                       </ol>
                     </div>
                   </div>
@@ -336,8 +336,7 @@
                                 data-student-id="{{ student.id }}"
                                 data-student-name="{{ student.first_name }}"
                                 data-student-last-initial="{{ student.last_initial }}"
-                                data-student-block="{{ student.block }}"
-                                data-student-dob-sum="{{ student.dob_sum }}">
+                                data-student-block="{{ student.block }}">
                           <span class="material-symbols-outlined" style="vertical-align: middle;">edit</span> Edit
                         </button>
                         <button class="btn btn-sm btn-outline-danger quick-action-btn"
@@ -463,14 +462,12 @@
                   <div class="row">
                     <div class="col-md-6 mb-3">
                       <label for="dob" class="form-label fw-bold">Date of Birth <span class="text-danger">*</span></label>
-                      <input type="text"
+                      <input type="date"
                              class="form-control"
                              id="dob"
                              name="dob"
-                             placeholder="MM/DD/YYYY"
-                             pattern="\d{2}/\d{2}/\d{4}"
                              required>
-                      <div class="form-text">Format: MM/DD/YYYY</div>
+                      <div class="form-text">Use the date picker to select a birth date.</div>
                     </div>
                     <div class="col-md-6 mb-3">
                       <label for="block" class="form-label fw-bold">Class <span class="text-danger">*</span></label>
@@ -535,9 +532,9 @@
                 </div>
               </div>
               <div class="mb-3">
-                <label for="edit_dob_sum" class="form-label fw-bold">DOB Sum (Optional)</label>
-                <input type="number" class="form-control" id="edit_dob_sum" name="dob_sum">
-                <div class="form-text">Sum of DOB components (MM + DD + YYYY). Leave blank to keep unchanged.</div>
+                <label for="edit_dob_sum" class="form-label fw-bold">Date of Birth (Optional)</label>
+                <input type="date" class="form-control" id="edit_dob_sum" name="dob_sum">
+                <div class="form-text">Leave blank to keep unchanged.</div>
               </div>
             </div>
           </div>
@@ -584,7 +581,7 @@
                 </div>
               </div>
               <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" style="display:none;">
-                <small><span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Student will need to re-claim their account using their name and DOB.</small>
+                <small><span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Student will need to re-claim their account using their name and date of birth.</small>
               </div>
             </div>
           </div>
@@ -686,13 +683,12 @@ document.addEventListener('DOMContentLoaded', function() {
       const firstName = button.getAttribute('data-student-name');
       const lastInitial = button.getAttribute('data-student-last-initial');
       const blocksStr = button.getAttribute('data-student-block');
-      const dobSum = button.getAttribute('data-student-dob-sum');
 
       // Populate basic fields
       editModal.querySelector('#edit_student_id').value = studentId;
       editModal.querySelector('#edit_first_name').value = firstName;
       editModal.querySelector('#edit_last_name').value = lastInitial; // Show just the initial, teacher can expand
-      editModal.querySelector('#edit_dob_sum').value = dobSum || '';
+      editModal.querySelector('#edit_dob_sum').value = '';
 
       // Uncheck all blocks first
       editModal.querySelectorAll('.block-checkbox').forEach(cb => cb.checked = false);

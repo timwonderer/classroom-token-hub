@@ -791,7 +791,7 @@ def add_class():
             return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
         if dob_sum != student.dob_sum:
-            flash("The DOB sum doesn't match your account. Please check and try again.", "danger")
+            flash("The date of birth doesn't match your account. Please check and try again.", "danger")
             return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
         # Verify last name matches using the same fuzzy matching logic
