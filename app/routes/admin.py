@@ -6908,13 +6908,9 @@ def onboarding_status():
                 'completion': {}
             })
 
-        block = teacher_block.block
-
-        # Get teacher's feature settings using teacher_id and block
-        feature_settings = FeatureSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=block
-        ).first()
+        # Get all blocks for this teacher (for account-wide onboarding checks)
+        all_teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
+        all_blocks = list(set(tb.block for tb in all_teacher_blocks))
 
         # Initialize completion status
         completion = {
@@ -6929,38 +6925,46 @@ def onboarding_status():
             'passkey': False
         }
 
-        # Check each task: either actually configured OR manually marked as complete/skipped
+        # ACCOUNT-WIDE ONBOARDING CHECKS
+        # Onboarding is per teacher account, not per class section
+        # If ANY of the teacher's class sections has a feature set up, mark as complete
 
-        # Roster: has at least one student OR marked complete
-        student_count = StudentBlock.query.filter_by(join_code=join_code).count()
+        # Roster: has at least one student in ANY class OR marked complete
+        # Use StudentTeacher to get all students for this teacher
+        from app.models import StudentTeacher
+        student_count = StudentTeacher.query.filter_by(admin_id=admin_id).count()
         completion['roster'] = student_count > 0 or onboarding_record.is_widget_task_completed('roster')
 
-        # Payroll: has payroll settings configured OR marked complete
-        payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, block=block).first()
+        # Payroll: has payroll settings configured for ANY block OR marked complete
+        payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id).first()
         completion['payroll'] = payroll_settings is not None or onboarding_record.is_widget_task_completed('payroll')
 
-        # Store: has at least one store item for this block OR marked complete
-        store_items = StoreItemBlock.query.filter_by(block=block).count()
+        # Store: has at least one store item for ANY block OR marked complete
+        store_items = 0
+        if all_blocks:
+            store_items = StoreItemBlock.query.filter(StoreItemBlock.block.in_(all_blocks)).count()
         completion['store'] = store_items > 0 or onboarding_record.is_widget_task_completed('store')
 
-        # Banking: has banking settings configured OR marked complete
-        banking_settings = BankingSettings.query.filter_by(teacher_id=admin_id, block=block).first()
+        # Banking: has banking settings configured for ANY block OR marked complete
+        banking_settings = BankingSettings.query.filter_by(teacher_id=admin_id).first()
         completion['banking'] = banking_settings is not None or onboarding_record.is_widget_task_completed('banking')
 
-        # Rent: has rent settings configured OR marked complete
-        rent_settings = RentSettings.query.filter_by(teacher_id=admin_id, block=block).first()
+        # Rent: has rent settings configured for ANY block OR marked complete
+        rent_settings = RentSettings.query.filter_by(teacher_id=admin_id).first()
         completion['rent'] = rent_settings is not None or onboarding_record.is_widget_task_completed('rent')
 
-        # Insurance: has at least one insurance policy for this block OR marked complete
-        insurance_policies = InsurancePolicyBlock.query.filter_by(block=block).count()
+        # Insurance: has at least one insurance policy for ANY block OR marked complete
+        insurance_policies = 0
+        if all_blocks:
+            insurance_policies = InsurancePolicyBlock.query.filter(InsurancePolicyBlock.block.in_(all_blocks)).count()
         completion['insurance'] = insurance_policies > 0 or onboarding_record.is_widget_task_completed('insurance')
 
-        # Hall pass: check if hall pass settings exist OR marked complete
-        hall_pass_settings = HallPassSettings.query.filter_by(teacher_id=admin_id, block=block).first()
+        # Hall pass: check if hall pass settings exist for ANY block OR marked complete
+        hall_pass_settings = HallPassSettings.query.filter_by(teacher_id=admin_id).first()
         completion['hall_pass'] = hall_pass_settings is not None or onboarding_record.is_widget_task_completed('hall_pass')
 
-        # Personalization: check if class_label is set on TeacherBlock OR marked complete
-        has_label = teacher_block.class_label and teacher_block.class_label.strip() != ''
+        # Personalization: check if ANY TeacherBlock has class_label set OR marked complete
+        has_label = any(tb.class_label and tb.class_label.strip() != '' for tb in all_teacher_blocks)
         completion['personalization'] = has_label or onboarding_record.is_widget_task_completed('personalization')
 
         # Passkey: check if at least one credential exists OR marked complete
