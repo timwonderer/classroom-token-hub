@@ -54,6 +54,16 @@ h1, h2, h3, h4, h5, h6 {
     letter-spacing: -0.02em;
 }
 
+.guide-icon {
+    font-size: 25pt;
+    vertical-align: middle;
+}
+
+.guide-icon-sm {
+    font-size: 20pt;
+    vertical-align: middle;
+}
+
 a {
     color: var(--primary);
     text-decoration: none;

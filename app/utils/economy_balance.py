@@ -91,6 +91,11 @@ class EconomyBalanceChecker:
     INSURANCE_MAX_RATIO = 0.12
     INSURANCE_DEFAULT_RATIO = 0.08
 
+    COVERAGE_MIN_MULTIPLIER = 3
+    COVERAGE_MAX_MULTIPLIER = 5
+    PERIOD_MIN_MULTIPLIER = 6
+    PERIOD_MAX_MULTIPLIER = 10
+
     FINE_MIN_RATIO = 0.05
     FINE_MAX_RATIO = 0.15
     FINE_DEFAULT_RATIO = 0.10
@@ -155,6 +160,26 @@ class EconomyBalanceChecker:
             return value * (7 / freq_value)
 
         return value
+
+    def _evaluate_insurance_limit_state(
+        self,
+        value: Optional[float],
+        min_value: float,
+        max_value: float,
+    ) -> Optional[str]:
+        """
+        Determine whether an insurance limit is low, high, or balanced.
+
+        Returns:
+            'low', 'high', 'balanced', or None if value is missing or non-positive.
+        """
+        if value is None or value <= 0:
+            return None
+        if value < min_value:
+            return "low"
+        if value > max_value:
+            return "high"
+        return "balanced"
 
     def calculate_cwi(self, payroll_settings, expected_weekly_hours: float = None) -> CWICalculation:
         """
@@ -337,165 +362,71 @@ class EconomyBalanceChecker:
                 ))
 
             if policy.claim_type != 'non_monetary' and premium > 0:
-                # Define multipliers as class-level constants
-                COVERAGE_MIN_MULTIPLIER = 3
-                COVERAGE_MAX_MULTIPLIER = 5
-                PERIOD_MIN_MULTIPLIER = 6
-                PERIOD_MAX_MULTIPLIER = 10
-
-                # Calculate frequency-specific values for validation
-                frequency_multiplier = {
-                    'weekly': 1,
-                    'monthly': self.AVERAGE_WEEKS_PER_MONTH,
-                    'biweekly': self.AVERAGE_WEEKS_PER_MONTH / 2,
-                    'daily': self.AVERAGE_WEEKS_PER_MONTH / 7,
-                    'semester': 18,
-                    'yearly': 52,
-                }.get(policy.charge_frequency, 1)
-
-                # Calculate frequency-specific values for validation
-                coverage_min = weekly_premium * self.COVERAGE_MIN_MULTIPLIER
-                coverage_max = weekly_premium * self.COVERAGE_MAX_MULTIPLIER
-                period_min = weekly_premium * self.PERIOD_MIN_MULTIPLIER
-                period_max = weekly_premium * self.PERIOD_MAX_MULTIPLIER
-
-                def generate_warning(feature: str, title: str, current_value: float, min_value: float, max_value: float, level: str, message: str):
-                    return BalanceWarning(
-                        feature=f"{feature}: {title}",
-                        level=level,
-                        message=message,
-                        current_value=current_value,
-                        recommended_min=min_value,
-                        recommended_max=max_value,
-                        cwi_ratio=None
-                    )
-
-                def check_claim_amount(max_claim_amount: float, coverage_min: float, coverage_max: float, title: str):
-                    if max_claim_amount < coverage_min:
-                        return generate_warning("Coverage", title, max_claim_amount, coverage_min, coverage_max, WarningLevel.WARNING,
-                            f"Max claim (${max_claim_amount:.2f}) is low relative to premium.")
-                    elif max_claim_amount > coverage_max:
-                        return generate_warning("Coverage", title, max_claim_amount, coverage_min, coverage_max, WarningLevel.WARNING,
-                            f"Max claim (${max_claim_amount:.2f}) exceeds 5x premium. Confirm this is intentional.")
-                    return generate_warning("Coverage", title, max_claim_amount, coverage_min, coverage_max, WarningLevel.INFO,
-                        f"Max claim is balanced at ${max_claim_amount:.2f} (3-5x premium).")
-
-                def check_payout(max_payout_per_period: float, period_min: float, period_max: float, title: str):
-                    if max_payout_per_period < period_min:
-                        return generate_warning("Period Cap", title, max_payout_per_period, period_min, period_max, WarningLevel.WARNING,
-                            f"Period cap (${max_payout_per_period:.2f}) may be too low for multiple claims.")
-                    elif max_payout_per_period > period_max:
-                        return generate_warning("Period Cap", title, max_payout_per_period, period_min, period_max, WarningLevel.WARNING,
-                            f"Period cap (${max_payout_per_period:.2f}) exceeds 10x premium. Confirm this is intentional.")
-                    return generate_warning("Period Cap", title, max_payout_per_period, period_min, period_max, WarningLevel.INFO,
-                        f"Period cap is balanced at ${max_payout_per_period:.2f} (6-10x premium).")
-
-                warnings.append(check_claim_amount(max_claim_amount, coverage_min, coverage_max, policy.title))
-                warnings.append(check_payout(max_payout_per_period, period_min, period_max, policy.title))
-                weekly_premium = self._normalize_to_weekly(premium, policy.charge_frequency)
-                coverage_min = weekly_premium * COVERAGE_MIN_MULTIPLIER
-                coverage_max = weekly_premium * COVERAGE_MAX_MULTIPLIER
-                period_min = weekly_premium * PERIOD_MIN_MULTIPLIER
-                period_max = weekly_premium * PERIOD_MAX_MULTIPLIER
-
-                def generate_warning(feature: str, title: str, current_value: float, min_value: float, max_value: float, level: str, message: str):
-                    return BalanceWarning(
-                        feature=f"{feature}: {title}",
-                        level=level,
-                        message=message,
-                        current_value=current_value,
-                        recommended_min=min_value,
-                        recommended_max=max_value,
-                        cwi_ratio=None
-                    )
-
-                if max_claim_amount > 0:
-                    if max_claim_amount < coverage_min:
-                        warnings.append(generate_warning("Coverage", policy.title, max_claim_amount, coverage_min, coverage_max, WarningLevel.WARNING,
-                            f"Max claim (${max_claim_amount:.2f}) is low relative to premium."))
-                    elif max_claim_amount > coverage_max:
-                        warnings.append(generate_warning("Coverage", policy.title, max_claim_amount, coverage_min, coverage_max, WarningLevel.WARNING,
-                            f"Max claim (${max_claim_amount:.2f}) exceeds 5x premium. Confirm this is intentional."))
-                    else:
-                        warnings.append(generate_warning("Coverage", policy.title, max_claim_amount, coverage_min, coverage_max, WarningLevel.INFO,
-                            f"Max claim is balanced at ${max_claim_amount:.2f} (3-5x premium)."))
-
-                if max_payout_per_period > 0:
-                    if max_payout_per_period < period_min:
-                        warnings.append(generate_warning("Period Cap", policy.title, max_payout_per_period, period_min, period_max, WarningLevel.WARNING,
-                            f"Period cap (${max_payout_per_period:.2f}) may be too low for multiple claims."))
-                    elif max_payout_per_period > period_max:
-                        warnings.append(generate_warning("Period Cap", policy.title, max_payout_per_period, period_min, period_max, WarningLevel.WARNING,
-                            f"Period cap (${max_payout_per_period:.2f}) exceeds 10x premium. Confirm this is intentional."))
-                    else:
-                        warnings.append(generate_warning("Period Cap", policy.title, max_payout_per_period, period_min, period_max, WarningLevel.INFO,
-                            f"Period cap is balanced at ${max_payout_per_period:.2f} (6-10x premium)."))
+                coverage_min = premium * self.COVERAGE_MIN_MULTIPLIER
+                coverage_max = premium * self.COVERAGE_MAX_MULTIPLIER
+                period_min = premium * self.PERIOD_MIN_MULTIPLIER
+                period_max = premium * self.PERIOD_MAX_MULTIPLIER
 
                 max_claim_amount = float(policy.max_claim_amount or 0)
-                if max_claim_amount > 0:
-                    if max_claim_amount < coverage_min:
-                        warnings.append(BalanceWarning(
-                            feature=f"Coverage: {policy.title}",
-                            level=WarningLevel.WARNING,
-                            message=f"Max claim (${max_claim_amount:.2f}) is low relative to premium.",
-                            current_value=max_claim_amount,
-                            recommended_min=coverage_min,
-                            recommended_max=coverage_max,
-                            cwi_ratio=None
-                        ))
-                    elif max_claim_amount > coverage_max:
-                        warnings.append(BalanceWarning(
-                            feature=f"Coverage: {policy.title}",
-                            level=WarningLevel.WARNING,
-                            message=f"Max claim (${max_claim_amount:.2f}) exceeds 5x premium. Confirm this is intentional.",
-                            current_value=max_claim_amount,
-                            recommended_min=coverage_min,
-                            recommended_max=coverage_max,
-                            cwi_ratio=None
-                        ))
-                    else:
-                        warnings.append(BalanceWarning(
-                            feature=f"Coverage: {policy.title}",
-                            level=WarningLevel.INFO,
-                            message=f"Max claim is balanced at ${max_claim_amount:.2f} (3-5x premium).",
-                            current_value=max_claim_amount,
-                            recommended_min=coverage_min,
-                            recommended_max=coverage_max,
-                            cwi_ratio=None
-                        ))
-
                 max_payout_per_period = float(policy.max_payout_per_period or 0)
-                if max_payout_per_period > 0:
-                    if max_payout_per_period < period_min:
-                        warnings.append(BalanceWarning(
-                            feature=f"Period Cap: {policy.title}",
-                            level=WarningLevel.WARNING,
-                            message=f"Period cap (${max_payout_per_period:.2f}) may be too low for multiple claims.",
-                            current_value=max_payout_per_period,
-                            recommended_min=period_min,
-                            recommended_max=period_max,
-                            cwi_ratio=None
-                        ))
-                    elif max_payout_per_period > period_max:
-                        warnings.append(BalanceWarning(
-                            feature=f"Period Cap: {policy.title}",
-                            level=WarningLevel.WARNING,
-                            message=f"Period cap (${max_payout_per_period:.2f}) exceeds 10x premium. Confirm this is intentional.",
-                            current_value=max_payout_per_period,
-                            recommended_min=period_min,
-                            recommended_max=period_max,
-                            cwi_ratio=None
-                        ))
+
+                def build_limit_warning(
+                    value: float,
+                    min_value: float,
+                    max_value: float,
+                    feature: str,
+                    low_msg: str,
+                    high_msg: str,
+                    balanced_msg: str,
+                ) -> Optional[BalanceWarning]:
+                    state = self._evaluate_insurance_limit_state(value, min_value, max_value)
+                    if not state:
+                        return None
+
+                    if state == "low":
+                        level = WarningLevel.WARNING
+                        message = low_msg
+                    elif state == "high":
+                        level = WarningLevel.WARNING
+                        message = high_msg
                     else:
-                        warnings.append(BalanceWarning(
-                            feature=f"Period Cap: {policy.title}",
-                            level=WarningLevel.INFO,
-                            message=f"Period cap is balanced at ${max_payout_per_period:.2f} (6-10x premium).",
-                            current_value=max_payout_per_period,
-                            recommended_min=period_min,
-                            recommended_max=period_max,
-                            cwi_ratio=None
-                        ))
+                        level = WarningLevel.INFO
+                        message = balanced_msg
+
+                    return BalanceWarning(
+                        feature=f"{feature}: {policy.title}",
+                        level=level,
+                        message=message,
+                        current_value=value,
+                        recommended_min=min_value,
+                        recommended_max=max_value,
+                        cwi_ratio=None
+                    )
+
+                coverage_warning = build_limit_warning(
+                    max_claim_amount,
+                    coverage_min,
+                    coverage_max,
+                    "Coverage",
+                    f"Max claim (${max_claim_amount:.2f}) is low relative to premium.",
+                    f"Max claim (${max_claim_amount:.2f}) exceeds {self.COVERAGE_MAX_MULTIPLIER}x premium. Confirm this is intentional.",
+                    f"Max claim is balanced at ${max_claim_amount:.2f} ({self.COVERAGE_MIN_MULTIPLIER}-{self.COVERAGE_MAX_MULTIPLIER}x premium)."
+                )
+
+                period_warning = build_limit_warning(
+                    max_payout_per_period,
+                    period_min,
+                    period_max,
+                    "Period Cap",
+                    f"Period cap (${max_payout_per_period:.2f}) may be too low for multiple claims.",
+                    f"Period cap (${max_payout_per_period:.2f}) exceeds {self.PERIOD_MAX_MULTIPLIER}x premium. Confirm this is intentional.",
+                    f"Period cap is balanced at ${max_payout_per_period:.2f} ({self.PERIOD_MIN_MULTIPLIER}-{self.PERIOD_MAX_MULTIPLIER}x premium)."
+                )
+
+                if coverage_warning:
+                    warnings.append(coverage_warning)
+                if period_warning:
+                    warnings.append(period_warning)
 
         return warnings
 
@@ -813,44 +744,56 @@ class EconomyBalanceChecker:
             })
 
         if claim_type != 'non_monetary' and premium > 0:
-            coverage_min = premium * 3
-            coverage_max = premium * 5
-            period_min = premium * 6
-            period_max = premium * 10
+            coverage_min = premium * self.COVERAGE_MIN_MULTIPLIER
+            coverage_max = premium * self.COVERAGE_MAX_MULTIPLIER
+            period_min = premium * self.PERIOD_MIN_MULTIPLIER
+            period_max = premium * self.PERIOD_MAX_MULTIPLIER
 
-            if max_claim_amount is not None:
-                if max_claim_amount < coverage_min:
-                    warnings.append({
-                        'level': 'warning',
-                        'message': f'Max claim (${max_claim_amount:.2f}) is low relative to premium.',
-                    })
-                elif max_claim_amount > coverage_max:
-                    warnings.append({
-                        'level': 'warning',
-                        'message': f'Max claim (${max_claim_amount:.2f}) exceeds 5x premium. Confirm this is intentional.',
-                    })
-                else:
-                    warnings.append({
-                        'level': 'success',
-                        'message': f'Max claim is balanced at ${max_claim_amount:.2f} (3-5x premium).',
-                    })
+            def add_limit_warning(
+                value: Optional[float],
+                min_value: float,
+                max_value: float,
+                low_builder,
+                high_builder,
+                balanced_builder,
+            ) -> None:
+                state = self._evaluate_insurance_limit_state(value, min_value, max_value)
+                if not state:
+                    return
 
-            if max_payout_per_period is not None:
-                if max_payout_per_period < period_min:
-                    warnings.append({
-                        'level': 'warning',
-                        'message': f'Period cap (${max_payout_per_period:.2f}) may be too low for multiple claims.',
-                    })
-                elif max_payout_per_period > period_max:
-                    warnings.append({
-                        'level': 'warning',
-                        'message': f'Period cap (${max_payout_per_period:.2f}) exceeds 10x premium. Confirm this is intentional.',
-                    })
+                current_value = float(value)
+                if state == "low":
+                    level = 'warning'
+                    message = low_builder(current_value)
+                elif state == "high":
+                    level = 'warning'
+                    message = high_builder(current_value)
                 else:
-                    warnings.append({
-                        'level': 'success',
-                        'message': f'Period cap is balanced at ${max_payout_per_period:.2f} (6-10x premium).',
-                    })
+                    level = 'success'
+                    message = balanced_builder(current_value)
+
+                warnings.append({
+                    'level': level,
+                    'message': message,
+                })
+
+            add_limit_warning(
+                max_claim_amount,
+                coverage_min,
+                coverage_max,
+                lambda value: f'Max claim (${value:.2f}) is low relative to premium.',
+                lambda value: f'Max claim (${value:.2f}) exceeds {self.COVERAGE_MAX_MULTIPLIER}x premium. Confirm this is intentional.',
+                lambda value: f'Max claim is balanced at ${value:.2f} ({self.COVERAGE_MIN_MULTIPLIER}-{self.COVERAGE_MAX_MULTIPLIER}x premium).',
+            )
+
+            add_limit_warning(
+                max_payout_per_period,
+                period_min,
+                period_max,
+                lambda value: f'Period cap (${value:.2f}) may be too low for multiple claims.',
+                lambda value: f'Period cap (${value:.2f}) exceeds {self.PERIOD_MAX_MULTIPLIER}x premium. Confirm this is intentional.',
+                lambda value: f'Period cap is balanced at ${value:.2f} ({self.PERIOD_MIN_MULTIPLIER}-{self.PERIOD_MAX_MULTIPLIER}x premium).',
+            )
 
         return warnings, recommendations, ratio
 

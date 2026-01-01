@@ -89,19 +89,19 @@ class EconomyBalanceChecker {
         }
         if (feature === 'insurance') {
             const getParamValue = (targetSelector, paramName) => {
-            if (!targetSelector) return;
-            const field = document.querySelector(targetSelector);
-            if (field) {
-                const value = parseFloat(field.value);
-                if (!isNaN(value) && value > 0) {
-                additionalParams[paramName] = value;
+                if (!targetSelector) return;
+                const field = document.querySelector(targetSelector);
+                if (!field) return;
+
+                const parsedValue = parseFloat(field.value);
+                if (!isNaN(parsedValue) && parsedValue > 0) {
+                    additionalParams[paramName] = parsedValue;
                 }
-            }
             };
 
             const claimTypeField = claimTypeTarget ? document.querySelector(claimTypeTarget) : null;
             if (claimTypeField && claimTypeField.value) {
-            additionalParams.claim_type = claimTypeField.value;
+                additionalParams.claim_type = claimTypeField.value;
             }
 
             getParamValue(coverageTarget, 'max_claim_amount');

@@ -8,6 +8,7 @@ import pytest
 from datetime import datetime, timezone
 from app import db
 from app.models import Admin, PayrollSettings
+from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 
 
 @pytest.fixture
@@ -651,3 +652,58 @@ def test_validate_insurance_with_coverage_monthly_frequency(logged_in_admin_clie
     # Coverage should be validated against monthly premium (not weekly)
     coverage_warnings = [w for w in data['warnings'] if 'claim' in w['message'].lower() and 'balanced' in w['message'].lower()]
     assert len(coverage_warnings) > 0
+
+
+def test_validate_insurance_with_period_cap_monthly_frequency(logged_in_admin_client, admin_with_payroll):
+    """Test insurance period cap validation scales correctly with monthly frequency."""
+    admin, payroll_settings = admin_with_payroll
+    client = logged_in_admin_client
+
+    response = client.post(
+        '/admin/api/economy/validate/insurance',
+        json={
+            'value': 40.0,
+            'frequency': 'monthly',
+            'max_payout_per_period': 300.0,
+            'claim_type': 'monetary'
+        }
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+
+    period_warnings = [w for w in data['warnings'] if 'period cap is balanced' in w['message'].lower()]
+    assert len(period_warnings) > 0
+
+
+def test_check_insurance_balance_uses_frequency_premium_for_limits():
+    """Ensure coverage and period caps are evaluated against stored premium frequency."""
+    checker = EconomyBalanceChecker(teacher_id=1)
+
+    class FakePolicy:
+        def __init__(self):
+            self.title = "Monthly Health"
+            self.premium = 40.0  # monthly premium
+            self.charge_frequency = 'monthly'
+            self.claim_type = 'monetary'
+            self.max_claim_amount = 150.0  # 3.75x monthly premium
+            self.max_payout_per_period = 300.0  # 7.5x monthly premium
+            self.is_active = True
+
+    policy = FakePolicy()
+    warnings = checker.check_insurance_balance([policy], cwi=120.0)
+
+    coverage_warning = next((w for w in warnings if w.feature.startswith("Coverage")), None)
+    period_warning = next((w for w in warnings if w.feature.startswith("Period Cap")), None)
+
+    assert coverage_warning is not None
+    assert period_warning is not None
+
+    # Recommendations should be based on the monthly premium (not normalized weekly value)
+    assert coverage_warning.recommended_min == policy.premium * checker.COVERAGE_MIN_MULTIPLIER
+    assert coverage_warning.recommended_max == policy.premium * checker.COVERAGE_MAX_MULTIPLIER
+    assert coverage_warning.level == WarningLevel.INFO
+
+    assert period_warning.recommended_min == policy.premium * checker.PERIOD_MIN_MULTIPLIER
+    assert period_warning.recommended_max == policy.premium * checker.PERIOD_MAX_MULTIPLIER
+    assert period_warning.level == WarningLevel.INFO
