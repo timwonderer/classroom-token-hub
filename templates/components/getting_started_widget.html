@@ -492,7 +492,6 @@ root {
 // Getting Started Widget functionality
 (function() {
     let widgetDismissed = false;
-    let widgetExpanded = false;
 
     // Initialize widget
     function initGettingStartedWidget() {
@@ -636,7 +635,7 @@ root {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('[name=csrf-token]').content
+                    'X-CSRFToken': document.querySelector('[name="csrf-token"]').content
                 }
             })
             .then(response => response.json())
@@ -650,14 +649,12 @@ root {
                     }, 300);
                 } else {
                     console.error('Failed to dismiss widget:', data.message);
+                    alert('Could not dismiss the getting started guide. Please try again.');
                 }
             })
             .catch(error => {
                 console.error('Error dismissing widget:', error);
-                // Still hide widget on error for better UX
-                widgetDismissed = true;
-                const widget = document.getElementById('gettingStartedWidget');
-                widget.style.display = 'none';
+                alert('An error occurred while dismissing the getting started guide. Please try again.');
             });
         }
     };

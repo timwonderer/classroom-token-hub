@@ -35,7 +35,7 @@ from app.extensions import db, limiter
 from app.models import (
     Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TapEvent, StoreItem, StudentItem,
     StoreItemBlock, RentSettings, RentPayment, RentWaiver, InsurancePolicy, InsurancePolicyBlock,
-    StudentInsurance, InsuranceClaim, HallPassLog, PayrollSettings, PayrollReward, PayrollFine,
+    StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     DemoStudent, Announcement, AdminCredential
@@ -6945,8 +6945,8 @@ def onboarding_status():
         completion['insurance'] = insurance_policies > 0 or onboarding_record.is_widget_task_completed('insurance')
 
         # Hall pass: check if hall pass settings exist OR marked complete
-        # For now, we'll just check if marked complete since hall pass doesn't have specific settings table
-        completion['hall_pass'] = onboarding_record.is_widget_task_completed('hall_pass')
+        hall_pass_settings = HallPassSettings.query.filter_by(teacher_id=admin_id, block=block).first()
+        completion['hall_pass'] = hall_pass_settings is not None or onboarding_record.is_widget_task_completed('hall_pass')
 
         # Personalization: check if class_label is set on TeacherBlock OR marked complete
         has_label = teacher_block.class_label and teacher_block.class_label.strip() != ''
