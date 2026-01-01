@@ -35,7 +35,7 @@ from app.extensions import db, limiter
 from app.models import (
     Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TapEvent, StoreItem, StudentItem,
     StoreItemBlock, RentSettings, RentPayment, RentWaiver, InsurancePolicy, InsurancePolicyBlock,
-    StudentInsurance, InsuranceClaim, HallPassLog, PayrollSettings, PayrollReward, PayrollFine,
+    StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     DemoStudent, Announcement, AdminCredential
@@ -6868,25 +6868,49 @@ def onboarding_status():
     join_code = session.get('current_join_code')
 
     try:
-        # First, get the TeacherBlock to retrieve the block identifier
+        # Get or create onboarding record for this teacher
+        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
+        if not onboarding_record:
+            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
+            db.session.add(onboarding_record)
+            db.session.commit()
+
+        # Check if widget is dismissed
+        if onboarding_record.widget_dismissed:
+            return jsonify({
+                'status': 'success',
+                'dismissed': True,
+                'completion': {}
+            })
+
+        # Get the TeacherBlock to retrieve the block identifier
+        # If join_code is not set in session, try to use the teacher's first TeacherBlock
+        if not join_code:
+            first_teacher_block = TeacherBlock.query.filter_by(
+                teacher_id=admin_id
+            ).order_by(TeacherBlock.id).first()
+            if first_teacher_block:
+                join_code = first_teacher_block.join_code
+                # Set it in session for future requests
+                session['current_join_code'] = join_code
+
         teacher_block = TeacherBlock.query.filter_by(
             teacher_id=admin_id,
             join_code=join_code
         ).first()
 
         if not teacher_block:
+            # No class period selected yet - indicate this so frontend can show appropriate message
             return jsonify({
-                'status': 'error',
-                'message': 'Class period not found'
-            }), 404
+                'status': 'success',
+                'dismissed': False,
+                'no_class_period': True,
+                'completion': {}
+            })
 
-        block = teacher_block.block
-
-        # Get teacher's feature settings using teacher_id and block
-        feature_settings = FeatureSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=block
-        ).first()
+        # Get all blocks for this teacher (for account-wide onboarding checks)
+        all_teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
+        all_blocks = list(set(tb.block for tb in all_teacher_blocks))
 
         # Initialize completion status
         completion = {
@@ -6901,60 +6925,51 @@ def onboarding_status():
             'passkey': False
         }
 
-        # Check roster: has at least one student
-        student_count = StudentBlock.query.filter_by(
-            join_code=join_code
-        ).count()
-        completion['roster'] = student_count > 0
+        # ACCOUNT-WIDE ONBOARDING CHECKS
+        # Onboarding is per teacher account, not per class section
+        # If ANY of the teacher's class sections has a feature set up, mark as complete
 
-        # Check payroll: has payroll settings configured
-        payroll_settings = PayrollSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=block
-        ).first()
-        completion['payroll'] = payroll_settings is not None
+        # Roster: has at least one student in ANY class OR marked complete
+        # Use StudentTeacher to get all students for this teacher
+        student_count = StudentTeacher.query.filter_by(admin_id=admin_id).count()
+        completion['roster'] = student_count > 0 or onboarding_record.is_widget_task_completed('roster')
 
-        # Check store: has at least one store item for this block
-        if feature_settings and feature_settings.store_enabled:
-            store_items = StoreItemBlock.query.filter_by(block=block).count()
-            completion['store'] = store_items > 0
+        # Payroll: has payroll settings configured for ANY block OR marked complete
+        payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id).first()
+        completion['payroll'] = payroll_settings is not None or onboarding_record.is_widget_task_completed('payroll')
 
-        # Check banking: has banking settings configured
-        if feature_settings and feature_settings.banking_enabled:
-            banking_settings = BankingSettings.query.filter_by(
-                teacher_id=admin_id,
-                block=block
-            ).first()
-            completion['banking'] = banking_settings is not None
+        # Store: has at least one store item for ANY block OR marked complete
+        store_items = StoreItem.query.filter_by(teacher_id=admin_id).count()
+        completion['store'] = store_items > 0 or onboarding_record.is_widget_task_completed('store')
 
-        # Check rent: has rent settings configured
-        if feature_settings and feature_settings.rent_enabled:
-            rent_settings = RentSettings.query.filter_by(
-                teacher_id=admin_id,
-                block=block
-            ).first()
-            completion['rent'] = rent_settings is not None
+        # Banking: has banking settings configured for ANY block OR marked complete
+        banking_settings = BankingSettings.query.filter_by(teacher_id=admin_id).first()
+        completion['banking'] = banking_settings is not None or onboarding_record.is_widget_task_completed('banking')
 
-        # Check insurance: has at least one insurance policy for this block
-        if feature_settings and feature_settings.insurance_enabled:
-            insurance_policies = InsurancePolicyBlock.query.filter_by(block=block).count()
-            completion['insurance'] = insurance_policies > 0
+        # Rent: has rent settings configured for ANY block OR marked complete
+        rent_settings = RentSettings.query.filter_by(teacher_id=admin_id).first()
+        completion['rent'] = rent_settings is not None or onboarding_record.is_widget_task_completed('rent')
 
-        # Check hall pass: always available (mark as complete if they've accessed it)
-        # For now, we'll mark it as incomplete until they configure it
-        completion['hall_pass'] = False
+        # Insurance: has at least one insurance policy for ANY block OR marked complete
+        insurance_policies = InsurancePolicy.query.filter_by(teacher_id=admin_id).count()
+        completion['insurance'] = insurance_policies > 0 or onboarding_record.is_widget_task_completed('insurance')
 
-        # Check personalization: check if class_label is set on TeacherBlock
-        completion['personalization'] = (
-            teacher_block.class_label and
-            teacher_block.class_label.strip() != ''
-        )
+        # Hall pass: check if hall pass settings exist for ANY block OR marked complete
+        hall_pass_settings = HallPassSettings.query.filter_by(teacher_id=admin_id).first()
+        completion['hall_pass'] = hall_pass_settings is not None or onboarding_record.is_widget_task_completed('hall_pass')
 
-        # Passkey is complete if at least one credential exists
-        completion['passkey'] = AdminCredential.query.filter_by(admin_id=admin_id).first() is not None
+        # Personalization: check if ANY TeacherBlock has class_label set OR marked complete
+        has_label = any(tb.class_label and tb.class_label.strip() != '' for tb in all_teacher_blocks)
+        completion['personalization'] = has_label or onboarding_record.is_widget_task_completed('personalization')
+
+        # Passkey: check if at least one credential exists OR marked complete
+        has_passkey = AdminCredential.query.filter_by(admin_id=admin_id).first() is not None
+        completion['passkey'] = has_passkey or onboarding_record.is_widget_task_completed('passkey')
 
         return jsonify({
             'status': 'success',
+            'dismissed': False,
+            'no_class_period': False,
             'completion': completion
         })
 
@@ -6982,8 +6997,8 @@ def onboarding_skip_task():
             onboarding_record = TeacherOnboarding(teacher_id=admin_id)
             db.session.add(onboarding_record)
 
-        # Mark task as skipped using the existing method (store as True to indicate it's "completed" via skip)
-        onboarding_record.mark_step_completed(task_name)
+        # Mark widget task as completed (skipped counts as completed)
+        onboarding_record.mark_widget_task_completed(task_name)
 
         db.session.commit()
 
@@ -6996,6 +7011,35 @@ def onboarding_skip_task():
         db.session.rollback()
         current_app.logger.error(f"Error skipping task: {e}")
         return jsonify({'status': 'error', 'message': 'Failed to skip task'}), 500
+
+
+@admin_bp.route('/onboarding/dismiss-widget', methods=['POST'])
+@admin_required
+def onboarding_dismiss_widget():
+    """Dismiss the Getting Started widget permanently."""
+    admin_id = session.get('admin_id')
+
+    try:
+        # Get or create onboarding record
+        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
+        if not onboarding_record:
+            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
+            db.session.add(onboarding_record)
+
+        # Dismiss the widget
+        onboarding_record.dismiss_widget()
+
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Getting Started widget dismissed'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error dismissing widget: {e}")
+        return jsonify({'status': 'error', 'message': 'Failed to dismiss widget'}), 500
 
 
 # ==================== ECONOMY BALANCE CHECKER API ====================

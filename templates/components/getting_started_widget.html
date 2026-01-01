@@ -491,51 +491,12 @@ root {
 <script>
 // Getting Started Widget functionality
 (function() {
-    let widgetState = {
-        dismissed: false,
-        collapsed: false,
-        tasksCompleted: {}
-    };
-
-    // Load state from localStorage
-    function loadWidgetState() {
-        const saved = localStorage.getItem('gettingStartedWidget');
-        if (saved) {
-            widgetState = JSON.parse(saved);
-        }
-    }
-
-    // Save state to localStorage
-    function saveWidgetState() {
-        localStorage.setItem('gettingStartedWidget', JSON.stringify(widgetState));
-    }
+    let widgetDismissed = false;
 
     // Initialize widget
     function initGettingStartedWidget() {
-        loadWidgetState();
-
-        // Don't show if dismissed
-        if (widgetState.dismissed) {
-            return;
-        }
-
-        // Check completion status from backend
+        // Check completion status from backend (which also checks if dismissed)
         checkTaskCompletion();
-
-        // Show widget (starts collapsed as a bubble by default)
-        const widget = document.getElementById('gettingStartedWidget');
-        if (widget) {
-            widget.style.display = 'block';
-
-            // Panel starts collapsed by default (aria-expanded="false" on bubble)
-            // User must click the bubble to expand
-            // If user previously had it expanded, restore that state
-            if (!widgetState.collapsed) {
-                const gsBody = document.getElementById('gsBody');
-                const bsCollapse = new bootstrap.Collapse(gsBody, { toggle: false });
-                bsCollapse.show();
-            }
-        }
     }
 
     // Check which tasks are completed
@@ -544,6 +505,39 @@ root {
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
+                    // Check if widget is dismissed
+                    if (data.dismissed) {
+                        widgetDismissed = true;
+                        const widget = document.getElementById('gettingStartedWidget');
+                        if (widget) {
+                            widget.style.display = 'none';
+                        }
+                        return;
+                    }
+
+                    // Check if no class period is selected
+                    if (data.no_class_period) {
+                        // Show widget but with a message about selecting a class period
+                        const widget = document.getElementById('gettingStartedWidget');
+                        if (widget) {
+                            widget.style.display = 'block';
+                        }
+                        showNoClassPeriodMessage();
+                        return;
+                    }
+
+                    // Show widget
+                    const widget = document.getElementById('gettingStartedWidget');
+                    if (widget) {
+                        widget.style.display = 'block';
+                    }
+
+                    // Remove any "no class period" message if it exists
+                    const noClassMsg = document.querySelector('.gs-no-class-period');
+                    if (noClassMsg) {
+                        noClassMsg.remove();
+                    }
+
                     const completion = data.completion || {};
 
                     // Update UI for each task
@@ -567,8 +561,6 @@ root {
         if (checkbox && item) {
             checkbox.checked = true;
             item.classList.add('completed');
-            widgetState.tasksCompleted[taskName] = true;
-            saveWidgetState();
         }
     }
 
@@ -643,18 +635,29 @@ root {
         }
     }
 
-    // Listen to Bootstrap collapse events to update state
-    const gsBody = document.getElementById('gsBody');
-    if (gsBody) {
-        gsBody.addEventListener('shown.bs.collapse', function () {
-            widgetState.collapsed = false;
-            saveWidgetState();
-        });
+    // Show message when no class period is selected
+    function showNoClassPeriodMessage() {
+        const body = document.querySelector('.gs-panel-body');
+        if (body && !document.querySelector('.gs-no-class-period')) {
+            // Clear existing checklist
+            const checklist = document.querySelector('.gs-checklist');
+            if (checklist) {
+                checklist.style.display = 'none';
+            }
 
-        gsBody.addEventListener('hidden.bs.collapse', function () {
-            widgetState.collapsed = true;
-            saveWidgetState();
-        });
+            const message = document.createElement('div');
+            message.className = 'alert alert-info gs-no-class-period';
+            message.innerHTML = `
+                <div class="d-flex align-items-start gap-2">
+                    <span class="material-symbols-outlined">info</span>
+                    <div>
+                        <strong>Select a Class Period First</strong>
+                        <p class="mb-0 mt-2">To start setting up your classroom economy, please select or create a class period from the class period dropdown in the navigation bar.</p>
+                    </div>
+                </div>
+            `;
+            body.insertBefore(message, body.firstChild);
+        }
     }
 
     // Make panel header also collapsible (click anywhere on header to collapse)
@@ -669,14 +672,32 @@ root {
         event.stopPropagation();
 
         if (confirm('Are you sure you want to dismiss this getting started guide? You can always access settings from the navigation menu.')) {
-            widgetState.dismissed = true;
-            saveWidgetState();
-
-            const widget = document.getElementById('gettingStartedWidget');
-            widget.style.animation = 'slideOutDown 0.3s ease-out';
-            setTimeout(() => {
-                widget.style.display = 'none';
-            }, 300);
+            // Call backend to persist dismissal
+            fetch('/admin/onboarding/dismiss-widget', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name="csrf-token"]').content
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    widgetDismissed = true;
+                    const widget = document.getElementById('gettingStartedWidget');
+                    widget.style.animation = 'slideOutDown 0.3s ease-out';
+                    setTimeout(() => {
+                        widget.style.display = 'none';
+                    }, 300);
+                } else {
+                    console.error('Failed to dismiss widget:', data.message);
+                    alert('Could not dismiss the getting started guide. Please try again.');
+                }
+            })
+            .catch(error => {
+                console.error('Error dismissing widget:', error);
+                alert('An error occurred while dismissing the getting started guide. Please try again.');
+            });
         }
     };
 
@@ -685,7 +706,7 @@ root {
 
     // Re-check completion when returning to page
     document.addEventListener('visibilitychange', function() {
-        if (!document.hidden && !widgetState.dismissed) {
+        if (!document.hidden && !widgetDismissed) {
             checkTaskCompletion();
         }
     });

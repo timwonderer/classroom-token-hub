@@ -1517,6 +1517,12 @@ class TeacherOnboarding(db.Model):
     # Format: {"welcome": true, "roster": false, "features": false, "settings": false}
     steps_completed = db.Column(db.JSON, default=dict, nullable=False)
 
+    # Getting Started widget tracking (separate from main onboarding flow)
+    # Format: {"roster": true, "payroll": true, "store": false, ...}
+    widget_tasks_completed = db.Column(db.JSON, default=dict, nullable=False)
+    widget_dismissed = db.Column(db.Boolean, default=False, nullable=False)
+    widget_dismissed_at = db.Column(db.DateTime, nullable=True)
+
     # Timestamps
     started_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
     completed_at = db.Column(db.DateTime, nullable=True)
@@ -1561,6 +1567,27 @@ class TeacherOnboarding(db.Model):
     def needs_onboarding(self):
         """Check if teacher needs to complete onboarding."""
         return not self.is_completed and not self.is_skipped
+
+    def mark_widget_task_completed(self, task_name):
+        """Mark a getting started widget task as completed/skipped."""
+        from sqlalchemy.orm.attributes import flag_modified
+        if self.widget_tasks_completed is None:
+            self.widget_tasks_completed = {}
+        self.widget_tasks_completed[task_name] = True
+        flag_modified(self, 'widget_tasks_completed')
+        self.last_activity_at = datetime.now(timezone.utc)
+
+    def is_widget_task_completed(self, task_name):
+        """Check if a getting started widget task is completed/skipped."""
+        if self.widget_tasks_completed is None:
+            return False
+        return self.widget_tasks_completed.get(task_name, False)
+
+    def dismiss_widget(self):
+        """Dismiss the getting started widget permanently."""
+        self.widget_dismissed = True
+        self.widget_dismissed_at = datetime.now(timezone.utc)
+        self.last_activity_at = datetime.now(timezone.utc)
 
 
 # -------------------- ANNOUNCEMENT MODEL --------------------
