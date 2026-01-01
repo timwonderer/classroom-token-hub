@@ -187,6 +187,60 @@ default_monthly_rate = 0.010
 
 If a teacher sets rates outside these ranges, agents should warn or request confirmation.
 
+---
+
+## 9. Affordability Constraints (Global Rule)
+
+Agents must validate economic stability:
+
+### 9.1 Budget Survival Test
+
+A student with perfect attendance must be able to:
+
+```
+weekly_savings = CWI - (rent/number_of_weeks_in_month) - utilities - average_store_cost
+weekly_savings >= 0.10 * CWI
+```
+
+If not, agents must lower rent or fines, or increase wages.
+
+### 9.2 Catastrophe Test
+
+A student experiencing:
+
+* two fines
+* loss of insurance
+* unexpected store need
+
+…must **not** fall below zero balance for more than one cycle.
+Agents adjust or warn as needed.
+
+---
+
+## 10. Output Requirements
+
+All agent-generated values must:
+
+* list **inputs** used
+* list **ratios applied**
+* show **resulting calculated values**
+* include **justification using this specification**
+* surface warnings when constraints are violated
+
+Agents should *never* output arbitrary values without referencing this framework.
+
+---
+
+## 11. Non-Negotiable Design Rules
+
+Agents must always enforce:
+
+1. All monetary values scale from CWI.
+2. All pricing must follow ratio bands unless overridden.
+3. Economic operations must preserve student solvency.
+4. Every tool must calculate and surface impacts before applying changes.
+5. All inflation, investment, and loan tools must maintain coherent proportionality across categories.
+
 ```
 bond_rate = inflation_rate + 0.00–0.02
 low_variance = TRUE

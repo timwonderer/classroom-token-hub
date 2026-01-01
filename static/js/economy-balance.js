@@ -87,28 +87,25 @@ class EconomyBalanceChecker {
         if (settingsBlockInput) {
             additionalParams.block = settingsBlockInput.value;
         }
-
         if (feature === 'insurance') {
+            const getParamValue = (targetSelector, paramName) => {
+            if (!targetSelector) return;
+            const field = document.querySelector(targetSelector);
+            if (field) {
+                const value = parseFloat(field.value);
+                if (!isNaN(value) && value > 0) {
+                additionalParams[paramName] = value;
+                }
+            }
+            };
+
             const claimTypeField = claimTypeTarget ? document.querySelector(claimTypeTarget) : null;
             if (claimTypeField && claimTypeField.value) {
-                additionalParams.claim_type = claimTypeField.value;
+            additionalParams.claim_type = claimTypeField.value;
             }
 
-            const coverageField = coverageTarget ? document.querySelector(coverageTarget) : null;
-            if (coverageField) {
-                const coverageValue = parseFloat(coverageField.value);
-                if (!isNaN(coverageValue) && coverageValue > 0) {
-                    additionalParams.max_claim_amount = coverageValue;
-                }
-            }
-
-            const periodField = periodTarget ? document.querySelector(periodTarget) : null;
-            if (periodField) {
-                const periodValue = parseFloat(periodField.value);
-                if (!isNaN(periodValue) && periodValue > 0) {
-                    additionalParams.max_payout_per_period = periodValue;
-                }
-            }
+            getParamValue(coverageTarget, 'max_claim_amount');
+            getParamValue(periodTarget, 'max_payout_per_period');
         }
 
         // For rent validation, collect additional frequency parameters from the form
