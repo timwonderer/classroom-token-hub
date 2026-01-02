@@ -7,9 +7,10 @@ allowing users to access help without leaving the app or losing their session.
 
 import re
 from pathlib import Path
-from flask import Blueprint, render_template, abort, current_app, session, request, url_for
+from flask import Blueprint, abort, current_app, session, request, url_for
 import bleach
 import markdown
+import yaml
 from markdown.extensions.toc import TocExtension
 from markdown.extensions.codehilite import CodeHiliteExtension
 from markdown.extensions.fenced_code import FencedCodeExtension
@@ -61,7 +62,7 @@ DOCS_ALLOWED_PROTOCOLS = ['http', 'https', 'mailto']
 
 def parse_front_matter(content):
     """
-    Extract YAML-style front matter from markdown content.
+    Extract YAML-style front matter from markdown content using PyYAML.
 
     Front matter format:
     ---
@@ -73,8 +74,6 @@ def parse_front_matter(content):
       - another/related/doc
     ---
 
-    Note: Multi-line YAML lists (with dashes) are now supported.
-
     Returns:
         tuple: (metadata_dict, remaining_content)
     """
@@ -82,52 +81,26 @@ def parse_front_matter(content):
         return {}, content
 
     try:
+        # Split on '---' delimiter
         parts = content.split('---', 2)
         if len(parts) < 3:
             return {}, content
 
-        # Simple YAML parsing for basic key: value pairs and lists
-        metadata = {}
+        # Parse YAML front matter using PyYAML
         front_matter = parts[1].strip()
-        current_list_key = None
+        metadata = yaml.safe_load(front_matter) or {}
 
-        for line in front_matter.split('\n'):
-            line = line.strip()
-            if not line or line.startswith('#'):
-                continue
-
-            # Handle list items (YAML dash syntax)
-            if line.startswith('- ') and current_list_key:
-                item = line[2:].strip().strip('"\'')
-                metadata[current_list_key].append(item)
-                continue
-
-            if ':' in line:
-                key, value = line.split(':', 1)
-                key = key.strip()
-                value = value.strip()
-                current_list_key = None
-
-                # Handle bracket-style lists [item1, item2]
-                if value.startswith('[') and value.endswith(']'):
-                    inner = value[1:-1].strip()
-                    if inner:
-                        value = [v.strip().strip('"\'') for v in inner.split(',')]
-                    else:
-                        value = []
-                # Empty value indicates a multi-line list follows
-                elif not value:
-                    metadata[key] = []
-                    current_list_key = key
-                    continue
-                else:
-                    value = value.strip('"\'')
-
-                metadata[key] = value
+        # Ensure metadata is a dictionary
+        if not isinstance(metadata, dict):
+            current_app.logger.warning(f"Front matter is not a dict: {type(metadata)}")
+            return {}, content
 
         return metadata, parts[2].strip()
+    except yaml.YAMLError as e:
+        current_app.logger.warning(f"Failed to parse YAML front matter: {e}")
+        return {}, content
     except Exception as e:
-        current_app.logger.warning(f"Failed to parse front matter: {e}")
+        current_app.logger.warning(f"Unexpected error parsing front matter: {e}")
         return {}, content
 
 
@@ -140,6 +113,10 @@ def render_markdown_content(content):
 
     Returns:
         tuple: (sanitized_html_content, sanitized_toc_html)
+
+    Note: The 'nl2br' extension is intentionally omitted to avoid unexpected
+    line breaks in formatted content like code blocks and tables. Standard
+    markdown requires two spaces at the end of a line or a blank line for breaks.
     """
     md = markdown.Markdown(
         extensions=[
@@ -245,7 +222,12 @@ def view_doc(doc_path):
             abort(404)
 
         # Read and parse the file
-        content = doc_file.read_text(encoding='utf-8')
+        try:
+            content = doc_file.read_text(encoding='utf-8')
+        except UnicodeDecodeError as e:
+            current_app.logger.error(f"File encoding error for {doc_path}: {e}")
+            abort(500, description="Unable to read documentation file (encoding error)")
+
         metadata, body = parse_front_matter(content)
 
         # Convert markdown to HTML (with sanitization)
@@ -271,7 +253,7 @@ def view_doc(doc_path):
             related_paths = metadata['related']
             if isinstance(related_paths, str):
                 related_paths = [related_paths]
-            
+
             for rel_path in related_paths:
                 try:
                     # Remove leading slash and ensure proper path
@@ -309,8 +291,11 @@ def view_doc(doc_path):
             doc_path=doc_path,
         )
 
+    except (OSError, IOError) as e:
+        current_app.logger.error(f"File system error rendering {doc_path}: {e}")
+        abort(500, description="Unable to access documentation file")
     except Exception as e:
-        current_app.logger.exception(f"Error rendering documentation: {e}")
+        current_app.logger.exception(f"Unexpected error rendering documentation: {e}")
         abort(500)
 
 
@@ -330,6 +315,9 @@ def search():
 
     try:
         # Search through all markdown files
+        # Note: This implementation reads all files on every search request.
+        # For production with many documentation files, consider implementing
+        # a search index (in-memory or cached) built at startup for better performance.
         for doc_file in DOCS_ROOT.rglob('*.md'):
             try:
                 # Skip if not relative to DOCS_ROOT (safety check)
@@ -372,12 +360,17 @@ def search():
                         'context': context,
                         'category': rel_path.parts[0] if len(rel_path.parts) > 1 else 'Other'
                     })
+            except (UnicodeDecodeError, OSError, IOError) as e:
+                current_app.logger.warning(f"Error reading file {doc_file}: {e}")
+                continue
             except Exception as e:
-                current_app.logger.warning(f"Error searching {doc_file}: {e}")
+                current_app.logger.warning(f"Unexpected error searching {doc_file}: {e}")
                 continue
 
+    except (OSError, IOError) as e:
+        current_app.logger.error(f"File system error during search: {e}")
     except Exception as e:
-        current_app.logger.exception(f"Search failed: {e}")
+        current_app.logger.exception(f"Unexpected error during search: {e}")
 
     return render_template_with_fallback(
         'docs/search.html',
