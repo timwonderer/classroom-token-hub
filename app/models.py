@@ -758,6 +758,7 @@ class RentItem(db.Model):
     # Store integration
     is_available_in_store = db.Column(db.Boolean, default=False)
     store_price = db.Column(db.Float, nullable=True)  # A la carte price (teacher sets manually)
+    purchase_duration = db.Column(db.String(20), default='per_use')  # 'per_use' or 'per_period'
     store_item_id = db.Column(db.Integer, db.ForeignKey('store_items.id'), nullable=True)
 
     # Metadata

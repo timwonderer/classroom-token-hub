@@ -28,6 +28,23 @@ and this project follows semantic versioning principles.
   - UI dynamically updates toggle label and description based on itemization status
   - JavaScript updates label when items are added/removed dynamically
   - Implemented in `/api/purchase-item` endpoint with proper rent late detection and item validation
+- **Purchase Duration Options for Rent Items** - Teachers can now choose how long individually-purchased rent items last
+  - New `purchase_duration` field on RentItem model: 'per_use' or 'per_period'
+  - **Per Use**: Student must buy each time they want to use it (unlimited purchases allowed)
+  - **Per Rent Period**: Student buys once and can use until next rent is due (limit 1, expires when rent comes due)
+  - Radio button selector in rent itemization UI with clear explanations
+  - Store items automatically configured with appropriate purchase limits based on duration type
+  - Purchase API calculates expiration dates for "per_period" items based on rent frequency settings
+  - Automated expiration when next rent payment is due
+  - Database migration: `h7i8j9k0l1m2_add_purchase_duration_to_rent_items`
+- **Rent Privilege Badges** - Visual indicators on student detail page showing active rent privileges
+  - Displays all "per_period" rent items that students currently have access to
+  - **Green badges**: Privileges covered by paid rent (automatic for rent-paying students)
+  - **Blue badges**: Privileges purchased individually (shows "(Purchased)" label)
+  - Badges only show for non-expired privileges
+  - Rent-paying students automatically receive all per-period privilege badges
+  - Teachers can quickly see which students have which privileges at a glance
+  - Hover over badges to see item descriptions
 
 ## [1.6.0] - 2026-01-01
 
