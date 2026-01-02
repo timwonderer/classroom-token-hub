@@ -553,12 +553,20 @@ root {
                     }
 
                     const completion = data.completion || {};
+                    const skippedTasks = data.skipped || {};
+                    const dataCompleted = data.data_completed || {};
+                    const hasDataCompleted = Object.keys(dataCompleted).length > 0;
 
                     // Update UI for each task
                     Object.keys(completion).forEach(task => {
-                        if (completion[task]) {
-                            markTaskComplete(task);
+                        if (!completion[task]) {
+                            return;
                         }
+
+                        const isSkipped = Boolean(skippedTasks[task]);
+                        const isDoneByData = Boolean(dataCompleted[task]);
+                        const status = isSkipped && (!hasDataCompleted || !isDoneByData) ? 'skipped' : 'done';
+                        markTaskComplete(task, status);
                     });
 
                     updateProgress();
@@ -568,14 +576,36 @@ root {
     }
 
     // Mark task as complete
-    function markTaskComplete(taskName) {
+    function markTaskComplete(taskName, status = 'done') {
         const checkbox = document.getElementById(`task-${taskName}`);
         const item = document.querySelector(`[data-task="${taskName}"]`);
 
         if (checkbox && item) {
             checkbox.checked = true;
             item.classList.add('completed');
+            updateTaskActions(item, status);
         }
+    }
+
+    function updateTaskActions(item, status) {
+        const actions = item.querySelector('.gs-item-actions');
+        if (!actions) {
+            return;
+        }
+
+        if (status === 'skipped') {
+            item.classList.add('skipped');
+        }
+
+        const label = status === 'skipped' ? 'Skipped' : 'Done';
+        const buttonClass = status === 'skipped' ? 'btn-outline-secondary' : 'btn-outline-primary';
+
+        actions.innerHTML = `
+            <button class="btn btn-sm ${buttonClass}" disabled aria-disabled="true">
+                ${label}
+            </button>
+        `;
+        actions.dataset.state = status;
     }
 
     // Skip task (for optional features)
@@ -586,7 +616,7 @@ root {
         const item = document.querySelector(`[data-task="${taskName}"]`);
         if (item) {
             item.classList.add('skipped');
-            markTaskComplete(taskName);  // Mark as "complete" (skipped)
+            markTaskComplete(taskName, 'skipped');  // Mark as "complete" (skipped)
 
             // Save skip status
             fetch('/admin/onboarding/skip-task', {

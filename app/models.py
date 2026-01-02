@@ -1568,12 +1568,12 @@ class TeacherOnboarding(db.Model):
         """Check if teacher needs to complete onboarding."""
         return not self.is_completed and not self.is_skipped
 
-    def mark_widget_task_completed(self, task_name):
+    def mark_widget_task_completed(self, task_name, status=True):
         """Mark a getting started widget task as completed/skipped."""
         from sqlalchemy.orm.attributes import flag_modified
         if self.widget_tasks_completed is None:
             self.widget_tasks_completed = {}
-        self.widget_tasks_completed[task_name] = True
+        self.widget_tasks_completed[task_name] = status
         flag_modified(self, 'widget_tasks_completed')
         self.last_activity_at = datetime.now(timezone.utc)
 
@@ -1581,7 +1581,8 @@ class TeacherOnboarding(db.Model):
         """Check if a getting started widget task is completed/skipped."""
         if self.widget_tasks_completed is None:
             return False
-        return self.widget_tasks_completed.get(task_name, False)
+        status = self.widget_tasks_completed.get(task_name, False)
+        return status is True or status == 'skipped' or status == 'completed'
 
     def dismiss_widget(self):
         """Dismiss the getting started widget permanently."""

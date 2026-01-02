@@ -6924,6 +6924,13 @@ def onboarding_status():
             'personalization': False,
             'passkey': False
         }
+        data_completed = completion.copy()
+        skipped_tasks = {}
+
+        widget_task_statuses = onboarding_record.widget_tasks_completed or {}
+        for task_name, status in widget_task_statuses.items():
+            if status is True or status == 'skipped':
+                skipped_tasks[task_name] = True
 
         # ACCOUNT-WIDE ONBOARDING CHECKS
         # Onboarding is per teacher account, not per class section
@@ -6932,45 +6939,50 @@ def onboarding_status():
         # Roster: has at least one student in ANY class OR marked complete
         # Use StudentTeacher to get all students for this teacher
         student_count = StudentTeacher.query.filter_by(admin_id=admin_id).count()
-        completion['roster'] = student_count > 0 or onboarding_record.is_widget_task_completed('roster')
+        data_completed['roster'] = student_count > 0
 
         # Payroll: has payroll settings configured for ANY block OR marked complete
         payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id).first()
-        completion['payroll'] = payroll_settings is not None or onboarding_record.is_widget_task_completed('payroll')
+        data_completed['payroll'] = payroll_settings is not None
 
         # Store: has at least one store item for ANY block OR marked complete
         store_items = StoreItem.query.filter_by(teacher_id=admin_id).count()
-        completion['store'] = store_items > 0 or onboarding_record.is_widget_task_completed('store')
+        data_completed['store'] = store_items > 0
 
         # Banking: has banking settings configured for ANY block OR marked complete
         banking_settings = BankingSettings.query.filter_by(teacher_id=admin_id).first()
-        completion['banking'] = banking_settings is not None or onboarding_record.is_widget_task_completed('banking')
+        data_completed['banking'] = banking_settings is not None
 
         # Rent: has rent settings configured for ANY block OR marked complete
         rent_settings = RentSettings.query.filter_by(teacher_id=admin_id).first()
-        completion['rent'] = rent_settings is not None or onboarding_record.is_widget_task_completed('rent')
+        data_completed['rent'] = rent_settings is not None
 
         # Insurance: has at least one insurance policy for ANY block OR marked complete
         insurance_policies = InsurancePolicy.query.filter_by(teacher_id=admin_id).count()
-        completion['insurance'] = insurance_policies > 0 or onboarding_record.is_widget_task_completed('insurance')
+        data_completed['insurance'] = insurance_policies > 0
 
         # Hall pass: check if hall pass settings exist for ANY block OR marked complete
         hall_pass_settings = HallPassSettings.query.filter_by(teacher_id=admin_id).first()
-        completion['hall_pass'] = hall_pass_settings is not None or onboarding_record.is_widget_task_completed('hall_pass')
+        data_completed['hall_pass'] = hall_pass_settings is not None
 
         # Personalization: check if ANY TeacherBlock has class_label set OR marked complete
         has_label = any(tb.class_label and tb.class_label.strip() != '' for tb in all_teacher_blocks)
-        completion['personalization'] = has_label or onboarding_record.is_widget_task_completed('personalization')
+        data_completed['personalization'] = has_label
 
         # Passkey: check if at least one credential exists OR marked complete
         has_passkey = AdminCredential.query.filter_by(admin_id=admin_id).first() is not None
-        completion['passkey'] = has_passkey or onboarding_record.is_widget_task_completed('passkey')
+        data_completed['passkey'] = has_passkey
+
+        for task_name in completion.keys():
+            completion[task_name] = data_completed.get(task_name, False) or skipped_tasks.get(task_name, False)
 
         return jsonify({
             'status': 'success',
             'dismissed': False,
             'no_class_period': False,
-            'completion': completion
+            'completion': completion,
+            'data_completed': data_completed,
+            'skipped': skipped_tasks
         })
 
     except Exception as e:
@@ -6997,8 +7009,8 @@ def onboarding_skip_task():
             onboarding_record = TeacherOnboarding(teacher_id=admin_id)
             db.session.add(onboarding_record)
 
-        # Mark widget task as completed (skipped counts as completed)
-        onboarding_record.mark_widget_task_completed(task_name)
+        # Mark widget task as skipped (counts as completed)
+        onboarding_record.mark_widget_task_completed(task_name, status='skipped')
 
         db.session.commit()
 
