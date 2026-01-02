@@ -207,24 +207,30 @@ def view_doc(doc_path):
             current_app.logger.warning(f"Invalid characters in doc path: {doc_path}")
             abort(404)
 
-        # Build a relative Path object
-        safe_path = Path(doc_path)
+        def resolve_doc_path(untrusted_path: str, docs_root: Path) -> Path:
+            """
+            Resolve an untrusted documentation path to a safe file within docs_root.
+            """
+            safe_rel_path = Path(untrusted_path)
 
-        # Reject absolute paths or traversal components
-        if safe_path.is_absolute() or any(part in ("..", "") for part in safe_path.parts):
-            current_app.logger.warning(f"Path traversal attempt: {doc_path}")
-            abort(404)
+            # Reject absolute paths or traversal components early
+            if safe_rel_path.is_absolute() or any(part == ".." for part in safe_rel_path.parts):
+                current_app.logger.warning(f"Path traversal attempt: {untrusted_path}")
+                abort(404)
 
-        # Resolve absolute path under the documentation root
-        docs_root = DOCS_ROOT.resolve()
-        doc_file = (docs_root / safe_path).with_suffix('.md').resolve()
+            # Resolve absolute path under the documentation root and ensure containment
+            root_resolved = docs_root.resolve()
+            candidate = (root_resolved / safe_rel_path).with_suffix('.md').resolve()
+            try:
+                candidate.relative_to(root_resolved)
+            except ValueError:
+                current_app.logger.warning(f"Path outside DOCS_ROOT: {untrusted_path}")
+                abort(404)
 
-        # Ensure the resolved path is within DOCS_ROOT
-        try:
-            doc_file.relative_to(docs_root)
-        except ValueError:
-            current_app.logger.warning(f"Path outside DOCS_ROOT: {doc_path}")
-            abort(404)
+            return candidate
+
+        docs_root = DOCS_ROOT
+        doc_file = resolve_doc_path(doc_path, docs_root)
 
         if not doc_file.exists():
             current_app.logger.info(f"Documentation not found: {doc_path}")
