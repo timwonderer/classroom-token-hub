@@ -673,6 +673,27 @@
                                             <small class="text-muted">Set higher than rent value to incentivize rent payment</small>
                                         </div>
                                     </div>
+
+                                    <div class="row store-price-field" id="store_duration_field_{{ loop.index0 }}" style="{% if not item.is_available_in_store %}display: none;{% endif %}">
+                                        <div class="col-md-12 mb-3">
+                                            <label class="form-label fw-bold">Purchase Duration</label>
+                                            <div class="btn-group w-100" role="group">
+                                                <input type="radio" class="btn-check" name="rent_item_purchase_duration_{{ loop.index0 }}" id="duration_per_use_{{ loop.index0 }}" value="per_use" {% if not item.purchase_duration or item.purchase_duration == 'per_use' %}checked{% endif %}>
+                                                <label class="btn btn-outline-primary" for="duration_per_use_{{ loop.index0 }}">
+                                                    <i class="bi bi-arrow-repeat me-1"></i> Per Use
+                                                </label>
+
+                                                <input type="radio" class="btn-check" name="rent_item_purchase_duration_{{ loop.index0 }}" id="duration_per_period_{{ loop.index0 }}" value="per_period" {% if item.purchase_duration == 'per_period' %}checked{% endif %}>
+                                                <label class="btn btn-outline-success" for="duration_per_period_{{ loop.index0 }}">
+                                                    <i class="bi bi-calendar-check me-1"></i> Per Rent Period
+                                                </label>
+                                            </div>
+                                            <small class="text-muted d-block mt-2">
+                                                <strong>Per Use:</strong> Student must buy each time they want to use it (unlimited purchases)<br>
+                                                <strong>Per Rent Period:</strong> Student buys once and can use until next rent is due (expires when rent comes due)
+                                            </small>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             {% endfor %}
@@ -1009,6 +1030,27 @@ document.addEventListener('DOMContentLoaded', function() {
             <small class="text-muted">Set higher than rent value to incentivize rent payment</small>
           </div>
         </div>
+
+        <div class="row store-price-field" id="store_duration_field_${rentItemCounter}" style="display: none;">
+          <div class="col-md-12 mb-3">
+            <label class="form-label fw-bold">Purchase Duration</label>
+            <div class="btn-group w-100" role="group">
+              <input type="radio" class="btn-check" name="rent_item_purchase_duration_${rentItemCounter}" id="duration_per_use_${rentItemCounter}" value="per_use" checked>
+              <label class="btn btn-outline-primary" for="duration_per_use_${rentItemCounter}">
+                <i class="bi bi-arrow-repeat me-1"></i> Per Use
+              </label>
+
+              <input type="radio" class="btn-check" name="rent_item_purchase_duration_${rentItemCounter}" id="duration_per_period_${rentItemCounter}" value="per_period">
+              <label class="btn btn-outline-success" for="duration_per_period_${rentItemCounter}">
+                <i class="bi bi-calendar-check me-1"></i> Per Rent Period
+              </label>
+            </div>
+            <small class="text-muted d-block mt-2">
+              <strong>Per Use:</strong> Student must buy each time they want to use it (unlimited purchases)<br>
+              <strong>Per Rent Period:</strong> Student buys once and can use until next rent is due (expires when rent comes due)
+            </small>
+          </div>
+        </div>
       </div>
     `;
 
@@ -1046,9 +1088,12 @@ document.addEventListener('DOMContentLoaded', function() {
   window.toggleStorePrice = function(index) {
     const checkbox = document.getElementById(`store_available_${index}`);
     const priceField = document.getElementById(`store_price_field_${index}`);
+    const durationField = document.getElementById(`store_duration_field_${index}`);
 
-    if (checkbox && priceField) {
-      priceField.style.display = checkbox.checked ? 'block' : 'none';
+    if (checkbox) {
+      const isVisible = checkbox.checked ? 'block' : 'none';
+      if (priceField) priceField.style.display = isVisible;
+      if (durationField) durationField.style.display = isVisible;
     }
   };
 

@@ -388,7 +388,33 @@ def purchase_item():
         # --- Standard Item Logic ---
         # Create the student's item(s)
         expiry_date = None
-        if item.item_type == 'delayed' and item.auto_expiry_days:
+
+        # Check if this is a rent item with "per_period" duration
+        from app.models import RentItem, RentSettings
+        rent_item = RentItem.query.filter_by(store_item_id=item.id).first()
+        if rent_item and rent_item.purchase_duration == 'per_period':
+            # Calculate next rent due date and set as expiry
+            rent_setting = RentSettings.query.get(rent_item.rent_setting_id)
+            if rent_setting and rent_setting.is_enabled:
+                now = datetime.now()
+
+                # Calculate next rent due date based on frequency
+                if rent_setting.frequency_type == 'daily':
+                    expiry_date = now + timedelta(days=1)
+                elif rent_setting.frequency_type == 'weekly':
+                    expiry_date = now + timedelta(weeks=1)
+                elif rent_setting.frequency_type == 'monthly':
+                    expiry_date = now + timedelta(days=30)
+                elif rent_setting.frequency_type == 'custom':
+                    if rent_setting.custom_frequency_unit == 'days':
+                        expiry_date = now + timedelta(days=rent_setting.custom_frequency_value)
+                    elif rent_setting.custom_frequency_unit == 'weeks':
+                        expiry_date = now + timedelta(weeks=rent_setting.custom_frequency_value)
+                    elif rent_setting.custom_frequency_unit == 'months':
+                        expiry_date = now + timedelta(days=rent_setting.custom_frequency_value * 30)
+
+        # Fall back to standard auto_expiry for delayed items
+        if expiry_date is None and item.item_type == 'delayed' and item.auto_expiry_days:
             expiry_date = datetime.now(timezone.utc) + timedelta(days=item.auto_expiry_days)
 
         student_item_status = 'purchased'

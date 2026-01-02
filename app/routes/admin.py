@@ -1826,6 +1826,70 @@ def student_detail(student_id):
             f"No join_code in session for student_detail view for student {student.id}. Displaying $0 balances."
         )
 
+    # Get active rent privileges (per-period items)
+    from app.models import RentItem, RentSettings, RentPayment
+    rent_privileges = []
+
+    if teacher_id and join_code:
+        # Get current block/period from join_code
+        from app.models import TeacherBlock
+        teacher_block = TeacherBlock.query.filter_by(join_code=join_code).first()
+        current_block = teacher_block.block if teacher_block else None
+
+        if current_block:
+            # Get rent settings for this period
+            rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
+
+            if rent_settings and rent_settings.is_enabled:
+                # Check if student has paid rent this month
+                now = datetime.now()
+                has_paid_rent = RentPayment.query.filter(
+                    RentPayment.student_id == student.id,
+                    RentPayment.period == current_block,
+                    RentPayment.period_month == now.month,
+                    RentPayment.period_year == now.year,
+                    db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                ).first() is not None
+
+                # Get all per-period rent items
+                from app.models import RentItem
+                per_period_items = RentItem.query.filter_by(
+                    rent_setting_id=rent_settings.id,
+                    purchase_duration='per_period',
+                    is_available_in_store=True
+                ).all()
+
+                for rent_item in per_period_items:
+                    has_privilege = False
+                    source = None
+
+                    if has_paid_rent:
+                        # Student paid rent, automatically has all privileges
+                        has_privilege = True
+                        source = 'rent'
+                    elif rent_item.store_item_id:
+                        # Check if student purchased this item and it hasn't expired
+                        purchased_item = StudentItem.query.filter(
+                            StudentItem.student_id == student.id,
+                            StudentItem.store_item_id == rent_item.store_item_id,
+                            StudentItem.status.in_(['purchased', 'redeemed']),
+                            db.or_(
+                                StudentItem.expiry_date.is_(None),
+                                StudentItem.expiry_date > now
+                            )
+                        ).first()
+
+                        if purchased_item:
+                            has_privilege = True
+                            source = 'purchased'
+
+                    if has_privilege:
+                        rent_privileges.append({
+                            'name': rent_item.name,
+                            'description': rent_item.description,
+                            'source': source  # 'rent' or 'purchased'
+                        })
+
     return render_template('student_detail.html',
                          student=student,
                          transactions=transactions,
@@ -1837,7 +1901,8 @@ def student_detail(student_id):
                          scoped_checking_balance=scoped_checking_balance,
                          scoped_savings_balance=scoped_savings_balance,
                          scoped_total_earnings=scoped_total_earnings,
-                         current_join_code=join_code)
+                         current_join_code=join_code,
+                         rent_privileges=rent_privileges)
 
 
 @admin_bp.route('/student/<int:student_id>/set-hall-passes', methods=['POST'])
@@ -2984,25 +3049,36 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
 
     for rent_item in rent_items:
         if rent_item.is_available_in_store and rent_item.store_price:
+            # Determine purchase limit based on duration type
+            if rent_item.purchase_duration == 'per_period':
+                limit = 1  # Can only buy once per rent period
+                duration_note = "Valid until next rent payment is due."
+            else:  # per_use
+                limit = None  # Unlimited purchases
+                duration_note = "Purchase each time you need to use it."
+
             # Create or update store item
             if rent_item.store_item_id:
                 # Update existing store item
                 store_item = StoreItem.query.get(rent_item.store_item_id)
                 if store_item:
                     store_item.name = rent_item.name
-                    store_item.description = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
+                    base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
+                    store_item.description = f"{base_desc}\n\n{duration_note}"
                     store_item.price = rent_item.store_price
+                    store_item.limit_per_student = limit
                     store_item.is_active = True
             else:
                 # Create new store item
-                description = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
+                base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
+                description = f"{base_desc}\n\n{duration_note}"
                 store_item = StoreItem(
                     teacher_id=teacher_id,
                     name=rent_item.name,
                     description=description,
                     price=rent_item.store_price,
                     item_type='immediate',
-                    limit_per_student=1,  # Single purchase
+                    limit_per_student=limit,
                     is_active=True
                 )
                 db.session.add(store_item)
@@ -3131,6 +3207,7 @@ def rent_settings():
                 is_available = request.form.get(f'rent_item_store_available_{idx}') == 'on'
                 store_price_str = request.form.get(f'rent_item_store_price_{idx}', '').strip()
                 store_price = float(store_price_str) if store_price_str and is_available else None
+                purchase_duration = request.form.get(f'rent_item_purchase_duration_{idx}', 'per_use')
 
                 if item_id and item_id in existing_items:
                     # Update existing item
@@ -3140,6 +3217,7 @@ def rent_settings():
                     item.order_index = int(idx)
                     item.is_available_in_store = is_available
                     item.store_price = store_price
+                    item.purchase_duration = purchase_duration
                     processed_item_ids.add(item_id)
                 else:
                     # Create new item
@@ -3149,7 +3227,8 @@ def rent_settings():
                         description=description if description else None,
                         order_index=int(idx),
                         is_available_in_store=is_available,
-                        store_price=store_price
+                        store_price=store_price,
+                        purchase_duration=purchase_duration
                     )
                     db.session.add(item)
 
