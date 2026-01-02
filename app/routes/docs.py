@@ -152,7 +152,7 @@ def render_markdown_content(content):
             CodeHiliteExtension(linenums=False, css_class='highlight'),
             FencedCodeExtension(),
             TableExtension(),
-            'nl2br',
+
         ]
     )
 

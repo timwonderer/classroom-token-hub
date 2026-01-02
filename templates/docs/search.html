@@ -60,7 +60,7 @@
                             </div>
                             {% if result.context %}
                                 <p class="text-muted mb-0">
-                                    {{ result.context }}...
+                                    {{ result.context | e }}...
                                 </p>
                             {% endif %}
                         </div>

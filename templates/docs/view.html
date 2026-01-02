@@ -109,7 +109,7 @@
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
                 <!-- Mobile Sidebar Toggle -->
                 <div class="d-md-none my-3">
-                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#docsSidebar" aria-expanded="false" aria-controls="docsSidebar">
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#docsSidebar" aria-expanded="false" aria-controls="docsSidebar" aria-label="Toggle documentation sidebar">
                         <span class="material-symbols-outlined" style="vertical-align: middle;">menu</span>
                         Menu
                     </button>
@@ -121,7 +121,11 @@
                     <ol class="breadcrumb">
                         <li class="breadcrumb-item"><a href="{{ url_for('docs.index') }}">Docs</a></li>
                         {% for crumb in breadcrumbs %}
+                            {% if loop.last %}
                             <li class="breadcrumb-item active" aria-current="page">{{ crumb.title }}</li>
+                            {% else %}
+                            <li class="breadcrumb-item"><a href="{{ crumb.url }}">{{ crumb.title }}</a></li>
+                            {% endif %}
                         {% endfor %}
                     </ol>
                 </nav>
