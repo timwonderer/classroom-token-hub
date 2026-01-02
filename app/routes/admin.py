@@ -1676,6 +1676,74 @@ def students():
                     'earnings': student.get_total_earnings(join_code=join_code)
                 }
 
+    # Calculate rent privileges for each student in each block
+    from app.models import RentItem, RentSettings, RentPayment, StudentItem
+    student_rent_privileges = {}  # {(student_id, block): [{'name': ..., 'source': ...}, ...]}
+
+    for block in blocks:
+        if block != "Unassigned" and block in join_codes_by_block:
+            join_code = join_codes_by_block[block]
+
+            # Get rent settings for this block
+            rent_settings = RentSettings.query.filter_by(teacher_id=current_admin, block=block).first()
+
+            if rent_settings and rent_settings.is_enabled:
+                # Get all per-period rent items
+                per_period_items = RentItem.query.filter_by(
+                    rent_setting_id=rent_settings.id,
+                    purchase_duration='per_period',
+                    is_available_in_store=True
+                ).all()
+
+                if per_period_items:
+                    now = datetime.now()
+
+                    for student in students_by_block.get(block, []):
+                        # Check if student has paid rent this month
+                        has_paid_rent = RentPayment.query.filter(
+                            RentPayment.student_id == student.id,
+                            RentPayment.period == block,
+                            RentPayment.period_month == now.month,
+                            RentPayment.period_year == now.year,
+                            db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                        ).first() is not None
+
+                        privileges = []
+
+                        for rent_item in per_period_items:
+                            has_privilege = False
+                            source = None
+
+                            if has_paid_rent:
+                                # Student paid rent, automatically has all privileges
+                                has_privilege = True
+                                source = 'rent'
+                            elif rent_item.store_item_id:
+                                # Check if student purchased this item and it hasn't expired
+                                purchased_item = StudentItem.query.filter(
+                                    StudentItem.student_id == student.id,
+                                    StudentItem.store_item_id == rent_item.store_item_id,
+                                    StudentItem.status.in_(['purchased', 'redeemed']),
+                                    db.or_(
+                                        StudentItem.expiry_date.is_(None),
+                                        StudentItem.expiry_date > now
+                                    )
+                                ).first()
+
+                                if purchased_item:
+                                    has_privilege = True
+                                    source = 'purchased'
+
+                            if has_privilege:
+                                privileges.append({
+                                    'name': rent_item.name,
+                                    'source': source  # 'rent' or 'purchased'
+                                })
+
+                        if privileges:
+                            key = (student.id, block)
+                            student_rent_privileges[key] = privileges
+
     # Ensure all blocks with students have join codes (for legacy teachers with pre-c3aa3a0 classes)
     # If a block has students but no TeacherBlock records, look up or generate a join code
     # Fetch all claimed TeacherBlock records for current admin upfront
@@ -1751,6 +1819,7 @@ def students():
                          unclaimed_seats_by_block=unclaimed_seats_by_block,
                          unclaimed_seats_list_by_block=unclaimed_seats_list_by_block,
                          student_balances_by_block=student_balances_by_block,
+                         student_rent_privileges=student_rent_privileges,
                          current_page="students")
 
 
