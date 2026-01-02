@@ -196,22 +196,28 @@ def view_doc(doc_path):
     """
     # Security: Validate input and prevent directory traversal
     try:
+        # Normalize basic string form and reject empty/whitespace-only paths
+        doc_path = (doc_path or "").strip()
+        if not doc_path:
+            current_app.logger.warning("Empty doc path")
+            abort(404)
+
         # Reject paths with suspicious characters
         if not re.fullmatch(r"[A-Za-z0-9_./-]+", doc_path):
             current_app.logger.warning(f"Invalid characters in doc path: {doc_path}")
             abort(404)
 
-        # Reject path traversal attempts
-        if '..' in doc_path or doc_path.startswith('/'):
+        # Build a relative Path object
+        safe_path = Path(doc_path)
+
+        # Reject absolute paths or traversal components
+        if safe_path.is_absolute() or any(part in ("..", "") for part in safe_path.parts):
             current_app.logger.warning(f"Path traversal attempt: {doc_path}")
             abort(404)
 
-        # Normalize the path
-        safe_path = Path(doc_path).with_suffix('.md')
-
         # Resolve absolute path under the documentation root
         docs_root = DOCS_ROOT.resolve()
-        doc_file = (docs_root / safe_path).resolve()
+        doc_file = (docs_root / safe_path).with_suffix('.md').resolve()
 
         # Ensure the resolved path is within DOCS_ROOT
         try:
