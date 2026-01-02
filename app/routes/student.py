@@ -2139,7 +2139,37 @@ def shop():
         StoreItem.teacher_id == teacher_id  # FIX: Only current class items
     ).order_by(StudentItem.purchase_date.desc()).all()
 
-    return render_template('student_shop.html', student=student, items=items, student_items=student_items)
+    # Check if student has paid rent this month and get per-period rent item IDs
+    from app.models import RentSettings, RentPayment, RentItem
+    join_code = context.get('join_code')
+    current_block = context.get('block')
+    has_paid_rent = False
+    per_period_rent_item_ids = set()
+
+    if teacher_id and join_code and current_block:
+        rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
+        if rent_settings and rent_settings.is_enabled:
+            now = datetime.now()
+            has_paid_rent = RentPayment.query.filter(
+                RentPayment.student_id == student.id,
+                RentPayment.period == current_block,
+                RentPayment.period_month == now.month,
+                RentPayment.period_year == now.year,
+                db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+            ).first() is not None
+
+            # Get all per-period rent items
+            per_period_items = RentItem.query.filter_by(
+                rent_setting_id=rent_settings.id,
+                purchase_duration='per_period',
+                is_available_in_store=True
+            ).all()
+
+            # Collect store item IDs
+            per_period_rent_item_ids = {item.store_item_id for item in per_period_items if item.store_item_id}
+
+    return render_template('student_shop.html', student=student, items=items, student_items=student_items,
+                         has_paid_rent=has_paid_rent, per_period_rent_item_ids=per_period_rent_item_ids)
 
 
 # -------------------- RENT --------------------
