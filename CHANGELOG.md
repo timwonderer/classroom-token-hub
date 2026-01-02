@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows semantic versioning principles.
 
 
+## [Unreleased]
+
+### Added
+- **Rent Itemization Feature** - Teachers can now specify what rent pays for and offer items as store alternatives (MVP)
+  - New `RentItem` model to track itemized rent components (e.g., Desk, Chair, Locker)
+  - Teachers can add/remove/reorder rent items in Rent Settings page
+  - Optional store integration: mark items as "Available in Store" with custom pricing
+  - Automated sync: items marked for store availability automatically create/update StoreItem records
+  - StoreItem created with `limit_per_student=1` to enforce single-purchase behavior
+  - Store items inherit block visibility from rent settings
+  - Student rent view displays itemized breakdown showing what rent includes
+  - Students see store price comparison for items available separately
+  - Pro tip message encourages rent payment by showing total value comparison
+  - Manual pricing (teacher sets store price manually - automatic pricing calculator coming in future release)
+  - Database migration: `a3b4c5d6e7f8_add_rent_items_table`
+
 ## [1.6.0] - 2026-01-01
 
 ### Added

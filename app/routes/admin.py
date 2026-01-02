@@ -2972,6 +2972,59 @@ def hard_delete_store_item(item_id):
 
 # -------------------- RENT SETTINGS --------------------
 
+def _sync_rent_items_to_store(rent_settings, teacher_id, block):
+    """
+    Sync rent items with store items.
+    Creates or updates store items for rent items that are marked as available in store.
+    Deactivates store items for rent items that are no longer available.
+    """
+    from app.models import RentItem, StoreItem, StoreItemBlock
+
+    rent_items = RentItem.query.filter_by(rent_setting_id=rent_settings.id).all()
+
+    for rent_item in rent_items:
+        if rent_item.is_available_in_store and rent_item.store_price:
+            # Create or update store item
+            if rent_item.store_item_id:
+                # Update existing store item
+                store_item = StoreItem.query.get(rent_item.store_item_id)
+                if store_item:
+                    store_item.name = rent_item.name
+                    store_item.description = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
+                    store_item.price = rent_item.store_price
+                    store_item.is_active = True
+            else:
+                # Create new store item
+                description = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
+                store_item = StoreItem(
+                    teacher_id=teacher_id,
+                    name=rent_item.name,
+                    description=description,
+                    price=rent_item.store_price,
+                    item_type='immediate',
+                    limit_per_student=1,  # Single purchase
+                    is_active=True
+                )
+                db.session.add(store_item)
+                db.session.flush()  # Get the store_item.id
+
+                # Link the rent item to this store item
+                rent_item.store_item_id = store_item.id
+
+                # Set block visibility to match the rent setting's block
+                if block:
+                    store_item_block = StoreItemBlock(store_item_id=store_item.id, block=block)
+                    db.session.add(store_item_block)
+
+        elif rent_item.store_item_id:
+            # Deactivate store item if it exists but is no longer available
+            store_item = StoreItem.query.get(rent_item.store_item_id)
+            if store_item:
+                store_item.is_active = False
+
+    db.session.commit()
+
+
 @admin_bp.route('/rent-settings', methods=['GET', 'POST'])
 @admin_required
 def rent_settings():
@@ -3049,6 +3102,71 @@ def rent_settings():
             block_settings.prevent_purchase_when_late = request.form.get('prevent_purchase_when_late') == 'on'
 
         db.session.commit()
+
+        # Handle rent items (only for the current settings_block, not apply_to_all)
+        if not apply_to_all and settings:
+            from app.models import RentItem
+            # Process rent items from form
+            # Collect all rent item indices from form keys
+            rent_item_indices = set()
+            for key in request.form.keys():
+                if key.startswith('rent_item_name_'):
+                    idx = key.split('_')[-1]
+                    rent_item_indices.add(idx)
+
+            # Get existing rent items for this setting
+            existing_items = {str(item.id): item for item in settings.rent_items.all()}
+            processed_item_ids = set()
+
+            # Process each rent item from the form
+            for idx in sorted(rent_item_indices):
+                item_id = request.form.get(f'rent_item_id_{idx}')
+                name = request.form.get(f'rent_item_name_{idx}', '').strip()
+
+                # Skip empty items
+                if not name:
+                    continue
+
+                description = request.form.get(f'rent_item_description_{idx}', '').strip()
+                is_available = request.form.get(f'rent_item_store_available_{idx}') == 'on'
+                store_price_str = request.form.get(f'rent_item_store_price_{idx}', '').strip()
+                store_price = float(store_price_str) if store_price_str and is_available else None
+
+                if item_id and item_id in existing_items:
+                    # Update existing item
+                    item = existing_items[item_id]
+                    item.name = name
+                    item.description = description if description else None
+                    item.order_index = int(idx)
+                    item.is_available_in_store = is_available
+                    item.store_price = store_price
+                    processed_item_ids.add(item_id)
+                else:
+                    # Create new item
+                    item = RentItem(
+                        rent_setting_id=settings.id,
+                        name=name,
+                        description=description if description else None,
+                        order_index=int(idx),
+                        is_available_in_store=is_available,
+                        store_price=store_price
+                    )
+                    db.session.add(item)
+
+            # Delete items that were removed
+            for item_id, item in existing_items.items():
+                if item_id not in processed_item_ids:
+                    # If this item had a linked store item, deactivate it
+                    if item.store_item_id:
+                        store_item = StoreItem.query.get(item.store_item_id)
+                        if store_item:
+                            store_item.is_active = False
+                    db.session.delete(item)
+
+            db.session.commit()
+
+            # Sync rent items with store items
+            _sync_rent_items_to_store(settings, admin_id, settings_block)
         if apply_to_all:
             flash(f"Rent settings applied to all {len(blocks_to_update)} classes!", "success")
         else:
@@ -3116,6 +3234,12 @@ def rent_settings():
         if rent_per_month > estimated_monthly_payroll * 0.8:  # If rent is more than 80% of payroll
             payroll_warning = f"Rent (${rent_per_month:.2f}/month) exceeds recommended 80% of estimated monthly payroll (${estimated_monthly_payroll:.2f}). Students may struggle to afford rent."
 
+    # Get rent items for this setting
+    rent_items = []
+    if settings:
+        from app.models import RentItem
+        rent_items = RentItem.query.filter_by(rent_setting_id=settings.id).order_by(RentItem.order_index).all()
+
     return render_template('admin_rent_settings.html',
                           settings=settings,
                           total_students=total_students,
@@ -3126,7 +3250,8 @@ def rent_settings():
                           payroll_settings=payroll_settings,
                           settings_block=settings_block,
                           teacher_blocks=teacher_blocks,
-                          class_labels_by_block=class_labels_by_block)
+                          class_labels_by_block=class_labels_by_block,
+                          rent_items=rent_items)
 
 
 @admin_bp.route('/rent-waiver/add', methods=['POST'])

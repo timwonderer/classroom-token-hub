@@ -601,6 +601,90 @@
                 </div>
             </div>
 
+            <!-- Rent Itemization -->
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="headingItemization">
+                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseItemization" aria-expanded="false" aria-controls="collapseItemization">
+                        <i class="bi bi-list-check me-2"></i><strong>Rent Itemization (Optional)</strong>
+                        <span class="badge bg-info ms-2">{% if rent_items|length > 0 %}{{ rent_items|length }} items{% else %}Not configured{% endif %}</span>
+                    </button>
+                </h2>
+                <div id="collapseItemization" class="accordion-collapse collapse" aria-labelledby="headingItemization" data-bs-parent="#rentSettingsAccordion">
+                    <div class="accordion-body">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>What is Rent Itemization?</strong><br>
+                            Specify what rent pays for (e.g., "Desk", "Chair", "Locker"). Optionally, you can make these items available in the store as single-purchase alternatives. This creates an incentive for students to pay rent instead of buying à la carte.
+                        </div>
+
+                        <div id="rentItemsContainer">
+                            {% if rent_items|length == 0 %}
+                            <div class="text-center text-muted py-4" id="noItemsPlaceholder">
+                                <i class="bi bi-inbox fs-1"></i>
+                                <p class="mb-0">No rent items configured yet. Click "Add Item" to get started.</p>
+                            </div>
+                            {% else %}
+                            {% for item in rent_items %}
+                            <div class="card mb-3 rent-item-card" data-item-index="{{ loop.index0 }}">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="mb-0"><i class="bi bi-grip-vertical me-2"></i>Item #{{ loop.index }}</h6>
+                                        <button type="button" class="btn btn-sm btn-danger" onclick="removeRentItem(this)">
+                                            <i class="bi bi-trash"></i> Remove
+                                        </button>
+                                    </div>
+
+                                    <input type="hidden" name="rent_item_id_{{ loop.index0 }}" value="{{ item.id }}">
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold">Item Name <span class="text-danger">*</span></label>
+                                            <input type="text" class="form-control" name="rent_item_name_{{ loop.index0 }}" value="{{ item.name }}" placeholder="e.g., Desk, Chair, Locker" required>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold">Description (Optional)</label>
+                                            <input type="text" class="form-control" name="rent_item_description_{{ loop.index0 }}" value="{{ item.description or '' }}" placeholder="Optional description">
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <div class="form-check form-switch">
+                                                <input class="form-check-input" type="checkbox" name="rent_item_store_available_{{ loop.index0 }}" id="store_available_{{ loop.index0 }}" {% if item.is_available_in_store %}checked{% endif %} onchange="toggleStorePrice({{ loop.index0 }})">
+                                                <label class="form-check-label fw-bold" for="store_available_{{ loop.index0 }}">
+                                                    Available in Store (single purchase)
+                                                </label>
+                                            </div>
+                                            <small class="text-muted">Allow students to buy this item separately in the store</small>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3 store-price-field" id="store_price_field_{{ loop.index0 }}" style="{% if not item.is_available_in_store %}display: none;{% endif %}">
+                                            <label class="form-label fw-bold">Store Price ($) <span class="text-danger">*</span></label>
+                                            <input type="number" step="0.01" min="0" class="form-control" name="rent_item_store_price_{{ loop.index0 }}" value="{{ item.store_price or '' }}" placeholder="Price if purchased separately">
+                                            <small class="text-muted">Set higher than rent value to incentivize rent payment</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% endif %}
+                        </div>
+
+                        <button type="button" class="btn btn-success mt-2" onclick="addRentItem()">
+                            <i class="bi bi-plus-circle me-2"></i>Add Rent Item
+                        </button>
+
+                        {% if rent_items|length > 0 %}
+                        <div class="alert alert-warning mt-3">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Note:</strong> Items marked as "Available in Store" will be automatically added to your class store when you save. If you uncheck this option, the store item will be deactivated.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <div class="text-end">
@@ -860,6 +944,106 @@ document.addEventListener('DOMContentLoaded', function() {
       // Disable class selector when apply to all is checked
       if (settingsBlockSelector) {
         settingsBlockSelector.disabled = this.checked;
+      }
+    });
+  }
+
+  // -------------------- RENT ITEMIZATION FUNCTIONS --------------------
+  let rentItemCounter = {{ rent_items|length }};
+
+  window.addRentItem = function() {
+    const container = document.getElementById('rentItemsContainer');
+    const placeholder = document.getElementById('noItemsPlaceholder');
+
+    // Hide placeholder if it exists
+    if (placeholder) {
+      placeholder.style.display = 'none';
+    }
+
+    const itemCard = document.createElement('div');
+    itemCard.className = 'card mb-3 rent-item-card';
+    itemCard.setAttribute('data-item-index', rentItemCounter);
+    itemCard.innerHTML = `
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="mb-0"><i class="bi bi-grip-vertical me-2"></i>Item #${rentItemCounter + 1}</h6>
+          <button type="button" class="btn btn-sm btn-danger" onclick="removeRentItem(this)">
+            <i class="bi bi-trash"></i> Remove
+          </button>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Item Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="rent_item_name_${rentItemCounter}" placeholder="e.g., Desk, Chair, Locker" required>
+          </div>
+
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Description (Optional)</label>
+            <input type="text" class="form-control" name="rent_item_description_${rentItemCounter}" placeholder="Optional description">
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6 mb-3">
+            <div class="form-check form-switch">
+              <input class="form-check-input" type="checkbox" name="rent_item_store_available_${rentItemCounter}" id="store_available_${rentItemCounter}" onchange="toggleStorePrice(${rentItemCounter})">
+              <label class="form-check-label fw-bold" for="store_available_${rentItemCounter}">
+                Available in Store (single purchase)
+              </label>
+            </div>
+            <small class="text-muted">Allow students to buy this item separately in the store</small>
+          </div>
+
+          <div class="col-md-6 mb-3 store-price-field" id="store_price_field_${rentItemCounter}" style="display: none;">
+            <label class="form-label fw-bold">Store Price ($) <span class="text-danger">*</span></label>
+            <input type="number" step="0.01" min="0" class="form-control" name="rent_item_store_price_${rentItemCounter}" placeholder="Price if purchased separately">
+            <small class="text-muted">Set higher than rent value to incentivize rent payment</small>
+          </div>
+        </div>
+      </div>
+    `;
+
+    container.appendChild(itemCard);
+    rentItemCounter++;
+
+    // Renumber all items
+    renumberRentItems();
+  };
+
+  window.removeRentItem = function(button) {
+    const card = button.closest('.rent-item-card');
+    card.remove();
+
+    // Show placeholder if no items left
+    const container = document.getElementById('rentItemsContainer');
+    const cards = container.querySelectorAll('.rent-item-card');
+    if (cards.length === 0) {
+      const placeholder = document.getElementById('noItemsPlaceholder');
+      if (placeholder) {
+        placeholder.style.display = 'block';
+      }
+    }
+
+    // Renumber remaining items
+    renumberRentItems();
+  };
+
+  window.toggleStorePrice = function(index) {
+    const checkbox = document.getElementById(`store_available_${index}`);
+    const priceField = document.getElementById(`store_price_field_${index}`);
+
+    if (checkbox && priceField) {
+      priceField.style.display = checkbox.checked ? 'block' : 'none';
+    }
+  };
+
+  function renumberRentItems() {
+    const cards = document.querySelectorAll('.rent-item-card');
+    cards.forEach((card, index) => {
+      const header = card.querySelector('h6');
+      if (header) {
+        header.innerHTML = `<i class="bi bi-grip-vertical me-2"></i>Item #${index + 1}`;
       }
     });
   }

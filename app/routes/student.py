@@ -2409,6 +2409,12 @@ def rent():
         RentPayment.payment_date.desc()
     ).limit(24).all()  # Increased to show more history with multiple periods
 
+    # Get rent items for this setting to show what rent includes
+    from app.models import RentItem
+    rent_items = []
+    if settings:
+        rent_items = RentItem.query.filter_by(rent_setting_id=settings.id).order_by(RentItem.order_index).all()
+
     return render_template('student_rent.html',
                           student=student,
                           settings=settings,
@@ -2421,7 +2427,8 @@ def rent():
                           due_date=due_date,
                           grace_end_date=grace_end_date,
                           preview_start_date=preview_start_date,
-                          payment_history=payment_history)
+                          payment_history=payment_history,
+                          rent_items=rent_items)
 
 
 @student_bp.route('/rent/pay/<period>', methods=['POST'])
