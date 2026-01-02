@@ -393,25 +393,104 @@ def purchase_item():
         from app.models import RentItem, RentSettings
         rent_item = RentItem.query.filter_by(store_item_id=item.id).first()
         if rent_item and rent_item.purchase_duration == 'per_period':
-            # Calculate next rent due date and set as expiry
+            # Calculate NEXT rent due date and set as expiry
             rent_setting = RentSettings.query.get(rent_item.rent_setting_id)
             if rent_setting and rent_setting.is_enabled:
                 now = datetime.now()
 
-                # Calculate next rent due date based on frequency
-                if rent_setting.frequency_type == 'daily':
-                    expiry_date = now + timedelta(days=1)
-                elif rent_setting.frequency_type == 'weekly':
-                    expiry_date = now + timedelta(weeks=1)
-                elif rent_setting.frequency_type == 'monthly':
-                    expiry_date = now + timedelta(days=30)
-                elif rent_setting.frequency_type == 'custom':
-                    if rent_setting.custom_frequency_unit == 'days':
-                        expiry_date = now + timedelta(days=rent_setting.custom_frequency_value)
-                    elif rent_setting.custom_frequency_unit == 'weeks':
-                        expiry_date = now + timedelta(weeks=rent_setting.custom_frequency_value)
-                    elif rent_setting.custom_frequency_unit == 'months':
-                        expiry_date = now + timedelta(days=rent_setting.custom_frequency_value * 30)
+                # Calculate next rent due date based on frequency and first_rent_due_date
+                if rent_setting.first_rent_due_date:
+                    first_due = rent_setting.first_rent_due_date
+
+                    if rent_setting.frequency_type == 'daily':
+                        # Find next day after today
+                        days_since_first = (now.date() - first_due.date()).days
+                        if days_since_first < 0:
+                            expiry_date = first_due
+                        else:
+                            # Next occurrence is tomorrow (or first_due if not yet reached)
+                            expiry_date = now.replace(hour=23, minute=59, second=59) + timedelta(days=1)
+
+                    elif rent_setting.frequency_type == 'weekly':
+                        # Find next weekly occurrence
+                        days_since_first = (now.date() - first_due.date()).days
+                        if days_since_first < 0:
+                            expiry_date = first_due
+                        else:
+                            weeks_passed = days_since_first // 7
+                            next_due = first_due + timedelta(weeks=weeks_passed + 1)
+                            expiry_date = next_due
+
+                    elif rent_setting.frequency_type == 'monthly':
+                        # Find next monthly occurrence
+                        # If we're before the first due date, use that
+                        if now < first_due:
+                            expiry_date = first_due
+                        else:
+                            # Calculate how many months have passed since first due
+                            months_passed = (now.year - first_due.year) * 12 + (now.month - first_due.month)
+
+                            # Try next month's due date
+                            next_month = first_due.month + months_passed + 1
+                            next_year = first_due.year + ((next_month - 1) // 12)
+                            next_month = ((next_month - 1) % 12) + 1
+
+                            # Keep the same day of month as first_due
+                            try:
+                                expiry_date = first_due.replace(year=next_year, month=next_month)
+                            except ValueError:
+                                # Handle case where day doesn't exist in next month (e.g., Jan 31 -> Feb 31)
+                                import calendar
+                                last_day = calendar.monthrange(next_year, next_month)[1]
+                                expiry_date = first_due.replace(year=next_year, month=next_month, day=last_day)
+
+                            # If next due date is still in the past or today, add another month
+                            if expiry_date.date() <= now.date():
+                                next_month = next_month + 1
+                                next_year = next_year + ((next_month - 1) // 12)
+                                next_month = ((next_month - 1) % 12) + 1
+                                try:
+                                    expiry_date = first_due.replace(year=next_year, month=next_month)
+                                except ValueError:
+                                    last_day = calendar.monthrange(next_year, next_month)[1]
+                                    expiry_date = first_due.replace(year=next_year, month=next_month, day=last_day)
+
+                    elif rent_setting.frequency_type == 'custom':
+                        # Calculate based on custom frequency
+                        days_since_first = (now.date() - first_due.date()).days
+
+                        if days_since_first < 0:
+                            expiry_date = first_due
+                        else:
+                            # Calculate period length in days
+                            if rent_setting.custom_frequency_unit == 'days':
+                                period_days = rent_setting.custom_frequency_value
+                            elif rent_setting.custom_frequency_unit == 'weeks':
+                                period_days = rent_setting.custom_frequency_value * 7
+                            elif rent_setting.custom_frequency_unit == 'months':
+                                period_days = rent_setting.custom_frequency_value * 30
+                            else:
+                                period_days = 30  # fallback
+
+                            # Find next occurrence
+                            periods_passed = days_since_first // period_days
+                            expiry_date = first_due + timedelta(days=period_days * (periods_passed + 1))
+                else:
+                    # No first_rent_due_date set, use simple calculation from now
+                    # This is a fallback for backwards compatibility
+                    if rent_setting.frequency_type == 'daily':
+                        expiry_date = now + timedelta(days=1)
+                    elif rent_setting.frequency_type == 'weekly':
+                        expiry_date = now + timedelta(weeks=1)
+                    elif rent_setting.frequency_type == 'monthly':
+                        expiry_date = now + timedelta(days=30)
+                    elif rent_setting.frequency_type == 'custom':
+                        if rent_setting.custom_frequency_unit == 'days':
+                            expiry_date = now + timedelta(days=rent_setting.custom_frequency_value)
+                        elif rent_setting.custom_frequency_unit == 'weeks':
+                            expiry_date = now + timedelta(weeks=rent_setting.custom_frequency_value)
+                        elif rent_setting.custom_frequency_unit == 'months':
+                            expiry_date = now + timedelta(days=rent_setting.custom_frequency_value * 30)
 
         # Fall back to standard auto_expiry for delayed items
         if expiry_date is None and item.item_type == 'delayed' and item.auto_expiry_days:
