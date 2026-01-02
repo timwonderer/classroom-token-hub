@@ -100,7 +100,7 @@
                         <br><small class="text-muted">{{ item.description }}</small>
                         {% endif %}
                         {% if item.is_available_in_store and item.store_price %}
-                        <br><small class="text-warning">💡 Available separately in store for ${{ "%.2f"|format(item.store_price) }}</small>
+                        <br><small class="text-secondary">💡 Available separately in store for ${{ "%.2f"|format(item.store_price) }} <strong>per use</strong></small>
                         {% endif %}
                     </div>
                 </li>
