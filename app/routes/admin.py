@@ -1567,6 +1567,162 @@ def logout():
     return redirect(url_for("admin.login"))
 
 
+# -------------------- Rent privilege helpers --------------------
+
+def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, students_by_block):
+    """
+    Build a dict {(student_id, block): [privileges]} using batched queries to avoid N+1 issues.
+    """
+    now = datetime.now(timezone.utc)
+    student_rent_privileges = {}
+
+    for block in blocks:
+        if block == "Unassigned" or block not in join_codes_by_block:
+            continue
+
+        join_code = join_codes_by_block[block]
+        block_students = students_by_block.get(block, [])
+        if not block_students:
+            continue
+
+        rent_settings = RentSettings.query.filter_by(teacher_id=current_admin, block=block).first()
+        if not rent_settings or not rent_settings.is_enabled:
+            continue
+
+        per_period_items = RentItem.query.filter_by(
+            rent_setting_id=rent_settings.id,
+            purchase_duration='per_period',
+            is_available_in_store=True
+        ).all()
+
+        if not per_period_items:
+            continue
+
+        student_ids = [student.id for student in block_students]
+
+        # Batch rent payments for the month
+        rent_payment_rows = (
+            RentPayment.query
+            .filter(
+                RentPayment.student_id.in_(student_ids),
+                RentPayment.period == block,
+                RentPayment.period_month == now.month,
+                RentPayment.period_year == now.year,
+                db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+            )
+            .with_entities(RentPayment.student_id)
+            .all()
+        )
+        paid_student_ids = {row[0] for row in rent_payment_rows}
+
+        store_item_ids = [
+            rent_item.store_item_id
+            for rent_item in per_period_items
+            if getattr(rent_item, "store_item_id", None)
+        ]
+
+        items_by_student = {}
+        if store_item_ids:
+            student_items = StudentItem.query.filter(
+                StudentItem.student_id.in_(student_ids),
+                StudentItem.store_item_id.in_(store_item_ids),
+                StudentItem.status.in_(['purchased', 'redeemed']),
+                db.or_(
+                    StudentItem.expiry_date.is_(None),
+                    StudentItem.expiry_date > now
+                )
+            ).all()
+
+            for si in student_items:
+                items_by_student.setdefault(si.student_id, set()).add(si.store_item_id)
+
+        for student in block_students:
+            privileges = []
+            has_paid_rent = student.id in paid_student_ids
+            student_store_items = items_by_student.get(student.id, set())
+
+            for rent_item in per_period_items:
+                source = None
+
+                if has_paid_rent:
+                    source = 'rent'
+                elif getattr(rent_item, "store_item_id", None) and rent_item.store_item_id in student_store_items:
+                    source = 'purchased'
+
+                if source:
+                    privileges.append({
+                        'name': rent_item.name,
+                        'source': source
+                    })
+
+            if privileges:
+                key = (student.id, block)
+                student_rent_privileges[key] = privileges
+
+    return student_rent_privileges
+
+
+def _get_rent_privileges_for_student(student, teacher_id, join_code):
+    """Return rent privileges for a single student in the current class context."""
+    rent_privileges = []
+    if not (teacher_id and join_code):
+        return rent_privileges
+
+    teacher_block = TeacherBlock.query.filter_by(join_code=join_code).first()
+    current_block = teacher_block.block if teacher_block else None
+    if not current_block:
+        return rent_privileges
+
+    rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
+    if not rent_settings or not rent_settings.is_enabled:
+        return rent_privileges
+
+    now = datetime.now(timezone.utc)
+    has_paid_rent = RentPayment.query.filter(
+        RentPayment.student_id == student.id,
+        RentPayment.period == current_block,
+        RentPayment.period_month == now.month,
+        RentPayment.period_year == now.year,
+        db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+    ).first() is not None
+
+    per_period_items = RentItem.query.filter_by(
+        rent_setting_id=rent_settings.id,
+        purchase_duration='per_period',
+        is_available_in_store=True
+    ).all()
+
+    store_item_ids = [item.store_item_id for item in per_period_items if item.store_item_id]
+    items_by_student = set()
+    if store_item_ids:
+        student_items = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.store_item_id.in_(store_item_ids),
+            StudentItem.status.in_(['purchased', 'redeemed']),
+            db.or_(
+                StudentItem.expiry_date.is_(None),
+                StudentItem.expiry_date > now
+            )
+        ).all()
+        items_by_student = {si.store_item_id for si in student_items}
+
+    for rent_item in per_period_items:
+        source = None
+        if has_paid_rent:
+            source = 'rent'
+        elif rent_item.store_item_id and rent_item.store_item_id in items_by_student:
+            source = 'purchased'
+
+        if source:
+            rent_privileges.append({
+                'name': rent_item.name,
+                'description': rent_item.description,
+                'source': source
+            })
+
+    return rent_privileges
+
+
 # -------------------- STUDENT MANAGEMENT --------------------
 
 @admin_bp.route('/students')
@@ -1676,73 +1832,9 @@ def students():
                     'earnings': student.get_total_earnings(join_code=join_code)
                 }
 
-    # Calculate rent privileges for each student in each block
+    # Calculate rent privileges for each student in each block (batched)
     from app.models import RentItem, RentSettings, RentPayment, StudentItem
-    student_rent_privileges = {}  # {(student_id, block): [{'name': ..., 'source': ...}, ...]}
-
-    for block in blocks:
-        if block != "Unassigned" and block in join_codes_by_block:
-            join_code = join_codes_by_block[block]
-
-            # Get rent settings for this block
-            rent_settings = RentSettings.query.filter_by(teacher_id=current_admin, block=block).first()
-
-            if rent_settings and rent_settings.is_enabled:
-                # Get all per-period rent items
-                per_period_items = RentItem.query.filter_by(
-                    rent_setting_id=rent_settings.id,
-                    purchase_duration='per_period',
-                    is_available_in_store=True
-                ).all()
-
-                if per_period_items:
-                    now = datetime.now()
-
-                    for student in students_by_block.get(block, []):
-                        # Check if student has paid rent this month
-                        has_paid_rent = RentPayment.query.filter(
-                            RentPayment.student_id == student.id,
-                            RentPayment.period == block,
-                            RentPayment.period_month == now.month,
-                            RentPayment.period_year == now.year,
-                            db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
-                        ).first() is not None
-
-                        privileges = []
-
-                        for rent_item in per_period_items:
-                            has_privilege = False
-                            source = None
-
-                            if has_paid_rent:
-                                # Student paid rent, automatically has all privileges
-                                has_privilege = True
-                                source = 'rent'
-                            elif rent_item.store_item_id:
-                                # Check if student purchased this item and it hasn't expired
-                                purchased_item = StudentItem.query.filter(
-                                    StudentItem.student_id == student.id,
-                                    StudentItem.store_item_id == rent_item.store_item_id,
-                                    StudentItem.status.in_(['purchased', 'redeemed']),
-                                    db.or_(
-                                        StudentItem.expiry_date.is_(None),
-                                        StudentItem.expiry_date > now
-                                    )
-                                ).first()
-
-                                if purchased_item:
-                                    has_privilege = True
-                                    source = 'purchased'
-
-                            if has_privilege:
-                                privileges.append({
-                                    'name': rent_item.name,
-                                    'source': source  # 'rent' or 'purchased'
-                                })
-
-                        if privileges:
-                            key = (student.id, block)
-                            student_rent_privileges[key] = privileges
+    student_rent_privileges = _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, students_by_block)
 
     # Ensure all blocks with students have join codes (for legacy teachers with pre-c3aa3a0 classes)
     # If a block has students but no TeacherBlock records, look up or generate a join code
@@ -1896,68 +1988,7 @@ def student_detail(student_id):
         )
 
     # Get active rent privileges (per-period items)
-    from app.models import RentItem, RentSettings, RentPayment
-    rent_privileges = []
-
-    if teacher_id and join_code:
-        # Get current block/period from join_code
-        from app.models import TeacherBlock
-        teacher_block = TeacherBlock.query.filter_by(join_code=join_code).first()
-        current_block = teacher_block.block if teacher_block else None
-
-        if current_block:
-            # Get rent settings for this period
-            rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
-
-            if rent_settings and rent_settings.is_enabled:
-                # Check if student has paid rent this month
-                now = datetime.now()
-                has_paid_rent = RentPayment.query.filter(
-                    RentPayment.student_id == student.id,
-                    RentPayment.period == current_block,
-                    RentPayment.period_month == now.month,
-                    RentPayment.period_year == now.year,
-                    db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
-                ).first() is not None
-
-                # Get all per-period rent items
-                from app.models import RentItem
-                per_period_items = RentItem.query.filter_by(
-                    rent_setting_id=rent_settings.id,
-                    purchase_duration='per_period',
-                    is_available_in_store=True
-                ).all()
-
-                for rent_item in per_period_items:
-                    has_privilege = False
-                    source = None
-
-                    if has_paid_rent:
-                        # Student paid rent, automatically has all privileges
-                        has_privilege = True
-                        source = 'rent'
-                    elif rent_item.store_item_id:
-                        # Check if student purchased this item and it hasn't expired
-                        purchased_item = StudentItem.query.filter(
-                            StudentItem.student_id == student.id,
-                            StudentItem.store_item_id == rent_item.store_item_id,
-                            StudentItem.status.in_(['purchased', 'redeemed']),
-                            db.or_(
-                                StudentItem.expiry_date.is_(None),
-                                StudentItem.expiry_date > now
-                            )
-                        ).first()
-
-                        if purchased_item:
-                            has_privilege = True
-                            source = 'purchased'
-
-                    if has_privilege:
-                        rent_privileges.append({
-                            'name': rent_item.name,
-                            'description': rent_item.description,
-                            'source': source  # 'rent' or 'purchased'
-                        })
+    rent_privileges = _get_rent_privileges_for_student(student, teacher_id, join_code)
 
     return render_template('student_detail.html',
                          student=student,
@@ -3137,6 +3168,8 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                     store_item.price = rent_item.store_price
                     store_item.limit_per_student = limit
                     store_item.is_active = True
+                    if block:
+                        store_item.set_blocks([block])
             else:
                 # Create new store item
                 base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
@@ -3275,7 +3308,22 @@ def rent_settings():
                 description = request.form.get(f'rent_item_description_{idx}', '').strip()
                 is_available = request.form.get(f'rent_item_store_available_{idx}') == 'on'
                 store_price_str = request.form.get(f'rent_item_store_price_{idx}', '').strip()
-                store_price = float(store_price_str) if store_price_str and is_available else None
+                store_price = None
+                if is_available:
+                    if not store_price_str:
+                        flash('Store price is required for rent items that are available in the store.', 'error')
+                        is_available = False
+                    else:
+                        try:
+                            store_price = float(store_price_str)
+                            if store_price <= 0:
+                                flash('Store price must be a positive value for rent items that are available in the store.', 'error')
+                                is_available = False
+                                store_price = None
+                        except ValueError:
+                            flash('Store price must be a valid number for rent items that are available in the store.', 'error')
+                            is_available = False
+                            store_price = None
                 purchase_duration = request.form.get(f'rent_item_purchase_duration_{idx}', 'per_use')
 
                 if item_id and item_id in existing_items:
@@ -6043,7 +6091,7 @@ def tap_in_students():
         current_app.logger.error(f"Admin tap-in failed: {e}", exc_info=True)
         return jsonify({
             "status": "error",
-            "message": f"Failed to tap in students: {str(e)}"
+            "message": "Failed to tap in students. Please try again or contact support."
         }), 500
 
 
@@ -6126,7 +6174,7 @@ def bulk_update_hall_passes():
         current_app.logger.error(f"Bulk hall pass update failed: {e}", exc_info=True)
         return jsonify({
             "status": "error",
-            "message": f"Failed to update hall passes: {str(e)}"
+            "message": "Failed to update hall passes. Please try again or contact support."
         }), 500
 
 

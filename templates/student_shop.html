@@ -131,10 +131,10 @@
                                     data-bulk-discount-percentage="{{ item.bulk_discount_percentage if item.bulk_discount_enabled else 0 }}"
                                     data-inventory="{{ item.inventory if item.inventory is not none else 'unlimited' }}"
                                     {% if is_rent_covered or (item.inventory is not none and item.inventory <= 0) %}disabled{% endif %}>
-                                {% if is_rent_covered %}
-                                    Already Included
-                                {% elif item.inventory is not none and item.inventory <= 0 %}
+                                {% if item.inventory is not none and item.inventory <= 0 %}
                                     Out of Stock
+                                {% elif is_rent_covered %}
+                                    Already Included
                                 {% else %}
                                     Purchase
                                 {% endif %}

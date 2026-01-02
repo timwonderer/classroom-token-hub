@@ -438,13 +438,13 @@
                       </button>
                       <ul class="dropdown-menu" aria-labelledby="bulkActionsDropdown-{{ block }}">
                         <li>
-                          <a class="dropdown-item" href="#" onclick="bulkStartWork('{{ block }}'); return false;">
-                            <span class="material-symbols-outlined align-middle fs-6 me-1">login</span> Start Work
+                          <a class="dropdown-item" href="#" onclick="bulkTapIn('{{ block }}'); return false;">
+                            <span class="material-symbols-outlined align-middle fs-6 me-1">login</span> Tap In
                           </a>
                         </li>
                         <li>
-                          <a class="dropdown-item" href="#" onclick="bulkStopWork('{{ block }}'); return false;">
-                            <span class="material-symbols-outlined align-middle fs-6 me-1">logout</span> Stop Work
+                          <a class="dropdown-item" href="#" onclick="bulkTapOut('{{ block }}'); return false;">
+                            <span class="material-symbols-outlined align-middle fs-6 me-1">logout</span> Tap Out
                           </a>
                         </li>
                         <li><hr class="dropdown-divider"></li>
@@ -1214,7 +1214,7 @@ function bulkDeleteStudents(block) {
   });
 }
 
-function bulkStartWork(block) {
+function bulkTapIn(block) {
   const table = document.getElementById(`students-table-${block}`);
   const checkboxes = table.querySelectorAll('.student-checkbox:checked');
   const studentIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
@@ -1226,7 +1226,7 @@ function bulkStartWork(block) {
 
   const count = studentIds.length;
   const confirmation = confirm(
-    `Are you sure you want to start work for ${count} selected student(s) in Block ${block.toUpperCase()}?`
+    `Are you sure you want to tap in ${count} selected student(s) in Block ${block.toUpperCase()}?`
   );
 
   if (!confirmation) return;
@@ -1246,19 +1246,20 @@ function bulkStartWork(block) {
   .then(response => response.json())
   .then(data => {
     if (data.status === 'success') {
-      alert(data.message || `Successfully started work for ${count} student(s).`);
+      alert(data.message || `Successfully tapped in ${count} student(s).`);
       clearSelection(block);
+      window.location.reload();
     } else {
       alert('Error: ' + data.message);
     }
   })
   .catch(error => {
     console.error('Error:', error);
-    alert('Network error occurred while starting work.');
+    alert('Network error occurred while tapping in students.');
   });
 }
 
-function bulkStopWork(block) {
+function bulkTapOut(block) {
   const table = document.getElementById(`students-table-${block}`);
   const checkboxes = table.querySelectorAll('.student-checkbox:checked');
   const studentIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
@@ -1270,7 +1271,7 @@ function bulkStopWork(block) {
 
   const count = studentIds.length;
   const confirmation = confirm(
-    `Are you sure you want to stop work for ${count} selected student(s) in Block ${block.toUpperCase()}?`
+    `Are you sure you want to tap out ${count} selected student(s) in Block ${block.toUpperCase()}?`
   );
 
   if (!confirmation) return;
@@ -1293,20 +1294,21 @@ function bulkStopWork(block) {
     if (data.status === 'success') {
       let message = data.message;
       if (data.tapped_out && data.tapped_out.length > 0) {
-        message += '\n\nStopped work:\n' + data.tapped_out.join(', ');
+        message += '\n\nTapped out:\n' + data.tapped_out.join(', ');
       }
       if (data.already_inactive && data.already_inactive.length > 0) {
         message += '\n\nAlready inactive:\n' + data.already_inactive.join(', ');
       }
       alert(message);
       clearSelection(block);
+      window.location.reload();
     } else {
       alert('Error: ' + data.message);
     }
   })
   .catch(error => {
     console.error('Error:', error);
-    alert('Network error occurred while stopping work.');
+    alert('Network error occurred while tapping out students.');
   });
 }
 

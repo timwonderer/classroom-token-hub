@@ -2149,7 +2149,7 @@ def shop():
     if teacher_id and join_code and current_block:
         rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
         if rent_settings and rent_settings.is_enabled:
-            now = datetime.now()
+            now = datetime.now(timezone.utc)
             has_paid_rent = RentPayment.query.filter(
                 RentPayment.student_id == student.id,
                 RentPayment.period == current_block,
