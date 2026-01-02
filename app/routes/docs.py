@@ -214,7 +214,9 @@ def view_doc(doc_path):
         doc_file = (docs_root / safe_path).resolve()
 
         # Ensure the resolved path is within DOCS_ROOT
-        if not doc_file.is_relative_to(docs_root):
+        try:
+            doc_file.relative_to(docs_root)
+        except ValueError:
             current_app.logger.warning(f"Path outside DOCS_ROOT: {doc_path}")
             abort(404)
 
