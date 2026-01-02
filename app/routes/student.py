@@ -115,6 +115,27 @@ def get_current_class_context():
     }
 
 
+def get_rent_settings_for_context(context):
+    """Return rent settings scoped to the current class context."""
+    if not context:
+        return None
+
+    teacher_id = context.get('teacher_id')
+    if not teacher_id:
+        return None
+
+    current_block = (context.get('block') or '').strip().upper()
+    if current_block:
+        settings = RentSettings.query.filter_by(
+            teacher_id=teacher_id,
+            block=current_block
+        ).first()
+        if settings:
+            return settings
+
+    return RentSettings.query.filter_by(teacher_id=teacher_id).first()
+
+
 def get_current_teacher_id():
     """DEPRECATED: Get teacher_id from current class context.
 
@@ -192,6 +213,11 @@ def is_feature_enabled(feature_name):
     Returns:
         bool: True if feature is enabled, False otherwise
     """
+    if feature_name == 'rent':
+        rent_settings = get_rent_settings_for_context(get_current_class_context())
+        if rent_settings:
+            return bool(rent_settings.is_enabled)
+
     settings = get_feature_settings_for_student()
     feature_key = f"{feature_name}_enabled"
     return settings.get(feature_key, True)  # Default to enabled
@@ -988,7 +1014,7 @@ def dashboard():
     active_insurance = student.get_active_insurance(teacher_id)
 
     rent_status = None
-    rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    rent_settings = get_rent_settings_for_context(context)
     if rent_settings and rent_settings.is_enabled and student.is_rent_enabled:
         now = datetime.now()
         due_date, grace_end_date = _calculate_rent_deadlines(rent_settings, now)
@@ -2309,7 +2335,7 @@ def rent():
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').strip().upper()
-    settings = RentSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
         flash("Rent system is currently disabled.", "info")
@@ -2444,7 +2470,7 @@ def rent_pay(period):
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').upper()
-    settings = RentSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
         flash("Rent system is currently disabled.", "error")
