@@ -1248,6 +1248,8 @@ function bulkTapIn(block) {
     if (data.status === 'success') {
       alert(data.message || `Successfully tapped in ${count} student(s).`);
       clearSelection(block);
+      // Reload the page so the student table reflects updated work status
+      location.reload();
       window.location.reload();
     } else {
       alert('Error: ' + data.message);
