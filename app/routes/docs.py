@@ -406,6 +406,10 @@ def view_doc(doc_path):
             doc_path=doc_path,
         )
 
+    except (FileNotFoundError, UnicodeDecodeError) as e:
+        # Treat file access/decoding problems as missing documentation
+        current_app.logger.warning(f"Documentation file error for '{doc_path}': {e}")
+        abort(404)
     except Exception as e:
         current_app.logger.exception(f"Error rendering documentation: {e}")
         abort(500)
