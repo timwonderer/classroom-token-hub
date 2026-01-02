@@ -47,12 +47,12 @@
                         </h6>
                         <ul class="nav flex-column mb-2">
                             <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'user-guides/student_guide' %}active{% endif %}" href="/docs/user-guides/student_guide">
+                                <a class="nav-link {% if doc_path == 'user-guides/student_guide' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/student_guide') }}">
                                     Student Guide
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'user-guides/teacher_manual' %}active{% endif %}" href="/docs/user-guides/teacher_manual">
+                                <a class="nav-link {% if doc_path == 'user-guides/teacher_manual' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}">
                                     Teacher Manual
                                 </a>
                             </li>
@@ -64,22 +64,22 @@
                         </h6>
                         <ul class="nav flex-column mb-2">
                             <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'technical-reference/architecture' %}active{% endif %}" href="/docs/technical-reference/architecture">
+                                <a class="nav-link {% if doc_path == 'technical-reference/architecture' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/architecture') }}">
                                     Architecture
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'technical-reference/database_schema' %}active{% endif %}" href="/docs/technical-reference/database_schema">
+                                <a class="nav-link {% if doc_path == 'technical-reference/database_schema' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/database_schema') }}">
                                     Database Schema
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'technical-reference/ECONOMY_SPECIFICATION' %}active{% endif %}" href="/docs/technical-reference/ECONOMY_SPECIFICATION">
+                                <a class="nav-link {% if doc_path == 'technical-reference/ECONOMY_SPECIFICATION' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/ECONOMY_SPECIFICATION') }}">
                                     Economy Spec
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'technical-reference/api_reference' %}active{% endif %}" href="/docs/technical-reference/api_reference">
+                                <a class="nav-link {% if doc_path == 'technical-reference/api_reference' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/api_reference') }}">
                                     API Reference
                                 </a>
                             </li>
@@ -91,12 +91,12 @@
                         </h6>
                         <ul class="nav flex-column mb-2">
                             <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'DEPLOYMENT' %}active{% endif %}" href="/docs/DEPLOYMENT">
+                                <a class="nav-link {% if doc_path == 'DEPLOYMENT' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='DEPLOYMENT') }}">
                                     Deployment
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'CHANGELOG' %}active{% endif %}" href="/docs/CHANGELOG">
+                                <a class="nav-link {% if doc_path == 'CHANGELOG' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='CHANGELOG') }}">
                                     Changelog
                                 </a>
                             </li>

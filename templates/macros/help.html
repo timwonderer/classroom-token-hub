@@ -5,6 +5,12 @@
   directing users to relevant documentation without losing their session.
 #}
 
+{% macro doc_url(doc_path) %}
+  {% set base_path = doc_path.split('#', 1)[0] %}
+  {% set anchor = doc_path.split('#', 1)[1] if '#' in doc_path else '' %}
+  {{ url_for('docs.view_doc', doc_path=base_path) }}{% if anchor %}#{{ anchor }}{% endif %}
+{% endmacro %}
+
 {% macro help_link(doc_path, text=None, tooltip=None, icon_only=False) %}
   {#
     Render a contextual help link to documentation.
@@ -15,7 +21,7 @@
       tooltip: Optional tooltip text
       icon_only: If true, only show icon (default: false)
   #}
-  <a href="/docs/{{ doc_path }}"
+  <a href="{{ doc_url(doc_path) }}"
      class="contextual-help-link text-decoration-none"
      {% if tooltip %}title="{{ tooltip }}"{% endif %}
      target="_blank"
@@ -48,7 +54,7 @@
       {% if description %}
         <p class="mb-2 small">{{ description }}</p>
       {% endif %}
-      <a href="/docs/{{ doc_path }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
+      <a href="{{ doc_url(doc_path) }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
         <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1rem;">menu_book</span>
         View Guide
       </a>
@@ -71,7 +77,7 @@
       <span class="material-symbols-outlined mb-3" style="font-size: 3rem; color: var(--primary-color);">{{ icon }}</span>
       <h5 class="card-title">{{ title }}</h5>
       <p class="card-text text-muted">{{ description }}</p>
-      <a href="/docs/{{ doc_path }}" class="btn btn-primary" target="_blank" rel="noopener">
+      <a href="{{ doc_url(doc_path) }}" class="btn btn-primary" target="_blank" rel="noopener">
         <span class="material-symbols-outlined" style="vertical-align: middle;">menu_book</span>
         Learn How
       </a>
