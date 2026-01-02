@@ -6,7 +6,8 @@
 <!-- Getting Started Widget - Floating onboarding checklist -->
 <div id="gettingStartedWidget" class="getting-started-widget" style="display: none;">
     <!-- Circular Bubble (Collapsed State) -->
-    <div id="gsBubble" class="gs-bubble" data-bs-toggle="collapse" data-bs-target="#gsBody" aria-expanded="false" aria-controls="gsBody">
+    <div id="gsBubble" class="gs-bubble" data-bs-toggle="collapse" data-bs-target="#gsBody" aria-expanded="false" aria-controls="gsBody" data-bs-toggle="tooltip" data-bs-placement="left" title="I can help you set up your classroom economy!">
+        
         <span class="material-symbols-outlined gs-bubble-icon">rocket_launch</span>
         <span class="gs-bubble-badge" id="gsBubbleBadge">0/9</span>
     </div>
@@ -48,12 +49,14 @@
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="task-roster" disabled>
                         <label class="form-check-label" for="task-roster">
-                            <strong>Upload student roster</strong>
+                            <strong>Create a class</strong>
                         </label>
                     </div>
-                    <a href="{{ url_for('admin.students') }}" class="btn btn-sm btn-outline-primary gs-item-action">
-                        Go <span class="material-symbols-outlined ms-1" style="font-size: 16px;">arrow_forward</span>
-                    </a>
+                    <div class="gs-item-actions">
+                        <a href="{{ url_for('admin.students') }}" class="btn btn-sm btn-outline-primary">
+                            Go <span class="material-symbols-outlined ms-1" style="font-size: 16px;">arrow_forward</span>
+                        </a>
+                    </div>
                 </div>
             </div>
 
@@ -63,7 +66,7 @@
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="task-payroll" disabled>
                         <label class="form-check-label" for="task-payroll">
-                            <strong>Set up payroll</strong>
+                            <strong>Set up pay rate</strong>
                         </label>
                     </div>
                     <div class="gs-item-actions">
@@ -86,7 +89,7 @@
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="task-store" disabled>
                         <label class="form-check-label" for="task-store">
-                            <strong>Set up store</strong>
+                            <strong>Add store items</strong>
                         </label>
                     </div>
                     <div class="gs-item-actions">
@@ -106,7 +109,7 @@
                     <div class="form-check">
                         <input class="form-check-input" type="checkbox" id="task-banking" disabled>
                         <label class="form-check-label" for="task-banking">
-                            <strong>Configure banking</strong>
+                            <strong>Customize bank rates</strong>
                         </label>
                     </div>
                     <div class="gs-item-actions">
@@ -485,6 +488,14 @@ root {
     .gs-panel {
         max-width: calc(100vw - 32px);
     }
+
+    .gs-congratulations {
+        background-color:#1a4d47;
+        color:white;
+        
+        padding: 10px;
+        
+    }
 }
 </style>
 
@@ -495,6 +506,9 @@ root {
 
     // Initialize widget
     function initGettingStartedWidget() {
+        // Initialize Bootstrap tooltip
+        const tooltip = new bootstrap.Tooltip(document.getElementById('gsBubble'));
+        
         // Check completion status from backend (which also checks if dismissed)
         checkTaskCompletion();
     }
@@ -539,12 +553,20 @@ root {
                     }
 
                     const completion = data.completion || {};
+                    const skippedTasks = data.skipped || {};
+                    const dataCompleted = data.data_completed || {};
+                    const hasDataCompleted = Object.keys(dataCompleted).length > 0;
 
                     // Update UI for each task
                     Object.keys(completion).forEach(task => {
-                        if (completion[task]) {
-                            markTaskComplete(task);
+                        if (!completion[task]) {
+                            return;
                         }
+
+                        const isSkipped = Boolean(skippedTasks[task]);
+                        const isDoneByData = Boolean(dataCompleted[task]);
+                        const status = isSkipped && (!hasDataCompleted || !isDoneByData) ? 'skipped' : 'done';
+                        markTaskComplete(task, status);
                     });
 
                     updateProgress();
@@ -554,14 +576,36 @@ root {
     }
 
     // Mark task as complete
-    function markTaskComplete(taskName) {
+    function markTaskComplete(taskName, status = 'done') {
         const checkbox = document.getElementById(`task-${taskName}`);
         const item = document.querySelector(`[data-task="${taskName}"]`);
 
         if (checkbox && item) {
             checkbox.checked = true;
             item.classList.add('completed');
+            updateTaskActions(item, status);
         }
+    }
+
+    function updateTaskActions(item, status) {
+        const actions = item.querySelector('.gs-item-actions');
+        if (!actions) {
+            return;
+        }
+
+        if (status === 'skipped') {
+            item.classList.add('skipped');
+        }
+
+        const label = status === 'skipped' ? 'Skipped' : 'Done';
+        const buttonClass = status === 'skipped' ? 'btn-outline-secondary' : 'btn-outline-primary';
+
+        actions.innerHTML = `
+            <button class="btn btn-sm ${buttonClass}" disabled aria-disabled="true">
+                ${label}
+            </button>
+        `;
+        actions.dataset.state = status;
     }
 
     // Skip task (for optional features)
@@ -572,7 +616,7 @@ root {
         const item = document.querySelector(`[data-task="${taskName}"]`);
         if (item) {
             item.classList.add('skipped');
-            markTaskComplete(taskName);  // Mark as "complete" (skipped)
+            markTaskComplete(taskName, 'skipped');  // Mark as "complete" (skipped)
 
             // Save skip status
             fetch('/admin/onboarding/skip-task', {
@@ -621,14 +665,15 @@ root {
         const body = document.getElementById('gsBody');
         if (body && !document.querySelector('.gs-congratulations')) {
             const congrats = document.createElement('div');
-            congrats.className = 'alert alert-success gs-congratulations mt-3';
+            congrats.className = ' gs-congratulations mt-2';
             congrats.innerHTML = `
-                <div class="d-flex align-items-start gap-2">
-                    <span class="material-symbols-outlined">celebration</span>
-                    <div>
-                        <strong>Great job!</strong> You've completed all required setup tasks.
-                        You can now dismiss this widget or continue with optional features.
-                    </div>
+                <div class=" align-items-start gap-2" style="padding:10px; border-radius: 0px 0px 10px 10px;background-color:#1a4d47; color:white; ">
+                    <h5 style="color:var(--secondary)"> <span class="material-symbols-outlined">celebration</span> Great job!</h5>
+                    
+                       
+                        <p class="mb-0 small" style="font-weight:300">You've completed all required setup tasks.
+                        You can now dismiss this widget or continue with optional features.</p>
+                   
                 </div>
             `;
             body.appendChild(congrats);

@@ -1,0 +1,104 @@
+{#
+  Contextual Help Macros
+
+  These macros provide inline help links throughout the app,
+  directing users to relevant documentation without losing their session.
+#}
+
+{% macro doc_url(doc_path) %}
+  {% set base_path = doc_path.split('#', 1)[0] %}
+  {% set anchor = doc_path.split('#', 1)[1] if '#' in doc_path else '' %}
+  {{ url_for('docs.view_doc', doc_path=base_path) }}{% if anchor %}#{{ anchor }}{% endif %}
+{% endmacro %}
+
+{% macro help_link(doc_path, text=None, tooltip=None, icon_only=False) %}
+  {#
+    Render a contextual help link to documentation.
+
+    Args:
+      doc_path: Path to the documentation (e.g., "user-guides/student_guide#banking")
+      text: Optional link text (default: "Learn more")
+      tooltip: Optional tooltip text
+      icon_only: If true, only show icon (default: false)
+  #}
+  <a href="{{ doc_url(doc_path) }}"
+     class="contextual-help-link text-decoration-none"
+     {% if tooltip %}title="{{ tooltip }}"{% endif %}
+     target="_blank"
+     rel="noopener">
+    <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1.1rem; color: #6c757d;">help</span>
+    {% if not icon_only %}
+      <span class="help-text">{{ text or "Learn more" }}</span>
+    {% endif %}
+  </a>
+{% endmacro %}
+
+{% macro help_icon(doc_path, tooltip="Learn more") %}
+  {# Shorthand for icon-only help link #}
+  {{ help_link(doc_path, icon_only=True, tooltip=tooltip) }}
+{% endmacro %}
+
+{% macro help_section(title, doc_path, description=None) %}
+  {#
+    Render a help section banner for a page.
+
+    Args:
+      title: Section title
+      doc_path: Documentation path
+      description: Optional description
+  #}
+  <div class="help-section alert alert-info d-flex align-items-start mb-3">
+    <span class="material-symbols-outlined me-2" style="font-size: 1.5rem;">info</span>
+    <div class="flex-grow-1">
+      <h6 class="mb-1">{{ title }}</h6>
+      {% if description %}
+        <p class="mb-2 small">{{ description }}</p>
+      {% endif %}
+      <a href="{{ doc_url(doc_path) }}" class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener">
+        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1rem;">menu_book</span>
+        View Guide
+      </a>
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro feature_help_card(title, description, doc_path, icon="help") %}
+  {#
+    Render a feature help card (for empty states or feature intro)
+
+    Args:
+      title: Feature title
+      description: Brief description
+      doc_path: Documentation path
+      icon: Material icon name
+  #}
+  <div class="card border-primary">
+    <div class="card-body text-center">
+      <span class="material-symbols-outlined mb-3" style="font-size: 3rem; color: var(--primary-color);">{{ icon }}</span>
+      <h5 class="card-title">{{ title }}</h5>
+      <p class="card-text text-muted">{{ description }}</p>
+      <a href="{{ doc_url(doc_path) }}" class="btn btn-primary" target="_blank" rel="noopener">
+        <span class="material-symbols-outlined" style="vertical-align: middle;">menu_book</span>
+        Learn How
+      </a>
+    </div>
+  </div>
+{% endmacro %}
+
+<style>
+.contextual-help-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #6c757d;
+  transition: color 0.2s;
+}
+
+.contextual-help-link:hover {
+  color: var(--primary-color);
+}
+
+.contextual-help-link .help-text {
+  font-size: 0.875rem;
+}
+</style>
