@@ -252,7 +252,7 @@ def build_breadcrumbs(category, page=None):
         category_title = category.replace('-', ' ').title()
         breadcrumbs.append({
             'title': category_title,
-            'url': f'/docs/{category}'
+            'url': url_for('docs.view_doc', doc_path=category)
         })
 
     if page:
