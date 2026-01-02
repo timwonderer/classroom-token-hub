@@ -5948,6 +5948,188 @@ def tap_out_students():
         }), 500
 
 
+@admin_bp.route('/tap-in-students', methods=['POST'])
+@admin_required
+def tap_in_students():
+    """
+    Admin endpoint to tap in one or more students for a specific period.
+    """
+    data = request.get_json()
+
+    # Get parameters
+    student_ids = data.get('student_ids', [])
+    period = data.get('period', '').strip().upper()
+
+    if not period:
+        return jsonify({"status": "error", "message": "Period is required."}), 400
+
+    if not student_ids:
+        return jsonify({"status": "error", "message": "student_ids must be provided."}), 400
+
+    now_utc = datetime.now(timezone.utc)
+    tapped_in = []
+    already_active = []
+    errors = []
+    current_admin_id = session.get('admin_id')
+
+    try:
+        # Process each student ID
+        for student_id in student_ids:
+            student = _get_student_or_404(student_id)
+
+            if not student:
+                errors.append(f"Student ID {student_id} not found")
+                continue
+
+            # Verify the student has this period in their block
+            student_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
+            if period not in student_blocks:
+                errors.append(f"{student.full_name} is not enrolled in period {period}")
+                continue
+
+            join_code = get_join_code_for_student_period(student.id, period, teacher_id=current_admin_id)
+
+            # Check if student is currently active in this period
+            latest_event = (
+                TapEvent.query
+                .filter_by(student_id=student.id, period=period)
+                .filter_by(join_code=join_code)
+                .order_by(TapEvent.timestamp.desc())
+                .first()
+            )
+
+            if latest_event and latest_event.status == "active":
+                already_active.append(student.full_name)
+                continue
+
+            # Create tap-in event
+            tap_in_event = TapEvent(
+                student_id=student.id,
+                period=period,
+                status="active",
+                timestamp=now_utc,
+                reason="Teacher tap-in",
+                join_code=join_code
+            )
+            db.session.add(tap_in_event)
+            tapped_in.append(student.full_name)
+
+            current_app.logger.info(
+                f"Admin tapped in student {student.id} ({student.full_name}) for period {period}"
+            )
+
+        # Commit all tap-ins
+        db.session.commit()
+
+        # Build response message
+        message_parts = []
+        if tapped_in:
+            message_parts.append(f"Successfully tapped in {len(tapped_in)} student(s)")
+        if already_active:
+            message_parts.append(f"{len(already_active)} student(s) were already active")
+        if errors:
+            message_parts.append(f"{len(errors)} error(s) occurred")
+
+        return jsonify({
+            "status": "success",
+            "message": ". ".join(message_parts),
+            "tapped_in": tapped_in,
+            "already_active": already_active,
+            "errors": errors
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Admin tap-in failed: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to tap in students: {str(e)}"
+        }), 500
+
+
+@admin_bp.route('/students/bulk-update-hall-passes', methods=['POST'])
+@admin_required
+def bulk_update_hall_passes():
+    """
+    Admin endpoint to bulk update hall passes for selected students.
+    Supports set, add, and subtract operations.
+    """
+    data = request.get_json()
+
+    # Get parameters
+    student_ids = data.get('student_ids', [])
+    update_type = data.get('update_type', 'set')  # 'set', 'add', or 'subtract'
+    value = data.get('value', 0)
+
+    if not student_ids:
+        return jsonify({"status": "error", "message": "student_ids must be provided."}), 400
+
+    if update_type not in ['set', 'add', 'subtract']:
+        return jsonify({"status": "error", "message": "update_type must be 'set', 'add', or 'subtract'."}), 400
+
+    try:
+        value = int(value)
+        if value < 0:
+            return jsonify({"status": "error", "message": "Value must be non-negative."}), 400
+    except (ValueError, TypeError):
+        return jsonify({"status": "error", "message": "Value must be a valid integer."}), 400
+
+    updated = []
+    errors = []
+
+    try:
+        # Process each student ID
+        for student_id in student_ids:
+            student = _get_student_or_404(student_id)
+
+            if not student:
+                errors.append(f"Student ID {student_id} not found")
+                continue
+
+            # Update hall passes based on operation type
+            if update_type == 'set':
+                student.hall_passes = value
+            elif update_type == 'add':
+                student.hall_passes = (student.hall_passes or 0) + value
+            elif update_type == 'subtract':
+                student.hall_passes = max(0, (student.hall_passes or 0) - value)
+
+            updated.append(student.full_name)
+
+            current_app.logger.info(
+                f"Admin updated hall passes for student {student.id} ({student.full_name}): {update_type} {value}, new value: {student.hall_passes}"
+            )
+
+        # Commit all updates
+        db.session.commit()
+
+        # Build response message
+        action_text = {
+            'set': f'set to {value}',
+            'add': f'increased by {value}',
+            'subtract': f'decreased by {value}'
+        }
+
+        message = f"Successfully updated hall passes for {len(updated)} student(s) ({action_text[update_type]})"
+        if errors:
+            message += f". {len(errors)} error(s) occurred"
+
+        return jsonify({
+            "status": "success",
+            "message": message,
+            "updated": updated,
+            "errors": errors
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Bulk hall pass update failed: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to update hall passes: {str(e)}"
+        }), 500
+
+
 # -------------------- BANKING ROUTES --------------------
 
 @admin_bp.route('/banking')
