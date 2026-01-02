@@ -1,7 +1,7 @@
 """Add RentItem table for itemized rent
 
-Revision ID: a3b4c5d6e7f8
-Revises: z2a3b4c5d6e7
+Revision ID: f1g2h3i4j5k6
+Revises: 3d66ea6ec5d3
 Create Date: 2026-01-02 00:00:00.000000
 
 This migration adds the rent_items table to support itemized rent feature.
@@ -15,8 +15,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'a3b4c5d6e7f8'
-down_revision = 'z2a3b4c5d6e7'
+revision = 'f1g2h3i4j5k6'
+down_revision = '3d66ea6ec5d3'
 branch_labels = None
 depends_on = None
 
