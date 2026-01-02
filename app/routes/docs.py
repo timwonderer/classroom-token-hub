@@ -209,11 +209,12 @@ def view_doc(doc_path):
         # Normalize the path
         safe_path = Path(doc_path).with_suffix('.md')
 
-        # Resolve absolute path
-        doc_file = (DOCS_ROOT / safe_path).resolve()
+        # Resolve absolute path under the documentation root
+        docs_root = DOCS_ROOT.resolve()
+        doc_file = (docs_root / safe_path).resolve()
 
         # Ensure the resolved path is within DOCS_ROOT
-        if not doc_file.is_relative_to(DOCS_ROOT.resolve()):
+        if not doc_file.is_relative_to(docs_root):
             current_app.logger.warning(f"Path outside DOCS_ROOT: {doc_path}")
             abort(404)
 
