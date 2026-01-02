@@ -100,7 +100,13 @@
                         <br><small class="text-muted">{{ item.description }}</small>
                         {% endif %}
                         {% if item.is_available_in_store and item.store_price %}
-                        <br><small class="text-secondary">💡 Available separately in store for ${{ "%.2f"|format(item.store_price) }} <strong>per use</strong></small>
+                        <br><small class="text-secondary">💡 Available separately in store for ${{ "%.2f"|format(item.store_price) }}
+                        {% if item.purchase_duration == 'per_period' %}
+                            <strong>(valid until next rent is due)</strong>
+                        {% else %}
+                            <strong>(per use)</strong>
+                        {% endif %}
+                        </small>
                         {% endif %}
                     </div>
                 </li>
