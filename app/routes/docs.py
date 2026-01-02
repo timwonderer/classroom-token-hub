@@ -265,6 +265,24 @@ def view_doc(doc_path):
         # Build breadcrumbs
         breadcrumbs = build_breadcrumbs(category, page)
 
+        # Get related articles if specified in front matter
+        related_articles = []
+        if 'related' in metadata:
+            related_paths = metadata['related']
+            if isinstance(related_paths, str):
+                related_paths = [related_paths]
+            
+            for rel_path in related_paths:
+                try:
+                    # Remove leading slash and ensure proper path
+                    rel_path = rel_path.lstrip('/')
+                    related_articles.append({
+                        'title': rel_path.replace('/', ' / ').replace('-', ' ').replace('_', ' ').title(),
+                        'url': url_for('docs.view_doc', doc_path=rel_path)
+                    })
+                except Exception as e:
+                    current_app.logger.warning(f"Error processing related article {rel_path}: {e}")
+
         # Get user role for UI filtering
         # Note: Role-based filtering is for UI display only, not access control.
         # All documentation is accessible to all users. The 'roles' metadata
@@ -286,6 +304,7 @@ def view_doc(doc_path):
             current_category=category,
             breadcrumbs=breadcrumbs,
             roles=metadata.get('roles', []),
+            related=related_articles,
             user_role=user_role,
             doc_path=doc_path,
         )
