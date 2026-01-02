@@ -20,7 +20,7 @@ and this project follows semantic versioning principles.
   - Students see store price comparison for items available separately
   - Pro tip message encourages rent payment by showing total value comparison
   - Manual pricing (teacher sets store price manually - automatic pricing calculator coming in future release)
-  - Database migration: `f1g2h3i4j5k6_add_rent_items_table`
+  - Database migration: `6feaa660d6c3_add_rent_item_table`
 - **Enhanced Purchase Restrictions** - "Prevent Purchase When Late" toggle now has dynamic behavior based on itemization
   - When rent itemization is disabled: blocks ALL store purchases when student is late on rent (original behavior)
   - When rent itemization is enabled: students late on rent can ONLY purchase items covered by rent (at à la carte prices), all other store items blocked
