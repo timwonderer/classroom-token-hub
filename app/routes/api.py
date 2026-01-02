@@ -195,6 +195,69 @@ def purchase_item():
     if not item or not item.is_active:
         return jsonify({"status": "error", "message": "This item is not available."}), 404
 
+    # Check rent late restrictions
+    from app.models import RentSettings, RentPayment, RentItem
+    from datetime import datetime, timedelta
+
+    rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id).first()
+    if rent_settings and rent_settings.is_enabled and rent_settings.prevent_purchase_when_late:
+        # Check if student is late on rent
+        now = datetime.now()
+        current_month = now.month
+        current_year = now.year
+
+        # Calculate current due date
+        if rent_settings.first_rent_due_date and now >= rent_settings.first_rent_due_date:
+            # Calculate how many periods have passed since first due date
+            if rent_settings.frequency_type == 'monthly':
+                months_since_first = (current_year - rent_settings.first_rent_due_date.year) * 12 + (current_month - rent_settings.first_rent_due_date.month)
+                due_date = rent_settings.first_rent_due_date + timedelta(days=30 * months_since_first)
+            elif rent_settings.frequency_type == 'weekly':
+                weeks_since_first = (now - rent_settings.first_rent_due_date).days // 7
+                due_date = rent_settings.first_rent_due_date + timedelta(weeks=weeks_since_first)
+            elif rent_settings.frequency_type == 'daily':
+                days_since_first = (now - rent_settings.first_rent_due_date).days
+                due_date = rent_settings.first_rent_due_date + timedelta(days=days_since_first)
+            else:  # custom
+                due_date = rent_settings.first_rent_due_date
+
+            grace_end_date = due_date + timedelta(days=rent_settings.grace_period_days)
+
+            # Check if past grace period
+            if now > grace_end_date:
+                # Check if rent is paid for current period
+                current_block = context.get('block', '').strip().upper()
+                total_paid = db.session.query(db.func.sum(RentPayment.amount_paid)).filter(
+                    RentPayment.student_id == student.id,
+                    RentPayment.period == current_block,
+                    RentPayment.period_month == current_month,
+                    RentPayment.period_year == current_year,
+                    db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                ).scalar() or 0
+
+                # Student is late if they haven't paid full rent
+                if total_paid < rent_settings.rent_amount:
+                    # Check if itemization is enabled
+                    rent_items = RentItem.query.filter_by(rent_setting_id=rent_settings.id).all()
+
+                    if rent_items:
+                        # Itemization is enabled: check if this item is a rent item
+                        rent_item_store_ids = [ri.store_item_id for ri in rent_items if ri.store_item_id]
+
+                        if item.id not in rent_item_store_ids:
+                            # This item is NOT part of rent - block purchase
+                            return jsonify({
+                                "status": "error",
+                                "message": "You are late on rent. You can only purchase items covered by rent until you pay your rent."
+                            }), 403
+                        # If item IS part of rent, allow purchase (they can buy à la carte)
+                    else:
+                        # No itemization: block ALL purchases
+                        return jsonify({
+                            "status": "error",
+                            "message": "You cannot make purchases while late on rent. Please pay your rent first."
+                        }), 403
+
     # Calculate price (with bulk discount if applicable)
     unit_price = item.price
     if (item.bulk_discount_enabled and

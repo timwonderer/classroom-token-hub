@@ -590,11 +590,19 @@
                             <div class="form-check form-switch">
                               <input class="form-check-input" type="checkbox" id="prevent_purchase_when_late"
                                      name="prevent_purchase_when_late" {% if settings.prevent_purchase_when_late %}checked{% endif %}>
-                              <label class="form-check-label fw-bold" for="prevent_purchase_when_late">
-                                Prevent Purchase/Redemption When Late
+                              <label class="form-check-label fw-bold" for="prevent_purchase_when_late" id="prevent_purchase_label">
+                                <span id="prevent_purchase_label_text">
+                                  {% if rent_items|length > 0 %}Prevent Purchase of Items Not Part of Rent{% else %}Prevent Purchase/Redemption When Late{% endif %}
+                                </span>
                               </label>
                             </div>
-                            <small class="text-muted d-block">Block store purchases and item redemptions if student is late on rent</small>
+                            <small class="text-muted d-block" id="prevent_purchase_description">
+                              {% if rent_items|length > 0 %}
+                                When late on rent, students can only purchase items covered by rent (at à la carte prices), blocking all other store items
+                              {% else %}
+                                Block all store purchases and item redemptions if student is late on rent
+                              {% endif %}
+                            </small>
                           </div>
                         </div>
                     </div>
@@ -1009,6 +1017,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Renumber all items
     renumberRentItems();
+
+    // Update prevent purchase toggle label
+    updatePreventPurchaseLabel();
   };
 
   window.removeRentItem = function(button) {
@@ -1027,6 +1038,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Renumber remaining items
     renumberRentItems();
+
+    // Update prevent purchase toggle label
+    updatePreventPurchaseLabel();
   };
 
   window.toggleStorePrice = function(index) {
@@ -1046,6 +1060,25 @@ document.addEventListener('DOMContentLoaded', function() {
         header.innerHTML = `<i class="bi bi-grip-vertical me-2"></i>Item #${index + 1}`;
       }
     });
+  }
+
+  function updatePreventPurchaseLabel() {
+    const container = document.getElementById('rentItemsContainer');
+    const cards = container ? container.querySelectorAll('.rent-item-card') : [];
+    const hasItems = cards.length > 0;
+
+    const labelText = document.getElementById('prevent_purchase_label_text');
+    const description = document.getElementById('prevent_purchase_description');
+
+    if (labelText && description) {
+      if (hasItems) {
+        labelText.textContent = 'Prevent Purchase of Items Not Part of Rent';
+        description.textContent = 'When late on rent, students can only purchase items covered by rent (at à la carte prices), blocking all other store items';
+      } else {
+        labelText.textContent = 'Prevent Purchase/Redemption When Late';
+        description.textContent = 'Block all store purchases and item redemptions if student is late on rent';
+      }
+    }
   }
 });
 </script>
