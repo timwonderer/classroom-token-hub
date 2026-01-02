@@ -13,17 +13,22 @@
                     <div class="mb-3">
                         {% if session.get('student_id') %}
                             <a href="{{ url_for('student.dashboard') }}" class="btn btn-sm btn-primary w-100">
-                                <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1.2rem;">arrow_back</span>
+                                <span class="material-symbols-outlined icon-align">arrow_back</span>
                                 Back to Dashboard
                             </a>
                         {% elif session.get('admin_id') %}
                             <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-primary w-100">
-                                <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1.2rem;">arrow_back</span>
+                                <span class="material-symbols-outlined icon-align">arrow_back</span>
+                                Back to Dashboard
+                            </a>
+                        {% elif session.get('sysadmin_id') %}
+                            <a href="{{ url_for('system_admin.dashboard') }}" class="btn btn-sm btn-primary w-100">
+                                <span class="material-symbols-outlined icon-align">arrow_back</span>
                                 Back to Dashboard
                             </a>
                         {% else %}
                             <a href="{{ url_for('docs.index') }}" class="btn btn-sm btn-outline-primary w-100">
-                                <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1.2rem;">arrow_back</span>
+                                <span class="material-symbols-outlined icon-align">arrow_back</span>
                                 All Docs
                             </a>
                         {% endif %}
@@ -34,7 +39,7 @@
                         <div class="input-group input-group-sm">
                             <input type="search" name="q" class="form-control" placeholder="Search..." aria-label="Search">
                             <button class="btn btn-outline-secondary" type="submit">
-                                <span class="material-symbols-outlined" style="font-size: 1rem;">search</span>
+                                <span class="material-symbols-outlined icon-small">search</span>
                             </button>
                         </div>
                     </form>
@@ -43,7 +48,7 @@
                     <nav class="nav flex-column">
                         <!-- Getting Started -->
                         <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-2 mb-1 text-muted">
-                            <span><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1rem;">rocket_launch</span> Getting Started</span>
+                            <span><span class="material-symbols-outlined icon-small">rocket_launch</span> Getting Started</span>
                         </h6>
                         <ul class="nav flex-column mb-2">
                             <li class="nav-item">
@@ -60,7 +65,7 @@
 
                         <!-- Technical -->
                         <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
-                            <span><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1rem;">code</span> Technical</span>
+                            <span><span class="material-symbols-outlined icon-small">code</span> Technical</span>
                         </h6>
                         <ul class="nav flex-column mb-2">
                             <li class="nav-item">
@@ -87,7 +92,7 @@
 
                         <!-- Reference -->
                         <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
-                            <span><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1rem;">description</span> Reference</span>
+                            <span><span class="material-symbols-outlined icon-small">description</span> Reference</span>
                         </h6>
                         <ul class="nav flex-column mb-2">
                             <li class="nav-item">
@@ -110,7 +115,7 @@
                 <!-- Mobile Sidebar Toggle -->
                 <div class="d-md-none my-3">
                     <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#docsSidebar" aria-expanded="false" aria-controls="docsSidebar" aria-label="Toggle documentation sidebar">
-                        <span class="material-symbols-outlined" style="vertical-align: middle;">menu</span>
+                        <span class="material-symbols-outlined icon-align">menu</span>
                         Menu
                     </button>
                 </div>
@@ -141,11 +146,11 @@
                                 {% for role in roles %}
                                 <span class="badge {% if role == 'teacher' %}bg-danger{% elif role == 'student' %}bg-primary{% elif role == 'developer' %}bg-secondary{% endif %} me-1">
                                     {% if role == 'teacher' %}
-                                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 0.9rem;">person</span> Teacher
+                                        <span class="material-symbols-outlined icon-badge">person</span> Teacher
                                     {% elif role == 'student' %}
-                                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 0.9rem;">school</span> Student
+                                        <span class="material-symbols-outlined icon-badge">school</span> Student
                                     {% elif role == 'developer' %}
-                                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 0.9rem;">code</span> Developer
+                                        <span class="material-symbols-outlined icon-badge">code</span> Developer
                                     {% endif %}
                                 </span>
                                 {% endfor %}
@@ -161,7 +166,7 @@
                             {% if related and related|length > 0 %}
                             <div class="related-articles mt-5 pt-4 border-top">
                                 <h4 class="mb-3">
-                                    <span class="material-symbols-outlined" style="vertical-align: middle;">bookmark</span>
+                                    <span class="material-symbols-outlined icon-align">bookmark</span>
                                     Related Articles
                                 </h4>
                                 <div class="row g-3">
@@ -186,9 +191,9 @@
                         <!-- Table of Contents (if present) -->
                         {% if toc %}
                         <aside class="col-lg-3">
-                            <div class="sticky-top" style="top: 2rem;">
+                            <div class="sticky-top toc-sticky">
                                 <div class="toc-wrapper">
-                                    {{ toc | striptags }}
+                                    {{ toc | safe }}
                                 </div>
                             </div>
                         </aside>
@@ -198,7 +203,7 @@
                     <!-- Scroll to Top -->
                     <div class="text-end mt-4">
                         <a href="#" class="btn btn-sm btn-outline-secondary">
-                            <span class="material-symbols-outlined" style="vertical-align: middle;">arrow_upward</span>
+                            <span class="material-symbols-outlined icon-align">arrow_upward</span>
                             Back to Top
                         </a>
                     </div>
@@ -210,6 +215,24 @@
 
 <style>
 /* Documentation-specific styles */
+
+/* Icon alignment utilities */
+.icon-align {
+    vertical-align: middle;
+    font-size: 1.2rem;
+}
+
+.icon-small {
+    vertical-align: middle;
+    font-size: 1rem;
+}
+
+.icon-badge {
+    vertical-align: middle;
+    font-size: 0.9rem;
+}
+
+/* Sidebar styles */
 .docs-layout .sidebar {
     max-height: 100vh;
     overflow-y: auto;
@@ -333,6 +356,10 @@
 }
 
 /* Table of Contents */
+.toc-sticky {
+    top: 2rem;
+}
+
 .toc-wrapper {
     background-color: #f8f9fa;
     padding: 1rem;
