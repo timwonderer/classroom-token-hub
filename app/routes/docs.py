@@ -411,46 +411,46 @@ def view_doc(doc_path):
         current_app.logger.warning(f"Documentation file error for '{doc_path}': {e}")
         abort(404)
     except Exception as e:
-        current_app.logger.exception(f"Error rendering documentation: {e}")
+    # Ensure documentation root exists and is accessible
+    if not DOCS_ROOT.exists() or not DOCS_ROOT.is_dir():
+        current_app.logger.error(f"Documentation root '{DOCS_ROOT}' does not exist or is not a directory")
         abort(500)
-
-
-@docs_bp.route('/search')
-def search():
-    """
-    Simple documentation search.
-
-    Searches through documentation files for the query string.
-    """
-    query = request.args.get('q', '').strip()
-
-    if not query:
-        return render_template_with_fallback('docs/search.html', query='', results=[])
 
     results = []
 
-    try:
-        latest_mtime = get_docs_mtime()
-        docs_index = build_search_index(latest_mtime)
-        query_lower = query.lower()
+    # Search through all markdown files
+    for doc_file in DOCS_ROOT.rglob('*.md'):
+        try:
+            # Skip if not relative to DOCS_ROOT (safety check)
+            if not doc_file.is_relative_to(DOCS_ROOT):
+                continue
 
-        for entry in docs_index:
-            if query_lower in entry['title_lower'] or query_lower in entry['body_lower']:
+            content = doc_file.read_text(encoding='utf-8')
+            metadata, body = parse_front_matter(content)
+
+            # Search in title and content (case-insensitive)
+            title = metadata.get('title', doc_file.stem)
+
+            if query.lower() in title.lower() or query.lower() in body.lower():
+                # Get relative path for URL
+                rel_path = doc_file.relative_to(DOCS_ROOT).with_suffix('')
+
+                # Find context around the match
                 context = ''
-                for line in entry['body_lines']:
-                    if query_lower in line.lower():
+                for line in body.split('\n'):
+                    if query.lower() in line.lower():
                         context = line.strip()[:200]
                         break
 
                 results.append({
-                    'title': entry['title'],
-                    'url': url_for('docs.view_doc', doc_path=entry['rel_path']),
+                    'title': title,
+                    'url': f'/docs/{rel_path}',
                     'context': context,
-                    'category': entry['category'],
+                    'category': rel_path.parts[0] if len(rel_path.parts) > 0 else 'Other'
                 })
-    except Exception as e:
-        current_app.logger.exception(f"Search failed: {e}")
-
+        except Exception as e:
+            current_app.logger.warning(f"Error searching {doc_file}: {e}")
+            continue
     return render_template_with_fallback(
         'docs/search.html',
         query=query,
