@@ -9,7 +9,7 @@
             <!-- Sidebar Navigation -->
             <aside class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse" id="docsSidebar">
                 <div class="position-sticky pt-3">
-                    <!-- Back to App -->
+                    <!-- Back Navigation -->
                     <div class="mb-3">
                         {% if session.get('student_id') %}
                             <a href="{{ url_for('student.dashboard') }}" class="btn btn-sm btn-primary w-100">
@@ -22,17 +22,29 @@
                                 Back to Dashboard
                             </a>
                         {% elif session.get('sysadmin_id') %}
-                            <a href="{{ url_for('system_admin.dashboard') }}" class="btn btn-sm btn-primary w-100">
+                            <a href="{{ url_for('sysadmin.dashboard') }}" class="btn btn-sm btn-primary w-100">
                                 <span class="material-symbols-outlined icon-align">arrow_back</span>
                                 Back to Dashboard
                             </a>
-                        {% else %}
-                            <a href="{{ url_for('docs.index') }}" class="btn btn-sm btn-outline-primary w-100">
-                                <span class="material-symbols-outlined icon-align">arrow_back</span>
-                                All Docs
-                            </a>
                         {% endif %}
                     </div>
+
+                    <!-- Docs Home (always show) -->
+                    {% if session.get('student_id') or session.get('admin_id') or session.get('sysadmin_id') %}
+                    <div class="mb-3">
+                        <a href="{{ url_for('docs.index') }}" class="btn btn-sm btn-outline-secondary w-100">
+                            <span class="material-symbols-outlined icon-align">home</span>
+                            Docs Home
+                        </a>
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <a href="{{ url_for('docs.index') }}" class="btn btn-sm btn-primary w-100">
+                            <span class="material-symbols-outlined icon-align">home</span>
+                            Docs Home
+                        </a>
+                    </div>
+                    {% endif %}
 
                     <!-- Search -->
                     <form action="{{ url_for('docs.search') }}" method="get" class="mb-3">
@@ -139,7 +151,7 @@
                 <!-- Article Content -->
                 <article class="docs-content py-4">
                     <div class="row">
-                        <div class="col-lg-{% if toc %}9{% else %}12{% endif %}">
+                        <div class="{% if toc %}col-lg-9{% else %}col-12{% endif %}">
                             <!-- Role Badges -->
                             {% if roles %}
                             <div class="mb-3">
@@ -263,6 +275,12 @@
 .markdown-content {
     font-size: 1rem;
     line-height: 1.7;
+    max-width: 900px;
+}
+
+/* Override max-width when TOC is present */
+.col-lg-9 .markdown-content {
+    max-width: none;
 }
 
 .markdown-content h1 {
