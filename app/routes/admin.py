@@ -86,6 +86,48 @@ LEGACY_PLACEHOLDER_LAST_INITIAL = "P"  # "P" for Placeholder
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
 
+# -------------------- HELPER FUNCTIONS --------------------
+
+def parse_dob_input(dob_str):
+    """
+    Parse date of birth input and return the DOB sum (month + day + year).
+
+    Attempts to parse in multiple formats:
+    1. YYYY-MM-DD (from date input)
+    2. MM/DD/YYYY (fallback format)
+
+    Args:
+        dob_str: String representation of date of birth
+
+    Returns:
+        int: DOB sum (month + day + year)
+
+    Raises:
+        ValueError: If date string cannot be parsed in any supported format
+    """
+    if not dob_str:
+        raise ValueError("Date of birth is required")
+
+    dob_str = dob_str.strip()
+
+    # Try YYYY-MM-DD format first (native date input)
+    try:
+        dob_input = datetime.strptime(dob_str, "%Y-%m-%d").date()
+        return dob_input.month + dob_input.day + dob_input.year
+    except ValueError:
+        pass
+
+    # Try MM/DD/YYYY format as fallback
+    try:
+        dob_input = datetime.strptime(dob_str, "%m/%d/%Y").date()
+        return dob_input.month + dob_input.day + dob_input.year
+    except ValueError:
+        pass
+
+    # If both formats fail, raise error
+    raise ValueError("Invalid date format. Please use the date picker.")
+
+
 # -------------------- DASHBOARD & QUICK ACTIONS --------------------
 
 
@@ -1487,18 +1529,10 @@ def setup_recovery():
 
     if request.method == 'POST':
         dob_sum_str = request.form.get('dob_sum', '').strip()
-        if not dob_sum_str:
-            flash("Please enter your date of birth.", "error")
-            return render_template('admin_setup_recovery.html')
-
         try:
-            if "-" in dob_sum_str:
-                dob_input = datetime.strptime(dob_sum_str, "%Y-%m-%d").date()
-            else:
-                dob_input = datetime.strptime(dob_sum_str, "%m/%d/%Y").date()
-            dob_sum = dob_input.month + dob_input.day + dob_input.year
-        except ValueError:
-            flash("Invalid date of birth. Please use the date picker.", "error")
+            dob_sum = parse_dob_input(dob_sum_str)
+        except ValueError as e:
+            flash(str(e) if "date format" in str(e) else "Invalid date of birth. Please use the date picker.", "error")
             return render_template('admin_setup_recovery.html')
 
         # Hash and save
@@ -2155,14 +2189,7 @@ def edit_student():
     dob_sum_str = request.form.get('dob_sum', '').strip()
     if dob_sum_str:
         try:
-            if "-" in dob_sum_str:
-                dob_input = datetime.strptime(dob_sum_str, "%Y-%m-%d").date()
-                new_dob_sum = dob_input.month + dob_input.day + dob_input.year
-            elif "/" in dob_sum_str:
-                dob_input = datetime.strptime(dob_sum_str, "%m/%d/%Y").date()
-                new_dob_sum = dob_input.month + dob_input.day + dob_input.year
-            else:
-                new_dob_sum = int(dob_sum_str)
+            new_dob_sum = parse_dob_input(dob_sum_str)
         except ValueError:
             flash("Invalid date of birth. Please use the date picker.", "error")
             return redirect(url_for('admin.students'))
@@ -2689,16 +2716,11 @@ def add_individual_student():
 
         # Generate initials
         first_initial = first_name[0].upper()
-            try:
-                dob_input = datetime.strptime(dob_str, "%Y-%m-%d").date()
-            except ValueError:
-                dob_input = datetime.strptime(dob_str, "%m/%d/%Y").date()
+        last_initial = last_name[0].upper()
 
-            if "-" in dob_str:
-                dob_input = datetime.strptime(dob_str, "%Y-%m-%d").date()
-            else:
-                dob_input = datetime.strptime(dob_str, "%m/%d/%Y").date()
-            dob_sum = dob_input.month + dob_input.day + dob_input.year
+        # Parse DOB and calculate sum
+        try:
+            dob_sum = parse_dob_input(dob_str)
         except ValueError:
             flash("Invalid date of birth. Please use the date picker.", "error")
             return redirect(url_for('admin.students'))
@@ -2825,8 +2847,6 @@ def add_individual_student():
         db.session.commit()
 
         flash(f"Successfully added {first_name} {last_initial}. to block {block}.", "success")
-    except ValueError:
-        flash("Invalid date of birth. Please use the date picker.", "error")
     except Exception as e:
         db.session.rollback()
         flash(f"Error adding student: {str(e)}", "error")
@@ -2854,20 +2874,15 @@ def add_manual_student():
 
         if not all([first_name, last_name, dob_str, block]):
             flash("Required fields missing.", "error")
-            try:
-                dob_input = datetime.strptime(dob_str, "%Y-%m-%d").date()
-            except ValueError:
-                dob_input = datetime.strptime(dob_str, "%m/%d/%Y").date()
+            return redirect(url_for('admin.students'))
 
+        # Generate initials
+        first_initial = first_name[0].upper()
         last_initial = last_name[0].upper()
 
         # Parse DOB and calculate sum
         try:
-            if "-" in dob_str:
-                dob_input = datetime.strptime(dob_str, "%Y-%m-%d").date()
-            else:
-                dob_input = datetime.strptime(dob_str, "%m/%d/%Y").date()
-            dob_sum = dob_input.month + dob_input.day + dob_input.year
+            dob_sum = parse_dob_input(dob_str)
         except ValueError:
             flash("Invalid date of birth. Please use the date picker.", "error")
             return redirect(url_for('admin.students'))
@@ -3003,8 +3018,6 @@ def add_manual_student():
         db.session.commit()
 
         flash(f"Successfully created {first_name} {last_initial}. in block {block} (manual mode).", "success")
-    except ValueError:
-        flash("Invalid date of birth. Please use the date picker.", "error")
     except Exception as e:
         db.session.rollback()
         flash(f"Error creating student: {str(e)}", "error")

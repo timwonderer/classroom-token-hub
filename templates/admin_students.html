@@ -665,8 +665,6 @@
                              class="form-control"
                              id="dob"
                              name="dob"
-                             placeholder="MM/DD/YYYY"
-                             pattern="\\d{2}/\\d{2}/\\d{4}"
                              required>
                       <div class="form-text">Use the date picker to select a birth date.</div>
                     </div>
@@ -740,8 +738,8 @@
                 </div>
               </div>
               <div class="mb-3">
-                <label for="edit_dob_sum" class="form-label fw-bold">Date of Birth (Optional)</label>
-                <input type="date" class="form-control" id="edit_dob_sum" name="dob_sum">
+                <label for="edit_dob" class="form-label fw-bold">Date of Birth (Optional)</label>
+                <input type="date" class="form-control" id="edit_dob" name="dob_sum">
                 <div class="form-text">Leave blank to keep unchanged.</div>
               </div>
             </div>
@@ -910,7 +908,7 @@ document.addEventListener('DOMContentLoaded', function() {
       editModal.querySelector('#edit_student_id').value = studentId;
       editModal.querySelector('#edit_first_name').value = firstName;
       editModal.querySelector('#edit_last_name').value = lastInitial; // Show just the initial, teacher can expand
-      editModal.querySelector('#edit_dob_sum').value = '';
+      editModal.querySelector('#edit_dob').value = dobSum || '';
 
       // Uncheck all blocks first
       editModal.querySelectorAll('.block-checkbox').forEach(cb => cb.checked = false);

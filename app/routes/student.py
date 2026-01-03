@@ -489,7 +489,7 @@ def claim_account():
         join_code = format_join_code(form.join_code.data)
         first_initial = form.first_initial.data.strip().upper()
         last_name = form.last_name.data.strip()
-        dob_input = form.dob_sum.data
+        dob_input = form.dob.data
 
         try:
             if isinstance(dob_input, str):
@@ -798,7 +798,7 @@ def add_class():
         join_code = format_join_code(form.join_code.data)
         first_initial = form.first_initial.data.strip().upper()
         last_name = form.last_name.data.strip()
-        dob_input = form.dob_sum.data
+        dob_input = form.dob.data
 
         # Parse DOB and calculate sum
         try:
