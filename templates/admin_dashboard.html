@@ -48,7 +48,7 @@
                     <div class="icon-circle bg-white bg-opacity-25 text-white me-3">
                         <span class="material-symbols-outlined">group</span>
                     </div>
-                    <span class="text-white text-opacity-75 fw-medium">Students</span>
+                    <span class="text-white text-opacity-75 fw-medium">Active Students</span>
                 </div>
                 <h2 class="display-6 text-white fw-bold mb-0">{{ total_students }}</h2>
             </div>
@@ -62,7 +62,11 @@
                     <div class="icon-circle bg-success bg-opacity-10 text-success me-3">
                         <span class="material-symbols-outlined">savings</span>
                     </div>
-                    <span class="text-secondary fw-medium">Total Economy</span>
+                    <span class="text-secondary fw-medium">Total Economy Value</span>
+                    <subtitle>
+                        <a href="#" class="text-secondary ms-2" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Sum of all student account balances">
+                            <span class="material-symbols-outlined align-top fs-6">info</span>
+                        </a>
                 </div>
                 <h2 class="display-6 fw-bold mb-0 text-dark">${{ "{:,.0f}".format(total_balance) }}</h2>
             </div>

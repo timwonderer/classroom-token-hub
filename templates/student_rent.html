@@ -87,6 +87,39 @@
             <h3 class="text-primary mb-0">${{ "%.2f"|format(settings.rent_amount) }}</h3>
         </div>
 
+        {% if rent_items and rent_items|length > 0 %}
+        <div class="mb-3">
+            <p class="mb-1 text-muted"><strong>What Your Rent Includes:</strong></p>
+            <ul class="list-unstyled mb-0">
+                {% for item in rent_items %}
+                <li class="d-flex align-items-start mb-2">
+                    <span class="material-symbols-outlined text-success me-2" style="font-size: 20px;">check_circle</span>
+                    <div>
+                        <strong>{{ item.name }}</strong>
+                        {% if item.description %}
+                        <br><small class="text-muted">{{ item.description }}</small>
+                        {% endif %}
+                        {% if item.is_available_in_store and item.store_price %}
+                        <br><small class="text-secondary">💡 Available separately in store for ${{ "%.2f"|format(item.store_price) }}
+                        {% if item.purchase_duration == 'per_period' %}
+                            <strong>(valid until next rent is due)</strong>
+                        {% else %}
+                            <strong>(per use)</strong>
+                        {% endif %}
+                        </small>
+                        {% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% if rent_items|selectattr('is_available_in_store')|list|length > 0 %}
+            <div class="alert alert-info mt-2 mb-0">
+                <small><strong>Pro tip:</strong> By paying rent, you get all {{ rent_items|length }} items for ${{ "%.2f"|format(settings.rent_amount) }}, which is better value than buying them separately!</small>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
         <div class="mb-3">
             <p class="mb-1 text-muted"><strong>Due Date:</strong></p>
             <p class="mb-0">{{ due_date.strftime('%B %d, %Y') }}</p>

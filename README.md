@@ -2,7 +2,7 @@
 
 An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.
 
-**Version:** 1.4.0
+**Version:** 1.6.0
 
 ---
 
@@ -12,7 +12,7 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Version 1.4.0 Released! This release adds a comprehensive announcement system for class communication, major UI/UX improvements including personalized greetings and enhanced dashboards, accordion-style admin navigation, streamlined authentication flow, and comprehensive security improvements including CodeQL alerts remediation (62 alerts addressed), DOM XSS vulnerability fixes, enhanced open redirect protection, and Grafana access improvements. See [RELEASE_NOTES_v1.4.0.md](docs/archive/releases/RELEASE_NOTES_v1.4.0.md) for full details.
+**Project Status:** Version 1.6.0 Released! This release focuses on repository organization, multi-tenancy fixes, and documentation improvements. Major updates include fixing critical HallPassSettings multi-tenancy violations, consolidating duplicate files, and improving deployment reliability. See [RELEASE_NOTES_v1.6.0.md](docs/archive/releases/RELEASE_NOTES_v1.6.0.md) for full details.
 
 ---
 
@@ -146,7 +146,7 @@ An interactive banking and classroom management platform for teaching students a
 
 ### Testing with Sample Data
 
-- Use `app/resources/student_upload_template.csv` as a reference for CSV roster uploads
+- Use `student_upload_template.csv` as a reference for CSV roster uploads
 - Run `python scripts/seed_dummy_students.py` to seed the database with sample students
 
 ---
@@ -320,4 +320,4 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 Built for educators and students to make learning about finance engaging and practical.
 
-**Last Updated:** 2025-12-21
+**Last Updated:** 2026-01-01

@@ -625,7 +625,7 @@ gunicorn --bind=0.0.0.0 --timeout 600 wsgi:app
 - **Transaction voids:** Use `is_void` flag, don't delete transactions
 - **Migration conflicts:** Review migrations carefully before applying
 - **Session data:** Student/admin sessions are separate, can't mix
-- **CSV uploads:** Use `app/resources/student_upload_template.csv` format
+- **CSV uploads:** Use `student_upload_template.csv` format
 
 ---
 

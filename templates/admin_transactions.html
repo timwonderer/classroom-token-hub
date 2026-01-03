@@ -71,7 +71,7 @@
               <td>{{ tx.reason or '—' }}</td>
               <td>
                 {% if not tx.is_void %}
-                  <button type="button" class="btn btn-sm btn-outline-danger void-btn" data-id="{{ tx.id }}">❌ Void</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger void-btn" data-id="{{ tx.id }}"><i class="bi bi-x-circle me-1"></i>Void</button>
                 {% else %}
                   <span class="badge bg-secondary">Voided</span>
                 {% endif %}

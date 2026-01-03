@@ -115,6 +115,27 @@ def get_current_class_context():
     }
 
 
+def get_rent_settings_for_context(context):
+    """Return rent settings scoped to the current class context."""
+    if not context:
+        return None
+
+    teacher_id = context.get('teacher_id')
+    if not teacher_id:
+        return None
+
+    current_block = (context.get('block') or '').strip().upper()
+    if current_block:
+        settings = RentSettings.query.filter_by(
+            teacher_id=teacher_id,
+            block=current_block
+        ).first()
+        if settings:
+            return settings
+
+    return RentSettings.query.filter_by(teacher_id=teacher_id).first()
+
+
 def get_current_teacher_id():
     """DEPRECATED: Get teacher_id from current class context.
 
@@ -150,16 +171,15 @@ def get_feature_settings_for_student():
         # Return defaults if no student logged in
         return FeatureSettings.get_defaults()
 
-    teacher_id = get_current_teacher_id()
+    context = get_current_class_context()
+    if not context:
+        return FeatureSettings.get_defaults()
+
+    teacher_id = context.get('teacher_id')
     if not teacher_id:
         return FeatureSettings.get_defaults()
 
-    # Get the student's current block/period
-    current_block = session.get('current_period')
-    if not current_block and student.block:
-        # Default to first block, handling empty strings after split
-        blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
-        current_block = blocks[0] if blocks else None
+    current_block = (context.get('block') or '').strip().upper() or None
 
     # Try block-specific settings first
     if current_block:
@@ -193,6 +213,11 @@ def is_feature_enabled(feature_name):
     Returns:
         bool: True if feature is enabled, False otherwise
     """
+    if feature_name == 'rent':
+        rent_settings = get_rent_settings_for_context(get_current_class_context())
+        if rent_settings:
+            return bool(rent_settings.is_enabled)
+
     settings = get_feature_settings_for_student()
     feature_key = f"{feature_name}_enabled"
     return settings.get(feature_key, True)  # Default to enabled
@@ -989,7 +1014,7 @@ def dashboard():
     active_insurance = student.get_active_insurance(teacher_id)
 
     rent_status = None
-    rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    rent_settings = get_rent_settings_for_context(context)
     if rent_settings and rent_settings.is_enabled and student.is_rent_enabled:
         now = datetime.now()
         due_date, grace_end_date = _calculate_rent_deadlines(rent_settings, now)
@@ -1053,7 +1078,7 @@ def dashboard():
     tz = pytz.timezone('America/Los_Angeles')
     local_now = datetime.now(tz)
     # --- DASHBOARD DEBUG LOGGING ---
-    current_app.logger.info(f"📊 DASHBOARD DEBUG: Student {student.id} - Block states:")
+    current_app.logger.info(f"DASHBOARD DEBUG: Student {student.id} - Block states:")
     for blk, blk_state in period_states.items():
         active = blk_state.get("active")
         done = blk_state.get("done")
@@ -2114,7 +2139,37 @@ def shop():
         StoreItem.teacher_id == teacher_id  # FIX: Only current class items
     ).order_by(StudentItem.purchase_date.desc()).all()
 
-    return render_template('student_shop.html', student=student, items=items, student_items=student_items)
+    # Check if student has paid rent this month and get per-period rent item IDs
+    from app.models import RentSettings, RentPayment, RentItem
+    join_code = context.get('join_code')
+    current_block = context.get('block')
+    has_paid_rent = False
+    per_period_rent_item_ids = set()
+
+    if teacher_id and join_code and current_block:
+        rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
+        if rent_settings and rent_settings.is_enabled:
+            now = datetime.now(timezone.utc)
+            has_paid_rent = RentPayment.query.filter(
+                RentPayment.student_id == student.id,
+                RentPayment.period == current_block,
+                RentPayment.period_month == now.month,
+                RentPayment.period_year == now.year,
+                db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+            ).first() is not None
+
+            # Get all per-period rent items
+            per_period_items = RentItem.query.filter_by(
+                rent_setting_id=rent_settings.id,
+                purchase_duration='per_period',
+                is_available_in_store=True
+            ).all()
+
+            # Collect store item IDs
+            per_period_rent_item_ids = {item.store_item_id for item in per_period_items if item.store_item_id}
+
+    return render_template('student_shop.html', student=student, items=items, student_items=student_items,
+                         has_paid_rent=has_paid_rent, per_period_rent_item_ids=per_period_rent_item_ids)
 
 
 # -------------------- RENT --------------------
@@ -2310,7 +2365,7 @@ def rent():
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').strip().upper()
-    settings = RentSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
         flash("Rent system is currently disabled.", "info")
@@ -2410,6 +2465,12 @@ def rent():
         RentPayment.payment_date.desc()
     ).limit(24).all()  # Increased to show more history with multiple periods
 
+    # Get rent items for this setting to show what rent includes
+    from app.models import RentItem
+    rent_items = []
+    if settings:
+        rent_items = RentItem.query.filter_by(rent_setting_id=settings.id).order_by(RentItem.order_index).all()
+
     return render_template('student_rent.html',
                           student=student,
                           settings=settings,
@@ -2422,7 +2483,8 @@ def rent():
                           due_date=due_date,
                           grace_end_date=grace_end_date,
                           preview_start_date=preview_start_date,
-                          payment_history=payment_history)
+                          payment_history=payment_history,
+                          rent_items=rent_items)
 
 
 @student_bp.route('/rent/pay/<period>', methods=['POST'])
@@ -2438,7 +2500,7 @@ def rent_pay(period):
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').upper()
-    settings = RentSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
         flash("Rent system is currently disabled.", "error")
@@ -3200,7 +3262,7 @@ def verify_recovery(code_id):
 
         # Verify passphrase
         if not student.passphrase_hash or not check_password_hash(student.passphrase_hash, passphrase):
-            current_app.logger.warning(f"🛑 Recovery verification failed: incorrect passphrase for student {student.id}")
+            current_app.logger.warning(f"Recovery verification failed: incorrect passphrase for student {student.id}")
             flash("Incorrect passphrase. Please try again.", "error")
             return render_template('student_verify_recovery.html',
                                  recovery_code=recovery_code,
@@ -3214,7 +3276,7 @@ def verify_recovery(code_id):
         recovery_code.verified_at = datetime.now(timezone.utc)
         db.session.commit()
 
-        current_app.logger.info(f"🔐 Student {student.id} verified recovery request {recovery_code.recovery_request_id}")
+        current_app.logger.info(f"Student {student.id} verified recovery request {recovery_code.recovery_request_id}")
 
         return render_template('student_verify_recovery.html',
                              recovery_code=recovery_code,

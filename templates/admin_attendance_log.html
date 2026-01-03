@@ -2,7 +2,68 @@
 {% set page_title = "Attendance Log" %}
 {% block title %}Attendance Log{% endblock %}
 {% block page_icon %}fact_check{% endblock %}
+{% block page_header_actions %}
+  <button class="btn btn-primary d-none d-md-inline-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#attendanceGuide" aria-controls="attendanceGuide">
+    <span class="material-symbols-outlined">quick_reference_all</span> Need Help?
+{% endblock %}
 {% block content %}
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="attendanceGuide" aria-labelledby="attendanceGuideLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="attendanceGuideLabel">How to: Attendance Log</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <p>Use this page to control attendance taps and review student attendance records.</p>
+        <div class="accordion mt-4 mb-4" id="attendanceGuideAccordion">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="attendanceGuideHeadingControls">
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#attendanceGuideControls" aria-expanded="false" aria-controls="attendanceGuideControls">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">toggle_on</span>
+                        <strong>Attendance Controls</strong>
+                    </button>
+                </h2>
+                <div id="attendanceGuideControls" class="accordion-collapse collapse mt-2" aria-labelledby="attendanceGuideHeadingControls" data-bs-parent="#attendanceGuideAccordion">
+                    <div class="accordion-body">
+                        <p>Use the class toggles to enable or pause Start Work, Break, and Done taps for each class period.</p>
+                        <div class="alert alert-info mb-0">
+                            <strong>Tip:</strong> Pausing a class prevents new taps but does not change existing records.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="attendanceGuideHeadingFilters">
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#attendanceGuideFilters" aria-expanded="false" aria-controls="attendanceGuideFilters">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">filter_alt</span>
+                        <strong>Filter Attendance History</strong>
+                    </button>
+                </h2>
+                <div id="attendanceGuideFilters" class="accordion-collapse collapse mt-2" aria-labelledby="attendanceGuideHeadingFilters" data-bs-parent="#attendanceGuideAccordion">
+                    <div class="accordion-body">
+                        <p>Use the filters to narrow by period, class, event type, and date range, then click Apply Filters.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="attendanceGuideHeadingReview">
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#attendanceGuideReview" aria-expanded="false" aria-controls="attendanceGuideReview">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">history</span>
+                        <strong>Review Records</strong>
+                    </button>
+                </h2>
+                <div id="attendanceGuideReview" class="accordion-collapse collapse mt-2" aria-labelledby="attendanceGuideHeadingReview" data-bs-parent="#attendanceGuideAccordion">
+                    <div class="accordion-body">
+                        <p>Review the table for start/end times, totals, and notes. Use the pagination to move through results.</p>
+                        <div class="alert alert-warning mb-0">
+                            <strong>Missing data?</strong> Clear filters or expand the date range if no records appear.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- Stats Summary Card -->
 <div class="card shadow mb-4">

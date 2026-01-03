@@ -94,7 +94,7 @@ from flask.cli import with_appcontext
 
 def ensure_default_admin():
     """Placeholder: No default admin created for TOTP-only auth."""
-    app.logger.info("🛡️ ensure_default_admin: TOTP-only mode, no default admin created.")
+    app.logger.info("ensure_default_admin: TOTP-only mode, no default admin created.")
 
 
 @app.cli.command("ensure-admin")
@@ -139,9 +139,9 @@ def create_sysadmin():
     db.session.commit()
 
     # Display results
-    print(f"\n✅ System admin '{username}' created successfully!")
+    print(f"\nSystem admin '{username}' created successfully.")
     print("\n" + "="*70)
-    print("📱 SCAN THIS QR CODE WITH YOUR AUTHENTICATOR APP")
+    print("SCAN THIS QR CODE WITH YOUR AUTHENTICATOR APP")
     print("="*70)
 
     # Generate and display QR code in terminal
@@ -151,10 +151,10 @@ def create_sysadmin():
     qr.print_ascii(invert=True)
 
     print("\n" + "="*70)
-    print("🔑 TOTP SECRET (store this securely as backup):")
+    print("TOTP SECRET (store this securely as backup):")
     print(f"   {totp_secret}")
     print("="*70)
-    print("\n⚠️  IMPORTANT: Save this secret in a secure location!")
+    print("\nIMPORTANT: Save this secret in a secure location!")
     print("   This is the ONLY time it will be displayed in plaintext.")
     print("   The secret is encrypted in the database for security.")
     print("\n   Manual entry URI:")
@@ -162,7 +162,7 @@ def create_sysadmin():
     print("="*70)
 
     # Wait for user confirmation before clearing
-    input("\n✅ Press ENTER after saving the secret to clear this screen...")
+    input("\nPress ENTER after saving the secret to clear this screen...")
 
     # Clear the terminal screen
     os.system('cls' if os.name == 'nt' else 'clear')

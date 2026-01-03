@@ -16,10 +16,10 @@ def split_last_name_parts(last_name):
     Split last name into parts by space and hyphen.
 
     Examples:
-        "Smith" → ["smith"]
-        "Smith-Jones" → ["smith", "jones"]
-        "Van Der Berg" → ["van", "der", "berg"]
-        "O'Brien" → ["o'brien"] (apostrophe NOT a delimiter)
+        "Smith" -> ["smith"]
+        "Smith-Jones" -> ["smith", "jones"]
+        "Van Der Berg" -> ["van", "der", "berg"]
+        "O'Brien" -> ["o'brien"] (apostrophe NOT a delimiter)
 
     Returns:
         list: Normalized lowercase parts (min 2 chars each)
@@ -49,7 +49,7 @@ def hash_last_name_parts(last_name, salt):
 
     Example:
         hash_last_name_parts("Smith-Jones", salt)
-        → ["abc123...", "def456..."]
+        -> ["abc123...", "def456..."]
     """
     parts = split_last_name_parts(last_name)
     return [hash_hmac(part.encode('utf-8'), salt) for part in parts]
@@ -71,17 +71,17 @@ def verify_last_name_parts(entered_last_name, stored_part_hashes, salt):
         bool: True if at least one part overlaps
 
     Examples:
-        Teacher A: "Smith-Jones" → stored: [hash("smith"), hash("jones")]
-        Teacher B: "Smith" → student enters "Smith"
-        → hash("smith") overlaps ✅
+        Teacher A: "Smith-Jones" -> stored: [hash("smith"), hash("jones")]
+        Teacher B: "Smith" -> student enters "Smith"
+        -> hash("smith") overlaps (match)
 
         Teacher A: "Van Der Berg"
-        Student enters: "VanDerBerg" → No overlap in parts ❌
-        Student enters: "Van Berg" → hash("van"), hash("berg") overlap ✅
+        Student enters: "VanDerBerg" -> no overlap in parts (no match)
+        Student enters: "Van Berg" -> hash("van"), hash("berg") overlap (match)
 
         Teacher A: "Smith"
         Teacher B: "Smith-Jones"
-        Student enters: "Smith" → Matches both ✅
+        Student enters: "Smith" -> matches both (ambiguous)
     """
     if not entered_last_name or not stored_part_hashes:
         return False

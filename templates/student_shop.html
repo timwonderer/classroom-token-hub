@@ -27,10 +27,16 @@
         {% if items %}
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
             {% for item in items %}
+            {% set is_rent_covered = has_paid_rent and item.id in per_period_rent_item_ids %}
             <div class="col">
-                <div class="card h-100 {% if item.is_bundle or item.bulk_discount_enabled %}border-primary{% endif %}">
+                <div class="card h-100 {% if item.is_bundle or item.bulk_discount_enabled %}border-primary{% endif %} {% if is_rent_covered %}opacity-50{% endif %}">
                     <div class="card-body d-flex flex-column">
                         <h5 class="card-title">{{ item.name }}</h5>
+                        {% if is_rent_covered %}
+                        <div class="alert alert-success alert-sm mb-2 py-1 px-2">
+                            <small><strong><span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">check_circle</span> Included in your rent!</strong></small>
+                        </div>
+                        {% endif %}
                         <div class="mb-2">
                             <span class="badge bg-primary fs-6">${{ "%.2f"|format(item.price) }}</span>
                             {% if item.item_type == 'immediate' %}
@@ -124,9 +130,11 @@
                                     data-bulk-discount-quantity="{{ item.bulk_discount_quantity if item.bulk_discount_enabled else 0 }}"
                                     data-bulk-discount-percentage="{{ item.bulk_discount_percentage if item.bulk_discount_enabled else 0 }}"
                                     data-inventory="{{ item.inventory if item.inventory is not none else 'unlimited' }}"
-                                    {% if item.inventory is not none and item.inventory <= 0 %}disabled{% endif %}>
+                                    {% if is_rent_covered or (item.inventory is not none and item.inventory <= 0) %}disabled{% endif %}>
                                 {% if item.inventory is not none and item.inventory <= 0 %}
                                     Out of Stock
+                                {% elif is_rent_covered %}
+                                    Already Included
                                 {% else %}
                                     Purchase
                                 {% endif %}

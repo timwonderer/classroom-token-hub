@@ -854,14 +854,14 @@ def manage_teachers():
     form = SystemAdminInviteForm()
     if form.validate_on_submit():
         code = (form.code.data.strip() if form.code.data else None) or secrets.token_urlsafe(8)
-        current_app.logger.info(f"📝 Creating invite code: {repr(code)} (length: {len(code)})")
+        current_app.logger.info(f"Creating invite code: {repr(code)} (length: {len(code)})")
         expiry_days = request.form.get('expiry_days', 30, type=int)
         expires_at = datetime.now(timezone.utc) + timedelta(days=expiry_days)
         invite = AdminInviteCode(code=code, expires_at=expires_at)
         db.session.add(invite)
         db.session.commit()
-        current_app.logger.info(f"✅ Invite code created in database: {repr(invite.code)} (id: {invite.id})")
-        flash(f"✅ Invite code '{code}' created successfully.", "success")
+        current_app.logger.info(f"Invite code created in database: {repr(invite.code)} (id: {invite.id})")
+        flash(f"Invite code '{code}' created successfully.", "success")
         return redirect(url_for("sysadmin.manage_teachers") + "#invite-codes")
 
     # Get all invite codes
@@ -1031,12 +1031,12 @@ def delete_period(admin_id, period):
     """
     # Validate period parameter
     if not period or len(period) > 10:
-        flash("❌ Invalid period parameter", "error")
+        flash("Invalid period parameter", "error")
         return redirect(url_for('sysadmin.teacher_overview'))
     
     # Sanitize period to prevent SQL injection (allow only alphanumeric, spaces, hyphens, underscores)
     if not re.match(r'^[a-zA-Z0-9\s\-_]+$', period):
-        flash("❌ Invalid period format", "error")
+        flash("Invalid period format", "error")
         return redirect(url_for('sysadmin.teacher_overview'))
     
     admin = Admin.query.get_or_404(admin_id)
@@ -1046,7 +1046,7 @@ def delete_period(admin_id, period):
     
     if not authorized:
         flash(
-            f"❌ Unauthorized: Cannot delete period '{period}' for teacher '{admin.username}'. "
+            f"Unauthorized: Cannot delete period '{period}' for teacher '{admin.username}'. "
             f"Teacher must request deletion or be inactive for 6+ months.",
             "error"
         )
@@ -1120,7 +1120,7 @@ def delete_period(admin_id, period):
         db.session.commit()
 
         flash(
-            f"✅ Period '{period}' deleted for teacher '{admin.username}'. "
+            f"Period '{period}' deleted for teacher '{admin.username}'. "
             f"Removed {removed_count} student links. Students maintain access to other classes.",
             "success"
         )
@@ -1128,7 +1128,7 @@ def delete_period(admin_id, period):
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception(f"Error deleting period {period} for teacher {admin_id}")
-        flash(f"❌ Error deleting period: {str(e)}", "error")
+        flash(f"Error deleting period: {str(e)}", "error")
 
     return redirect(url_for('sysadmin.teacher_overview'))
 
@@ -1152,7 +1152,7 @@ def delete_teacher(admin_id):
     
     if not authorized:
         flash(
-            f"❌ Unauthorized: Cannot delete teacher '{admin.username}'. "
+            f"Unauthorized: Cannot delete teacher '{admin.username}'. "
             f"Teacher must request deletion or be inactive for 6+ months.",
             "error"
         )
@@ -1226,7 +1226,7 @@ def delete_teacher(admin_id):
         db.session.commit()
 
         flash(
-            f"✅ Teacher '{admin_username}' deleted. Updated {student_count} student ownership records. "
+            f"Teacher '{admin_username}' deleted. Updated {student_count} student ownership records. "
             f"Students maintain access unless they have no other teachers.",
             "success",
         )
@@ -1234,7 +1234,7 @@ def delete_teacher(admin_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception(f"Error deleting teacher {admin_id}")
-        flash(f"❌ Error deleting teacher: {str(e)}", "error")
+        flash(f"Error deleting teacher: {str(e)}", "error")
 
     return redirect(url_for('sysadmin.teacher_overview'))
 

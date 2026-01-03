@@ -1,8 +1,107 @@
 {% extends "layout_admin.html" %}
 
 {% block page_title %}Student Issues{% endblock %}
+{% block page_header_actions %}
+    <button class="btn btn-primary d-none d-md-inline-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#issuesGuide" aria-controls="issuesGuide">
+        <span class="material-symbols-outlined">quick_reference_all</span> Need Help?
+    </button>
+{% endblock %}
 
 {% block content %}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="issuesGuide" aria-labelledby="issuesGuideLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="issuesGuideLabel">How to: Student Issues</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <p>Review student issue tickets, resolve them quickly, or escalate to developers when needed.</p>
+        <div class="accordion mt-4 mb-4" id="issuesGuideAccordion">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="issuesGuideHeadingReview">
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#issuesGuideReview" aria-expanded="false" aria-controls="issuesGuideReview">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">contact_support</span>
+                        <strong>Review Tickets</strong>
+                    </button>
+                </h2>
+                <div id="issuesGuideReview" class="accordion-collapse collapse mt-2" aria-labelledby="issuesGuideHeadingReview" data-bs-parent="#issuesGuideAccordion">
+                    <div class="accordion-body">
+                        <p>Open any ticket in the Pending Review tab to read the student explanation and view related details.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="issuesGuideHeadingResolve">
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#issuesGuideResolve" aria-expanded="false" aria-controls="issuesGuideResolve">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">check_circle</span>
+                        <strong>Resolve an Issue</strong>
+                    </button>
+                </h2>
+                <div id="issuesGuideResolve" class="accordion-collapse collapse mt-2" aria-labelledby="issuesGuideHeadingResolve" data-bs-parent="#issuesGuideAccordion">
+                    <div class="accordion-body">
+                        <p>Choose the appropriate resolution option and leave a clear note for the student.</p>
+                        <div class="alert alert-info mb-0">
+                            <strong>Tip:</strong> Clear notes help students understand what changed and what to do next.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="issuesGuideHeadingEscalate">
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#issuesGuideEscalate" aria-expanded="false" aria-controls="issuesGuideEscalate">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">arrow_upward</span>
+                        <strong>Escalate to Developers</strong>
+                    </button>
+                </h2>
+                <div id="issuesGuideEscalate" class="accordion-collapse collapse mt-2" aria-labelledby="issuesGuideHeadingEscalate" data-bs-parent="#issuesGuideAccordion">
+                    <div class="accordion-body">
+                        <p>Escalate technical issues and include any steps you tried or patterns you noticed.</p>
+                        <div class="alert alert-warning mb-0">
+                            <strong>Reminder:</strong> Students cannot contact developers directly, so your detail matters.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="issuesGuideHeadingStatus">
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#issuesGuideStatus" aria-expanded="false" aria-controls="issuesGuideStatus">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">badge</span>
+                        <strong>Status Badges</strong>
+                    </button>
+                </h2>
+                <div id="issuesGuideStatus" class="accordion-collapse collapse mt-2" aria-labelledby="issuesGuideHeadingStatus" data-bs-parent="#issuesGuideAccordion">
+                    <div class="accordion-body">
+                        <p>Students see a status badge for each ticket:</p>
+                        <ul>
+                            <li><span class="badge bg-secondary text-dark">Submitted</span> Ticket is awaiting review.</li>
+                            <li><span class="badge bg-secondary text-dark">Teacher Review</span> Teacher is working on the issue.</li>
+                            <li><span class="badge bg-success">Resolved</span> Issue resolved by the teacher.</li>
+                            <li><span class="badge bg-warning text-dark">Elevated</span> Escalated to developers.</li>
+                            <li><span class="badge bg-warning text-dark">Developer Review</span> Developer is investigating.</li>
+                            <li><span class="badge bg-info">Resolved - See Teacher</span> Developer resolved; student should follow up with you.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="issuesGuideHeadingPrivacy">
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#issuesGuidePrivacy" aria-expanded="false" aria-controls="issuesGuidePrivacy">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">privacy_tip</span>
+                        <strong>Privacy Notes</strong>
+                    </button>
+                </h2>
+                <div id="issuesGuidePrivacy" class="accordion-collapse collapse mt-2" aria-labelledby="issuesGuideHeadingPrivacy" data-bs-parent="#issuesGuideAccordion">
+                    <div class="accordion-body">
+                        <p>Escalated issues include a non-identifying student reference and your notes.</p>
+                        <div class="alert alert-info mb-0">
+                            <strong>Privacy:</strong> Developers never see student names or other identifying details.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="container-fluid">
     
 
@@ -217,34 +316,6 @@
                     </div>
                 </div>
             {% endif %}
-        </div>
-        <!-- Help Accordion -->
-        <div class="accordion mt-4" id="helpAccordion">
-            <div class="accordion-item ">
-                <h2 class="accordion-header" id="headingHelp">
-                    <button class="accordion-button collapsed bg-primary text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseHelp" aria-expanded="false" aria-controls="collapseHelp">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">contact_support</span>
-                        <strong>Handling Student Issues - Help Guide</strong>
-                    </button>
-                </h2>
-                <div id="collapseHelp" class="accordion-collapse collapse mt-2" aria-labelledby="headingHelp" data-bs-parent="#helpAccordion">
-                    <div class="accordion-body" >
-                        <p>When students have issues with Classroom Token Hub, they will submit a <strong>support ticket</strong> with relevant information attached. Once they submit the ticket, they will not be able to modify it to maintain the integrity of the support ticket.</p>
-                        <p>This ticket will first arrive here, under the <strong>Pending Review</strong> section. Depending on the nature of the issue, you will be provided with relevant options to <strong>resolve</strong> or <strong>escalate</strong> the issue. Once the support ticket is resolved or closed, it will move to the <strong>Resolved</strong> section.</p>
-                        <p>For issues that are due to technical problems or bugs, you can opt to <strong>escalate</strong> the issue to our support team. When you select this option, you will be able to provide additional information that could be helpful to our team in identifying and fixing the problem. <strong>Students will not be able to directly submit a ticket to our team due to privacy and security concerns.</strong></p>
-                        <p>Once escalated, the issue will appear in the <strong>Escalated</strong> section. When an issue has been escalated, our team will see your (the teacher's) username, a non-identifying reference to the student, original issue provided by the students, and any additional details you provide. In addition, if you opt to send class information to us, we will also see the class identifier. <strong>Our team will never see student name or other identifying information about them.</strong></p>
-                        <p>At any given point, students will see a <strong>status badge</strong> on their support page. This status badge will indicate the current state of their ticket and it can be one of the following:</p>
-                        <ul>
-                            <li><span class="badge bg-secondary text-dark">Submitted</span> The issue has been submitted and is pending review by the teacher.</li>
-                            <li><span class="badge bg-secondary text-dark">Teacher Review</span> The issue is being reviewed by the teacher.</li>
-                            <li><span class="badge bg-success">Resolved</span> The issue has been resolved by the teacher.</li>
-                            <li><span class="badge bg-warning text-dark">Elevated</span> The issue has been escalated to the support team by the teacher.</li>
-                            <li><span class="badge bg-warning text-dark">Developer Review</span> The issue is being reviewed by the support team.</li>
-                            <li><span class="badge bg-info">Resolved - See Teacher</span> The issue has been resolved by the support team.</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
     </div>

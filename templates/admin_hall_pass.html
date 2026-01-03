@@ -3,8 +3,105 @@
 {% block title %}Hall Pass Management{% endblock %}
 
 {% block page_icon %}confirmation_number{% endblock %}
+{% block page_header_actions %}
+  <button class="btn btn-primary d-none d-md-inline-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#hallPassGuide" aria-controls="hallPassGuide">
+    <span class="material-symbols-outlined">quick_reference_all</span> Need Help?
+  </button>
+{% endblock %}
 
 {% block content %}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="hallPassGuide" aria-labelledby="hallPassGuideLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="hallPassGuideLabel">How to: Hall Pass Management</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+        <p>Approve requests, manage the queue, and track who is out of class.</p>
+        <div class="accordion mt-4 mb-4" id="hallPassGuideAccordion">
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="hallPassGuideHeadingQueue">
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideQueue" aria-expanded="false" aria-controls="hallPassGuideQueue">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">settings</span>
+                        <strong>Queue Settings</strong>
+                    </button>
+                </h2>
+                <div id="hallPassGuideQueue" class="accordion-collapse collapse mt-2" aria-labelledby="hallPassGuideHeadingQueue" data-bs-parent="#hallPassGuideAccordion">
+                    <div class="accordion-body">
+                        <p>Turn the queue system on or off and set a limit for how many students can be out at once.</p>
+                        <div class="alert alert-info mb-0">
+                            <strong>Tip:</strong> When the queue is disabled, students cannot submit new pass requests.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="hallPassGuideHeadingSettingsBreakdown">
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideSettingsBreakdown" aria-expanded="false" aria-controls="hallPassGuideSettingsBreakdown">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
+                        <strong>Settings Breakdown</strong>
+                    </button>
+                </h2>
+                <div id="hallPassGuideSettingsBreakdown" class="accordion-collapse collapse mt-2" aria-labelledby="hallPassGuideHeadingSettingsBreakdown" data-bs-parent="#hallPassGuideAccordion">
+                    <div class="accordion-body">
+                        <ul class="mb-0">
+                            <li><strong>Queue toggle:</strong> enables or disables all new pass requests.</li>
+                            <li><strong>Queue limit:</strong> caps how many students can be out at the same time.</li>
+                            <li><strong>Verification display:</strong> shows the active pass list for hallway checks.</li>
+                            <li><strong>Terminal:</strong> student-facing kiosk to request passes.</li>
+                            <li><strong>Queue display:</strong> screen showing the live queue order.</li>
+                        </ul>
+                        <div class="alert alert-warning mt-3 mb-0">
+                            <strong>Side effects:</strong> Lowering the limit can block new approvals until slots open.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="hallPassGuideHeadingApprove">
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideApprove" aria-expanded="false" aria-controls="hallPassGuideApprove">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">check_circle</span>
+                        <strong>Approve or Reject Requests</strong>
+                    </button>
+                </h2>
+                <div id="hallPassGuideApprove" class="accordion-collapse collapse mt-2" aria-labelledby="hallPassGuideHeadingApprove" data-bs-parent="#hallPassGuideAccordion">
+                    <div class="accordion-body">
+                        <p>Use the Pending tab to approve or reject requests. Approved students move into the queue.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="hallPassGuideHeadingTrack">
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideTrack" aria-expanded="false" aria-controls="hallPassGuideTrack">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">logout</span>
+                        <strong>Track Students Out</strong>
+                    </button>
+                </h2>
+                <div id="hallPassGuideTrack" class="accordion-collapse collapse mt-2" aria-labelledby="hallPassGuideHeadingTrack" data-bs-parent="#hallPassGuideAccordion">
+                    <div class="accordion-body">
+                        <p>Use the Approved and Out tabs to track who is waiting and who has left the room.</p>
+                        <div class="alert alert-warning mb-0">
+                            <strong>Reminder:</strong> Mark students as returned to keep the queue accurate.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="hallPassGuideHeadingDisplays">
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#hallPassGuideDisplays" aria-expanded="false" aria-controls="hallPassGuideDisplays">
+                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tv</span>
+                        <strong>Display Screens</strong>
+                    </button>
+                </h2>
+                <div id="hallPassGuideDisplays" class="accordion-collapse collapse mt-2" aria-labelledby="hallPassGuideHeadingDisplays" data-bs-parent="#hallPassGuideAccordion">
+                    <div class="accordion-body">
+                        <p>Open Verification, Terminal, or Queue Display in a new tab to show status on a classroom screen.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="container-fluid">
     <div class="d-flex justify-content-end align-items-center mb-4">
         <div>

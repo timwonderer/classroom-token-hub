@@ -205,7 +205,7 @@ def admin_required(f):
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        current_app.logger.info(f"🧪 Admin access attempt: session = {dict(session)}")
+        current_app.logger.info(f"Admin access attempt: session = {dict(session)}")
         if not session.get("is_admin"):
             flash("You must be an admin to view this page.")
             encoded_next = urllib.parse.quote(request.path, safe="")

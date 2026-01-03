@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Documentation - Classroom Token Hub{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <!-- Header -->
+    <div class="text-center mb-5">
+        <h1 class="display-4 mb-3">
+            <span class="material-symbols-outlined" style="font-size: 3rem; vertical-align: middle; color: var(--primary-color);">menu_book</span>
+            Documentation
+        </h1>
+        <p class="lead text-muted">Everything you need to know about Classroom Token Hub</p>
+
+        <!-- Search Bar -->
+        <form action="{{ url_for('docs.search') }}" method="get" class="mt-4">
+            <div class="input-group input-group-lg mx-auto" style="max-width: 600px;">
+                <input type="search" name="q" class="form-control" placeholder="Search documentation..." aria-label="Search">
+                <button class="btn btn-primary" type="submit">
+                    <span class="material-symbols-outlined" style="vertical-align: middle;">search</span>
+                    Search
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Documentation Categories -->
+    <div class="row g-4 mb-5">
+        <!-- Getting Started -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #28a745;">rocket_launch</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">Getting Started</h3>
+                    <p class="card-text text-muted">New to Classroom Token Hub? Start here to learn the basics.</p>
+                    <ul class="list-unstyled">
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/student_guide') }}" class="text-decoration-none">Student Guide</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}" class="text-decoration-none">Teacher Manual</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- For Students -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #007bff;">school</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">For Students</h3>
+                    <p class="card-text text-muted">Learn how to use your account, earn tokens, and shop.</p>
+                    <ul class="list-unstyled">
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/student_guide') }}#account-setup" class="text-decoration-none">Account Setup</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/student_guide') }}#work-and-pay" class="text-decoration-none">Work & Payroll</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/student_guide') }}#accounts-and-transactions" class="text-decoration-none">Banking</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/student_guide') }}#store-and-hall-passes" class="text-decoration-none">Store</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/student_guide') }}#bills-rent-and-insurance" class="text-decoration-none">Bills</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- For Teachers -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #dc3545;">person</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">For Teachers</h3>
+                    <p class="card-text text-muted">Manage your classroom economy and configure features.</p>
+                    <ul class="list-unstyled">
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}#student-management" class="text-decoration-none">Student Management</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}#payroll-and-financials" class="text-decoration-none">Payroll</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}#store-and-rewards" class="text-decoration-none">Store</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}#rent-and-insurance" class="text-decoration-none">Rent & Insurance</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}#announcements" class="text-decoration-none">Announcements</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Reference -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #6f42c1;">code</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">Technical Reference</h3>
+                    <p class="card-text text-muted">Architecture, database schema, and developer docs.</p>
+                    <ul class="list-unstyled">
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/architecture') }}" class="text-decoration-none">Architecture</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/database_schema') }}" class="text-decoration-none">Database Schema</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/ECONOMY_SPECIFICATION') }}" class="text-decoration-none">Economy Specification</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/api_reference') }}" class="text-decoration-none">API Reference</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Operations & Deployment -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #fd7e14;">cloud_upload</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">Operations</h3>
+                    <p class="card-text text-muted">Deployment, maintenance, and operational procedures.</p>
+                    <ul class="list-unstyled">
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='DEPLOYMENT') }}" class="text-decoration-none">Deployment Guide</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='CHANGELOG') }}" class="text-decoration-none">Changelog</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #17a2b8;">shield</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">Security</h3>
+                    <p class="card-text text-muted">Security audits, best practices, and compliance.</p>
+                    <ul class="list-unstyled">
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='security/MULTI_TENANCY_AUDIT') }}" class="text-decoration-none">Multi-Tenancy Audit</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='security/VALIDATION_REPORT') }}" class="text-decoration-none">Validation Report</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="card bg-light">
+        <div class="card-body">
+            <h4 class="card-title">
+                <span class="material-symbols-outlined" style="vertical-align: middle;">bolt</span>
+                Quick Links
+            </h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Common Questions</h6>
+                    <ul>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/student_guide') }}#logging-in" class="text-decoration-none">How do I log in?</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}#student-management" class="text-decoration-none">How do I add students?</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}#payroll-and-financials" class="text-decoration-none">How do I run payroll?</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6>External Resources</h6>
+                    <ul>
+                        <li><a href="https://github.com/timwonderer/classroom-economy" target="_blank" rel="noopener" class="text-decoration-none">GitHub Repository</a></li>
+                        <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener" class="text-decoration-none">Contributing Guide</a></li>
+                        <li><a href="https://github.com/timwonderer/classroom-economy/issues" target="_blank" rel="noopener" class="text-decoration-none">Report Issues</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

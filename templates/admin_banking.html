@@ -3,7 +3,116 @@
 {% set current_page = "banking" %}
 {% block title %}Banking Management{% endblock %}
 {% block page_icon %}account_balance{% endblock %}
+{% block page_header_actions %}
+  <button class="btn btn-primary d-none d-md-inline-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#bankingGuide" aria-controls="bankingGuide">
+    <span class="material-symbols-outlined">quick_reference_all</span> Need Help?
+{% endblock %}
 {% block content %}
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="bankingGuide" aria-labelledby="bankingGuideLabel">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title" id="bankingGuideLabel">How to: Banking Management</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body">
+    <p>Monitor student balances, review transactions, and configure savings settings.</p>
+    <div class="accordion mt-4 mb-4" id="bankingGuideAccordion">
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="bankingGuideHeadingOverview">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#bankingGuideOverview" aria-expanded="false" aria-controls="bankingGuideOverview">
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">grid_view</span>
+            <strong>Overview Stats</strong>
+          </button>
+        </h2>
+        <div id="bankingGuideOverview" class="accordion-collapse collapse mt-2" aria-labelledby="bankingGuideHeadingOverview" data-bs-parent="#bankingGuideAccordion">
+          <div class="accordion-body">
+            <p class="mb-2"><strong>What you'll see:</strong></p>
+            <ul class="mb-3">
+              <li><strong>Total Checking</strong> — All money available for immediate spending</li>
+              <li><strong>Total Savings</strong> — Money set aside earning interest</li>
+              <li><strong>Total Deposits</strong> — Combined checking + savings across all students</li>
+              <li><strong>Students w/ Savings</strong> — How many students are actively saving</li>
+            </ul>
+            <p class="mb-3"><strong>Example:</strong> 20 students with $10 in checking and $5 in savings equals $300 in total deposits.</p>
+            <div class="alert alert-info mb-0">
+              <strong><i class="bi bi-lightbulb-fill me-1"></i>Teaching Tip:</strong> Encourage at least 30% of students to use savings accounts. This teaches delayed gratification and financial planning!
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="bankingGuideHeadingTransactions">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#bankingGuideTransactions" aria-expanded="false" aria-controls="bankingGuideTransactions">
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">receipt_long</span>
+            <strong>Transactions</strong>
+          </button>
+        </h2>
+        <div id="bankingGuideTransactions" class="accordion-collapse collapse mt-2" aria-labelledby="bankingGuideHeadingTransactions" data-bs-parent="#bankingGuideAccordion">
+          <div class="accordion-body">
+            <p>Use the Transactions tab to review deposits, withdrawals, transfers, and fees for each student.</p>
+            <ul class="mb-0">
+              <li>Filter by student, account type, or date to investigate a specific concern.</li>
+              <li>Common entries include payroll deposits, rent charges, store purchases, and savings transfers.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="bankingGuideHeadingSettings">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#bankingGuideSettings" aria-expanded="false" aria-controls="bankingGuideSettings">
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">settings</span>
+            <strong>Banking Settings</strong>
+          </button>
+        </h2>
+        <div id="bankingGuideSettings" class="accordion-collapse collapse mt-2" aria-labelledby="bankingGuideHeadingSettings" data-bs-parent="#bankingGuideAccordion">
+          <div class="accordion-body">
+            <p>Configure savings interest, payout schedules, and overdraft rules in the Settings tab.</p>
+            <p class="mb-0">Rate changes affect future payouts only and will not re-calculate past interest.</p>
+            <div class="alert alert-warning mb-0">
+              <strong>Reminder:</strong> Setting changes apply moving forward and do not alter past transactions.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="bankingGuideHeadingBreakdown">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#bankingGuideBreakdown" aria-expanded="false" aria-controls="bankingGuideBreakdown">
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
+            <strong>Settings Breakdown</strong>
+          </button>
+        </h2>
+        <div id="bankingGuideBreakdown" class="accordion-collapse collapse mt-2" aria-labelledby="bankingGuideHeadingBreakdown" data-bs-parent="#bankingGuideAccordion">
+          <div class="accordion-body">
+            <p class="mb-2"><strong><i class="bi bi-gear-fill me-1"></i>Basic Settings:</strong></p>
+            <ul class="mb-3">
+              <li><strong>Savings APY:</strong> Annual percentage yield (e.g., 5% APY means about $0.42 earned per $100 saved monthly)</li>
+              <li><strong>Interest schedule:</strong> How often students earn interest
+                <ul class="small mt-1">
+                  <li><em>Weekly:</em> Frequent rewards, ideal for younger students</li>
+                  <li><em>Monthly:</em> Mirrors real banking, better for older students</li>
+                </ul>
+              </li>
+            </ul>
+
+            <p class="mb-2"><strong><i class="bi bi-sliders me-1"></i>Advanced Settings:</strong></p>
+            <ul class="mb-3">
+              <li><strong>Overdraft protection:</strong> When enabled, savings automatically covers checking shortfalls (recommended for beginners)</li>
+              <li><strong>Overdraft fees:</strong> When protection is off, charge a fee if balance goes negative to reinforce consequences</li>
+            </ul>
+
+            <div class="alert alert-warning mt-3 mb-3">
+              <strong><i class="bi bi-exclamation-triangle-fill me-1"></i>Side effects:</strong> Rate changes only affect future interest, not past payments. Interest schedule changes take effect on the next scheduled run.
+            </div>
+
+            <div class="alert alert-info mb-0">
+              <strong><i class="bi bi-lightbulb-fill me-1"></i>Recommended Setup:</strong> Start with 5% APY, weekly payouts, and overdraft protection enabled. Adjust based on student engagement.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- Nav Tabs -->
 <ul class="nav nav-tabs mb-4" id="bankingTabs" role="tablist">

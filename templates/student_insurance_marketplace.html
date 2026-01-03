@@ -128,11 +128,11 @@
                             <div class="d-grid gap-2">
                                 {% set in_waiting_period = not enrollment.coverage_start_date or enrollment.coverage_start_date > now %}
                                 {% if in_waiting_period %}
-                                    <button class="btn btn-outline-secondary" disabled title="Coverage not active yet - still in waiting period">
+                                    <button class="btn btn-secondary" disabled title="Coverage not active yet - still in waiting period" disabled>
                                         <span class="material-symbols-outlined">schedule</span> Waiting Period
                                     </button>
                                 {% else %}
-                                    <a href="{{ url_for('student.file_claim', policy_id=enrollment.policy.id) }}" class="btn btn-primary">
+                                    <a href="{{ url_for('student.file_claim', policy_id=enrollment.policy.id) }}" class="btn btn-primary text-white">
                                         <span class="material-symbols-outlined">add_circle</span> File Claim
                                     </a>
                                 {% endif %}
@@ -185,7 +185,7 @@
                     </h5>
                     <small class="text-muted">
                         {% if tier_id in enrolled_tiers %}
-                            ✓ You have selected a policy from this tier
+                            <i class="bi bi-check-circle-fill me-1"></i>You have selected a policy from this tier
                         {% else %}
                             Select ONE policy from this tier
                         {% endif %}

@@ -82,6 +82,16 @@ default_coverage = premium * 4
 
 If a teacher specifies coverage exceeding 5× premium, agents must warn or request confirmation.
 
+### 3.3 Period Payout Cap
+
+```
+period_cap_min = premium * 6
+period_cap_max = premium * 10
+default_period_cap = premium * 8
+```
+
+If a teacher sets the period cap outside 6–10× premium, agents must warn or request confirmation.
+
 ---
 
 ## 4. Fines
@@ -173,11 +183,29 @@ risk_flag = HIGH
 
 ---
 
-## 8. Affordability Constraints (Global Rule)
+## 8. Savings Interest Guidance
+
+Savings interest is an engagement incentive, not a CWI-based ratio. Use modest ranges to avoid overpowering wages.
+
+```
+apy_min = 0.06
+apy_max = 0.18
+default_apy = 0.10–0.12
+
+monthly_rate_min = 0.005
+monthly_rate_max = 0.015
+default_monthly_rate = 0.010
+```
+
+If a teacher sets rates outside these ranges, agents should warn or request confirmation.
+
+---
+
+## 9. Affordability Constraints (Global Rule)
 
 Agents must validate economic stability:
 
-### 8.1 Budget Survival Test
+### 9.1 Budget Survival Test
 
 A student with perfect attendance must be able to:
 
@@ -188,7 +216,7 @@ weekly_savings >= 0.10 * CWI
 
 If not, agents must lower rent or fines, or increase wages.
 
-### 8.2 Catastrophe Test
+### 9.2 Catastrophe Test
 
 A student experiencing:
 
@@ -201,7 +229,7 @@ Agents adjust or warn as needed.
 
 ---
 
-## 9. Output Requirements
+## 10. Output Requirements
 
 All agent-generated values must:
 
@@ -215,7 +243,7 @@ Agents should *never* output arbitrary values without referencing this framework
 
 ---
 
-## 10. Non-Negotiable Design Rules
+## 11. Non-Negotiable Design Rules
 
 Agents must always enforce:
 

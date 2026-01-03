@@ -18,7 +18,7 @@
         <div class="card mb-3 {{ 'border-start border-5' if announcement.is_active else '' }} {{ 'border-danger' if announcement.priority == 'urgent' else 'border-warning' if announcement.priority == 'high' else 'border-info' }}">
             <div class="card-header d-flex justify-content-between align-items-center {{ announcement.get_priority_class() }}">
                 <div>
-                    <span class="me-2">{{ announcement.get_priority_icon() }}</span>
+                    <span class="material-symbols-outlined me-2 align-middle">{{ announcement.get_priority_icon() }}</span>
                     <strong>{{ announcement.title }}</strong>
                     <span class="badge bg-dark ms-2">{{ announcement.audience_display }}</span>
                     {% if not announcement.is_active %}

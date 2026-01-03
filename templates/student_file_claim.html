@@ -178,17 +178,17 @@
 
                 {% if enrollment.coverage_start_date %}
                     <div class="alert alert-success py-2 small">
-                        ✓ Coverage active since {{ enrollment.coverage_start_date.strftime('%b %d, %Y') }}
+                        <i class="bi bi-check-circle-fill me-1"></i>Coverage active since {{ enrollment.coverage_start_date.strftime('%b %d, %Y') }}
                     </div>
                 {% else %}
                     <div class="alert alert-warning py-2 small">
-                        ⚠️ Still in {{ policy.waiting_period_days }}-day waiting period
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>Still in {{ policy.waiting_period_days }}-day waiting period
                     </div>
                 {% endif %}
 
                 {% if not enrollment.payment_current %}
                     <div class="alert alert-danger py-2 small">
-                        ⚠️ Payment overdue ({{ enrollment.days_unpaid }} days)
+                        <i class="bi bi-exclamation-octagon-fill me-1"></i>Payment overdue ({{ enrollment.days_unpaid }} days)
                     </div>
                 {% endif %}
             </div>
@@ -213,7 +213,7 @@
 
                     {% if policy.max_claims_count and (claims_this_period|length >= policy.max_claims_count) %}
                         <div class="alert alert-warning py-2 small mt-2">
-                            ⚠️ You've reached the maximum number of claims for this {{ policy.max_claims_period }}.
+                            <i class="bi bi-exclamation-triangle-fill me-1"></i>You've reached the maximum number of claims for this {{ policy.max_claims_period }}.
                         </div>
                     {% endif %}
                 {% else %}

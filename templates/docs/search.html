@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+
+{% block title %}Search Documentation{% if query %} - {{ query }}{% endif %}{% endblock %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <!-- Back Link -->
+    <div class="mb-3">
+        <a href="{{ url_for('docs.index') }}" class="text-decoration-none">
+            <span class="material-symbols-outlined" style="vertical-align: middle;">arrow_back</span>
+            Back to Documentation
+        </a>
+    </div>
+
+    <!-- Search Header -->
+    <div class="mb-4">
+        <h1 class="mb-3">
+            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 2.5rem;">search</span>
+            Search Documentation
+        </h1>
+
+        <!-- Search Form -->
+        <form action="{{ url_for('docs.search') }}" method="get">
+            <div class="input-group input-group-lg">
+                <input type="search" name="q" class="form-control" placeholder="Search documentation..." value="{{ query }}" aria-label="Search" autofocus>
+                <button class="btn btn-primary" type="submit">
+                    <span class="material-symbols-outlined" style="vertical-align: middle;">search</span>
+                    Search
+                </button>
+            </div>
+        </form>
+    </div>
+
+    {% if query %}
+        <!-- Results -->
+        <div class="mb-4">
+            <h2 class="h5 text-muted">
+                {% if results %}
+                    Found {{ results|length }} result{{ 's' if results|length != 1 else '' }} for "{{ query }}"
+                {% else %}
+                    No results found for "{{ query }}"
+                {% endif %}
+            </h2>
+        </div>
+
+        {% if results %}
+            <!-- Results List -->
+            <div class="row g-3">
+                {% for result in results %}
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <h3 class="h5 mb-0">
+                                    <a href="{{ result.url }}" class="text-decoration-none">
+                                        {{ result.title }}
+                                    </a>
+                                </h3>
+                                <span class="badge bg-secondary">{{ result.category }}</span>
+                            </div>
+                            {% if result.context %}
+                                <p class="text-muted mb-0">
+                                    {{ result.context | e }}...
+                                </p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <!-- No Results Message -->
+            <div class="alert alert-info">
+                <h4 class="alert-heading">
+                    <span class="material-symbols-outlined" style="vertical-align: middle;">info</span>
+                    No results found
+                </h4>
+                <p class="mb-0">
+                    Try searching with different keywords or browse the <a href="{{ url_for('docs.index') }}" class="alert-link">documentation categories</a>.
+                </p>
+            </div>
+        {% endif %}
+    {% else %}
+        <!-- Search Tips -->
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="h5 card-title">
+                            <span class="material-symbols-outlined" style="vertical-align: middle;">tips_and_updates</span>
+                            Search Tips
+                        </h3>
+                        <ul class="mb-0">
+                            <li>Use specific keywords (e.g., "payroll", "store items")</li>
+                            <li>Search for feature names (e.g., "insurance", "rent")</li>
+                            <li>Try action words (e.g., "create", "delete", "transfer")</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h3 class="h5 card-title">
+                            <span class="material-symbols-outlined" style="vertical-align: middle;">bookmark</span>
+                            Popular Topics
+                        </h3>
+                        <ul class="mb-0">
+                            <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/student_guide') }}" class="text-decoration-none">Student Guide</a></li>
+                            <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}" class="text-decoration-none">Teacher Manual</a></li>
+                            <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/architecture') }}" class="text-decoration-none">Architecture</a></li>
+                            <li><a href="{{ url_for('docs.view_doc', doc_path='CHANGELOG') }}" class="text-decoration-none">Changelog</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

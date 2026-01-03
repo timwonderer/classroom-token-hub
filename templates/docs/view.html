@@ -1,0 +1,389 @@
+{% extends "base.html" %}
+
+{% block title %}{{ title }} - Documentation{% endblock %}
+
+{% block content %}
+<div class="docs-layout">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar Navigation -->
+            <aside class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse" id="docsSidebar">
+                <div class="position-sticky pt-3">
+                    <!-- Back to App -->
+                    <div class="mb-3">
+                        {% if session.get('student_id') %}
+                            <a href="{{ url_for('student.dashboard') }}" class="btn btn-sm btn-primary w-100">
+                                <span class="material-symbols-outlined icon-align">arrow_back</span>
+                                Back to Dashboard
+                            </a>
+                        {% elif session.get('admin_id') %}
+                            <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-primary w-100">
+                                <span class="material-symbols-outlined icon-align">arrow_back</span>
+                                Back to Dashboard
+                            </a>
+                        {% elif session.get('sysadmin_id') %}
+                            <a href="{{ url_for('system_admin.dashboard') }}" class="btn btn-sm btn-primary w-100">
+                                <span class="material-symbols-outlined icon-align">arrow_back</span>
+                                Back to Dashboard
+                            </a>
+                        {% else %}
+                            <a href="{{ url_for('docs.index') }}" class="btn btn-sm btn-outline-primary w-100">
+                                <span class="material-symbols-outlined icon-align">arrow_back</span>
+                                All Docs
+                            </a>
+                        {% endif %}
+                    </div>
+
+                    <!-- Search -->
+                    <form action="{{ url_for('docs.search') }}" method="get" class="mb-3">
+                        <div class="input-group input-group-sm">
+                            <input type="search" name="q" class="form-control" placeholder="Search..." aria-label="Search">
+                            <button class="btn btn-outline-secondary" type="submit">
+                                <span class="material-symbols-outlined icon-small">search</span>
+                            </button>
+                        </div>
+                    </form>
+
+                    <!-- Navigation Categories -->
+                    <nav class="nav flex-column">
+                        <!-- Getting Started -->
+                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-2 mb-1 text-muted">
+                            <span><span class="material-symbols-outlined icon-small">rocket_launch</span> Getting Started</span>
+                        </h6>
+                        <ul class="nav flex-column mb-2">
+                            <li class="nav-item">
+                                <a class="nav-link {% if doc_path == 'user-guides/student_guide' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/student_guide') }}">
+                                    Student Guide
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if doc_path == 'user-guides/teacher_manual' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}">
+                                    Teacher Manual
+                                </a>
+                            </li>
+                        </ul>
+
+                        <!-- Technical -->
+                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                            <span><span class="material-symbols-outlined icon-small">code</span> Technical</span>
+                        </h6>
+                        <ul class="nav flex-column mb-2">
+                            <li class="nav-item">
+                                <a class="nav-link {% if doc_path == 'technical-reference/architecture' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/architecture') }}">
+                                    Architecture
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if doc_path == 'technical-reference/database_schema' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/database_schema') }}">
+                                    Database Schema
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if doc_path == 'technical-reference/ECONOMY_SPECIFICATION' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/ECONOMY_SPECIFICATION') }}">
+                                    Economy Spec
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if doc_path == 'technical-reference/api_reference' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/api_reference') }}">
+                                    API Reference
+                                </a>
+                            </li>
+                        </ul>
+
+                        <!-- Reference -->
+                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
+                            <span><span class="material-symbols-outlined icon-small">description</span> Reference</span>
+                        </h6>
+                        <ul class="nav flex-column mb-2">
+                            <li class="nav-item">
+                                <a class="nav-link {% if doc_path == 'DEPLOYMENT' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='DEPLOYMENT') }}">
+                                    Deployment
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a class="nav-link {% if doc_path == 'CHANGELOG' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='CHANGELOG') }}">
+                                    Changelog
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <!-- Mobile Sidebar Toggle -->
+                <div class="d-md-none my-3">
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#docsSidebar" aria-expanded="false" aria-controls="docsSidebar" aria-label="Toggle documentation sidebar">
+                        <span class="material-symbols-outlined icon-align">menu</span>
+                        Menu
+                    </button>
+                </div>
+
+                <!-- Breadcrumbs -->
+                {% if breadcrumbs %}
+                <nav aria-label="breadcrumb" class="mt-3">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="{{ url_for('docs.index') }}">Docs</a></li>
+                        {% for crumb in breadcrumbs %}
+                            {% if loop.last %}
+                            <li class="breadcrumb-item active" aria-current="page">{{ crumb.title }}</li>
+                            {% else %}
+                            <li class="breadcrumb-item"><a href="{{ crumb.url }}">{{ crumb.title }}</a></li>
+                            {% endif %}
+                        {% endfor %}
+                    </ol>
+                </nav>
+                {% endif %}
+
+                <!-- Article Content -->
+                <article class="docs-content py-4">
+                    <div class="row">
+                        <div class="col-lg-{% if toc %}9{% else %}12{% endif %}">
+                            <!-- Role Badges -->
+                            {% if roles %}
+                            <div class="mb-3">
+                                {% for role in roles %}
+                                <span class="badge {% if role == 'teacher' %}bg-danger{% elif role == 'student' %}bg-primary{% elif role == 'developer' %}bg-secondary{% endif %} me-1">
+                                    {% if role == 'teacher' %}
+                                        <span class="material-symbols-outlined icon-badge">person</span> Teacher
+                                    {% elif role == 'student' %}
+                                        <span class="material-symbols-outlined icon-badge">school</span> Student
+                                    {% elif role == 'developer' %}
+                                        <span class="material-symbols-outlined icon-badge">code</span> Developer
+                                    {% endif %}
+                                </span>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
+
+                            <!-- Markdown Content -->
+                            <div class="markdown-content">
+                                {{ content | safe }}
+                            </div>
+
+                            <!-- Related Articles -->
+                            {% if related and related|length > 0 %}
+                            <div class="related-articles mt-5 pt-4 border-top">
+                                <h4 class="mb-3">
+                                    <span class="material-symbols-outlined icon-align">bookmark</span>
+                                    Related Articles
+                                </h4>
+                                <div class="row g-3">
+                                    {% for article in related %}
+                                    <div class="col-md-6">
+                                        <div class="card h-100 border-primary border-opacity-25">
+                                            <div class="card-body">
+                                                <h6 class="card-title">
+                                                    <a href="{{ article.url }}" class="text-decoration-none stretched-link">
+                                                        {{ article.title }}
+                                                    </a>
+                                                </h6>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- Table of Contents (if present) -->
+                        {% if toc %}
+                        <aside class="col-lg-3">
+                            <div class="sticky-top toc-sticky">
+                                <div class="toc-wrapper">
+                                    {{ toc | safe }}
+                                </div>
+                            </div>
+                        </aside>
+                        {% endif %}
+                    </div>
+
+                    <!-- Scroll to Top -->
+                    <div class="text-end mt-4">
+                        <a href="#" class="btn btn-sm btn-outline-secondary">
+                            <span class="material-symbols-outlined icon-align">arrow_upward</span>
+                            Back to Top
+                        </a>
+                    </div>
+                </article>
+            </main>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Documentation-specific styles */
+
+/* Icon alignment utilities */
+.icon-align {
+    vertical-align: middle;
+    font-size: 1.2rem;
+}
+
+.icon-small {
+    vertical-align: middle;
+    font-size: 1rem;
+}
+
+.icon-badge {
+    vertical-align: middle;
+    font-size: 0.9rem;
+}
+
+/* Sidebar styles */
+.docs-layout .sidebar {
+    max-height: 100vh;
+    overflow-y: auto;
+}
+
+.docs-layout .sidebar .nav-link {
+    color: #212529;
+    padding: 0.25rem 1rem;
+    font-size: 0.9rem;
+}
+
+.docs-layout .sidebar .nav-link:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.docs-layout .sidebar .nav-link.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+.sidebar-heading {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Markdown Content Styling */
+.markdown-content {
+    font-size: 1rem;
+    line-height: 1.7;
+}
+
+.markdown-content h1 {
+    font-size: 2.5rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #dee2e6;
+}
+
+.markdown-content h2 {
+    font-size: 2rem;
+    margin-top: 2rem;
+    margin-bottom: 1rem;
+}
+
+.markdown-content h3 {
+    font-size: 1.5rem;
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+}
+
+.markdown-content h4 {
+    font-size: 1.25rem;
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.markdown-content code {
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.9em;
+    color: #e83e8c;
+}
+
+.markdown-content pre {
+    background-color: #2d2d2d;
+    color: #f8f8f2;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    overflow-x: auto;
+    margin: 1rem 0;
+}
+
+.markdown-content pre code {
+    background: transparent;
+    color: inherit;
+    padding: 0;
+}
+
+.markdown-content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    margin: 1rem 0;
+}
+
+.markdown-content table {
+    width: 100%;
+    margin: 1rem 0;
+    border-collapse: collapse;
+}
+
+.markdown-content table th,
+.markdown-content table td {
+    padding: 0.75rem;
+    border: 1px solid #dee2e6;
+}
+
+.markdown-content table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.markdown-content blockquote {
+    border-left: 4px solid var(--primary-color);
+    padding-left: 1rem;
+    margin: 1rem 0;
+    color: #6c757d;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+    padding-left: 2rem;
+    margin: 1rem 0;
+}
+
+.markdown-content li {
+    margin-bottom: 0.5rem;
+}
+
+/* Table of Contents */
+.toc-sticky {
+    top: 2rem;
+}
+
+.toc-wrapper {
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.toc-wrapper ul {
+    list-style: none;
+    padding-left: 0;
+}
+
+.toc-wrapper li {
+    margin-bottom: 0.5rem;
+}
+
+.toc-wrapper a {
+    color: #212529;
+    text-decoration: none;
+}
+
+.toc-wrapper a:hover {
+    color: var(--primary-color);
+    text-decoration: underline;
+}
+</style>
+{% endblock %}

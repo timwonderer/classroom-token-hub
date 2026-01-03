@@ -8,7 +8,7 @@
     <div class="card mb-3">
         <div class="card-body text-center">
             <small class="text-muted">Checking Balance</small>
-            <h3 class="mb-0">${{ "%.2f"|format(student.checking_balance) }}</h3>
+            <h3 class="mb-0">${{ "%.2f"|format(checking_balance) }}</h3>
         </div>
     </div>
 
@@ -39,7 +39,7 @@
                     <div class="alert alert-danger mt-2">Late Fee Applied: ${{ "%.2f"|format(status.late_fee) }}</div>
                 {% endif %}
 
-                {% if student.checking_balance < status.remaining_amount %}
+                {% if checking_balance < status.remaining_amount %}
                     <button class="btn btn-secondary w-100 mt-3" disabled>Insufficient Funds</button>
                 {% else %}
                     <form action="{{ url_for('student.rent_pay', period=period) }}" method="POST" class="mt-3">

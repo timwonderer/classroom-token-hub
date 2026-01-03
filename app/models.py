@@ -740,6 +740,36 @@ class RentWaiver(db.Model):
     created_by = db.relationship('Admin', backref='rent_waivers_created')
 
 
+class RentItem(db.Model):
+    """
+    Represents an itemized component of rent (e.g., Desk, Chair, Locker).
+    Teachers can optionally make these items available as single-purchase
+    alternatives in the class store.
+    """
+    __tablename__ = 'rent_items'
+    id = db.Column(db.Integer, primary_key=True)
+    rent_setting_id = db.Column(db.Integer, db.ForeignKey('rent_settings.id'), nullable=False, index=True)
+
+    # Item details
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    order_index = db.Column(db.Integer, default=0)  # For display ordering
+
+    # Store integration
+    is_available_in_store = db.Column(db.Boolean, default=False)
+    store_price = db.Column(db.Numeric(10, 2), nullable=True)  # A la carte price (teacher sets manually)
+    purchase_duration = db.Column(db.String(20), default='per_use')  # 'per_use' or 'per_period'
+    store_item_id = db.Column(db.Integer, db.ForeignKey('store_items.id'), nullable=True)
+
+    # Metadata
+    created_at = db.Column(db.DateTime, default=_utc_now)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now)
+
+    # Relationships
+    rent_setting = db.relationship('RentSettings', backref=db.backref('rent_items', lazy='dynamic', cascade='all, delete-orphan'))
+    store_item = db.relationship('StoreItem', backref='rent_item_source', foreign_keys=[store_item_id])
+
+
 # -------------------- INSURANCE MODELS --------------------
 class InsurancePolicy(db.Model):
     __tablename__ = 'insurance_policies'
@@ -1517,6 +1547,12 @@ class TeacherOnboarding(db.Model):
     # Format: {"welcome": true, "roster": false, "features": false, "settings": false}
     steps_completed = db.Column(db.JSON, default=dict, nullable=False)
 
+    # Getting Started widget tracking (separate from main onboarding flow)
+    # Format: {"roster": true, "payroll": true, "store": false, ...}
+    widget_tasks_completed = db.Column(db.JSON, default=dict, nullable=False)
+    widget_dismissed = db.Column(db.Boolean, default=False, nullable=False)
+    widget_dismissed_at = db.Column(db.DateTime, nullable=True)
+
     # Timestamps
     started_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
     completed_at = db.Column(db.DateTime, nullable=True)
@@ -1561,6 +1597,28 @@ class TeacherOnboarding(db.Model):
     def needs_onboarding(self):
         """Check if teacher needs to complete onboarding."""
         return not self.is_completed and not self.is_skipped
+
+    def mark_widget_task_completed(self, task_name, status=True):
+        """Mark a getting started widget task as completed/skipped."""
+        from sqlalchemy.orm.attributes import flag_modified
+        if self.widget_tasks_completed is None:
+            self.widget_tasks_completed = {}
+        self.widget_tasks_completed[task_name] = status
+        flag_modified(self, 'widget_tasks_completed')
+        self.last_activity_at = datetime.now(timezone.utc)
+
+    def is_widget_task_completed(self, task_name):
+        """Check if a getting started widget task is completed/skipped."""
+        if self.widget_tasks_completed is None:
+            return False
+        status = self.widget_tasks_completed.get(task_name, False)
+        return status is True or status == 'skipped' or status == 'completed'
+
+    def dismiss_widget(self):
+        """Dismiss the getting started widget permanently."""
+        self.widget_dismissed = True
+        self.widget_dismissed_at = datetime.now(timezone.utc)
+        self.last_activity_at = datetime.now(timezone.utc)
 
 
 # -------------------- ANNOUNCEMENT MODEL --------------------
@@ -1643,12 +1701,12 @@ class Announcement(db.Model):
     def get_priority_icon(self):
         """Get icon for announcement priority."""
         priority_icons = {
-            'low': '📌',
-            'normal': '📢',
-            'high': '⚠️',
-            'urgent': '🚨'
+            'low': 'push_pin',
+            'normal': 'campaign',
+            'high': 'warning',
+            'urgent': 'error'
         }
-        return priority_icons.get(self.priority, '📢')
+        return priority_icons.get(self.priority, 'campaign')
 
     def get_audience_label(self):
         """Get human-readable label for audience type."""

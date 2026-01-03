@@ -34,8 +34,8 @@ import pytz
 from app.extensions import db, limiter
 from app.models import (
     Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TapEvent, StoreItem, StudentItem,
-    StoreItemBlock, RentSettings, RentPayment, RentWaiver, InsurancePolicy, InsurancePolicyBlock,
-    StudentInsurance, InsuranceClaim, HallPassLog, PayrollSettings, PayrollReward, PayrollFine,
+    InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
+    StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     DemoStudent, Announcement, AdminCredential
@@ -851,11 +851,11 @@ def signup():
 
     # Debug logging
     if request.method == 'POST':
-        current_app.logger.info(f"📥 Signup POST request received (TOTP submission: {is_totp_submission})")
+        current_app.logger.info(f"Signup POST request received (TOTP submission: {is_totp_submission})")
         current_app.logger.info(f"   Form data: username={request.form.get('username')}, invite_code={repr(request.form.get('invite_code'))}")
 
     if form.validate_on_submit():
-        current_app.logger.info(f"✅ Form validation passed")
+        current_app.logger.info("Form validation passed")
 
         # Get form data
         if is_totp_submission:
@@ -868,7 +868,7 @@ def signup():
             try:
                 dob_input = datetime.strptime(dob_string, "%Y-%m-%d").date()
             except (ValueError, TypeError):
-                current_app.logger.warning(f"🛑 TOTP submission failed: invalid DOB string")
+                current_app.logger.warning("TOTP submission failed: invalid DOB string")
                 msg = "Invalid date of birth. Please try again."
                 flash(msg, "error")
                 return redirect(url_for('admin.signup'))
@@ -886,27 +886,27 @@ def signup():
                 dob_input = datetime.strptime(dob_input, "%Y-%m-%d").date()
             dob_sum = dob_input.month + dob_input.day + dob_input.year
         except (ValueError, AttributeError, TypeError):
-            current_app.logger.warning(f"🛑 Admin signup failed: invalid DOB input")
+            current_app.logger.warning("Admin signup failed: invalid DOB input")
             msg = "Invalid date of birth. Please enter a valid date."
             if is_json:
                 return jsonify(status="error", message=msg), 400
             flash(msg, "error")
             return redirect(url_for('admin.signup'))
         # Step 1: Validate invite code
-        current_app.logger.info(f"🔍 Validating invite code: {repr(invite_code)}")
+        current_app.logger.info(f"Validating invite code: {repr(invite_code)}")
         code_row = db.session.execute(
             text("SELECT * FROM admin_invite_codes WHERE TRIM(code) = :code"),
             {"code": invite_code}
         ).fetchone()
         if not code_row:
-            current_app.logger.warning(f"🛑 Admin signup failed: invalid invite code {repr(invite_code)}")
+            current_app.logger.warning(f"Admin signup failed: invalid invite code {repr(invite_code)}")
             msg = "Invalid invite code."
             if is_json:
                 return jsonify(status="error", message=msg), 400
             flash(msg, "error")
             return redirect(url_for('admin.signup'))
         if code_row.used:
-            current_app.logger.warning(f"🛑 Admin signup failed: invite code already used")
+            current_app.logger.warning("Admin signup failed: invite code already used")
             msg = "Invite code already used."
             if is_json:
                 return jsonify(status="error", message=msg), 400
@@ -923,7 +923,7 @@ def signup():
             # Database stores UTC times as naive, make them aware for comparison
             expires_aware = expires_dt.replace(tzinfo=timezone.utc) if expires_dt.tzinfo is None else expires_dt
             if expires_aware < datetime.now(timezone.utc):
-                current_app.logger.warning(f"🛑 Admin signup failed: invite code expired")
+                current_app.logger.warning("Admin signup failed: invite code expired")
                 msg = "Invite code expired."
                 if is_json:
                     return jsonify(status="error", message=msg), 400
@@ -931,7 +931,7 @@ def signup():
                 return redirect(url_for('admin.signup'))
         # Step 2: Check username uniqueness
         if Admin.query.filter_by(username=username).first():
-            current_app.logger.warning(f"🛑 Admin signup failed: username already exists")
+            current_app.logger.warning("Admin signup failed: username already exists")
             msg = "Username already exists."
             if is_json:
                 return jsonify(status="error", message=msg), 400
@@ -969,12 +969,12 @@ def signup():
                 totp_secret=totp_secret
             )
         # Step 5: Validate entered TOTP code
-        current_app.logger.info(f"🔐 TOTP code submitted (length: {len(totp_code)})")
+        current_app.logger.info(f"TOTP code submitted (length: {len(totp_code)})")
         totp = pyotp.TOTP(totp_secret)
         is_valid = totp.verify(totp_code)
-        current_app.logger.info(f"🔐 TOTP verification result: {is_valid}")
+        current_app.logger.info(f"TOTP verification result: {is_valid}")
         if not is_valid:
-            current_app.logger.warning(f"🛑 TOTP verification failed for user: {username}")
+            current_app.logger.warning(f"TOTP verification failed for user: {username}")
             msg = "Invalid TOTP code. Please try again."
             if is_json:
                 return jsonify(status="error", message=msg), 400
@@ -998,7 +998,7 @@ def signup():
                 totp_secret=totp_secret
             )
         # Step 6: Create admin account and mark invite as used
-        current_app.logger.info(f"✅ TOTP verified! Creating admin account for: {username}")
+        current_app.logger.info(f"TOTP verified. Creating admin account for: {username}")
         # Hash DOB sum
         salt = get_random_salt()
         dob_sum_str = str(dob_sum).encode()
@@ -1013,7 +1013,7 @@ def signup():
             {"code": invite_code}
         )
         db.session.commit()
-        current_app.logger.info(f"✅ Admin account created successfully: {username}")
+        current_app.logger.info(f"Admin account created successfully: {username}")
         # Clear session
         session.pop("admin_totp_secret", None)
         session.pop("admin_totp_username", None)
@@ -1026,7 +1026,7 @@ def signup():
         return redirect(url_for("admin.login"))
     # GET or invalid POST: render signup form with form instance (for CSRF)
     if request.method == 'POST':
-        current_app.logger.warning(f"❌ Form validation failed")
+        current_app.logger.warning("Form validation failed")
         current_app.logger.warning(f"   Form errors: {form.errors}")
     return render_template("admin_signup.html", form=form)
 
@@ -1098,8 +1098,8 @@ def recover():
         expected_hash = hash_hmac(dob_sum_str, teacher.salt)
 
         if teacher.dob_sum_hash != expected_hash:
-            current_app.logger.warning(f"🛑 Admin recovery failed: DOB sum mismatch for teacher {teacher_id}")
-            flash("Unable to verify your identity. Please check your date of birth.", "error")
+            current_app.logger.warning(f"Admin recovery failed: DOB sum mismatch for teacher {teacher_id}")
+            flash("Unable to verify your identity. Please check your DOB sum.", "error")
             return render_template("admin_recover.html", form=form)
 
         # Enforce 'One from each period' policy
@@ -1170,7 +1170,7 @@ def recover():
         db.session.commit()
 
         session['recovery_request_id'] = recovery_request.id
-        current_app.logger.info(f"🔐 Admin recovery: request created for teacher {teacher.id}, expires {expires_at}")
+        current_app.logger.info(f"Admin recovery: request created for teacher {teacher.id}, expires {expires_at}")
 
         flash(f"Recovery request created! Your students have been notified. You have 5 days to complete this process.", "success")
         return redirect(url_for('admin.recovery_status'))
@@ -1258,7 +1258,7 @@ def reset_credentials():
 
         # Verify count matches
         if len(entered_codes) != len(student_codes):
-            current_app.logger.warning(f"🛑 Admin recovery: code count mismatch for request {recovery_request.id} - expected {len(student_codes)}, got {len(entered_codes)}")
+            current_app.logger.warning(f"Admin recovery: code count mismatch for request {recovery_request.id} - expected {len(student_codes)}, got {len(entered_codes)}")
             # Invalidate ALL codes
             _invalidate_all_recovery_codes(student_codes)
             flash(f"Wrong number of codes entered. All codes have been invalidated. Your students must generate new codes.", "error")
@@ -1269,7 +1269,7 @@ def reset_credentials():
         for code in entered_codes:
             # Validate format
             if not code.isdigit() or len(code) != 6:
-                current_app.logger.warning(f"🛑 Admin recovery: invalid code format for request {recovery_request.id}")
+                current_app.logger.warning(f"Admin recovery: invalid code format for request {recovery_request.id}")
                 _invalidate_all_recovery_codes(student_codes)
                 flash("Invalid code format detected. All codes have been invalidated. Your students must generate new codes.", "error")
                 return redirect(url_for('admin.recovery_status'))
@@ -1280,7 +1280,7 @@ def reset_credentials():
         stored_hashes = set(sc.code_hash for sc in student_codes)
 
         if entered_hashes != stored_hashes:
-            current_app.logger.warning(f"🛑 Admin recovery: code mismatch for request {recovery_request.id}")
+            current_app.logger.warning(f"Admin recovery: code mismatch for request {recovery_request.id}")
             # Invalidate ALL codes on failed attempt
             _invalidate_all_recovery_codes(student_codes)
             flash("Recovery codes do not match. All codes have been invalidated. Your students must generate new codes.", "error")
@@ -1334,7 +1334,7 @@ def _invalidate_all_recovery_codes(student_codes):
         sc.code_hash = None
         sc.verified_at = None
     db.session.commit()
-    current_app.logger.info(f"🔄 Invalidated {len(student_codes)} recovery codes - students must regenerate")
+    current_app.logger.info(f"Invalidated {len(student_codes)} recovery codes - students must regenerate")
 
 
 @admin_bp.route('/confirm-reset', methods=['POST'])
@@ -1429,7 +1429,7 @@ def save_recovery_progress():
     recovery_request.resume_new_username = new_username
     db.session.commit()
 
-    current_app.logger.info(f"💾 Admin recovery: saved partial progress for request {recovery_request.id}")
+    current_app.logger.info(f"Admin recovery: saved partial progress for request {recovery_request.id}")
 
     # Show the PIN to the teacher
     return render_template("admin_recovery_saved.html",
@@ -1466,7 +1466,7 @@ def resume_credentials():
     ).first()
 
     if not recovery_request:
-        current_app.logger.warning(f"🛑 Admin recovery: invalid resume PIN attempt")
+        current_app.logger.warning("Admin recovery: invalid resume PIN attempt")
         flash("Invalid or expired resume PIN. Please check your PIN or start a new recovery.", "error")
         return render_template("admin_resume_credentials.html")
 
@@ -1474,7 +1474,7 @@ def resume_credentials():
     session['recovery_request_id'] = recovery_request.id
     session['resume_mode'] = True
 
-    current_app.logger.info(f"🔄 Admin recovery: resumed progress for request {recovery_request.id}")
+    current_app.logger.info(f"Admin recovery: resumed progress for request {recovery_request.id}")
     flash(f"Progress resumed! You have {len(recovery_request.partial_codes or [])} code(s) already saved.", "info")
     return redirect(url_for('admin.reset_credentials'))
 
@@ -1572,6 +1572,162 @@ def logout():
     return redirect(url_for("admin.login"))
 
 
+# -------------------- Rent privilege helpers --------------------
+
+def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, students_by_block):
+    """
+    Build a dict {(student_id, block): [privileges]} using batched queries to avoid N+1 issues.
+    """
+    now = datetime.now(timezone.utc)
+    student_rent_privileges = {}
+
+    for block in blocks:
+        if block == "Unassigned" or block not in join_codes_by_block:
+            continue
+
+        join_code = join_codes_by_block[block]
+        block_students = students_by_block.get(block, [])
+        if not block_students:
+            continue
+
+        rent_settings = RentSettings.query.filter_by(teacher_id=current_admin, block=block).first()
+        if not rent_settings or not rent_settings.is_enabled:
+            continue
+
+        per_period_items = RentItem.query.filter_by(
+            rent_setting_id=rent_settings.id,
+            purchase_duration='per_period',
+            is_available_in_store=True
+        ).all()
+
+        if not per_period_items:
+            continue
+
+        student_ids = [student.id for student in block_students]
+
+        # Batch rent payments for the month
+        rent_payment_rows = (
+            RentPayment.query
+            .filter(
+                RentPayment.student_id.in_(student_ids),
+                RentPayment.period == block,
+                RentPayment.period_month == now.month,
+                RentPayment.period_year == now.year,
+                db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+            )
+            .with_entities(RentPayment.student_id)
+            .all()
+        )
+        paid_student_ids = {row[0] for row in rent_payment_rows}
+
+        store_item_ids = [
+            rent_item.store_item_id
+            for rent_item in per_period_items
+            if getattr(rent_item, "store_item_id", None)
+        ]
+
+        items_by_student = {}
+        if store_item_ids:
+            student_items = StudentItem.query.filter(
+                StudentItem.student_id.in_(student_ids),
+                StudentItem.store_item_id.in_(store_item_ids),
+                StudentItem.status.in_(['purchased', 'redeemed']),
+                db.or_(
+                    StudentItem.expiry_date.is_(None),
+                    StudentItem.expiry_date > now
+                )
+            ).all()
+
+            for si in student_items:
+                items_by_student.setdefault(si.student_id, set()).add(si.store_item_id)
+
+        for student in block_students:
+            privileges = []
+            has_paid_rent = student.id in paid_student_ids
+            student_store_items = items_by_student.get(student.id, set())
+
+            for rent_item in per_period_items:
+                source = None
+
+                if has_paid_rent:
+                    source = 'rent'
+                elif getattr(rent_item, "store_item_id", None) and rent_item.store_item_id in student_store_items:
+                    source = 'purchased'
+
+                if source:
+                    privileges.append({
+                        'name': rent_item.name,
+                        'source': source
+                    })
+
+            if privileges:
+                key = (student.id, block)
+                student_rent_privileges[key] = privileges
+
+    return student_rent_privileges
+
+
+def _get_rent_privileges_for_student(student, teacher_id, join_code):
+    """Return rent privileges for a single student in the current class context."""
+    rent_privileges = []
+    if not (teacher_id and join_code):
+        return rent_privileges
+
+    teacher_block = TeacherBlock.query.filter_by(join_code=join_code).first()
+    current_block = teacher_block.block if teacher_block else None
+    if not current_block:
+        return rent_privileges
+
+    rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
+    if not rent_settings or not rent_settings.is_enabled:
+        return rent_privileges
+
+    now = datetime.now(timezone.utc)
+    has_paid_rent = RentPayment.query.filter(
+        RentPayment.student_id == student.id,
+        RentPayment.period == current_block,
+        RentPayment.period_month == now.month,
+        RentPayment.period_year == now.year,
+        db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+    ).first() is not None
+
+    per_period_items = RentItem.query.filter_by(
+        rent_setting_id=rent_settings.id,
+        purchase_duration='per_period',
+        is_available_in_store=True
+    ).all()
+
+    store_item_ids = [item.store_item_id for item in per_period_items if item.store_item_id]
+    items_by_student = set()
+    if store_item_ids:
+        student_items = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.store_item_id.in_(store_item_ids),
+            StudentItem.status.in_(['purchased', 'redeemed']),
+            db.or_(
+                StudentItem.expiry_date.is_(None),
+                StudentItem.expiry_date > now
+            )
+        ).all()
+        items_by_student = {si.store_item_id for si in student_items}
+
+    for rent_item in per_period_items:
+        source = None
+        if has_paid_rent:
+            source = 'rent'
+        elif rent_item.store_item_id and rent_item.store_item_id in items_by_student:
+            source = 'purchased'
+
+        if source:
+            rent_privileges.append({
+                'name': rent_item.name,
+                'description': rent_item.description,
+                'source': source
+            })
+
+    return rent_privileges
+
+
 # -------------------- STUDENT MANAGEMENT --------------------
 
 @admin_bp.route('/students')
@@ -1666,6 +1822,25 @@ def students():
                 unclaimed_seats_list_by_block[block_name].append(tb)
                 unclaimed_seats_by_block[block_name] += 1
 
+    # CRITICAL: Add scoped balances for each student in each block
+    # This prevents multi-tenancy violations where students see aggregated balances across all classes
+    student_balances_by_block = {}  # {(student_id, block): {'checking': X, 'savings': Y, 'earnings': Z}}
+
+    for block in blocks:
+        if block != "Unassigned" and block in join_codes_by_block:
+            join_code = join_codes_by_block[block]
+            for student in students_by_block.get(block, []):
+                key = (student.id, block)
+                student_balances_by_block[key] = {
+                    'checking': student.get_checking_balance(join_code=join_code),
+                    'savings': student.get_savings_balance(join_code=join_code),
+                    'earnings': student.get_total_earnings(join_code=join_code)
+                }
+
+    # Calculate rent privileges for each student in each block (batched)
+    from app.models import RentItem, RentSettings, RentPayment, StudentItem
+    student_rent_privileges = _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, students_by_block)
+
     # Ensure all blocks with students have join codes (for legacy teachers with pre-c3aa3a0 classes)
     # If a block has students but no TeacherBlock records, look up or generate a join code
     # Fetch all claimed TeacherBlock records for current admin upfront
@@ -1740,6 +1915,8 @@ def students():
                          class_labels_by_block=class_labels_by_block,
                          unclaimed_seats_by_block=unclaimed_seats_by_block,
                          unclaimed_seats_list_by_block=unclaimed_seats_list_by_block,
+                         student_balances_by_block=student_balances_by_block,
+                         student_rent_privileges=student_rent_privileges,
                          current_page="students")
 
 
@@ -1797,7 +1974,40 @@ def student_detail(student_id):
             'done_for_day_date': student_block.done_for_day_date if student_block else None
         }
 
-    return render_template('student_detail.html', student=student, transactions=transactions, student_items=student_items, latest_tap_event=latest_tap_event, active_insurance=active_insurance, blocks=blocks, student_blocks_settings=student_blocks_settings)
+    # CRITICAL: Get scoped balances for current join_code to prevent multi-tenancy violations
+    # Teacher clicked from a specific class tab, so show balances for that period only
+    join_code = session.get('current_join_code')
+    scoped_checking_balance = 0
+    scoped_savings_balance = 0
+    scoped_total_earnings = 0
+
+    if join_code:
+        scoped_checking_balance = student.get_checking_balance(join_code=join_code)
+        scoped_savings_balance = student.get_savings_balance(join_code=join_code)
+        scoped_total_earnings = student.get_total_earnings(join_code=join_code)
+    else:
+        # Fallback: Log a warning and show $0 balances if no join_code is available.
+        # This prevents accidentally showing aggregated data.
+        current_app.logger.warning(
+            f"No join_code in session for student_detail view for student {student.id}. Displaying $0 balances."
+        )
+
+    # Get active rent privileges (per-period items)
+    rent_privileges = _get_rent_privileges_for_student(student, teacher_id, join_code)
+
+    return render_template('student_detail.html',
+                         student=student,
+                         transactions=transactions,
+                         student_items=student_items,
+                         latest_tap_event=latest_tap_event,
+                         active_insurance=active_insurance,
+                         blocks=blocks,
+                         student_blocks_settings=student_blocks_settings,
+                         scoped_checking_balance=scoped_checking_balance,
+                         scoped_savings_balance=scoped_savings_balance,
+                         scoped_total_earnings=scoped_total_earnings,
+                         current_join_code=join_code,
+                         rent_privileges=rent_privileges)
 
 
 @admin_bp.route('/student/<int:student_id>/set-hall-passes', methods=['POST'])
@@ -1881,6 +2091,52 @@ def edit_student():
     # Track old blocks for TeacherBlock updates
     old_blocks = set(b.strip().upper() for b in (student.block or '').split(',') if b.strip())
     new_blocks_set = set(b.strip().upper() for b in selected_blocks)
+
+    # Determine which blocks are being removed/added
+    removed_blocks = old_blocks - new_blocks_set
+    added_blocks = new_blocks_set - old_blocks
+
+    # Handle per-period balance transfers
+    transferred_blocks = []
+    if added_blocks:
+        # Get join codes for old blocks (source of transfers)
+        old_join_codes = []
+        for block in removed_blocks:
+            tb = TeacherBlock.query.filter_by(
+                teacher_id=current_admin_id,
+                block=block
+            ).first()
+            if tb and tb.join_code:
+                old_join_codes.append(tb.join_code)
+
+        # For each added block, check if teacher wants to transfer balance
+        for block in added_blocks:
+            # Get the balance action for this specific period
+            balance_action_key = f'balance_action_{block}'
+            balance_action = request.form.get(balance_action_key, 'start_fresh')
+
+            if balance_action == 'transfer' and old_join_codes:
+                # Get join code for this new block
+                tb = TeacherBlock.query.filter_by(
+                    teacher_id=current_admin_id,
+                    block=block
+                ).first()
+
+                if tb and tb.join_code:
+                    target_join_code = tb.join_code
+
+                    # Transfer transactions from old blocks to this new block
+                    for old_join_code in old_join_codes:
+                        Transaction.query.filter_by(
+                            student_id=student.id,
+                            join_code=old_join_code
+                        ).update({'join_code': target_join_code})
+
+                    transferred_blocks.append(block)
+                    current_app.logger.info(
+                        f"Transferred transactions for student {student.id} from {old_join_codes} to {target_join_code} (block: {block})"
+                    )
+            # If 'start_fresh', do nothing - student starts with $0 in that period
 
     # Check if name changed (need to recalculate hashes)
     name_changed = (new_first_name != student.first_name or new_last_initial != student.last_initial)
@@ -2038,7 +2294,16 @@ def edit_student():
 
     try:
         db.session.commit()
-        flash(f"Successfully updated {student.full_name}'s information.", "success")
+
+        # Build flash message with balance transfer info
+        message = f"Successfully updated {student.full_name}'s information."
+        if transferred_blocks:
+            blocks_str = ', '.join(transferred_blocks)
+            message += f" Balance transferred to: {blocks_str}."
+        elif added_blocks and not transferred_blocks:
+            message += " Student will start fresh in new period(s)."
+
+        flash(message, "success")
     except Exception as e:
         db.session.rollback()
         flash(f"Error updating student: {str(e)}", "error")
@@ -2903,6 +3168,72 @@ def hard_delete_store_item(item_id):
 
 # -------------------- RENT SETTINGS --------------------
 
+def _sync_rent_items_to_store(rent_settings, teacher_id, block):
+    """
+    Sync rent items with store items.
+    Creates or updates store items for rent items that are marked as available in store.
+    Deactivates store items for rent items that are no longer available.
+    """
+    from app.models import RentItem, StoreItem, StoreItemBlock
+
+    rent_items = RentItem.query.filter_by(rent_setting_id=rent_settings.id).all()
+
+    for rent_item in rent_items:
+        if rent_item.is_available_in_store and rent_item.store_price:
+            # Determine purchase limit based on duration type
+            if rent_item.purchase_duration == 'per_period':
+                limit = 1  # Can only buy once per rent period
+                duration_note = "Valid until next rent payment is due."
+            else:  # per_use
+                limit = None  # Unlimited purchases
+                duration_note = "Purchase each time you need to use it."
+
+            # Create or update store item
+            if rent_item.store_item_id:
+                # Update existing store item
+                store_item = StoreItem.query.get(rent_item.store_item_id)
+                if store_item:
+                    store_item.name = rent_item.name
+                    base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
+                    store_item.description = f"{base_desc}\n\n{duration_note}"
+                    store_item.price = rent_item.store_price
+                    store_item.limit_per_student = limit
+                    store_item.is_active = True
+                    if block:
+                        store_item.set_blocks([block])
+            else:
+                # Create new store item
+                base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
+                description = f"{base_desc}\n\n{duration_note}"
+                store_item = StoreItem(
+                    teacher_id=teacher_id,
+                    name=rent_item.name,
+                    description=description,
+                    price=rent_item.store_price,
+                    item_type='immediate',
+                    limit_per_student=limit,
+                    is_active=True
+                )
+                db.session.add(store_item)
+                db.session.flush()  # Get the store_item.id
+
+                # Link the rent item to this store item
+                rent_item.store_item_id = store_item.id
+
+                # Set block visibility to match the rent setting's block
+                if block:
+                    store_item_block = StoreItemBlock(store_item_id=store_item.id, block=block)
+                    db.session.add(store_item_block)
+
+        elif rent_item.store_item_id:
+            # Deactivate store item if it exists but is no longer available
+            store_item = StoreItem.query.get(rent_item.store_item_id)
+            if store_item:
+                store_item.is_active = False
+
+    db.session.commit()
+
+
 @admin_bp.route('/rent-settings', methods=['GET', 'POST'])
 @admin_required
 def rent_settings():
@@ -2980,6 +3311,89 @@ def rent_settings():
             block_settings.prevent_purchase_when_late = request.form.get('prevent_purchase_when_late') == 'on'
 
         db.session.commit()
+
+        # Handle rent items (only for the current settings_block, not apply_to_all)
+        if not apply_to_all and settings:
+            from app.models import RentItem
+            # Process rent items from form
+            # Collect all rent item indices from form keys
+            rent_item_indices = set()
+            for key in request.form.keys():
+                if key.startswith('rent_item_name_'):
+                    idx = key.split('_')[-1]
+                    rent_item_indices.add(idx)
+
+            # Get existing rent items for this setting
+            existing_items = {str(item.id): item for item in settings.rent_items.all()}
+            processed_item_ids = set()
+
+            # Process each rent item from the form
+            for idx in sorted(rent_item_indices):
+                item_id = request.form.get(f'rent_item_id_{idx}')
+                name = request.form.get(f'rent_item_name_{idx}', '').strip()
+
+                # Skip empty items
+                if not name:
+                    continue
+
+                description = request.form.get(f'rent_item_description_{idx}', '').strip()
+                is_available = request.form.get(f'rent_item_store_available_{idx}') == 'on'
+                store_price_str = request.form.get(f'rent_item_store_price_{idx}', '').strip()
+                store_price = None
+                if is_available:
+                    if not store_price_str:
+                        flash('Store price is required for rent items that are available in the store.', 'error')
+                        is_available = False
+                    else:
+                        try:
+                            store_price = float(store_price_str)
+                            if store_price <= 0:
+                                flash('Store price must be a positive value for rent items that are available in the store.', 'error')
+                                is_available = False
+                                store_price = None
+                        except ValueError:
+                            flash('Store price must be a valid number for rent items that are available in the store.', 'error')
+                            is_available = False
+                            store_price = None
+                purchase_duration = request.form.get(f'rent_item_purchase_duration_{idx}', 'per_use')
+
+                if item_id and item_id in existing_items:
+                    # Update existing item
+                    item = existing_items[item_id]
+                    item.name = name
+                    item.description = description if description else None
+                    item.order_index = int(idx)
+                    item.is_available_in_store = is_available
+                    item.store_price = store_price
+                    item.purchase_duration = purchase_duration
+                    processed_item_ids.add(item_id)
+                else:
+                    # Create new item
+                    item = RentItem(
+                        rent_setting_id=settings.id,
+                        name=name,
+                        description=description if description else None,
+                        order_index=int(idx),
+                        is_available_in_store=is_available,
+                        store_price=store_price,
+                        purchase_duration=purchase_duration
+                    )
+                    db.session.add(item)
+
+            # Delete items that were removed
+            for item_id, item in existing_items.items():
+                if item_id not in processed_item_ids:
+                    # If this item had a linked store item, deactivate it
+                    if item.store_item_id:
+                        store_item = StoreItem.query.get(item.store_item_id)
+                        if store_item:
+                            store_item.is_active = False
+                    db.session.delete(item)
+
+            db.session.commit()
+
+            # Sync rent items with store items
+            _sync_rent_items_to_store(settings, admin_id, settings_block)
         if apply_to_all:
             flash(f"Rent settings applied to all {len(blocks_to_update)} classes!", "success")
         else:
@@ -3047,6 +3461,12 @@ def rent_settings():
         if rent_per_month > estimated_monthly_payroll * 0.8:  # If rent is more than 80% of payroll
             payroll_warning = f"Rent (${rent_per_month:.2f}/month) exceeds recommended 80% of estimated monthly payroll (${estimated_monthly_payroll:.2f}). Students may struggle to afford rent."
 
+    # Get rent items for this setting
+    rent_items = []
+    if settings:
+        from app.models import RentItem
+        rent_items = RentItem.query.filter_by(rent_setting_id=settings.id).order_by(RentItem.order_index).all()
+
     return render_template('admin_rent_settings.html',
                           settings=settings,
                           total_students=total_students,
@@ -3057,7 +3477,8 @@ def rent_settings():
                           payroll_settings=payroll_settings,
                           settings_block=settings_block,
                           teacher_blocks=teacher_blocks,
-                          class_labels_by_block=class_labels_by_block)
+                          class_labels_by_block=class_labels_by_block,
+                          rent_items=rent_items)
 
 
 @admin_bp.route('/rent-waiver/add', methods=['POST'])
@@ -3875,7 +4296,7 @@ def void_transaction(transaction_id):
         return redirect(return_url)
     if is_json:
         return jsonify(status="success", message="Transaction voided.")
-    flash("✅ Transaction voided.", "success")
+    flash("Transaction voided.", "success")
     # Safe redirect: validate referrer to prevent open redirects
     ref = request.referrer or ""
     potential_url = ref.replace('\\', '')
@@ -3940,7 +4361,7 @@ def hall_pass():
     )
 
 
-# -------------------- PAYROLL --------------------
+# -------------------- ECONOMY HEALTH --------------------
 
 @admin_bp.route('/economy-health')
 @admin_required
@@ -4116,14 +4537,14 @@ def economy_health():
 @admin_required
 def payroll_history():
     """View payroll history with filtering."""
-    current_app.logger.info("🧭 Entered admin_payroll_history route")
+    current_app.logger.info("Entered admin_payroll_history route")
     student_ids_subq = _student_scope_subquery()
 
     block = request.args.get("block")
-    current_app.logger.info(f"📊 Block filter: {block}")
+    current_app.logger.info(f"Block filter: {block}")
     start_date_str = request.args.get("start_date")
     end_date_str = request.args.get("end_date")
-    current_app.logger.info(f"📅 Date filters: start={start_date_str}, end={end_date_str}")
+    current_app.logger.info(f"Date filters: start={start_date_str}, end={end_date_str}")
 
     query = Transaction.query.filter(
         Transaction.student_id.in_(student_ids_subq),
@@ -4133,7 +4554,7 @@ def payroll_history():
     if block:
         # Stream students in batches for this block
         student_ids = [s.id for s in _scoped_students().filter_by(block=block).yield_per(50).all()]
-        current_app.logger.info(f"👥 Student IDs in block '{block}': {student_ids}")
+        current_app.logger.info(f"Student IDs in block '{block}': {student_ids}")
         query = query.filter(Transaction.student_id.in_(student_ids))
 
     if start_date_str:
@@ -4145,7 +4566,7 @@ def payroll_history():
         query = query.filter(Transaction.timestamp < end_date)
 
     payroll_transactions = query.order_by(desc(Transaction.timestamp)).all()
-    current_app.logger.info(f"🔎 Payroll transactions found: {len(payroll_transactions)}")
+    current_app.logger.info(f"Payroll transactions found: {len(payroll_transactions)}")
 
     # Stream students in batches to reduce memory usage for the lookup
     student_lookup = {s.id: s for s in _scoped_students().yield_per(50)}
@@ -4171,7 +4592,7 @@ def payroll_history():
             'notes': tx.description,
         })
 
-    current_app.logger.info(f"📄 Payroll records prepared: {len(payroll_records)}")
+    current_app.logger.info(f"Payroll records prepared: {len(payroll_records)}")
 
     # Current timestamp for header (Pacific Time)
     pacific = pytz.timezone('America/Los_Angeles')
@@ -4208,7 +4629,7 @@ def run_payroll():
 
         if not current_admin_id:
             error_msg = "No admin_id in session"
-            current_app.logger.error(f"❌ Payroll error: {error_msg}")
+            current_app.logger.error(f"Payroll error: {error_msg}")
             if is_json:
                 return jsonify(status="error", message=error_msg), 401
             flash(error_msg, "admin_error")
@@ -4220,7 +4641,7 @@ def run_payroll():
             teacher_id=current_admin_id
         ).order_by(Transaction.timestamp.desc()).first()
         last_payroll_time = last_payroll_tx.timestamp if last_payroll_tx else None
-        current_app.logger.info(f"🧮 RUN PAYROLL: Last payroll at {last_payroll_time}")
+        current_app.logger.info(f"Run payroll: last payroll at {last_payroll_time}")
 
         students = _scoped_students().all()
         # Pass teacher_id to ensure correct payroll settings are used
@@ -4249,7 +4670,7 @@ def run_payroll():
             db.session.add(tx)
 
         db.session.commit()
-        current_app.logger.info(f"✅ Payroll complete. Paid {len(summary)} students.")
+        current_app.logger.info(f"Payroll complete. Paid {len(summary)} students.")
 
         success_message = f"Payroll complete. Paid {len(summary)} students."
         if is_json:
@@ -4261,7 +4682,7 @@ def run_payroll():
         db.session.rollback()
         is_db_error = isinstance(e, SQLAlchemyError)
         error_type = "database" if is_db_error else "unexpected"
-        current_app.logger.error(f"❌ Payroll {error_type} error: {e}", exc_info=True)
+        current_app.logger.error(f"Payroll {error_type} error: {e}", exc_info=True)
 
         if is_json:
             message = "Database error during payroll. Check logs." if is_db_error else "Unexpected error during payroll."
@@ -5606,6 +6027,188 @@ def tap_out_students():
         }), 500
 
 
+@admin_bp.route('/tap-in-students', methods=['POST'])
+@admin_required
+def tap_in_students():
+    """
+    Admin endpoint to tap in one or more students for a specific period.
+    """
+    data = request.get_json()
+
+    # Get parameters
+    student_ids = data.get('student_ids', [])
+    period = data.get('period', '').strip().upper()
+
+    if not period:
+        return jsonify({"status": "error", "message": "Period is required."}), 400
+
+    if not student_ids:
+        return jsonify({"status": "error", "message": "student_ids must be provided."}), 400
+
+    now_utc = datetime.now(timezone.utc)
+    tapped_in = []
+    already_active = []
+    errors = []
+    current_admin_id = session.get('admin_id')
+
+    try:
+        # Process each student ID
+        for student_id in student_ids:
+            student = _get_student_or_404(student_id)
+
+            if not student:
+                errors.append(f"Student ID {student_id} not found")
+                continue
+
+            # Verify the student has this period in their block
+            student_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
+            if period not in student_blocks:
+                errors.append(f"{student.full_name} is not enrolled in period {period}")
+                continue
+
+            join_code = get_join_code_for_student_period(student.id, period, teacher_id=current_admin_id)
+
+            # Check if student is currently active in this period
+            latest_event = (
+                TapEvent.query
+                .filter_by(student_id=student.id, period=period)
+                .filter_by(join_code=join_code)
+                .order_by(TapEvent.timestamp.desc())
+                .first()
+            )
+
+            if latest_event and latest_event.status == "active":
+                already_active.append(student.full_name)
+                continue
+
+            # Create tap-in event
+            tap_in_event = TapEvent(
+                student_id=student.id,
+                period=period,
+                status="active",
+                timestamp=now_utc,
+                reason="Teacher tap-in",
+                join_code=join_code
+            )
+            db.session.add(tap_in_event)
+            tapped_in.append(student.full_name)
+
+            current_app.logger.info(
+                f"Admin tapped in student {student.id} ({student.full_name}) for period {period}"
+            )
+
+        # Commit all tap-ins
+        db.session.commit()
+
+        # Build response message
+        message_parts = []
+        if tapped_in:
+            message_parts.append(f"Successfully tapped in {len(tapped_in)} student(s)")
+        if already_active:
+            message_parts.append(f"{len(already_active)} student(s) were already active")
+        if errors:
+            message_parts.append(f"{len(errors)} error(s) occurred")
+
+        return jsonify({
+            "status": "success",
+            "message": ". ".join(message_parts),
+            "tapped_in": tapped_in,
+            "already_active": already_active,
+            "errors": errors
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Admin tap-in failed: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": "Failed to tap in students. Please try again or contact support."
+        }), 500
+
+
+@admin_bp.route('/students/bulk-update-hall-passes', methods=['POST'])
+@admin_required
+def bulk_update_hall_passes():
+    """
+    Admin endpoint to bulk update hall passes for selected students.
+    Supports set, add, and subtract operations.
+    """
+    data = request.get_json()
+
+    # Get parameters
+    student_ids = data.get('student_ids', [])
+    update_type = data.get('update_type', 'set')  # 'set', 'add', or 'subtract'
+    value = data.get('value', 0)
+
+    if not student_ids:
+        return jsonify({"status": "error", "message": "student_ids must be provided."}), 400
+
+    if update_type not in ['set', 'add', 'subtract']:
+        return jsonify({"status": "error", "message": "update_type must be 'set', 'add', or 'subtract'."}), 400
+
+    try:
+        value = int(value)
+        if value < 0:
+            return jsonify({"status": "error", "message": "Value must be non-negative."}), 400
+    except (ValueError, TypeError):
+        return jsonify({"status": "error", "message": "Value must be a valid integer."}), 400
+
+    updated = []
+    errors = []
+
+    try:
+        # Process each student ID
+        for student_id in student_ids:
+            student = _get_student_or_404(student_id)
+
+            if not student:
+                errors.append(f"Student ID {student_id} not found")
+                continue
+
+            # Update hall passes based on operation type
+            if update_type == 'set':
+                student.hall_passes = value
+            elif update_type == 'add':
+                student.hall_passes = (student.hall_passes or 0) + value
+            elif update_type == 'subtract':
+                student.hall_passes = max(0, (student.hall_passes or 0) - value)
+
+            updated.append(student.full_name)
+
+            current_app.logger.info(
+                f"Admin updated hall passes for student {student.id} ({student.full_name}): {update_type} {value}, new value: {student.hall_passes}"
+            )
+
+        # Commit all updates
+        db.session.commit()
+
+        # Build response message
+        action_text = {
+            'set': f'set to {value}',
+            'add': f'increased by {value}',
+            'subtract': f'decreased by {value}'
+        }
+
+        message = f"Successfully updated hall passes for {len(updated)} student(s) ({action_text[update_type]})"
+        if errors:
+            message += f". {len(errors)} error(s) occurred"
+
+        return jsonify({
+            "status": "success",
+            "message": message,
+            "updated": updated,
+            "errors": errors
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Bulk hall pass update failed: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": "Failed to update hall passes. Please try again or contact support."
+        }), 500
+
+
 # -------------------- BANKING ROUTES --------------------
 
 @admin_bp.route('/banking')
@@ -5926,7 +6529,7 @@ def deletion_requests():
         try:
             db.session.commit()
             flash(
-                f'✅ Deletion request submitted successfully. '
+                f'Deletion request submitted successfully. '
                 f'A system administrator will review your {request_type} deletion request.',
                 'success'
             )
@@ -6074,13 +6677,7 @@ def feature_settings():
                 'rent_enabled': 'rent_enabled' in request.form,
                 'hall_pass_enabled': 'hall_pass_enabled' in request.form,
                 'store_enabled': 'store_enabled' in request.form,
-                'bug_reports_enabled': 'bug_reports_enabled' in request.form,
-                'bug_rewards_enabled': 'bug_rewards_enabled' in request.form,
             }
-
-            # Bug rewards is a subfeature of bug reports - if bug reports is disabled, disable bug rewards too
-            if not features_data['bug_reports_enabled']:
-                features_data['bug_rewards_enabled'] = False
 
             # Apply settings to selected periods
             if apply_to == 'all':
@@ -6184,8 +6781,6 @@ def feature_settings():
             ('rent_enabled', 'Rent', 'home', 'Housing costs and payments'),
             ('hall_pass_enabled', 'Hall Pass', 'confirmation_number', 'Bathroom and water break passes'),
             ('store_enabled', 'Store', 'storefront', 'Marketplace for student rewards'),
-            ('bug_reports_enabled', 'Bug Reports', 'bug_report', 'Allow students to report issues'),
-            ('bug_rewards_enabled', 'Bug Rewards', 'redeem', 'Reward students for valid bug reports'),
         ]
     )
 
@@ -6218,17 +6813,11 @@ def update_period_feature_settings(period):
             'rent': 'rent_enabled',
             'hall_pass': 'hall_pass_enabled',
             'store': 'store_enabled',
-            'bug_reports': 'bug_reports_enabled',
-            'bug_rewards': 'bug_rewards_enabled',
         }
 
         for feature_key, db_column in feature_map.items():
             if feature_key in data:
                 setattr(settings, db_column, bool(data[feature_key]))
-
-        # Bug rewards is a subfeature of bug reports - if bug reports is disabled, disable bug rewards too
-        if not settings.bug_reports_enabled:
-            settings.bug_rewards_enabled = False
 
         settings.updated_at = datetime.now(timezone.utc)
         db.session.commit()
@@ -6287,7 +6876,6 @@ def copy_feature_settings():
         valid_feature_columns = {
             'payroll_enabled', 'insurance_enabled', 'banking_enabled',
             'rent_enabled', 'hall_pass_enabled', 'store_enabled',
-            'bug_reports_enabled', 'bug_rewards_enabled'
         }
 
         # Copy to target periods
@@ -6761,7 +7349,7 @@ def onboarding_complete():
         onboarding_record.complete_onboarding()
         db.session.commit()
 
-        flash('🎉 Welcome to Classroom Economy! Your setup is complete.', 'success')
+        flash('Welcome to Classroom Economy! Your setup is complete.', 'success')
 
         return jsonify({
             'status': 'success',
@@ -6814,25 +7402,49 @@ def onboarding_status():
     join_code = session.get('current_join_code')
 
     try:
-        # First, get the TeacherBlock to retrieve the block identifier
+        # Get or create onboarding record for this teacher
+        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
+        if not onboarding_record:
+            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
+            db.session.add(onboarding_record)
+            db.session.commit()
+
+        # Check if widget is dismissed
+        if onboarding_record.widget_dismissed:
+            return jsonify({
+                'status': 'success',
+                'dismissed': True,
+                'completion': {}
+            })
+
+        # Get the TeacherBlock to retrieve the block identifier
+        # If join_code is not set in session, try to use the teacher's first TeacherBlock
+        if not join_code:
+            first_teacher_block = TeacherBlock.query.filter_by(
+                teacher_id=admin_id
+            ).order_by(TeacherBlock.id).first()
+            if first_teacher_block:
+                join_code = first_teacher_block.join_code
+                # Set it in session for future requests
+                session['current_join_code'] = join_code
+
         teacher_block = TeacherBlock.query.filter_by(
             teacher_id=admin_id,
             join_code=join_code
         ).first()
 
         if not teacher_block:
+            # No class period selected yet - indicate this so frontend can show appropriate message
             return jsonify({
-                'status': 'error',
-                'message': 'Class period not found'
-            }), 404
+                'status': 'success',
+                'dismissed': False,
+                'no_class_period': True,
+                'completion': {}
+            })
 
-        block = teacher_block.block
-
-        # Get teacher's feature settings using teacher_id and block
-        feature_settings = FeatureSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=block
-        ).first()
+        # Get all blocks for this teacher (for account-wide onboarding checks)
+        all_teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
+        all_blocks = list(set(tb.block for tb in all_teacher_blocks))
 
         # Initialize completion status
         completion = {
@@ -6846,62 +7458,65 @@ def onboarding_status():
             'personalization': False,
             'passkey': False
         }
+        data_completed = completion.copy()
+        skipped_tasks = {}
 
-        # Check roster: has at least one student
-        student_count = StudentBlock.query.filter_by(
-            join_code=join_code
-        ).count()
-        completion['roster'] = student_count > 0
+        widget_task_statuses = onboarding_record.widget_tasks_completed or {}
+        for task_name, status in widget_task_statuses.items():
+            if status is True or status == 'skipped':
+                skipped_tasks[task_name] = True
 
-        # Check payroll: has payroll settings configured
-        payroll_settings = PayrollSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=block
-        ).first()
-        completion['payroll'] = payroll_settings is not None
+        # ACCOUNT-WIDE ONBOARDING CHECKS
+        # Onboarding is per teacher account, not per class section
+        # If ANY of the teacher's class sections has a feature set up, mark as complete
 
-        # Check store: has at least one store item for this block
-        if feature_settings and feature_settings.store_enabled:
-            store_items = StoreItemBlock.query.filter_by(block=block).count()
-            completion['store'] = store_items > 0
+        # Roster: has at least one student in ANY class OR marked complete
+        # Use StudentTeacher to get all students for this teacher
+        student_count = StudentTeacher.query.filter_by(admin_id=admin_id).count()
+        data_completed['roster'] = student_count > 0
 
-        # Check banking: has banking settings configured
-        if feature_settings and feature_settings.banking_enabled:
-            banking_settings = BankingSettings.query.filter_by(
-                teacher_id=admin_id,
-                block=block
-            ).first()
-            completion['banking'] = banking_settings is not None
+        # Payroll: has payroll settings configured for ANY block OR marked complete
+        payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id).first()
+        data_completed['payroll'] = payroll_settings is not None
 
-        # Check rent: has rent settings configured
-        if feature_settings and feature_settings.rent_enabled:
-            rent_settings = RentSettings.query.filter_by(
-                teacher_id=admin_id,
-                block=block
-            ).first()
-            completion['rent'] = rent_settings is not None
+        # Store: has at least one store item for ANY block OR marked complete
+        store_items = StoreItem.query.filter_by(teacher_id=admin_id).count()
+        data_completed['store'] = store_items > 0
 
-        # Check insurance: has at least one insurance policy for this block
-        if feature_settings and feature_settings.insurance_enabled:
-            insurance_policies = InsurancePolicyBlock.query.filter_by(block=block).count()
-            completion['insurance'] = insurance_policies > 0
+        # Banking: has banking settings configured for ANY block OR marked complete
+        banking_settings = BankingSettings.query.filter_by(teacher_id=admin_id).first()
+        data_completed['banking'] = banking_settings is not None
 
-        # Check hall pass: always available (mark as complete if they've accessed it)
-        # For now, we'll mark it as incomplete until they configure it
-        completion['hall_pass'] = False
+        # Rent: has rent settings configured for ANY block OR marked complete
+        rent_settings = RentSettings.query.filter_by(teacher_id=admin_id).first()
+        data_completed['rent'] = rent_settings is not None
 
-        # Check personalization: check if class_label is set on TeacherBlock
-        completion['personalization'] = (
-            teacher_block.class_label and
-            teacher_block.class_label.strip() != ''
-        )
+        # Insurance: has at least one insurance policy for ANY block OR marked complete
+        insurance_policies = InsurancePolicy.query.filter_by(teacher_id=admin_id).count()
+        data_completed['insurance'] = insurance_policies > 0
 
-        # Passkey is always incomplete (to be revamped)
-        completion['passkey'] = False
+        # Hall pass: check if hall pass settings exist for ANY block OR marked complete
+        hall_pass_settings = HallPassSettings.query.filter_by(teacher_id=admin_id).first()
+        data_completed['hall_pass'] = hall_pass_settings is not None
+
+        # Personalization: check if ANY TeacherBlock has class_label set OR marked complete
+        has_label = any(tb.class_label and tb.class_label.strip() != '' for tb in all_teacher_blocks)
+        data_completed['personalization'] = has_label
+
+        # Passkey: check if at least one credential exists OR marked complete
+        has_passkey = AdminCredential.query.filter_by(admin_id=admin_id).first() is not None
+        data_completed['passkey'] = has_passkey
+
+        for task_name in completion.keys():
+            completion[task_name] = data_completed.get(task_name, False) or skipped_tasks.get(task_name, False)
 
         return jsonify({
             'status': 'success',
-            'completion': completion
+            'dismissed': False,
+            'no_class_period': False,
+            'completion': completion,
+            'data_completed': data_completed,
+            'skipped': skipped_tasks
         })
 
     except Exception as e:
@@ -6928,8 +7543,8 @@ def onboarding_skip_task():
             onboarding_record = TeacherOnboarding(teacher_id=admin_id)
             db.session.add(onboarding_record)
 
-        # Mark task as skipped using the existing method (store as True to indicate it's "completed" via skip)
-        onboarding_record.mark_step_completed(task_name)
+        # Mark widget task as skipped (counts as completed)
+        onboarding_record.mark_widget_task_completed(task_name, status='skipped')
 
         db.session.commit()
 
@@ -6942,6 +7557,35 @@ def onboarding_skip_task():
         db.session.rollback()
         current_app.logger.error(f"Error skipping task: {e}")
         return jsonify({'status': 'error', 'message': 'Failed to skip task'}), 500
+
+
+@admin_bp.route('/onboarding/dismiss-widget', methods=['POST'])
+@admin_required
+def onboarding_dismiss_widget():
+    """Dismiss the Getting Started widget permanently."""
+    admin_id = session.get('admin_id')
+
+    try:
+        # Get or create onboarding record
+        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
+        if not onboarding_record:
+            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
+            db.session.add(onboarding_record)
+
+        # Dismiss the widget
+        onboarding_record.dismiss_widget()
+
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Getting Started widget dismissed'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error dismissing widget: {e}")
+        return jsonify({'status': 'error', 'message': 'Failed to dismiss widget'}), 500
 
 
 # ==================== ECONOMY BALANCE CHECKER API ====================
@@ -7188,6 +7832,10 @@ def api_economy_validate(feature):
             'frequency_type': data.get('frequency_type', data.get('frequency', 'monthly')),
             'custom_frequency_value': data.get('custom_frequency_value'),
             'custom_frequency_unit': data.get('custom_frequency_unit'),
+            # Insurance-specific parameters for coverage and period cap validation
+            'max_claim_amount': data.get('max_claim_amount'),
+            'max_payout_per_period': data.get('max_payout_per_period'),
+            'claim_type': data.get('claim_type'),
         }
 
         warnings, recommendations, ratio = checker.validate_feature_value(
