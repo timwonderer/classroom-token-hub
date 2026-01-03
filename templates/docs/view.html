@@ -30,21 +30,12 @@
                     </div>
 
                     <!-- Docs Home (always show) -->
-                    {% if session.get('student_id') or session.get('admin_id') or session.get('sysadmin_id') %}
                     <div class="mb-3">
-                        <a href="{{ url_for('docs.index') }}" class="btn btn-sm btn-outline-secondary w-100">
+                        <a href="{{ url_for('docs.index') }}" class="btn btn-sm {% if session.get('student_id') or session.get('admin_id') or session.get('sysadmin_id') %}btn-outline-secondary{% else %}btn-primary{% endif %} w-100">
                             <span class="material-symbols-outlined icon-align">home</span>
                             Docs Home
                         </a>
                     </div>
-                    {% else %}
-                    <div class="mb-3">
-                        <a href="{{ url_for('docs.index') }}" class="btn btn-sm btn-primary w-100">
-                            <span class="material-symbols-outlined icon-align">home</span>
-                            Docs Home
-                        </a>
-                    </div>
-                    {% endif %}
 
                     <!-- Search -->
                     <form action="{{ url_for('docs.search') }}" method="get" class="mb-3">
@@ -170,7 +161,7 @@
                             {% endif %}
 
                             <!-- Markdown Content -->
-                            <div class="markdown-content">
+                            <div class="markdown-content{% if toc %} markdown-content-with-toc{% endif %}">
                                 {{ content | safe }}
                             </div>
 
@@ -279,7 +270,7 @@
 }
 
 /* Override max-width when TOC is present */
-.col-lg-9 .markdown-content {
+.markdown-content-with-toc {
     max-width: none;
 }
 
