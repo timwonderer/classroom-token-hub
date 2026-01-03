@@ -2689,10 +2689,11 @@ def add_individual_student():
 
         # Generate initials
         first_initial = first_name[0].upper()
-        last_initial = last_name[0].upper()
+            try:
+                dob_input = datetime.strptime(dob_str, "%Y-%m-%d").date()
+            except ValueError:
+                dob_input = datetime.strptime(dob_str, "%m/%d/%Y").date()
 
-        # Parse DOB and calculate sum
-        try:
             if "-" in dob_str:
                 dob_input = datetime.strptime(dob_str, "%Y-%m-%d").date()
             else:
@@ -2853,10 +2854,11 @@ def add_manual_student():
 
         if not all([first_name, last_name, dob_str, block]):
             flash("Required fields missing.", "error")
-            return redirect(url_for('admin.students'))
+            try:
+                dob_input = datetime.strptime(dob_str, "%Y-%m-%d").date()
+            except ValueError:
+                dob_input = datetime.strptime(dob_str, "%m/%d/%Y").date()
 
-        # Generate initials
-        first_initial = first_name[0].upper()
         last_initial = last_name[0].upper()
 
         # Parse DOB and calculate sum
