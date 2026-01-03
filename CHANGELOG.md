@@ -6,6 +6,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows semantic versioning principles.
 
 
+## [Unreleased]
+
+### Added
+- **Rent Itemization Feature** - Teachers can now specify what rent pays for and offer items as store alternatives (MVP)
+  - New `RentItem` model to track itemized rent components (e.g., Desk, Chair, Locker)
+  - Teachers can add/remove/reorder rent items in Rent Settings page
+  - Optional store integration: mark items as "Available in Store" with custom pricing
+  - Automated sync: items marked for store availability automatically create/update StoreItem records
+  - StoreItem created with `limit_per_student=1` to enforce single-purchase behavior
+  - Store items inherit block visibility from rent settings
+  - Student rent view displays itemized breakdown showing what rent includes
+  - Students see store price comparison for items available separately
+  - Pro tip message encourages rent payment by showing total value comparison
+  - Manual pricing (teacher sets store price manually - automatic pricing calculator coming in future release)
+  - Database migration: `6feaa660d6c3_add_rent_item_table`
+- **Enhanced Purchase Restrictions** - "Prevent Purchase When Late" toggle now has dynamic behavior based on itemization
+  - When rent itemization is disabled: blocks ALL store purchases when student is late on rent (original behavior)
+  - When rent itemization is enabled: students late on rent can ONLY purchase items covered by rent (at à la carte prices), all other store items blocked
+  - Creates strong incentive structure: pay rent to get everything, or buy individual rent items at higher prices while missing out on other store items
+  - UI dynamically updates toggle label and description based on itemization status
+  - JavaScript updates label when items are added/removed dynamically
+  - Implemented in `/api/purchase-item` endpoint with proper rent late detection and item validation
+- **Purchase Duration Options for Rent Items** - Teachers can now choose how long individually-purchased rent items last
+  - New `purchase_duration` field on RentItem model: 'per_use' or 'per_period'
+  - **Per Use**: Student must buy each time they want to use it (unlimited purchases allowed)
+  - **Per Rent Period**: Student buys once and can use until next rent is due (limit 1, expires when rent comes due)
+  - Radio button selector in rent itemization UI with clear explanations
+  - Store items automatically configured with appropriate purchase limits based on duration type
+  - Purchase API calculates expiration dates for "per_period" items based on rent frequency settings
+  - Automated expiration when next rent payment is due
+  - Database migration: `h7i8j9k0l1m2_add_purchase_duration_to_rent_items`
+- **Rent Privilege Badges** - Visual indicators on student detail page showing active rent privileges
+  - Displays all "per_period" rent items that students currently have access to
+  - **Green badges**: Privileges covered by paid rent (automatic for rent-paying students)
+  - **Blue badges**: Privileges purchased individually (shows "(Purchased)" label)
+  - Badges only show for non-expired privileges
+  - Rent-paying students automatically receive all per-period privilege badges
+  - Teachers can quickly see which students have which privileges at a glance
+  - Hover over badges to see item descriptions
+
 ## [1.6.0] - 2026-01-01
 
 ### Added

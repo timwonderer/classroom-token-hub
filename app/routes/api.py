@@ -10,6 +10,7 @@ import string
 import re
 import pytz
 from datetime import datetime, timedelta, timezone
+from dateutil.relativedelta import relativedelta
 
 from flask import Blueprint, request, jsonify, session, current_app
 from sqlalchemy import func, or_
@@ -23,7 +24,7 @@ from app.models import (
     StudentTeacher, TeacherBlock, StudentBlock
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
-from app.routes.student import get_current_teacher_id
+from app.routes.student import get_current_class_context, get_current_teacher_id, get_rent_settings_for_context
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
 
@@ -38,6 +39,70 @@ from payroll import get_pay_rate_for_block
 
 # Create blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')
+
+
+# -------------------- Rent Helpers --------------------
+
+def _ensure_aware(dt):
+    """Ensure datetime is timezone-aware in UTC."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _get_period_delta(rent_setting):
+    """Return the timedelta/relativedelta for a rent setting."""
+    if rent_setting.frequency_type == 'daily':
+        return timedelta(days=1)
+    if rent_setting.frequency_type == 'weekly':
+        return timedelta(weeks=1)
+    if rent_setting.frequency_type == 'monthly':
+        return relativedelta(months=1)
+    if rent_setting.frequency_type == 'custom':
+        unit = rent_setting.custom_frequency_unit or 'days'
+        value = rent_setting.custom_frequency_value or 1
+        if unit == 'days':
+            return timedelta(days=value)
+        if unit == 'weeks':
+            return timedelta(weeks=value)
+        if unit == 'months':
+            return relativedelta(months=value)
+    return timedelta(days=30)
+
+
+def _add_period(dt, delta):
+    """Add a timedelta or relativedelta to dt."""
+    if isinstance(delta, relativedelta):
+        return dt + delta
+    return dt + delta
+
+
+def _calculate_due_dates(rent_setting, now):
+    """
+    Calculate the current and next due dates for a rent setting based on the provided time.
+    Returns (current_due, next_due). If first due date is not set, returns (None, None).
+    """
+    first_due = _ensure_aware(rent_setting.first_rent_due_date)
+    if not first_due:
+        return (None, None)
+
+    delta = _get_period_delta(rent_setting)
+
+    # If before the first due date, the first due date is both current and next marker
+    if now < first_due:
+        return (first_due, _add_period(first_due, delta))
+
+    current_due = first_due
+    next_due = _add_period(first_due, delta)
+
+    # Advance until next_due is after now
+    while next_due and next_due <= now:
+        current_due = next_due
+        next_due = _add_period(next_due, delta)
+
+    return (current_due, next_due)
 
 
 # -------------------- TIPS API --------------------
@@ -195,6 +260,57 @@ def purchase_item():
     if not item or not item.is_active:
         return jsonify({"status": "error", "message": "This item is not available."}), 404
 
+    # Check rent late restrictions
+    from app.models import RentSettings, RentPayment, RentItem
+    from datetime import datetime, timedelta
+
+    rent_settings = get_rent_settings_for_context(context)
+    if rent_settings and rent_settings.is_enabled and rent_settings.prevent_purchase_when_late:
+        # Check if student is late on rent
+        now = datetime.now(timezone.utc)
+        current_month = now.month
+        current_year = now.year
+
+        current_due, next_due = _calculate_due_dates(rent_settings, now)
+
+        if current_due:
+            grace_end_date = current_due + timedelta(days=rent_settings.grace_period_days)
+
+            # Check if past grace period
+            if now > grace_end_date:
+                # Check if rent is paid for current period
+                current_block = context.get('block', '').strip().upper()
+                total_paid = db.session.query(db.func.sum(RentPayment.amount_paid)).filter(
+                    RentPayment.student_id == student.id,
+                    RentPayment.period == current_block,
+                    RentPayment.period_month == current_month,
+                    RentPayment.period_year == current_year,
+                    db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                ).scalar() or 0
+
+                # Student is late if they haven't paid full rent
+                if total_paid < rent_settings.rent_amount:
+                    # Check if itemization is enabled
+                    rent_items = RentItem.query.filter_by(rent_setting_id=rent_settings.id).all()
+
+                    if rent_items:
+                        # Itemization is enabled: check if this item is a rent item
+                        rent_item_store_ids = [ri.store_item_id for ri in rent_items if ri.store_item_id]
+
+                        if item.id not in rent_item_store_ids:
+                            # This item is NOT part of rent - block purchase
+                            return jsonify({
+                                "status": "error",
+                                "message": "You are late on rent. You can only purchase items covered by rent until you pay your rent."
+                            }), 403
+                        # If item IS part of rent, allow purchase (they can buy à la carte)
+                    else:
+                        # No itemization: block ALL purchases
+                        return jsonify({
+                            "status": "error",
+                            "message": "You cannot make purchases while late on rent. Please pay your rent first."
+                        }), 403
+
     # Calculate price (with bulk discount if applicable)
     unit_price = item.price
     if (item.bulk_discount_enabled and
@@ -325,7 +441,30 @@ def purchase_item():
         # --- Standard Item Logic ---
         # Create the student's item(s)
         expiry_date = None
-        if item.item_type == 'delayed' and item.auto_expiry_days:
+
+        # Check if this is a rent item with "per_period" duration
+        from app.models import RentItem, RentSettings
+        rent_item = RentItem.query.filter_by(store_item_id=item.id).first()
+        if rent_item and rent_item.purchase_duration == 'per_period':
+            # Calculate NEXT rent due date and set as expiry
+            rent_setting = RentSettings.query.get(rent_item.rent_setting_id)
+            if rent_setting and rent_setting.is_enabled:
+                now = datetime.now(timezone.utc)
+
+                if rent_setting.first_rent_due_date:
+                    current_due, next_due = _calculate_due_dates(rent_setting, now)
+
+                    if current_due and next_due:
+                        # Align expiry to the next scheduled due date
+                        expiry_date = next_due
+                else:
+                    # No first_rent_due_date set, use simple calculation from now
+                    # This is a fallback for backwards compatibility
+                    delta = _get_period_delta(rent_setting)
+                    expiry_date = _add_period(now, delta)
+
+        # Fall back to standard auto_expiry for delayed items
+        if expiry_date is None and item.item_type == 'delayed' and item.auto_expiry_days:
             expiry_date = datetime.now(timezone.utc) + timedelta(days=item.auto_expiry_days)
 
         student_item_status = 'purchased'
