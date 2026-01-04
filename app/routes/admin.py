@@ -255,7 +255,7 @@ def _link_student_to_admin(student: Student, admin_id):
         )
         db.session.add(new_teacher_block)
         current_app.logger.info(
-            f"Created TeacherBlock for teacher {admin_id}"
+            f"Created TeacherBlock for a student for teacher {admin_id} in block {student.block}"
         )
     elif not existing_teacher_block.is_claimed:
         # TeacherBlock exists but not claimed - mark as claimed now
@@ -498,7 +498,7 @@ def auto_tapout_all_over_limit():
                     tapped_out_count += 1
                     break  # Only need to run once per student
         except Exception as e:
-            current_app.logger.error(f"Error checking auto-tapout for student")
+            current_app.logger.error("Error checking auto-tapout for student", exc_info=True)
             continue
 
     return tapped_out_count
@@ -2329,10 +2329,10 @@ def edit_student():
         elif added_blocks and not transferred_blocks:
             message += " Student will start fresh in new period(s)."
 
-        flash(message, "success")
     except Exception as e:
         db.session.rollback()
-        flash(f"Error updating student due to internal error", "error")
+        current_app.logger.error(f"Error updating student {student_id}", exc_info=True)
+        flash("Error updating student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
 
@@ -2386,9 +2386,9 @@ def delete_student():
         db.session.delete(student)
         db.session.commit()
 
-        flash(f"Successfully deleted {student_name} and all associated data.", "success")
     except Exception as e:
         db.session.rollback()
+        current_app.logger.error(f"Error deleting student {student_name}", exc_info=True)
         flash(f"Cannot delete student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
@@ -2845,9 +2845,9 @@ def add_individual_student():
         
         db.session.commit()
 
-        flash(f"Successfully added {first_name} {last_initial}. to block {block}.", "success")
     except Exception as e:
         db.session.rollback()
+        current_app.logger.error("Error adding individual student", exc_info=True)
         flash(f"Cannot add student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
@@ -3016,9 +3016,9 @@ def add_manual_student():
         
         db.session.commit()
 
-        flash(f"Successfully created {first_name} {last_initial}. in block {block} (manual mode).", "success")
     except Exception as e:
         db.session.rollback()
+        current_app.logger.error("Error creating manual student", exc_info=True)
         flash(f"Cannot create student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
@@ -3968,9 +3968,9 @@ def delete_insurance_policy(policy_id):
         db.session.delete(policy)
         db.session.commit()
 
-        flash(f"Successfully deleted policy '{policy.title}' ({enrollments_deleted} enrollments and {claims_deleted} claims removed).", "success")
     except Exception as e:
         db.session.rollback()
+        current_app.logger.error(f"Error deleting policy {policy_id}", exc_info=True)
         flash(f"Cannot delete insurance policy due to internal error", "danger")
 
     return redirect(url_for('admin.insurance_management'))
@@ -6647,7 +6647,7 @@ def help_support():
             return redirect(url_for('admin.help_support'))
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error submitting report")
+            current_app.logger.error("Error submitting report", exc_info=True)
             flash("An error occurred while submitting your report. Please try again.", "error")
             return redirect(url_for('admin.help_support'))
 
@@ -8265,7 +8265,7 @@ def resolve_issue(issue_id):
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error resolving issue")
+        current_app.logger.error(f"Error resolving issue {issue_id}", exc_info=True)
         flash("An error occurred while resolving the issue. Please try again.", "error")
         return redirect(url_for('admin.view_issue', issue_id=issue_id))
 
@@ -8312,6 +8312,6 @@ def escalate_issue(issue_id):
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error escalating issue")
+        current_app.logger.error(f"Error escalating issue {issue_id}", exc_info=True)
         flash("An error occurred while escalating the issue. Please try again.", "error")
         return redirect(url_for('admin.view_issue', issue_id=issue_id))
