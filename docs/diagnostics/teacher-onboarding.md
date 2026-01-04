@@ -14,9 +14,10 @@ related:
 - Period-specific settings override global defaults.
 - Students must be in the correct class context to see that feature.
 
-## If the onboarding widget is gone
-- It disappears after completion or dismissal.
-- You can reset it from **Account Personalization** (Settings menu → "Reset Setup Wizard" button).
+## If the getting started widget is gone
+- It disappears after you dismiss it.
+- You can show it again from **Account Personalization** (Settings → "Show Getting Started Widget" button).
+- The widget tracks your progress on setup tasks and can be collapsed/expanded using the floating rocket icon.
 
 ## This is expected when...
 - Newly created classes start with default feature settings enabled.

@@ -4385,34 +4385,35 @@ def economy_health():
     admin_id = session.get("admin_id")
 
     blocks = _get_teacher_blocks()
-    scope = request.args.get('scope', 'all')
+    scope_param = request.args.get('scope')
+    scope = scope_param or 'all'
     selected_block = None
     if scope == 'class':
         selected_block = request.args.get('block') or (blocks[0] if blocks else None)
 
     payroll_query = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True)
+    global_payroll_settings = payroll_query.filter_by(block=None).first()
     payroll_settings = None
-    if selected_block:
-        payroll_settings = payroll_query.filter_by(block=selected_block).first()
 
-    if not payroll_settings:
-        payroll_settings = payroll_query.filter_by(block=None).first()
+    if scope == 'class':
+        if selected_block:
+            payroll_settings = payroll_query.filter_by(block=selected_block).first()
+        if not payroll_settings:
+            payroll_settings = global_payroll_settings
+    else:
+        payroll_settings = global_payroll_settings
 
-    # Fallback to first class-specific payroll when no global settings exist
-    if not payroll_settings:
+    # Fallback to first class-specific payroll when no global settings exist and
+    # the user did not explicitly request all-classes scope.
+    if not payroll_settings and scope_param != 'all':
         first_class_setting = payroll_query.filter(PayrollSettings.block.isnot(None)).order_by(PayrollSettings.block.asc()).first()
         if first_class_setting:
             payroll_settings = first_class_setting
             selected_block = first_class_setting.block
             scope = 'class'
 
-    # Fallback to the first available class when only class-specific payroll is configured
-    if not payroll_settings and not selected_block:
-        selected_block = request.args.get('block') or (blocks[0] if blocks else None)
-        if selected_block:
-            payroll_settings = payroll_query.filter_by(block=selected_block).first()
-
     has_payroll_settings = payroll_query.count() > 0
+    has_global_payroll_settings = global_payroll_settings is not None
 
     rent_settings = None
     if selected_block:
@@ -4526,6 +4527,7 @@ def economy_health():
         scope=scope,
         payroll_settings=payroll_settings,
         has_payroll_settings=has_payroll_settings,
+        has_global_payroll_settings=has_global_payroll_settings,
         cwi_calc=cwi_calc,
         expected_hours=expected_hours,
         pay_rate_per_minute=pay_rate_per_minute,
@@ -7191,224 +7193,6 @@ def announcement_toggle(announcement_id):
 
 # -------------------- TEACHER ONBOARDING --------------------
 
-@admin_bp.route('/onboarding')
-@admin_required
-def onboarding():
-    """
-    Teacher onboarding wizard.
-
-    Guides new teachers through initial setup:
-    1. Welcome & Overview
-    2. Roster Upload (students/periods)
-    3. Feature Selection
-    4. Feature Setup (payroll required, other features based on selection)
-    """
-    admin_id = session.get('admin_id')
-
-    # Get or create onboarding record
-    onboarding_record = _get_or_create_onboarding(admin_id)
-
-    # If already completed or skipped, redirect to dashboard unless force=true
-    force = request.args.get('force')
-    if (onboarding_record.is_completed or onboarding_record.is_skipped) and force != 'true':
-        return redirect(url_for('admin.dashboard'))
-
-    # Get admin info
-    admin = Admin.query.get(admin_id)
-
-    # Define steps (new order: welcome, roster, features, settings)
-    steps = [
-        {
-            'id': 'welcome',
-            'title': 'Welcome',
-            'icon': 'waving_hand',
-            'description': 'Get started with Classroom Economy'
-        },
-        {
-            'id': 'roster',
-            'title': 'Upload Roster',
-            'icon': 'upload_file',
-            'description': 'Add your students'
-        },
-        {
-            'id': 'features',
-            'title': 'Select Features',
-            'icon': 'tune',
-            'description': 'Choose which features to enable'
-        },
-        {
-            'id': 'settings',
-            'title': 'Feature Setup',
-            'icon': 'settings',
-            'description': 'Configure your features'
-        }
-    ]
-
-    # Get current step based on onboarding record
-    current_step = onboarding_record.current_step
-
-    return render_template(
-        'admin_onboarding.html',
-        admin=admin,
-        onboarding=onboarding_record,
-        steps=steps,
-        current_step=current_step,
-        current_page='onboarding'
-    )
-
-
-@admin_bp.route('/onboarding/step/<step_name>', methods=['POST'])
-@admin_required
-def onboarding_step(step_name):
-    """Process an onboarding step completion."""
-    admin_id = session.get('admin_id')
-
-    try:
-        data = request.get_json() if request.is_json else {}
-
-        onboarding_record = _get_or_create_onboarding(admin_id)
-
-        # Mark step as completed
-        onboarding_record.mark_step_completed(step_name)
-
-        # Process step-specific data
-        if step_name == 'features':
-            # Save feature selections
-            features_data = data.get('features', {})
-
-            global_settings = FeatureSettings.query.filter_by(
-                teacher_id=admin_id,
-                block=None
-            ).first()
-
-            if not global_settings:
-                global_settings = FeatureSettings(teacher_id=admin_id, block=None)
-                db.session.add(global_settings)
-
-            # Payroll is mandatory, always enable it
-            global_settings.payroll_enabled = True
-
-            # Enable other features based on selection
-            for feature, enabled in features_data.items():
-                if feature != 'payroll':  # Skip payroll as it's already forced to True
-                    feature_column = f"{feature}_enabled"
-                    if hasattr(global_settings, feature_column):
-                        setattr(global_settings, feature_column, bool(enabled))
-
-            global_settings.updated_at = datetime.now(timezone.utc)
-
-        elif step_name == 'roster':
-            # Roster upload handled by upload_students route
-            # This just marks the step as completed
-            pass
-
-        # Advance to next step (new order: welcome, roster, features, settings)
-        step_order = ['welcome', 'roster', 'features', 'settings']
-        try:
-            current_index = step_order.index(step_name)
-            if current_index < len(step_order) - 1:
-                onboarding_record.current_step = current_index + 2  # Advance to next step (1-indexed)
-            else:
-                # Last step completed
-                onboarding_record.complete_onboarding()
-        except ValueError:
-            # If step_name is not found in step_order, ignore and do not advance onboarding step.
-            pass
-
-        db.session.commit()
-
-        return jsonify({
-            'status': 'success',
-            'message': f'Step "{step_name}" completed.',
-            'next_step': onboarding_record.current_step,
-            'is_completed': onboarding_record.is_completed
-        })
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error processing onboarding step: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-@admin_bp.route('/onboarding/skip', methods=['POST'])
-@admin_required
-def onboarding_skip():
-    """Skip the onboarding process."""
-    admin_id = session.get('admin_id')
-
-    try:
-        onboarding_record = _get_or_create_onboarding(admin_id)
-        onboarding_record.skip_onboarding()
-        db.session.commit()
-
-        return jsonify({
-            'status': 'success',
-            'message': 'Onboarding skipped. You can always configure settings later.',
-            'redirect': url_for('admin.dashboard')
-        })
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error skipping onboarding: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-@admin_bp.route('/onboarding/complete', methods=['POST'])
-@admin_required
-def onboarding_complete():
-    """Complete the onboarding process."""
-    admin_id = session.get('admin_id')
-
-    try:
-        onboarding_record = _get_or_create_onboarding(admin_id)
-        onboarding_record.complete_onboarding()
-        db.session.commit()
-
-        flash('Welcome to Classroom Economy! Your setup is complete.', 'success')
-
-        return jsonify({
-            'status': 'success',
-            'message': 'Onboarding completed successfully!',
-            'redirect': url_for('admin.dashboard')
-        })
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error completing onboarding: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-@admin_bp.route('/onboarding/reset', methods=['POST'])
-@admin_required
-def onboarding_reset():
-    """Reset onboarding to start over (for testing or re-configuration)."""
-    admin_id = session.get('admin_id')
-
-    try:
-        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
-
-        if onboarding_record:
-            onboarding_record.is_completed = False
-            onboarding_record.is_skipped = False
-            onboarding_record.current_step = 1
-            onboarding_record.steps_completed = {}
-            onboarding_record.completed_at = None
-            onboarding_record.skipped_at = None
-            onboarding_record.last_activity_at = datetime.now(timezone.utc)
-            db.session.commit()
-
-        return jsonify({
-            'status': 'success',
-            'message': 'Onboarding reset. You can now go through setup again.',
-            'redirect': url_for('admin.onboarding')
-        })
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error resetting onboarding: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
 @admin_bp.route('/onboarding/status', methods=['GET'])
 @admin_required
 def onboarding_status():
@@ -7601,6 +7385,35 @@ def onboarding_dismiss_widget():
         db.session.rollback()
         current_app.logger.error(f"Error dismissing widget: {e}")
         return jsonify({'status': 'error', 'message': 'Failed to dismiss widget'}), 500
+
+
+@admin_bp.route('/onboarding/undismiss-widget', methods=['POST'])
+@admin_required
+def onboarding_undismiss_widget():
+    """Un-dismiss the Getting Started widget to show it again."""
+    admin_id = session.get('admin_id')
+
+    try:
+        # Get onboarding record
+        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
+        if not onboarding_record:
+            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
+            db.session.add(onboarding_record)
+
+        # Un-dismiss the widget by setting widget_dismissed_at to None
+        onboarding_record.widget_dismissed_at = None
+
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Getting Started widget will appear again'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error un-dismissing widget: {e}")
+        return jsonify({'status': 'error', 'message': 'Failed to show widget'}), 500
 
 
 # ==================== ECONOMY BALANCE CHECKER API ====================
