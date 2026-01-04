@@ -211,16 +211,28 @@ def view_doc(doc_path):
             """
             Resolve an untrusted documentation path to a safe file within docs_root.
             """
+            # Normalize the untrusted path as a relative path
             safe_rel_path = Path(untrusted_path)
 
-            # Reject absolute paths or traversal components early
+            # Reject absolute paths, traversal components, or attempts to escape the root
             if safe_rel_path.is_absolute() or any(part == ".." for part in safe_rel_path.parts):
                 current_app.logger.warning(f"Path traversal attempt: {untrusted_path}")
                 abort(404)
 
-            # Resolve absolute path under the documentation root and ensure containment
-            root_resolved = docs_root.resolve()
-            candidate = (root_resolved / safe_rel_path).with_suffix('.md').resolve()
+            # Ensure docs_root is absolute and normalized
+            try:
+                root_resolved = docs_root.resolve(strict=False)
+            except OSError as e:
+                current_app.logger.error(f"Invalid DOCS_ROOT '{docs_root}': {e}")
+                abort(500)
+
+            # Build candidate path under documentation root and ensure containment
+            try:
+                candidate = (root_resolved / safe_rel_path).with_suffix('.md').resolve(strict=False)
+            except OSError as e:
+                current_app.logger.warning(f"Error resolving documentation path '{untrusted_path}': {e}")
+                abort(404)
+
             try:
                 candidate.relative_to(root_resolved)
             except ValueError:
@@ -229,8 +241,14 @@ def view_doc(doc_path):
 
             return candidate
 
-        docs_root = DOCS_ROOT
-        doc_file = resolve_doc_path(doc_path, docs_root)
+        # Ensure we have a safe, absolute docs root
+        try:
+            docs_root = DOCS_ROOT
+        except NameError:
+            # Fallback: constrain to a 'docs' directory under the application root
+            docs_root = Path(current_app.root_path) / "docs"
+        doc_file = resolve_doc_path(doc_path, Path(docs_root))
+
 
         if not doc_file.exists():
             current_app.logger.info(f"Documentation not found: {doc_path}")
