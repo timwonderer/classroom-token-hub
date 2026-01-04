@@ -203,7 +203,7 @@ def _link_student_to_admin(student: Student, admin_id):
 
     if not student.block:
         current_app.logger.warning(
-            f"Student {student.id} has no block assigned, skipping TeacherBlock creation"
+            f"Selected student has no block assigned, skipping TeacherBlock creation"
         )
         return
 
@@ -255,15 +255,14 @@ def _link_student_to_admin(student: Student, admin_id):
         )
         db.session.add(new_teacher_block)
         current_app.logger.info(
-            f"Created TeacherBlock for student {student.id} with teacher {admin_id}, "
-            f"block {student.block}, join_code {join_code}"
+            f"Created TeacherBlock for teacher {admin_id}"
         )
     elif not existing_teacher_block.is_claimed:
         # TeacherBlock exists but not claimed - mark as claimed now
         existing_teacher_block.is_claimed = True
         existing_teacher_block.student_id = student.id
         current_app.logger.info(
-            f"Claimed existing TeacherBlock for student {student.id} with join_code {existing_teacher_block.join_code}"
+            f"Claimed existing TeacherBlock for student with join_code {existing_teacher_block.join_code}"
         )
 
 
@@ -499,7 +498,7 @@ def auto_tapout_all_over_limit():
                     tapped_out_count += 1
                     break  # Only need to run once per student
         except Exception as e:
-            current_app.logger.error(f"Error checking auto-tapout for student {student.id}: {e}")
+            current_app.logger.error(f"Error checking auto-tapout for student")
             continue
 
     return tapped_out_count
@@ -818,7 +817,7 @@ def backfill_transactions():
                     
                     current_app.logger.info(
                         f"Backfilled teacher_id={current_admin_id} and join_code={join_code} "
-                        f"for {len(transactions_to_update)} transactions for student {student.id}"
+                        f"for {len(transactions_to_update)} transactions for student"
                     )
             
             db.session.commit()
@@ -935,13 +934,13 @@ def signup():
             flash(msg, "error")
             return redirect(url_for('admin.signup'))
         # Step 1: Validate invite code
-        current_app.logger.info(f"Validating invite code: {repr(invite_code)}")
+        current_app.logger.info(f"Validating invite code")
         code_row = db.session.execute(
             text("SELECT * FROM admin_invite_codes WHERE TRIM(code) = :code"),
             {"code": invite_code}
         ).fetchone()
         if not code_row:
-            current_app.logger.warning(f"Admin signup failed: invalid invite code {repr(invite_code)}")
+            current_app.logger.warning(f"Admin signup failed: invalid invite code")
             msg = "Invalid invite code."
             if is_json:
                 return jsonify(status="error", message=msg), 400
@@ -1016,7 +1015,7 @@ def signup():
         is_valid = totp.verify(totp_code)
         current_app.logger.info(f"TOTP verification result: {is_valid}")
         if not is_valid:
-            current_app.logger.warning(f"TOTP verification failed for user: {username}")
+            current_app.logger.warning(f"TOTP verification failed for user")
             msg = "Invalid TOTP code. Please try again."
             if is_json:
                 return jsonify(status="error", message=msg), 400
@@ -1040,7 +1039,7 @@ def signup():
                 totp_secret=totp_secret
             )
         # Step 6: Create admin account and mark invite as used
-        current_app.logger.info(f"TOTP verified. Creating admin account for: {username}")
+        current_app.logger.info(f"TOTP verified. Creating admin account")
         # Hash DOB sum
         salt = get_random_salt()
         dob_sum_str = str(dob_sum).encode()
@@ -1055,7 +1054,7 @@ def signup():
             {"code": invite_code}
         )
         db.session.commit()
-        current_app.logger.info(f"Admin account created successfully: {username}")
+        current_app.logger.info(f"Admin account created successfully")
         # Clear session
         session.pop("admin_totp_secret", None)
         session.pop("admin_totp_username", None)
@@ -2333,7 +2332,7 @@ def edit_student():
         flash(message, "success")
     except Exception as e:
         db.session.rollback()
-        flash(f"Error updating student: {str(e)}", "error")
+        flash(f"Error updating student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
 
@@ -2390,7 +2389,7 @@ def delete_student():
         flash(f"Successfully deleted {student_name} and all associated data.", "success")
     except Exception as e:
         db.session.rollback()
-        flash(f"Error deleting student: {str(e)}", "error")
+        flash(f"Cannot delete student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
 
@@ -2849,7 +2848,7 @@ def add_individual_student():
         flash(f"Successfully added {first_name} {last_initial}. to block {block}.", "success")
     except Exception as e:
         db.session.rollback()
-        flash(f"Error adding student: {str(e)}", "error")
+        flash(f"Cannot add student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
 
@@ -3020,7 +3019,7 @@ def add_manual_student():
         flash(f"Successfully created {first_name} {last_initial}. in block {block} (manual mode).", "success")
     except Exception as e:
         db.session.rollback()
-        flash(f"Error creating student: {str(e)}", "error")
+        flash(f"Cannot create student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
 
@@ -3972,7 +3971,7 @@ def delete_insurance_policy(policy_id):
         flash(f"Successfully deleted policy '{policy.title}' ({enrollments_deleted} enrollments and {claims_deleted} claims removed).", "success")
     except Exception as e:
         db.session.rollback()
-        flash(f"Error deleting policy: {str(e)}", "danger")
+        flash(f"Cannot delete insurance policy due to internal error", "danger")
 
     return redirect(url_for('admin.insurance_management'))
 
@@ -5112,7 +5111,7 @@ def payroll_settings():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error saving payroll settings: {e}")
-        flash(f'Error saving payroll settings: {str(e)}', 'error')
+        flash(f'Error saving payroll settings', 'error')
 
     return redirect(url_for('admin.payroll'))
 
@@ -5183,7 +5182,7 @@ def update_expected_weekly_hours():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error updating expected weekly hours: {e}")
-        flash(f'Error updating expected weekly hours: {str(e)}', 'error')
+        flash(f'Error updating expected weekly hours', 'error')
 
     # Redirect back with cwi_block parameter to maintain the selected class
     next_url = request.form.get('next')
@@ -5882,8 +5881,13 @@ def enforce_daily_limits():
                             tapped_out.append(f"{student.full_name} (Period {period_upper})")
                     break  # Only check once per student
         except Exception as e:
-            errors.append(f"{student.full_name}: {str(e)}")
-            current_app.logger.error(f"Error enforcing limits for student {student.id}: {e}", exc_info=True)
+            errors.append(
+                f"Error when executing auto-timeout for {student.full_name} (ID {student.id}, Period {period_upper}): {e}"
+            )
+            current_app.logger.error(
+                f"Error enforcing limits for student {student.id} ({student.full_name}) in period {period_upper}",
+                exc_info=True,
+            )
             continue
 
     message = f"Checked {checked} active students. Auto-tapped out {len(tapped_out)} student(s)."
@@ -6040,7 +6044,7 @@ def tap_out_students():
         current_app.logger.error(f"Admin tap-out failed: {e}", exc_info=True)
         return jsonify({
             "status": "error",
-            "message": f"Failed to tap out students: {str(e)}"
+            "message": "Failed to tap out students due to an internal error."
         }), 500
 
 
@@ -6645,7 +6649,7 @@ def help_support():
             return redirect(url_for('admin.help_support'))
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error submitting report: {str(e)}")
+            current_app.logger.error(f"Error submitting report")
             flash("An error occurred while submitting your report. Please try again.", "error")
             return redirect(url_for('admin.help_support'))
 
@@ -8074,7 +8078,7 @@ def resolve_issue(issue_id):
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error resolving issue: {str(e)}")
+        current_app.logger.error(f"Error resolving issue")
         flash("An error occurred while resolving the issue. Please try again.", "error")
         return redirect(url_for('admin.view_issue', issue_id=issue_id))
 
@@ -8121,6 +8125,6 @@ def escalate_issue(issue_id):
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error escalating issue: {str(e)}")
+        current_app.logger.error(f"Error escalating issue")
         flash("An error occurred while escalating the issue. Please try again.", "error")
         return redirect(url_for('admin.view_issue', issue_id=issue_id))
