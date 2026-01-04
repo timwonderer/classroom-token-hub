@@ -194,7 +194,6 @@ and this project follows semantic versioning principles.
     - Added guidance for manual payroll scheduling and consistency
     - Clarified that break time IS paid (system does not exclude breaks from hours worked)
     - Added Q&A explaining how to handle unpaid breaks if desired
-    - Removed non-existent "Work & Pay" page reference
     - Updated all automatic payroll references to reflect manual-only operation
   - **Banking (docs/features/banking/transferring-money.md)**:
     - Removed non-existent transfer limits documentation (daily limits, min/max transfer amounts)

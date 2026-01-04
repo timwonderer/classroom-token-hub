@@ -246,7 +246,7 @@ A: Not per-student, but you can set different rates per block/period if students
 A: Future payroll runs use the new rate. Past payments are not affected.
 
 **Q: Can students see their hours before payroll runs?**
-A: Students can see their attendance history on their dashboard. Projected earnings are calculated during the payroll preview before you run payroll.
+A: Yes! Students can view their attendance history and projected earnings on the **Work & Pay** page.
 
 ## Related Articles
 
