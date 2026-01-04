@@ -832,16 +832,27 @@ body.maintenance-active .main-content {
         padding: 1rem !important;
     }
 
-    /* Ensure page header doesn't overflow */
+    /* Ensure page header doesn't overflow and doesn't overlap with hamburger menu */
     .page-header {
         flex-direction: column;
         align-items: flex-start;
+        padding-left: 64px; /* Make room for hamburger button */
+    }
+
+    .page-header h1 {
+        font-size: 1.5rem; /* Slightly smaller on mobile */
+    }
+
+    .page-header .eyebrow {
+        font-size: 0.7rem;
     }
 
     .page-header-actions {
         width: 100%;
         justify-content: flex-start;
         margin-top: 0.5rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
     }
 
     /* Ensure tables scroll horizontally within their container */
@@ -855,18 +866,25 @@ body.maintenance-active .main-content {
         padding-bottom: 70px;
     }
 
-    /* Show help button icon on mobile */
-    .page-header-actions .btn[href*="help"] {
-        display: inline-flex !important;
+    /* Make all buttons in page-header-actions icon-only on mobile */
+    .page-header-actions .btn {
         padding: 0.5rem;
-        width: 40px;
+        min-width: 40px;
         height: 40px;
+        display: inline-flex !important;
         align-items: center;
         justify-content: center;
     }
 
-    .page-header-actions .btn[href*="help"] span:not(.material-symbols-outlined) {
-        display: none;
+    /* Hide text in buttons, show only icons */
+    .page-header-actions .btn span:not(.material-symbols-outlined),
+    .page-header-actions .btn:not(:has(.material-symbols-outlined)) {
+        font-size: 0;
+    }
+
+    .page-header-actions .btn .material-symbols-outlined {
+        font-size: 24px;
+        margin: 0;
     }
 
     /* Show contextual help link icon on mobile */

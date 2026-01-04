@@ -4,11 +4,11 @@
 {% block title %}Store Management{% endblock %}
 {% block page_icon %}storefront{% endblock %}
 {% block page_header_actions %}
-  <button class="btn btn-primary d-none d-md-inline-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#storeGuide" aria-controls="storeGuide">
-    <span class="material-symbols-outlined">quick_reference_all</span> Quick Tips
+  <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#storeGuide" aria-controls="storeGuide">
+    <span class="material-symbols-outlined">quick_reference_all</span> <span>Quick Tips</span>
   </button>
-  <a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-store') }}" class="btn btn-outline-primary d-none d-md-inline-flex align-items-center gap-2" target="_blank" rel="noopener">
-    <span class="material-symbols-outlined">menu_book</span> Full Guide
+  <a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-store') }}" class="btn btn-outline-primary d-flex align-items-center gap-2" target="_blank" rel="noopener">
+    <span class="material-symbols-outlined">menu_book</span> <span>Full Guide</span>
   </a>
 {% endblock %}
 

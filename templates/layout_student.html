@@ -171,19 +171,14 @@
                     {% endif %}
                 </div>
                 <div class="page-header-actions">
-                    <button class="btn btn-primary d-none d-md-inline-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#addClassModal">
-                        <span class="material-symbols-outlined" aria-hidden="true">group_add</span> Add Class
-                    </button>
-                    <button class="btn btn-primary btn-icon d-inline-flex d-md-none align-items-center justify-content-center" data-bs-toggle="modal" data-bs-target="#addClassModal" title="Add Class" aria-label="Add Class">
-                        <span class="material-symbols-outlined" aria-hidden="true">group_add</span>
+                    <button class="btn btn-primary d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#addClassModal">
+                        <span class="material-symbols-outlined" aria-hidden="true">group_add</span> <span>Add Class</span>
                     </button>
                     {% if help_doc_path %}
-                    <span class="d-none d-md-inline-flex">
                         {{ help.help_link(help_doc_path, text="Guide", tooltip="View guide") }}
-                    </span>
                     {% endif %}
-                    <a href="{{ url_for('student.help_support') }}" class="btn btn-white d-none d-md-inline-flex align-items-center gap-2">
-                        <span class="material-symbols-outlined" aria-hidden="true">help</span> Help
+                    <a href="{{ url_for('student.help_support') }}" class="btn btn-white d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined" aria-hidden="true">help</span> <span>Help</span>
                     </a>
                 </div>
             </div>

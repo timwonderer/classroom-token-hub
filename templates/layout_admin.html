@@ -276,13 +276,11 @@
             </div>
             <div class="page-header-actions">
                 {% if help_doc_path %}
-                    <span class="d-none d-md-inline-flex">
-                        {{ help.help_link(help_doc_path, text="Guide", tooltip="View guide") }}
-                    </span>
+                    {{ help.help_link(help_doc_path, text="Guide", tooltip="View guide") }}
                 {% endif %}
                 {% block page_header_actions %}
-                    <a href="{{ url_for('admin.help_support') }}" class="btn btn-white d-none d-md-inline-flex align-items-center gap-2">
-                        <span class="material-symbols-outlined">help</span> Help
+                    <a href="{{ url_for('admin.help_support') }}" class="btn btn-white d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined">help</span> <span>Help</span>
                     </a>
                 {% endblock %}
             </div>
