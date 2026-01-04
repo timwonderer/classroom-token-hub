@@ -877,8 +877,7 @@ body.maintenance-active .main-content {
     }
 
     /* Hide text in buttons, show only icons */
-    .page-header-actions .btn span:not(.material-symbols-outlined),
-    .page-header-actions .btn:not(:has(.material-symbols-outlined)) {
+    .page-header-actions .btn span:not(.material-symbols-outlined) {
         font-size: 0;
     }
 
