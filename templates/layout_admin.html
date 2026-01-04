@@ -100,7 +100,7 @@
             {% set classroom_open = current_page in ['students', 'attendance', 'hall_pass', 'announcements', 'issues'] %}
             {% set economy_open = current_page in ['economy_health', 'payroll', 'store', 'banking'] %}
             {% set bills_open = current_page in ['rent', 'insurance'] %}
-            {% set settings_open = current_page in ['settings', 'passkey_settings', 'feature_settings', 'deletion_requests', 'help'] %}
+            {% set settings_open = current_page in ['settings', 'passkey_settings', 'feature_settings', 'deletion_requests'] %}
 
             <!-- Dropdown Navigation -->
             <div class="d-flex flex-column gap-2 mt-2">
@@ -194,9 +194,6 @@
                         <a href="{{ url_for('admin.deletion_requests') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'deletion_requests' %}active{% endif %}">
                             <span class="material-symbols-outlined">person_cancel</span> Account Deletion Requests
                         </a>
-                        <a href="{{ url_for('admin.help_support') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'help' %}active{% endif %}">
-                            <span class="material-symbols-outlined">help</span> Help &amp; Support
-                        </a>
                     </div>
                 </div>
 
@@ -275,13 +272,10 @@
                 <div class="meta" id="current-time"></div>
             </div>
             <div class="page-header-actions">
-                {% if help_doc_path %}
-                    {{ help.help_link(help_doc_path, text="Guide", tooltip="View guide") }}
-                {% endif %}
                 {% block page_header_actions %}
-                    <a href="{{ url_for('admin.help_support') }}" class="btn btn-white d-flex align-items-center gap-2">
-                        <span class="material-symbols-outlined">help</span> <span>Help</span>
-                    </a>
+                    {% if help_doc_path %}
+                        {{ help.help_link(help_doc_path, text="Guide", tooltip="View guide") }}
+                    {% endif %}
                 {% endblock %}
             </div>
         </div>

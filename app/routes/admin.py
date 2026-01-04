@@ -6604,6 +6604,7 @@ def deletion_requests():
 @admin_required
 def help_support():
     """Admin Help & Support page with bug reporting and documentation."""
+    return redirect(url_for('docs.view_doc', doc_path='diagnostics/teacher'))
     admin_id = session.get('admin_id')
 
     if request.method == 'POST':

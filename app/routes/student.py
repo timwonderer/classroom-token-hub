@@ -3028,6 +3028,7 @@ def help_support():
     Help and Support page with issue resolution system.
     Shows knowledge base and student's submitted issues.
     """
+    return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
     from app.models import Issue
     from app.utils.issue_categories import init_default_categories
 
@@ -3059,6 +3060,7 @@ def help_support():
 @login_required
 def submit_general_issue():
     """Submit a general (non-transaction) issue."""
+    return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
     from app.models import TeacherBlock
     from app.utils.issue_categories import get_active_categories
     from app.utils.issue_helpers import create_issue
@@ -3106,6 +3108,7 @@ def submit_general_issue():
 @login_required
 def report_transaction_issue(transaction_id):
     """Report an issue with a specific transaction."""
+    return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
     from app.utils.issue_categories import get_active_categories
     from app.utils.issue_helpers import create_issue
     from forms import TransactionIssueSubmissionForm
