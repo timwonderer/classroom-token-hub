@@ -258,7 +258,7 @@ cp classroom_economy_backup_20251204.db classroom_economy.db
 ### Migration Errors
 - Check migration status: `flask db current`
 - Check for migration conflicts: `flask db heads`
-- If stuck, see migration troubleshooting in `/docs/DEPLOYMENT.md`
+- If stuck, see migration troubleshooting in `/docs/Deployment_Guide.md`
 
 ### Permission Errors
 - Ensure setup script is executable: `chmod +x scripts/setup_jules.sh`
@@ -290,7 +290,7 @@ After setup:
 ## Additional Resources
 
 - **Main README:** `/README.md` - Project overview
-- **Deployment Guide:** `/docs/DEPLOYMENT.md` - Production deployment
+- **Deployment Guide:** `/docs/Deployment_Guide.md` - Production deployment
 - **Technical Reference:** `/docs/technical-reference/` - Architecture details
 - **User Guides:** `/docs/user-guides/` - Student and teacher guides
 

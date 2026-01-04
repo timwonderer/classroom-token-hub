@@ -1,3 +1,9 @@
+---
+title: Architecture Guide
+category: technical-reference
+roles: [developer]
+---
+
 # Classroom Token Hub - Architecture Guide
 
 **Last Updated:** 2025-11-23
@@ -34,7 +40,7 @@ Before starting any work, familiarize yourself with these files:
 2. **docs/development/TODO.md** - Comprehensive task list with priorities and effort estimates
 3. **docs/technical-reference/database_schema.md** - Complete database structure and model documentation
 4. **docs/technical-reference/api_reference.md** - All API endpoints and their specifications
-5. **docs/user-guides/teacher_manual.md** - How teachers use the system (understand the user perspective)
+5. **docs/diagnostics/teacher.md** - Diagnostic guides for teacher workflows (user perspective)
 6. **docs/development/MULTI_TENANCY_TODO.md** - Important upcoming feature (multi-teacher support)
 
 ---
@@ -156,7 +162,7 @@ classroom-economy/
 │
 └── docs/                     # Documentation
     ├── README.md             # Master documentation index
-    ├── DEPLOYMENT.md         # Deployment guide
+    ├── Deployment_Guide.md   # Deployment guide
     ├── user-guides/
     ├── technical-reference/
     └── development/

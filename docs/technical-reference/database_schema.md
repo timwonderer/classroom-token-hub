@@ -1,8 +1,12 @@
+---
+title: Database Schema Documentation
+category: technical-reference
+roles: [developer]
+---
+
 # Database Schema Documentation
 
 This document summarizes the database schema for Classroom Token Hub based on `app/models.py`. All timestamps are stored in UTC.
-
----
 
 ## Core Models
 

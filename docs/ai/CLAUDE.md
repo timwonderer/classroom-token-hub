@@ -160,7 +160,7 @@ pytest tests/
 1. **../CHANGELOG.md** - All changes, following Keep a Changelog format
 2. **../development/DEVELOPMENT.md** - Add to roadmap or mark as completed
 3. **README.md** - Update if it affects installation/quick start
-4. **User guides** in `docs/user-guides/` - If user-facing
+4. **Diagnostics** in `docs/diagnostics/` - If user-facing
 5. **Technical reference** in `docs/technical-reference/` - For architecture changes
 
 ### Documentation Organization
@@ -168,15 +168,17 @@ pytest tests/
 ```
 docs/
 ├── README.md                  # Documentation index
-├── user-guides/              # For teachers and students
-│   ├── teacher_manual.md
-│   └── student_guide.md
+├── diagnostics/              # Diagnostic guides for teachers and students
+│   ├── teacher.md
+│   └── student.md
+├── user-guides/              # Design and reference guides for users
+│   └── economy_guide.md
 ├── technical-reference/      # Architecture, database, API
 │   ├── architecture.md
 │   ├── database_schema.md
 │   └── ECONOMY_SPECIFICATION.md
 ├── operations/               # Deployment, maintenance
-│   ├── DEPLOYMENT.md
+│   ├── Deployment_Guide.md
 │   └── MULTI_TENANCY_FIX_DEPLOYMENT.md
 ├── security/                 # Security audits
 │   ├── CRITICAL_SAME_TEACHER_LEAK.md
@@ -419,7 +421,7 @@ When uncertain about:
 - **Architecture decisions** → Review `docs/technical-reference/architecture.md`
 - **Database design** → Review `docs/technical-reference/database_schema.md`
 - **Multi-tenancy** → Review `docs/security/MULTI_TENANCY_AUDIT.md`
-- **Deployment** → Review `docs/operations/DEPLOYMENT.md`
+- **Deployment** -> Review `docs/Deployment_Guide.md`
 
 Always prefer reading existing code and documentation before making assumptions.
 

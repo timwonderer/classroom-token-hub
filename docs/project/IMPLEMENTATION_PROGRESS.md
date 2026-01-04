@@ -150,8 +150,8 @@ Implemented 4 routes:
 ### 13. Documentation ⏳
 **Files to Update**:
 - `../CHANGELOG.md` - Document new issue resolution system
-- `docs/user-guides/teacher_manual.md` - Add issue review section
-- `docs/user-guides/student_guide.md` - Update help & support section
+- `docs/diagnostics/teacher-announcements-issues.md` - Add issue review diagnostics
+- `docs/diagnostics/student-support.md` - Update help & support diagnostics
 - `docs/technical-reference/architecture.md` - Document issue resolution flow
 - `docs/security/` - Document data minimization approach
 

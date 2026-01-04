@@ -5,7 +5,7 @@ roles: [teacher]
 related:
   - features/payroll/settings
   - features/payroll/rewards-and-fines
-  - user-guides/teacher_manual#payroll-and-financials
+  - diagnostics/teacher-attendance-payroll
 ---
 
 # Running Payroll
@@ -264,6 +264,6 @@ A: Yes! They can view projected earnings on their **Work & Pay** page.
 
 ## Need Help?
 
-- Full [Teacher Manual](/docs/user-guides/teacher_manual)
+- Full [Teacher Diagnostics Index](/docs/diagnostics/teacher)
 - Check [Economy Health](/docs/features/payroll/economy-health) for balance guidance
 - Contact support for technical issues

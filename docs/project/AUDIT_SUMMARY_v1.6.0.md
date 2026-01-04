@@ -191,7 +191,7 @@ Comprehensive audit of the classroom-economy repository completed in preparation
 ├── docs/
 │   ├── README.md (documentation index)
 │   ├── CHANGELOG.md (copy for docs site)
-│   ├── DEPLOYMENT.md
+│   ├── Deployment_Guide.md
 │   ├── archive/
 │   │   ├── releases/ (all release notes)
 │   │   │   └── RELEASE_NOTES_v1.6.0.md (new)

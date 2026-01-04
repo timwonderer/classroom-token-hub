@@ -1,3 +1,9 @@
+---
+title: Deployment Guide
+category: operations
+roles: [developer, teacher]
+---
+
 # Deployment Guide
 
 This guide provides instructions for deploying the Classroom Token Hub application.

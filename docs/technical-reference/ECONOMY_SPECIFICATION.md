@@ -1,6 +1,16 @@
-# Classroom Economy Monetary System — Agent Specification
+---
+title: Economy Specification (Developer)
+description: Developer-only ratios and constraints used by automated tools and balancing logic.
+roles: [developer]
+---
 
-This document defines the **formulas, constraints, ratios, and rules** agents must follow when generating or modifying monetary values in the Classroom Economy App.
+# Economy Specification (Developer)
+
+This document defines the **formulas, constraints, ratios, and rules** used by automated tools when generating or modifying monetary values in the Classroom Economy App.
+
+Teachers should use the [Classroom Economy Guide](../user-guides/economy_guide) for a human-friendly version of these ranges.
+
+In this document, "agents" refers to automated tools and internal workflows.
 
 This specification ensures consistent, predictable behavior across tools such as:
 

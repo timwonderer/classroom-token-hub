@@ -5,7 +5,7 @@ roles: [teacher]
 related:
   - features/store/managing-inventory
   - features/store/redemptions
-  - user-guides/teacher_manual#store-and-rewards
+  - diagnostics/teacher-store
 ---
 
 # Creating Store Items
@@ -240,10 +240,10 @@ Example: "Pizza Party" - class collectively raises $5000
 - [Managing Store Inventory](/docs/features/store/managing-inventory)
 - [Processing Redemptions](/docs/features/store/redemptions)
 - [Economy Health & Pricing](/docs/features/payroll/economy-health)
-- [Teacher Manual: Store](/docs/user-guides/teacher_manual#store-and-rewards)
+- [Teacher Diagnostics: Store](/docs/diagnostics/teacher-store)
 
 ## Need More Help?
 
-- View the complete [Teacher Manual](/docs/user-guides/teacher_manual)
+- View the [Teacher Diagnostics Index](/docs/diagnostics/teacher)
 - Check [Economy Health](/docs/features/payroll/economy-health) for pricing guidance
 - Contact support if items aren't working as expected

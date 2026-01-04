@@ -484,8 +484,8 @@ When ready to finalize multi-teacher model:
 ## Documentation Structure
 
 ### User Documentation
-- **[Student Guide](docs/user-guides/student_guide.md)** - How students use the platform
-- **[Teacher Manual](docs/user-guides/teacher_manual.md)** - Comprehensive admin guide
+- **[Student Diagnostics](docs/diagnostics/student.md)** - Student-facing diagnostic guides
+- **[Teacher Diagnostics](docs/diagnostics/teacher.md)** - Teacher-facing diagnostic guides
 
 ### Technical Reference
 - **[Architecture](docs/technical-reference/architecture.md)** - System design and patterns
@@ -503,7 +503,7 @@ When ready to finalize multi-teacher model:
 - **[System Admin Design](docs/development/SYSADMIN_INTERFACE_DESIGN.md)** - Admin interface patterns
 
 ### Operations & Deployment
-- **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment
+- **[Deployment Guide](docs/Deployment_Guide.md)** - Production deployment
 - **[Operations Guides](docs/operations/)** - Maintenance procedures
 - **[Security Audits](docs/security/)** - Security assessment reports
 

@@ -1,3 +1,9 @@
+---
+title: API Reference
+category: technical-reference
+roles: [developer]
+---
+
 # API Reference
 
 This document provides a reference for all the API endpoints available in the Classroom Token Hub application.

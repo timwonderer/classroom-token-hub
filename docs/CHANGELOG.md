@@ -1,3 +1,8 @@
+---
+title: Changelog
+roles: [teacher, developer]
+---
+
 # Changelog
 
 All notable changes to the Classroom Token Hub project will be documented in this file.
@@ -7,6 +12,10 @@ and this project follows semantic versioning principles.
 
 
 ## [Unreleased]
+
+### Fixed
+- **Documentation Table of Contents** - Added YAML front matter to all main documentation files to fix table of contents display showing directory paths instead of proper titles
+  - Updated: Student Guide, Teacher Manual, Architecture Guide, API Reference, Database Schema, Changelog, Deployment Guide
 
 ### Added
 - **Attendance Issue Reporting** - Students can now report issues with specific attendance/tap events (clock in/out records) directly from the Work & Pay page
@@ -506,7 +515,7 @@ The project is ready for version 1.0 release. All critical blockers have been re
 - System admin and token-based maintenance bypass with session persistence (`maintenance_global_bypass`)
 - System admin login access during maintenance (`/sysadmin/login`) and login link on `maintenance.html`
 - Badge icon/text server-side mapping and status description rendering fallback when JS disabled
-- Documentation for maintenance variables and operational workflow (see `docs/DEPLOYMENT.md`)
+- Documentation for maintenance variables and operational workflow (see `docs/Deployment_Guide.md`)
 
 ### Changed
 - `deploy_updates.sh` now detects existing maintenance state instead of resetting it

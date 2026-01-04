@@ -9,7 +9,7 @@ This guide describes how to stand up the read-only style demo endpoints that pow
 - Schema: `demo_students` table (see `docs/technical-reference/database_schema.md`)
 
 ## Prerequisites
-- A separate deployment for the demo (do **not** point at production data). Follow `docs/DEPLOYMENT.md` for the base setup.
+- A separate deployment for the demo (do **not** point at production data). Follow `docs/Deployment_Guide.md` for the base setup.
 - Environment configured with production-like settings plus Turnstile keys (or leave unset to bypass during testing).
 - APScheduler running so `cleanup_expired_demo_sessions_job` executes every 5 minutes (see `app/scheduled_tasks.py`).
 
