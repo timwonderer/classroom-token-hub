@@ -875,10 +875,23 @@ body.maintenance-active .main-content {
         align-items: center;
         justify-content: center;
     }
-
-    /* Hide text in buttons, show only icons */
+    /* Hide text in buttons in an accessible way, show only icons */
     .page-header-actions .btn span:not(.material-symbols-outlined) {
-        font-size: 0;
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    /* For buttons without icons, hide the text visually but keep layout */
+    .page-header-actions .btn:not(:has(.material-symbols-outlined)) {
+        color: transparent;
+        text-shadow: none;
     }
 
     .page-header-actions .btn .material-symbols-outlined {
