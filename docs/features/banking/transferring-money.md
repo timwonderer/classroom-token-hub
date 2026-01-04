@@ -4,7 +4,6 @@ category: banking
 roles: [student]
 related:
   - diagnostics/student-money
-  - features/banking/understanding-savings
 ---
 
 # Transferring Money Between Accounts
@@ -287,12 +286,11 @@ To earn the most interest:
 
 ## Related Articles
 
-- [Understanding Savings Interest](/docs/features/banking/understanding-savings)
-- [Student Diagnostics: Balances and Transfers](/docs/diagnostics/student-money)
-- [Planning for Big Purchases](/docs/features/store/student-buying)
+- [Student Diagnostics: Balances and Transfers](../../diagnostics/student-money.md)
+- [Student Store Diagnostics](../../diagnostics/student-store.md)
 
 ## Need Help?
 
-- Full [Student Diagnostics Index](/docs/diagnostics/student)
+- Full [Student Diagnostics Index](../../diagnostics/student.md)
 - Ask your teacher if you have questions about interest rates
 - Report issues if transfers aren't working

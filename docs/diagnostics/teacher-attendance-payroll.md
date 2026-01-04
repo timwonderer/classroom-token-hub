@@ -1,5 +1,5 @@
 ---
-title: Teacher Attendance and Payroll Diagnostics
+title: Teacher Attendance and Payroll
 category: diagnostics
 roles: [teacher]
 related:
@@ -7,7 +7,7 @@ related:
   - diagnostics/teacher-transactions-banking
 ---
 
-# Attendance and Payroll (Diagnostics)
+# Attendance and Payroll
 
 ## If payroll does not run or looks wrong, check these first
 - Payroll is enabled in Feature Settings for the class period.

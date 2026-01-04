@@ -1,5 +1,5 @@
 ---
-title: Student Rent and Insurance Diagnostics
+title: Student Rent and Insurance
 category: diagnostics
 roles: [student]
 related:
@@ -7,7 +7,7 @@ related:
   - diagnostics/student-money
 ---
 
-# Rent and Insurance (Diagnostics)
+# Rent and Insurance
 
 ## If rent is missing or cannot be paid, check these first
 - Rent is enabled for your class period.

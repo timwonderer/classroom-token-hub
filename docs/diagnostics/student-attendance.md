@@ -1,5 +1,5 @@
 ---
-title: Student Attendance and Payroll Diagnostics
+title: Student Attendance and Payroll
 category: diagnostics
 roles: [student]
 related:
@@ -7,7 +7,7 @@ related:
   - diagnostics/student-support
 ---
 
-# Attendance and Payroll (Diagnostics)
+# Attendance and Payroll
 
 ## If your work time looks missing or wrong, check these first
 - You tapped Start Work, Break, and Done in the correct class session.

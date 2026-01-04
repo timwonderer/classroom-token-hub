@@ -6,10 +6,10 @@ roles: [student]
 
 # Student Guide (Quick Index)
 
-This page is now a shortcut list. Each link is a short diagnostic checklist to answer: "Is this a bug, or a rule?"
+Here are some issues that students typically encounters.
 
 ## Start here
-- [Student Diagnostics Index](/docs/diagnostics/student)
+- [Student Help and Support Guides](/docs/diagnostics/student)
 
 ## Common questions
 - [I cannot log in or finish setup](/docs/diagnostics/student-login)

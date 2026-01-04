@@ -1,5 +1,5 @@
 ---
-title: Teacher Students and Join Codes Diagnostics
+title: Teacher Students and Join Codes
 category: diagnostics
 roles: [teacher]
 related:
@@ -7,7 +7,7 @@ related:
   - diagnostics/teacher-attendance-payroll
 ---
 
-# Students and Join Codes (Diagnostics)
+# Students and Join Codes
 
 ## If a student cannot claim an account, check these first
 - The join code matches the correct class period.

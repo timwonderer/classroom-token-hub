@@ -1,5 +1,5 @@
 ---
-title: Student Balances, Transfers, and Interest Diagnostics
+title: Student Balances, Transfers, and Interest
 category: diagnostics
 roles: [student]
 related:
@@ -7,7 +7,7 @@ related:
   - diagnostics/student-store
 ---
 
-# Balances, Transfers, and Interest (Diagnostics)
+# Balances, Transfers, and Interest
 
 ## If your balance looks wrong, check these first
 - You are viewing the correct class (balances are per join code).

@@ -1,5 +1,5 @@
 ---
-title: Teacher Onboarding and Feature Settings Diagnostics
+title: Teacher Onboarding and Feature Settings
 category: diagnostics
 roles: [teacher]
 related:
@@ -7,7 +7,7 @@ related:
   - diagnostics/teacher-attendance-payroll
 ---
 
-# Onboarding and Feature Settings (Diagnostics)
+# Onboarding and Feature Settings
 
 ## If a feature is missing for students, check these first
 - Feature Settings can disable features per class period.
@@ -16,7 +16,7 @@ related:
 
 ## If the onboarding widget is gone
 - It disappears after completion or dismissal.
-- You can reset onboarding from the admin onboarding controls.
+- You can reset it from **Account Personalization** (Settings menu → "Reset Setup Wizard" button).
 
 ## This is expected when...
 - Newly created classes start with default feature settings enabled.

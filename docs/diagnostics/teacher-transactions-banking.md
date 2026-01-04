@@ -1,5 +1,5 @@
 ---
-title: Teacher Transactions and Banking Diagnostics
+title: Teacher Transactions and Banking
 category: diagnostics
 roles: [teacher]
 related:
@@ -7,7 +7,7 @@ related:
   - diagnostics/teacher-store
 ---
 
-# Transactions and Banking (Diagnostics)
+# Transactions and Banking
 
 ## If balances look wrong, check these first
 - Confirm the student is on the correct join code/class period.

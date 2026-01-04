@@ -46,7 +46,7 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 - **[Deployment Guide](Deployment_Guide.md)** - Environment variables, CI/CD references, and production checklist.
 - **[Operations Guides](operations/)** - Cleanup, demo session hygiene, and PII audit procedures.
 - **[Multi-Tenancy Fix Deployment](operations/MULTI_TENANCY_FIX_DEPLOYMENT.md)** - Deployment procedures for multi-tenancy fixes.
-- **[Changelog](CHANGELOG.md)** - Notable changes and release notes.
+- **[Changelog](../CHANGELOG.md)** - Notable changes and release notes.
 
 ### Security
 - **[Security Audit 2025](security/SECURITY_AUDIT_2025.md)** - Comprehensive security audit findings.
@@ -99,7 +99,7 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 | [Classroom Economy Guide](user-guides/economy_guide.md) | Teachers | Economy ranges and balance checks | 2025-12-28 |
 | [Deployment Guide](Deployment_Guide.md) | DevOps | Deployment instructions | 2025-11-25 |
 | [Economy Specification](technical-reference/ECONOMY_SPECIFICATION.md) | Developers | Financial system spec | 2025-12-11 |
-| [Changelog](CHANGELOG.md) | All | Version history and changes | 2025-12-27 |
+| [Changelog](../CHANGELOG.md) | All | Version history and changes | 2025-12-27 |
 | [README](../README.md) | All | Project overview and quick start | 2025-12-21 |
 
 ---

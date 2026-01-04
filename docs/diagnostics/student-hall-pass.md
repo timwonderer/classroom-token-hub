@@ -1,5 +1,5 @@
 ---
-title: Student Hall Pass Diagnostics
+title: Student Hall Pass
 category: diagnostics
 roles: [student]
 related:
@@ -7,8 +7,7 @@ related:
   - diagnostics/student-attendance
 ---
 
-# Hall Passes (Diagnostics)
-
+# Hall Passes
 ## If your request is denied or disappears, check these first
 - Hall pass is enabled for your class period.
 - You have hall passes available (some teachers require passes for approval).

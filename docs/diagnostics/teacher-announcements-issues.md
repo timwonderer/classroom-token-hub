@@ -1,5 +1,5 @@
 ---
-title: Teacher Announcements and Issues Diagnostics
+title: Teacher Announcements and Issues
 category: diagnostics
 roles: [teacher]
 related:
@@ -7,7 +7,7 @@ related:
   - diagnostics/teacher-students
 ---
 
-# Announcements and Issues (Diagnostics)
+# Announcements and Issues
 
 ## If students do not see an announcement, check these first
 - The announcement is active and not expired.

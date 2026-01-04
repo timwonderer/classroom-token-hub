@@ -1,5 +1,5 @@
 ---
-title: Student Classes and Join Codes Diagnostics
+title: Student Classes and Join Codes
 category: diagnostics
 roles: [student]
 related:
@@ -7,7 +7,7 @@ related:
   - diagnostics/student-money
 ---
 
-# Classes and Join Codes (Diagnostics)
+# Classes and Join Codes
 
 ## If you cannot join a class, check these first
 - Join codes are required and come from your teacher, one per class period.

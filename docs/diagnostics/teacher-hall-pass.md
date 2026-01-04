@@ -1,5 +1,5 @@
 ---
-title: Teacher Hall Pass Diagnostics
+title: Teacher Hall Pass
 category: diagnostics
 roles: [teacher]
 related:
@@ -7,7 +7,7 @@ related:
   - diagnostics/teacher-attendance-payroll
 ---
 
-# Hall Passes (Diagnostics)
+# Hall Passes
 
 ## If passes cannot be approved, check these first
 - Hall pass is enabled for the class period.

@@ -1,12 +1,12 @@
 ---
-title: Teacher Login and Account Security Diagnostics
+title: Teacher Login and Account Security
 category: diagnostics
 roles: [teacher]
 related:
   - diagnostics/teacher-onboarding
 ---
 
-# Login and Account Security (Diagnostics)
+# Login and Account Security
 
 ## If you cannot log in, check these first
 - Username and TOTP code must match exactly.

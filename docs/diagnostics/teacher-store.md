@@ -1,5 +1,5 @@
 ---
-title: Teacher Store and Redemptions Diagnostics
+title: Teacher Store and Redemptions
 category: diagnostics
 roles: [teacher]
 related:
@@ -7,7 +7,7 @@ related:
   - diagnostics/teacher-rent-insurance
 ---
 
-# Store and Redemptions (Diagnostics)
+# Store and Redemptions
 
 ## If students cannot see or buy an item, check these first
 - The item is active and not auto-delisted.

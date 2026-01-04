@@ -1,12 +1,13 @@
 ---
-title: Student Diagnostics Index
+title: Student Help and Support Guides
 category: diagnostics
 roles: [student]
 ---
 
-# Student Diagnostics Index
+# Student Help and Support Guides
 
-Short, scenario-based checklists for the most common student questions.
+Here are some issues that students typically encounters.
+
 
 - [Login and Setup](student-login)
 - [Classes and Join Codes](student-classes)

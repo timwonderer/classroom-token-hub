@@ -1,5 +1,5 @@
 ---
-title: Student Help and Issue Reports Diagnostics
+title: Student Help and Issue Reports
 category: diagnostics
 roles: [student]
 related:
@@ -7,12 +7,12 @@ related:
   - diagnostics/student-money
 ---
 
-# Help and Issue Reports (Diagnostics)
+# Help and Issue Reports
 
 ## If you cannot submit an issue, check these first
 - You selected a class (issues are tied to the current join code).
 - The transaction or tap event belongs to your current class.
-- Your teacher may have disabled bug reports for this class.
+
 
 ## This is expected when...
 - New issues show up with a pending status until your teacher reviews them.

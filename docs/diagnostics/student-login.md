@@ -1,5 +1,5 @@
 ---
-title: Student Login and Setup Diagnostics
+title: Student Login and Setup
 category: diagnostics
 roles: [student]
 related:
@@ -7,7 +7,7 @@ related:
   - diagnostics/student-support
 ---
 
-# Student Login and Setup (Diagnostics)
+# Student Login and Setup
 
 ## If you cannot log in, check these first
 - Use the exact username assigned during setup (no nicknames).

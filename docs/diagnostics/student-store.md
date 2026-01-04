@@ -1,5 +1,5 @@
 ---
-title: Student Store and Purchases Diagnostics
+title: Student Store and Purchases
 category: diagnostics
 roles: [student]
 related:
@@ -7,7 +7,7 @@ related:
   - diagnostics/student-rent-insurance
 ---
 
-# Store and Purchases (Diagnostics)
+# Store and Purchases
 
 ## If an item is missing from the store, check these first
 - Store is enabled for your class period.

@@ -1,5 +1,5 @@
 ---
-title: Teacher Rent and Insurance Diagnostics
+title: Teacher Rent and Insurance
 category: diagnostics
 roles: [teacher]
 related:
@@ -7,7 +7,7 @@ related:
   - diagnostics/teacher-transactions-banking
 ---
 
-# Rent and Insurance (Diagnostics)
+# Rent and Insurance
 
 ## If rent is not showing for students, check these first
 - Rent is enabled for the class period.

@@ -1,12 +1,15 @@
 ---
-title: Teacher Diagnostics Index
+title: Teacher Help and Support Guides
 category: diagnostics
 roles: [teacher]
 ---
 
-# Teacher Diagnostics Index
+# Teacher Help and Support Guides
 
-Short, scenario-based checklists for the most common teacher questions.
+Here are some issues that teachers typically encounter.
+
+
+
 
 - [Login and Account Security](teacher-login)
 - [Onboarding and Feature Settings](teacher-onboarding)
