@@ -1,6 +1,12 @@
 {% extends "base.html" %}
+{% set full_width = true %}
 
 {% block title %}{{ title }} - Documentation{% endblock %}
+
+
+<!-- Documentation-specific styles and scripts -->
+
+
 
 {% block content %}
 <div class="docs-layout">
@@ -16,12 +22,12 @@
                                 <span class="material-symbols-outlined icon-align">arrow_back</span>
                                 Back to Dashboard
                             </a>
-                        {% elif session.get('admin_id') %}
+                        {% elif session.get('is_admin') and session.get('admin_id') %}
                             <a href="{{ url_for('admin.dashboard') }}" class="btn btn-sm btn-primary w-100">
                                 <span class="material-symbols-outlined icon-align">arrow_back</span>
                                 Back to Dashboard
                             </a>
-                        {% elif session.get('sysadmin_id') %}
+                        {% elif session.get('is_system_admin') and session.get('sysadmin_id') %}
                             <a href="{{ url_for('sysadmin.dashboard') }}" class="btn btn-sm btn-primary w-100">
                                 <span class="material-symbols-outlined icon-align">arrow_back</span>
                                 Back to Dashboard
@@ -31,7 +37,7 @@
 
                     <!-- Docs Home (always show) -->
                     <div class="mb-3">
-                        <a href="{{ url_for('docs.index') }}" class="btn btn-sm {% if session.get('student_id') or session.get('admin_id') or session.get('sysadmin_id') %}btn-outline-secondary{% else %}btn-primary{% endif %} w-100">
+                        <a href="{{ url_for('docs.index') }}" class="btn btn-sm {% if session.get('student_id') or session.get('is_admin') or session.get('is_system_admin') %}btn-outline-secondary{% else %}btn-primary{% endif %} w-100">
                             <span class="material-symbols-outlined icon-align">home</span>
                             Docs Home
                         </a>
@@ -49,26 +55,38 @@
 
                     <!-- Navigation Categories -->
                     <nav class="nav flex-column">
-                        <!-- Getting Started -->
-                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-2 mb-1 text-muted">
-                            <span><span class="material-symbols-outlined icon-small">rocket_launch</span> Getting Started</span>
+                        <!-- Diagnostics -->
+                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-2 mb-1 ">
+                            <span><span class="material-symbols-outlined align-middle">quick_reference</span> Diagnostics</span>
                         </h6>
                         <ul class="nav flex-column mb-2">
                             <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'user-guides/student_guide' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/student_guide') }}">
-                                    Student Guide
+                                <a class="nav-link {% if doc_path.startswith('diagnostics/student') %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='diagnostics/student') }}">
+                                    Student Diagnostics
                                 </a>
                             </li>
                             <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'user-guides/teacher_manual' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}">
-                                    Teacher Manual
+                                <a class="nav-link {% if doc_path.startswith('diagnostics/teacher') %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher') }}">
+                                    Teacher Diagnostics
+                                </a>
+                            </li>
+                        </ul>
+                 
+                        <!-- Classroom Economy -->
+                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1">
+                            <span><span class="material-symbols-outlined align-middle">emoji_objects</span> Design Philosophy</span>
+                        </h6>
+                        <ul class="nav flex-column mb-2">
+                            <li class="nav-item">
+                                <a class="nav-link {% if doc_path == 'user-guides/economy_guide' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/economy_guide') }}">
+                                    Economy Design Guide
                                 </a>
                             </li>
                         </ul>
 
-                        <!-- Technical -->
-                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
-                            <span><span class="material-symbols-outlined icon-small">code</span> Technical</span>
+                        <!-- Developer Docs -->
+                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1">
+                            <span><span class="material-symbols-outlined align-middle">design_services</span> Developer Docs</span>
                         </h6>
                         <ul class="nav flex-column mb-2">
                             <li class="nav-item">
@@ -94,12 +112,12 @@
                         </ul>
 
                         <!-- Reference -->
-                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1 text-muted">
-                            <span><span class="material-symbols-outlined icon-small">description</span> Reference</span>
+                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1">
+                            <span><span class="material-symbols-outlined align-middle">description</span> Reference</span>
                         </h6>
                         <ul class="nav flex-column mb-2">
                             <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'DEPLOYMENT' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='DEPLOYMENT') }}">
+                                <a class="nav-link {% if doc_path == 'Deployment_Guide' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='Deployment_Guide') }}">
                                     Deployment
                                 </a>
                             </li>
@@ -196,20 +214,23 @@
                         <aside class="col-lg-3">
                             <div class="sticky-top toc-sticky">
                                 <div class="toc-wrapper">
+                                    <h3 class="h5  toclabel">Navigation</h3>
                                     {{ toc | safe }}
+                                    
                                 </div>
+                                <div class="text-end mt-4">
+                                        <a href="#" class="btn btn-primary">
+                                        <span class="material-symbols-outlined icon-align">arrow_upward</span>
+                                        Back to Top
+                                        </a>
+                                    </div>
                             </div>
                         </aside>
                         {% endif %}
                     </div>
 
                     <!-- Scroll to Top -->
-                    <div class="text-end mt-4">
-                        <a href="#" class="btn btn-sm btn-outline-secondary">
-                            <span class="material-symbols-outlined icon-align">arrow_upward</span>
-                            Back to Top
-                        </a>
-                    </div>
+                    
                 </article>
             </main>
         </div>
@@ -252,14 +273,15 @@
 }
 
 .docs-layout .sidebar .nav-link.active {
-    background-color: var(--primary-color);
-    color: white;
+    background-color: var(--primary);
+    color: var(--secondary);
 }
 
 .sidebar-heading {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
+    font-weight:600;
+    color:var(--primary);
 }
 
 /* Markdown Content Styling */
@@ -348,7 +370,7 @@
 }
 
 .markdown-content blockquote {
-    border-left: 4px solid var(--primary-color);
+    border-left: 4px solid var(--primary);
     padding-left: 1rem;
     margin: 1rem 0;
     color: #6c757d;
@@ -370,20 +392,18 @@
 }
 
 .toc-wrapper {
-    background-color: #f8f9fa;
+    border: 2px solid var(--primary);
     padding: 1rem;
     border-radius: 0.5rem;
     font-size: 0.9rem;
 }
 
-.toc-wrapper ul {
-    list-style: none;
-    padding-left: 0;
+.toc-wrapper .toclabel{
+    font-weight: 600;
+   
+    color: var(--primary);
 }
 
-.toc-wrapper li {
-    margin-bottom: 0.5rem;
-}
 
 .toc-wrapper a {
     color: #212529;
@@ -391,8 +411,28 @@
 }
 
 .toc-wrapper a:hover {
-    color: var(--primary-color);
-    text-decoration: underline;
+    background-color: rgba(26, 77, 71, 0.2);
+    font-weight:600;
+}
+
+.btn {
+    border-radius: var(--radius-sm);
+    border-width:2px;
+    font-weight: 500;
+    padding: 0.625rem 1.25rem;
+    transition: all 0.2s ease;
+}
+
+.btn-primary {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #d3af37;
+    color: var(--primary);
 }
 </style>
+
 {% endblock %}

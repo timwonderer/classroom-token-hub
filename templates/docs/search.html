@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% set full_width = true %}
 
 {% block title %}Search Documentation{% if query %} - {{ query }}{% endif %}{% endblock %}
 
@@ -107,8 +108,8 @@
                             Popular Topics
                         </h3>
                         <ul class="mb-0">
-                            <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/student_guide') }}" class="text-decoration-none">Student Guide</a></li>
-                            <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}" class="text-decoration-none">Teacher Manual</a></li>
+                            <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/student') }}" class="text-decoration-none">Student Diagnostics</a></li>
+                            <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher') }}" class="text-decoration-none">Teacher Diagnostics</a></li>
                             <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/architecture') }}" class="text-decoration-none">Architecture</a></li>
                             <li><a href="{{ url_for('docs.view_doc', doc_path='CHANGELOG') }}" class="text-decoration-none">Changelog</a></li>
                         </ul>

@@ -7,7 +7,7 @@
   <button class="btn btn-primary d-none d-md-inline-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#storeGuide" aria-controls="storeGuide">
     <span class="material-symbols-outlined">quick_reference_all</span> Quick Tips
   </button>
-  <a href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}#store-and-rewards" class="btn btn-outline-primary d-none d-md-inline-flex align-items-center gap-2" target="_blank" rel="noopener">
+  <a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-store') }}" class="btn btn-outline-primary d-none d-md-inline-flex align-items-center gap-2" target="_blank" rel="noopener">
     <span class="material-symbols-outlined">menu_book</span> Full Guide
   </a>
 {% endblock %}
@@ -121,7 +121,7 @@
           <span class="material-symbols-outlined" style="vertical-align: middle;">menu_book</span>
           Read Full Store Guide
         </a>
-        <a href="{{ url_for('docs.view_doc', doc_path='user-guides/teacher_manual') }}#store-and-rewards" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">
+        <a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-store') }}" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">
           <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1rem;">description</span>
           Teacher Manual: Store Section
         </a>
