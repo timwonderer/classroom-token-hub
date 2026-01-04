@@ -255,8 +255,7 @@ def _link_student_to_admin(student: Student, admin_id):
         )
         db.session.add(new_teacher_block)
         current_app.logger.info(
-            f"Created TeacherBlock for teacher {admin_id}, "
-            
+            f"Created TeacherBlock for teacher {admin_id}"
         )
     elif not existing_teacher_block.is_claimed:
         # TeacherBlock exists but not claimed - mark as claimed now
