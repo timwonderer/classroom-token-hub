@@ -157,7 +157,7 @@ and this project follows semantic versioning principles.
   - Added `collective_goal_type` and `collective_goal_target` field assignments for collective goal items (app/routes/admin.py:3063-3064)
   - Added `redemption_prompt` field assignment for delayed-use items (app/routes/admin.py:3066)
   - These fields were already present in the form (forms.py) and model (models.py), but were not being passed to the StoreItem constructor
-  - Edit functionality was unaffected (uses populate_obj), only creation was broken
+  - Edit functionality uses `populate_obj` rather than manually assigning these fields, so this bug specifically affected the creation route
 - **Transaction Issue Reporting** - Added report buttons to all transaction tables in Banking/Finances page (Checking and Savings tabs), allowing students to report issues on any visible transaction (up to 50 most recent), not just the 5 shown on dashboard
 - **Issue Resolution Display** - Fixed `developer_resolved` status showing as "Escalated" instead of "Resolved by Developer" in teacher view
 - **Issue Context Snapshot** - Fixed incorrect balance calculation in context_snapshot by using Student model's `get_checking_balance()` and `get_savings_balance()` methods instead of non-existent `get_balances()` function
