@@ -1,3 +1,4 @@
+{% import "macros/help.html" as help %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -125,6 +126,25 @@
 
     <main id="main-content" class="student-main">
         <div class="student-content">
+            {% set help_doc_map = {
+                'dashboard': 'diagnostics/student',
+                'profile': 'diagnostics/student-classes',
+                'help': 'diagnostics/student-support',
+                'student.dashboard': 'diagnostics/student',
+                'student.transfer': 'diagnostics/student-money',
+                'student.shop': 'diagnostics/student-store',
+                'student.payroll': 'diagnostics/student-attendance',
+                'student.rent': 'diagnostics/student-rent-insurance',
+                'student.student_insurance': 'diagnostics/student-rent-insurance',
+                'student.help_support': 'diagnostics/student-support',
+                'student.claim_account': 'diagnostics/student-classes',
+                'student.complete_profile': 'diagnostics/student-classes'
+            } %}
+            {% set help_doc_key = current_page or request.endpoint %}
+            {% set help_doc_path = help_doc_map.get(help_doc_key) %}
+            {% if not help_doc_path and request.endpoint %}
+                {% set help_doc_path = help_doc_map.get(request.endpoint) %}
+            {% endif %}
             {% set resolved_page_icon = (self.page_icon() | trim) or 'school' %}
             <div class="page-header">
                 <div>
@@ -148,6 +168,11 @@
                     <button class="btn btn-primary btn-icon d-inline-flex d-md-none align-items-center justify-content-center" data-bs-toggle="modal" data-bs-target="#addClassModal" title="Add Class" aria-label="Add Class">
                         <span class="material-symbols-outlined" aria-hidden="true">group_add</span>
                     </button>
+                    {% if help_doc_path %}
+                    <span class="d-none d-md-inline-flex">
+                        {{ help.help_link(help_doc_path, text="Guide", tooltip="View guide") }}
+                    </span>
+                    {% endif %}
                     <a href="{{ url_for('student.help_support') }}" class="btn btn-white d-none d-md-inline-flex align-items-center gap-2">
                         <span class="material-symbols-outlined" aria-hidden="true">help</span> Help
                     </a>

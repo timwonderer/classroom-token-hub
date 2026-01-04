@@ -1,3 +1,4 @@
+{% import "macros/help.html" as help %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -204,6 +205,58 @@
 
     <!-- Main Content -->
     <main id="main-content" class="main-content flex-grow-1">
+        {% set help_doc_map = {
+            'dashboard': 'diagnostics/teacher',
+            'students': 'diagnostics/teacher-students',
+            'attendance': 'diagnostics/teacher-attendance-payroll',
+            'payroll': 'diagnostics/teacher-attendance-payroll',
+            'payroll_history': 'diagnostics/teacher-attendance-payroll',
+            'economy_health': 'diagnostics/teacher-attendance-payroll',
+            'store': 'diagnostics/teacher-store',
+            'banking': 'diagnostics/teacher-transactions-banking',
+            'transactions': 'diagnostics/teacher-transactions-banking',
+            'rent': 'diagnostics/teacher-rent-insurance',
+            'insurance': 'diagnostics/teacher-rent-insurance',
+            'hall_pass': 'diagnostics/teacher-hall-pass',
+            'announcements': 'diagnostics/teacher-announcements-issues',
+            'issues': 'diagnostics/teacher-announcements-issues',
+            'help': 'diagnostics/teacher',
+            'onboarding': 'diagnostics/teacher-onboarding',
+            'settings': 'diagnostics/teacher-onboarding',
+            'feature_settings': 'diagnostics/teacher-onboarding',
+            'passkey_settings': 'diagnostics/teacher-login',
+            'deletion_requests': 'diagnostics/teacher-login',
+            'admin.dashboard': 'diagnostics/teacher',
+            'admin.students': 'diagnostics/teacher-students',
+            'admin.attendance_log': 'diagnostics/teacher-attendance-payroll',
+            'admin.payroll': 'diagnostics/teacher-attendance-payroll',
+            'admin.payroll_history': 'diagnostics/teacher-attendance-payroll',
+            'admin.economy_health': 'diagnostics/teacher-attendance-payroll',
+            'admin.store_management': 'diagnostics/teacher-store',
+            'admin.transactions': 'diagnostics/teacher-transactions-banking',
+            'admin.banking': 'diagnostics/teacher-transactions-banking',
+            'admin.rent_settings': 'diagnostics/teacher-rent-insurance',
+            'admin.insurance_management': 'diagnostics/teacher-rent-insurance',
+            'admin.hall_pass': 'diagnostics/teacher-hall-pass',
+            'admin.announcements': 'diagnostics/teacher-announcements-issues',
+            'admin.issues_queue': 'diagnostics/teacher-announcements-issues',
+            'admin.settings': 'diagnostics/teacher-onboarding',
+            'admin.feature_settings': 'diagnostics/teacher-onboarding',
+            'admin.onboarding': 'diagnostics/teacher-onboarding',
+            'admin.passkey_settings': 'diagnostics/teacher-login',
+            'admin.help_support': 'diagnostics/teacher',
+            'admin.deletion_requests': 'diagnostics/teacher-login',
+            'admin.setup_recovery': 'diagnostics/teacher-login',
+            'admin.claim_students': 'diagnostics/teacher-students',
+            'admin.backfill_join_codes': 'diagnostics/teacher-students',
+            'admin.view_issue': 'diagnostics/teacher-announcements-issues',
+            'admin.announcement_form': 'diagnostics/teacher-announcements-issues'
+        } %}
+        {% set help_doc_key = current_page or request.endpoint %}
+        {% set help_doc_path = help_doc_map.get(help_doc_key) %}
+        {% if not help_doc_path and request.endpoint %}
+            {% set help_doc_path = help_doc_map.get(request.endpoint) %}
+        {% endif %}
         <div class="page-header">
             <div>
                 <div class="eyebrow">Classroom Token Hub</div>
@@ -214,6 +267,11 @@
                 <div class="meta" id="current-time"></div>
             </div>
             <div class="page-header-actions">
+                {% if help_doc_path %}
+                    <span class="d-none d-md-inline-flex">
+                        {{ help.help_link(help_doc_path, text="Guide", tooltip="View guide") }}
+                    </span>
+                {% endif %}
                 {% block page_header_actions %}
                     <a href="{{ url_for('admin.help_support') }}" class="btn btn-white d-none d-md-inline-flex align-items-center gap-2">
                         <span class="material-symbols-outlined">help</span> Help

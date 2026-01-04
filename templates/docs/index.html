@@ -9,6 +9,9 @@
 <div class="container mt-4 mb-5">
     <!-- Header -->
     <div class="text-center mb-5">
+        <span class="material-symbols-outlined" style="font-size: 2.5rem; vertical-align: middle; font-weight:600; color:var(--secondary)">local_atm</span>
+        <span class="material-symbols-outlined" style="font-size: 2.5rem; vertical-align: middle; font-weight:600; color:var(--secondary)">store</span>
+        <span class="material-symbols-outlined" style="font-size: 2.5rem; vertical-align: middle; font-weight:600; color:var(--secondary)"> finance_mode</span>             
         <p  class="mb-2" style="font-size:2.5rem; font-weight:600;color:var(--primary);">
              CLASSROOM TOKEN HUB
         </p>
@@ -17,7 +20,7 @@
         <!-- Search Bar -->
         <form action="{{ url_for('docs.search') }}" method="get" class="mt-4">
             <div class="input-group input-group-lg mx-auto" style="max-width: 600px;">
-                <input type="search" name="q" class="form-control" placeholder="Search documentation..." aria-label="Search">
+                <input type="search" name="q" class="form-control" placeholder="Start with 1-3 keywords about your issue..." aria-label="Search">
                 <button class="btn btn-primary" type="submit">
                     <span class="material-symbols-outlined" style="vertical-align: middle;">search</span>
                     Search
@@ -35,9 +38,9 @@
                     <div class="text-center mb-3">
                         <span class="material-symbols-outlined" style="font-size: 3rem; color: #007bff;">school</span>
                     </div>
-                    <h3 class="card-title h5 text-center">Student Diagnostics</h3>
-                    <p class="card-text text-muted">Fast answers for student questions and surprising rules.</p>
-                    <ul class="list-unstyled">
+                    <h3 class="card-title h5 text-center">For Students</h3>
+                    <p class="card-text text-muted">Find quick solutions to your common issues.</p>
+                    <ul >
                         <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/student') }}" class="text-decoration-none">All Student Diagnostics</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/student-login') }}" class="text-decoration-none">Login & Setup</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/student-classes') }}" class="text-decoration-none">Classes & Join Codes</a></li>
@@ -59,9 +62,9 @@
                     <div class="text-center mb-3">
                         <span class="material-symbols-outlined" style="font-size: 3rem; color: #dc3545;">person</span>
                     </div>
-                    <h3 class="card-title h5 text-center">Teacher Diagnostics</h3>
-                    <p class="card-text text-muted">Debug-first guides for admin workflows and rules.</p>
-                    <ul class="list-unstyled">
+                    <h3 class="card-title h5 text-center">For Teachers</h3>
+                    <p class="card-text text-muted">Concise, solution-first guides to help you get back on track.</p>
+                    <ul >
                         <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher') }}" class="text-decoration-none">All Teacher Diagnostics</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-login') }}" class="text-decoration-none">Login & Security</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-onboarding') }}" class="text-decoration-none">Feature Settings</a></li>
@@ -85,7 +88,7 @@
                         <span class="material-symbols-outlined" style="font-size: 3rem; color: #6c757d;">emoji_objects</span>
                     </div>
                     <h3 class="card-title h5 text-center">Economy Design</h3>
-                    <p class="card-text text-muted">Pricing, rent, and balance rules for teachers.</p>
+                    <p class="card-text text-muted">Understanding how the economy system was designed and implemented.</p>
                     <ul class="list-unstyled">
                         <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/economy_guide') }}" class="text-decoration-none">Classroom Economy Guide</a></li>
                     </ul>
@@ -100,9 +103,9 @@
                     <div class="text-center mb-3">
                         <span class="material-symbols-outlined" style="font-size: 3rem; color: #20c997;">folder</span>
                     </div>
-                    <h3 class="card-title h5 text-center">More Docs</h3>
+                    <h3 class="card-title h5 text-center">Technical Archives</h3>
                     <p class="card-text text-muted">Engineering, operations, and project context.</p>
-                    <ul class="list-unstyled">
+                    <ul >
                         <li><a href="{{ url_for('docs.view_doc', doc_path='development/DEVELOPMENT') }}" class="text-decoration-none">Development</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='operations/README') }}" class="text-decoration-none">Operations</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='project/PROJECT_HISTORY') }}" class="text-decoration-none">Project History</a></li>
@@ -120,7 +123,7 @@
                     </div>
                     <h3 class="card-title h5 text-center">Developer Reference</h3>
                     <p class="card-text text-muted">Architecture, database schema, and API docs for developers and maintainers.</p>
-                    <ul class="list-unstyled">
+                    <ul >
                         <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/architecture') }}" class="text-decoration-none">Architecture</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/database_schema') }}" class="text-decoration-none">Database Schema</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/ECONOMY_SPECIFICATION') }}" class="text-decoration-none">Economy Spec</a></li>
@@ -139,7 +142,7 @@
                     </div>
                     <h3 class="card-title h5 text-center">Operations</h3>
                     <p class="card-text text-muted">Deployment, maintenance, and operational procedures for maintainers.</p>
-                    <ul class="list-unstyled">
+                    <ul >
                         <li><a href="{{ url_for('docs.view_doc', doc_path='Deployment_Guide') }}" class="text-decoration-none">Deployment Guide</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='CHANGELOG') }}" class="text-decoration-none">Changelog</a></li>
                     </ul>

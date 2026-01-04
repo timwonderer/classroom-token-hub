@@ -147,6 +147,22 @@ a:hover {
     color: var(--primary);
 }
 
+.contextual-help-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: #6c757d;
+    transition: color 0.2s;
+}
+
+.contextual-help-link:hover {
+    color: var(--primary);
+}
+
+.contextual-help-link .help-text {
+    font-size: 0.875rem;
+}
+
 .dashboard-greeting {
     font-size: 2rem;
 }

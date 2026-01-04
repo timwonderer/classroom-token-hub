@@ -74,7 +74,7 @@
   #}
   <div class="card border-primary">
     <div class="card-body text-center">
-      <span class="material-symbols-outlined mb-3" style="font-size: 3rem; color: var(--primary-color);">{{ icon }}</span>
+      <span class="material-symbols-outlined mb-3" style="font-size: 3rem; color: var(--primary);">{{ icon }}</span>
       <h5 class="card-title">{{ title }}</h5>
       <p class="card-text text-muted">{{ description }}</p>
       <a href="{{ doc_url(doc_path) }}" class="btn btn-primary" target="_blank" rel="noopener">
@@ -84,21 +84,3 @@
     </div>
   </div>
 {% endmacro %}
-
-<style>
-.contextual-help-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  color: #6c757d;
-  transition: color 0.2s;
-}
-
-.contextual-help-link:hover {
-  color: var(--primary-color);
-}
-
-.contextual-help-link .help-text {
-  font-size: 0.875rem;
-}
-</style>

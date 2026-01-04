@@ -119,8 +119,51 @@
                         </button>
                     </div>
                 </form>
+
+                <hr class="my-4">
+
+                <!-- Reset Getting Started Widget Section -->
+                <div class="mb-4">
+                    <h5 class="text-primary mb-3">
+                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 25px;">restart_alt</span>
+                        Getting Started Widget
+                    </h5>
+                    <p class="text-muted mb-3">
+                        Show the getting started widget again if you dismissed it or want to review setup tasks.
+                    </p>
+                    <button type="button" class="btn btn-outline-secondary" onclick="showGettingStartedWidget()">
+                        <span class="material-symbols-outlined" style="vertical-align: middle;">refresh</span>
+                        Show Getting Started Widget
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+function showGettingStartedWidget() {
+    // Call the un-dismiss endpoint to show the widget again
+    fetch('/admin/onboarding/undismiss-widget', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert('Getting started widget will appear when you return to the dashboard.');
+            window.location.href = '{{ url_for("admin.dashboard") }}';
+        } else {
+            alert('Error: ' + (data.message || 'Failed to show widget'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while showing the widget.');
+    });
+}
+</script>
 {% endblock %}
