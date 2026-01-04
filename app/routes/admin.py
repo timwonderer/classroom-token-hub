@@ -5880,7 +5880,7 @@ def enforce_daily_limits():
                     break  # Only check once per student
         except Exception as e:
             errors.append(
-                f"Error when executing auto-timeout for {student.full_name} (ID {student.id}, Period {period_upper}): {e}"
+                f"Error when executing auto-timeout for {student.full_name} (ID {student.id}, Period {period_upper})"
             )
             current_app.logger.error(
                 f"Error enforcing limits for student {student.id} ({student.full_name}) in period {period_upper}",
