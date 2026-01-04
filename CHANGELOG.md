@@ -170,6 +170,27 @@ and this project follows semantic versioning principles.
 
 ### Documentation
 - Reorganized documentation structure for improved navigation
+- **Comprehensive Documentation Accuracy Fixes** - Corrected 10 inaccuracies found in user-facing documentation
+  - **Store Items (docs/features/store/creating-items.md)**:
+    - Fixed tier system documentation to reflect actual implementation (Basic/Standard/Premium/Luxury based on % of CWI, not Tier 1/2/3 with dollar amounts)
+    - Corrected default state - items are created as active by default, not inactive
+    - Removed non-existent image upload feature documentation
+    - Removed non-existent daily purchase limit documentation
+    - Updated terminology to match code (Immediate Use/Delayed Use instead of Virtual/Physical)
+    - Added missing "Collective Goal" item type to documentation with full explanation
+    - Corrected purchase limits documentation to reflect actual behavior (concurrent ownership, not daily limits)
+    - Updated scenario examples to use correct field names and remove daily limits
+    - Removed confusing "if available" language for collective goals (feature is fully available)
+  - **Payroll (docs/features/payroll/running-payroll.md)**:
+    - Removed non-existent automatic payroll feature documentation (entire section)
+    - Added guidance for manual payroll scheduling and consistency
+    - Clarified that break time IS paid (system does not exclude breaks from hours worked)
+    - Added Q&A explaining how to handle unpaid breaks if desired
+    - Removed non-existent "Work & Pay" page reference
+    - Updated all automatic payroll references to reflect manual-only operation
+  - **Banking (docs/features/banking/transferring-money.md)**:
+    - Removed non-existent transfer limits documentation (daily limits, min/max transfer amounts)
+    - Simplified to only document actual rules (no negative balances)
 
 ### Dependencies
 - Bump `requests` from 2.32.4 to 2.32.5
