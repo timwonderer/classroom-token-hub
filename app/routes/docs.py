@@ -8,6 +8,7 @@ allowing users to access help without leaving the app or losing their session.
 import re
 from pathlib import Path
 from flask import Blueprint, abort, current_app, session, request, url_for
+from werkzeug.exceptions import HTTPException
 import bleach
 import markdown
 import yaml
@@ -104,12 +105,13 @@ def parse_front_matter(content):
         return {}, content
 
 
-def render_markdown_content(content):
+def render_markdown_content(content, toc_title='On This Page'):
     """
     Convert markdown to HTML with extensions and sanitization.
 
     Args:
         content: Markdown text
+        toc_title: The title for the Table of Contents.
 
     Returns:
         tuple: (sanitized_html_content, sanitized_toc_html)
@@ -121,7 +123,7 @@ def render_markdown_content(content):
     md = markdown.Markdown(
         extensions=[
             'extra',
-            TocExtension(title='On This Page'),
+            TocExtension(title=toc_title, toc_depth='2-6'),
             CodeHiliteExtension(linenums=False, css_class='highlight'),
             FencedCodeExtension(),
             TableExtension(),
@@ -244,9 +246,10 @@ def view_doc(doc_path):
             abort(500, description="Unable to read documentation file (encoding error)")
 
         metadata, body = parse_front_matter(content)
+        doc_title = metadata.get('title', doc_path)
 
         # Convert markdown to HTML (with sanitization)
-        html_content, toc = render_markdown_content(body)
+        html_content, toc = render_markdown_content(body, toc_title=doc_title)
 
         # Determine category and page from path
         path_parts = Path(doc_path).parts
@@ -285,18 +288,18 @@ def view_doc(doc_path):
         # All documentation is accessible to all users. The 'roles' metadata
         # is used for contextual highlighting and navigation suggestions.
         user_role = None
-        if session.get('admin_id'):
+        if session.get('is_admin'):
             user_role = 'teacher'
         elif session.get('student_id'):
             user_role = 'student'
-        elif session.get('sysadmin_id'):
+        elif session.get('is_system_admin'):
             user_role = 'sysadmin'
 
         return render_template_with_fallback(
             'docs/view.html',
             content=html_content,
             toc=toc,
-            title=metadata.get('title', doc_path),
+            title=doc_title,
             category=category,
             current_category=category,
             breadcrumbs=breadcrumbs,
@@ -306,6 +309,8 @@ def view_doc(doc_path):
             doc_path=doc_path,
         )
 
+    except HTTPException:
+        raise
     except (OSError, IOError) as e:
         current_app.logger.error(f"File system error rendering {doc_path}: {e}")
         abort(500, description="Unable to access documentation file")
@@ -339,6 +344,10 @@ def search():
                 if not doc_file.is_relative_to(DOCS_ROOT.resolve()):
                     continue
 
+                rel_path = doc_file.relative_to(DOCS_ROOT)
+                if rel_path.parts and rel_path.parts[0] == 'security':
+                    continue
+
                 content = doc_file.read_text(encoding='utf-8')
                 metadata, body = parse_front_matter(content)
 
@@ -347,7 +356,7 @@ def search():
 
                 if query.lower() in title.lower() or query.lower() in body.lower():
                     # Get relative path for URL
-                    rel_path = doc_file.relative_to(DOCS_ROOT).with_suffix('')
+                    rel_path = rel_path.with_suffix('')
 
                     # Find context around the match
                     context = ''

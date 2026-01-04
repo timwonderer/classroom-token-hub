@@ -227,6 +227,8 @@ def admin_required(f):
             last_activity = datetime.fromisoformat(last_activity)
             if (now - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
                 session.pop("is_admin", None)
+                session.pop("admin_id", None)
+                session.pop("last_activity", None)
                 flash("Admin session expired. Please log in again.")
                 encoded_next = urllib.parse.quote(request.path, safe="")
                 return redirect(f"{url_for('admin.login')}?next={encoded_next}")
@@ -254,6 +256,8 @@ def system_admin_required(f):
             last_activity = datetime.fromisoformat(last_activity)
             if now - last_activity > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
                 session.pop("is_system_admin", None)
+                session.pop("sysadmin_id", None)
+                session.pop("last_activity", None)
                 flash("Session expired. Please log in again.")
                 return redirect(url_for('sysadmin.login', next=request.path))
         session['last_activity'] = now.isoformat()
