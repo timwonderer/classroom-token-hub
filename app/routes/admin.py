@@ -6038,7 +6038,7 @@ def tap_out_students():
         current_app.logger.error(f"Admin tap-out failed: {e}", exc_info=True)
         return jsonify({
             "status": "error",
-            "message": f"Failed to tap out students: {str(e)}"
+            "message": "Failed to tap out students due to an internal error."
         }), 500
 
 
