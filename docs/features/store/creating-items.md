@@ -273,7 +273,6 @@ Items the whole class works toward together:
 - **Start simple**: Begin with 3-5 basic items
 - **Balance pricing**: Use the Economy Health page to ensure prices are fair
 - **Clear descriptions**: Students should understand exactly what they're buying
-- **Use images**: Visual items are more appealing
 - **Monitor redemptions**: Check the Redemptions tab regularly
 - **Adjust as needed**: Change prices if items aren't selling or are too popular
 
@@ -285,7 +284,8 @@ Items the whole class works toward together:
 - Ensure students are in the correct class period
 
 **Item sold out too quickly**:
-- Set daily or total limits
+- Set inventory limits (total stock available)
+- Set purchase limits per student (max they can own at once)
 - Increase the price
 - Create similar items to distribute demand
 

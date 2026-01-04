@@ -152,6 +152,12 @@ and this project follows semantic versioning principles.
 - Standardized UTC timestamp formatting
 
 ### Fixed
+- **Store Item Creation** - Fixed critical bug where tier, collective_goal_type, collective_goal_target, and redemption_prompt fields were not being saved when creating new store items
+  - Added `tier` field assignment to store creation route (app/routes/admin.py:3047)
+  - Added `collective_goal_type` and `collective_goal_target` field assignments for collective goal items (app/routes/admin.py:3063-3064)
+  - Added `redemption_prompt` field assignment for delayed-use items (app/routes/admin.py:3066)
+  - These fields were already present in the form (forms.py) and model (models.py), but were not being passed to the StoreItem constructor
+  - Edit functionality was unaffected (uses populate_obj), only creation was broken
 - **Transaction Issue Reporting** - Added report buttons to all transaction tables in Banking/Finances page (Checking and Savings tabs), allowing students to report issues on any visible transaction (up to 50 most recent), not just the 5 shown on dashboard
 - **Issue Resolution Display** - Fixed `developer_resolved` status showing as "Escalated" instead of "Resolved by Developer" in teacher view
 - **Issue Context Snapshot** - Fixed incorrect balance calculation in context_snapshot by using Student model's `get_checking_balance()` and `get_savings_balance()` methods instead of non-existent `get_balances()` function
@@ -181,6 +187,8 @@ and this project follows semantic versioning principles.
     - Corrected purchase limits documentation to reflect actual behavior (concurrent ownership, not daily limits)
     - Updated scenario examples to use correct field names and remove daily limits
     - Removed confusing "if available" language for collective goals (feature is fully available)
+    - Removed misleading "Use images" tip from Tips for Success section (feature doesn't exist)
+    - Fixed contradictory troubleshooting text about daily limits (clarified to use inventory and per-student limits)
   - **Payroll (docs/features/payroll/running-payroll.md)**:
     - Removed non-existent automatic payroll feature documentation (entire section)
     - Added guidance for manual payroll scheduling and consistency

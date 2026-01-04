@@ -3044,6 +3044,7 @@ def store_management():
             name=form.name.data,
             description=form.description.data,
             price=form.price.data,
+            tier=form.tier.data if form.tier.data else None,
             item_type=form.item_type.data,
             inventory=form.inventory.data,
             limit_per_student=form.limit_per_student.data,
@@ -3057,7 +3058,12 @@ def store_management():
             # Bulk discount settings
             bulk_discount_enabled=form.bulk_discount_enabled.data,
             bulk_discount_quantity=form.bulk_discount_quantity.data if form.bulk_discount_enabled.data else None,
-            bulk_discount_percentage=form.bulk_discount_percentage.data if form.bulk_discount_enabled.data else None
+            bulk_discount_percentage=form.bulk_discount_percentage.data if form.bulk_discount_enabled.data else None,
+            # Collective goal settings
+            collective_goal_type=form.collective_goal_type.data if form.item_type.data == 'collective' else None,
+            collective_goal_target=form.collective_goal_target.data if form.item_type.data == 'collective' else None,
+            # Redemption prompt
+            redemption_prompt=form.redemption_prompt.data if form.redemption_prompt.data else None
         )
         db.session.add(new_item)
         db.session.flush()  # Get the ID for the item before adding blocks
