@@ -93,6 +93,24 @@
             </div>
         </div>
 
+        <!-- More Docs -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #20c997;">folder</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">More Docs</h3>
+                    <p class="card-text text-muted">Engineering, operations, and project context.</p>
+                    <ul class="list-unstyled">
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='development/DEVELOPMENT') }}" class="text-decoration-none">Development</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='operations/README') }}" class="text-decoration-none">Operations</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='project/PROJECT_HISTORY') }}" class="text-decoration-none">Project History</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
         <!-- Technical Reference -->
         <div class="col-md-6 col-lg-4">
             <div class="card h-100 shadow-sm">

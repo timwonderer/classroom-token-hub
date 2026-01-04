@@ -145,3 +145,8 @@ Potential improvements:
 - Server-side timezone conversion option
 - Additional format options (relative time, custom formats)
 - Timezone picker UI component
+
+## Full Documentation
+
+For the complete documentation set, visit:
+https://github.com/timwonderer/classroom-economy/tree/main/docs

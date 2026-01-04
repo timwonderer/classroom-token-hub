@@ -114,3 +114,8 @@ classroom-economy/
 - Economy spec: `docs/technical-reference/ECONOMY_SPECIFICATION.md`
 - Diagnostics for user-visible behavior: `docs/diagnostics/student.md`, `docs/diagnostics/teacher.md`
 - Development practices: `docs/development/DEVELOPMENT.md`
+
+## Full Documentation
+
+For the complete documentation set, visit:
+https://github.com/timwonderer/classroom-economy/tree/main/docs

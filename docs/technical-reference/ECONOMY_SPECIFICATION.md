@@ -262,3 +262,8 @@ Agents must always enforce:
 3. Economic operations must preserve student solvency.
 4. Every tool must calculate and surface impacts before applying changes.
 5. All inflation, investment, and loan tools must maintain coherent proportionality across categories.
+
+## Full Documentation
+
+For the complete documentation set, visit:
+https://github.com/timwonderer/classroom-economy/tree/main/docs
