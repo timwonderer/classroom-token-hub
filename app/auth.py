@@ -226,9 +226,7 @@ def admin_required(f):
         if last_activity:
             last_activity = datetime.fromisoformat(last_activity)
             if (now - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
-                session.pop("is_admin", None)
-                session.pop("admin_id", None)
-                session.pop("last_activity", None)
+                session.clear()
                 flash("Admin session expired. Please log in again.")
                 encoded_next = urllib.parse.quote(request.path, safe="")
                 return redirect(f"{url_for('admin.login')}?next={encoded_next}")
