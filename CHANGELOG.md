@@ -9,6 +9,14 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Added
+- **Mobile Navigation Enhancement** - Full navigation menu now accessible on mobile devices and PWA
+  - Added floating hamburger menu button that appears on mobile (<768px)
+  - Sidebar slides in from left with smooth animation and backdrop overlay
+  - Help buttons now visible as icon-only on mobile screens
+  - Contextual help links show icon on mobile, hiding text to save space
+  - Same template works for desktop, mobile, and PWA - no separate mobile templates needed
+  - Sidebar automatically closes when clicking navigation links or backdrop
+  - Resolves PWA limitation where full navigation menu was previously inaccessible
 - **Rent Itemization Feature** - Teachers can now specify what rent pays for and offer items as store alternatives (MVP)
   - New `RentItem` model to track itemized rent components (e.g., Desk, Chair, Locker)
   - Teachers can add/remove/reorder rent items in Rent Settings page

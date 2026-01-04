@@ -804,10 +804,21 @@ body.maintenance-active .main-content {
         overflow-x: hidden;
     }
 
-    /* Hide desktop sidebar on mobile to prevent horizontal overflow */
+    /* Slide-out sidebar on mobile instead of hiding */
     .sidebar,
     .student-sidebar {
-        display: none !important;
+        position: fixed;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        z-index: 1050;
+        height: 100vh;
+        overflow-y: auto;
+    }
+
+    .sidebar.show,
+    .student-sidebar.show {
+        transform: translateX(0);
+        box-shadow: 0 0 30px rgba(0, 0, 0, 0.3);
     }
 
     /* Reset main content to fill screen without sidebar margin */
@@ -840,6 +851,29 @@ body.maintenance-active .main-content {
     /* Add padding at bottom for mobile nav */
     body {
         padding-bottom: 70px;
+    }
+
+    /* Show help button icon on mobile */
+    .page-header-actions .btn[href*="help"] {
+        display: inline-flex !important;
+        padding: 0.5rem;
+        width: 40px;
+        height: 40px;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .page-header-actions .btn[href*="help"] span:not(.material-symbols-outlined) {
+        display: none;
+    }
+
+    /* Show contextual help link icon on mobile */
+    .contextual-help-link {
+        display: inline-flex !important;
+    }
+
+    .contextual-help-link .help-text {
+        display: none;
     }
 }
 
@@ -883,4 +917,59 @@ body.maintenance-active .main-content {
 
 .mobile-bottom-nav a:hover {
     color: var(--primary, #1a4d47);
+}
+
+/* Mobile Menu Toggle Button */
+.mobile-menu-toggle {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 1060;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.mobile-menu-toggle:hover,
+.mobile-menu-toggle:focus {
+    background: var(--primary-hover);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    transform: scale(1.05);
+}
+
+.mobile-menu-toggle:active {
+    transform: scale(0.95);
+}
+
+@media (max-width: 767.98px) {
+    .mobile-menu-toggle {
+        display: flex;
+    }
+}
+
+/* Sidebar Backdrop */
+.sidebar-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1040;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.sidebar-backdrop.show {
+    opacity: 1;
+    visibility: visible;
 }

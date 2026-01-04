@@ -66,6 +66,14 @@
 
     <div id="flashToastContainer" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;"></div>
 
+    <!-- Mobile Menu Toggle Button -->
+    <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle navigation menu">
+        <span class="material-symbols-outlined">menu</span>
+    </button>
+
+    <!-- Sidebar Backdrop -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
     <!-- Sidebar -->
     <aside class="sidebar d-flex flex-column">
         <div class="sidebar-brand">
@@ -372,6 +380,44 @@
                     });
             });
         }
+    </script>
+    <!-- Mobile Sidebar Toggle Script -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const sidebar = document.querySelector('.sidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            const toggle = document.getElementById('mobileMenuToggle');
+
+            function openSidebar() {
+                sidebar?.classList.add('show');
+                backdrop?.classList.add('show');
+                document.body.style.overflow = 'hidden';
+            }
+
+            function closeSidebar() {
+                sidebar?.classList.remove('show');
+                backdrop?.classList.remove('show');
+                document.body.style.overflow = '';
+            }
+
+            toggle?.addEventListener('click', function() {
+                if (sidebar?.classList.contains('show')) {
+                    closeSidebar();
+                } else {
+                    openSidebar();
+                }
+            });
+
+            backdrop?.addEventListener('click', closeSidebar);
+
+            // Close sidebar when clicking a link on mobile
+            if (window.innerWidth <= 768) {
+                const sidebarLinks = sidebar?.querySelectorAll('a.nav-link');
+                sidebarLinks?.forEach(link => {
+                    link.addEventListener('click', closeSidebar);
+                });
+            }
+        });
     </script>
     <!-- TODO: Re-enable View as Student once demo sessions are stable -->
     {% block extra_scripts %}{% endblock %}
