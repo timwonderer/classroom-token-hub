@@ -309,7 +309,7 @@ def view_doc(doc_path):
         # All documentation is accessible to all users. The 'roles' metadata
         # is used for contextual highlighting and navigation suggestions.
         user_role = None
-        if session.get('is_admin'):
+        if session.get('admin_id'):
             user_role = 'teacher'
         elif session.get('student_id'):
             user_role = 'student'
