@@ -63,14 +63,14 @@
     <a href="#main-content" class="skip-link">Skip to main content</a>
 
     <!-- Mobile Menu Toggle Button -->
-    <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle navigation menu">
+    <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle navigation menu" aria-controls="studentSidebar" aria-expanded="false">
         <span class="material-symbols-outlined">menu</span>
     </button>
 
     <!-- Sidebar Backdrop -->
-    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+    <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
 
-    <aside class="student-sidebar">
+    <aside class="student-sidebar" id="studentSidebar" role="navigation" aria-label="Student navigation" aria-hidden="true">
         <a class="student-brand" href="{{ url_for('student.dashboard') }}">
             
             <div>
@@ -342,76 +342,7 @@
         }
     </script>
     <!-- Mobile Sidebar Toggle Script -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const sidebar = document.querySelector('.student-sidebar');
-            const backdrop = document.getElementById('sidebarBackdrop');
-            const toggle = document.getElementById('mobileMenuToggle');
-
-            function openSidebar() {
-                sidebar?.classList.add('show');
-                backdrop?.classList.add('show');
-                document.body.style.overflow = 'hidden';
-            }
-
-            function closeSidebar() {
-                sidebar?.classList.remove('show');
-                backdrop?.classList.remove('show');
-                document.body.style.overflow = '';
-            }
-
-            toggle?.addEventListener('click', function() {
-                if (sidebar?.classList.contains('show')) {
-                    closeSidebar();
-                } else {
-                    openSidebar();
-                }
-            });
-
-            backdrop?.addEventListener('click', closeSidebar);
-
-            // Manage sidebar link click behavior based on current viewport size
-            function updateSidebarLinkListeners(isMobile) {
-                const sidebarLinks = sidebar?.querySelectorAll('a');
-                if (!sidebarLinks) {
-                    return;
-                }
-
-                sidebarLinks.forEach(link => {
-                    // Always remove first to avoid duplicate listeners
-                    link.removeEventListener('click', closeSidebar);
-                    if (isMobile) {
-                        link.addEventListener('click', closeSidebar);
-                    }
-                });
-            }
-
-            // Initial setup based on current viewport width
-            updateSidebarLinkListeners(window.innerWidth <= 768);
-
-            // Respond to viewport changes (e.g., resizing between mobile and desktop)
-            if (window.matchMedia) {
-                const mobileMediaQuery = window.matchMedia('(max-width: 768px)');
-
-                // Keep listeners in sync with current match state
-                const handleMediaChange = event => {
-                    updateSidebarLinkListeners(event.matches);
-                };
-
-                // Some browsers use addEventListener, others use addListener
-                if (typeof mobileMediaQuery.addEventListener === 'function') {
-                    mobileMediaQuery.addEventListener('change', handleMediaChange);
-                } else if (typeof mobileMediaQuery.addListener === 'function') {
-                    mobileMediaQuery.addListener(handleMediaChange);
-                }
-            } else {
-                // Fallback: update on window resize if matchMedia is unavailable
-                window.addEventListener('resize', function() {
-                    updateSidebarLinkListeners(window.innerWidth <= 768);
-                });
-            }
-        });
-    </script>
+    <script src="{{ static_url('js/mobile-sidebar-toggle.js') }}"></script>
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>
