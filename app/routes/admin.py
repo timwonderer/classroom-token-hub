@@ -4404,7 +4404,7 @@ def economy_health():
 
     # Fallback to first class-specific payroll when no global settings exist and
     # the user did not explicitly request all-classes scope.
-    if not payroll_settings and scope_param != 'all':
+    if not payroll_settings and scope != 'all':
         first_class_setting = payroll_query.filter(PayrollSettings.block.isnot(None)).order_by(PayrollSettings.block.asc()).first()
         if first_class_setting:
             payroll_settings = first_class_setting
