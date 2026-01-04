@@ -871,7 +871,7 @@ body.maintenance-active .main-content {
         padding: 0.5rem;
         min-width: 40px;
         height: 40px;
-        display: inline-flex !important;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
     }
