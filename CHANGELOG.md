@@ -152,6 +152,12 @@ and this project follows semantic versioning principles.
 - Standardized UTC timestamp formatting
 
 ### Fixed
+- **Store Item Creation** - Fixed critical bug where tier, collective_goal_type, collective_goal_target, and redemption_prompt fields were not being saved when creating new store items
+  - Added `tier` field assignment to store creation route (app/routes/admin.py:3047)
+  - Added `collective_goal_type` and `collective_goal_target` field assignments for collective goal items (app/routes/admin.py:3063-3064)
+  - Added `redemption_prompt` field assignment for delayed-use items (app/routes/admin.py:3066)
+  - These fields were already present in the form (forms.py) and model (models.py), but were not being passed to the StoreItem constructor
+  - Edit functionality uses `populate_obj` rather than manually assigning these fields, so this bug specifically affected the creation route
 - **Transaction Issue Reporting** - Added report buttons to all transaction tables in Banking/Finances page (Checking and Savings tabs), allowing students to report issues on any visible transaction (up to 50 most recent), not just the 5 shown on dashboard
 - **Issue Resolution Display** - Fixed `developer_resolved` status showing as "Escalated" instead of "Resolved by Developer" in teacher view
 - **Issue Context Snapshot** - Fixed incorrect balance calculation in context_snapshot by using Student model's `get_checking_balance()` and `get_savings_balance()` methods instead of non-existent `get_balances()` function
@@ -170,6 +176,36 @@ and this project follows semantic versioning principles.
 
 ### Documentation
 - Reorganized documentation structure for improved navigation
+- **Developer Documentation Updates** - Updated development tracking documentation to reflect current status
+  - Updated `docs/development/DEVELOPMENT.md` to reflect v1.6.0 status (was showing 1.4.0)
+  - Added v1.5.0 and v1.6.0 release summaries to Recent Releases section
+  - Updated target version from 1.5.0 to 1.7.0
+  - Updated `IMPLEMENTATION_PROGRESS.md` to mark sysadmin routes and templates as completed (were incorrectly marked as pending)
+  - Added detailed test coverage priorities and recommendations
+  - Updated Next Steps with current implementation status (85% complete)
+  - Added specific guidance for remaining work (tests, user docs, technical docs)
+- **Comprehensive Documentation Accuracy Fixes** - Corrected 10 inaccuracies found in user-facing documentation
+  - **Store Items (docs/features/store/creating-items.md)**:
+    - Fixed tier system documentation to reflect actual implementation (Basic/Standard/Premium/Luxury based on % of CWI, not Tier 1/2/3 with dollar amounts)
+    - Corrected default state - items are created as active by default, not inactive
+    - Removed non-existent image upload feature documentation
+    - Removed non-existent daily purchase limit documentation
+    - Updated terminology to match code (Immediate Use/Delayed Use instead of Virtual/Physical)
+    - Added missing "Collective Goal" item type to documentation with full explanation
+    - Corrected purchase limits documentation to reflect actual behavior (concurrent ownership, not daily limits)
+    - Updated scenario examples to use correct field names and remove daily limits
+    - Removed confusing "if available" language for collective goals (feature is fully available)
+    - Removed misleading "Use images" tip from Tips for Success section (feature doesn't exist)
+    - Fixed contradictory troubleshooting text about daily limits (clarified to use inventory and per-student limits)
+  - **Payroll (docs/features/payroll/running-payroll.md)**:
+    - Removed non-existent automatic payroll feature documentation (entire section)
+    - Added guidance for manual payroll scheduling and consistency
+    - Clarified that break time IS paid (system does not exclude breaks from hours worked)
+    - Added Q&A explaining how to handle unpaid breaks if desired
+    - Updated all automatic payroll references to reflect manual-only operation
+  - **Banking (docs/features/banking/transferring-money.md)**:
+    - Removed non-existent transfer limits documentation (daily limits, min/max transfer amounts)
+    - Simplified to only document actual rules (no negative balances)
 
 ### Dependencies
 - Bump `requests` from 2.32.4 to 2.32.5

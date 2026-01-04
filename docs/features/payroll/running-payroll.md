@@ -34,7 +34,7 @@ That's it! Tokens are automatically distributed to student checking accounts.
 
 ✅ **Payroll Settings configured**:
 - Pay rate set (e.g., $10/hour)
-- Schedule configured (if using automatic payroll)
+- Pay frequency planned (e.g., weekly, bi-weekly)
 
 ✅ **Students have attendance data**:
 - Students have clocked in/out during the period
@@ -47,8 +47,9 @@ That's it! Tokens are automatically distributed to student checking accounts.
 
 Visit **Payroll** → **Settings** to verify:
 - **Pay Rate**: How much students earn per hour
-- **Pay Schedule**: Weekly, bi-weekly, or manual
 - **Block-Specific Rates** (Advanced): Different pay for different periods
+
+> **Note:** Payroll is always run manually. There is no automatic payroll feature. Set a reminder to run payroll on your chosen schedule.
 
 ## How Payroll Works
 
@@ -57,9 +58,9 @@ Visit **Payroll** → **Settings** to verify:
 When you run payroll, the system:
 
 1. **Calculates work time** since last payroll:
-   - Looks at all "Start Work" and "Done" events
-   - Calculates total minutes worked
-   - Excludes break time
+   - Looks at all "Start Work" (active tap) and "Done" (inactive tap) events
+   - Calculates total minutes between active and inactive taps
+   - Includes all time logged, regardless of reason
 
 2. **Applies pay rate**:
    - Converts minutes to hours
@@ -125,37 +126,26 @@ After running:
   - View their transaction history
   - Verify payroll deposit appears
 
-## Payroll Schedules
+## Payroll Schedule Planning
 
-### Manual Payroll
+**Payroll is always manual** - you must click "Run Payroll" to process payments.
 
-**How it works**:
-- You click "Run Payroll" whenever you want
-- No automatic processing
-- Good for: New teachers, flexible schedules
+### Best Practices for Consistency
 
-**Best practices**:
-- Run at consistent times (e.g., every Friday)
-- Set a reminder so you don't forget
-- Communicate schedule to students
+**Set a recurring reminder**:
+- Weekly: Every Friday at the same time
+- Bi-weekly: Every other Friday
+- Use your calendar app to create a recurring event
 
-### Automatic Payroll
+**Communicate your schedule**:
+- Post your payroll day on the classroom board
+- Announce before running: "Paychecks processing!"
+- Be consistent so students know when to expect pay
 
-**How it works**:
-- Payroll runs automatically on schedule
-- You get notified when it runs
-- Good for: Experienced teachers, consistency
-
-**Schedules**:
-- **Weekly**: Every Friday at 3 PM
-- **Bi-weekly**: Every other Friday
-- **Custom**: Set your own day/time
-
-**Setting up automatic payroll**:
-1. Go to **Payroll** → **Settings**
-2. Select **Enable Automatic Payroll**
-3. Choose frequency and day
-4. Save settings
+**Tips**:
+- Run payroll same day/time each week
+- Run before students want to shop in the store
+- Friday afternoons work well (students see earnings before weekend)
 
 ## Handling Special Cases
 
@@ -186,7 +176,7 @@ After running:
 - Just run payroll now
 - System calculates all time since last run
 - Students get full back pay automatically
-- Consider switching to automatic payroll
+- Set a recurring reminder to avoid missing future runs
 
 ### Student Not Receiving Pay
 
@@ -244,7 +234,10 @@ Click on a specific run to see:
 A: No, but you can void individual transactions if needed. Go to **Transactions**, find the payroll entry, and click **Void**.
 
 **Q: Do students on break get paid?**
-A: No, break time is excluded from hours worked.
+A: Yes, all time between "Start Work" and "Done" taps is paid at the configured rate. The system does not differentiate between work time and break time.
+
+**Q: How can I handle breaks if I don't want to pay for them?**
+A: If you want unpaid breaks, ask students to tap "Done" before breaks and "Start Work" after breaks. This creates separate paid work sessions.
 
 **Q: Can different students have different pay rates?**
 A: Not per-student, but you can set different rates per block/period if students are in multiple periods.
@@ -253,7 +246,7 @@ A: Not per-student, but you can set different rates per block/period if students
 A: Future payroll runs use the new rate. Past payments are not affected.
 
 **Q: Can students see their hours before payroll runs?**
-A: Yes! They can view projected earnings on their **Work & Pay** page.
+A: Yes! Students can view their attendance history and projected earnings on the **Work & Pay** page.
 
 ## Related Articles
 

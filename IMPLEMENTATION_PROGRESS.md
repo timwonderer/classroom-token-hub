@@ -122,38 +122,59 @@ Implemented 4 routes:
   - Status history timeline
   - Resolution actions history
 
-### 10. Sysadmin Routes ⏳
-**Pending Implementation**:
-- `GET /sysadmin/issues` - Developer issue queue
-- `GET /sysadmin/issues/<id>` - View with data minimization:
-  - Opaque student reference only
-  - No student names unless necessary
-  - Class name only if teacher shared
-- `POST /sysadmin/issues/<id>/resolve` - Developer resolution
+### 10. Sysadmin Routes ✅
+**File**: `app/routes/system_admin.py`
 
-### 11. Sysadmin Templates ⏳
-**Files Needed**:
-- `templates/sysadmin_issues_queue.html`
-- `templates/sysadmin_view_issue.html` - With data minimization UI
+Implemented 4 routes:
+- `GET /sysadmin/issues` - escalated_issues() (line 1760)
+- `GET /sysadmin/issues/<id>` - view_escalated_issue() (line 1786)
+- `POST /sysadmin/issues/<id>/start-review` - start_review_escalated_issue() (line 1809)
+- `POST /sysadmin/issues/<id>/resolve` - resolve_escalated_issue() (line 1836)
+
+**Features**:
+- Data minimization with opaque student references
+- Optional class name sharing (teacher-controlled)
+- Developer resolution workflow
+- Status tracking (escalated → developer_review → developer_resolved)
+
+### 11. Sysadmin Templates ✅
+**Files Created**:
+- `templates/sysadmin_escalated_issues.html` - Issue queue view
+- `templates/sysadmin_view_escalated_issue.html` - Detailed issue view with data minimization UI
 
 ### 12. Tests ⏳
-**Test Coverage Needed**:
-- Issue creation and context capture
-- Student submission (general + transaction)
-- Teacher resolution actions (reverse, manual, deny)
-- Teacher escalation workflow
-- Multi-tenancy scoping
-- Opaque reference generation
-- Status transitions
-- Audit trail recording
+**Priority Test Coverage Needed**:
 
-### 13. Documentation ⏳
-**Files to Update**:
-- `CHANGELOG.md` - Document new issue resolution system
-- `docs/user-guides/teacher_manual.md` - Add issue review section
-- `docs/user-guides/student_guide.md` - Update help & support section
-- `docs/technical-reference/architecture.md` - Document issue resolution flow
-- `docs/security/` - Document data minimization approach
+**Unit Tests** (app/utils/issue_helpers.py):
+- ✅ Issue creation with context capture
+- ✅ Opaque reference generation (non-reversible)
+- ✅ Context snapshot creation (balances, transactions)
+- ⏳ Status transition validation
+- ⏳ Audit trail recording
+
+**Integration Tests** (Full workflow):
+- ⏳ Student issue submission (general)
+- ⏳ Student transaction issue reporting
+- ⏳ Teacher resolution actions (reverse, manual adjustment, deny)
+- ⏳ Teacher escalation workflow with reward eligibility
+- ⏳ Sysadmin review and resolution
+- ⏳ Multi-tenancy scoping (issues isolated by join_code)
+
+**Recommended Test File**: `tests/test_issue_resolution.py`
+
+**Test Priorities**:
+1. **Critical**: Multi-tenancy scoping tests (ensure join_code isolation)
+2. **High**: Teacher resolution actions (transaction voiding, status changes)
+3. **Medium**: Opaque reference generation (privacy compliance)
+4. **Medium**: Complete workflow (student → teacher → sysadmin)
+
+### 13. Documentation ✅
+**Files Updated**:
+- ✅ `CHANGELOG.md` - Issue Resolution System documented in v1.5.0
+- ⏳ `docs/user-guides/teacher_manual.md` - Add issue review section
+- ⏳ `docs/user-guides/student_guide.md` - Update help & support section
+- ⏳ `docs/technical-reference/architecture.md` - Document issue resolution flow
+- ⏳ `docs/security/` - Document data minimization approach
 
 ## Design Principles Implemented
 
@@ -168,30 +189,57 @@ Implemented 4 routes:
 ✅ **Non-Communicative**: No free-form messaging
 ✅ **Reward Eligibility**: Teacher flags potential bug rewards
 
+## Current Status Summary
+
+**Implementation: 85% Complete** ✅
+
+✅ **Completed**:
+- Database models and migration
+- Utility functions and helpers
+- Student routes and templates
+- Teacher routes and templates
+- Sysadmin routes and templates
+- Core workflow (student → teacher → sysadmin)
+- CHANGELOG documentation
+
+⏳ **Remaining Work**:
+- Test coverage for Issue Resolution system
+- User guide documentation updates
+- Technical reference documentation
+- Security documentation updates
+
 ## Next Steps
 
-1. **Create Teacher Templates** - Priority 1
-   - Implement issue queue view
-   - Implement detailed issue view with resolution UI
-   - Add escalation form with reward checkbox
+### Priority 1: Test Coverage ⏳
+**Critical for production confidence:**
+- Multi-tenancy scoping tests (ensure join_code isolation)
+- Teacher resolution actions (void transactions, status updates)
+- Complete workflow integration tests
+- Opaque reference privacy compliance
 
-2. **Implement Sysadmin Interface** - Priority 2
-   - Create routes with data minimization
-   - Create templates showing only opaque references
-   - Implement resolution workflow
+**Recommended approach:**
+1. Create `tests/test_issue_resolution.py`
+2. Add multi-tenancy scoping tests first (critical)
+3. Add workflow integration tests
+4. Add edge case and error handling tests
 
-3. **Write Tests** - Priority 3
-   - Unit tests for helpers
-   - Integration tests for full workflow
-   - Multi-tenancy scoping tests
+### Priority 2: User Documentation ⏳
+**Help users understand the system:**
+- Update `docs/user-guides/teacher_manual.md` with Issue Review section
+- Update `docs/user-guides/student_guide.md` with Help & Support usage
+- Create diagnostic guides if needed
 
-4. **Update Documentation** - Priority 4
-   - User-facing guides
-   - Technical documentation
-   - Security documentation
+### Priority 3: Technical Documentation ⏳
+**For developers and architects:**
+- Document issue resolution flow in `docs/technical-reference/architecture.md`
+- Document data minimization approach in `docs/security/`
+- Add privacy compliance notes
 
-5. **Run Migration** - Before deployment
-6. **Commit and Push** - Final step
+### Priority 4: Deployment Validation
+**Before production release:**
+- Run test suite and ensure passing
+- Verify multi-tenancy scoping manually
+- Test full workflow in staging environment
 
 ## Database Schema Summary
 

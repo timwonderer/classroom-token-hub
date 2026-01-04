@@ -15,10 +15,10 @@ Learn how to create and configure store items for your classroom economy.
 ## What You'll Learn
 
 - How to create basic store items
-- Understanding item types (virtual vs physical)
+- Understanding item types (immediate, delayed, collective, hall pass)
 - Setting prices and limits
 - Configuring expiration dates
-- Creating hall pass items
+- Creating collective goal items
 
 ## Before You Start
 
@@ -49,42 +49,66 @@ From the admin dashboard:
 
 - **Price (tokens)**: How many tokens the item costs
 - **Tier**: Optional pricing tier for economy balance tracking
-  - Tier 1: Low-priced items ($1-50)
-  - Tier 2: Medium-priced items ($51-200)
-  - Tier 3: High-priced items ($201+)
+  - No Tier (leave blank)
+  - Basic (2-5% of CWI)
+  - Standard (5-10% of CWI)
+  - Premium (10-25% of CWI)
+  - Luxury (25-50% of CWI)
+
+> **Note:** Tiers are organizational labels based on percentage of Class Wealth Index (CWI), not fixed dollar amounts. They help you categorize items by their relative cost in your classroom economy.
 
 #### Item Type
 
 Choose how the item works:
 
-**Virtual Items** (immediate redemption):
+**Immediate Use**:
 - Student purchases, automatically "owns" it
 - No teacher approval needed
-- Good for: Points, privileges, digital rewards
+- Status changes to "completed" immediately
+- Good for: Bonus points, privileges, digital rewards
 - Example: "5 Bonus Points" - automatically added to their record
 
-**Physical Items** (requires redemption):
+**Delayed Use**:
 - Student purchases, teacher approves redemption later
-- Use for tangible rewards
+- Status is "processing" until teacher marks as redeemed
+- Use for tangible rewards you hand out
 - Good for: Snacks, pencils, small prizes
 - Example: "Candy Bar" - student must redeem in person
 
-**Hall Pass Items**:
-- Adds to student's hall pass balance
+**Collective Goal**:
+- Class works together to reach a purchase goal
+- Choose "Fixed Number" (set target) or "Whole Class" (everyone must buy)
+- Status is "pending" until goal is met
+- Good for: Class rewards, pizza parties, field trips
+- Example: "Pizza Party" - set goal of 20 purchases, class works together
+
+**Hall Pass**:
+- Adds passes to student's hall pass balance
+- No approval needed, automatic
 - Used with hall pass system
-- Example: "2 Extra Hall Passes"
+- Example: "2 Extra Hall Passes" - adds 2 to their balance
+
+> **Note:** Item type cannot be changed after creation. Choose carefully.
 
 ### 3. Configure Limits (Optional)
 
-**Purchase Limits**:
-- **Daily limit**: How many times per day a student can buy this item
-- **Total limit**: Maximum lifetime purchases per student
-- Leave blank for unlimited purchases
+**Inventory** (global stock limit):
+- Total quantity available to ALL students across all periods
+- Example: Set to 10 if you only have 10 physical candy bars
+- Leave blank for unlimited inventory
+
+**Purchase Limit per Student** (how many each student can own at once):
+- Maximum number a student can have in their inventory at one time
+- Students can buy again after using/redeeming the item
+- Example: Homework Pass set to 2 means students can own max 2 at once
+- Leave blank for unlimited per student
 
 **Example Limits**:
-- Homework Pass: 1 per week, 4 total per semester
-- Candy: 2 per day, unlimited total
-- Seat Change: No daily limit, 2 total
+- Homework Pass: Purchase limit 4 (max 4 at once, can buy more after using)
+- Candy: Inventory 20 (only 20 total available), Purchase limit 2 (max 2 per student at once)
+- Seat Change: No inventory limit, Purchase limit 2 (max 2 owned at once)
+
+> **Note:** There is no daily purchase limit. Limits are based on concurrent ownership (how many they can have at once) and total inventory (how many exist).
 
 ### 4. Set Expiration (Optional)
 
@@ -98,22 +122,17 @@ Choose how the item works:
 - Prevents students from hoarding
 - Example: "Snack" expires 7 days after purchase
 
-### 5. Add Image (Optional)
+### 5. Save the Item
 
-Upload an image to make the item more appealing:
-- Supported formats: JPG, PNG, GIF
-- Recommended size: 400x400 pixels
-- File size: Under 2MB
-
-### 6. Save the Item
-
-1. Click **Create Item**
-2. The item is created as **Inactive** by default
-3. To make it available, click **Activate** next to the item
+1. Review the **Item is Active** checkbox (checked by default)
+2. If you want the item hidden from students initially, uncheck **Item is Active**
+3. Click **Save Item**
+4. The item will be visible to students immediately if active
+5. To change visibility later, click **Activate/Deactivate** next to the item
 
 ## Item Types Explained
 
-### Virtual Items
+### Immediate Use Items
 
 Best for:
 - Bonus points
@@ -125,9 +144,10 @@ Best for:
 - Student clicks "Purchase"
 - Tokens deducted immediately
 - Item added to "My Items"
+- Status automatically set to "completed"
 - No teacher action required
 
-### Physical Items
+### Delayed Use Items
 
 Best for:
 - Tangible rewards (candy, pencils, stickers)
@@ -138,7 +158,32 @@ Best for:
 - Student clicks "Purchase"
 - Tokens deducted
 - Item appears in **Redemptions** queue for teacher
+- Status is "processing"
 - Teacher marks as "Redeemed" when item is given
+
+### Collective Goal Items
+
+Best for:
+- Class-wide rewards
+- Team goals
+- Special events (pizza parties, movie days)
+- Building class unity
+
+**How they work**:
+- **Fixed Number**: Set a target number of purchases (e.g., 20)
+  - Each student who purchases contributes to the goal
+  - When target is reached, all contributors benefit
+  - Example: "Pizza Party" - 20 students must purchase
+
+- **Whole Class**: Every enrolled student must purchase
+  - Ensures everyone participates
+  - Goal met when all students have purchased
+  - Example: "Field Trip Fund" - everyone must contribute
+
+**Status tracking**:
+- Purchase status shows "pending" until goal is met
+- Teacher can view progress toward goal
+- When goal reached, status changes to "completed"
 
 ### Hall Pass Items
 
@@ -158,7 +203,7 @@ Best for:
 Create items that give multiple rewards:
 1. Set the price for the bundle
 2. In description, list what's included
-3. Use virtual items for automatic multi-reward bundles
+3. Use immediate use items for automatic multi-reward bundles
 
 Example: "Starter Pack" ($200) includes:
 - 2 Homework Passes
@@ -167,13 +212,28 @@ Example: "Starter Pack" ($200) includes:
 
 ### Collective Goal Items
 
-Items the whole class contributes to:
-1. Set a high price (e.g., $5000)
-2. Enable "Collective Goal" option (if available)
-3. Students contribute individually
-4. When goal reached, whole class benefits
+Items the whole class works toward together:
+1. Select "Collective Goal" as the item type
+2. Choose goal type:
+   - **Fixed Number**: Set target number of purchases (e.g., 20 students)
+   - **Whole Class**: All enrolled students must purchase
+3. Set the price (what each student pays)
+4. Students purchase individually
+5. When goal is met, all contributors benefit
 
-Example: "Pizza Party" - class collectively raises $5000
+**Example: Fixed Number**
+- Item: "Pizza Party"
+- Price: $50 per student
+- Goal Type: Fixed Number
+- Target: 20 purchases
+- When 20 students have purchased, goal is met
+
+**Example: Whole Class**
+- Item: "Movie Day"
+- Price: $100 per student
+- Goal Type: Whole Class
+- All students must purchase
+- When everyone has contributed, class earns movie day
 
 ## Common Scenarios
 
@@ -182,9 +242,9 @@ Example: "Pizza Party" - class collectively raises $5000
 **Setup**:
 - Name: "Homework Pass"
 - Price: $150
-- Type: Virtual
-- Daily Limit: None
-- Total Limit: 4 (per semester)
+- Type: Immediate Use
+- Inventory: Leave blank (unlimited)
+- Purchase Limit per Student: 4 (can own max 4 at once)
 - Description: "Skip one homework assignment. Cannot be used on tests or projects. Must notify teacher before assignment is due."
 
 ### Scenario: Snack from Treasure Box
@@ -192,9 +252,9 @@ Example: "Pizza Party" - class collectively raises $5000
 **Setup**:
 - Name: "Snack"
 - Price: $50
-- Type: Physical
-- Daily Limit: 2
-- Total Limit: None
+- Type: Delayed Use
+- Inventory: 30 (only 30 snacks available)
+- Purchase Limit per Student: 2 (max 2 at once)
 - Expiration after purchase: 7 days
 - Description: "Choose one snack from the treasure box. Must redeem within one week."
 
@@ -204,9 +264,8 @@ Example: "Pizza Party" - class collectively raises $5000
 - Name: "2 Extra Hall Passes"
 - Price: $100
 - Type: Hall Pass
-- Daily Limit: None
-- Total Limit: None
-- Hall Pass Quantity: 2
+- Inventory: Leave blank (unlimited)
+- Purchase Limit per Student: Leave blank (unlimited)
 - Description: "Adds 2 passes to your hall pass balance."
 
 ## Tips for Success
@@ -214,7 +273,6 @@ Example: "Pizza Party" - class collectively raises $5000
 - **Start simple**: Begin with 3-5 basic items
 - **Balance pricing**: Use the Economy Health page to ensure prices are fair
 - **Clear descriptions**: Students should understand exactly what they're buying
-- **Use images**: Visual items are more appealing
 - **Monitor redemptions**: Check the Redemptions tab regularly
 - **Adjust as needed**: Change prices if items aren't selling or are too popular
 
@@ -226,7 +284,8 @@ Example: "Pizza Party" - class collectively raises $5000
 - Ensure students are in the correct class period
 
 **Item sold out too quickly**:
-- Set daily or total limits
+- Set inventory limits (total stock available)
+- Set purchase limits per student (max they can own at once)
 - Increase the price
 - Create similar items to distribute demand
 
