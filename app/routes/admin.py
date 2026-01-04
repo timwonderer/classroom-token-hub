@@ -6930,7 +6930,7 @@ def copy_feature_settings():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error copying feature settings: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': 'Failed to copy settings due to an internal error.'}), 500
 
 
 # -------------------- ANNOUNCEMENTS --------------------
@@ -7889,7 +7889,7 @@ def api_economy_validate(feature):
 
     except Exception as e:
         current_app.logger.error(f"Error validating {feature}: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': 'Failed to validate feature due to an internal error.'}), 500
 
 
 # ==================== PASSKEY AUTHENTICATION (Official SDK Implementation) ====================

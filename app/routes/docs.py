@@ -233,13 +233,16 @@ def view_doc(doc_path):
                 current_app.logger.warning(f"Error resolving documentation path '{untrusted_path}': {e}")
                 abort(404)
 
+            # Verify the resolved path is still within the docs root
             try:
-                candidate.relative_to(root_resolved)
+                relative_path = candidate.relative_to(root_resolved)
             except ValueError:
                 current_app.logger.warning(f"Path outside DOCS_ROOT: {untrusted_path}")
                 abort(404)
 
-            return candidate
+            # Reconstruct the safe path from the validated relative path
+            safe_candidate = root_resolved / relative_path
+            return safe_candidate
 
         # Ensure we have a safe, absolute docs root
         try:
