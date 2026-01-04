@@ -370,11 +370,44 @@
 
             backdrop?.addEventListener('click', closeSidebar);
 
-            // Close sidebar when clicking a link on mobile
-            if (window.innerWidth <= 768) {
+            // Manage sidebar link click behavior based on current viewport size
+            function updateSidebarLinkListeners(isMobile) {
                 const sidebarLinks = sidebar?.querySelectorAll('a');
-                sidebarLinks?.forEach(link => {
-                    link.addEventListener('click', closeSidebar);
+                if (!sidebarLinks) {
+                    return;
+                }
+
+                sidebarLinks.forEach(link => {
+                    // Always remove first to avoid duplicate listeners
+                    link.removeEventListener('click', closeSidebar);
+                    if (isMobile) {
+                        link.addEventListener('click', closeSidebar);
+                    }
+                });
+            }
+
+            // Initial setup based on current viewport width
+            updateSidebarLinkListeners(window.innerWidth <= 768);
+
+            // Respond to viewport changes (e.g., resizing between mobile and desktop)
+            if (window.matchMedia) {
+                const mobileMediaQuery = window.matchMedia('(max-width: 768px)');
+
+                // Keep listeners in sync with current match state
+                const handleMediaChange = event => {
+                    updateSidebarLinkListeners(event.matches);
+                };
+
+                // Some browsers use addEventListener, others use addListener
+                if (typeof mobileMediaQuery.addEventListener === 'function') {
+                    mobileMediaQuery.addEventListener('change', handleMediaChange);
+                } else if (typeof mobileMediaQuery.addListener === 'function') {
+                    mobileMediaQuery.addListener(handleMediaChange);
+                }
+            } else {
+                // Fallback: update on window resize if matchMedia is unavailable
+                window.addEventListener('resize', function() {
+                    updateSidebarLinkListeners(window.innerWidth <= 768);
                 });
             }
         });
