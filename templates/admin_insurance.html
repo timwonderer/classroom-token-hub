@@ -3,10 +3,14 @@
 {% set current_page = "insurance" %}
 {% block title %}Insurance Management{% endblock %}
 {% block page_icon %}shield{% endblock %}
+{% set custom_full_guide = true %}
 {% block page_header_actions %}
   <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#insuranceGuide" aria-controls="insuranceGuide">
     <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
   </button>
+  <a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-rent-insurance') }}" class="btn btn-outline-primary d-flex align-items-center gap-2" target="_blank" rel="noopener">
+    <span class="material-symbols-outlined">menu_book</span> <span>Full Guide</span>
+  </a>
 {% endblock %}
 
 {% block extra_head %}

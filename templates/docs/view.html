@@ -509,6 +509,30 @@
         visibility: visible;
     }
 }
+
+/* Keep sidebar visible on desktop */
+@media (min-width: 992px) {
+    .docs-layout .docs-sidebar {
+        position: static;
+        height: auto;
+        transform: none !important;
+        box-shadow: none;
+    }
+
+    .docs-layout .docs-sidebar.collapse {
+        display: block !important;
+        visibility: visible;
+    }
+
+    .docs-layout .docs-sidebar.collapsing {
+        height: auto !important;
+        transition: none;
+    }
+
+    .docs-layout .docs-backdrop {
+        display: none !important;
+    }
+}
 </style>
 
 <script>
