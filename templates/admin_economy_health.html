@@ -1,4 +1,5 @@
 {% extends "layout_admin.html" %}
+{% import "macros/help.html" as help %}
 {% block page_title %}Economy Health{% endblock %}
 {% block page_icon %}monitor_heart{% endblock %}
 {% block page_header_actions %}
@@ -119,12 +120,25 @@
 
 <div class="container-fluid py-3">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3">
-    <p class="text-muted mb-0">Review your current CWI and see how payroll, rent, banking, insurance, and the store fit together.</p>
+    <div class="d-flex align-items-center gap-2">
+      <p class="text-muted mb-0">Review your current CWI and see how payroll, rent, banking, insurance, and the store fit together.</p>
+      {{ help.help_icon("diagnostics/teacher-attendance-payroll", "Economy health help") }}
+    </div>
     <div class="btn-group" role="group" aria-label="CWI scope">
-      <a class="btn {% if scope != 'class' %}btn-primary text-white{% else %}btn-white{% endif %}" href="{{ url_for('admin.economy_health', scope='all') }}">All classes</a>
-      <a class="btn {% if scope == 'class' %}btn-primary text-white{% else %}btn-white{% endif %}" href="{{ url_for('admin.economy_health', scope='class', block=selected_block or (blocks[0] if blocks else None)) }}">Individual class</a>
+      <a class="btn {% if scope != 'class' %}btn-primary text-white{% else %}btn-outline-primary{% endif %}" href="{{ url_for('admin.economy_health', scope='all') }}">All classes</a>
+      <a class="btn {% if scope == 'class' %}btn-primary text-white{% else %}btn-outline-primary{% endif %}" href="{{ url_for('admin.economy_health', scope='class', block=selected_block or (blocks[0] if blocks else None)) }}">Individual class</a>
     </div>
   </div>
+
+  {% if scope == 'all' and has_payroll_settings and not has_global_payroll_settings %}
+  <div class="alert alert-info d-flex align-items-start gap-2">
+    <span class="material-symbols-outlined">info</span>
+    <div>
+      <strong>All classes view needs global payroll settings.</strong>
+      <div class="small">You have block-specific payroll settings only. Add a global payroll setting in <a href="{{ payroll_link }}" class="alert-link">Payroll</a> or switch to Individual class.</div>
+    </div>
+  </div>
+  {% endif %}
 
   {% if not payroll_settings %}
   <div class="alert alert-warning d-flex align-items-start gap-2">
