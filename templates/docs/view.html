@@ -179,6 +179,22 @@
                 </nav>
                 {% endif %}
 
+                <!-- Mobile TOC (Collapsible) - Only visible on mobile/tablet -->
+                {% if toc %}
+                <div class="d-lg-none mb-4">
+                    <button class="btn btn-outline-primary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#mobileTOC" aria-expanded="false" aria-controls="mobileTOC" aria-label="Toggle table of contents">
+                        <span class="material-symbols-outlined icon-align">list</span>
+                        Navigation (Table of Contents)
+                    </button>
+                    <div class="collapse mt-2" id="mobileTOC">
+                        <div class="toc-wrapper">
+                            <h3 class="h5 toclabel">Navigation</h3>
+                            {{ toc | safe }}
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Article Content -->
                 <article class="docs-content py-4">
                     <div class="row">

@@ -178,6 +178,10 @@
             <span class="material-symbols-outlined" aria-hidden="true">storefront</span>
             <span class="nav-label">Store</span>
         </a>
+        <a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher') }}" class="{{ 'active' if current_page == 'help' else '' }}" aria-label="Help & Docs" target="_blank" rel="noopener noreferrer">
+            <span class="material-symbols-outlined" aria-hidden="true">help</span>
+            <span class="nav-label">Help</span>
+        </a>
     </nav>
     <div style="text-align: center; margin-top: 10px; font-size: 0.8rem;">
         <a href="{{ url_for('main.switch_view', view='desktop', next=request.path) }}" style="color: var(--gray-800); text-decoration: underline;">View Full Site</a>
