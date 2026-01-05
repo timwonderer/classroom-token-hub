@@ -343,16 +343,28 @@ def view_doc(doc_path):
 @docs_bp.route('/search')
 def search():
     """
-    Simple documentation search.
+    Documentation search with relevance scoring and filtering.
 
-    Searches through documentation files for the query string.
+    Searches through documentation files for the query string,
+    excluding internal-only documentation and ranking results by relevance.
+
+    Metadata support:
+    - searchable: false - Excludes document from search results
+    - keywords: [...] - Additional searchable terms for better matching
+    - description: "..." - Used for search context and relevance
     """
     query = request.args.get('q', '').strip()
 
     if not query:
         return render_template_with_fallback('docs/search.html', query='', results=[])
 
+    # Directories that should be excluded from user-facing search
+    # (internal documentation only)
+    EXCLUDED_DIRECTORIES = {'security', 'development', 'operations', 'archive', 'ai'}
+
     results = []
+    query_lower = query.lower()
+    query_words = set(query_lower.split())
 
     try:
         # Search through all markdown files
@@ -366,51 +378,119 @@ def search():
                     continue
 
                 rel_path = doc_file.relative_to(DOCS_ROOT)
-                if rel_path.parts and rel_path.parts[0] == 'security':
+
+                # Skip excluded directories (internal docs)
+                if rel_path.parts and rel_path.parts[0] in EXCLUDED_DIRECTORIES:
                     continue
 
                 content = doc_file.read_text(encoding='utf-8')
                 metadata, body = parse_front_matter(content)
 
-                # Search in title and content (case-insensitive)
-                title = metadata.get('title', doc_file.stem)
+                # Skip if explicitly marked as not searchable
+                if metadata.get('searchable', True) is False:
+                    continue
 
-                if query.lower() in title.lower() or query.lower() in body.lower():
+                # Get metadata fields for relevance scoring
+                title = metadata.get('title', doc_file.stem)
+                description = metadata.get('description', '').strip()
+                keywords = metadata.get('keywords', [])
+                if isinstance(keywords, str):
+                    keywords = [keywords]
+
+                # Calculate relevance score
+                relevance_score = 0
+
+                # Title match (highest priority - 10 points)
+                if query_lower in title.lower():
+                    relevance_score += 10
+                    # Exact title match gets bonus
+                    if query_lower == title.lower():
+                        relevance_score += 5
+
+                # Keyword match (high priority - 8 points per keyword)
+                for keyword in keywords:
+                    if query_lower in keyword.lower():
+                        relevance_score += 8
+
+                # Description match (medium priority - 5 points)
+                if description and query_lower in description.lower():
+                    relevance_score += 5
+
+                # Body match (lower priority - 1 point, max 3)
+                body_matches = body.lower().count(query_lower)
+                relevance_score += min(body_matches, 3)
+
+                # Word-based relevance (check if query words appear)
+                title_words = set(title.lower().split())
+                keyword_words = set(' '.join(keywords).lower().split())
+                desc_words = set(description.lower().split()) if description else set()
+
+                # Bonus for word matches
+                word_matches_in_title = len(query_words & title_words)
+                word_matches_in_keywords = len(query_words & keyword_words)
+                word_matches_in_desc = len(query_words & desc_words)
+
+                relevance_score += word_matches_in_title * 3
+                relevance_score += word_matches_in_keywords * 2
+                relevance_score += word_matches_in_desc * 1
+
+                # Only include results with positive relevance
+                if relevance_score > 0:
                     # Get relative path for URL
-                    rel_path = rel_path.with_suffix('')
+                    rel_path_no_ext = rel_path.with_suffix('')
 
                     # Find context around the match
                     context = ''
-                    for line in body.split('\n'):
-                        if query.lower() in line.lower():
-                            context = line.strip()[:200]
-                            break
 
-                    # Fallback: if no body line matched (e.g., query only in title),
-                    # use description or first non-empty line as context
-                    if not context:
-                        description = metadata.get('description', '').strip()
-                        if description:
-                            context = description[:200]
-                        else:
+                    # Prefer description as context if available
+                    if description:
+                        context = description[:200]
+                    else:
+                        # Find first line with query match
+                        for line in body.split('\n'):
+                            if query_lower in line.lower():
+                                context = line.strip()[:200]
+                                break
+
+                        # Fallback: first non-empty line
+                        if not context:
                             for line in body.split('\n'):
                                 stripped = line.strip()
-                                if stripped:
+                                if stripped and not stripped.startswith('#'):
                                     context = stripped[:200]
                                     break
 
+                    # Determine category display name
+                    category = 'Other'
+                    if rel_path.parts:
+                        category_key = rel_path.parts[0]
+                        # Friendly category names
+                        category_map = {
+                            'user-guides': 'User Guides',
+                            'diagnostics': 'Diagnostics',
+                            'features': 'Features',
+                            'technical-reference': 'Technical Reference',
+                            'project': 'Project'
+                        }
+                        category = category_map.get(category_key, category_key.replace('-', ' ').title())
+
                     results.append({
                         'title': title,
-                        'url': url_for('docs.view_doc', doc_path=str(rel_path.as_posix())),
+                        'url': url_for('docs.view_doc', doc_path=str(rel_path_no_ext.as_posix())),
                         'context': context,
-                        'category': rel_path.parts[0] if len(rel_path.parts) > 1 else 'Other'
+                        'category': category,
+                        'relevance': relevance_score
                     })
+
             except (UnicodeDecodeError, OSError, IOError) as e:
                 current_app.logger.warning(f"Error reading file {doc_file}: {e}")
                 continue
             except Exception as e:
                 current_app.logger.warning(f"Unexpected error searching {doc_file}: {e}")
                 continue
+
+        # Sort results by relevance (highest first)
+        results.sort(key=lambda x: x['relevance'], reverse=True)
 
     except (OSError, IOError) as e:
         current_app.logger.error(f"File system error during search: {e}")

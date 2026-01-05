@@ -2,6 +2,8 @@
 title: Running Payroll
 category: payroll
 roles: [teacher]
+description: Process student paychecks and distribute earnings based on attendance and time tracking.
+keywords: [payroll, attendance, payments, earnings, salary, wages, paychecks, clockin, clockout]
 related:
   - features/payroll/settings
   - features/payroll/rewards-and-fines

@@ -2,6 +2,8 @@
 title: Creating Store Items
 category: store
 roles: [teacher]
+description: Create and configure store items like rewards, privileges, and hall passes for your classroom economy.
+keywords: [store, items, rewards, privileges, shop, inventory, hall pass, collective goals, purchases]
 related:
   - features/store/managing-inventory
   - features/store/redemptions

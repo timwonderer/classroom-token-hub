@@ -80,17 +80,20 @@
             </div>
         </div>
 
-        <!-- Economy Design Guide -->
+        <!-- Feature Guides -->
         <div class="col-md-6 col-lg-4">
             <div class="card h-100 shadow-sm">
                 <div class="card-body">
                     <div class="text-center mb-3">
-                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #6c757d;">emoji_objects</span>
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #28a745;">auto_awesome</span>
                     </div>
-                    <h3 class="card-title h5 text-center">Economy Design</h3>
-                    <p class="card-text text-muted">Understanding how the economy system was designed and implemented.</p>
-                    <ul class="list-unstyled">
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/economy_guide') }}" class="text-decoration-none">Classroom Economy Guide</a></li>
+                    <h3 class="card-title h5 text-center">Feature Guides</h3>
+                    <p class="card-text text-muted">In-depth guides for each major feature of the system.</p>
+                    <ul>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='features/payroll/running-payroll') }}" class="text-decoration-none">Payroll Management</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='features/store/creating-items') }}" class="text-decoration-none">Store & Items</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='features/banking/transferring-money') }}" class="text-decoration-none">Banking & Transfers</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/economy_guide') }}" class="text-decoration-none">Economy Design Guide</a></li>
                     </ul>
                 </div>
             </div>
