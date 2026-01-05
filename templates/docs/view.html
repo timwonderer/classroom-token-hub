@@ -86,12 +86,12 @@
                         <!-- Feature Guides -->
                         <div class="accordion-item">
                             <h2 class="accordion-header">
-                                <button class="accordion-button {% if not doc_path.startswith('features') %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#featuresCollapse" aria-expanded="{% if doc_path.startswith('features') %}true{% else %}false{% endif %}">
+                                <button class="accordion-button {% if not (doc_path.startswith('features') or doc_path == 'user-guides/economy_guide') %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#featuresCollapse" aria-expanded="{% if doc_path.startswith('features') or doc_path == 'user-guides/economy_guide' %}true{% else %}false{% endif %}">
                                     <span class="material-symbols-outlined me-2">auto_awesome</span>
                                     Feature Guides
                                 </button>
                             </h2>
-                            <div id="featuresCollapse" class="accordion-collapse collapse {% if doc_path.startswith('features') %}show{% endif %}">
+                            <div id="featuresCollapse" class="accordion-collapse collapse {% if doc_path.startswith('features') or doc_path == 'user-guides/economy_guide' %}show{% endif %}">
                                 <div class="accordion-body p-0">
                                     <ul class="nav flex-column">
                                         <li class="nav-item">

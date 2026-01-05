@@ -362,6 +362,15 @@ def search():
     # (internal documentation only)
     EXCLUDED_DIRECTORIES = {'security', 'development', 'operations', 'archive', 'ai'}
 
+    # Friendly category names (defined once, outside loop for performance)
+    CATEGORY_MAP = {
+        'user-guides': 'User Guides',
+        'diagnostics': 'Diagnostics',
+        'features': 'Features',
+        'technical-reference': 'Technical Reference',
+        'project': 'Project'
+    }
+
     results = []
     query_lower = query.lower()
     query_words = set(query_lower.split())
@@ -464,15 +473,7 @@ def search():
                     category = 'Other'
                     if rel_path.parts:
                         category_key = rel_path.parts[0]
-                        # Friendly category names
-                        category_map = {
-                            'user-guides': 'User Guides',
-                            'diagnostics': 'Diagnostics',
-                            'features': 'Features',
-                            'technical-reference': 'Technical Reference',
-                            'project': 'Project'
-                        }
-                        category = category_map.get(category_key, category_key.replace('-', ' ').title())
+                        category = CATEGORY_MAP.get(category_key, category_key.replace('-', ' ').title())
 
                     results.append({
                         'title': title,
