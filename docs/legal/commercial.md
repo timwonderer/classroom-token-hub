@@ -58,31 +58,31 @@ Commercial entities may **not**, under any circumstances:
 
 ### Allowed Examples
 
-✅ A company hosts the software for teachers and charges a monthly hosting fee (e.g., $50/month for server costs + support).
+**Allowed:** A company hosts the software for teachers and charges a monthly hosting fee (e.g., $50/month for server costs + support).
 
-✅ A district pays a vendor $5,000 to deploy and configure the software on the district's infrastructure.
+**Allowed:** A district pays a vendor $5,000 to deploy and configure the software on the district's infrastructure.
 
-✅ A provider offers support contracts or uptime guarantees (e.g., $100/month for 24/7 support).
+**Allowed:** A provider offers support contracts or uptime guarantees (e.g., $100/month for 24/7 support).
 
-✅ A consultant charges $150/hour to help a school configure payroll, store items, and rent settings.
+**Allowed:** A consultant charges $150/hour to help a school configure payroll, store items, and rent settings.
 
-✅ A hosting company offers managed instances with guaranteed uptime, backups, and technical support for a monthly service fee.
+**Allowed:** A hosting company offers managed instances with guaranteed uptime, backups, and technical support for a monthly service fee.
 
 ### Not Allowed Examples
 
-❌ Charging teachers to "unlock" features or modules (e.g., "$10/month for hall pass feature").
+**Prohibited:** Charging teachers to "unlock" features or modules (e.g., "$10/month for hall pass feature").
 
-❌ Charging for updates, patches, or bug fixes (e.g., "Pay $50 to get version 1.7").
+**Prohibited:** Charging for updates, patches, or bug fixes (e.g., "Pay $50 to get version 1.7").
 
-❌ Selling a hosted version with exclusive or enhanced functionality not available in the open-source version.
+**Prohibited:** Selling a hosted version with exclusive or enhanced functionality not available in the open-source version.
 
-❌ Branding the software as a proprietary product or platform (e.g., "SchoolBankPro powered by our technology").
+**Prohibited:** Branding the software as a proprietary product or platform (e.g., "SchoolBankPro powered by our technology").
 
-❌ Offering tiered pricing based on feature access (e.g., "Basic: $20/month for 50 students; Pro: $50/month for unlimited students").
+**Prohibited:** Offering tiered pricing based on feature access (e.g., "Basic: $20/month for 50 students; Pro: $50/month for unlimited students").
 
-❌ Charging per-user, per-seat, or per-student pricing models (e.g., "$2 per student per month").
+**Prohibited:** Charging per-user, per-seat, or per-student pricing models (e.g., "$2 per student per month").
 
-❌ Requiring payment to access critical bug fixes or security patches (all users must receive these for free).
+**Prohibited:** Requiring payment to access critical bug fixes or security patches (all users must receive these for free).
 
 **These examples are illustrative, not limiting.**
 
