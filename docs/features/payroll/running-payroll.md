@@ -34,15 +34,15 @@ That's it! Tokens are automatically distributed to student checking accounts.
 
 ### Prerequisites
 
-✅ **Payroll Settings configured**:
+ **Payroll Settings configured**:
 - Pay rate set (e.g., $10/hour)
 - Pay frequency planned (e.g., weekly, bi-weekly)
 
-✅ **Students have attendance data**:
+ **Students have attendance data**:
 - Students have clocked in/out during the period
 - Attendance log shows work sessions
 
-✅ **Banking feature enabled**:
+ **Banking feature enabled**:
 - Students must have checking accounts to receive pay
 
 ### Check Your Settings
@@ -108,9 +108,9 @@ Before running, check the preview table:
 - **Net pay**: Total deposit amount
 
 **Red flags to watch for**:
-- 🚨 Student with 0 hours (didn't clock in)
-- 🚨 Unusually high hours (forgot to clock out?)
-- 🚨 Negative pay (too many fines)
+-  Student with 0 hours (didn't clock in)
+-  Unusually high hours (forgot to clock out?)
+-  Negative pay (too many fines)
 
 ### 3. Run Payroll
 
@@ -183,11 +183,11 @@ After running:
 ### Student Not Receiving Pay
 
 **Checklist**:
-- ✅ Student has checking account?
-- ✅ Student actually worked (clocked in/out)?
-- ✅ Student in the correct class period?
-- ✅ Payroll feature enabled?
-- ✅ Student's account not frozen?
+-  Student has checking account?
+-  Student actually worked (clocked in/out)?
+-  Student in the correct class period?
+-  Payroll feature enabled?
+-  Student's account not frozen?
 
 ## Payroll History
 

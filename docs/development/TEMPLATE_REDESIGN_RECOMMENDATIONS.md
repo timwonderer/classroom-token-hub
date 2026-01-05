@@ -6,7 +6,7 @@ This document outlines templates that have been redesigned or could benefit from
 ## Completed Redesigns
 
 ### 1. Insurance Policy Edit Page (`admin_edit_insurance_policy.html`)
-**Status:** ✅ Redesigned (2025-12-16)
+**Status:**  Redesigned (2025-12-16)
 
 **Previous Issues:**
 - 2x2 grid layout caused severe overflow in the "Rules & Bundles" card
@@ -40,7 +40,7 @@ This document outlines templates that have been redesigned or could benefit from
 ## Recommended for Redesign
 
 ### 2. Store Item Edit Page (`admin_edit_item.html`)
-**Status:** ✅ Redesigned (2025-12-16)
+**Status:**  Redesigned (2025-12-16)
 
 **Previous Issues:**
 - Long vertical scroll due to multiple stacked cards
@@ -57,7 +57,7 @@ This document outlines templates that have been redesigned or could benefit from
 ---
 
 ### 3. Rent Management Page (`admin_rent_settings.html`)
-**Status:** ✅ Redesigned (2025-12-16)
+**Status:**  Redesigned (2025-12-16)
 
 **Redesign Approach:**
 - Grouped settings into collapsible Accordion sections:
@@ -111,17 +111,17 @@ This document outlines templates that have been redesigned or could benefit from
 Based on the successful insurance policy redesign, use this pattern for complex edit forms:
 
 ### When to Use Accordion Pattern:
-- ✅ Page has 5+ distinct sections
-- ✅ Some sections are optional or advanced
-- ✅ Content causes overflow in fixed layouts
-- ✅ Mobile responsiveness is challenging
-- ✅ Users need focused editing of specific areas
+-  Page has 5+ distinct sections
+-  Some sections are optional or advanced
+-  Content causes overflow in fixed layouts
+-  Mobile responsiveness is challenging
+-  Users need focused editing of specific areas
 
 ### When NOT to Use Accordion Pattern:
-- ❌ Simple forms with 2-3 fields
-- ❌ All fields are equally important and frequently edited
-- ❌ Users need to compare values across sections
-- ❌ Page is already well-organized with tabs
+-  Simple forms with 2-3 fields
+-  All fields are equally important and frequently edited
+-  Users need to compare values across sections
+-  Page is already well-organized with tabs
 
 ### Best Practices:
 1. **Keep frequently-edited sections always visible** (don't hide basics)

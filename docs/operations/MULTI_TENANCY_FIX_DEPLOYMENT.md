@@ -56,7 +56,7 @@ with app.app_context():
     print(f"Students with teacher_id but no StudentTeacher record: {orphaned}")
     
     if orphaned > 0:
-        print("\n⚠️  WARNING: Found orphaned students that need migration!")
+        print("\n  WARNING: Found orphaned students that need migration!")
         print("   Run the migration script before deploying the fix.")
 EOF
 ```
@@ -85,11 +85,11 @@ Expected output:
 Fixing Missing StudentTeacher Associations
 ============================================================
 
-✓ Created StudentTeacher for student 123 -> teacher 1
-✓ Created StudentTeacher for student 456 -> teacher 2
+ Created StudentTeacher for student 123 -> teacher 1
+ Created StudentTeacher for student 456 -> teacher 2
 ...
 
-✅ Fixed X students with missing StudentTeacher associations
+ Fixed X students with missing StudentTeacher associations
    Y students already had correct associations
 
 ============================================================
@@ -117,9 +117,9 @@ with app.app_context():
     ).count()
     
     if orphaned == 0:
-        print("✅ Migration successful! All students have StudentTeacher records.")
+        print(" Migration successful! All students have StudentTeacher records.")
     else:
-        print(f"❌ ERROR: {orphaned} students still missing StudentTeacher records!")
+        print(f" ERROR: {orphaned} students still missing StudentTeacher records!")
         print("   DO NOT PROCEED with deployment until this is fixed.")
 EOF
 ```
@@ -237,7 +237,7 @@ with app.app_context():
         st = StudentTeacher(student_id=student_id, admin_id=teacher_id)
         db.session.add(st)
         db.session.commit()
-        print("✓ Created StudentTeacher record")
+        print(" Created StudentTeacher record")
 ```
 
 ### Issue: Teacher Sees Students from Another Teacher
@@ -259,7 +259,7 @@ with app.app_context():
     if incorrect_link:
         db.session.delete(incorrect_link)
         db.session.commit()
-        print("✓ Removed incorrect StudentTeacher record")
+        print(" Removed incorrect StudentTeacher record")
 ```
 
 ## Support Contacts

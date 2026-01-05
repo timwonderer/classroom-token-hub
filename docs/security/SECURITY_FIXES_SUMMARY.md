@@ -8,7 +8,7 @@ This document summarizes the resolution of 62 CodeQL security alerts across the 
 
 ## Fixed Issues
 
-### 1. Clear-text Logging of Sensitive Information (High Priority) ✅ FIXED
+### 1. Clear-text Logging of Sensitive Information (High Priority)  FIXED
 
 **Issue:** TOTP secrets were being printed to console/logs in multiple files.
 
@@ -23,7 +23,7 @@ This document summarizes the resolution of 62 CodeQL security alerts across the 
 
 ---
 
-### 2. DOM Text Reinterpreted as HTML - XSS Vulnerability (High Priority) ✅ FIXED
+### 2. DOM Text Reinterpreted as HTML - XSS Vulnerability (High Priority)  FIXED
 
 **Issue:** User-controlled data was being inserted into DOM using `innerHTML`, creating XSS vulnerabilities.
 
@@ -37,7 +37,7 @@ This document summarizes the resolution of 62 CodeQL security alerts across the 
 
 ---
 
-### 3. Workflow Does Not Contain Permissions (Medium Priority) ✅ FIXED
+### 3. Workflow Does Not Contain Permissions (Medium Priority)  FIXED
 
 **Issue:** GitHub Actions workflows lacked explicit permission declarations (principle of least privilege).
 
@@ -54,7 +54,7 @@ This document summarizes the resolution of 62 CodeQL security alerts across the 
 
 ---
 
-### 4. Incomplete URL Substring Sanitization (Test File) ✅ SUPPRESSED
+### 4. Incomplete URL Substring Sanitization (Test File)  SUPPRESSED
 
 **Issue:** CodeQL flagged CSP header validation tests as potential security issues.
 
@@ -70,7 +70,7 @@ This document summarizes the resolution of 62 CodeQL security alerts across the 
 
 ## Remaining Alerts (False Positives / Already Mitigated)
 
-### 1. URL Redirection from Remote Source (Medium Priority) 🔍 REVIEWED
+### 1. URL Redirection from Remote Source (Medium Priority)  REVIEWED
 
 **Files:** Multiple route files (`app/routes/student.py`, `app/routes/admin.py`, etc.)
 
@@ -86,7 +86,7 @@ This document summarizes the resolution of 62 CodeQL security alerts across the 
 
 ---
 
-### 2. Information Exposure Through Exception (Medium Priority) 🔍 REVIEWED
+### 2. Information Exposure Through Exception (Medium Priority)  REVIEWED
 
 **Files:** Primarily `app/routes/admin.py`
 
@@ -102,7 +102,7 @@ This document summarizes the resolution of 62 CodeQL security alerts across the 
 
 ---
 
-### 3. Reflected Server-Side XSS (Medium Priority) 🔍 REVIEWED
+### 3. Reflected Server-Side XSS (Medium Priority)  REVIEWED
 
 **File:** `app/routes/system_admin.py` (line 1654)
 
@@ -125,14 +125,14 @@ response = Response(resp.iter_content(chunk_size=8192), resp.status_code, respon
 
 | Category | Count | Status |
 |----------|-------|--------|
-| Clear-text logging | 16 | ✅ Fixed |
-| DOM XSS (innerHTML) | 2 | ✅ Fixed |
-| Workflow permissions | 3 | ✅ Fixed |
-| Test false positives | 2 | ✅ Suppressed |
-| URL redirect (mitigated) |19| 🔍 Already safe |
-| Exception exposure | 19 | 🔍 False positive |
-| Reflected XSS | 1 | 🔍 False positive |
-| **Total** | **62** | **✅ All addressed** |
+| Clear-text logging | 16 |  Fixed |
+| DOM XSS (innerHTML) | 2 |  Fixed |
+| Workflow permissions | 3 |  Fixed |
+| Test false positives | 2 |  Suppressed |
+| URL redirect (mitigated) |19|  Already safe |
+| Exception exposure | 19 |  False positive |
+| Reflected XSS | 1 |  False positive |
+| **Total** | **62** | ** All addressed** |
 
 ---
 
@@ -159,13 +159,13 @@ response = Response(resp.iter_content(chunk_size=8192), resp.status_code, respon
 
 ## Security Best Practices Maintained
 
-✅ All PII (student names) remain encrypted at rest
-✅ All passwords use salted + peppered hashing
-✅ TOTP secrets encrypted before database storage
-✅ CSRF protection maintained on all forms
-✅ Multi-tenancy scoping preserved
-✅ Input validation using WTForms
-✅ Content Security Policy headers active
+ All PII (student names) remain encrypted at rest
+ All passwords use salted + peppered hashing
+ TOTP secrets encrypted before database storage
+ CSRF protection maintained on all forms
+ Multi-tenancy scoping preserved
+ Input validation using WTForms
+ Content Security Policy headers active
 
 ---
 

@@ -11,8 +11,8 @@ searchable: false
 
 ### What are "Legacy Classes"?
 Legacy classes are classes that were created before the join code system was implemented. These classes have:
-- ✅ Student records in the database
-- ❌ NO TeacherBlock entries (seats)
+-  Student records in the database
+-  NO TeacherBlock entries (seats)
 
 ### How Join Codes Work for Legacy Classes
 When a teacher with legacy students views their students page, the system:
@@ -27,8 +27,8 @@ The placeholder TeacherBlock entry had these properties:
 - Used only to store the join code, NOT a real student seat
 
 The badge counting logic counted ALL `is_claimed=False` entries, including placeholders. This caused:
-- ❌ Badge showing "1 unclaimed" when no real students were waiting
-- ❌ Confusing UI for teachers (looked like a student hadn't claimed their account)
+-  Badge showing "1 unclaimed" when no real students were waiting
+-  Confusing UI for teachers (looked like a student hadn't claimed their account)
 
 ## The Fix
 
@@ -50,10 +50,10 @@ if not tb.is_claimed and tb.first_name != LEGACY_PLACEHOLDER_FIRST_NAME:
 ```
 
 ### What This Does
-- ✅ Excludes placeholder entries from unclaimed seat counts
-- ✅ Only real student seats are counted as "unclaimed"
-- ✅ Join codes still work correctly for legacy classes
-- ✅ Students can still claim accounts using join codes
+-  Excludes placeholder entries from unclaimed seat counts
+-  Only real student seats are counted as "unclaimed"
+-  Join codes still work correctly for legacy classes
+-  Students can still claim accounts using join codes
 
 ## Testing
 
@@ -80,35 +80,35 @@ Added 5 comprehensive tests across 2 test files:
 ### Before Fix
 ```
 Block A (badge showing "1 unclaimed")
-├── LegacyStudent (claimed via StudentTeacher link)
-└── __JOIN_CODE_PLACEHOLDER__ (counted as unclaimed ❌)
+ LegacyStudent (claimed via StudentTeacher link)
+ __JOIN_CODE_PLACEHOLDER__ (counted as unclaimed )
 ```
 **Teacher sees:** "1 unclaimed seat" (incorrect)
 
 ### After Fix
 ```
 Block A (badge showing "All seats claimed")
-├── LegacyStudent (claimed via StudentTeacher link)
-└── __JOIN_CODE_PLACEHOLDER__ (excluded from count ✅)
+ LegacyStudent (claimed via StudentTeacher link)
+ __JOIN_CODE_PLACEHOLDER__ (excluded from count )
 ```
 **Teacher sees:** "All seats claimed" (correct)
 
 ### When Real Unclaimed Seats Exist
 ```
 Block A (badge showing "1 unclaimed")
-├── LegacyStudent (claimed)
-├── __JOIN_CODE_PLACEHOLDER__ (excluded)
-└── NewStudent N. (real unclaimed seat, counted ✅)
+ LegacyStudent (claimed)
+ __JOIN_CODE_PLACEHOLDER__ (excluded)
+ NewStudent N. (real unclaimed seat, counted )
 ```
 **Teacher sees:** "1 unclaimed seat" (correct)
 
 ## Security & Performance
 
 ### Security Scan
-✅ **CodeQL**: No vulnerabilities detected
+ **CodeQL**: No vulnerabilities detected
 
 ### Code Review
-✅ **No issues found**
+ **No issues found**
 
 ### Performance Impact
 - **Minimal**: Only adds one additional string comparison per TeacherBlock
@@ -117,7 +117,7 @@ Block A (badge showing "1 unclaimed")
 ## Student Sign-In Verification
 
 ### Can Students Sign In?
-✅ **YES** - Students can sign in using join codes for legacy classes.
+ **YES** - Students can sign in using join codes for legacy classes.
 
 The tests confirm:
 1. Join codes are generated and persisted for legacy classes
@@ -134,10 +134,10 @@ The issue title may have been:
 ## Conclusion
 
 This fix ensures that:
-1. ✅ Legacy classes show correct badge counts
-2. ✅ Students can claim accounts using join codes
-3. ✅ Real unclaimed seats are still tracked properly
-4. ✅ No regressions in existing functionality
-5. ✅ Comprehensive test coverage for future changes
+1.  Legacy classes show correct badge counts
+2.  Students can claim accounts using join codes
+3.  Real unclaimed seats are still tracked properly
+4.  No regressions in existing functionality
+5.  Comprehensive test coverage for future changes
 
 The minimal code change (1 line) with maximum impact is consistent with the repository's principle of surgical, precise modifications.

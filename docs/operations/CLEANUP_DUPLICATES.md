@@ -12,7 +12,7 @@ The bug has been FIXED. Now you need to clean up the existing duplicates.
 
 ---
 
-## ⚠️ IMPORTANT: Why Raw SQL Won't Work
+##  IMPORTANT: Why Raw SQL Won't Work
 
 **You MUST use the Flask script** - raw PostgreSQL/psql commands will NOT work because:
 
@@ -118,19 +118,19 @@ For each set of duplicates:
 ## Example Output
 
 ```
-⚠️  Found 2 sets of duplicate students:
+  Found 2 sets of duplicate students:
 ====================================================================================================
 
 Destiny M. in Block A:
   Found 2 copies (will keep oldest, delete 1)
-  ✓ KEEP: ID=45, Setup=True, Checking=$150.00, Savings=$50.00
-  ✗ DELETE: ID=78, Setup=False, Checking=$0.00, Savings=$0.00
+   KEEP: ID=45, Setup=True, Checking=$150.00, Savings=$50.00
+   DELETE: ID=78, Setup=False, Checking=$0.00, Savings=$0.00
     → Will migrate 15 related records (txns:12, taps:3, halls:0, items:0, rent:0, ins:0, claims:0)
 
 John S. in Block B:
   Found 2 copies (will keep oldest, delete 1)
-  ✓ KEEP: ID=12, Setup=True, Checking=$200.00, Savings=$100.00
-  ✗ DELETE: ID=46, Setup=False, Checking=$0.00, Savings=$0.00
+   KEEP: ID=12, Setup=True, Checking=$200.00, Savings=$100.00
+   DELETE: ID=46, Setup=False, Checking=$0.00, Savings=$0.00
     → Will migrate 8 related records (txns:5, taps:3, halls:0, items:0, rent:0, ins:0, claims:0)
 
 ====================================================================================================
@@ -159,8 +159,8 @@ You can also check in the admin panel that student counts per block are correct.
 
 ## What Was Fixed
 
-1. ✅ Reverted to original name code algorithm (vowels from first name + consonants from last name)
-2. ✅ Fixed duplicate detection in all three student creation functions
-3. ✅ Future uploads will correctly detect and skip duplicates
-4. ✅ Students with similar names (like "Destiny Morales" and "Destiny Mora Escobedo") will NOT be incorrectly flagged as duplicates
-5. ✅ Cleanup script migrates all related data before deletion (no data loss)
+1.  Reverted to original name code algorithm (vowels from first name + consonants from last name)
+2.  Fixed duplicate detection in all three student creation functions
+3.  Future uploads will correctly detect and skip duplicates
+4.  Students with similar names (like "Destiny Morales" and "Destiny Mora Escobedo") will NOT be incorrectly flagged as duplicates
+5.  Cleanup script migrates all related data before deletion (no data loss)

@@ -4,7 +4,7 @@
 
 This migration adds encryption-at-rest for TOTP secrets in the `admins` and `system_admins` tables.
 
-**Status:** ⚠️ DATABASE MIGRATION REQUIRED
+**Status:**  DATABASE MIGRATION REQUIRED
 
 ## Changes Made
 
@@ -43,10 +43,10 @@ The `decrypt_totp()` function handles both:
 - **New encrypted** TOTP secrets (base64-encoded)
 
 This means:
-✅ Existing admins can continue to log in with old plaintext secrets
-✅ New admins will have encrypted secrets
-✅ Password resets will migrate admins to encrypted secrets
-✅ No data migration script needed - migration happens on-the-fly
+ Existing admins can continue to log in with old plaintext secrets
+ New admins will have encrypted secrets
+ Password resets will migrate admins to encrypted secrets
+ No data migration script needed - migration happens on-the-fly
 
 ## Testing Checklist
 
@@ -80,4 +80,4 @@ If issues arise:
 2. Rollback database migration: `flask db downgrade`
 3. Old plaintext TOTP secrets will work again
 
-**⚠️ WARNING:** After this migration, you cannot rollback without data loss for newly created admins!
+** WARNING:** After this migration, you cannot rollback without data loss for newly created admins!

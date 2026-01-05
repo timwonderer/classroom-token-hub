@@ -308,7 +308,7 @@ Expected output:
 ================================================================================
 COMPREHENSIVE LEGACY ACCOUNT MIGRATION
 ================================================================================
-🔍 DRY RUN MODE - No changes will be made
+ DRY RUN MODE - No changes will be made
 ================================================================================
 
 ================================================================================
@@ -320,7 +320,7 @@ Found 15 legacy students to migrate:
   - Jane Smith (ID: 124, Teacher: 5, Block: Period 1)
   ...
 
-🔍 DRY RUN: Would create StudentTeacher associations and TeacherBlock entries
+ DRY RUN: Would create StudentTeacher associations and TeacherBlock entries
 
 ...
 
@@ -333,7 +333,7 @@ Legacy Account Migration:
   StudentTeacher associations created: 0 (dry run)
   ...
 
-ℹ️  This was a dry run. Run without --dry-run to apply changes.
+ℹ  This was a dry run. Run without --dry-run to apply changes.
 ```
 
 ### Step 2: Review Dry Run Output
@@ -369,7 +369,7 @@ Found 15 legacy students to migrate:
   ...
 
 Creating StudentTeacher associations...
-  ✓ Created StudentTeacher for John Doe
+   Created StudentTeacher for John Doe
   ...
 
 Grouping students by teacher and block...
@@ -377,10 +377,10 @@ Found 3 unique teacher-block combinations
 
 Creating TeacherBlock entries...
   → Generated join code ABC123 for teacher 5, block Period 1
-    ✓ Created TeacherBlock for John Doe
+     Created TeacherBlock for John Doe
   ...
 
-✅ Phase 1 complete: 15 associations, 15 blocks created
+ Phase 1 complete: 15 associations, 15 blocks created
 
 ...
 
@@ -388,23 +388,23 @@ Creating TeacherBlock entries...
 COMMITTING CHANGES
 ================================================================================
 
-✅ All changes committed successfully!
+ All changes committed successfully!
 
 ================================================================================
 VERIFICATION
 ================================================================================
 
 1. Checking for legacy students...
-  ✓ All students have proper StudentTeacher associations
+   All students have proper StudentTeacher associations
 
 2. Checking TeacherBlock join codes...
-  ✓ All TeacherBlock entries have join codes
+   All TeacherBlock entries have join codes
 
 3. Checking transaction join codes...
-  ✓ All transactions have join codes
+   All transactions have join codes
 
 4. Checking tap event join codes...
-  ✓ All tap events have join codes
+   All tap events have join codes
 
 ================================================================================
 
@@ -430,7 +430,7 @@ Data Backfill:
   Hall pass logs backfilled: 22
   Rent payments backfilled: 10
 
-✅ No errors encountered!
+ No errors encountered!
 ================================================================================
 ```
 

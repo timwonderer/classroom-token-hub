@@ -14,14 +14,14 @@ cd classroom-economy
 ```
 
 The setup script will:
-1. ✓ Verify Python 3.10+ is installed
-2. ✓ Check for PostgreSQL and Redis
-3. ✓ Create a virtual environment (`venv/`)
-4. ✓ Install all Python dependencies
-5. ✓ Create `.env` file with secure generated keys
-6. ✓ Initialize and migrate the database
-7. ✓ (Optional) Create a system admin account
-8. ✓ (Optional) Seed test data
+1.  Verify Python 3.10+ is installed
+2.  Check for PostgreSQL and Redis
+3.  Create a virtual environment (`venv/`)
+4.  Install all Python dependencies
+5.  Create `.env` file with secure generated keys
+6.  Initialize and migrate the database
+7.  (Optional) Create a system admin account
+8.  (Optional) Seed test data
 
 ## Prerequisites
 
@@ -271,7 +271,7 @@ cp classroom_economy_backup_20251204.db classroom_economy.db
 
 ## Security Notes
 
-⚠️ **Important:**
+ **Important:**
 - Never commit `.env` to version control (already in `.gitignore`)
 - Keep `SECRET_KEY`, `ENCRYPTION_KEY`, and `PEPPER_KEY` secure
 - Use strong, randomly generated keys in production

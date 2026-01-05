@@ -6,7 +6,7 @@ Version 1.4.0 is a feature-rich release focused on enhancing classroom communica
 
 ---
 
-## 🎯 Release Highlights
+##  Release Highlights
 
 ### Announcement System for Class Communication
 Teachers can now create and manage announcements for their class periods, with global announcement capability for system admins. Students see announcements prominently on their dashboards with the ability to dismiss them.
@@ -19,7 +19,7 @@ Fixed critical open redirect vulnerabilities in student enrollment flow, resolve
 
 ---
 
-## 🚀 New Features
+##  New Features
 
 ### Announcement System
 
@@ -103,7 +103,7 @@ Teachers now have a powerful announcement system for communicating with their st
 
 ---
 
-## 🔒 Security Enhancements
+##  Security Enhancements
 
 ### CodeQL Security Alerts Remediation
 
@@ -184,7 +184,7 @@ Resolved "connection refused" error when accessing Grafana from system admin das
 
 ---
 
-## 🐛 Bug Fixes
+##  Bug Fixes
 
 ### Teacher Invite Code Validation
 
@@ -244,7 +244,7 @@ Updated TOTP setup page to match new brand theme:
 
 ---
 
-## 📝 Technical Details
+##  Technical Details
 
 ### Dependency Updates
 - `requests==2.32.4` - For Grafana proxy functionality (updated from 2.32.3)
@@ -287,7 +287,7 @@ None - This is a feature and UI-focused release with no schema changes
 
 ---
 
-## 🔄 Upgrade Notes
+##  Upgrade Notes
 
 ### For Administrators
 
@@ -333,7 +333,7 @@ None - This is a feature and UI-focused release with no schema changes
 
 ---
 
-## 📖 Documentation Updates
+##  Documentation Updates
 
 ### New Documentation
 - `../../operations/GRAFANA_FIX_GUIDE.md` - Grafana access troubleshooting and configuration
@@ -346,7 +346,7 @@ None - This is a feature and UI-focused release with no schema changes
 
 ---
 
-## 🎓 User-Facing Changes
+##  User-Facing Changes
 
 ### For Teachers
 
@@ -376,7 +376,7 @@ None - This is a feature and UI-focused release with no schema changes
 
 ---
 
-## 🚦 Testing Recommendations
+##  Testing Recommendations
 
 After upgrading to v1.4.0, test the following:
 
@@ -407,7 +407,7 @@ After upgrading to v1.4.0, test the following:
 
 ---
 
-## 🔗 Related Links
+##  Related Links
 
 - [Full Changelog](../../CHANGELOG.md#140---2025-12-27)
 - [Version 1.3.0 Release Notes](RELEASE_NOTES_v1.3.0.md)
@@ -416,7 +416,7 @@ After upgrading to v1.4.0, test the following:
 
 ---
 
-## 📞 Support
+##  Support
 
 If you encounter any issues with this release:
 

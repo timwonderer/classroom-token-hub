@@ -5,7 +5,7 @@ This document tracks the implementation of the new Issue Resolution & Escalation
 
 ## Completed Components
 
-### 1. Database Models ✅
+### 1. Database Models 
 **File**: `app/models.py`
 
 Created 4 new models:
@@ -21,7 +21,7 @@ Created 4 new models:
 - Multi-tenancy scoped by join_code
 - Full audit trail with timestamps and attribution
 
-### 2. Database Migration ✅
+### 2. Database Migration 
 **Status**: Generated (user will run migration)
 
 Migration creates all new tables with proper indexes for:
@@ -29,7 +29,7 @@ Migration creates all new tables with proper indexes for:
 - Student issue tracking
 - Opaque reference lookups for sysadmin
 
-### 3. Utility Functions ✅
+### 3. Utility Functions 
 **Files**:
 - `app/utils/issue_categories.py` - Default category initialization
 - `app/utils/issue_helpers.py` - Issue creation and management helpers
@@ -43,7 +43,7 @@ Migration creates all new tables with proper indexes for:
 - `record_resolution_action()` - Track teacher/sysadmin actions
 - `update_issue_status()` - Safe status updates with history
 
-### 4. Forms ✅
+### 4. Forms 
 **File**: `forms.py`
 
 Added 2 new WTForms:
@@ -52,7 +52,7 @@ Added 2 new WTForms:
 
 Both include character limits and validation per spec.
 
-### 5. Student Routes ✅
+### 5. Student Routes 
 **File**: `app/routes/student.py`
 
 Implemented 3 routes:
@@ -66,7 +66,7 @@ Implemented 3 routes:
 - Multi-tenancy scoping by join_code
 - Character-limited text fields as per spec
 
-### 6. Student Templates ✅
+### 6. Student Templates 
 **Files**:
 - `templates/student_help_support_new.html` - Main help page with 3 tabs:
   - Knowledge Base (How-To + Troubleshooting)
@@ -77,12 +77,12 @@ Implemented 3 routes:
   - Shows transaction details if applicable
   - Helpful tips for good reports
 
-### 7. Transaction Help Icons ✅
+### 7. Transaction Help Icons 
 **File**: `templates/student_dashboard.html`
 
 Added help icons next to each transaction in Recent Activity section, linking directly to transaction issue reporting.
 
-### 8. Teacher Routes ✅
+### 8. Teacher Routes 
 **File**: `app/routes/admin.py`
 
 Implemented 4 routes:
@@ -106,7 +106,7 @@ Implemented 4 routes:
 
 ## Pending Components
 
-### 9. Teacher Templates ✅
+### 9. Teacher Templates 
 **Files Created**:
 - `templates/admin_issues_queue.html` - Queue with pending/resolved/escalated tabs
   - Stats cards showing counts for each tab
@@ -157,16 +157,16 @@ Implemented 4 routes:
 
 ## Design Principles Implemented
 
-✅ **No Direct Communication**: Students never contact sysadmins directly
-✅ **Teacher-Mediated**: All escalations go through teachers
-✅ **Evidence-Based**: Issues tied to concrete transactions/records when possible
-✅ **Audit Trail**: Complete history of status changes and actions
-✅ **Data Minimization**: Opaque references for sysadmin review
-✅ **Character Limits**: Prevents essay-length submissions
-✅ **Status Badges Only**: Students see status, not messages
-✅ **Multi-Tenancy Safe**: All queries scoped by join_code
-✅ **Non-Communicative**: No free-form messaging
-✅ **Reward Eligibility**: Teacher flags potential bug rewards
+ **No Direct Communication**: Students never contact sysadmins directly
+ **Teacher-Mediated**: All escalations go through teachers
+ **Evidence-Based**: Issues tied to concrete transactions/records when possible
+ **Audit Trail**: Complete history of status changes and actions
+ **Data Minimization**: Opaque references for sysadmin review
+ **Character Limits**: Prevents essay-length submissions
+ **Status Badges Only**: Students see status, not messages
+ **Multi-Tenancy Safe**: All queries scoped by join_code
+ **Non-Communicative**: No free-form messaging
+ **Reward Eligibility**: Teacher flags potential bug rewards
 
 ## Next Steps
 
@@ -197,49 +197,49 @@ Implemented 4 routes:
 
 ```
 issue_categories
-├─ id (PK)
-├─ name (unique)
-├─ category_type (transaction/general)
-└─ display_order
+ id (PK)
+ name (unique)
+ category_type (transaction/general)
+ display_order
 
 issues
-├─ id (PK)
-├─ student_id (FK → students)
-├─ student_first_name (cached)
-├─ student_last_initial (cached)
-├─ opaque_student_reference (non-reversible)
-├─ teacher_id (FK → admins)
-├─ join_code (multi-tenancy)
-├─ category_id (FK → issue_categories)
-├─ issue_type (transaction/general)
-├─ student_explanation (immutable)
-├─ student_expected_outcome
-├─ related_transaction_id (FK → transaction)
-├─ context_snapshot (JSON)
-├─ status (submitted/teacher_review/teacher_resolved/elevated/developer_review/developer_resolved)
-├─ escalation_reason
-├─ teacher_diagnostic_note
-├─ share_class_name_with_sysadmin (bool)
-├─ eligible_for_reward (bool) ← User requested feature
-└─ [timestamps and resolution fields]
+ id (PK)
+ student_id (FK → students)
+ student_first_name (cached)
+ student_last_initial (cached)
+ opaque_student_reference (non-reversible)
+ teacher_id (FK → admins)
+ join_code (multi-tenancy)
+ category_id (FK → issue_categories)
+ issue_type (transaction/general)
+ student_explanation (immutable)
+ student_expected_outcome
+ related_transaction_id (FK → transaction)
+ context_snapshot (JSON)
+ status (submitted/teacher_review/teacher_resolved/elevated/developer_review/developer_resolved)
+ escalation_reason
+ teacher_diagnostic_note
+ share_class_name_with_sysadmin (bool)
+ eligible_for_reward (bool) ← User requested feature
+ [timestamps and resolution fields]
 
 issue_status_history
-├─ id (PK)
-├─ issue_id (FK → issues)
-├─ previous_status
-├─ new_status
-├─ changed_by_type (student/teacher/sysadmin/system)
-├─ changed_by_id
-└─ changed_at
+ id (PK)
+ issue_id (FK → issues)
+ previous_status
+ new_status
+ changed_by_type (student/teacher/sysadmin/system)
+ changed_by_id
+ changed_at
 
 issue_resolution_actions
-├─ id (PK)
-├─ issue_id (FK → issues)
-├─ action_type (reverse_transaction/correct_amount/deny_issue/etc)
-├─ performed_by_type (teacher/sysadmin)
-├─ performed_by_id
-├─ related_transaction_id (FK → transaction)
-└─ [before/after values for audit]
+ id (PK)
+ issue_id (FK → issues)
+ action_type (reverse_transaction/correct_amount/deny_issue/etc)
+ performed_by_type (teacher/sysadmin)
+ performed_by_id
+ related_transaction_id (FK → transaction)
+ [before/after values for audit]
 ```
 
 ## Issue Categories (Default)
@@ -285,7 +285,7 @@ submitted → teacher_review → teacher_resolved (closed)
 
 ## Summary of Completed Work
 
-### ✅ Fully Implemented (Ready for Testing)
+###  Fully Implemented (Ready for Testing)
 1. **Student Interface** - Complete issue submission and status tracking
 2. **Teacher Interface** - Complete issue review, resolution, and escalation
 3. **Database Schema** - All models and relationships defined
@@ -298,7 +298,7 @@ submitted → teacher_review → teacher_resolved (closed)
 2. **Tests** - Unit and integration tests (recommended before production)
 3. **User Guide Updates** - Teacher and student manual updates
 
-### 🚀 Ready for Use
+###  Ready for Use
 The core Issue Resolution & Escalation system is **fully functional** for:
 - Students submitting general and transaction-specific issues
 - Teachers reviewing, resolving, and escalating issues

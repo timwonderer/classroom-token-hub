@@ -18,7 +18,7 @@
 
 ## CRITICAL: SSH Host Key Verification (ASA-002)
 
-### Priority: 🔥 URGENT - Must fix before next production deployment
+### Priority:  URGENT - Must fix before next production deployment
 
 ### Current Problem
 
@@ -124,11 +124,11 @@ Replace the current deploy step with this:
           # Add Turnstile keys if provided
           if [ -n "${TURNSTILE_SITE}" ]; then
             echo "TURNSTILE_SITE_KEY=${TURNSTILE_SITE}" >> .env
-            echo "✓ Turnstile site key configured"
+            echo " Turnstile site key configured"
           fi
           if [ -n "${TURNSTILE_SECRET}" ]; then
             echo "TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET}" >> .env
-            echo "✓ Turnstile secret key configured"
+            echo " Turnstile secret key configured"
           fi
 
           echo 'Installing dependencies...'
@@ -137,9 +137,9 @@ Replace the current deploy step with this:
           # Ensure DATABASE_URL is set for migrations
           echo 'Exporting DATABASE_URL for production migrations...'
 
-          echo '🔍 Running migration safety checks...'
+          echo ' Running migration safety checks...'
           bash scripts/check-migrations.sh || {
-            echo "❌ Migration safety check failed - deployment aborted"
+            echo " Migration safety check failed - deployment aborted"
             echo "This usually means there are multiple migration heads."
             echo "Fix this by creating a merge migration locally and pushing to main."
             exit 1
@@ -240,7 +240,7 @@ Add the same host key setup step before the SSH command:
 Setting up SSH with host key verification
 Host key verification enabled
 Connecting to server...
-✓ Connection successful with verified host key
+ Connection successful with verified host key
 ```
 
 ---
@@ -295,7 +295,7 @@ Add to `deploy.yml`:
 
 ## HIGH: Update Cryptography Package (ASA-004)
 
-### Priority: ⚠️ HIGH - Fix this week
+### Priority:  HIGH - Fix this week
 
 ### Current Problem
 
@@ -417,7 +417,7 @@ Add to `../CHANGELOG.md`:
 
 ## HIGH: Improve Secrets Management (ASA-003)
 
-### Priority: ⚠️ HIGH - Fix this month
+### Priority:  HIGH - Fix this month
 
 ### Current Problem
 
@@ -526,7 +526,7 @@ load_dotenv('.env.encrypted', password='your-encryption-password')
 
 ## MEDIUM: Add Rate Limiting (ASA-006)
 
-### Priority: 🟡 MEDIUM - Fix this month
+### Priority:  MEDIUM - Fix this month
 
 ### Current Problem
 
@@ -749,10 +749,10 @@ If you encounter issues:
 ## Summary
 
 **Immediate Actions (Before Next Deploy):**
-1. ✅ Add `KNOWN_HOSTS` secret to GitHub
-2. ✅ Update `deploy.yml` and `toggle-maintenance.yml`
-3. ✅ Test deployment on test branch
-4. ✅ Deploy to production
+1.  Add `KNOWN_HOSTS` secret to GitHub
+2.  Update `deploy.yml` and `toggle-maintenance.yml`
+3.  Test deployment on test branch
+4.  Deploy to production
 
 **This Week:**
 1. Update `cryptography` package

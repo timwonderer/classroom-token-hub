@@ -31,7 +31,7 @@ Move tokens between your checking and savings accounts.
 
 ### Benefits of Savings Account
 
-**Earn Interest** 💰:
+**Earn Interest** :
 - Savings earns interest (usually monthly)
 - Interest rate varies by teacher (typically 1-5%)
 - Interest is "free money" added to your balance
@@ -42,12 +42,12 @@ Move tokens between your checking and savings accounts.
 - After 1 month: $103
 - After 3 months: ~$109
 
-**Keep Money Safe** 🔒:
+**Keep Money Safe** :
 - Can't accidentally spend savings money
 - Must transfer to checking first to use it
 - Good for long-term goals
 
-**Reach Big Goals** 🎯:
+**Reach Big Goals** :
 - Save for expensive store items
 - Build emergency fund
 - Plan ahead for rent or insurance
@@ -55,16 +55,16 @@ Move tokens between your checking and savings accounts.
 ### When to Save
 
 Save money when:
-- ✅ You don't need it right now
-- ✅ You're saving for something specific
-- ✅ You want to earn interest
-- ✅ You tend to overspend from checking
+-  You don't need it right now
+-  You're saving for something specific
+-  You want to earn interest
+-  You tend to overspend from checking
 
 Keep money in checking when:
-- ✅ You need it for daily expenses
-- ✅ Rent is due soon
-- ✅ You want to shop in the store
-- ✅ You need it this week
+-  You need it for daily expenses
+-  Rent is due soon
+-  You want to shop in the store
+-  You need it this week
 
 ## How to Transfer Money
 
@@ -93,10 +93,10 @@ Keep money in checking when:
 ### What Happens
 
 When you transfer:
-- ✅ Money moves instantly
-- ✅ New balances show immediately
-- ✅ Transfer appears in transaction history
-- ✅ Both accounts updated
+-  Money moves instantly
+-  New balances show immediately
+-  Transfer appears in transaction history
+-  Both accounts updated
 
 ## Transfer Rules
 
@@ -209,10 +209,10 @@ See all your transfers:
 
 ### Avoid Common Mistakes
 
-- ❌ Don't leave all money in checking (you'll spend it)
-- ❌ Don't leave all money in savings (can't use it)
-- ❌ Don't transfer right before rent is due (might not have enough)
-- ❌ Don't forget your passphrase (write it somewhere safe!)
+-  Don't leave all money in checking (you'll spend it)
+-  Don't leave all money in savings (can't use it)
+-  Don't transfer right before rent is due (might not have enough)
+-  Don't forget your passphrase (write it somewhere safe!)
 
 ### Finding the Right Balance
 

@@ -6,7 +6,7 @@ Version 1.1.0 brings exciting new analytics features, a completely redesigned us
 
 ---
 
-## 🎉 What's New
+##  What's New
 
 ### Student Analytics Dashboard
 Students now have visibility into their financial habits with a new **Weekly Statistics** card on their dashboard:
@@ -54,7 +54,7 @@ The Economy Health page now provides more actionable guidance:
 
 ---
 
-## 🐛 Bug Fixes
+##  Bug Fixes
 
 ### Critical Fixes
 - **Fixed invisible tabs** on 15+ pages (Student Management, Store Management, etc.)
@@ -69,7 +69,7 @@ The Economy Health page now provides more actionable guidance:
 
 ---
 
-## 🔧 Technical Improvements
+##  Technical Improvements
 
 ### Database Changes
 - Added `is_long_term_goal` column to `store_items` table
@@ -88,7 +88,7 @@ The Economy Health page now provides more actionable guidance:
 
 ---
 
-## 📊 Analytics Details
+##  Analytics Details
 
 ### How Weekly Stats Work
 - **Days Tapped In**: Counts unique calendar days with active attendance
@@ -118,7 +118,7 @@ The graph projects 12 months forward and updates dynamically based on:
 
 ---
 
-## 🎓 For Teachers
+##  For Teachers
 
 ### Setting Up Long-Term Goal Items
 1. Go to **Store Management**
@@ -142,7 +142,7 @@ The improved Economy Health page now shows:
 
 ---
 
-## 📦 Upgrade Instructions
+##  Upgrade Instructions
 
 ### For Existing Installations
 
@@ -170,7 +170,7 @@ The improved Economy Health page now shows:
 
 ---
 
-## 🔗 Documentation Updates
+##  Documentation Updates
 
 - Updated ../../CHANGELOG.md with all changes
 - Added economy health tips to teacher manual
@@ -179,25 +179,25 @@ The improved Economy Health page now shows:
 
 ---
 
-## 🙏 Credits
+##  Credits
 
 Thanks to all contributors who helped test and provide feedback on the UI redesign and analytics features.
 
 ---
 
-## 📝 Full Changelog
+##  Full Changelog
 
 See [CHANGELOG.md](../../CHANGELOG.md) for the complete list of changes.
 
 ---
 
-## 🐞 Known Issues
+##  Known Issues
 
 None at this time.
 
 ---
 
-## 💬 Support
+##  Support
 
 - Report issues: [GitHub Issues](https://github.com/timwonderer/classroom-economy/issues)
 - Documentation: `/docs` directory
@@ -205,4 +205,4 @@ None at this time.
 
 ---
 
-**Enjoy v1.1.0! 🎉**
+**Enjoy v1.1.0! **

@@ -33,7 +33,7 @@ cd /path/to/classroom-economy
 Host Keys Retrieved
 ========================================
 
-✓ Host keys saved to: known_hosts_github_secret.txt
+ Host keys saved to: known_hosts_github_secret.txt
 
 File contents:
 ----------------------------------------
@@ -69,7 +69,7 @@ Copy the entire contents of the file.
 
 1. Click the **"Settings"** tab at the top of the repository page
    ```
-   < > Code    Issues    Pull requests    Actions    Projects    Wiki    Security    ⚙️ Settings
+   < > Code    Issues    Pull requests    Actions    Projects    Wiki    Security     Settings
                                                                                            ^^^^
    ```
 
@@ -85,14 +85,14 @@ In the left sidebar, look for:
 
 ```
 Settings
-├── General
-├── Collaborators
-├── ...
-├── Secrets and variables    ← Click this
-│   ├── Actions              ← Then click this
-│   ├── Codespaces
-│   └── Dependabot
-├── ...
+ General
+ Collaborators
+ ...
+ Secrets and variables    ← Click this
+    Actions              ← Then click this
+    Codespaces
+    Dependabot
+ ...
 ```
 
 **Full path:** Settings → Secrets and variables → Actions
@@ -172,14 +172,14 @@ You should see something like:
 
 ```
 Repository secrets:
-┌────────────────────────┬─────────────┬─────────┐
-│ Name                   │ Updated     │ Actions │
-├────────────────────────┼─────────────┼─────────┤
-│ DO_DEPLOY_KEY         │ 1 day ago   │ Update  │
-│ KNOWN_HOSTS           │ Just now    │ Update  │  ← New!
-│ PRODUCTION_SERVER_IP  │ 3 days ago  │ Update  │
-│ TURNSTILE_SECRET_KEY  │ 1 week ago  │ Update  │
-└────────────────────────┴─────────────┴─────────┘
+
+ Name                    Updated      Actions 
+
+ DO_DEPLOY_KEY          1 day ago    Update  
+ KNOWN_HOSTS            Just now     Update    ← New!
+ PRODUCTION_SERVER_IP   3 days ago   Update  
+ TURNSTILE_SECRET_KEY   1 week ago   Update  
+
 ```
 
 ### 5.2 Secret Value is Hidden
@@ -245,7 +245,7 @@ git push
 
 **Success looks like:**
 ```
-✓ SSH host key verification enabled
+ SSH host key verification enabled
 ```
 
 4. Expand the **"Deploy to DO Production Server"** step
@@ -352,66 +352,66 @@ ssh root@YOUR_SERVER_IP
 ### GitHub Settings Page Layout
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│  YOUR_USERNAME / classroom-economy                  [Search] │
-├──────────────────────────────────────────────────────────────┤
-│  < > Code  Issues  PRs  Actions  Projects  Security Settings │
-│                                                        ^^^^^^^ │
-├─────────────┬────────────────────────────────────────────────┤
-│ Sidebar     │ Main Content Area                              │
-│             │                                                │
-│ General     │ Repository name                                │
-│ Access      │ [classroom-economy]                            │
-│ Code        │                                                │
-│ ...         │ Description                                    │
-│             │ [Add description]                              │
-│ Secrets >   │                                                │
-│  Actions    │ ...                                            │
-│  Codespaces │                                                │
-│             │                                                │
-└─────────────┴────────────────────────────────────────────────┘
+
+  YOUR_USERNAME / classroom-economy                  [Search] 
+
+  < > Code  Issues  PRs  Actions  Projects  Security Settings 
+                                                        ^^^^^^^ 
+
+ Sidebar      Main Content Area                              
+                                                             
+ General      Repository name                                
+ Access       [classroom-economy]                            
+ Code                                                        
+ ...          Description                                    
+              [Add description]                              
+ Secrets >                                                   
+  Actions     ...                                            
+  Codespaces                                                 
+                                                             
+
 ```
 
 ### Secrets Page Layout
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│ Actions secrets and variables                                │
-├──────────────────────────────────────────────────────────────┤
-│                                    [New repository secret]   │
-│                                                               │
-│ Repository secrets                                            │
-│ ┌──────────────────────────────────────────────────────────┐ │
-│ │ Name                   │ Updated    │ Actions            │ │
-│ ├──────────────────────────────────────────────────────────┤ │
-│ │ DO_DEPLOY_KEY         │ 1 day ago  │ Update   Remove   │ │
-│ │ PRODUCTION_SERVER_IP  │ 3 days ago │ Update   Remove   │ │
-│ │ TURNSTILE_SECRET_KEY  │ 1 week ago │ Update   Remove   │ │
-│ └──────────────────────────────────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────┘
+
+ Actions secrets and variables                                
+
+                                    [New repository secret]   
+                                                               
+ Repository secrets                                            
+  
+  Name                    Updated     Actions             
+  
+  DO_DEPLOY_KEY          1 day ago   Update   Remove    
+  PRODUCTION_SERVER_IP   3 days ago  Update   Remove    
+  TURNSTILE_SECRET_KEY   1 week ago  Update   Remove    
+  
+
 ```
 
 ### Add Secret Form
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│ Actions secrets / New secret                                 │
-├──────────────────────────────────────────────────────────────┤
-│                                                               │
-│ Name *                                                        │
-│ ┌───────────────────────────────────────────────────────┐    │
-│ │ KNOWN_HOSTS                                           │    │
-│ └───────────────────────────────────────────────────────┘    │
-│                                                               │
-│ Secret *                                                      │
-│ ┌───────────────────────────────────────────────────────┐    │
-│ │ |1|abc123...= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...    │    │
-│ │ |1|def456...= ssh-rsa AAAAB3NzaC1yc2EAAAADAQABA...   │    │
-│ │                                                       │    │
-│ └───────────────────────────────────────────────────────┘    │
-│                                                               │
-│                                    [Add secret]              │
-└──────────────────────────────────────────────────────────────┘
+
+ Actions secrets / New secret                                 
+
+                                                               
+ Name *                                                        
+     
+  KNOWN_HOSTS                                               
+     
+                                                               
+ Secret *                                                      
+     
+  |1|abc123...= ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...        
+  |1|def456...= ssh-rsa AAAAB3NzaC1yc2EAAAADAQABA...       
+                                                            
+     
+                                                               
+                                    [Add secret]              
+
 ```
 
 ---
@@ -435,18 +435,18 @@ Repository → Settings → Secrets and variables → Actions → New repository
 **Verify it worked:**
 ```bash
 # After committing workflow changes, check Actions tab
-# Look for: "✓ SSH host key verification enabled"
+# Look for: " SSH host key verification enabled"
 ```
 
 ---
 
 ## Next Steps After Adding Secret
 
-1. ✅ Secret added to GitHub
-2. ⏭️ Replace workflow files (`.FIXED` → regular)
-3. ⏭️ Commit and push changes
-4. ⏭️ Test deployment
-5. ✅ Security vulnerability fixed!
+1.  Secret added to GitHub
+2. ⏭ Replace workflow files (`.FIXED` → regular)
+3. ⏭ Commit and push changes
+4. ⏭ Test deployment
+5.  Security vulnerability fixed!
 
 ---
 
