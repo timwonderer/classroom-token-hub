@@ -3106,59 +3106,8 @@ def submit_general_issue():
 @student_bp.route('/help-support/transaction/<int:transaction_id>/report', methods=['GET', 'POST'])
 @login_required
 def report_transaction_issue(transaction_id):
-    """Report an issue with a specific transaction."""
+    """Redirects to the student help and support documentation."""
     return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
-    from app.utils.issue_categories import get_active_categories
-    from app.utils.issue_helpers import create_issue
-    from forms import TransactionIssueSubmissionForm
-
-    student = get_logged_in_student()
-    class_context = get_current_class_context()
-
-    if not class_context:
-        flash("Please select a class first.", "warning")
-        return redirect(url_for('student.dashboard'))
-
-    # Get the transaction and verify it belongs to this student and class
-    transaction = Transaction.query.filter_by(
-        id=transaction_id,
-        student_id=student.id,
-        join_code=class_context['join_code']
-    ).first_or_404()
-
-    form = TransactionIssueSubmissionForm()
-
-    # Populate category choices
-    form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('transaction')
-
-    if form.validate_on_submit():
-        try:
-            issue = create_issue(
-                student=student,
-                teacher_id=class_context['teacher_id'],
-                join_code=class_context['join_code'],
-                category_id=form.category_id.data,
-                explanation=form.explanation.data,
-                expected_outcome=form.expected_outcome.data,
-                related_transaction_id=transaction_id,
-                related_record_type='transaction',
-                related_record_id=transaction_id
-            )
-
-            flash("Your transaction issue has been submitted. Your teacher will review it soon.", "success")
-            return redirect(url_for('student.help_support'))
-
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error submitting transaction issue: {str(e)}")
-            flash("An error occurred while submitting your issue. Please try again.", "error")
-
-    return render_template('student_submit_issue.html',
-                         current_page='help',
-                         page_title='Report Transaction Issue',
-                         form=form,
-                         issue_type='transaction',
-                         transaction=transaction)
 
 
 @student_bp.route('/help-support/tap-event/<int:tap_event_id>/report', methods=['GET', 'POST'])
