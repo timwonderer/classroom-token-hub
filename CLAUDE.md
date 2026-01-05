@@ -97,7 +97,7 @@ app/
 
 ### Database Models
 
-**35 SQLAlchemy models** including:
+**41 SQLAlchemy models** including:
 - Core: `Admin`, `Student`, `SystemAdmin`, `TeacherBlock`, `StudentBlock`
 - Financial: `Transaction`, `PayrollSettings`, `BankingSettings`
 - Features: `StoreItem`, `InsurancePolicy`, `RentSettings`, `HallPassLog`

@@ -1,3 +1,10 @@
+---
+title: Timezone Handling
+category: technical-reference
+roles: [developer]
+description: Client-side timezone conversion patterns and UTC storage conventions.
+---
+
 # Timezone Handling
 
 ## Overview
