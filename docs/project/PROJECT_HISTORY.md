@@ -158,7 +158,7 @@ Active priorities and roadmap details live in:
 
 ### AI-assisted development
 
-Contributor guidance for AI tools is maintained in `../../CLAUDE.md` and `../ai/CLAUDE.md`.
+Canonical contributor guidance for AI tools is in `../../CLAUDE.md`, with a project-specific summary in `../ai/CLAUDE.md`.
 
 ### Open source but noncommercial
 
