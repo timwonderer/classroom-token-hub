@@ -2168,7 +2168,7 @@ def set_timezone():
     now = datetime.now(timezone.utc)
 
     # Check Admin Session
-    if session.get('is_admin'):
+    if session.get('is_admin') and session.get('admin_id'):
         last_activity = session.get('last_activity')
         if last_activity:
             try:
