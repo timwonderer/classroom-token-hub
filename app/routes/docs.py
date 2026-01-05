@@ -36,7 +36,8 @@ CATEGORY_MAP = {
     'technical-reference': 'Technical Reference',
     'project': 'Project',
     'development': 'Development',
-    'operations': 'Operations'
+    'operations': 'Operations',
+    'legal': 'Legal & Licensing'
 }
 
 # HTML sanitization configuration for rendered markdown

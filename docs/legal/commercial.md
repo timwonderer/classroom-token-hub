@@ -1,3 +1,14 @@
+---
+title: Commercial Use Policy
+description: Detailed guidance on permitted commercial services and prohibited software monetization
+category: legal
+keywords: [commercial, services, monetization, prohibited, permitted, hosting, support]
+searchable: true
+related:
+  - legal/license
+  - legal/attribution
+---
+
 # Commercial Use Policy
 
 This project is licensed to ensure that the software itself remains free, open, and non-commercial, while allowing others to offer services around it.

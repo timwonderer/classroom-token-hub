@@ -152,6 +152,25 @@
                 </div>
             </div>
         </div>
+
+        <!-- Legal & Licensing -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #17a2b8;">gavel</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">Legal & Licensing</h3>
+                    <p class="card-text text-muted">License terms, commercial use policy, attributions, and project philosophy.</p>
+                    <ul >
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='legal/license') }}" class="text-decoration-none">License (PolyForm Noncommercial)</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='legal/commercial') }}" class="text-decoration-none">Commercial Use Policy</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='legal/attribution') }}" class="text-decoration-none">Attribution & Philosophy</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='legal/third-party-notices') }}" class="text-decoration-none">Third-Party Notices</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Quick Links -->
