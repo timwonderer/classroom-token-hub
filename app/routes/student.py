@@ -3024,12 +3024,8 @@ def setup_complete():
 @student_bp.route('/help-support', methods=['GET'])
 @login_required
 def help_support():
-    """
-    Help and Support page with issue resolution system.
-    Shows knowledge base and student's submitted issues.
-    """
+    """Redirect to the student help and support documentation."""
     return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
-    from app.models import Issue
     from app.utils.issue_categories import init_default_categories
 
     student = get_logged_in_student()
@@ -3059,9 +3055,12 @@ def help_support():
 @student_bp.route('/help-support/submit-issue', methods=['GET', 'POST'])
 @login_required
 def submit_general_issue():
-    """Submit a general (non-transaction) issue."""
+    @student_bp.route('/help-support/transaction/<int:transaction_id>/report', methods=['GET', 'POST'])
+    @login_required
+    def report_transaction_issue(transaction_id):
+        """Redirect to the student help and support documentation."""
+        return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
     return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
-    from app.models import TeacherBlock
     from app.utils.issue_categories import get_active_categories
     from app.utils.issue_helpers import create_issue
     from forms import StudentIssueSubmissionForm

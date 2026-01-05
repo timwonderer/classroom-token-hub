@@ -281,15 +281,10 @@
                 {% block page_header_actions %}
                 {% endblock %}
                 {% if not custom_full_guide %}
-                    {% if help_doc_path %}
-                        <a href="{{ url_for('docs.view_doc', doc_path=help_doc_path) }}" class="btn btn-outline-primary d-flex align-items-center gap-2" target="_blank" rel="noopener">
-                            <span class="material-symbols-outlined" aria-hidden="true">menu_book</span> <span>Full Guide</span>
-                        </a>
-                    {% else %}
-                        <a href="{{ url_for('docs.index') }}" class="btn btn-outline-primary d-flex align-items-center gap-2" target="_blank" rel="noopener">
-                            <span class="material-symbols-outlined" aria-hidden="true">menu_book</span> <span>Full Guide</span>
-                        </a>
-                    {% endif %}
+                    {% set doc_url = url_for('docs.view_doc', doc_path=help_doc_path) if help_doc_path else url_for('docs.index') %}
+                    <a href="{{ doc_url }}" class="btn btn-outline-primary d-flex align-items-center gap-2" target="_blank" rel="noopener">
+                        <span class="material-symbols-outlined" aria-hidden="true">menu_book</span> <span>Full Guide</span>
+                    </a>
                 {% endif %}
             </div>
         </div>
