@@ -1,3 +1,7 @@
+---
+searchable: false
+---
+
 # Migration Status Report
 
 ## Date: 2025-11-29

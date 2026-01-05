@@ -13,7 +13,7 @@
     <div class="container-fluid">
         <div class="row">
             <!-- Sidebar Navigation -->
-            <aside class="col-md-3 col-lg-2 d-md-block bg-light sidebar collapse" id="docsSidebar">
+            <aside class="docs-sidebar col-md-3 col-lg-2 d-md-block bg-light collapse" id="docsSidebar">
                 <div class="position-sticky pt-3">
                     <!-- Back Navigation -->
                     <div class="mb-3">
@@ -53,105 +53,156 @@
                         </div>
                     </form>
 
-                    <!-- Navigation Categories -->
-                    <nav class="nav flex-column">
-                        <!-- Diagnostics -->
-                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-2 mb-1 ">
-                            <span><span class="material-symbols-outlined align-middle">quick_reference</span> User Guides</span>
-                        </h6>
-                        <ul class="nav flex-column mb-2">
-                            <li class="nav-item">
-                                <a class="nav-link {% if doc_path.startswith('diagnostics/student') %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='diagnostics/student') }}">
-                                    For Students
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if doc_path.startswith('diagnostics/teacher') %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher') }}">
-                                    For Teachers
-                                </a>
-                            </li>
-                        </ul>
-                 
-                        <!-- Classroom Economy -->
-                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1">
-                            <span><span class="material-symbols-outlined align-middle">emoji_objects</span> Design Philosophy</span>
-                        </h6>
-                        <ul class="nav flex-column mb-2">
-                            <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'user-guides/economy_guide' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/economy_guide') }}">
-                                    Economy Design Guide
-                                </a>
-                            </li>
-                        </ul>
+                    <!-- Navigation Accordion -->
+                    <div class="accordion accordion-flush" id="docsAccordion">
+                        <!-- Diagnostics / User Guides -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button {% if not doc_path.startswith('diagnostics') %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#diagnosticsCollapse" aria-expanded="{% if doc_path.startswith('diagnostics') %}true{% else %}false{% endif %}">
+                                    <span class="material-symbols-outlined me-2">quick_reference</span>
+                                    Diagnostics
+                                </button>
+                            </h2>
+                            <div id="diagnosticsCollapse" class="accordion-collapse collapse {% if doc_path.startswith('diagnostics') %}show{% endif %}">
+                                <div class="accordion-body p-0">
+                                    <ul class="nav flex-column">
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path.startswith('diagnostics/student') %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='diagnostics/student') }}">
+                                                <span class="material-symbols-outlined me-2" style="font-size: 1rem;">school</span>
+                                                For Students
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path.startswith('diagnostics/teacher') %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher') }}">
+                                                <span class="material-symbols-outlined me-2" style="font-size: 1rem;">person</span>
+                                                For Teachers
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
 
-                        <!-- Developer Docs -->
-                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1">
-                            <span><span class="material-symbols-outlined align-middle">design_services</span> Developer Docs</span>
-                        </h6>
-                        <ul class="nav flex-column mb-2">
-                            <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'technical-reference/architecture' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/architecture') }}">
-                                    Architecture
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'technical-reference/database_schema' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/database_schema') }}">
-                                    Database Schema
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'technical-reference/ECONOMY_SPECIFICATION' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/ECONOMY_SPECIFICATION') }}">
-                                    Economy Spec
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'technical-reference/api_reference' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/api_reference') }}">
-                                    API Reference
-                                </a>
-                            </li>
-                        </ul>
+                        <!-- Feature Guides -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button {% if not (doc_path.startswith('features') or doc_path == 'user-guides/economy_guide') %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#featuresCollapse" aria-expanded="{% if doc_path.startswith('features') or doc_path == 'user-guides/economy_guide' %}true{% else %}false{% endif %}">
+                                    <span class="material-symbols-outlined me-2">auto_awesome</span>
+                                    Feature Guides
+                                </button>
+                            </h2>
+                            <div id="featuresCollapse" class="accordion-collapse collapse {% if doc_path.startswith('features') or doc_path == 'user-guides/economy_guide' %}show{% endif %}">
+                                <div class="accordion-body p-0">
+                                    <ul class="nav flex-column">
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'features/payroll/running-payroll' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='features/payroll/running-payroll') }}">
+                                                <span class="material-symbols-outlined me-2" style="font-size: 1rem;">receipt_long</span>
+                                                Payroll
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'features/store/creating-items' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='features/store/creating-items') }}">
+                                                <span class="material-symbols-outlined me-2" style="font-size: 1rem;">store</span>
+                                                Store & Items
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'features/banking/transferring-money' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='features/banking/transferring-money') }}">
+                                                <span class="material-symbols-outlined me-2" style="font-size: 1rem;">account_balance</span>
+                                                Banking & Transfers
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'user-guides/economy_guide' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/economy_guide') }}">
+                                                <span class="material-symbols-outlined me-2" style="font-size: 1rem;">emoji_objects</span>
+                                                Economy Design
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
 
-                        <!-- Reference -->
-                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1">
-                            <span><span class="material-symbols-outlined align-middle">description</span> Reference</span>
-                        </h6>
-                        <ul class="nav flex-column mb-2">
-                            <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'Deployment_Guide' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='Deployment_Guide') }}">
-                                    Deployment
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'CHANGELOG' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='CHANGELOG') }}">
-                                    Changelog
-                                </a>
-                            </li>
-                        </ul>
+                        <!-- Technical Reference -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button {% if not doc_path.startswith('technical-reference') %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#technicalCollapse" aria-expanded="{% if doc_path.startswith('technical-reference') %}true{% else %}false{% endif %}">
+                                    <span class="material-symbols-outlined me-2">code</span>
+                                    Technical Reference
+                                </button>
+                            </h2>
+                            <div id="technicalCollapse" class="accordion-collapse collapse {% if doc_path.startswith('technical-reference') %}show{% endif %}">
+                                <div class="accordion-body p-0">
+                                    <ul class="nav flex-column">
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'technical-reference/architecture' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/architecture') }}">
+                                                Architecture
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'technical-reference/database_schema' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/database_schema') }}">
+                                                Database Schema
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'technical-reference/ECONOMY_SPECIFICATION' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/ECONOMY_SPECIFICATION') }}">
+                                                Economy Spec
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'technical-reference/api_reference' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/api_reference') }}">
+                                                API Reference
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
 
-                        <!-- Additional Docs -->
-                        <h6 class="sidebar-heading d-flex justify-content-between align-items-center px-3 mt-4 mb-1">
-                            <span><span class="material-symbols-outlined align-middle">folder</span> More Docs</span>
-                        </h6>
-                        <ul class="nav flex-column mb-2">
-                            <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'development/DEVELOPMENT' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='development/DEVELOPMENT') }}">
-                                    Development
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'operations/README' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='operations/README') }}">
-                                    Operations
-                                </a>
-                            </li>
-                            <li class="nav-item">
-                                <a class="nav-link {% if doc_path == 'project/PROJECT_HISTORY' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='project/PROJECT_HISTORY') }}">
-                                    Project History
-                                </a>
-                            </li>
-                        </ul>
-                    </nav>
+                        <!-- Reference & Project Info -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button class="accordion-button {% if not (doc_path in ['CHANGELOG', 'Deployment_Guide', 'project/PROJECT_HISTORY'] or doc_path.startswith('development/') or doc_path.startswith('operations/')) %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#projectCollapse" aria-expanded="{% if doc_path in ['CHANGELOG', 'Deployment_Guide', 'project/PROJECT_HISTORY'] or doc_path.startswith('development/') or doc_path.startswith('operations/') %}true{% else %}false{% endif %}">
+                                    <span class="material-symbols-outlined me-2">folder</span>
+                                    Reference & Project
+                                </button>
+                            </h2>
+                            <div id="projectCollapse" class="accordion-collapse collapse {% if doc_path in ['CHANGELOG', 'Deployment_Guide', 'project/PROJECT_HISTORY'] or doc_path.startswith('development/') or doc_path.startswith('operations/') %}show{% endif %}">
+                                <div class="accordion-body p-0">
+                                    <ul class="nav flex-column">
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'CHANGELOG' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='CHANGELOG') }}">
+                                                Changelog
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'Deployment_Guide' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='Deployment_Guide') }}">
+                                                Deployment
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'project/PROJECT_HISTORY' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='project/PROJECT_HISTORY') }}">
+                                                Project History
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'development/DEVELOPMENT' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='development/DEVELOPMENT') }}">
+                                                Development
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'operations/README' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='operations/README') }}">
+                                                Operations
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </aside>
+            <div class="docs-backdrop" id="docsBackdrop" aria-hidden="true"></div>
 
             <!-- Main Content Area -->
             <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
@@ -177,6 +228,22 @@
                         {% endfor %}
                     </ol>
                 </nav>
+                {% endif %}
+
+                <!-- Mobile TOC (Collapsible) - Only visible on mobile/tablet -->
+                {% if toc %}
+                <div class="d-lg-none mb-4">
+                    <button class="btn btn-outline-primary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#mobileTOC" aria-expanded="false" aria-controls="mobileTOC" aria-label="Toggle table of contents">
+                        <span class="material-symbols-outlined icon-align">list</span>
+                        Navigation (Table of Contents)
+                    </button>
+                    <div class="collapse mt-2" id="mobileTOC">
+                        <div class="toc-wrapper">
+                            <h3 class="h5 toclabel">Navigation</h3>
+                            {{ toc | safe }}
+                        </div>
+                    </div>
+                </div>
                 {% endif %}
 
                 <!-- Article Content -->
@@ -278,23 +345,23 @@
     font-size: 0.9rem;
 }
 
-/* Sidebar styles */
-.docs-layout .sidebar {
+.docs-layout .docs-sidebar {
     max-height: 100vh;
     overflow-y: auto;
+    border-right: 1px solid #e5e5e3;
 }
 
-.docs-layout .sidebar .nav-link {
+.docs-layout .docs-sidebar .nav-link {
     color: #212529;
     padding: 0.25rem 1rem;
     font-size: 0.9rem;
 }
 
-.docs-layout .sidebar .nav-link:hover {
+.docs-layout .docs-sidebar .nav-link:hover {
     background-color: rgba(0, 0, 0, 0.05);
 }
 
-.docs-layout .sidebar .nav-link.active {
+.docs-layout .docs-sidebar .nav-link.active {
     background-color: var(--primary);
     color: var(--secondary);
 }
@@ -455,6 +522,91 @@
     background-color: #d3af37;
     color: var(--primary);
 }
+
+/* Docs offcanvas on mobile */
+@media (max-width: 991.98px) {
+    .docs-layout .docs-sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 280px;
+        max-width: 90%;
+        height: 100vh;
+        padding: 1.25rem;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        box-shadow: none;
+        z-index: 1040;
+    }
+
+    .docs-layout .docs-sidebar.show {
+        transform: translateX(0);
+        box-shadow: 0 0 30px rgba(0, 0, 0, 0.25);
+    }
+
+    .docs-layout .docs-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+        z-index: 1030;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+    .docs-layout .docs-backdrop.show {
+        opacity: 1;
+        visibility: visible;
+    }
+}
+
+/* Keep sidebar visible on desktop */
+@media (min-width: 992px) {
+    .docs-layout .docs-sidebar {
+        position: static;
+        height: auto;
+        transform: none !important;
+        box-shadow: none;
+    }
+
+    .docs-layout .docs-sidebar.collapse {
+        display: block !important;
+        visibility: visible;
+    }
+
+    .docs-layout .docs-sidebar.collapsing {
+        height: auto !important;
+        transition: none;
+    }
+
+    .docs-layout .docs-backdrop {
+        display: none !important;
+    }
+}
 </style>
 
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.getElementById('docsSidebar');
+    const backdrop = document.getElementById('docsBackdrop');
+
+    if (!sidebar || !backdrop) return;
+
+    const collapse = bootstrap.Collapse.getOrCreateInstance(sidebar, {
+        toggle: false
+    });
+
+    sidebar.addEventListener('shown.bs.collapse', () => {
+        backdrop.classList.add('show');
+    });
+
+    sidebar.addEventListener('hidden.bs.collapse', () => {
+        backdrop.classList.remove('show');
+    });
+
+    backdrop.addEventListener('click', () => {
+        collapse.hide();
+    });
+});
+</script>
 {% endblock %}

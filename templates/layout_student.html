@@ -61,7 +61,16 @@
 </head>
 <body class="student-shell">
     <a href="#main-content" class="skip-link">Skip to main content</a>
-    <aside class="student-sidebar">
+
+    <!-- Mobile Menu Toggle Button -->
+    <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle navigation menu" aria-controls="studentSidebar" aria-expanded="false">
+        <span class="material-symbols-outlined">menu</span>
+    </button>
+
+    <!-- Sidebar Backdrop -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
+
+    <aside class="student-sidebar" id="studentSidebar" role="navigation" aria-label="Student navigation" aria-hidden="true">
         <a class="student-brand" href="{{ url_for('student.dashboard') }}">
             
             <div>
@@ -115,9 +124,6 @@
             <a href="{{ url_for('student.rent') }}" class="{% if request.endpoint in ['student.rent', 'student.student_insurance'] %}active{% endif %}">
                 <span class="material-symbols-outlined">receipt_long</span> Bills
             </a>
-            <a href="{{ url_for('student.help_support') }}" class="{% if request.endpoint == 'student.help_support' %}active{% endif %}">
-                <span class="material-symbols-outlined">help</span> Help and Support
-            </a>
             <a href="{{ url_for('student.logout') }}">
                 <span class="material-symbols-outlined">logout</span> Sign Out
             </a>
@@ -162,20 +168,12 @@
                     {% endif %}
                 </div>
                 <div class="page-header-actions">
-                    <button class="btn btn-primary d-none d-md-inline-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#addClassModal">
-                        <span class="material-symbols-outlined" aria-hidden="true">group_add</span> Add Class
-                    </button>
-                    <button class="btn btn-primary btn-icon d-inline-flex d-md-none align-items-center justify-content-center" data-bs-toggle="modal" data-bs-target="#addClassModal" title="Add Class" aria-label="Add Class">
-                        <span class="material-symbols-outlined" aria-hidden="true">group_add</span>
+                    <button class="btn btn-primary d-flex align-items-center gap-2" data-bs-toggle="modal" data-bs-target="#addClassModal">
+                        <span class="material-symbols-outlined" aria-hidden="true">group_add</span> <span>Add Class</span>
                     </button>
                     {% if help_doc_path %}
-                    <span class="d-none d-md-inline-flex">
                         {{ help.help_link(help_doc_path, text="Guide", tooltip="View guide") }}
-                    </span>
                     {% endif %}
-                    <a href="{{ url_for('student.help_support') }}" class="btn btn-white d-none d-md-inline-flex align-items-center gap-2">
-                        <span class="material-symbols-outlined" aria-hidden="true">help</span> Help
-                    </a>
                 </div>
             </div>
 
@@ -332,6 +330,8 @@
             });
         }
     </script>
+    <!-- Mobile Sidebar Toggle Script -->
+    <script src="{{ static_url('js/mobile-sidebar-toggle.js') }}"></script>
     {% block extra_scripts %}{% endblock %}
 </body>
 </html>

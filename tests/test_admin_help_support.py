@@ -21,8 +21,7 @@ def _login_admin(client):
 def test_help_support_page_renders(client):
     _login_admin(client)
 
-    response = client.get("/admin/help-support")
+    response = client.get("/admin/help-support", follow_redirects=False)
 
-    assert response.status_code == 200
-    assert b"Help & Support" in response.data
-    assert b"Knowledge Base" in response.data
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/docs/diagnostics/teacher")

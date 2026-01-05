@@ -1,5 +1,7 @@
 ---
-title: Transferring Money Between Accounts
+title: Banking & Transfers
+description: Learn how to transfer money between student accounts in your classroom economy
+keywords: [banking, transfers, money, send money, student accounts, checking, savings]
 category: banking
 roles: [student]
 related:
@@ -96,18 +98,9 @@ When you transfer:
 - ✅ Transfer appears in transaction history
 - ✅ Both accounts updated
 
-## Transfer Limits
+## Transfer Rules
 
-### Daily Limits
-
-Some teachers set limits on transfers:
-- **Daily limit**: Maximum you can transfer per day
-- **Minimum transfer**: Smallest amount allowed
-- **Maximum balance**: Highest your savings can go
-
-If limits exist, you'll see a message if you exceed them.
-
-### No Balance Going Negative
+**No negative balances**:
 
 **Checking to Savings**:
 - Can't transfer more than your checking balance

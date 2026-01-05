@@ -1,8 +1,8 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2025-12-27
-**Current Version:** 1.4.0
-**Target:** 1.5.0 Feature Release
+**Last Updated:** 2026-01-04
+**Current Version:** 1.6.0
+**Target:** 1.7.0 Feature Release
 
 ---
 
@@ -22,6 +22,33 @@
 ---
 
 ## Recent Releases
+
+### ✅ Version 1.6.0 - January 1, 2026
+
+**Documentation and organization-focused release:**
+
+#### 🎯 Key Accomplishments
+- ✅ **Documentation Organization** - Improved repository structure and consistency
+- ✅ **Mobile Navigation Enhancement** - Hamburger menu for PWA, full navigation access
+- ✅ **Hall Pass Multi-Tenancy Fix** - Fixed critical HallPassSettings violations
+- ✅ **Repository Cleanup** - Consolidated duplicate files, improved structure
+- ✅ **Deployment Reliability** - Enhanced deployment process and documentation
+
+See [RELEASE_NOTES_v1.6.0.md](docs/archive/releases/RELEASE_NOTES_v1.6.0.md) for full details.
+
+### ✅ Version 1.5.0 - December 29, 2025
+
+**Issue Resolution & Reporting system release:**
+
+#### 🎯 Key Accomplishments
+- ✅ **Issue Resolution System** - Structured student help and support workflow
+- ✅ **Attendance Issue Reporting** - Report clock-in/out issues from Work & Pay page
+- ✅ **Teacher Issue Queue** - Review, resolve, and escalate student issues
+- ✅ **Sysadmin Escalation** - Developer review of escalated bugs with reward eligibility
+- ✅ **Data Minimization** - Privacy-focused opaque student references
+- ✅ **Audit Trail** - Complete history of status changes and resolution actions
+
+See [RELEASE_NOTES_v1.5.0.md](docs/archive/releases/RELEASE_NOTES_v1.5.0.md) for full details.
 
 ### ✅ Version 1.4.0 - December 27, 2025
 
