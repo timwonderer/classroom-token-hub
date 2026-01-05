@@ -531,6 +531,12 @@
     overflow: hidden;
 }
 
+/* Use dynamic viewport height where supported to avoid mobile 100vh issues */
+@supports (height: 100dvh) {
+    .docs-layout {
+        height: 100dvh;
+    }
+}
 .docs-layout > .container-fluid,
 .docs-layout > .container-fluid > .row {
     height: 100%;
