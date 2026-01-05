@@ -1,3 +1,7 @@
+---
+searchable: false
+---
+
 # Multi-Tenancy Security Fix - Deployment Instructions
 
 ## Overview

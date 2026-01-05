@@ -25,8 +25,8 @@ and this project follows semantic versioning principles.
   - **Better organization**: Feature guides, diagnostics, and technical reference are now clearly separated in both index and sidebar navigation
 
 - **Documentation Search Improvements** - Enhanced search functionality with better filtering and relevance scoring
-  - **Directory-based filtering**: Automatically excludes internal documentation (security, development, operations, archive, ai) from user-facing search results
-  - **Relevance scoring**: Results now ranked by relevance based on title matches (10 pts), keyword matches (8 pts), description matches (5 pts), and body matches (1-3 pts)
+  - **Directory-based filtering**: Automatically excludes internal documentation (security, archive, ai) from user-facing search results; selective filtering for development/operations docs
+  - **Relevance scoring**: Results ranked by title matches (10 pts base + 5 pts exact-match bonus + 3 pts per matched title word), keyword matches (8 pts per keyword), description matches (5 pts), and body matches (1-3 pts max)
   - **Metadata support**: Added support for `searchable: false`, `keywords`, and `description` fields in document front matter
   - **Better categorization**: Friendly category names (e.g., "User Guides" instead of "user-guides")
   - **Context snippets**: Prefer description field for result previews when available

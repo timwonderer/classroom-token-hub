@@ -25,6 +25,20 @@ docs_bp = Blueprint('docs', __name__, url_prefix='/docs')
 # Documentation root directory
 DOCS_ROOT = Path(__file__).parent.parent.parent / 'docs'
 
+# Directories excluded from user-facing search (internal documentation only)
+EXCLUDED_DIRECTORIES = {'security', 'archive', 'ai'}
+
+# Friendly category names for search results
+CATEGORY_MAP = {
+    'user-guides': 'User Guides',
+    'diagnostics': 'Diagnostics',
+    'features': 'Features',
+    'technical-reference': 'Technical Reference',
+    'project': 'Project',
+    'development': 'Development',
+    'operations': 'Operations'
+}
+
 # HTML sanitization configuration for rendered markdown
 DOCS_ALLOWED_TAGS = [
     'p', 'br', 'span', 'div',
@@ -358,19 +372,6 @@ def search():
     if not query:
         return render_template_with_fallback('docs/search.html', query='', results=[])
 
-    # Directories that should be excluded from user-facing search
-    # (internal documentation only)
-    EXCLUDED_DIRECTORIES = {'security', 'development', 'operations', 'archive', 'ai'}
-
-    # Friendly category names (defined once, outside loop for performance)
-    CATEGORY_MAP = {
-        'user-guides': 'User Guides',
-        'diagnostics': 'Diagnostics',
-        'features': 'Features',
-        'technical-reference': 'Technical Reference',
-        'project': 'Project'
-    }
-
     results = []
     query_lower = query.lower()
     query_words = set(query_lower.split())
@@ -402,9 +403,9 @@ def search():
                 # Get metadata fields for relevance scoring
                 title = metadata.get('title', doc_file.stem)
                 description = metadata.get('description', '').strip()
-                keywords = metadata.get('keywords', [])
-                if isinstance(keywords, str):
-                    keywords = [keywords]
+                keywords = metadata.get('keywords', []) or []
+                if not isinstance(keywords, list):
+                    keywords = [str(keywords)] if keywords else []
 
                 # Calculate relevance score
                 relevance_score = 0
@@ -431,7 +432,7 @@ def search():
 
                 # Word-based relevance (check if query words appear)
                 title_words = set(title.lower().split())
-                keyword_words = set(' '.join(keywords).lower().split())
+                keyword_words = {word for keyword in keywords for word in keyword.lower().split()}
                 desc_words = set(description.lower().split()) if description else set()
 
                 # Bonus for word matches

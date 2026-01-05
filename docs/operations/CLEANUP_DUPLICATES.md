@@ -1,3 +1,7 @@
+---
+searchable: false
+---
+
 # Cleanup Duplicate Students
 
 ## Problem

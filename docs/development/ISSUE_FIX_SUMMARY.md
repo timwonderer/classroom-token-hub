@@ -1,3 +1,7 @@
+---
+searchable: false
+---
+
 # Issue Fix Summary: Legacy Class Unclaimed Seats Badge
 
 ## Issue Description

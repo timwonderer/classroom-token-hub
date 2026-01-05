@@ -1,5 +1,7 @@
 ---
-title: Transferring Money Between Accounts
+title: Banking & Transfers
+description: Learn how to transfer money between student accounts in your classroom economy
+keywords: [banking, transfers, money, send money, student accounts, checking, savings]
 category: banking
 roles: [student]
 related:

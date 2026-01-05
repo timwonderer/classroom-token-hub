@@ -162,12 +162,12 @@
                         <!-- Reference & Project Info -->
                         <div class="accordion-item">
                             <h2 class="accordion-header">
-                                <button class="accordion-button {% if not (doc_path in ['CHANGELOG', 'Deployment_Guide', 'project/PROJECT_HISTORY']) %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#projectCollapse" aria-expanded="{% if doc_path in ['CHANGELOG', 'Deployment_Guide', 'project/PROJECT_HISTORY'] %}true{% else %}false{% endif %}">
+                                <button class="accordion-button {% if not (doc_path in ['CHANGELOG', 'Deployment_Guide', 'project/PROJECT_HISTORY'] or doc_path.startswith('development/') or doc_path.startswith('operations/')) %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#projectCollapse" aria-expanded="{% if doc_path in ['CHANGELOG', 'Deployment_Guide', 'project/PROJECT_HISTORY'] or doc_path.startswith('development/') or doc_path.startswith('operations/') %}true{% else %}false{% endif %}">
                                     <span class="material-symbols-outlined me-2">folder</span>
                                     Reference & Project
                                 </button>
                             </h2>
-                            <div id="projectCollapse" class="accordion-collapse collapse {% if doc_path in ['CHANGELOG', 'Deployment_Guide', 'project/PROJECT_HISTORY'] %}show{% endif %}">
+                            <div id="projectCollapse" class="accordion-collapse collapse {% if doc_path in ['CHANGELOG', 'Deployment_Guide', 'project/PROJECT_HISTORY'] or doc_path.startswith('development/') or doc_path.startswith('operations/') %}show{% endif %}">
                                 <div class="accordion-body p-0">
                                     <ul class="nav flex-column">
                                         <li class="nav-item">
