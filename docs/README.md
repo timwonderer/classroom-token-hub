@@ -51,12 +51,12 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 
 ### Deployment & Operations
 - **[Deployment Guide](Deployment_Guide.md)** - Environment variables, CI/CD references, and production checklist.
-- **[Operations Guides](operations/)** - Cleanup, demo session hygiene, and PII audit procedures.
+- **[Operations README](operations/README.md)** - Cleanup, demo session hygiene, and PII audit procedures.
 - **[Multi-Tenancy Fix Deployment](operations/MULTI_TENANCY_FIX_DEPLOYMENT.md)** - Deployment procedures for multi-tenancy fixes.
-- **[Changelog](../CHANGELOG.md)** - Notable changes and release notes.
+- **[Changelog](CHANGELOG.md)** - Notable changes and release notes.
 
 ### Security
-- **[Security Audit 2025](security/SECURITY_AUDIT_2025.md)** - Comprehensive security audit findings.
+- **[Security Audit 2025](operations/SECURITY_AUDIT_2025.md)** - Comprehensive security audit findings.
 - **[Multi-Tenancy Audit](security/MULTI_TENANCY_AUDIT.md)** - Multi-tenancy security analysis.
 - **[Critical Same-Teacher Leak](security/CRITICAL_SAME_TEACHER_LEAK.md)** - Resolved data isolation fix.
 - **[Validation Report](security/VALIDATION_REPORT.md)** - Input/output validation audit.
@@ -72,7 +72,7 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 - **[Release Notes v1.1.1](archive/releases/RELEASE_NOTES_v1.1.1.md)** - Stability patch (Dec 15, 2025)
 - **[Release Notes v1.1.0](archive/releases/RELEASE_NOTES_v1.1.0.md)** - Dashboard analytics and UI redesign (Dec 13, 2024)
 - **[Release Notes v1.0.0](archive/releases/RELEASE_NOTES_v1.0.md)** - First stable release (Nov 29, 2024)
-- **[Archived Fix Reports](archive/)** - Historical bug fix and feature implementation summaries.
+- **[Archived Fix Reports](archive/README.md)** - Historical bug fix and feature implementation summaries.
 
 ---
 

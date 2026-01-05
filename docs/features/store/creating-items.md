@@ -5,8 +5,6 @@ roles: [teacher]
 description: Create and configure store items like rewards, privileges, and hall passes for your classroom economy.
 keywords: [store, items, rewards, privileges, shop, inventory, hall pass, collective goals, purchases]
 related:
-  - features/store/managing-inventory
-  - features/store/redemptions
   - diagnostics/teacher-store
 ---
 
@@ -298,13 +296,11 @@ Items the whole class works toward together:
 
 ## Related Articles
 
-- [Managing Store Inventory](/docs/features/store/managing-inventory)
-- [Processing Redemptions](/docs/features/store/redemptions)
-- [Economy Health & Pricing](/docs/features/payroll/economy-health)
-- [Teacher Diagnostics: Store](/docs/diagnostics/teacher-store)
+- [Teacher Store Diagnostics](/docs/diagnostics/teacher-store)
+- [Economy Guide](/docs/user-guides/economy_guide)
 
 ## Need More Help?
 
 - View the [Teacher Diagnostics Index](/docs/diagnostics/teacher)
-- Check [Economy Health](/docs/features/payroll/economy-health) for pricing guidance
+- Check [Economy Guide](/docs/user-guides/economy_guide) for pricing guidance
 - Contact support if items aren't working as expected
