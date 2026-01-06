@@ -218,7 +218,6 @@ def api_alerts():
               id, type, severity, what_changed, why_it_matters, suggested_action,
               triggered_at, and acknowledged.
     """
-    teacher_id = session.get('admin_id')
     join_code = session.get('current_join_code')
     
     if not join_code:
