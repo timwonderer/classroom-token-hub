@@ -327,10 +327,12 @@ def student_drill_down(student_id):
         return redirect(url_for('admin.students'))
     
     # Get student with scoping
-    student = Student.query.join(StudentBlock).filter(
-        # Use actual enrollment duration when possible; fall back to 18 weeks if unknown
-        weeks_enrolled == 18  # default/fallback for legacy behavior
-    )
+    student = Student.query.join(
+        StudentBlock, Student.id == StudentBlock.student_id
+    ).filter(
+        Student.id == student_id,
+        StudentBlock.join_code == join_code
+    ).first()
     # Use actual enrollment duration when possible; fall back to 18 weeks if unknown
     weeks_enrolled = 18  # default/fallback for legacy behavior
 
