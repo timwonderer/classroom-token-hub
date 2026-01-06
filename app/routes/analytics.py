@@ -29,7 +29,8 @@ from app.utils.analytics_engine import AnalyticsEngine
 from app.utils.helpers import render_template_with_fallback as render_template
 
 import pytz
-from werkzeug.exceptions import BadRequest, TemplateNotFound
+from werkzeug.exceptions import BadRequest
+from jinja2 import TemplateNotFound
 
 # Timezone
 PACIFIC = pytz.timezone('America/Los_Angeles')

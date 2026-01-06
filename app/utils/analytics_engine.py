@@ -18,7 +18,6 @@ Per spec section 4.2:
 """
 
 from datetime import datetime, timezone
-from app.models import Enrollment  # Assuming there's an Enrollment model to track enrollment dates
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from sqlalchemy import or_
