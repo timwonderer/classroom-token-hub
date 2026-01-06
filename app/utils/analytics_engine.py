@@ -432,7 +432,7 @@ class AnalyticsEngine:
             })
         
         # Alert: Velocity drop
-        if trends.velocity_trend == 'worsening':
+        if trends.velocity_trend == 'decreasing':
             alerts.append({
                 'alert_type': 'velocity_drop',
                 'severity': 'info',
