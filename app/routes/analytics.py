@@ -294,7 +294,7 @@ def events():
             events=events_list,
             join_code=join_code
         )
-    except Exception:
+    except TemplateNotFound:
         # Fallback: return JSON response if template not found
         events_data = []
         for event in events_list:

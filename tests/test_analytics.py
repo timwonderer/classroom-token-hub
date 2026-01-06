@@ -296,11 +296,11 @@ def test_trend_calculation(client, setup_analytics_test):
     # Test trend calculation
     # Improving: current > previous
     trend = engine.calculate_trend(100.0, 80.0)
-    assert trend == 'improving'
+    assert trend == 'increasing'
     
     # Worsening: current < previous
     trend = engine.calculate_trend(80.0, 100.0)
-    assert trend == 'worsening'
+    assert trend == 'decreasing'
     
     # Stable: difference < threshold
     trend = engine.calculate_trend(100.0, 98.0)

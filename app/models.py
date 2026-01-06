@@ -1896,11 +1896,10 @@ class AnalyticsAlert(db.Model):
         """Mark alert as acknowledged by teacher."""
         if not self.acknowledged_at:
             self.acknowledged_at = _utc_now()
-            db.session.commit()
     
     def resolve(self):
         """Mark alert as resolved (condition returned to normal)."""
         if not self.resolved_at:
             self.resolved_at = _utc_now()
             self.is_active = False
-            db.session.commit()
+
