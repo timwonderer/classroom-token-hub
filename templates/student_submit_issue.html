@@ -160,6 +160,10 @@ document.addEventListener('DOMContentLoaded', function() {
             ...options,
         });
 
+        // Remove required attribute from hidden textarea to allow form submission
+        // Server-side validation will still enforce the required field
+        field.removeAttribute('required');
+
         if (counter) {
             const updateCounter = function() {
                 counter.textContent = editor.value().length;
