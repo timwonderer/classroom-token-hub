@@ -186,7 +186,7 @@ class AnalyticsEngine:
             Transaction.join_code == self.join_code,
             Transaction.timestamp >= window_start,
             Transaction.timestamp < window_end,
-            Transaction.is_void == False
+            ~Transaction.is_void
         ).count()
         
         # Transactions per student per day
