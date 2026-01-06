@@ -7,6 +7,7 @@ allowing users to access help without leaving the app or losing their session.
 
 import re
 from pathlib import Path
+import os
 from flask import Blueprint, abort, current_app, session, request, url_for
 from werkzeug.exceptions import HTTPException
 import bleach
@@ -236,30 +237,32 @@ def view_doc(doc_path):
                 current_app.logger.warning(f"Path traversal attempt: {untrusted_path}")
                 abort(404)
 
-            # Ensure docs_root is absolute and normalized
+            # Ensure docs_root is absolute and normalized and actually exists
             try:
-                root_resolved = docs_root.resolve(strict=False)
+                root_resolved = docs_root.resolve(strict=True)
             except OSError as e:
                 current_app.logger.error(f"Invalid DOCS_ROOT '{docs_root}': {e}")
                 abort(500)
 
-            # Build candidate path under documentation root and ensure containment
+            # Build candidate path under documentation root and normalize it
             try:
                 candidate = (root_resolved / safe_rel_path).with_suffix('.md').resolve(strict=False)
             except OSError as e:
                 current_app.logger.warning(f"Error resolving documentation path '{untrusted_path}': {e}")
                 abort(404)
 
-            # Verify the resolved path is still within the docs root
+            # Verify the resolved path is still within the docs root using commonpath
             try:
-                relative_path = candidate.relative_to(root_resolved)
+                common = os.path.commonpath([str(root_resolved), str(candidate)])
             except ValueError:
+                current_app.logger.warning(f"Path outside DOCS_ROOT (invalid common path): {untrusted_path}")
+                abort(404)
+
+            if common != str(root_resolved):
                 current_app.logger.warning(f"Path outside DOCS_ROOT: {untrusted_path}")
                 abort(404)
 
-            # Reconstruct the safe path from the validated relative path
-            safe_candidate = root_resolved / relative_path
-            return safe_candidate
+            return candidate
 
         # Ensure we have a safe, absolute docs root
         try:
@@ -267,7 +270,12 @@ def view_doc(doc_path):
         except NameError:
             # Fallback: constrain to a 'docs' directory under the application root
             docs_root = Path(current_app.root_path) / "docs"
-        doc_file = resolve_doc_path(doc_path, Path(docs_root))
+        # Make sure docs_root is a Path instance
+        if not isinstance(docs_root, Path):
+            docs_root = Path(docs_root)
+        doc_file = resolve_doc_path(doc_path, docs_root)
+
+
 
 
         if not doc_file.exists():
