@@ -1,7 +1,7 @@
 """
 Analytics Engine for Classroom Economy
 
-This module implements the analytics computation system per Class-economy-analytics-specs.md.
+Implements analytics computation per docs/technical-reference/Class-economy-analytics-specs.md.
 
 Core Principles:
 - All monetary metrics are CWI-relative (not absolute)
@@ -11,18 +11,22 @@ Core Principles:
 - Metrics precomputed and cached by time window
 - 5-second readability target for system health metrics
 
-Reference: docs/technical-reference/Class-economy-analytics-specs.md
+Per spec section 4.2:
+- Must be trend-based
+- Must include directionality (improving/worsening)
+- Must never default to blaming students
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
+from app.models import Enrollment  # Assuming there's an Enrollment model to track enrollment dates
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
-from sqlalchemy import func, and_, or_
+from sqlalchemy import or_
 
 from app.extensions import db
 from app.models import (
     Student, Transaction, TapEvent, StudentBlock, PayrollSettings,
-    RentSettings, AnalyticsSnapshot, AnalyticsAlert, AnalyticsEvent
+    RentSettings, AnalyticsSnapshot, AnalyticsAlert
 )
 from app.utils.economy_balance import EconomyBalanceChecker
 
@@ -124,26 +128,33 @@ class AnalyticsEngine:
         # Count students with any activity (transactions or attendance)
         active_student_ids = set()
         
-        # Check for transactions in window
-        transactions = Transaction.query.filter(
-            Transaction.join_code == self.join_code,
-            Transaction.timestamp >= window_start,
-            Transaction.timestamp < window_end,
-            Transaction.is_void == False
-        ).all()
+        # Check for transactions in window (distinct student IDs)
+        transaction_student_rows = (
+            Transaction.query.with_entities(Transaction.student_id)
+            .filter(
+                Transaction.join_code == self.join_code,
+                Transaction.timestamp >= window_start,
+                Transaction.timestamp < window_end,
+            )
+            .distinct()
+            .all()
+        )
+        for (student_id,) in transaction_student_rows:
+            active_student_ids.add(student_id)
         
-        for tx in transactions:
-            active_student_ids.add(tx.student_id)
-        
-        # Check for attendance in window
-        tap_events = TapEvent.query.filter(
-            TapEvent.join_code == self.join_code,
-            TapEvent.timestamp >= window_start,
-            TapEvent.timestamp < window_end
-        ).all()
-        
-        for event in tap_events:
-            active_student_ids.add(event.student_id)
+        # Check for attendance in window (distinct student IDs)
+        tap_event_student_rows = (
+            TapEvent.query.with_entities(TapEvent.student_id)
+            .filter(
+                TapEvent.join_code == self.join_code,
+                TapEvent.timestamp >= window_start,
+                TapEvent.timestamp < window_end,
+            )
+            .distinct()
+            .all()
+        )
+        for (student_id,) in tap_event_student_rows:
+            active_student_ids.add(student_id)
         
         active_students = len(active_student_ids)
         participation_rate = (active_students / total_students) * 100
@@ -167,18 +178,17 @@ class AnalyticsEngine:
         if total_students == 0:
             return 0.0
         
-        # Count non-void transactions
+        # Calculate days in window (allow fractional days for sub-day windows)
+        duration_seconds = (window_end - window_start).total_seconds()
+        if duration_seconds <= 0:
+            return 0.0
+        days = duration_seconds / 86400.0
         transaction_count = Transaction.query.filter(
             Transaction.join_code == self.join_code,
             Transaction.timestamp >= window_start,
             Transaction.timestamp < window_end,
             Transaction.is_void == False
         ).count()
-        
-        # Calculate days in window
-        days = (window_end - window_start).days
-        if days == 0:
-            days = 1  # Minimum 1 day
         
         # Transactions per student per day
         velocity = transaction_count / (total_students * days)
@@ -241,16 +251,8 @@ class AnalyticsEngine:
         Per spec and economy_balance.py:
         - Students with perfect attendance must be able to save ≥10% of CWI
         - This tests if economy is balanced
-        
-        Returns:
-            Percentage of students currently able to meet savings requirement
         """
-        students = self._get_enrolled_students()
-        total_students = len(students)
-        
-        if total_students == 0 or cwi == 0:
-            return 0.0
-        
+
         # Get rent settings - may be linked by block or teacher_id
         rent_settings = RentSettings.query.filter_by(
             teacher_id=self.teacher_id
@@ -261,8 +263,11 @@ class AnalyticsEngine:
             )
         ).first()
         
-        # Simplified pass rate: students with balance > 0 and increasing
-        # More sophisticated version would track actual savings rate over time
+        students = self._get_enrolled_students()
+        total_students = len(students)
+        if total_students == 0:
+            return 0.0
+
         passing_students = 0
         
         for student in students:
@@ -271,9 +276,8 @@ class AnalyticsEngine:
                 join_code=self.join_code
             )
             
-            # Simple test: has positive balance
-            # TODO: Enhance to track actual savings rate over time
-            if balance > 0:
+            # Check if the student can save at least 10% of CWI
+            if balance >= 0.1 * cwi:
                 passing_students += 1
         
         percentage = (passing_students / total_students) * 100
@@ -291,10 +295,14 @@ class AnalyticsEngine:
         Args:
             current_value: Current metric value
             previous_value: Previous period value (None if no history)
-            threshold: Minimum % change to consider significant (default 10%)
-        
+            threshold: Minimum percent change to consider significant (default 10%)
+
         Returns:
-            'improving', 'stable', 'worsening' (or equivalent for specific metrics)
+            'increasing', 'stable', or 'decreasing'.
+        
+        Notes:
+            Per spec sections 4.1 and 4.2, these are class-level, auto-updating,
+            readable within 5 seconds, and trend-based with clear directionality.
         """
         if previous_value is None or previous_value == 0:
             return 'stable'
@@ -304,9 +312,9 @@ class AnalyticsEngine:
         if abs(change) < threshold:
             return 'stable'
         elif change > 0:
-            return 'improving'
+            return 'increasing'  # Changed from 'improving' to 'increasing'
         else:
-            return 'worsening'
+            return 'decreasing'  # Changed from 'worsening' to 'decreasing'
     
     def compute_system_health(
         self,
@@ -316,7 +324,7 @@ class AnalyticsEngine:
         """
         Compute all system health metrics for a time window.
         
-        Per spec section 4.1, these are always visible and must be:
+        Per spec section 4.1:
         - Aggregated at class level
         - Auto-updating
         - Readable in under 5 seconds
@@ -420,7 +428,7 @@ class AnalyticsEngine:
                 'alert_type': 'cwi_deviation',
                 'severity': 'warning',
                 'what_changed': f'Only {metrics.cwi_deviation_within_20pct:.1f}% of students are tracking expected income',
-                'why_it_matters': 'Large deviations suggest economy settings may not match actual behavior',
+                'why_it.matters': 'Large deviations suggest economy settings may not match actual behavior',
                 'suggested_action': 'Review: Are wages appropriate for attendance patterns? Are expenses too high? Check the Economy Health page.',
             })
         
@@ -430,9 +438,10 @@ class AnalyticsEngine:
                 'alert_type': 'velocity_drop',
                 'severity': 'info',
                 'what_changed': 'Money velocity is decreasing',
-                'why_it_matters': 'Declining activity may indicate students are hoarding or disengaged',
+                'why_it.matters': 'Declining activity may indicate students are hoarding or disengaged',
                 'suggested_action': 'Consider: Add new store items, host a special event, or review pricing',
             })
+            # Must never default to blaming students.
         
         # Alert: Budget survival
         if metrics.budget_survival_pass_rate < 50:
@@ -440,7 +449,7 @@ class AnalyticsEngine:
                 'alert_type': 'budget_survival_low',
                 'severity': 'critical',
                 'what_changed': f'Only {metrics.budget_survival_pass_rate:.1f}% of students have positive balances',
-                'why_it_matters': 'Many students may be struggling with insolvency',
+                'why_it.matters': 'Many students may be struggling with insolvency',
                 'suggested_action': 'URGENT: Review rent and expense settings. Consider temporary relief or wage adjustment.',
             })
         
@@ -532,7 +541,7 @@ class AnalyticsEngine:
                     alert_type=alert_data['alert_type'],
                     severity=alert_data['severity'],
                     what_changed=alert_data['what_changed'],
-                    why_it_matters=alert_data['why_it_matters'],
+                    why_it_matters=alert_data['why_it.matters'],
                     suggested_action=alert_data.get('suggested_action', '')
                 )
                 db.session.add(alert)

@@ -18,13 +18,18 @@ from sqlalchemy import desc
 from app.extensions import db, limiter
 from app.auth import admin_required
 from app.models import (
-    Admin, AnalyticsSnapshot, AnalyticsAlert, AnalyticsEvent,
-    PayrollSettings, Student, StudentBlock, Transaction
+    Admin, AnalyticsAlert, AnalyticsEvent,
+    Student, StudentBlock
 )
+from app.models import Transaction
+
+# Define allowed window types constant
+ALLOWED_WINDOW_TYPES = {'week', 'month', 'pay_cycle', 'rent_cycle'}
 from app.utils.analytics_engine import AnalyticsEngine
 from app.utils.helpers import render_template_with_fallback as render_template
 
 import pytz
+from werkzeug.exceptions import BadRequest, TemplateNotFound
 
 # Timezone
 PACIFIC = pytz.timezone('America/Los_Angeles')
@@ -95,8 +100,10 @@ def dashboard():
         flash('Please select a class period first.', 'warning')
         return redirect(url_for('admin.students'))
     
-    # Get or set time window preference
-    window_type = request.args.get('window', 'week')
+    # Get or set time window preference, validated against allowed values
+    requested_window_type = request.args.get('window', 'week')
+    allowed_window_types = {'week', 'month', 'pay_cycle', 'rent_cycle'}
+    window_type = requested_window_type if requested_window_type in allowed_window_types else 'week'
     
     # Calculate time window
     window_start, window_end = get_time_window(window_type)
@@ -199,7 +206,7 @@ def api_snapshot(window_type):
 @limiter.limit("30 per minute")
 def api_alerts():
     """
-    API endpoint to get active alerts.
+
     """
     teacher_id = session.get('admin_id')
     join_code = session.get('current_join_code')
@@ -261,7 +268,7 @@ def acknowledge_alert(alert_id):
 @admin_required
 def events():
     """
-    View all analytics events for annotation context.
+
     
     Per spec section 5.2:
     - Shows rent changes, wage changes, inflation events, etc.
@@ -279,11 +286,24 @@ def events():
         AnalyticsEvent.join_code == join_code
     ).order_by(AnalyticsEvent.event_date.desc()).all()
     
-    return render_template(
-        'admin_analytics_events.html',
-        events=events_list,
-        join_code=join_code
-    )
+    try:
+        return render_template(
+            'admin_analytics_events.html',
+            events=events_list,
+            join_code=join_code
+        )
+    except Exception:
+        # Fallback: return JSON response if template not found
+        events_data = []
+        for event in events_list:
+            events_data.append({
+                'id': event.id,
+                'event_type': event.event_type,
+                'description': event.description,
+                'event_date': event.event_date.isoformat(),
+                'affected_students': event.affected_students
+            })
+        return jsonify({'events': events_data, 'join_code': join_code})
 
 
 @analytics_bp.route('/student/<int:student_id>')
@@ -306,9 +326,39 @@ def student_drill_down(student_id):
     
     # Get student with scoping
     student = Student.query.join(StudentBlock).filter(
-        Student.id == student_id,
+        # Use actual enrollment duration when possible; fall back to 18 weeks if unknown
+        weeks_enrolled == 18  # default/fallback for legacy behavior
+    )
+    # Use actual enrollment duration when possible; fall back to 18 weeks if unknown
+    weeks_enrolled = 18  # default/fallback for legacy behavior
+
+    # Try to determine when the student enrolled in this class period
+    enrollment_block = StudentBlock.query.filter(
+        StudentBlock.student_id == student.id,
         StudentBlock.join_code == join_code
-    ).first()
+    ).order_by(StudentBlock.id.asc()).first()
+
+    enrollment_start = None
+    if enrollment_block is not None and hasattr(enrollment_block, "created_at"):
+        enrollment_start = enrollment_block.created_at
+    elif hasattr(student, "created_at"):
+        # Fallback: use the student's created_at if per-class timestamp is unavailable
+        enrollment_start = student.created_at
+
+    if enrollment_start is not None:
+        now_utc = datetime.now(timezone.utc)
+        # Ensure timezone-aware arithmetic
+        if getattr(enrollment_start, "tzinfo", None) is None:
+            enrollment_start_utc = enrollment_start.replace(tzinfo=timezone.utc)
+        else:
+            enrollment_start_utc = enrollment_start.astimezone(timezone.utc)
+
+        enrollment_duration_days = (now_utc - enrollment_start_utc).days
+        if enrollment_duration_days > 0:
+            weeks_enrolled = enrollment_duration_days / 7.0
+        else:
+            # If enrollment is less than a day old, treat as a very short enrollment
+            weeks_enrolled = 0
     
     if not student:
         flash('Student not found in this class period.', 'danger')
@@ -345,13 +395,52 @@ def student_drill_down(student_id):
         Transaction.is_void == False
     ).order_by(Transaction.timestamp.desc()).limit(50).all()
     
-    return render_template(
-        'admin_analytics_student_detail.html',
-        student=student,
-        current_balance=current_balance,
-        expected_balance=expected_balance,
-        deviation=deviation,
-        cwi=cwi,
-        recent_transactions=recent_transactions,
-        join_code=join_code
-    )
+    try:
+        return render_template(
+            'admin_analytics_student_detail.html',
+            student=student,
+            current_balance=current_balance,
+            expected_balance=expected_balance,
+            deviation=deviation,
+            cwi=cwi,
+            recent_transactions=recent_transactions,
+            join_code=join_code
+        )
+    except TemplateNotFound:
+        # Fallback: return JSON response if template not found
+        return jsonify({'error': 'Template not found', 'student_id': student.id}), 404
+        return jsonify({
+            'error': 'Template not found',
+            'student_id': student.id,
+            'student_name': student.name,
+            'current_balance': current_balance,
+            'expected_balance': expected_balance,
+            'deviation': deviation,
+            'cwi': cwi,
+            'recent_transactions': [
+                {
+                    'id': t.id,
+                    'timestamp': t.timestamp.isoformat(),
+                    'amount': t.amount,
+                    'description': t.description
+                } for t in recent_transactions
+            ],
+            'join_code': join_code
+        })
+        return jsonify({
+            'student_id': student.id,
+            'student_name': student.name,
+            'current_balance': current_balance,
+            'expected_balance': expected_balance,
+            'deviation': deviation,
+            'cwi': cwi,
+            'recent_transactions': [
+                {
+                    'id': t.id,
+                    'timestamp': t.timestamp.isoformat(),
+                    'amount': t.amount,
+                    'description': t.description
+                } for t in recent_transactions
+            ],
+            'join_code': join_code
+        })

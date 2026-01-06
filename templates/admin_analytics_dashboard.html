@@ -211,11 +211,11 @@
             {% else %}
             <i class="bi bi-info-circle-fill me-2"></i>
             {% endif %}
-            {{ alert.what_changed }}
+            {{ alert.what_changed | e }}
           </h6>
-          <p class="mb-2"><strong>Why this matters:</strong> {{ alert.why_it_matters }}</p>
+          <p class="mb-2"><strong>Why this matters:</strong> {{ alert.why_it_matters | e }}</p>
           {% if alert.suggested_action %}
-          <p class="mb-0"><strong>What to do:</strong> {{ alert.suggested_action }}</p>
+          <p class="mb-0"><strong>What to do:</strong> {{ alert.suggested_action | e }}</p>
           {% endif %}
         </div>
         {% if not alert.acknowledged_at %}
@@ -247,7 +247,7 @@
           <div class="list-group-item">
             <div class="d-flex justify-content-between align-items-start">
               <div>
-                <h6 class="mb-1">{{ event.description }}</h6>
+                <h6 class="mb-1">{{ event.description | e }}</h6>
                 <p class="small text-muted mb-0">
                   {{ event.event_date|format_datetime('%b %d, %Y at %I:%M %p') }}
                   {% if event.old_value and event.new_value %}
@@ -255,7 +255,7 @@
                   {% endif %}
                 </p>
               </div>
-              <span class="badge bg-secondary-subtle text-secondary">{{ event.event_type }}</span>
+              <span class="badge bg-secondary-subtle text-secondary">{{ event.event_type | e }}</span>
             </div>
           </div>
           {% endfor %}

@@ -11,8 +11,8 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from app import db
 from app.models import (
-    Admin, Student, StudentBlock, Transaction, TapEvent,
-    PayrollSettings, AnalyticsSnapshot, AnalyticsAlert
+    Admin, Student, StudentBlock, Transaction,
+    PayrollSettings, AnalyticsAlert
 )
 from app.utils.analytics_engine import AnalyticsEngine
 from hash_utils import get_random_salt, hash_username
@@ -228,7 +228,7 @@ def test_alert_generation(client, setup_analytics_test):
     engine = AnalyticsEngine(admin.id, join_code)
     
     # Create snapshot which will generate alerts
-    snapshot = engine.create_snapshot('week', window_start, now, is_complete=True)
+    engine.create_snapshot('week', window_start, now, is_complete=True)
     
     # Check if alerts were created
     alerts = AnalyticsAlert.query.filter_by(
