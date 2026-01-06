@@ -208,7 +208,15 @@ def api_snapshot(window_type):
 @limiter.limit("30 per minute")
 def api_alerts():
     """
+    API endpoint to retrieve active analytics alerts for the current class period.
 
+    Returns:
+        flask.Response: JSON object with either:
+            - {"error": "No class period selected"} and HTTP 400 if no join code
+              is present in the session, or
+            - {"alerts": [...]} with a list of active alerts, each containing
+              id, type, severity, what_changed, why_it_matters, suggested_action,
+              triggered_at, and acknowledged.
     """
     teacher_id = session.get('admin_id')
     join_code = session.get('current_join_code')
