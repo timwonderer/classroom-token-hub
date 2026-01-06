@@ -427,7 +427,7 @@ class AnalyticsEngine:
                 'alert_type': 'cwi_deviation',
                 'severity': 'warning',
                 'what_changed': f'Only {metrics.cwi_deviation_within_20pct:.1f}% of students are tracking expected income',
-                'why_it.matters': 'Large deviations suggest economy settings may not match actual behavior',
+                'why_it_matters': 'Large deviations suggest economy settings may not match actual behavior',
                 'suggested_action': 'Review: Are wages appropriate for attendance patterns? Are expenses too high? Check the Economy Health page.',
             })
         
@@ -437,7 +437,7 @@ class AnalyticsEngine:
                 'alert_type': 'velocity_drop',
                 'severity': 'info',
                 'what_changed': 'Money velocity is decreasing',
-                'why_it.matters': 'Declining activity may indicate students are hoarding or disengaged',
+                'why_it_matters': 'Declining activity may indicate students are hoarding or disengaged',
                 'suggested_action': 'Consider: Add new store items, host a special event, or review pricing',
             })
             # Must never default to blaming students.
@@ -540,7 +540,7 @@ class AnalyticsEngine:
                     alert_type=alert_data['alert_type'],
                     severity=alert_data['severity'],
                     what_changed=alert_data['what_changed'],
-                    why_it_matters=alert_data['why_it.matters'],
+                    why_it_matters=alert_data['why_it_matters'],
                     suggested_action=alert_data.get('suggested_action', '')
                 )
                 db.session.add(alert)
