@@ -143,6 +143,12 @@ def test_rent_items_display_after_due_date(client, setup_rent_with_items):
 def test_days_until_due_calculation(client, setup_rent_with_items):
     """Test that days_until_due is correctly calculated and passed to template."""
     data = setup_rent_with_items
+    now = datetime.now(timezone.utc)
+    # Activate preview so the countdown is visible (due in 10 days, preview for 12)
+    data['rent_settings'].bill_preview_enabled = True
+    data['rent_settings'].bill_preview_days = 12
+    data['rent_settings'].first_rent_due_date = now + timedelta(days=10, hours=1)
+    db.session.commit()
     
     with client.session_transaction() as sess:
         sess['student_id'] = data['student'].id
@@ -155,7 +161,7 @@ def test_days_until_due_calculation(client, setup_rent_with_items):
     # Since the rent is due in 10 days (from setup_rent_with_items)
     # We should see some indication that it's more than 7 days away
     # The status should show "Rent will be due in X days" (>7 days uses warning color)
-    assert b'Rent will be due in' in response.data or b'days' in response.data
+    assert b'Rent will be due in 10 days' in response.data
 
 
 def test_status_text_more_than_7_days(client, setup_rent_with_items):
@@ -164,9 +170,9 @@ def test_status_text_more_than_7_days(client, setup_rent_with_items):
     
     # Set rent due date to 8 days from now (within preview period so it's active)
     now = datetime.now(timezone.utc)
-    data['rent_settings'].first_rent_due_date = now + timedelta(days=8)
+    data['rent_settings'].first_rent_due_date = now + timedelta(days=8, hours=1)
     data['rent_settings'].bill_preview_enabled = True
-    data['rent_settings'].bill_preview_days = 5  # So it becomes active 3 days before due
+    data['rent_settings'].bill_preview_days = 9  # Activate preview before the due date
     db.session.commit()
     
     with client.session_transaction() as sess:
@@ -179,16 +185,16 @@ def test_status_text_more_than_7_days(client, setup_rent_with_items):
     
     # Should display "Rent will be due in X days" with warning color
     # Since we're 8 days before due, this should be active and show the countdown
-    assert b'Rent will be due in' in response.data or b'8' in response.data
+    assert b'Rent will be due in 8 days' in response.data
 
 
-def test_status_text_within_7_days(client, setup_rent_with_items):
-    """Test status text when rent is within 7 days but more than 3."""
+def test_status_text_between_3_and_7_days(client, setup_rent_with_items):
+    """Test status text when rent is between 3 and 7 days away (inclusive)."""
     data = setup_rent_with_items
     
-    # Set rent due date to 5 days from now
+    # Set rent due date to 3 days from now
     now = datetime.now(timezone.utc)
-    data['rent_settings'].first_rent_due_date = now + timedelta(days=5)
+    data['rent_settings'].first_rent_due_date = now + timedelta(days=3, hours=1)
     db.session.commit()
     
     with client.session_transaction() as sess:
@@ -200,16 +206,16 @@ def test_status_text_within_7_days(client, setup_rent_with_items):
     assert response.status_code == 200
     
     # Should display "Rent due in X days" with light red color
-    assert b'Rent due in' in response.data or b'5' in response.data
+    assert b'Rent due in 3 days' in response.data
 
 
-def test_status_text_within_3_days(client, setup_rent_with_items):
-    """Test status text when rent is within 3 days."""
+def test_status_text_within_2_days(client, setup_rent_with_items):
+    """Test status text when rent is within 2 days."""
     data = setup_rent_with_items
     
     # Set rent due date to 2 days from now
     now = datetime.now(timezone.utc)
-    data['rent_settings'].first_rent_due_date = now + timedelta(days=2)
+    data['rent_settings'].first_rent_due_date = now + timedelta(days=2, hours=1)
     db.session.commit()
     
     with client.session_transaction() as sess:
@@ -221,7 +227,7 @@ def test_status_text_within_3_days(client, setup_rent_with_items):
     assert response.status_code == 200
     
     # Should display "Due, pay soon" with crimson color
-    assert b'Due, pay soon' in response.data or b'pay soon' in response.data
+    assert b'Due, pay soon' in response.data
 
 
 def test_status_text_past_due(client, setup_rent_with_items):
@@ -242,7 +248,27 @@ def test_status_text_past_due(client, setup_rent_with_items):
     assert response.status_code == 200
     
     # Should display "Past due, pay now" with black color
-    assert b'Past due, pay now' in response.data or b'Past due' in response.data
+    assert b'Past due, pay now' in response.data
+
+
+def test_status_text_due_today(client, setup_rent_with_items):
+    """Test status text when rent is due today."""
+    data = setup_rent_with_items
+    
+    now = datetime.now(timezone.utc)
+    data['rent_settings'].first_rent_due_date = now + timedelta(hours=1)
+    db.session.commit()
+    
+    with client.session_transaction() as sess:
+        sess['student_id'] = data['student'].id
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+        sess['current_join_code'] = data['join_code']
+
+    response = client.get('/student/rent')
+    assert response.status_code == 200
+    
+    # Due today should show the urgent state
+    assert b'Due, pay soon' in response.data
 
 
 def test_status_text_no_rent_yet(client, setup_rent_with_items):

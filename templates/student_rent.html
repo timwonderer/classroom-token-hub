@@ -73,8 +73,8 @@
     {% set status_icon = "info" %}
     {% set status_text = "No rent is due yet" %}
 {% elif days_until_due is not none %}
-    {% if days_until_due <= 3 %}
-        {# Within 3 days - crimson (danger) #}
+    {% if days_until_due < 3 %}
+        {# Due today or within 2 days - crimson (danger) #}
         {% set card_border = "border-danger" %}
         {% set card_header_bg = "bg-danger text-white" %}
         {% set status_icon = "warning" %}
