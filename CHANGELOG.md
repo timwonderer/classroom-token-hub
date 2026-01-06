@@ -9,11 +9,12 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Fixed
-- **Insurance Claim Form Submission** - Fixed issue where insurance claim form could not be submitted due to hidden required field
-  - EasyMDE markdown editor hides the underlying textarea, causing browser validation to fail
-  - Removed HTML `required` attribute from hidden textarea after editor initialization
-  - Server-side validation via `DataRequired()` still enforces required field
-  - Resolves console error: "An invalid form control with name='description' is not focusable"
+- **EasyMDE Form Submission** - Fixed issue where forms with EasyMDE markdown editors could not be submitted due to hidden required fields
+  - EasyMDE markdown editor hides the underlying textarea, causing browser validation to fail on required fields
+  - Removed HTML `required` attribute from hidden textareas after editor initialization
+  - Server-side validation via `DataRequired()` still enforces required fields
+  - Applied fix to insurance claim form (`student_file_claim.html`) and issue submission form (`student_submit_issue.html`)
+  - Resolves console error: "An invalid form control with name='[field]' is not focusable"
 
 ### Added
 - **Mobile Navigation Enhancement** - Full navigation menu now accessible on mobile devices and PWA
