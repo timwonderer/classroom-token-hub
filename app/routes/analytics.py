@@ -103,8 +103,7 @@ def dashboard():
     
     # Get or set time window preference, validated against allowed values
     requested_window_type = request.args.get('window', 'week')
-    allowed_window_types = {'week', 'month', 'pay_cycle', 'rent_cycle'}
-    window_type = requested_window_type if requested_window_type in allowed_window_types else 'week'
+    window_type = requested_window_type if requested_window_type in ALLOWED_WINDOW_TYPES else 'week'
     
     # Calculate time window
     window_start, window_end = get_time_window(window_type)
