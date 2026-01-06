@@ -333,6 +333,9 @@ def student_drill_down(student_id):
         Student.id == student_id,
         StudentBlock.join_code == join_code
     ).first()
+    if student is None:
+        flash('Student not found for this class period.', 'warning')
+        return redirect(url_for('admin.students'))
     # Use actual enrollment duration when possible; fall back to 18 weeks if unknown
     weeks_enrolled = 18  # default/fallback for legacy behavior
 
