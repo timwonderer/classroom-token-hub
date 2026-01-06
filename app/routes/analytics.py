@@ -270,11 +270,11 @@ def acknowledge_alert(alert_id):
 @admin_required
 def events():
     """
+    Display contextual analytics events for the currently selected class period.
 
-    
     Per spec section 5.2:
     - Shows rent changes, wage changes, inflation events, etc.
-    - Provides context for understanding metric changes
+    - Provides context for understanding metric changes.
     """
     teacher_id = session.get('admin_id')
     join_code = session.get('current_join_code')
