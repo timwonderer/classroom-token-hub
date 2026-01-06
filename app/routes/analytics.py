@@ -145,7 +145,8 @@ def dashboard():
         window_start=window_start,
         window_end=window_end,
         teacher=teacher,
-        join_code=join_code
+        join_code=join_code,
+        current_page='analytics'
     )
 
 
