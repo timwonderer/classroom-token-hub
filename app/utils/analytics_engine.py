@@ -45,9 +45,9 @@ class SystemHealthMetrics:
 @dataclass
 class TrendMetrics:
     """Drift & anomaly metrics (trend-based per spec section 4.2)"""
-    balance_trend: str  # 'improving', 'stable', 'worsening'
+    balance_trend: str  # 'increasing', 'stable', 'decreasing'
     velocity_trend: str  # 'increasing', 'stable', 'decreasing'
-    participation_trend: str  # 'improving', 'stable', 'declining'
+    participation_trend: str  # 'increasing', 'stable', 'decreasing'
 
 
 class AnalyticsEngine:
