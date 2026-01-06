@@ -9,6 +9,22 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Added
+- **Analytics Dashboard (Phase 1-3)** - System health observability dashboard per analytics specification
+  - Three new database models: `AnalyticsSnapshot`, `AnalyticsEvent`, `AnalyticsAlert`
+  - Analytics computation engine with CWI-relative metrics (no absolute balances/rankings)
+  - System health metrics: participation rate, money velocity, CWI deviation bands, budget survival pass rate
+  - Trend analysis: tracks improving/stable/worsening patterns across periods
+  - Visual alerts with explanations (what changed, why it matters, suggested actions)
+  - Event annotation system for rent changes, wage changes, inflation events
+  - Metrics precomputed and cached by time window for 5-second readability
+  - Weekly and monthly time window views
+  - All metrics properly scoped by `join_code` for multi-tenancy compliance
+  - Dashboard route at `/admin/analytics`
+  - API endpoints for snapshot data and alerts
+  - Comprehensive test coverage for analytics engine
+  - Database migration: `a7b8c9d0e1f2_add_analytics_models`
+  - Per spec: no student names in default views, no leaderboards, no comparative rankings
+  - Design principle: "Something is drifting — and I know what lever to pull"
 - **Mobile Navigation Enhancement** - Full navigation menu now accessible on mobile devices and PWA
   - Added floating hamburger menu button that appears on mobile (<768px)
   - Sidebar slides in from left with smooth animation and backdrop overlay

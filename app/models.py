@@ -1723,3 +1723,184 @@ class Announcement(db.Model):
     def is_system_admin_announcement(self):
         """Check if this is a system admin announcement."""
         return self.system_admin_id is not None
+
+
+# -------------------- ANALYTICS MODELS --------------------
+class AnalyticsSnapshot(db.Model):
+    """
+    Stores precomputed analytics metrics for a class economy at a point in time.
+    
+    Per analytics spec:
+    - All monetary metrics are CWI-relative
+    - Metrics are cached by time window for performance
+    - System health metrics are always visible
+    - Individual student data only in drill-down views
+    
+    This model enables:
+    - Fast dashboard loading (5-second readability target)
+    - Historical trend analysis
+    - CWI-relative anomaly detection
+    """
+    __tablename__ = 'analytics_snapshots'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # Scoping (CRITICAL: join_code is source of truth for multi-tenancy)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+    join_code = db.Column(db.String(20), nullable=False, index=True)
+    
+    # Time window
+    window_type = db.Column(db.String(20), nullable=False)  # 'week', 'pay_cycle', 'rent_cycle', 'custom'
+    window_start = db.Column(db.DateTime, nullable=False)
+    window_end = db.Column(db.DateTime, nullable=False)
+    
+    # System Health Metrics (Always Visible)
+    participation_rate = db.Column(db.Float, nullable=True)  # % of students who were active
+    money_velocity = db.Column(db.Float, nullable=True)  # Transactions per student per day
+    cwi_deviation_within_20pct = db.Column(db.Float, nullable=True)  # % of students within ±20% of expected CWI
+    budget_survival_pass_rate = db.Column(db.Float, nullable=True)  # % of students passing budget survival test
+    
+    # CWI Context
+    cwi_value = db.Column(db.Float, nullable=False)  # Calculated CWI for this period
+    avg_student_balance = db.Column(db.Float, nullable=True)  # Average balance (for CWI comparison only)
+    
+    # Drift & Anomaly Indicators (Trend-based)
+    balance_trend = db.Column(db.String(20), nullable=True)  # 'improving', 'stable', 'worsening'
+    velocity_trend = db.Column(db.String(20), nullable=True)  # 'increasing', 'stable', 'decreasing'
+    participation_trend = db.Column(db.String(20), nullable=True)  # 'improving', 'stable', 'declining'
+    
+    # Additional context (non-student-identifying)
+    total_students = db.Column(db.Integer, nullable=False)  # Total enrolled students
+    active_students = db.Column(db.Integer, nullable=True)  # Students with activity in window
+    total_transactions = db.Column(db.Integer, nullable=True)  # Total transaction count
+    
+    # Metadata
+    computed_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    is_complete = db.Column(db.Boolean, default=True, nullable=False)  # False if window is ongoing
+    
+    # Relationships
+    teacher = db.relationship('Admin', backref=db.backref('analytics_snapshots', lazy='dynamic', passive_deletes=True))
+    
+    # Indexes for efficient queries
+    __table_args__ = (
+        db.Index('ix_analytics_join_code_window', 'join_code', 'window_type', 'window_start'),
+        db.Index('ix_analytics_teacher_window', 'teacher_id', 'window_type', 'window_start'),
+        db.Index('ix_analytics_computed_at', 'computed_at'),
+    )
+    
+    def __repr__(self):
+        return f'<AnalyticsSnapshot {self.join_code} {self.window_type} {self.window_start.date()}>'
+
+
+class AnalyticsEvent(db.Model):
+    """
+    Stores significant events that affect economy metrics for annotation on charts.
+    
+    Per analytics spec section 5.2:
+    - Rent changes
+    - Wage changes
+    - Inflation events
+    - Wildcard constraints
+    - Holidays or shortened weeks
+    
+    Charts without context are considered incomplete.
+    """
+    __tablename__ = 'analytics_events'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # Scoping
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+    join_code = db.Column(db.String(20), nullable=False, index=True)
+    
+    # Event details
+    event_type = db.Column(db.String(50), nullable=False)  # 'rent_change', 'wage_change', 'inflation', 'holiday', 'wildcard', 'custom'
+    event_date = db.Column(db.DateTime, nullable=False)
+    description = db.Column(db.String(255), nullable=False)
+    
+    # Impact metadata (for understanding effect on metrics)
+    old_value = db.Column(db.Float, nullable=True)  # Old value if applicable (e.g., old rent amount)
+    new_value = db.Column(db.Float, nullable=True)  # New value if applicable
+    
+    # Metadata
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    created_by_admin = db.Column(db.Boolean, default=True, nullable=False)  # True if manually created, False if auto-detected
+    
+    # Relationships
+    teacher = db.relationship('Admin', backref=db.backref('analytics_events', lazy='dynamic', passive_deletes=True))
+    
+    # Indexes
+    __table_args__ = (
+        db.Index('ix_analytics_events_join_code_date', 'join_code', 'event_date'),
+        db.Index('ix_analytics_events_teacher_date', 'teacher_id', 'event_date'),
+        db.Index('ix_analytics_events_type', 'event_type'),
+    )
+    
+    def __repr__(self):
+        return f'<AnalyticsEvent {self.event_type} on {self.event_date.date()} for {self.join_code}>'
+
+
+class AnalyticsAlert(db.Model):
+    """
+    Stores generated alerts for anomalies and threshold violations.
+    
+    Per analytics spec section 6:
+    - Visual alerts only (not notifications)
+    - Predefined thresholds with teacher adjustment
+    - Must explain what changed, why it matters, and suggest interventions
+    - Never shame students, prescribe discipline, or trigger automatic penalties
+    """
+    __tablename__ = 'analytics_alerts'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    
+    # Scoping
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+    join_code = db.Column(db.String(20), nullable=False, index=True)
+    
+    # Alert details
+    alert_type = db.Column(db.String(50), nullable=False)  # 'cwi_deviation', 'velocity_drop', 'participation_low', etc.
+    severity = db.Column(db.String(20), nullable=False)  # 'info', 'warning', 'critical'
+    
+    # Message components (per spec section 6.2)
+    what_changed = db.Column(db.String(255), nullable=False)  # What metric changed
+    why_it_matters = db.Column(db.Text, nullable=False)  # Why teacher should care
+    suggested_action = db.Column(db.Text, nullable=True)  # Possible intervention
+    
+    # Metric context
+    metric_name = db.Column(db.String(100), nullable=True)
+    current_value = db.Column(db.Float, nullable=True)
+    threshold_value = db.Column(db.Float, nullable=True)
+    
+    # Alert lifecycle
+    triggered_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    acknowledged_at = db.Column(db.DateTime, nullable=True)  # When teacher marked as seen
+    resolved_at = db.Column(db.DateTime, nullable=True)  # When condition returned to normal
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    
+    # Relationships
+    teacher = db.relationship('Admin', backref=db.backref('analytics_alerts', lazy='dynamic', passive_deletes=True))
+    
+    # Indexes
+    __table_args__ = (
+        db.Index('ix_analytics_alerts_join_code_active', 'join_code', 'is_active'),
+        db.Index('ix_analytics_alerts_teacher_active', 'teacher_id', 'is_active'),
+        db.Index('ix_analytics_alerts_severity', 'severity', 'is_active'),
+        db.Index('ix_analytics_alerts_triggered', 'triggered_at'),
+    )
+    
+    def __repr__(self):
+        return f'<AnalyticsAlert {self.alert_type} ({self.severity}) for {self.join_code}>'
+    
+    def acknowledge(self):
+        """Mark alert as acknowledged by teacher."""
+        if not self.acknowledged_at:
+            self.acknowledged_at = _utc_now()
+            db.session.commit()
+    
+    def resolve(self):
+        """Mark alert as resolved (condition returned to normal)."""
+        if not self.resolved_at:
+            self.resolved_at = _utc_now()
+            self.is_active = False
+            db.session.commit()
