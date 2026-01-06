@@ -252,16 +252,6 @@ class AnalyticsEngine:
         - This tests if economy is balanced
         """
 
-        # Get rent settings - may be linked by block or teacher_id
-        rent_settings = RentSettings.query.filter_by(
-            teacher_id=self.teacher_id
-        ).filter(
-            or_(
-                RentSettings.block == self.join_code,
-                RentSettings.block.is_(None)
-            )
-        ).first()
-        
         students = self._get_enrolled_students()
         total_students = len(students)
         if total_students == 0:
