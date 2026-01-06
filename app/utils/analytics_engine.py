@@ -448,7 +448,7 @@ class AnalyticsEngine:
                 'alert_type': 'budget_survival_low',
                 'severity': 'critical',
                 'what_changed': f'Only {metrics.budget_survival_pass_rate:.1f}% of students have positive balances',
-                'why_it.matters': 'Many students may be struggling with insolvency',
+                'why_it_matters': 'Many students may be struggling with insolvency',
                 'suggested_action': 'URGENT: Review rent and expense settings. Consider temporary relief or wage adjustment.',
             })
         
