@@ -11,6 +11,11 @@ For gunicorn: wsgi:app
 import os
 import time
 import platform
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env before importing the app so CLI commands see required settings
+load_dotenv(dotenv_path=Path(__file__).parent / ".env", override=True)
 
 os.environ['TZ'] = 'UTC'
 

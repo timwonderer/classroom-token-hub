@@ -22,9 +22,9 @@ def upgrade():
     bind = op.get_bind()
     inspector = sa.inspect(bind)
     old_fk_name = None
-
+    existing_fks = list(inspector.get_foreign_keys('system_admin_credentials'))
     # Find the existing FK name for system_admin_id if one exists (SQLite may leave this unnamed)
-    for fk in inspector.get_foreign_keys('system_admin_credentials'):
+    for fk in existing_fks:
         if 'system_admin_id' in fk.get('constrained_columns', []):
             old_fk_name = fk.get('name')
             break
@@ -39,16 +39,33 @@ def upgrade():
                type_=sa.Text(),
                nullable=True)
 
+    # Make system_admin_credentials changes idempotent
     with op.batch_alter_table('system_admin_credentials', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('sysadmin_id', sa.Integer(), nullable=False))
+        # Refresh inspector info for columns
+        cols = {c['name'] for c in inspector.get_columns('system_admin_credentials')}
+
+        # Ensure credential_id is Text and nullable
         batch_op.alter_column('credential_id',
                existing_type=sa.VARCHAR(length=255),
                type_=sa.Text(),
                nullable=True)
+
+        # Add sysadmin_id if missing
+        if 'sysadmin_id' not in cols:
+            batch_op.add_column(sa.Column('sysadmin_id', sa.Integer(), nullable=False))
+        # Drop old FK on system_admin_id if present
         if old_fk_name:
             batch_op.drop_constraint(old_fk_name, type_='foreignkey')
-        batch_op.create_foreign_key('fk_system_admin_credentials_sysadmin_id', 'system_admins', ['sysadmin_id'], ['id'], ondelete='CASCADE')
-        batch_op.drop_column('system_admin_id')
+        # Create FK on sysadmin_id if not already present
+        has_sysadmin_fk = any(
+            'sysadmin_id' in fk.get('constrained_columns', []) and fk.get('referred_table') == 'system_admins'
+            for fk in existing_fks
+        )
+        if not has_sysadmin_fk:
+            batch_op.create_foreign_key('fk_system_admin_credentials_sysadmin_id', 'system_admins', ['sysadmin_id'], ['id'], ondelete='CASCADE')
+        # Drop legacy column if it exists
+        if 'system_admin_id' in cols:
+            batch_op.drop_column('system_admin_id')
 
     # ### end Alembic commands ###
 
