@@ -129,17 +129,5 @@
   </div>
 </div>
 
-<script>
-  document.addEventListener('change', (event) => {
-    const target = event.target;
-    if (!target || target.id !== 'analyticsClassSelect') {
-      return;
-    }
-
-    const baseUrl = target.dataset.switchUrl || "{{ url_for('analytics.events') }}";
-    const targetUrl = new URL(baseUrl, window.location.origin);
-    targetUrl.searchParams.set('join_code', target.value);
-    window.location.assign(targetUrl.toString());
-  });
-</script>
+<script src="{{ static_url('js/analytics-class-selector.js') }}"></script>
 {% endblock %}

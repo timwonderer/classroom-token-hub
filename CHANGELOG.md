@@ -8,6 +8,12 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+- **Analytics Class Selector Refactoring** - Extracted duplicate JavaScript code for analytics class selection into reusable module
+  - Created `static/js/analytics-class-selector.js` for shared class switching logic
+  - Removed inline scripts from `admin_analytics_dashboard.html` and `admin_analytics_events.html`
+  - Improves maintainability and reduces code duplication
+
 ### Fixed
 - **Analytics Events Value Display** - Show zero-value economy changes in the analytics events timeline by checking for `None` instead of falsy values.
 - **EasyMDE Form Submission** - Fixed issue where forms with EasyMDE markdown editors could not be submitted due to hidden required fields
