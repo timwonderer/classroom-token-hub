@@ -284,6 +284,9 @@ def api_snapshot(window_type):
     
     if not join_code:
         return jsonify({'error': 'No class period selected'}), 400
+
+    if window_type not in ALLOWED_WINDOW_TYPES:
+        return jsonify({'error': 'Invalid window type'}), 400
     
     # Calculate time window
     window_start, window_end = get_time_window(window_type, teacher_id, join_code)
