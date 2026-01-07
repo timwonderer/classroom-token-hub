@@ -9,6 +9,7 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Fixed
+- **Analytics Events Value Display** - Show zero-value economy changes in the analytics events timeline by checking for `None` instead of falsy values.
 - **EasyMDE Form Submission** - Fixed issue where forms with EasyMDE markdown editors could not be submitted due to hidden required fields
   - EasyMDE markdown editor hides the underlying textarea, causing browser validation to fail on required fields
   - Removed HTML `required` attribute from hidden textareas after editor initialization

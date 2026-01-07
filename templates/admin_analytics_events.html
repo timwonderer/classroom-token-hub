@@ -75,7 +75,7 @@
                   </td>
                   <td>{{ event.description | e }}</td>
                   <td>
-                    {% if event.old_value and event.new_value %}
+                    {% if event.old_value is not none and event.new_value is not none %}
                     <span class="text-muted small">
                       <span class="text-decoration-line-through">${{ "%.2f"|format(event.old_value) }}</span>
                       <i class="bi bi-arrow-right mx-1"></i>
