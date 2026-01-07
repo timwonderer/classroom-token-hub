@@ -29,6 +29,7 @@ from app.models import (
     StudentTeacher, DemoStudent
 )
 from app.utils.economy_balance import EconomyBalanceChecker
+import logging
 
 
 @dataclass
@@ -300,7 +301,14 @@ class AnalyticsEngine:
 
         students = self._get_enrolled_students()
         total_students = len(students)
-        if total_students == 0 or cwi <= 0:
+        if total_students == 0:
+            return 0.0
+        
+        if cwi <= 0:
+            logging.warning(
+            f'Invalid CWI ({cwi}) for teacher_id={self.teacher_id}, '
+            f'join_code={self.join_code}. Check PayrollSettings configuration.'
+            )
             return 0.0
 
         passing_students = 0
