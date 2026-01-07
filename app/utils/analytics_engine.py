@@ -460,7 +460,7 @@ class AnalyticsEngine:
         # Alert: Low participation
         if metrics.participation_rate < (self.PARTICIPATION_WARNING_THRESHOLD * 100):
             alerts.append({
-                'alert_type': 'participation_low',
+                'alert_key': 'participation_low',
                 'severity': 'warning',
                 'what_changed': f'Participation rate is {metrics.participation_rate:.1f}%',
                 'why_it_matters': 'Low participation may indicate students are disengaged or facing barriers',
@@ -471,7 +471,7 @@ class AnalyticsEngine:
         cwi_within_band = metrics.cwi_deviation_within_20pct / 100
         if cwi_within_band < (1 - self.CWI_DEVIATION_WARNING_THRESHOLD):
             alerts.append({
-                'alert_type': 'cwi_deviation',
+                'alert_key': 'cwi_deviation',
                 'severity': 'warning',
                 'what_changed': f'Only {metrics.cwi_deviation_within_20pct:.1f}% of students are tracking expected income',
                 'why_it_matters': 'Large deviations suggest economy settings may not match actual behavior',
@@ -481,7 +481,7 @@ class AnalyticsEngine:
         # Alert: Velocity drop
         if trends.velocity_trend == 'decreasing':
             alerts.append({
-                'alert_type': 'velocity_drop',
+                'alert_key': 'velocity_drop',
                 'severity': 'info',
                 'what_changed': 'Money velocity is decreasing',
                 'why_it_matters': 'Declining activity may indicate students are hoarding or disengaged',
@@ -491,7 +491,7 @@ class AnalyticsEngine:
         # Alert: Budget survival
         if metrics.cwi_value > 0 and metrics.budget_survival_pass_rate < 50:
             alerts.append({
-                'alert_type': 'budget_survival_low',
+                'alert_key': 'budget_survival_low',
                 'severity': 'critical',
                 'what_changed': (
                     f'Only {metrics.budget_survival_pass_rate:.1f}% of students can save '
@@ -572,27 +572,50 @@ class AnalyticsEngine:
         db.session.add(snapshot)
         db.session.commit()
         
-        # Generate and save alerts
+        # Generate and handle alerts according to new AnalyticsAlert lifecycle
         alerts = self.generate_alerts(health_metrics, trends)
+        # --- Analytics Alert Lifecycle Handling ---
+        active_alert_keys = set()
+
         for alert_data in alerts:
-            # Check if this alert type already exists and is active
-            existing_alert = AnalyticsAlert.query.filter(
-                AnalyticsAlert.join_code == self.join_code,
-                AnalyticsAlert.alert_type == alert_data['alert_type'],
-                AnalyticsAlert.is_active == True
+            alert_key = alert_data['alert_key']
+            active_alert_keys.add(alert_key)
+
+            alert = AnalyticsAlert.query.filter_by(
+                alert_key=alert_key,
+                join_code=self.join_code,
+                window_type=window_type,
+                window_start=window_start,
+                window_end=window_end,
+                resolved_at=None
             ).first()
-            
-            if not existing_alert:
+
+            if not alert:
                 alert = AnalyticsAlert(
-                    teacher_id=self.teacher_id,
+                    alert_key=alert_key,
                     join_code=self.join_code,
-                    alert_type=alert_data['alert_type'],
+                    window_type=window_type,
+                    window_start=window_start,
+                    window_end=window_end,
                     severity=alert_data['severity'],
                     what_changed=alert_data['what_changed'],
                     why_it_matters=alert_data['why_it_matters'],
-                    suggested_action=alert_data.get('suggested_action', '')
+                    suggested_action=alert_data.get('suggested_action')
                 )
                 db.session.add(alert)
+
+        # Resolve alerts from this window that no longer apply
+        stale_alerts = AnalyticsAlert.query.filter(
+            AnalyticsAlert.join_code == self.join_code,
+            AnalyticsAlert.window_type == window_type,
+            AnalyticsAlert.window_start == window_start,
+            AnalyticsAlert.window_end == window_end,
+            AnalyticsAlert.resolved_at.is_(None),
+            ~AnalyticsAlert.alert_key.in_(active_alert_keys)
+        ).all()
+
+        for alert in stale_alerts:
+            alert.resolve()
         
         db.session.commit()
         

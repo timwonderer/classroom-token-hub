@@ -224,12 +224,12 @@ def dashboard():
     # Get active alerts
     active_alerts = AnalyticsAlert.query.filter(
         AnalyticsAlert.join_code == join_code,
-        AnalyticsAlert.is_active == True
+        AnalyticsAlert.resolved_at.is_(None)
     ).order_by(
         # Sort by severity: critical, warning, info
         desc(AnalyticsAlert.severity == 'critical'),
         desc(AnalyticsAlert.severity == 'warning'),
-        AnalyticsAlert.triggered_at.desc()
+        AnalyticsAlert.created_at.desc()
     ).all()
     
     # Get recent events for context
@@ -334,23 +334,23 @@ def api_alerts():
     
     active_alerts = AnalyticsAlert.query.filter(
         AnalyticsAlert.join_code == join_code,
-        AnalyticsAlert.is_active == True
+        AnalyticsAlert.resolved_at.is_(None)
     ).order_by(
         desc(AnalyticsAlert.severity == 'critical'),
         desc(AnalyticsAlert.severity == 'warning'),
-        AnalyticsAlert.triggered_at.desc()
+        AnalyticsAlert.created_at.desc()
     ).all()
     
     alerts_data = []
     for alert in active_alerts:
         alerts_data.append({
             'id': alert.id,
-            'type': alert.alert_type,
+            'alert_key': alert.alert_key,
             'severity': alert.severity,
             'what_changed': alert.what_changed,
             'why_it_matters': alert.why_it_matters,
             'suggested_action': alert.suggested_action,
-            'triggered_at': alert.triggered_at.isoformat(),
+            'created_at': alert.created_at.isoformat(),
             'acknowledged': alert.acknowledged_at is not None
         })
     
@@ -368,8 +368,8 @@ def acknowledge_alert(alert_id):
     
     alert = AnalyticsAlert.query.filter(
         AnalyticsAlert.id == alert_id,
-        AnalyticsAlert.teacher_id == teacher_id,
-        AnalyticsAlert.join_code == join_code
+        AnalyticsAlert.join_code == join_code,
+        AnalyticsAlert.resolved_at.is_(None)
     ).first()
     
     if not alert:
