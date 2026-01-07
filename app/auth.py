@@ -289,17 +289,17 @@ def get_current_admin():
 
 def ensure_admin_join_code(admin_id):
     """Ensure an admin has a current join code selected in session."""
+    from app.models import TeacherBlock  # Imported lazily to avoid circular import
+
     if not admin_id:
         return
 
     join_code = session.get('current_join_code')
     if join_code:
-        from app.models import TeacherBlock  # Imported lazily to avoid circular import
         if TeacherBlock.query.filter_by(teacher_id=admin_id, join_code=join_code).first():
             return
         session.pop('current_join_code', None)
 
-    from app.models import TeacherBlock  # Imported lazily to avoid circular import
     teacher_block = (
         TeacherBlock.query
         .filter_by(teacher_id=admin_id)
