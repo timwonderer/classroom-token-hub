@@ -582,6 +582,7 @@ class AnalyticsEngine:
             active_alert_keys.add(alert_key)
 
             alert = AnalyticsAlert.query.filter_by(
+                teacher_id=self.teacher_id,
                 alert_key=alert_key,
                 join_code=self.join_code,
                 window_type=window_type,
@@ -592,11 +593,13 @@ class AnalyticsEngine:
 
             if not alert:
                 alert = AnalyticsAlert(
+                    teacher_id=self.teacher_id,
                     alert_key=alert_key,
                     join_code=self.join_code,
                     window_type=window_type,
                     window_start=window_start,
                     window_end=window_end,
+                    alert_type=alert_data.get('alert_type', 'general'),
                     severity=alert_data['severity'],
                     what_changed=alert_data['what_changed'],
                     why_it_matters=alert_data['why_it_matters'],
@@ -606,6 +609,7 @@ class AnalyticsEngine:
 
         # Resolve alerts from this window that no longer apply
         stale_alerts = AnalyticsAlert.query.filter(
+            AnalyticsAlert.teacher_id == self.teacher_id,
             AnalyticsAlert.join_code == self.join_code,
             AnalyticsAlert.window_type == window_type,
             AnalyticsAlert.window_start == window_start,
