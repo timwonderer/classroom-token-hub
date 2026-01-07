@@ -232,6 +232,7 @@
                     id="block-{{ block }}-tab"
                     data-bs-toggle="pill"
                     data-bs-target="#block-{{ block }}"
+                    data-join-code="{{ join_codes_by_block.get(block|upper, '') }}"
                     type="button"
                     role="tab">
               {% if block == "Unassigned" %}
@@ -1581,11 +1582,42 @@ function tapOutAllBlock(block) {
   });
 }
 
+function setCurrentJoinCode(joinCode) {
+  if (!joinCode) {
+    return;
+  }
+
+  fetch('/admin/current-class', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+    },
+    body: JSON.stringify({ join_code: joinCode })
+  }).catch(error => {
+    console.error('Error updating current class:', error);
+  });
+}
+
+function initCurrentClassSync() {
+  const activeTab = document.querySelector('#blockTabs .nav-link.active[data-join-code]');
+  if (activeTab) {
+    setCurrentJoinCode(activeTab.dataset.joinCode);
+  }
+
+  document.querySelectorAll('#blockTabs .nav-link[data-join-code]').forEach(tab => {
+    tab.addEventListener('shown.bs.tab', event => {
+      setCurrentJoinCode(event.target.dataset.joinCode);
+    });
+  });
+}
+
 // (Tap toggle controls moved to Attendance page)
 
 // -------------------- CREATE NEW CLASS SECTION --------------------
 
 document.addEventListener('DOMContentLoaded', function() {
+  initCurrentClassSync();
   const blockSelect = document.getElementById('block_select');
   const blockHidden = document.getElementById('block');
   const newBlockInput = document.getElementById('new_block_input');

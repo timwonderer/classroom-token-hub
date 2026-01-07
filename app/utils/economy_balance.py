@@ -248,46 +248,48 @@ class EconomyBalanceChecker:
             rent_settings.custom_frequency_value,
             getattr(rent_settings, 'custom_frequency_unit', None)
         )
-        rent_ratio = weekly_rent / cwi if cwi > 0 else 0
+        monthly_rent = weekly_rent * self.AVERAGE_WEEKS_PER_MONTH
+        monthly_ratio = monthly_rent / cwi if cwi > 0 else 0
 
-        recommended_min = cwi * self.RENT_MIN_RATIO
-        recommended_max = cwi * self.RENT_MAX_RATIO
+        # Recommended monthly rent bounds based on weekly CWI ratios
+        recommended_min = cwi * self.RENT_MIN_RATIO * self.AVERAGE_WEEKS_PER_MONTH
+        recommended_max = cwi * self.RENT_MAX_RATIO * self.AVERAGE_WEEKS_PER_MONTH
 
         # Check if within bounds
-        if rent_ratio < self.RENT_MIN_RATIO:
-            deviation = (self.RENT_MIN_RATIO - rent_ratio) / self.RENT_MIN_RATIO
+        if monthly_ratio < self.RENT_MIN_RATIO:
+            deviation = (self.RENT_MIN_RATIO - monthly_ratio) / self.RENT_MIN_RATIO
             level = WarningLevel.CRITICAL if deviation > self.MAJOR_DEVIATION_THRESHOLD else WarningLevel.WARNING
             warnings.append(BalanceWarning(
                 feature="Rent",
                 level=level,
-                message=f"Weekly rent (${weekly_rent:.2f}) is below recommended minimum. Students may not learn proper budgeting.",
-                current_value=weekly_rent,
+                message=f"Monthly-equivalent rent (${monthly_rent:.2f}) is below recommended minimum. Students may not learn proper budgeting.",
+                current_value=monthly_rent,
                 recommended_min=recommended_min,
                 recommended_max=recommended_max,
-                cwi_ratio=rent_ratio
+                cwi_ratio=monthly_ratio
             ))
-        elif rent_ratio > self.RENT_MAX_RATIO:
-            deviation = (rent_ratio - self.RENT_MAX_RATIO) / self.RENT_MAX_RATIO
+        elif monthly_ratio > self.RENT_MAX_RATIO:
+            deviation = (monthly_ratio - self.RENT_MAX_RATIO) / self.RENT_MAX_RATIO
             level = WarningLevel.CRITICAL if deviation > self.MAJOR_DEVIATION_THRESHOLD else WarningLevel.WARNING
             warnings.append(BalanceWarning(
                 feature="Rent",
                 level=level,
-                message=f"Weekly rent (${weekly_rent:.2f}) is above recommended maximum. Students may struggle with other expenses.",
-                current_value=weekly_rent,
+                message=f"Monthly-equivalent rent (${monthly_rent:.2f}) is above recommended maximum. Students may struggle with other expenses.",
+                current_value=monthly_rent,
                 recommended_min=recommended_min,
                 recommended_max=recommended_max,
-                cwi_ratio=rent_ratio
+                cwi_ratio=monthly_ratio
             ))
         else:
             # Within bounds - provide info
             warnings.append(BalanceWarning(
                 feature="Rent",
                 level=WarningLevel.INFO,
-                message=f"Rent is balanced at ${weekly_rent:.2f}/week ({rent_ratio:.2f}x CWI)",
-                current_value=weekly_rent,
+                message=f"Rent is balanced at ${monthly_rent:.2f}/month ({monthly_ratio:.2f}x CWI)",
+                current_value=monthly_rent,
                 recommended_min=recommended_min,
                 recommended_max=recommended_max,
-                cwi_ratio=rent_ratio
+                cwi_ratio=monthly_ratio
             ))
 
         return warnings

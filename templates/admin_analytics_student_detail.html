@@ -3,7 +3,7 @@
 {% block page_icon %}person_search{% endblock %}
 
 {% block page_header_actions %}
-<a href="{{ url_for('analytics.dashboard') }}" class="btn btn-outline-primary">
+<a href="{{ url_for('analytics.dashboard', join_code=join_code) }}" class="btn btn-outline-primary">
   <i class="bi bi-arrow-left"></i> Back to Dashboard
 </a>
 {% endblock %}

@@ -19,7 +19,7 @@ from app.extensions import db, limiter
 from app.auth import admin_required
 from app.models import (
     Admin, AnalyticsAlert, AnalyticsEvent,
-    PayrollSettings, RentSettings, Student, StudentBlock
+    PayrollSettings, RentSettings, Student, StudentBlock, TeacherBlock
 )
 from app.models import Transaction
 
@@ -36,6 +36,49 @@ PACIFIC = pytz.timezone('America/Los_Angeles')
 
 # Create blueprint
 analytics_bp = Blueprint('analytics', __name__, url_prefix='/admin/analytics')
+
+def get_teacher_class_options(teacher_id: int):
+    if not teacher_id:
+        return []
+
+    teacher_blocks = TeacherBlock.query.filter_by(
+        teacher_id=teacher_id
+    ).order_by(TeacherBlock.block).all()
+
+    seen_join_codes = set()
+    options = []
+    for tb in teacher_blocks:
+        if not tb.join_code or tb.join_code in seen_join_codes:
+            continue
+        seen_join_codes.add(tb.join_code)
+        options.append({
+            'join_code': tb.join_code,
+            'block': (tb.block or '').strip().upper(),
+            'label': tb.get_class_label()
+        })
+
+    return options
+
+
+def resolve_current_join_code(teacher_id: int):
+    available_classes = get_teacher_class_options(teacher_id)
+    valid_join_codes = {c['join_code'] for c in available_classes}
+
+    requested_join_code = (request.args.get('join_code') or '').strip()
+    session_join_code = session.get('current_join_code')
+    selected_join_code = None
+
+    if requested_join_code and requested_join_code in valid_join_codes:
+        selected_join_code = requested_join_code
+    elif session_join_code in valid_join_codes:
+        selected_join_code = session_join_code
+    elif available_classes:
+        selected_join_code = available_classes[0]['join_code']
+
+    if selected_join_code:
+        session['current_join_code'] = selected_join_code
+
+    return selected_join_code, available_classes
 
 
 def get_block_for_join_code(join_code: str):
@@ -159,12 +202,12 @@ def dashboard():
     - Auto-updating
     """
     teacher_id = session.get('admin_id')
-    join_code = session.get('current_join_code')
+    join_code, available_classes = resolve_current_join_code(teacher_id)
     
     if not join_code:
-        flash('Please select a class period first.', 'warning')
+        flash('You need to set up class periods before viewing analytics.', 'warning')
         return redirect(url_for('admin.students'))
-    
+
     # Get or set time window preference, validated against allowed values
     requested_window_type = request.args.get('window', 'week')
     window_type = requested_window_type if requested_window_type in ALLOWED_WINDOW_TYPES else 'week'
@@ -198,6 +241,7 @@ def dashboard():
     
     # Get teacher info for display
     teacher = Admin.query.get(teacher_id)
+    current_class = next((c for c in available_classes if c['join_code'] == join_code), None)
     
     return render_template(
         'admin_analytics_dashboard.html',
@@ -209,6 +253,8 @@ def dashboard():
         window_end=window_end,
         teacher=teacher,
         join_code=join_code,
+        available_classes=available_classes,
+        current_class_label=current_class['label'] if current_class else None,
         current_page='analytics'
     )
 
@@ -347,10 +393,11 @@ def events():
     - Shows rent changes, wage changes, inflation events, etc.
     - Provides context for understanding metric changes.
     """
-    join_code = session.get('current_join_code')
+    teacher_id = session.get('admin_id')
+    join_code, available_classes = resolve_current_join_code(teacher_id)
     
     if not join_code:
-        flash('Please select a class period first.', 'warning')
+        flash('You need to set up class periods before viewing analytics.', 'warning')
         return redirect(url_for('admin.students'))
     
     # Get all events for this class
@@ -362,7 +409,8 @@ def events():
         return render_template(
             'admin_analytics_events.html',
             events=events_list,
-            join_code=join_code
+            join_code=join_code,
+            available_classes=available_classes
         )
     except TemplateNotFound:
         # Fallback: return JSON response if template not found
@@ -390,10 +438,10 @@ def student_drill_down(student_id):
     - Must explain why the metric matters
     """
     teacher_id = session.get('admin_id')
-    join_code = session.get('current_join_code')
+    join_code, available_classes = resolve_current_join_code(teacher_id)
     
     if not join_code:
-        flash('Please select a class period first.', 'warning')
+        flash('You need to set up class periods before viewing analytics.', 'warning')
         return redirect(url_for('admin.students'))
     
     # Get student with scoping
