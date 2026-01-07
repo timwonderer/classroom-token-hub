@@ -126,12 +126,9 @@ def test_conditional_index_drop_when_missing(test_db):
     # This should NOT execute because index doesn't exist
     if 'ix_test_credentials_no_index_credential_id' in test_cred_indexes:
         # This branch should not be taken
-        assert False, "Index should not exist"
-    else:
-        # This is the expected path - index doesn't exist, so skip the drop
-        pass
+        pytest.fail("Index should not exist but was found in indexes")
     
-    # Verify no error occurred
+    # Verify no error occurred - we successfully handled the missing index case
     assert True
 
 
@@ -211,12 +208,12 @@ def test_both_tables_pattern(test_db):
     
     # System admin credentials - should skip (no error)
     if 'ix_sim_system_admin_credentials_cred' in sys_admin_indexes:
-        assert False, "This should not execute because index doesn't exist"
+        pytest.fail("This should not execute because index doesn't exist")
     
     # Verify first index was dropped
     inspector = inspect(db.engine)
     admin_indexes_after = {idx['name'] for idx in inspector.get_indexes('sim_admin_credentials')}
     assert 'ix_sim_admin_credentials_cred' not in admin_indexes_after
     
-    # Verify no error occurred for missing index
+    # Verify no error occurred for missing index - test passed successfully
     assert True

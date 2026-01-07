@@ -250,6 +250,8 @@ def upgrade():
         batch_op.drop_index(batch_op.f('ix_students_teacher_id'))
 
     # Conditionally drop index and columns from system_admin_credentials if they exist
+    # Refresh inspector to ensure we have current database state
+    inspector = sa.inspect(bind)
     sys_admin_cred_indexes = {idx['name'] for idx in inspector.get_indexes('system_admin_credentials')}
     sys_admin_cred_columns = {col['name'] for col in inspector.get_columns('system_admin_credentials')}
     
