@@ -115,6 +115,27 @@ def get_current_class_context():
     }
 
 
+def get_rent_settings_for_context(context):
+    """Return rent settings scoped to the current class context."""
+    if not context:
+        return None
+
+    teacher_id = context.get('teacher_id')
+    if not teacher_id:
+        return None
+
+    current_block = (context.get('block') or '').strip().upper()
+    if current_block:
+        settings = RentSettings.query.filter_by(
+            teacher_id=teacher_id,
+            block=current_block
+        ).first()
+        if settings:
+            return settings
+
+    return RentSettings.query.filter_by(teacher_id=teacher_id).first()
+
+
 def get_current_teacher_id():
     """DEPRECATED: Get teacher_id from current class context.
 
@@ -192,6 +213,11 @@ def is_feature_enabled(feature_name):
     Returns:
         bool: True if feature is enabled, False otherwise
     """
+    if feature_name == 'rent':
+        rent_settings = get_rent_settings_for_context(get_current_class_context())
+        if rent_settings:
+            return bool(rent_settings.is_enabled)
+
     settings = get_feature_settings_for_student()
     feature_key = f"{feature_name}_enabled"
     return settings.get(feature_key, True)  # Default to enabled
@@ -463,7 +489,7 @@ def claim_account():
         join_code = format_join_code(form.join_code.data)
         first_initial = form.first_initial.data.strip().upper()
         last_name = form.last_name.data.strip()
-        dob_input = form.dob_sum.data
+        dob_input = form.dob.data
 
         try:
             if isinstance(dob_input, str):
@@ -772,7 +798,7 @@ def add_class():
         join_code = format_join_code(form.join_code.data)
         first_initial = form.first_initial.data.strip().upper()
         last_name = form.last_name.data.strip()
-        dob_input = form.dob_sum.data
+        dob_input = form.dob.data
 
         # Parse DOB and calculate sum
         try:
@@ -790,7 +816,7 @@ def add_class():
             return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
         if dob_sum != student.dob_sum:
-            flash("The DOB sum doesn't match your account. Please check and try again.", "danger")
+            flash("The date of birth doesn't match your account. Please check and try again.", "danger")
             return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
         # Verify last name matches using the same fuzzy matching logic
@@ -988,7 +1014,7 @@ def dashboard():
     active_insurance = student.get_active_insurance(teacher_id)
 
     rent_status = None
-    rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    rent_settings = get_rent_settings_for_context(context)
     if rent_settings and rent_settings.is_enabled and student.is_rent_enabled:
         now = datetime.now()
         due_date, grace_end_date = _calculate_rent_deadlines(rent_settings, now)
@@ -997,16 +1023,13 @@ def dashboard():
         if rent_settings.bill_preview_enabled and rent_settings.bill_preview_days:
             preview_start_date = due_date - timedelta(days=rent_settings.bill_preview_days)
 
-        rent_is_active = True
+        rent_is_active = False
         is_preview_period = False
-        if rent_settings.first_rent_due_date and now < rent_settings.first_rent_due_date:
-            if preview_start_date and now >= preview_start_date:
-                rent_is_active = True
-                is_preview_period = True
-            else:
-                rent_is_active = False
-        elif preview_start_date and preview_start_date <= now < due_date:
-            is_preview_period = True
+        if preview_start_date and now >= preview_start_date:
+            rent_is_active = True
+            is_preview_period = now < due_date
+        elif now >= due_date:
+            rent_is_active = True
 
         rent_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
         current_month = now.month
@@ -2113,7 +2136,37 @@ def shop():
         StoreItem.teacher_id == teacher_id  # FIX: Only current class items
     ).order_by(StudentItem.purchase_date.desc()).all()
 
-    return render_template('student_shop.html', student=student, items=items, student_items=student_items)
+    # Check if student has paid rent this month and get per-period rent item IDs
+    from app.models import RentSettings, RentPayment, RentItem
+    join_code = context.get('join_code')
+    current_block = context.get('block')
+    has_paid_rent = False
+    per_period_rent_item_ids = set()
+
+    if teacher_id and join_code and current_block:
+        rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
+        if rent_settings and rent_settings.is_enabled:
+            now = datetime.now(timezone.utc)
+            has_paid_rent = RentPayment.query.filter(
+                RentPayment.student_id == student.id,
+                RentPayment.period == current_block,
+                RentPayment.period_month == now.month,
+                RentPayment.period_year == now.year,
+                db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+            ).first() is not None
+
+            # Get all per-period rent items
+            per_period_items = RentItem.query.filter_by(
+                rent_setting_id=rent_settings.id,
+                purchase_duration='per_period',
+                is_available_in_store=True
+            ).all()
+
+            # Collect store item IDs
+            per_period_rent_item_ids = {item.store_item_id for item in per_period_items if item.store_item_id}
+
+    return render_template('student_shop.html', student=student, items=items, student_items=student_items,
+                         has_paid_rent=has_paid_rent, per_period_rent_item_ids=per_period_rent_item_ids)
 
 
 # -------------------- RENT --------------------
@@ -2309,7 +2362,7 @@ def rent():
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').strip().upper()
-    settings = RentSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
         flash("Rent system is currently disabled.", "info")
@@ -2334,17 +2387,13 @@ def rent():
         preview_start_date = due_date - timedelta(days=settings.bill_preview_days)
 
     # Check if rent is active (due date has arrived or preview period has started)
-    rent_is_active = True
+    rent_is_active = False
     is_preview_period = False
-    if settings.first_rent_due_date and now < settings.first_rent_due_date:
-        # Check if we're in preview period before first due date
-        if preview_start_date and now >= preview_start_date:
-            rent_is_active = True
-            is_preview_period = True
-        else:
-            rent_is_active = False
-    elif preview_start_date and now >= preview_start_date and now < due_date:
-        is_preview_period = True
+    if preview_start_date and now >= preview_start_date:
+        rent_is_active = True
+        is_preview_period = now < due_date
+    elif now >= due_date:
+        rent_is_active = True
     current_month = now.month
     current_year = now.year
 
@@ -2409,6 +2458,17 @@ def rent():
         RentPayment.payment_date.desc()
     ).limit(24).all()  # Increased to show more history with multiple periods
 
+    # Get rent items for this setting to show what rent includes
+    from app.models import RentItem
+    rent_items = []
+    if settings:
+        rent_items = RentItem.query.filter_by(rent_setting_id=settings.id).order_by(RentItem.order_index).all()
+
+    # Calculate days until rent is due for dynamic display
+    days_until_due = None
+    if due_date:
+        days_until_due = (due_date - now).days
+
     return render_template('student_rent.html',
                           student=student,
                           settings=settings,
@@ -2421,7 +2481,9 @@ def rent():
                           due_date=due_date,
                           grace_end_date=grace_end_date,
                           preview_start_date=preview_start_date,
-                          payment_history=payment_history)
+                          payment_history=payment_history,
+                          rent_items=rent_items,
+                          days_until_due=days_until_due)
 
 
 @student_bp.route('/rent/pay/<period>', methods=['POST'])
@@ -2437,7 +2499,7 @@ def rent_pay(period):
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').upper()
-    settings = RentSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
         flash("Rent system is currently disabled.", "error")
@@ -2462,12 +2524,20 @@ def rent_pay(period):
     if settings.bill_preview_enabled and settings.bill_preview_days:
         preview_start_date = due_date - timedelta(days=settings.bill_preview_days)
 
-    # Check if rent is even due yet (if first_rent_due_date is in the future and not in preview period)
-    if settings.first_rent_due_date and now < settings.first_rent_due_date:
-        # Allow payment if we're in the preview period
-        if not (preview_start_date and now >= preview_start_date):
-            flash(f"Rent is not due yet. First payment due on {settings.first_rent_due_date.strftime('%B %d, %Y')}.", "info")
-            return redirect(url_for('student.rent'))
+    rent_is_active = False
+    if preview_start_date and now >= preview_start_date:
+        rent_is_active = True
+    elif now >= due_date:
+        rent_is_active = True
+
+    if not rent_is_active:
+        if preview_start_date:
+            available_date = preview_start_date
+            message = f"Rent is not due yet. You can start paying on {available_date.strftime('%B %d, %Y')}."
+        else:
+            message = f"Rent is not due yet. Payment opens on {due_date.strftime('%B %d, %Y')}."
+        flash(message, "info")
+        return redirect(url_for('student.rent'))
 
     current_month = now.month
     current_year = now.year
@@ -2961,11 +3031,8 @@ def setup_complete():
 @student_bp.route('/help-support', methods=['GET'])
 @login_required
 def help_support():
-    """
-    Help and Support page with issue resolution system.
-    Shows knowledge base and student's submitted issues.
-    """
-    from app.models import Issue
+    """Redirect to the student help and support documentation."""
+    return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
     from app.utils.issue_categories import init_default_categories
 
     student = get_logged_in_student()
@@ -2995,8 +3062,12 @@ def help_support():
 @student_bp.route('/help-support/submit-issue', methods=['GET', 'POST'])
 @login_required
 def submit_general_issue():
-    """Submit a general (non-transaction) issue."""
-    from app.models import TeacherBlock
+    @student_bp.route('/help-support/transaction/<int:transaction_id>/report', methods=['GET', 'POST'])
+    @login_required
+    def report_transaction_issue(transaction_id):
+        """Redirect to the student help and support documentation."""
+        return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
+    return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
     from app.utils.issue_categories import get_active_categories
     from app.utils.issue_helpers import create_issue
     from forms import StudentIssueSubmissionForm
@@ -3042,58 +3113,8 @@ def submit_general_issue():
 @student_bp.route('/help-support/transaction/<int:transaction_id>/report', methods=['GET', 'POST'])
 @login_required
 def report_transaction_issue(transaction_id):
-    """Report an issue with a specific transaction."""
-    from app.utils.issue_categories import get_active_categories
-    from app.utils.issue_helpers import create_issue
-    from forms import TransactionIssueSubmissionForm
-
-    student = get_logged_in_student()
-    class_context = get_current_class_context()
-
-    if not class_context:
-        flash("Please select a class first.", "warning")
-        return redirect(url_for('student.dashboard'))
-
-    # Get the transaction and verify it belongs to this student and class
-    transaction = Transaction.query.filter_by(
-        id=transaction_id,
-        student_id=student.id,
-        join_code=class_context['join_code']
-    ).first_or_404()
-
-    form = TransactionIssueSubmissionForm()
-
-    # Populate category choices
-    form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('transaction')
-
-    if form.validate_on_submit():
-        try:
-            issue = create_issue(
-                student=student,
-                teacher_id=class_context['teacher_id'],
-                join_code=class_context['join_code'],
-                category_id=form.category_id.data,
-                explanation=form.explanation.data,
-                expected_outcome=form.expected_outcome.data,
-                related_transaction_id=transaction_id,
-                related_record_type='transaction',
-                related_record_id=transaction_id
-            )
-
-            flash("Your transaction issue has been submitted. Your teacher will review it soon.", "success")
-            return redirect(url_for('student.help_support'))
-
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error submitting transaction issue: {str(e)}")
-            flash("An error occurred while submitting your issue. Please try again.", "error")
-
-    return render_template('student_submit_issue.html',
-                         current_page='help',
-                         page_title='Report Transaction Issue',
-                         form=form,
-                         issue_type='transaction',
-                         transaction=transaction)
+    """Redirects to the student help and support documentation."""
+    return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
 
 
 @student_bp.route('/help-support/tap-event/<int:tap_event_id>/report', methods=['GET', 'POST'])

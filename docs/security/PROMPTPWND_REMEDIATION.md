@@ -28,33 +28,33 @@ PromptPwnd is a class of vulnerabilities in CI/CD pipelines (GitHub Actions, Git
 ```yaml
 on:
   issues:
-    types: [opened]  # ⚠️ Can be triggered by ANY user
+    types: [opened]  #  Can be triggered by ANY user
 
 permissions:
-  issues: write      # ⚠️ Write permissions
+  issues: write      #  Write permissions
 
 steps:
   - uses: actions/ai-inference@v1
     with:
       prompt: |
         Summarize the following GitHub issue in one paragraph:
-        Title: ${{ github.event.issue.title }}      # ⚠️ Untrusted input
-        Body: ${{ github.event.issue.body }}        # ⚠️ Untrusted input
+        Title: ${{ github.event.issue.title }}      #  Untrusted input
+        Body: ${{ github.event.issue.body }}        #  Untrusted input
 
   - run: |
       gh issue comment "$ISSUE_NUMBER" --body "$RESPONSE"
     env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}         # ⚠️ Privileged token
-      RESPONSE: ${{ steps.inference.outputs.response }}  # ⚠️ AI output used in shell
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}         #  Privileged token
+      RESPONSE: ${{ steps.inference.outputs.response }}  #  AI output used in shell
 ```
 
 **Critical Issues:**
 
-1. ❌ **Untrusted Input in Prompts** - Any user can create an issue with malicious prompt injection
-2. ❌ **Privileged Token Access** - Workflow has access to `GITHUB_TOKEN` with write permissions
-3. ❌ **AI Output in Shell Commands** - AI response is directly used in `gh` command
-4. ❌ **No Input Validation** - No sanitization or validation of user input
-5. ❌ **Public Trigger** - Any external user can trigger this workflow
+1.  **Untrusted Input in Prompts** - Any user can create an issue with malicious prompt injection
+2.  **Privileged Token Access** - Workflow has access to `GITHUB_TOKEN` with write permissions
+3.  **AI Output in Shell Commands** - AI response is directly used in `gh` command
+4.  **No Input Validation** - No sanitization or validation of user input
+5.  **Public Trigger** - Any external user can trigger this workflow
 
 ### Attack Scenario
 
@@ -91,11 +91,11 @@ The AI model might interpret this as legitimate instructions and:
 ### 2. Security Audit of All Workflows
 
 **Audited Workflows:**
-- ✅ `deploy.yml` - No AI agents, secure
-- ✅ `check-migrations.yml` - No AI agents, secure
-- ❌ `summary.yml` - **VULNERABLE** - Disabled
-- ✅ `label.yml` - No AI agents, secure (uses `pull_request_target` safely)
-- ✅ `toggle-maintenance.yml` - No AI agents, secure
+-  `deploy.yml` - No AI agents, secure
+-  `check-migrations.yml` - No AI agents, secure
+-  `summary.yml` - **VULNERABLE** - Disabled
+-  `label.yml` - No AI agents, secure (uses `pull_request_target` safely)
+-  `toggle-maintenance.yml` - No AI agents, secure
 
 **Findings:**
 - Only `summary.yml` was affected
@@ -105,7 +105,7 @@ The AI model might interpret this as legitimate instructions and:
 
 To prevent similar vulnerabilities in the future:
 
-### ❌ NEVER Do This
+###  NEVER Do This
 
 ```yaml
 # BAD: Untrusted input directly in AI prompts
@@ -122,7 +122,7 @@ permissions:
   contents: write
 ```
 
-### ✅ Safe Practices
+###  Safe Practices
 
 If AI integration is absolutely necessary:
 
@@ -197,7 +197,7 @@ Organizations can detect PromptPwnd vulnerabilities using:
   - Unauthorized issue/PR modifications
   - Potential for repository compromise
 - **Actual Impact:** None detected - vulnerability fixed before exploitation
-- **Remediation Status:** ✅ Complete
+- **Remediation Status:**  Complete
 
 ## Lessons Learned
 

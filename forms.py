@@ -120,7 +120,7 @@ class StudentClaimAccountForm(FlaskForm):
     join_code = StringField('Join Code (from your teacher)', validators=[DataRequired()])
     first_initial = StringField('First Initial (e.g., J)', validators=[DataRequired(), Length(min=1, max=1)])
     last_name = StringField('Last Name', validators=[DataRequired()])
-    dob_sum = DateField('Birthday', format='%Y-%m-%d', validators=[DataRequired()])
+    dob = DateField('Date of Birth', format='%Y-%m-%d', validators=[DataRequired()])
     submit = SubmitField('Claim Account')
 
 class StudentCreateUsernameForm(FlaskForm):

@@ -23,8 +23,8 @@
 {% endblock %}
 
 {% block page_header_actions %}
-  <button class="btn btn-primary d-none d-md-inline-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#studentManagementGuide" aria-controls="studentManagementGuide">
-    <span class="material-symbols-outlined">quick_reference_all</span> Need Help?
+  <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#studentManagementGuide" aria-controls="studentManagementGuide">
+    <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
   </button>
 {% endblock %}
 
@@ -317,7 +317,7 @@
                         <li>Go to student sign-in page</li>
                         <li>Click "First Time? Set Up Account"</li>
                         <li>Enter this join code</li>
-                        <li>Provide first name, last name, and DOB sum</li>
+                        <li>Provide first name, last name, and date of birth</li>
                       </ol>
                     </div>
                   </div>
@@ -432,18 +432,38 @@
                   <div>
                     <strong><span class="selected-count">0</span> students selected</strong>
                   </div>
-                  <div>
-                      <button type="button" class="btn btn-info btn-sm me-2" onclick="tapOutSelected('{{ block }}')">
-                        <span class="material-symbols-outlined align-middle fs-5">logout</span> Tap Out Selected
+                  <div class="d-flex gap-2">
+                    <div class="dropdown">
+                      <button class="btn btn-primary btn-sm dropdown-toggle" type="button" id="bulkActionsDropdown-{{ block }}" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="material-symbols-outlined align-middle fs-6">more_vert</span> Bulk Actions
                       </button>
-                      <button type="button" class="btn btn-secondary btn-sm me-2" onclick="tapOutAllBlock('{{ block }}')">
-                        <span class="material-symbols-outlined align-middle fs-5">logout</span> Tap Out Entire Class
-                    </button>
-                    <button type="button" class="btn btn-danger btn-sm" onclick="bulkDeleteStudents('{{ block }}')">
-                      <span class="material-symbols-outlined" style="vertical-align: middle;">delete</span> Delete Selected
-                    </button>
+                      <ul class="dropdown-menu" aria-labelledby="bulkActionsDropdown-{{ block }}">
+                        <li>
+                          <a class="dropdown-item" href="#" onclick="bulkTapIn('{{ block }}'); return false;">
+                            <span class="material-symbols-outlined align-middle fs-6 me-1">login</span> Tap In
+                          </a>
+                        </li>
+                        <li>
+                          <a class="dropdown-item" href="#" onclick="bulkTapOut('{{ block }}'); return false;">
+                            <span class="material-symbols-outlined align-middle fs-6 me-1">logout</span> Tap Out
+                          </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                          <a class="dropdown-item" href="#" onclick="bulkUpdateHallPass('{{ block }}'); return false;">
+                            <span class="material-symbols-outlined align-middle fs-6 me-1">confirmation_number</span> Update Hall Passes
+                          </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                          <a class="dropdown-item text-danger" href="#" onclick="bulkDeleteStudents('{{ block }}'); return false;">
+                            <span class="material-symbols-outlined align-middle fs-6 me-1">delete</span> Delete Students
+                          </a>
+                        </li>
+                      </ul>
+                    </div>
                     <button type="button" class="btn btn-warning btn-sm" onclick="clearSelection('{{ block }}')">
-                      <span class="material-symbols-outlined" style="vertical-align: middle;">cancel</span> Clear Selection
+                      <span class="material-symbols-outlined align-middle fs-6">cancel</span> Clear
                     </button>
                   </div>
                 </div>
@@ -463,13 +483,11 @@
                         <input type="checkbox" class="form-check-input select-all-checkbox" onchange="toggleSelectAll('{{ block }}', this)" aria-label="Select all students">
                       </th>
                       <th scope="col">Name</th>
-                      <th scope="col">Username</th>
                       <th scope="col">Checking</th>
                       <th scope="col">Savings</th>
-                      <th scope="col">Total Earnings</th>
                       <th scope="col">Hall Passes</th>
-                      <th scope="col">Setup Status</th>
-                      <th scope="col">Actions</th>
+                      <th scope="col">Privileges</th>
+                      <th scope="col" style="width: 200px;">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -483,24 +501,30 @@
                           {{ student.full_name }}
                         </a>
                       </td>
-                      <td>
-                        <span class="badge bg-info">{{ student.username_display if student.has_completed_setup else 'Not Set' }}</span>
-                      </td>
                       {% set balance_key = (student.id, block) %}
                       {% set balances = student_balances_by_block.get(balance_key, {'checking': 0, 'savings': 0, 'earnings': 0}) %}
-                      <td class="{% if balances.checking < 0 %}text-danger{% endif %}">
+                      <td class="{% if balances.checking < 0 %}text-danger fw-bold{% endif %}">
                         ${{ "%.2f"|format(balances.checking) }}
                       </td>
                       <td>${{ "%.2f"|format(balances.savings) }}</td>
-                      <td class="text-success">${{ "%.2f"|format(balances.earnings) }}</td>
-                      <td>
-                        <span class="badge bg-primary text-white">{{ student.hall_passes }}</span>
+                      <td class="text-center">
+                        <span class="badge bg-primary">{{ student.hall_passes }}</span>
                       </td>
                       <td>
-                        {% if student.has_completed_setup %}
-                          <span class="badge bg-success">Complete</span>
+                        {% set privilege_key = (student.id, block) %}
+                        {% set privileges = student_rent_privileges.get(privilege_key, []) %}
+                        {% if privileges %}
+                          <div class="d-flex flex-wrap gap-1">
+                            {% for privilege in privileges %}
+                              <span class="badge bg-{% if privilege.source == 'rent' %}success{% else %}info{% endif %} text-white"
+                                    style="font-size: 0.75rem;"
+                                    title="{% if privilege.source == 'rent' %}Covered by rent{% else %}Individually purchased{% endif %}">
+                                {{ privilege.name }}
+                              </span>
+                            {% endfor %}
+                          </div>
                         {% else %}
-                          <span class="badge bg-warning text-dark">Pending</span>
+                          <span class="text-muted small">—</span>
                         {% endif %}
                       </td>
                       <td>
@@ -512,14 +536,14 @@
                                 data-student-last-initial="{{ student.last_initial }}"
                                 data-student-block="{{ student.block }}"
                                 data-student-dob-sum="{{ student.dob_sum }}">
-                          <span class="material-symbols-outlined" style="vertical-align: middle;">edit</span> Edit
+                          <span class="material-symbols-outlined" style="vertical-align: middle;">edit</span>
                         </button>
                         <button class="btn btn-sm btn-outline-danger quick-action-btn"
                                 data-bs-toggle="modal"
                                 data-bs-target="#deleteStudentModal"
                                 data-student-id="{{ student.id }}"
                                 data-student-name="{{ student.full_name }}">
-                          <span class="material-symbols-outlined" style="vertical-align: middle;">delete</span> Delete
+                          <span class="material-symbols-outlined" style="vertical-align: middle;">delete</span>
                         </button>
                       </td>
                     </tr>
@@ -638,14 +662,12 @@
                   <div class="row">
                     <div class="col-md-6 mb-3">
                       <label for="dob" class="form-label fw-bold">Date of Birth <span class="text-danger">*</span></label>
-                      <input type="text"
+                      <input type="date"
                              class="form-control"
                              id="dob"
                              name="dob"
-                             placeholder="MM/DD/YYYY"
-                             pattern="\\d{2}/\\d{2}/\\d{4}"
                              required>
-                      <div class="form-text">Format: MM/DD/YYYY</div>
+                      <div class="form-text">Use the date picker to select a birth date.</div>
                     </div>
                     <div class="col-md-6 mb-3">
                       <label for="block" class="form-label fw-bold">Class <span class="text-danger">*</span></label>
@@ -717,9 +739,9 @@
                 </div>
               </div>
               <div class="mb-3">
-                <label for="edit_dob_sum" class="form-label fw-bold">DOB Sum (Optional)</label>
-                <input type="number" class="form-control" id="edit_dob_sum" name="dob_sum">
-                <div class="form-text">Sum of DOB components (MM + DD + YYYY). Leave blank to keep unchanged.</div>
+                <label for="edit_dob" class="form-label fw-bold">Date of Birth (Optional)</label>
+                <input type="date" class="form-control" id="edit_dob" name="dob_sum">
+                <div class="form-text">Leave blank to keep unchanged.</div>
               </div>
             </div>
           </div>
@@ -780,7 +802,7 @@
                 </div>
               </div>
               <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" style="display:none;">
-                <small><span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Student will need to re-claim their account using their name and DOB.</small>
+                <small><span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Student will need to re-claim their account using their name and date of birth.</small>
               </div>
             </div>
           </div>
@@ -887,7 +909,7 @@ document.addEventListener('DOMContentLoaded', function() {
       editModal.querySelector('#edit_student_id').value = studentId;
       editModal.querySelector('#edit_first_name').value = firstName;
       editModal.querySelector('#edit_last_name').value = lastInitial; // Show just the initial, teacher can expand
-      editModal.querySelector('#edit_dob_sum').value = dobSum || '';
+      editModal.querySelector('#edit_dob').value = dobSum || '';
 
       // Uncheck all blocks first
       editModal.querySelectorAll('.block-checkbox').forEach(cb => cb.checked = false);
@@ -1191,6 +1213,174 @@ function bulkDeleteStudents(block) {
   });
 }
 
+function bulkTapIn(block) {
+  const table = document.getElementById(`students-table-${block}`);
+  const checkboxes = table.querySelectorAll('.student-checkbox:checked');
+  const studentIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+  if (studentIds.length === 0) {
+    alert('Please select at least one student.');
+    return;
+  }
+
+  const count = studentIds.length;
+  const confirmation = confirm(
+    `Are you sure you want to tap in ${count} selected student(s) in Block ${block.toUpperCase()}?`
+  );
+
+  if (!confirmation) return;
+
+  // Call the tap-in API
+  fetch('/admin/tap-in-students', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+    },
+    body: JSON.stringify({
+      student_ids: studentIds,
+      period: block.toUpperCase()
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      alert(data.message || `Successfully tapped in ${count} student(s).`);
+      clearSelection(block);
+      // Reload the page so the student table reflects updated work status
+      location.reload();
+      window.location.reload();
+    } else {
+      alert('Error: ' + data.message);
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Network error occurred while tapping in students.');
+  });
+}
+
+function bulkTapOut(block) {
+  const table = document.getElementById(`students-table-${block}`);
+  const checkboxes = table.querySelectorAll('.student-checkbox:checked');
+  const studentIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+  if (studentIds.length === 0) {
+    alert('Please select at least one student.');
+    return;
+  }
+
+  const count = studentIds.length;
+  const confirmation = confirm(
+    `Are you sure you want to tap out ${count} selected student(s) in Block ${block.toUpperCase()}?`
+  );
+
+  if (!confirmation) return;
+
+  // Call the tap-out API
+  fetch('/admin/tap-out-students', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+    },
+    body: JSON.stringify({
+      student_ids: studentIds,
+      period: block.toUpperCase(),
+      reason: 'Teacher bulk stop work'
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      let message = data.message;
+      if (data.tapped_out && data.tapped_out.length > 0) {
+        message += '\n\nTapped out:\n' + data.tapped_out.join(', ');
+      }
+      if (data.already_inactive && data.already_inactive.length > 0) {
+        message += '\n\nAlready inactive:\n' + data.already_inactive.join(', ');
+      }
+      alert(message);
+      clearSelection(block);
+      window.location.reload();
+    } else {
+      alert('Error: ' + data.message);
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Network error occurred while tapping out students.');
+  });
+}
+
+function bulkUpdateHallPass(block) {
+  const table = document.getElementById(`students-table-${block}`);
+  const checkboxes = table.querySelectorAll('.student-checkbox:checked');
+  const studentIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
+
+  if (studentIds.length === 0) {
+    alert('Please select at least one student.');
+    return;
+  }
+
+  const count = studentIds.length;
+  const action = prompt(
+    `Update hall passes for ${count} student(s):\n\n` +
+    `Enter:\n` +
+    `• A number to SET hall passes to that amount (e.g., "5")\n` +
+    `• +N to ADD passes (e.g., "+3")\n` +
+    `• -N to SUBTRACT passes (e.g., "-2")`
+  );
+
+  if (!action) return;
+
+  const trimmedAction = action.trim();
+  let updateType, value;
+
+  if (trimmedAction.startsWith('+')) {
+    updateType = 'add';
+    value = parseInt(trimmedAction.substring(1));
+  } else if (trimmedAction.startsWith('-')) {
+    updateType = 'subtract';
+    value = parseInt(trimmedAction.substring(1));
+  } else {
+    updateType = 'set';
+    value = parseInt(trimmedAction);
+  }
+
+  if (isNaN(value) || value < 0) {
+    alert('Invalid input. Please enter a valid number.');
+    return;
+  }
+
+  // Send bulk update request
+  fetch('/admin/students/bulk-update-hall-passes', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+    },
+    body: JSON.stringify({
+      student_ids: studentIds,
+      update_type: updateType,
+      value: value
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.status === 'success') {
+      alert(data.message);
+      location.reload();
+    } else {
+      alert('Error: ' + data.message);
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Network error occurred while updating hall passes.');
+  });
+}
+
 function deleteEntireBlock(block) {
   const table = document.getElementById(`students-table-${block}`);
   const allRows = table.querySelectorAll('.student-row');
@@ -1336,63 +1526,6 @@ function deleteAllPendingInBlock(block, unclaimedSeatsCount, unclaimedStudentsCo
       alert('Error: ' + error.message);
       location.reload(); // Reload anyway to show current state
     });
-}
-
-function tapOutSelected(block) {
-  const table = document.getElementById(`students-table-${block}`);
-  const checkboxes = table.querySelectorAll('.student-checkbox:checked');
-  const studentIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
-
-  if (studentIds.length === 0) {
-    alert('Please select at least one student to tap out.');
-    return;
-  }
-
-  const count = studentIds.length;
-  const confirmation = confirm(
-    `Are you sure you want to tap out ${count} selected student(s) from Block ${block.toUpperCase()}?\n\n` +
-    `This will mark them as inactive for this period.`
-  );
-
-  if (!confirmation) return;
-
-  // Call the tap-out API
-  fetch('/admin/tap-out-students', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-    },
-    body: JSON.stringify({
-      student_ids: studentIds,
-      period: block.toUpperCase(),
-      reason: 'Teacher tap-out (selected students)'
-    })
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.status === 'success') {
-      let message = data.message;
-      if (data.tapped_out && data.tapped_out.length > 0) {
-        message += '\n\nTapped out:\n' + data.tapped_out.join(', ');
-      }
-      if (data.already_inactive && data.already_inactive.length > 0) {
-        message += '\n\nAlready inactive:\n' + data.already_inactive.join(', ');
-      }
-      if (data.errors && data.errors.length > 0) {
-        message += '\n\nErrors:\n' + data.errors.join('\n');
-      }
-      alert(message);
-      // Clear selection after tap-out
-      clearSelection(block);
-    } else {
-      alert('Error: ' + data.message);
-    }
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    alert('Network error occurred while tapping out students.');
-  });
 }
 
 function tapOutAllBlock(block) {

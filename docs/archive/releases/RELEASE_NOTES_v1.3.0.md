@@ -6,7 +6,7 @@ Version 1.3.0 is a major security-focused release introducing modern passwordles
 
 ---
 
-## 🎯 Release Highlights
+##  Release Highlights
 
 ### Passwordless Authentication with Passkeys
 Teachers and system administrators can now authenticate using modern passkeys (WebAuthn/FIDO2), supporting hardware security keys, platform authenticators (Touch ID, Face ID, Windows Hello), and synced passkeys across devices.
@@ -19,7 +19,7 @@ Resolved persistent browser console errors from the Service Worker attempting to
 
 ---
 
-## 🚀 New Features
+##  New Features
 
 ### Passwordless Authentication for Teachers
 
@@ -68,7 +68,7 @@ System administrators now have the same passkey authentication capabilities as t
 
 ---
 
-## 🔒 Security Enhancements
+##  Security Enhancements
 
 ### Encrypted TOTP Secrets at Rest
 
@@ -166,7 +166,7 @@ Full security review of codebase, CI/CD, and infrastructure:
 
 ---
 
-## 🐛 Bug Fixes
+##  Bug Fixes
 
 ### Service Worker Cache Errors
 
@@ -221,7 +221,7 @@ Fixed corrupted `cacheFirst()` function from bad merge:
 
 ---
 
-## 🔄 Changed
+##  Changed
 
 ### Improved Store Management Overview Page
 
@@ -241,7 +241,7 @@ Replaced "Active Store Items" section with more actionable information:
 
 ---
 
-## 📦 Database Migrations
+##  Database Migrations
 
 ### Required Migrations
 
@@ -272,7 +272,7 @@ flask db current
 
 ---
 
-## 🚀 Deployment Notes
+##  Deployment Notes
 
 ### Environment Variables
 
@@ -313,7 +313,7 @@ Users may need to hard refresh (Ctrl+Shift+R / Cmd+Shift+R) to get the updated S
 
 ---
 
-## 🎓 User Guide
+##  User Guide
 
 ### For Teachers
 
@@ -347,13 +347,13 @@ Same process as teachers, but navigate to `/sysadmin/passkey/settings`
 
 ---
 
-## ⚠️ Breaking Changes
+##  Breaking Changes
 
 None. This release is backward compatible with v1.2.1.
 
 ---
 
-## 📊 Statistics
+##  Statistics
 
 - **Files Changed**: 47
 - **Commits**: 35
@@ -362,7 +362,7 @@ None. This release is backward compatible with v1.2.1.
 
 ---
 
-## 🙏 Acknowledgments
+##  Acknowledgments
 
 - Thanks to **Aikido Security** for responsible disclosure of the PromptPwnd vulnerability
 - Thanks to **GitHub Copilot** and **Google Gemini** for catching the `credId` bug during code review
@@ -370,7 +370,7 @@ None. This release is backward compatible with v1.2.1.
 
 ---
 
-## 🔗 Links
+##  Links
 
 - **Full Changelog**: [CHANGELOG.md](../../CHANGELOG.md#130---2025-12-25)
 - **Security Audit**: [docs/security/COMPREHENSIVE_ATTACK_SURFACE_AUDIT_2025.md](../security/COMPREHENSIVE_ATTACK_SURFACE_AUDIT_2025.md)
@@ -379,4 +379,4 @@ None. This release is backward compatible with v1.2.1.
 
 ---
 
-**Enjoy the enhanced security and convenience of passkey authentication! 🔐**
+**Enjoy the enhanced security and convenience of passkey authentication! **

@@ -98,7 +98,7 @@ When creating new operational documentation:
 
 ## Related Documentation
 
-- **[Deployment Guide](../DEPLOYMENT.md)** - Initial setup and deployment procedures
+- **[Deployment Guide](../Deployment_Guide.md)** - Initial setup and deployment procedures
 - **[Migration Guide](../development/MIGRATION_GUIDE.md)** - Database schema migrations
 - **[System Admin Design](../development/SYSADMIN_INTERFACE_DESIGN.md)** - Admin interface features
 

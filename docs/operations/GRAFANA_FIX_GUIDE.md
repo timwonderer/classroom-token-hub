@@ -23,8 +23,8 @@ This branch implements **both solutions** for maximum reliability:
 2. **Fallback (Flask)**: Works in all environments, no Nginx required
 
 **How it works:**
-- With Nginx configured: Nginx intercepts requests → Grafana (⚡ fastest)
-- Without Nginx / Dev mode: Flask proxy handles requests (🛟 reliable fallback)
+- With Nginx configured: Nginx intercepts requests → Grafana ( fastest)
+- Without Nginx / Dev mode: Flask proxy handles requests ( reliable fallback)
 
 You can deploy **just the Flask proxy** (merge this branch), or **both** (merge + fix Nginx).
 
@@ -127,11 +127,11 @@ sudo nginx -t && sudo systemctl reload nginx
 
 | Feature | Nginx Fix | Flask Proxy | **Both (Recommended)** |
 |---------|-----------|-------------|------------------------|
-| **Performance** | ⚡ Excellent | ✅ Good | ⚡ Excellent (Nginx takes priority) |
+| **Performance** |  Excellent |  Good |  Excellent (Nginx takes priority) |
 | **Setup** | Requires SSH | Just deploy | Deploy + SSH |
-| **Resilience** | Production only | All environments | ✅ Maximum (auto-fallback) |
+| **Resilience** | Production only | All environments |  Maximum (auto-fallback) |
 | **Maintenance** | One config change | Zero config | One config change |
-| **Recommended For** | Production only | Dev/Quick fix | ✅ **All scenarios** |
+| **Recommended For** | Production only | Dev/Quick fix |  **All scenarios** |
 
 ## Testing
 

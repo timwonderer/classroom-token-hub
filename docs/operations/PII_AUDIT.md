@@ -1,3 +1,7 @@
+---
+searchable: false
+---
+
 # PII Audit for Multi-Tenancy Rollout
 
 We reviewed the multi-tenant data model and request flows to confirm no new personally identifiable information (PII) is stored beyond the existing minimal surface:

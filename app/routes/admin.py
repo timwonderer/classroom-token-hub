@@ -34,8 +34,8 @@ import pytz
 from app.extensions import db, limiter
 from app.models import (
     Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TapEvent, StoreItem, StudentItem,
-    StoreItemBlock, RentSettings, RentPayment, RentWaiver, InsurancePolicy, InsurancePolicyBlock,
-    StudentInsurance, InsuranceClaim, HallPassLog, PayrollSettings, PayrollReward, PayrollFine,
+    InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
+    StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     DemoStudent, Announcement, AdminCredential
@@ -84,6 +84,48 @@ LEGACY_PLACEHOLDER_LAST_INITIAL = "P"  # "P" for Placeholder
 
 # Create blueprint
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+
+# -------------------- HELPER FUNCTIONS --------------------
+
+def parse_dob_input(dob_str):
+    """
+    Parse date of birth input and return the DOB sum (month + day + year).
+
+    Attempts to parse in multiple formats:
+    1. YYYY-MM-DD (from date input)
+    2. MM/DD/YYYY (fallback format)
+
+    Args:
+        dob_str: String representation of date of birth
+
+    Returns:
+        int: DOB sum (month + day + year)
+
+    Raises:
+        ValueError: If date string cannot be parsed in any supported format
+    """
+    if not dob_str:
+        raise ValueError("Date of birth is required")
+
+    dob_str = dob_str.strip()
+
+    # Try YYYY-MM-DD format first (native date input)
+    try:
+        dob_input = datetime.strptime(dob_str, "%Y-%m-%d").date()
+        return dob_input.month + dob_input.day + dob_input.year
+    except ValueError:
+        pass
+
+    # Try MM/DD/YYYY format as fallback
+    try:
+        dob_input = datetime.strptime(dob_str, "%m/%d/%Y").date()
+        return dob_input.month + dob_input.day + dob_input.year
+    except ValueError:
+        pass
+
+    # If both formats fail, raise error
+    raise ValueError("Invalid date format. Please use the date picker.")
 
 
 # -------------------- DASHBOARD & QUICK ACTIONS --------------------
@@ -161,7 +203,7 @@ def _link_student_to_admin(student: Student, admin_id):
 
     if not student.block:
         current_app.logger.warning(
-            f"Student {student.id} has no block assigned, skipping TeacherBlock creation"
+            f"Selected student has no block assigned, skipping TeacherBlock creation"
         )
         return
 
@@ -213,15 +255,14 @@ def _link_student_to_admin(student: Student, admin_id):
         )
         db.session.add(new_teacher_block)
         current_app.logger.info(
-            f"Created TeacherBlock for student {student.id} with teacher {admin_id}, "
-            f"block {student.block}, join_code {join_code}"
+            f"Created TeacherBlock for a student for teacher {admin_id} in block {student.block}"
         )
     elif not existing_teacher_block.is_claimed:
         # TeacherBlock exists but not claimed - mark as claimed now
         existing_teacher_block.is_claimed = True
         existing_teacher_block.student_id = student.id
         current_app.logger.info(
-            f"Claimed existing TeacherBlock for student {student.id} with join_code {existing_teacher_block.join_code}"
+            f"Claimed existing TeacherBlock for student with join_code {existing_teacher_block.join_code}"
         )
 
 
@@ -457,7 +498,7 @@ def auto_tapout_all_over_limit():
                     tapped_out_count += 1
                     break  # Only need to run once per student
         except Exception as e:
-            current_app.logger.error(f"Error checking auto-tapout for student {student.id}: {e}")
+            current_app.logger.error("Error checking auto-tapout for student", exc_info=True)
             continue
 
     return tapped_out_count
@@ -776,7 +817,7 @@ def backfill_transactions():
                     
                     current_app.logger.info(
                         f"Backfilled teacher_id={current_admin_id} and join_code={join_code} "
-                        f"for {len(transactions_to_update)} transactions for student {student.id}"
+                        f"for {len(transactions_to_update)} transactions for student"
                     )
             
             db.session.commit()
@@ -893,13 +934,13 @@ def signup():
             flash(msg, "error")
             return redirect(url_for('admin.signup'))
         # Step 1: Validate invite code
-        current_app.logger.info(f"Validating invite code: {repr(invite_code)}")
+        current_app.logger.info(f"Validating invite code")
         code_row = db.session.execute(
             text("SELECT * FROM admin_invite_codes WHERE TRIM(code) = :code"),
             {"code": invite_code}
         ).fetchone()
         if not code_row:
-            current_app.logger.warning(f"Admin signup failed: invalid invite code {repr(invite_code)}")
+            current_app.logger.warning(f"Admin signup failed: invalid invite code")
             msg = "Invalid invite code."
             if is_json:
                 return jsonify(status="error", message=msg), 400
@@ -974,7 +1015,7 @@ def signup():
         is_valid = totp.verify(totp_code)
         current_app.logger.info(f"TOTP verification result: {is_valid}")
         if not is_valid:
-            current_app.logger.warning(f"TOTP verification failed for user: {username}")
+            current_app.logger.warning(f"TOTP verification failed for user")
             msg = "Invalid TOTP code. Please try again."
             if is_json:
                 return jsonify(status="error", message=msg), 400
@@ -998,7 +1039,7 @@ def signup():
                 totp_secret=totp_secret
             )
         # Step 6: Create admin account and mark invite as used
-        current_app.logger.info(f"TOTP verified. Creating admin account for: {username}")
+        current_app.logger.info(f"TOTP verified. Creating admin account")
         # Hash DOB sum
         salt = get_random_salt()
         dob_sum_str = str(dob_sum).encode()
@@ -1013,7 +1054,7 @@ def signup():
             {"code": invite_code}
         )
         db.session.commit()
-        current_app.logger.info(f"Admin account created successfully: {username}")
+        current_app.logger.info(f"Admin account created successfully")
         # Clear session
         session.pop("admin_totp_secret", None)
         session.pop("admin_totp_username", None)
@@ -1482,30 +1523,27 @@ def resume_credentials():
 @admin_bp.route('/setup-recovery', methods=['GET', 'POST'])
 @admin_required
 def setup_recovery():
-    """Prompt legacy teachers to set up account recovery (DOB sum)."""
+    """Prompt legacy teachers to set up account recovery (date of birth)."""
     admin = Admin.query.get(session['admin_id'])
 
     if request.method == 'POST':
         dob_sum_str = request.form.get('dob_sum', '').strip()
-
         try:
-            dob_sum = int(dob_sum_str)
-            if dob_sum <= 0:
-                raise ValueError("Positive number required")
+            dob_sum = parse_dob_input(dob_sum_str)
+        except ValueError as e:
+            flash(str(e) if "date format" in str(e) else "Invalid date of birth. Please use the date picker.", "error")
+            return render_template('admin_setup_recovery.html')
 
-            # Hash and save
-            salt = get_random_salt()
-            dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
+        # Hash and save
+        salt = get_random_salt()
+        dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
 
-            admin.dob_sum_hash = dob_sum_hash
-            admin.salt = salt
-            db.session.commit()
+        admin.dob_sum_hash = dob_sum_hash
+        admin.salt = salt
+        db.session.commit()
 
-            flash("Recovery setup complete! You can now use the student-assisted recovery feature if needed.", "success")
-            return redirect(url_for('admin.dashboard'))
-
-        except ValueError:
-            flash("Invalid Date of Birth Sum. Please enter a number (e.g. 2028).", "error")
+        flash("Recovery setup complete! You can now use the student-assisted recovery feature if needed.", "success")
+        return redirect(url_for('admin.dashboard'))
 
     return render_template('admin_setup_recovery.html')
 
@@ -1565,6 +1603,162 @@ def logout():
     session.pop("last_activity", None)
     flash("Logged out.")
     return redirect(url_for("admin.login"))
+
+
+# -------------------- Rent privilege helpers --------------------
+
+def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, students_by_block):
+    """
+    Build a dict {(student_id, block): [privileges]} using batched queries to avoid N+1 issues.
+    """
+    now = datetime.now(timezone.utc)
+    student_rent_privileges = {}
+
+    for block in blocks:
+        if block == "Unassigned" or block not in join_codes_by_block:
+            continue
+
+        join_code = join_codes_by_block[block]
+        block_students = students_by_block.get(block, [])
+        if not block_students:
+            continue
+
+        rent_settings = RentSettings.query.filter_by(teacher_id=current_admin, block=block).first()
+        if not rent_settings or not rent_settings.is_enabled:
+            continue
+
+        per_period_items = RentItem.query.filter_by(
+            rent_setting_id=rent_settings.id,
+            purchase_duration='per_period',
+            is_available_in_store=True
+        ).all()
+
+        if not per_period_items:
+            continue
+
+        student_ids = [student.id for student in block_students]
+
+        # Batch rent payments for the month
+        rent_payment_rows = (
+            RentPayment.query
+            .filter(
+                RentPayment.student_id.in_(student_ids),
+                RentPayment.period == block,
+                RentPayment.period_month == now.month,
+                RentPayment.period_year == now.year,
+                db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+            )
+            .with_entities(RentPayment.student_id)
+            .all()
+        )
+        paid_student_ids = {row[0] for row in rent_payment_rows}
+
+        store_item_ids = [
+            rent_item.store_item_id
+            for rent_item in per_period_items
+            if getattr(rent_item, "store_item_id", None)
+        ]
+
+        items_by_student = {}
+        if store_item_ids:
+            student_items = StudentItem.query.filter(
+                StudentItem.student_id.in_(student_ids),
+                StudentItem.store_item_id.in_(store_item_ids),
+                StudentItem.status.in_(['purchased', 'redeemed']),
+                db.or_(
+                    StudentItem.expiry_date.is_(None),
+                    StudentItem.expiry_date > now
+                )
+            ).all()
+
+            for si in student_items:
+                items_by_student.setdefault(si.student_id, set()).add(si.store_item_id)
+
+        for student in block_students:
+            privileges = []
+            has_paid_rent = student.id in paid_student_ids
+            student_store_items = items_by_student.get(student.id, set())
+
+            for rent_item in per_period_items:
+                source = None
+
+                if has_paid_rent:
+                    source = 'rent'
+                elif getattr(rent_item, "store_item_id", None) and rent_item.store_item_id in student_store_items:
+                    source = 'purchased'
+
+                if source:
+                    privileges.append({
+                        'name': rent_item.name,
+                        'source': source
+                    })
+
+            if privileges:
+                key = (student.id, block)
+                student_rent_privileges[key] = privileges
+
+    return student_rent_privileges
+
+
+def _get_rent_privileges_for_student(student, teacher_id, join_code):
+    """Return rent privileges for a single student in the current class context."""
+    rent_privileges = []
+    if not (teacher_id and join_code):
+        return rent_privileges
+
+    teacher_block = TeacherBlock.query.filter_by(join_code=join_code).first()
+    current_block = teacher_block.block if teacher_block else None
+    if not current_block:
+        return rent_privileges
+
+    rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
+    if not rent_settings or not rent_settings.is_enabled:
+        return rent_privileges
+
+    now = datetime.now(timezone.utc)
+    has_paid_rent = RentPayment.query.filter(
+        RentPayment.student_id == student.id,
+        RentPayment.period == current_block,
+        RentPayment.period_month == now.month,
+        RentPayment.period_year == now.year,
+        db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+    ).first() is not None
+
+    per_period_items = RentItem.query.filter_by(
+        rent_setting_id=rent_settings.id,
+        purchase_duration='per_period',
+        is_available_in_store=True
+    ).all()
+
+    store_item_ids = [item.store_item_id for item in per_period_items if item.store_item_id]
+    items_by_student = set()
+    if store_item_ids:
+        student_items = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.store_item_id.in_(store_item_ids),
+            StudentItem.status.in_(['purchased', 'redeemed']),
+            db.or_(
+                StudentItem.expiry_date.is_(None),
+                StudentItem.expiry_date > now
+            )
+        ).all()
+        items_by_student = {si.store_item_id for si in student_items}
+
+    for rent_item in per_period_items:
+        source = None
+        if has_paid_rent:
+            source = 'rent'
+        elif rent_item.store_item_id and rent_item.store_item_id in items_by_student:
+            source = 'purchased'
+
+        if source:
+            rent_privileges.append({
+                'name': rent_item.name,
+                'description': rent_item.description,
+                'source': source
+            })
+
+    return rent_privileges
 
 
 # -------------------- STUDENT MANAGEMENT --------------------
@@ -1676,6 +1870,10 @@ def students():
                     'earnings': student.get_total_earnings(join_code=join_code)
                 }
 
+    # Calculate rent privileges for each student in each block (batched)
+    from app.models import RentItem, RentSettings, RentPayment, StudentItem
+    student_rent_privileges = _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, students_by_block)
+
     # Ensure all blocks with students have join codes (for legacy teachers with pre-c3aa3a0 classes)
     # If a block has students but no TeacherBlock records, look up or generate a join code
     # Fetch all claimed TeacherBlock records for current admin upfront
@@ -1751,6 +1949,7 @@ def students():
                          unclaimed_seats_by_block=unclaimed_seats_by_block,
                          unclaimed_seats_list_by_block=unclaimed_seats_list_by_block,
                          student_balances_by_block=student_balances_by_block,
+                         student_rent_privileges=student_rent_privileges,
                          current_page="students")
 
 
@@ -1847,6 +2046,9 @@ def student_detail(student_id):
             f"No join_code in session for student_detail view for student {student.id}. Displaying $0 balances."
         )
 
+    # Get active rent privileges (per-period items)
+    rent_privileges = _get_rent_privileges_for_student(student, teacher_id, join_code)
+
     return render_template('student_detail.html',
                          student=student,
                          transactions=transactions,
@@ -1858,7 +2060,8 @@ def student_detail(student_id):
                          scoped_checking_balance=scoped_checking_balance,
                          scoped_savings_balance=scoped_savings_balance,
                          scoped_total_earnings=scoped_total_earnings,
-                         current_join_code=join_code)
+                         current_join_code=join_code,
+                         rent_privileges=rent_privileges)
 
 
 @admin_bp.route('/student/<int:student_id>/set-hall-passes', methods=['POST'])
@@ -2005,7 +2208,12 @@ def edit_student():
     # Update DOB sum if provided (and recalculate second_half_hash)
     dob_sum_str = request.form.get('dob_sum', '').strip()
     if dob_sum_str:
-        new_dob_sum = int(dob_sum_str)
+        try:
+            new_dob_sum = parse_dob_input(dob_sum_str)
+        except ValueError:
+            flash("Invalid date of birth. Please use the date picker.", "error")
+            return redirect(url_for('admin.students'))
+
         if new_dob_sum != student.dob_sum:
             student.dob_sum = new_dob_sum
             # Regenerate second_half_hash (DOB sum hash)
@@ -2142,10 +2350,10 @@ def edit_student():
         elif added_blocks and not transferred_blocks:
             message += " Student will start fresh in new period(s)."
 
-        flash(message, "success")
     except Exception as e:
         db.session.rollback()
-        flash(f"Error updating student: {str(e)}", "error")
+        current_app.logger.error(f"Error updating student {student_id}", exc_info=True)
+        flash("Error updating student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
 
@@ -2199,10 +2407,10 @@ def delete_student():
         db.session.delete(student)
         db.session.commit()
 
-        flash(f"Successfully deleted {student_name} and all associated data.", "success")
     except Exception as e:
         db.session.rollback()
-        flash(f"Error deleting student: {str(e)}", "error")
+        current_app.logger.error(f"Error deleting student {student_name}", exc_info=True)
+        flash(f"Cannot delete student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
 
@@ -2531,8 +2739,11 @@ def add_individual_student():
         last_initial = last_name[0].upper()
 
         # Parse DOB and calculate sum
-        month, day, year = map(int, dob_str.split('/'))
-        dob_sum = month + day + year
+        try:
+            dob_sum = parse_dob_input(dob_str)
+        except ValueError:
+            flash("Invalid date of birth. Please use the date picker.", "error")
+            return redirect(url_for('admin.students'))
 
         # Generate salt
         salt = get_random_salt()
@@ -2655,12 +2866,10 @@ def add_individual_student():
         
         db.session.commit()
 
-        flash(f"Successfully added {first_name} {last_initial}. to block {block}.", "success")
-    except ValueError:
-        flash("Invalid date format. Use MM/DD/YYYY.", "error")
     except Exception as e:
         db.session.rollback()
-        flash(f"Error adding student: {str(e)}", "error")
+        current_app.logger.error("Error adding individual student", exc_info=True)
+        flash(f"Cannot add student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
 
@@ -2692,8 +2901,11 @@ def add_manual_student():
         last_initial = last_name[0].upper()
 
         # Parse DOB and calculate sum
-        month, day, year = map(int, dob_str.split('/'))
-        dob_sum = month + day + year
+        try:
+            dob_sum = parse_dob_input(dob_str)
+        except ValueError:
+            flash("Invalid date of birth. Please use the date picker.", "error")
+            return redirect(url_for('admin.students'))
 
         # Generate salt
         salt = get_random_salt()
@@ -2825,12 +3037,10 @@ def add_manual_student():
         
         db.session.commit()
 
-        flash(f"Successfully created {first_name} {last_initial}. in block {block} (manual mode).", "success")
-    except ValueError:
-        flash("Invalid date format. Use MM/DD/YYYY.", "error")
     except Exception as e:
         db.session.rollback()
-        flash(f"Error creating student: {str(e)}", "error")
+        current_app.logger.error("Error creating manual student", exc_info=True)
+        flash(f"Cannot create student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
 
@@ -2855,6 +3065,7 @@ def store_management():
             name=form.name.data,
             description=form.description.data,
             price=form.price.data,
+            tier=form.tier.data if form.tier.data else None,
             item_type=form.item_type.data,
             inventory=form.inventory.data,
             limit_per_student=form.limit_per_student.data,
@@ -2868,7 +3079,12 @@ def store_management():
             # Bulk discount settings
             bulk_discount_enabled=form.bulk_discount_enabled.data,
             bulk_discount_quantity=form.bulk_discount_quantity.data if form.bulk_discount_enabled.data else None,
-            bulk_discount_percentage=form.bulk_discount_percentage.data if form.bulk_discount_enabled.data else None
+            bulk_discount_percentage=form.bulk_discount_percentage.data if form.bulk_discount_enabled.data else None,
+            # Collective goal settings
+            collective_goal_type=form.collective_goal_type.data if form.item_type.data == 'collective' else None,
+            collective_goal_target=form.collective_goal_target.data if form.item_type.data == 'collective' else None,
+            # Redemption prompt
+            redemption_prompt=form.redemption_prompt.data if form.redemption_prompt.data else None
         )
         db.session.add(new_item)
         db.session.flush()  # Get the ID for the item before adding blocks
@@ -2993,6 +3209,72 @@ def hard_delete_store_item(item_id):
 
 # -------------------- RENT SETTINGS --------------------
 
+def _sync_rent_items_to_store(rent_settings, teacher_id, block):
+    """
+    Sync rent items with store items.
+    Creates or updates store items for rent items that are marked as available in store.
+    Deactivates store items for rent items that are no longer available.
+    """
+    from app.models import RentItem, StoreItem, StoreItemBlock
+
+    rent_items = RentItem.query.filter_by(rent_setting_id=rent_settings.id).all()
+
+    for rent_item in rent_items:
+        if rent_item.is_available_in_store and rent_item.store_price:
+            # Determine purchase limit based on duration type
+            if rent_item.purchase_duration == 'per_period':
+                limit = 1  # Can only buy once per rent period
+                duration_note = "Valid until next rent payment is due."
+            else:  # per_use
+                limit = None  # Unlimited purchases
+                duration_note = "Purchase each time you need to use it."
+
+            # Create or update store item
+            if rent_item.store_item_id:
+                # Update existing store item
+                store_item = StoreItem.query.get(rent_item.store_item_id)
+                if store_item:
+                    store_item.name = rent_item.name
+                    base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
+                    store_item.description = f"{base_desc}\n\n{duration_note}"
+                    store_item.price = rent_item.store_price
+                    store_item.limit_per_student = limit
+                    store_item.is_active = True
+                    if block:
+                        store_item.set_blocks([block])
+            else:
+                # Create new store item
+                base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
+                description = f"{base_desc}\n\n{duration_note}"
+                store_item = StoreItem(
+                    teacher_id=teacher_id,
+                    name=rent_item.name,
+                    description=description,
+                    price=rent_item.store_price,
+                    item_type='immediate',
+                    limit_per_student=limit,
+                    is_active=True
+                )
+                db.session.add(store_item)
+                db.session.flush()  # Get the store_item.id
+
+                # Link the rent item to this store item
+                rent_item.store_item_id = store_item.id
+
+                # Set block visibility to match the rent setting's block
+                if block:
+                    store_item_block = StoreItemBlock(store_item_id=store_item.id, block=block)
+                    db.session.add(store_item_block)
+
+        elif rent_item.store_item_id:
+            # Deactivate store item if it exists but is no longer available
+            store_item = StoreItem.query.get(rent_item.store_item_id)
+            if store_item:
+                store_item.is_active = False
+
+    db.session.commit()
+
+
 @admin_bp.route('/rent-settings', methods=['GET', 'POST'])
 @admin_required
 def rent_settings():
@@ -3070,6 +3352,89 @@ def rent_settings():
             block_settings.prevent_purchase_when_late = request.form.get('prevent_purchase_when_late') == 'on'
 
         db.session.commit()
+
+        # Handle rent items (only for the current settings_block, not apply_to_all)
+        if not apply_to_all and settings:
+            from app.models import RentItem
+            # Process rent items from form
+            # Collect all rent item indices from form keys
+            rent_item_indices = set()
+            for key in request.form.keys():
+                if key.startswith('rent_item_name_'):
+                    idx = key.split('_')[-1]
+                    rent_item_indices.add(idx)
+
+            # Get existing rent items for this setting
+            existing_items = {str(item.id): item for item in settings.rent_items.all()}
+            processed_item_ids = set()
+
+            # Process each rent item from the form
+            for idx in sorted(rent_item_indices):
+                item_id = request.form.get(f'rent_item_id_{idx}')
+                name = request.form.get(f'rent_item_name_{idx}', '').strip()
+
+                # Skip empty items
+                if not name:
+                    continue
+
+                description = request.form.get(f'rent_item_description_{idx}', '').strip()
+                is_available = request.form.get(f'rent_item_store_available_{idx}') == 'on'
+                store_price_str = request.form.get(f'rent_item_store_price_{idx}', '').strip()
+                store_price = None
+                if is_available:
+                    if not store_price_str:
+                        flash('Store price is required for rent items that are available in the store.', 'error')
+                        is_available = False
+                    else:
+                        try:
+                            store_price = float(store_price_str)
+                            if store_price <= 0:
+                                flash('Store price must be a positive value for rent items that are available in the store.', 'error')
+                                is_available = False
+                                store_price = None
+                        except ValueError:
+                            flash('Store price must be a valid number for rent items that are available in the store.', 'error')
+                            is_available = False
+                            store_price = None
+                purchase_duration = request.form.get(f'rent_item_purchase_duration_{idx}', 'per_use')
+
+                if item_id and item_id in existing_items:
+                    # Update existing item
+                    item = existing_items[item_id]
+                    item.name = name
+                    item.description = description if description else None
+                    item.order_index = int(idx)
+                    item.is_available_in_store = is_available
+                    item.store_price = store_price
+                    item.purchase_duration = purchase_duration
+                    processed_item_ids.add(item_id)
+                else:
+                    # Create new item
+                    item = RentItem(
+                        rent_setting_id=settings.id,
+                        name=name,
+                        description=description if description else None,
+                        order_index=int(idx),
+                        is_available_in_store=is_available,
+                        store_price=store_price,
+                        purchase_duration=purchase_duration
+                    )
+                    db.session.add(item)
+
+            # Delete items that were removed
+            for item_id, item in existing_items.items():
+                if item_id not in processed_item_ids:
+                    # If this item had a linked store item, deactivate it
+                    if item.store_item_id:
+                        store_item = StoreItem.query.get(item.store_item_id)
+                        if store_item:
+                            store_item.is_active = False
+                    db.session.delete(item)
+
+            db.session.commit()
+
+            # Sync rent items with store items
+            _sync_rent_items_to_store(settings, admin_id, settings_block)
         if apply_to_all:
             flash(f"Rent settings applied to all {len(blocks_to_update)} classes!", "success")
         else:
@@ -3137,6 +3502,12 @@ def rent_settings():
         if rent_per_month > estimated_monthly_payroll * 0.8:  # If rent is more than 80% of payroll
             payroll_warning = f"Rent (${rent_per_month:.2f}/month) exceeds recommended 80% of estimated monthly payroll (${estimated_monthly_payroll:.2f}). Students may struggle to afford rent."
 
+    # Get rent items for this setting
+    rent_items = []
+    if settings:
+        from app.models import RentItem
+        rent_items = RentItem.query.filter_by(rent_setting_id=settings.id).order_by(RentItem.order_index).all()
+
     return render_template('admin_rent_settings.html',
                           settings=settings,
                           total_students=total_students,
@@ -3147,7 +3518,8 @@ def rent_settings():
                           payroll_settings=payroll_settings,
                           settings_block=settings_block,
                           teacher_blocks=teacher_blocks,
-                          class_labels_by_block=class_labels_by_block)
+                          class_labels_by_block=class_labels_by_block,
+                          rent_items=rent_items)
 
 
 @admin_bp.route('/rent-waiver/add', methods=['POST'])
@@ -3623,10 +3995,10 @@ def delete_insurance_policy(policy_id):
         db.session.delete(policy)
         db.session.commit()
 
-        flash(f"Successfully deleted policy '{policy.title}' ({enrollments_deleted} enrollments and {claims_deleted} claims removed).", "success")
     except Exception as e:
         db.session.rollback()
-        flash(f"Error deleting policy: {str(e)}", "danger")
+        current_app.logger.error(f"Error deleting policy {policy_id}", exc_info=True)
+        flash(f"Cannot delete insurance policy due to internal error", "danger")
 
     return redirect(url_for('admin.insurance_management'))
 
@@ -4039,34 +4411,27 @@ def economy_health():
     admin_id = session.get("admin_id")
 
     blocks = _get_teacher_blocks()
-    scope = request.args.get('scope', 'all')
-    selected_block = None
-    if scope == 'class':
-        selected_block = request.args.get('block') or (blocks[0] if blocks else None)
+    # Always use per-class view since CWI is inherently per-class (multi-tenancy by join_code)
+    selected_block = request.args.get('block') or (blocks[0] if blocks else None)
 
     payroll_query = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True)
+    # Fetch all active payroll settings for this teacher once to avoid multiple DB queries
+    all_payroll_settings = payroll_query.order_by(PayrollSettings.block.asc()).all()
+    settings_by_block = {s.block: s for s in all_payroll_settings if s.block}
+
     payroll_settings = None
     if selected_block:
-        payroll_settings = payroll_query.filter_by(block=selected_block).first()
+        payroll_settings = settings_by_block.get(selected_block)
 
-    if not payroll_settings:
-        payroll_settings = payroll_query.filter_by(block=None).first()
-
-    # Fallback to first class-specific payroll when no global settings exist
-    if not payroll_settings:
-        first_class_setting = payroll_query.filter(PayrollSettings.block.isnot(None)).order_by(PayrollSettings.block.asc()).first()
+    # Fallback to first class if no settings found for selected block
+    if not payroll_settings and all_payroll_settings:
+        # Find the first setting that has a block
+        first_class_setting = next((s for s in all_payroll_settings if s.block), None)
         if first_class_setting:
             payroll_settings = first_class_setting
             selected_block = first_class_setting.block
-            scope = 'class'
 
-    # Fallback to the first available class when only class-specific payroll is configured
-    if not payroll_settings and not selected_block:
-        selected_block = request.args.get('block') or (blocks[0] if blocks else None)
-        if selected_block:
-            payroll_settings = payroll_query.filter_by(block=selected_block).first()
-
-    has_payroll_settings = payroll_query.count() > 0
+    has_payroll_settings = len(all_payroll_settings) > 0
 
     rent_settings = None
     if selected_block:
@@ -4177,7 +4542,6 @@ def economy_health():
         current_page='economy_health',
         blocks=blocks,
         selected_block=selected_block,
-        scope=scope,
         payroll_settings=payroll_settings,
         has_payroll_settings=has_payroll_settings,
         cwi_calc=cwi_calc,
@@ -4764,7 +5128,7 @@ def payroll_settings():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error saving payroll settings: {e}")
-        flash(f'Error saving payroll settings: {str(e)}', 'error')
+        flash(f'Error saving payroll settings', 'error')
 
     return redirect(url_for('admin.payroll'))
 
@@ -4835,7 +5199,7 @@ def update_expected_weekly_hours():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error updating expected weekly hours: {e}")
-        flash(f'Error updating expected weekly hours: {str(e)}', 'error')
+        flash(f'Error updating expected weekly hours', 'error')
 
     # Redirect back with cwi_block parameter to maintain the selected class
     next_url = request.form.get('next')
@@ -5534,8 +5898,13 @@ def enforce_daily_limits():
                             tapped_out.append(f"{student.full_name} (Period {period_upper})")
                     break  # Only check once per student
         except Exception as e:
-            errors.append(f"{student.full_name}: {str(e)}")
-            current_app.logger.error(f"Error enforcing limits for student {student.id}: {e}", exc_info=True)
+            errors.append(
+                f"Error when executing auto-timeout for {student.full_name} (ID {student.id}, Period {period_upper})"
+            )
+            current_app.logger.error(
+                f"Error enforcing limits for student {student.id} ({student.full_name}) in period {period_upper}",
+                exc_info=True,
+            )
             continue
 
     message = f"Checked {checked} active students. Auto-tapped out {len(tapped_out)} student(s)."
@@ -5692,7 +6061,189 @@ def tap_out_students():
         current_app.logger.error(f"Admin tap-out failed: {e}", exc_info=True)
         return jsonify({
             "status": "error",
-            "message": f"Failed to tap out students: {str(e)}"
+            "message": "Failed to tap out students due to an internal error."
+        }), 500
+
+
+@admin_bp.route('/tap-in-students', methods=['POST'])
+@admin_required
+def tap_in_students():
+    """
+    Admin endpoint to tap in one or more students for a specific period.
+    """
+    data = request.get_json()
+
+    # Get parameters
+    student_ids = data.get('student_ids', [])
+    period = data.get('period', '').strip().upper()
+
+    if not period:
+        return jsonify({"status": "error", "message": "Period is required."}), 400
+
+    if not student_ids:
+        return jsonify({"status": "error", "message": "student_ids must be provided."}), 400
+
+    now_utc = datetime.now(timezone.utc)
+    tapped_in = []
+    already_active = []
+    errors = []
+    current_admin_id = session.get('admin_id')
+
+    try:
+        # Process each student ID
+        for student_id in student_ids:
+            student = _get_student_or_404(student_id)
+
+            if not student:
+                errors.append(f"Student ID {student_id} not found")
+                continue
+
+            # Verify the student has this period in their block
+            student_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
+            if period not in student_blocks:
+                errors.append(f"{student.full_name} is not enrolled in period {period}")
+                continue
+
+            join_code = get_join_code_for_student_period(student.id, period, teacher_id=current_admin_id)
+
+            # Check if student is currently active in this period
+            latest_event = (
+                TapEvent.query
+                .filter_by(student_id=student.id, period=period)
+                .filter_by(join_code=join_code)
+                .order_by(TapEvent.timestamp.desc())
+                .first()
+            )
+
+            if latest_event and latest_event.status == "active":
+                already_active.append(student.full_name)
+                continue
+
+            # Create tap-in event
+            tap_in_event = TapEvent(
+                student_id=student.id,
+                period=period,
+                status="active",
+                timestamp=now_utc,
+                reason="Teacher tap-in",
+                join_code=join_code
+            )
+            db.session.add(tap_in_event)
+            tapped_in.append(student.full_name)
+
+            current_app.logger.info(
+                f"Admin tapped in student {student.id} ({student.full_name}) for period {period}"
+            )
+
+        # Commit all tap-ins
+        db.session.commit()
+
+        # Build response message
+        message_parts = []
+        if tapped_in:
+            message_parts.append(f"Successfully tapped in {len(tapped_in)} student(s)")
+        if already_active:
+            message_parts.append(f"{len(already_active)} student(s) were already active")
+        if errors:
+            message_parts.append(f"{len(errors)} error(s) occurred")
+
+        return jsonify({
+            "status": "success",
+            "message": ". ".join(message_parts),
+            "tapped_in": tapped_in,
+            "already_active": already_active,
+            "errors": errors
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Admin tap-in failed: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": "Failed to tap in students. Please try again or contact support."
+        }), 500
+
+
+@admin_bp.route('/students/bulk-update-hall-passes', methods=['POST'])
+@admin_required
+def bulk_update_hall_passes():
+    """
+    Admin endpoint to bulk update hall passes for selected students.
+    Supports set, add, and subtract operations.
+    """
+    data = request.get_json()
+
+    # Get parameters
+    student_ids = data.get('student_ids', [])
+    update_type = data.get('update_type', 'set')  # 'set', 'add', or 'subtract'
+    value = data.get('value', 0)
+
+    if not student_ids:
+        return jsonify({"status": "error", "message": "student_ids must be provided."}), 400
+
+    if update_type not in ['set', 'add', 'subtract']:
+        return jsonify({"status": "error", "message": "update_type must be 'set', 'add', or 'subtract'."}), 400
+
+    try:
+        value = int(value)
+        if value < 0:
+            return jsonify({"status": "error", "message": "Value must be non-negative."}), 400
+    except (ValueError, TypeError):
+        return jsonify({"status": "error", "message": "Value must be a valid integer."}), 400
+
+    updated = []
+    errors = []
+
+    try:
+        # Process each student ID
+        for student_id in student_ids:
+            student = _get_student_or_404(student_id)
+
+            if not student:
+                errors.append(f"Student ID {student_id} not found")
+                continue
+
+            # Update hall passes based on operation type
+            if update_type == 'set':
+                student.hall_passes = value
+            elif update_type == 'add':
+                student.hall_passes = (student.hall_passes or 0) + value
+            elif update_type == 'subtract':
+                student.hall_passes = max(0, (student.hall_passes or 0) - value)
+
+            updated.append(student.full_name)
+
+            current_app.logger.info(
+                f"Admin updated hall passes for student {student.id} ({student.full_name}): {update_type} {value}, new value: {student.hall_passes}"
+            )
+
+        # Commit all updates
+        db.session.commit()
+
+        # Build response message
+        action_text = {
+            'set': f'set to {value}',
+            'add': f'increased by {value}',
+            'subtract': f'decreased by {value}'
+        }
+
+        message = f"Successfully updated hall passes for {len(updated)} student(s) ({action_text[update_type]})"
+        if errors:
+            message += f". {len(errors)} error(s) occurred"
+
+        return jsonify({
+            "status": "success",
+            "message": message,
+            "updated": updated,
+            "errors": errors
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Bulk hall pass update failed: {e}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": "Failed to update hall passes. Please try again or contact support."
         }), 500
 
 
@@ -6069,8 +6620,8 @@ def deletion_requests():
 @admin_bp.route('/help-support', methods=['GET', 'POST'])
 @admin_required
 def help_support():
-    """Admin Help & Support page with bug reporting and documentation."""
-    admin_id = session.get('admin_id')
+    """Redirects to the admin help and support documentation."""
+    return redirect(url_for('docs.view_doc', doc_path='diagnostics/teacher'))
 
     if request.method == 'POST':
         # Handle bug report submission
@@ -6115,7 +6666,7 @@ def help_support():
             return redirect(url_for('admin.help_support'))
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error submitting report: {str(e)}")
+            current_app.logger.error("Error submitting report", exc_info=True)
             flash("An error occurred while submitting your report. Please try again.", "error")
             return redirect(url_for('admin.help_support'))
 
@@ -6398,7 +6949,7 @@ def copy_feature_settings():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error copying feature settings: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': 'Failed to copy settings due to an internal error.'}), 500
 
 
 # -------------------- ANNOUNCEMENTS --------------------
@@ -6663,224 +7214,6 @@ def announcement_toggle(announcement_id):
 
 # -------------------- TEACHER ONBOARDING --------------------
 
-@admin_bp.route('/onboarding')
-@admin_required
-def onboarding():
-    """
-    Teacher onboarding wizard.
-
-    Guides new teachers through initial setup:
-    1. Welcome & Overview
-    2. Roster Upload (students/periods)
-    3. Feature Selection
-    4. Feature Setup (payroll required, other features based on selection)
-    """
-    admin_id = session.get('admin_id')
-
-    # Get or create onboarding record
-    onboarding_record = _get_or_create_onboarding(admin_id)
-
-    # If already completed or skipped, redirect to dashboard unless force=true
-    force = request.args.get('force')
-    if (onboarding_record.is_completed or onboarding_record.is_skipped) and force != 'true':
-        return redirect(url_for('admin.dashboard'))
-
-    # Get admin info
-    admin = Admin.query.get(admin_id)
-
-    # Define steps (new order: welcome, roster, features, settings)
-    steps = [
-        {
-            'id': 'welcome',
-            'title': 'Welcome',
-            'icon': 'waving_hand',
-            'description': 'Get started with Classroom Economy'
-        },
-        {
-            'id': 'roster',
-            'title': 'Upload Roster',
-            'icon': 'upload_file',
-            'description': 'Add your students'
-        },
-        {
-            'id': 'features',
-            'title': 'Select Features',
-            'icon': 'tune',
-            'description': 'Choose which features to enable'
-        },
-        {
-            'id': 'settings',
-            'title': 'Feature Setup',
-            'icon': 'settings',
-            'description': 'Configure your features'
-        }
-    ]
-
-    # Get current step based on onboarding record
-    current_step = onboarding_record.current_step
-
-    return render_template(
-        'admin_onboarding.html',
-        admin=admin,
-        onboarding=onboarding_record,
-        steps=steps,
-        current_step=current_step,
-        current_page='onboarding'
-    )
-
-
-@admin_bp.route('/onboarding/step/<step_name>', methods=['POST'])
-@admin_required
-def onboarding_step(step_name):
-    """Process an onboarding step completion."""
-    admin_id = session.get('admin_id')
-
-    try:
-        data = request.get_json() if request.is_json else {}
-
-        onboarding_record = _get_or_create_onboarding(admin_id)
-
-        # Mark step as completed
-        onboarding_record.mark_step_completed(step_name)
-
-        # Process step-specific data
-        if step_name == 'features':
-            # Save feature selections
-            features_data = data.get('features', {})
-
-            global_settings = FeatureSettings.query.filter_by(
-                teacher_id=admin_id,
-                block=None
-            ).first()
-
-            if not global_settings:
-                global_settings = FeatureSettings(teacher_id=admin_id, block=None)
-                db.session.add(global_settings)
-
-            # Payroll is mandatory, always enable it
-            global_settings.payroll_enabled = True
-
-            # Enable other features based on selection
-            for feature, enabled in features_data.items():
-                if feature != 'payroll':  # Skip payroll as it's already forced to True
-                    feature_column = f"{feature}_enabled"
-                    if hasattr(global_settings, feature_column):
-                        setattr(global_settings, feature_column, bool(enabled))
-
-            global_settings.updated_at = datetime.now(timezone.utc)
-
-        elif step_name == 'roster':
-            # Roster upload handled by upload_students route
-            # This just marks the step as completed
-            pass
-
-        # Advance to next step (new order: welcome, roster, features, settings)
-        step_order = ['welcome', 'roster', 'features', 'settings']
-        try:
-            current_index = step_order.index(step_name)
-            if current_index < len(step_order) - 1:
-                onboarding_record.current_step = current_index + 2  # Advance to next step (1-indexed)
-            else:
-                # Last step completed
-                onboarding_record.complete_onboarding()
-        except ValueError:
-            # If step_name is not found in step_order, ignore and do not advance onboarding step.
-            pass
-
-        db.session.commit()
-
-        return jsonify({
-            'status': 'success',
-            'message': f'Step "{step_name}" completed.',
-            'next_step': onboarding_record.current_step,
-            'is_completed': onboarding_record.is_completed
-        })
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error processing onboarding step: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-@admin_bp.route('/onboarding/skip', methods=['POST'])
-@admin_required
-def onboarding_skip():
-    """Skip the onboarding process."""
-    admin_id = session.get('admin_id')
-
-    try:
-        onboarding_record = _get_or_create_onboarding(admin_id)
-        onboarding_record.skip_onboarding()
-        db.session.commit()
-
-        return jsonify({
-            'status': 'success',
-            'message': 'Onboarding skipped. You can always configure settings later.',
-            'redirect': url_for('admin.dashboard')
-        })
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error skipping onboarding: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-@admin_bp.route('/onboarding/complete', methods=['POST'])
-@admin_required
-def onboarding_complete():
-    """Complete the onboarding process."""
-    admin_id = session.get('admin_id')
-
-    try:
-        onboarding_record = _get_or_create_onboarding(admin_id)
-        onboarding_record.complete_onboarding()
-        db.session.commit()
-
-        flash('Welcome to Classroom Economy! Your setup is complete.', 'success')
-
-        return jsonify({
-            'status': 'success',
-            'message': 'Onboarding completed successfully!',
-            'redirect': url_for('admin.dashboard')
-        })
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error completing onboarding: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
-@admin_bp.route('/onboarding/reset', methods=['POST'])
-@admin_required
-def onboarding_reset():
-    """Reset onboarding to start over (for testing or re-configuration)."""
-    admin_id = session.get('admin_id')
-
-    try:
-        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
-
-        if onboarding_record:
-            onboarding_record.is_completed = False
-            onboarding_record.is_skipped = False
-            onboarding_record.current_step = 1
-            onboarding_record.steps_completed = {}
-            onboarding_record.completed_at = None
-            onboarding_record.skipped_at = None
-            onboarding_record.last_activity_at = datetime.now(timezone.utc)
-            db.session.commit()
-
-        return jsonify({
-            'status': 'success',
-            'message': 'Onboarding reset. You can now go through setup again.',
-            'redirect': url_for('admin.onboarding')
-        })
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error resetting onboarding: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
-
-
 @admin_bp.route('/onboarding/status', methods=['GET'])
 @admin_required
 def onboarding_status():
@@ -6889,25 +7222,49 @@ def onboarding_status():
     join_code = session.get('current_join_code')
 
     try:
-        # First, get the TeacherBlock to retrieve the block identifier
+        # Get or create onboarding record for this teacher
+        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
+        if not onboarding_record:
+            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
+            db.session.add(onboarding_record)
+            db.session.commit()
+
+        # Check if widget is dismissed
+        if onboarding_record.widget_dismissed:
+            return jsonify({
+                'status': 'success',
+                'dismissed': True,
+                'completion': {}
+            })
+
+        # Get the TeacherBlock to retrieve the block identifier
+        # If join_code is not set in session, try to use the teacher's first TeacherBlock
+        if not join_code:
+            first_teacher_block = TeacherBlock.query.filter_by(
+                teacher_id=admin_id
+            ).order_by(TeacherBlock.id).first()
+            if first_teacher_block:
+                join_code = first_teacher_block.join_code
+                # Set it in session for future requests
+                session['current_join_code'] = join_code
+
         teacher_block = TeacherBlock.query.filter_by(
             teacher_id=admin_id,
             join_code=join_code
         ).first()
 
         if not teacher_block:
+            # No class period selected yet - indicate this so frontend can show appropriate message
             return jsonify({
-                'status': 'error',
-                'message': 'Class period not found'
-            }), 404
+                'status': 'success',
+                'dismissed': False,
+                'no_class_period': True,
+                'completion': {}
+            })
 
-        block = teacher_block.block
-
-        # Get teacher's feature settings using teacher_id and block
-        feature_settings = FeatureSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=block
-        ).first()
+        # Get all blocks for this teacher (for account-wide onboarding checks)
+        all_teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
+        all_blocks = list(set(tb.block for tb in all_teacher_blocks))
 
         # Initialize completion status
         completion = {
@@ -6921,62 +7278,65 @@ def onboarding_status():
             'personalization': False,
             'passkey': False
         }
+        data_completed = completion.copy()
+        skipped_tasks = {}
 
-        # Check roster: has at least one student
-        student_count = StudentBlock.query.filter_by(
-            join_code=join_code
-        ).count()
-        completion['roster'] = student_count > 0
+        widget_task_statuses = onboarding_record.widget_tasks_completed or {}
+        for task_name, status in widget_task_statuses.items():
+            if status is True or status == 'skipped':
+                skipped_tasks[task_name] = True
 
-        # Check payroll: has payroll settings configured
-        payroll_settings = PayrollSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=block
-        ).first()
-        completion['payroll'] = payroll_settings is not None
+        # ACCOUNT-WIDE ONBOARDING CHECKS
+        # Onboarding is per teacher account, not per class section
+        # If ANY of the teacher's class sections has a feature set up, mark as complete
 
-        # Check store: has at least one store item for this block
-        if feature_settings and feature_settings.store_enabled:
-            store_items = StoreItemBlock.query.filter_by(block=block).count()
-            completion['store'] = store_items > 0
+        # Roster: has at least one student in ANY class OR marked complete
+        # Use StudentTeacher to get all students for this teacher
+        student_count = StudentTeacher.query.filter_by(admin_id=admin_id).count()
+        data_completed['roster'] = student_count > 0
 
-        # Check banking: has banking settings configured
-        if feature_settings and feature_settings.banking_enabled:
-            banking_settings = BankingSettings.query.filter_by(
-                teacher_id=admin_id,
-                block=block
-            ).first()
-            completion['banking'] = banking_settings is not None
+        # Payroll: has payroll settings configured for ANY block OR marked complete
+        payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id).first()
+        data_completed['payroll'] = payroll_settings is not None
 
-        # Check rent: has rent settings configured
-        if feature_settings and feature_settings.rent_enabled:
-            rent_settings = RentSettings.query.filter_by(
-                teacher_id=admin_id,
-                block=block
-            ).first()
-            completion['rent'] = rent_settings is not None
+        # Store: has at least one store item for ANY block OR marked complete
+        store_items = StoreItem.query.filter_by(teacher_id=admin_id).count()
+        data_completed['store'] = store_items > 0
 
-        # Check insurance: has at least one insurance policy for this block
-        if feature_settings and feature_settings.insurance_enabled:
-            insurance_policies = InsurancePolicyBlock.query.filter_by(block=block).count()
-            completion['insurance'] = insurance_policies > 0
+        # Banking: has banking settings configured for ANY block OR marked complete
+        banking_settings = BankingSettings.query.filter_by(teacher_id=admin_id).first()
+        data_completed['banking'] = banking_settings is not None
 
-        # Check hall pass: always available (mark as complete if they've accessed it)
-        # For now, we'll mark it as incomplete until they configure it
-        completion['hall_pass'] = False
+        # Rent: has rent settings configured for ANY block OR marked complete
+        rent_settings = RentSettings.query.filter_by(teacher_id=admin_id).first()
+        data_completed['rent'] = rent_settings is not None
 
-        # Check personalization: check if class_label is set on TeacherBlock
-        completion['personalization'] = (
-            teacher_block.class_label and
-            teacher_block.class_label.strip() != ''
-        )
+        # Insurance: has at least one insurance policy for ANY block OR marked complete
+        insurance_policies = InsurancePolicy.query.filter_by(teacher_id=admin_id).count()
+        data_completed['insurance'] = insurance_policies > 0
 
-        # Passkey is complete if at least one credential exists
-        completion['passkey'] = AdminCredential.query.filter_by(admin_id=admin_id).first() is not None
+        # Hall pass: check if hall pass settings exist for ANY block OR marked complete
+        hall_pass_settings = HallPassSettings.query.filter_by(teacher_id=admin_id).first()
+        data_completed['hall_pass'] = hall_pass_settings is not None
+
+        # Personalization: check if ANY TeacherBlock has class_label set OR marked complete
+        has_label = any(tb.class_label and tb.class_label.strip() != '' for tb in all_teacher_blocks)
+        data_completed['personalization'] = has_label
+
+        # Passkey: check if at least one credential exists OR marked complete
+        has_passkey = AdminCredential.query.filter_by(admin_id=admin_id).first() is not None
+        data_completed['passkey'] = has_passkey
+
+        for task_name in completion.keys():
+            completion[task_name] = data_completed.get(task_name, False) or skipped_tasks.get(task_name, False)
 
         return jsonify({
             'status': 'success',
-            'completion': completion
+            'dismissed': False,
+            'no_class_period': False,
+            'completion': completion,
+            'data_completed': data_completed,
+            'skipped': skipped_tasks
         })
 
     except Exception as e:
@@ -7003,8 +7363,8 @@ def onboarding_skip_task():
             onboarding_record = TeacherOnboarding(teacher_id=admin_id)
             db.session.add(onboarding_record)
 
-        # Mark task as skipped using the existing method (store as True to indicate it's "completed" via skip)
-        onboarding_record.mark_step_completed(task_name)
+        # Mark widget task as skipped (counts as completed)
+        onboarding_record.mark_widget_task_completed(task_name, status='skipped')
 
         db.session.commit()
 
@@ -7017,6 +7377,64 @@ def onboarding_skip_task():
         db.session.rollback()
         current_app.logger.error(f"Error skipping task: {e}")
         return jsonify({'status': 'error', 'message': 'Failed to skip task'}), 500
+
+
+@admin_bp.route('/onboarding/dismiss-widget', methods=['POST'])
+@admin_required
+def onboarding_dismiss_widget():
+    """Dismiss the Getting Started widget permanently."""
+    admin_id = session.get('admin_id')
+
+    try:
+        # Get or create onboarding record
+        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
+        if not onboarding_record:
+            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
+            db.session.add(onboarding_record)
+
+        # Dismiss the widget
+        onboarding_record.dismiss_widget()
+
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Getting Started widget dismissed'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error dismissing widget: {e}")
+        return jsonify({'status': 'error', 'message': 'Failed to dismiss widget'}), 500
+
+
+@admin_bp.route('/onboarding/undismiss-widget', methods=['POST'])
+@admin_required
+def onboarding_undismiss_widget():
+    """Un-dismiss the Getting Started widget to show it again."""
+    admin_id = session.get('admin_id')
+
+    try:
+        # Get onboarding record
+        onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
+        if not onboarding_record:
+            onboarding_record = TeacherOnboarding(teacher_id=admin_id)
+            db.session.add(onboarding_record)
+
+        # Un-dismiss the widget by setting widget_dismissed_at to None
+        onboarding_record.widget_dismissed_at = None
+
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'message': 'Getting Started widget will appear again'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error un-dismissing widget: {e}")
+        return jsonify({'status': 'error', 'message': 'Failed to show widget'}), 500
 
 
 # ==================== ECONOMY BALANCE CHECKER API ====================
@@ -7301,7 +7719,7 @@ def api_economy_validate(feature):
 
     except Exception as e:
         current_app.logger.error(f"Error validating {feature}: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': 'Failed to validate feature due to an internal error.'}), 500
 
 
 # ==================== PASSKEY AUTHENTICATION (Official SDK Implementation) ====================
@@ -7677,7 +8095,7 @@ def resolve_issue(issue_id):
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error resolving issue: {str(e)}")
+        current_app.logger.error(f"Error resolving issue {issue_id}", exc_info=True)
         flash("An error occurred while resolving the issue. Please try again.", "error")
         return redirect(url_for('admin.view_issue', issue_id=issue_id))
 
@@ -7724,6 +8142,6 @@ def escalate_issue(issue_id):
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error escalating issue: {str(e)}")
+        current_app.logger.error(f"Error escalating issue {issue_id}", exc_info=True)
         flash("An error occurred while escalating the issue. Please try again.", "error")
         return redirect(url_for('admin.view_issue', issue_id=issue_id))

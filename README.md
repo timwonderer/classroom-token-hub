@@ -12,7 +12,7 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Version 1.6.0 Released! This release focuses on repository organization, multi-tenancy fixes, and documentation improvements. Major updates include fixing critical HallPassSettings multi-tenancy violations, consolidating duplicate files, and improving deployment reliability. See [RELEASE_NOTES_v1.6.0.md](docs/archive/releases/RELEASE_NOTES_v1.6.0.md) for full details.
+**Project Status:** Version 1.6.0 Released! Recent enhancements include mobile navigation improvements with hamburger menu for PWA, repository organization, multi-tenancy fixes, and documentation improvements. Major updates include fixing critical HallPassSettings multi-tenancy violations, consolidating duplicate files, and improving deployment reliability. See [RELEASE_NOTES_v1.6.0.md](docs/archive/releases/RELEASE_NOTES_v1.6.0.md) for full details.
 
 ---
 
@@ -34,12 +34,14 @@ An interactive banking and classroom management platform for teaching students a
 - **Rent & Fees** — Optional recurring rent with waivers and late-fee configuration
 - **TOTP Authentication** — Secure admin access with two-factor authentication
 
-### Mobile & PWA Features 
+### Mobile & PWA Features
 
 - **Progressive Web App** — Install as mobile app on iOS and Android devices
 - **Offline Support** — Intelligent caching with offline fallback page
-- **Mobile-Optimized UI** — Dedicated mobile templates with responsive navigation
+- **Mobile-Optimized UI** — Responsive design with hamburger menu navigation
+- **Full Navigation Access** — Slide-out sidebar provides complete menu access on mobile
 - **Touch-Friendly** — Larger buttons and improved touch targets throughout
+- **Unified Templates** — Same responsive layout works for desktop, mobile, and PWA
 - **Fast Performance** — Aggressive caching for quick load times
 - **Home Screen Installation** — Add to home screen for app-like experience
 
@@ -294,17 +296,27 @@ We welcome contributions! Please see [.github/CONTRIBUTING.md](.github/CONTRIBUT
 
 This project is licensed under the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/).
 
-### ✅ You CAN:
+### Permitted Uses:
 - Use in classrooms, clubs, and nonprofit educational settings
 - Modify for school use, assignments, or personal learning
 - Share with students or other educators
 - Use for research or academic presentations (non-commercial)
 
-### ❌ You CANNOT:
+### Prohibited Uses:
 - Use as part of a commercial product or SaaS platform
 - Host a paid service or subscription
 - Incorporate into revenue-generating offerings
 - Use internally within for-profit businesses
+
+### Licensing & Attribution
+
+**Full License:** See [LICENSE](LICENSE) for complete terms
+
+**Commercial Use Policy:** See [COMMERCIAL.md](COMMERCIAL.md) for detailed guidance on permitted and prohibited commercial activities
+
+**Third-Party Attributions:** See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for open-source dependencies and services
+
+**Project Philosophy:** See [ATTRIBUTION.md](ATTRIBUTION.md) for the project's ethical foundations
 
 ---
 

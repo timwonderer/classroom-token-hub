@@ -243,6 +243,9 @@
         status: false,
         placeholder: "Describe the incident in detail (Markdown supported)...",
       });
+      // Remove required attribute from hidden textarea to allow form submission
+      // Server-side validation will still enforce the required field
+      descriptionField.removeAttribute('required');
     }
 
     if (commentsField) {

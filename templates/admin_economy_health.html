@@ -1,9 +1,10 @@
 {% extends "layout_admin.html" %}
+{% import "macros/help.html" as help %}
 {% block page_title %}Economy Health{% endblock %}
 {% block page_icon %}monitor_heart{% endblock %}
 {% block page_header_actions %}
-  <button class="btn btn-primary d-none d-md-inline-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#economyHealthGuide" aria-controls="economyHealthGuide">
-    <span class="material-symbols-outlined">quick_reference_all</span> Need Help?
+  <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#economyHealthGuide" aria-controls="economyHealthGuide">
+    <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
   </button>
 {% endblock %}
 {% block content %}
@@ -69,31 +70,13 @@
         <div id="economyHealthGuideSettingsBreakdown" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingSettingsBreakdown" data-bs-parent="#economyHealthGuideAccordion">
           <div class="accordion-body">
             <ul class="mb-0">
-              <li><strong>Scope:</strong> switch between all classes (combined view) and a single class (block-specific view).</li>
-              <li><strong>Expected weekly hours:</strong> updates the CWI and balance calculations for the selected scope.</li>
-              <li><strong>Class selector:</strong> appears in class scope to choose which block you are reviewing.</li>
+              <li><strong>Class selector:</strong> choose which class period you are reviewing. Each class has its own CWI based on its payroll settings.</li>
+              <li><strong>Expected weekly hours:</strong> updates the CWI and balance calculations for the selected class.</li>
               <li><strong>Balance snapshot:</strong> flags mismatches between CWI and costs so you can adjust settings.</li>
             </ul>
             <div class="alert alert-info mt-3 mb-0">
-              <strong>Side effects:</strong> Adjusting hours changes CWI immediately for the selected scope.
+              <strong>Side effects:</strong> Adjusting hours changes CWI immediately for the selected class.
             </div>
-          </div>
-        </div>
-      </div>
-      <div class="accordion-item">
-        <h2 class="accordion-header" id="economyHealthGuideHeadingScope">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideScope" aria-expanded="false" aria-controls="economyHealthGuideScope">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
-            <strong>Switch Between Scopes</strong>
-          </button>
-        </h2>
-        <div id="economyHealthGuideScope" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingScope" data-bs-parent="#economyHealthGuideAccordion">
-          <div class="accordion-body">
-            <p>Use the scope toggle to review all classes at once or focus on a single class.</p>
-            <ul class="mb-0">
-              <li><strong>All classes:</strong> best for a quick health check across your whole economy.</li>
-              <li><strong>Individual class:</strong> best when one period runs a different schedule or needs its own pricing.</li>
-            </ul>
           </div>
         </div>
       </div>
@@ -119,11 +102,20 @@
 
 <div class="container-fluid py-3">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3">
-    <p class="text-muted mb-0">Review your current CWI and see how payroll, rent, banking, insurance, and the store fit together.</p>
-    <div class="btn-group" role="group" aria-label="CWI scope">
-      <a class="btn {% if scope != 'class' %}btn-primary text-white{% else %}btn-white{% endif %}" href="{{ url_for('admin.economy_health', scope='all') }}">All classes</a>
-      <a class="btn {% if scope == 'class' %}btn-primary text-white{% else %}btn-white{% endif %}" href="{{ url_for('admin.economy_health', scope='class', block=selected_block or (blocks[0] if blocks else None)) }}">Individual class</a>
+    <div class="d-flex align-items-center gap-2">
+      <p class="text-muted mb-0">Review your current CWI and see how payroll, rent, banking, insurance, and the store fit together.</p>
+      {{ help.help_icon("diagnostics/teacher-attendance-payroll", "Economy health help") }}
     </div>
+    {% if blocks|length > 1 %}
+    <div class="d-flex align-items-center gap-2">
+      <label for="classSelector" class="text-muted mb-0">Class:</label>
+      <select id="classSelector" class="form-select form-select-sm" style="width: auto;" onchange="window.location.href='{{ url_for('admin.economy_health') }}?block=' + encodeURIComponent(this.value)">
+        {% for block in blocks %}
+        <option value="{{ block }}" {% if selected_block == block %}selected{% endif %}>{{ block }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
   </div>
 
   {% if not payroll_settings %}
@@ -174,7 +166,7 @@
                 <form method="post" action="{{ url_for('admin.update_expected_weekly_hours') }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="cwi_block" value="{{ selected_block }}">
-                  <input type="hidden" name="next" value="{{ url_for('admin.economy_health', block=selected_block, scope=scope) }}">
+                  <input type="hidden" name="next" value="{{ url_for('admin.economy_health', block=selected_block) }}">
                   <div class="input-group">
                     <input type="number" step="0.25" min="0.25" max="80" name="expected_weekly_hours" class="form-control" value="{{ expected_hours }}">
                     <button class="btn btn-primary" type="submit">Update</button>
@@ -186,29 +178,6 @@
                 </form>
               </div>
             </div>
-            {% if scope == 'class' %}
-            <div class="col-md-4">
-              <div class="p-3 bg-light rounded h-100">
-                <div class="text-muted small">Class/Block</div>
-                <form method="get">
-                  <input type="hidden" name="scope" value="class">
-                  <select name="block" class="form-select mb-2" onchange="this.form.submit()">
-                    {% if not blocks %}
-                      <option value="">No classes yet</option>
-                    {% else %}
-                      {% for blk in blocks %}
-                        <option value="{{ blk }}" {% if selected_block == blk %}selected{% endif %}>{{ blk }}</option>
-                      {% endfor %}
-                    {% endif %}
-                  </select>
-                  <div class="d-flex gap-2">
-                    <button class="btn btn-primary flex-grow-1" type="submit">Apply</button>
-                    <a class="btn btn-outline-secondary" href="{{ url_for('admin.economy_health', scope='class') }}">Clear</a>
-                  </div>
-                </form>
-              </div>
-            </div>
-            {% endif %}
           </div>
           <div class="mt-3">
             <div class="small text-muted">Calculation notes:</div>

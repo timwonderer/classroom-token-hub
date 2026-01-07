@@ -6,7 +6,7 @@ Version 1.1.1 is a stability-focused patch that addresses regressions discovered
 
 ---
 
-## 🐛 Bug Fixes
+##  Bug Fixes
 
 ### Authentication & Recovery
 - Secured teacher recovery by hashing stored date-of-birth sums with salted HMAC, migrating existing records, and validating both legacy and new hashes during recovery checks (#637).
@@ -21,18 +21,18 @@ Version 1.1.1 is a stability-focused patch that addresses regressions discovered
 
 ---
 
-## 📦 Upgrade Notes
+##  Upgrade Notes
 
 No manual steps are required beyond the standard deployment process. Deployments will run the included migration to populate the new recovery hash fields automatically.
 
 ---
 
-## 🧪 Validation
+##  Validation
 
 - Existing automated tests continue to cover the static asset helper changes and recovery flows introduced in this patch.
 
 ---
 
-## 📝 Full Changelog
+##  Full Changelog
 
 See [CHANGELOG.md](../../CHANGELOG.md) for the complete list of changes.

@@ -1,3 +1,10 @@
+---
+title: Changelog
+roles: [teacher, developer]
+description: Complete history of all updates, bug fixes, and new features added to Classroom Token Hub.
+keywords: [changelog, updates, version history, releases, what's new, bug fixes, features]
+---
+
 # Changelog
 
 All notable changes to the Classroom Token Hub project will be documented in this file.
@@ -7,6 +14,28 @@ and this project follows semantic versioning principles.
 
 
 ## [Unreleased]
+
+### Changed
+- **Documentation Navigation Improvements** - Redesigned documentation system with better discoverability and app integration
+  - **Accordion-based sidebar**: Documentation view now uses collapsible accordion navigation (like app sidebar) with auto-expanding sections based on current page
+  - **Feature Guides section**: Added dedicated "Feature Guides" category to docs index with links to Payroll, Store, Banking, and Economy Design guides
+  - **Icon improvements**: Added Material Symbols icons to all navigation items for visual clarity
+  - **Smart state management**: Accordion sections automatically expand when viewing pages within that category
+  - **Integrated help flow**: "Need Help?" buttons open offcanvas quick tips, "Full Guide" buttons link to comprehensive feature documentation
+  - **Better organization**: Feature guides, diagnostics, and technical reference are now clearly separated in both index and sidebar navigation
+
+- **Documentation Search Improvements** - Enhanced search functionality with better filtering and relevance scoring
+  - **Directory-based filtering**: Automatically excludes internal documentation (security, archive, ai) from user-facing search results; selective filtering for development/operations docs
+  - **Relevance scoring**: Results ranked by title matches (10 pts base + 5 pts exact-match bonus + 3 pts per matched title word), keyword matches (8 pts per keyword), description matches (5 pts), and body matches (1-3 pts max)
+  - **Metadata support**: Added support for `searchable: false`, `keywords`, and `description` fields in document front matter
+  - **Better categorization**: Friendly category names (e.g., "User Guides" instead of "user-guides")
+  - **Context snippets**: Prefer description field for result previews when available
+  - **Before**: Searching "economy" returned 42 results including internal docs like seeding instructions and testing summaries
+  - **After**: Same search returns only 15 user-facing results, filtering out 27 internal documents
+
+### Fixed
+- **Documentation Table of Contents** - Added YAML front matter to all main documentation files to fix table of contents display showing directory paths instead of proper titles
+  - Updated: Student Guide, Teacher Manual, Architecture Guide, API Reference, Database Schema, Changelog, Deployment Guide
 
 ### Added
 - **Attendance Issue Reporting** - Students can now report issues with specific attendance/tap events (clock in/out records) directly from the Work & Pay page
@@ -438,9 +467,9 @@ First stable release of Classroom Token Hub! All critical security issues resolv
 
 ### Project Status
 The project is ready for version 1.0 release. All critical blockers have been resolved:
-- ✅ **P0 Critical Data Leak:** Fixed and deployed (2025-11-29) - See [docs/security/CRITICAL_SAME_TEACHER_LEAK.md](docs/security/CRITICAL_SAME_TEACHER_LEAK.md)
-- ✅ **P1 Deprecated Patterns:** All updated to Python 3.12+ and SQLAlchemy 2.0+ (2025-12-06)
-- 🔄 **Backfill:** Legacy transaction data being backfilled with interactive verification
+-  **P0 Critical Data Leak:** Fixed and deployed (2025-11-29) - See [security/CRITICAL_SAME_TEACHER_LEAK.md](security/CRITICAL_SAME_TEACHER_LEAK.md)
+-  **P1 Deprecated Patterns:** All updated to Python 3.12+ and SQLAlchemy 2.0+ (2025-12-06)
+-  **Backfill:** Legacy transaction data being backfilled with interactive verification
 
 ### Added (2025-12-11)
 - **development/DEVELOPMENT.md** — Unified development priorities document consolidating all TODO files and roadmap
@@ -506,7 +535,7 @@ The project is ready for version 1.0 release. All critical blockers have been re
 - System admin and token-based maintenance bypass with session persistence (`maintenance_global_bypass`)
 - System admin login access during maintenance (`/sysadmin/login`) and login link on `maintenance.html`
 - Badge icon/text server-side mapping and status description rendering fallback when JS disabled
-- Documentation for maintenance variables and operational workflow (see `docs/DEPLOYMENT.md`)
+- Documentation for maintenance variables and operational workflow (see `docs/Deployment_Guide.md`)
 
 ### Changed
 - `deploy_updates.sh` now detects existing maintenance state instead of resetting it
@@ -579,9 +608,9 @@ The project is ready for version 1.0 release. All critical blockers have been re
 ## Documentation Maintenance
 
 This changelog tracks significant changes to the codebase. For:
-- **Current development tasks**: See [docs/development/DEVELOPMENT.md](docs/development/DEVELOPMENT.md)
-- **Planned features**: See [docs/development/DEVELOPMENT.md](docs/development/DEVELOPMENT.md) Roadmap section
-- **Technical details**: See [docs/technical-reference/architecture.md](docs/technical-reference/architecture.md)
+- **Current development tasks**: See [development/DEVELOPMENT.md](development/DEVELOPMENT.md)
+- **Planned features**: See [development/DEVELOPMENT.md](development/DEVELOPMENT.md) Roadmap section
+- **Technical details**: See [technical-reference/architecture.md](technical-reference/architecture.md)
 
 ## Changelog Guidelines
 

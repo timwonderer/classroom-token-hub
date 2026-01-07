@@ -19,24 +19,26 @@
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
 
     {% block extra_head %}{% endblock %}
+    {% set full_width = full_width|default(false) %}
+    {% set show_sysadmin_link = show_sysadmin_link|default(true) %}
 </head>
-<body class="d-flex flex-column min-vh-100 justify-content-center align-items-center bg-light">
+<body class="d-flex flex-column min-vh-100 bg-light {% if full_width %}align-items-stretch{% else %}justify-content-center align-items-center{% endif %}">
     <a href="#main-content" class="skip-link">Skip to main content</a>
 
-    <div class="container" style="max-width: 600px;">
-        <div class="card shadow-lg border-0 rounded-4 overflow-hidden">
+    <div class="{% if full_width %}w-100{% else %}container{% endif %}" {% if not full_width %}style="max-width: 600px;"{% endif %}>
+        <div class="{% if full_width %}w-100{% else %}card shadow-lg border-0 rounded-4 overflow-hidden{% endif %}">
             <main id="main-content">
-            {% block content_full %}
-            <div class="card-body p-4 p-md-5">
-                {% block content %}{% endblock %}
-            </div>
-            {% endblock %}
+                <div class="{% if full_width %}w-100{% else %}card-body p-4 p-md-5{% endif %}">
+                    {% block content %}{% endblock %}
+                </div>
             </main>
         </div>
 
+        {% if show_sysadmin_link %}
         <div class="text-center mt-4">
             <a href="/sysadmin/login" class="text-secondary text-decoration-none small">System Admin Login</a>
         </div>
+        {% endif %}
     </div>
 
     <!-- Scripts -->

@@ -6,6 +6,78 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project follows semantic versioning principles.
 
 
+## [Unreleased]
+
+### Fixed
+- **EasyMDE Form Submission** - Fixed issue where forms with EasyMDE markdown editors could not be submitted due to hidden required fields
+  - EasyMDE markdown editor hides the underlying textarea, causing browser validation to fail on required fields
+  - Removed HTML `required` attribute from hidden textareas after editor initialization
+  - Server-side validation via `DataRequired()` still enforces required fields
+  - Applied fix to insurance claim form (`student_file_claim.html`) and issue submission form (`student_submit_issue.html`)
+  - Resolves console error: "An invalid form control with name='[field]' is not focusable"
+
+### Added
+- **Analytics Dashboard (Phase 1-3)** - System health observability dashboard per analytics specification
+  - Three new database models: `AnalyticsSnapshot`, `AnalyticsEvent`, `AnalyticsAlert`
+  - Analytics computation engine with CWI-relative metrics (no absolute balances/rankings)
+  - System health metrics: participation rate, money velocity, CWI deviation bands, budget survival pass rate
+  - Trend analysis: tracks improving/stable/worsening patterns across periods
+  - Visual alerts with explanations (what changed, why it matters, suggested actions)
+  - Event annotation system for rent changes, wage changes, inflation events
+  - Metrics precomputed and cached by time window for 5-second readability
+  - Weekly and monthly time window views
+  - All metrics properly scoped by `join_code` for multi-tenancy compliance
+  - Dashboard route at `/admin/analytics`
+  - API endpoints for snapshot data and alerts
+  - Comprehensive test coverage for analytics engine
+  - Database migration: `a7b8c9d0e1f2_add_analytics_models`
+  - Per spec: no student names in default views, no leaderboards, no comparative rankings
+  - Design principle: "Something is drifting — and I know what lever to pull"
+- **Mobile Navigation Enhancement** - Full navigation menu now accessible on mobile devices and PWA
+  - Added floating hamburger menu button that appears on mobile (<768px)
+  - Sidebar slides in from left with smooth animation and backdrop overlay
+  - Help buttons now visible as icon-only on mobile screens
+  - Contextual help links show icon on mobile, hiding text to save space
+  - Same template works for desktop, mobile, and PWA - no separate mobile templates needed
+  - Sidebar automatically closes when clicking navigation links or backdrop
+  - Resolves PWA limitation where full navigation menu was previously inaccessible
+- **Rent Itemization Feature** - Teachers can now specify what rent pays for and offer items as store alternatives (MVP)
+  - New `RentItem` model to track itemized rent components (e.g., Desk, Chair, Locker)
+  - Teachers can add/remove/reorder rent items in Rent Settings page
+  - Optional store integration: mark items as "Available in Store" with custom pricing
+  - Automated sync: items marked for store availability automatically create/update StoreItem records
+  - StoreItem created with `limit_per_student=1` to enforce single-purchase behavior
+  - Store items inherit block visibility from rent settings
+  - Student rent view displays itemized breakdown showing what rent includes
+  - Students see store price comparison for items available separately
+  - Pro tip message encourages rent payment by showing total value comparison
+  - Manual pricing (teacher sets store price manually - automatic pricing calculator coming in future release)
+  - Database migration: `6feaa660d6c3_add_rent_item_table`
+- **Enhanced Purchase Restrictions** - "Prevent Purchase When Late" toggle now has dynamic behavior based on itemization
+  - When rent itemization is disabled: blocks ALL store purchases when student is late on rent (original behavior)
+  - When rent itemization is enabled: students late on rent can ONLY purchase items covered by rent (at à la carte prices), all other store items blocked
+  - Creates strong incentive structure: pay rent to get everything, or buy individual rent items at higher prices while missing out on other store items
+  - UI dynamically updates toggle label and description based on itemization status
+  - JavaScript updates label when items are added/removed dynamically
+  - Implemented in `/api/purchase-item` endpoint with proper rent late detection and item validation
+- **Purchase Duration Options for Rent Items** - Teachers can now choose how long individually-purchased rent items last
+  - New `purchase_duration` field on RentItem model: 'per_use' or 'per_period'
+  - **Per Use**: Student must buy each time they want to use it (unlimited purchases allowed)
+  - **Per Rent Period**: Student buys once and can use until next rent is due (limit 1, expires when rent comes due)
+  - Radio button selector in rent itemization UI with clear explanations
+  - Store items automatically configured with appropriate purchase limits based on duration type
+  - Purchase API calculates expiration dates for "per_period" items based on rent frequency settings
+  - Automated expiration when next rent payment is due
+  - Database migration: `h7i8j9k0l1m2_add_purchase_duration_to_rent_items`
+- **Rent Privilege Badges** - Visual indicators on student detail page showing active rent privileges
+  - Displays all "per_period" rent items that students currently have access to
+  - **Green badges**: Privileges covered by paid rent (automatic for rent-paying students)
+  - **Blue badges**: Privileges purchased individually (shows "(Purchased)" label)
+  - Badges only show for non-expired privileges
+  - Rent-paying students automatically receive all per-period privilege badges
+  - Teachers can quickly see which students have which privileges at a glance
+  - Hover over badges to see item descriptions
+
 ## [1.6.0] - 2026-01-01
 
 ### Added
@@ -16,6 +88,14 @@ and this project follows semantic versioning principles.
   - Improved navigation and file organization
 
 ### Fixed
+- **Getting Started Widget** - Fixed onboarding widget state persistence issues
+  - Widget state now persists to database instead of browser localStorage
+  - Widget dismissal and task completion now sync across logins and devices
+  - Skipped tasks are now properly marked as complete in the widget
+  - Added `widget_tasks_completed`, `widget_dismissed`, and `widget_dismissed_at` fields to `TeacherOnboarding` model
+  - Updated `/admin/onboarding/status` endpoint to check both actual setup AND manually skipped tasks
+  - Added `/admin/onboarding/dismiss-widget` endpoint to persist widget dismissal
+  - Widget state is per-teacher (not per-block) for consistent onboarding experience
 - **Multi-Tenancy Violation** - Fixed critical bug where `HallPassSettings` records were created without `teacher_id`, violating NOT NULL constraint and breaking multi-tenancy isolation
   - Fixed `/api/hall-pass/settings` endpoint to scope settings by `teacher_id` from session
   - Fixed hall pass creation in `/tap` endpoint to retrieve `teacher_id` from `join_code` via `TeacherBlock` lookup
@@ -96,6 +176,12 @@ and this project follows semantic versioning principles.
 - Standardized UTC timestamp formatting
 
 ### Fixed
+- **Store Item Creation** - Fixed critical bug where tier, collective_goal_type, collective_goal_target, and redemption_prompt fields were not being saved when creating new store items
+  - Added `tier` field assignment to store creation route (app/routes/admin.py:3047)
+  - Added `collective_goal_type` and `collective_goal_target` field assignments for collective goal items (app/routes/admin.py:3063-3064)
+  - Added `redemption_prompt` field assignment for delayed-use items (app/routes/admin.py:3066)
+  - These fields were already present in the form (forms.py) and model (models.py), but were not being passed to the StoreItem constructor
+  - Edit functionality uses `populate_obj` rather than manually assigning these fields, so this bug specifically affected the creation route
 - **Transaction Issue Reporting** - Added report buttons to all transaction tables in Banking/Finances page (Checking and Savings tabs), allowing students to report issues on any visible transaction (up to 50 most recent), not just the 5 shown on dashboard
 - **Issue Resolution Display** - Fixed `developer_resolved` status showing as "Escalated" instead of "Resolved by Developer" in teacher view
 - **Issue Context Snapshot** - Fixed incorrect balance calculation in context_snapshot by using Student model's `get_checking_balance()` and `get_savings_balance()` methods instead of non-existent `get_balances()` function
@@ -114,6 +200,36 @@ and this project follows semantic versioning principles.
 
 ### Documentation
 - Reorganized documentation structure for improved navigation
+- **Developer Documentation Updates** - Updated development tracking documentation to reflect current status
+  - Updated `docs/development/DEVELOPMENT.md` to reflect v1.6.0 status (was showing 1.4.0)
+  - Added v1.5.0 and v1.6.0 release summaries to Recent Releases section
+  - Updated target version from 1.5.0 to 1.7.0
+  - Updated `IMPLEMENTATION_PROGRESS.md` to mark sysadmin routes and templates as completed (were incorrectly marked as pending)
+  - Added detailed test coverage priorities and recommendations
+  - Updated Next Steps with current implementation status (85% complete)
+  - Added specific guidance for remaining work (tests, user docs, technical docs)
+- **Comprehensive Documentation Accuracy Fixes** - Corrected 10 inaccuracies found in user-facing documentation
+  - **Store Items (docs/features/store/creating-items.md)**:
+    - Fixed tier system documentation to reflect actual implementation (Basic/Standard/Premium/Luxury based on % of CWI, not Tier 1/2/3 with dollar amounts)
+    - Corrected default state - items are created as active by default, not inactive
+    - Removed non-existent image upload feature documentation
+    - Removed non-existent daily purchase limit documentation
+    - Updated terminology to match code (Immediate Use/Delayed Use instead of Virtual/Physical)
+    - Added missing "Collective Goal" item type to documentation with full explanation
+    - Corrected purchase limits documentation to reflect actual behavior (concurrent ownership, not daily limits)
+    - Updated scenario examples to use correct field names and remove daily limits
+    - Removed confusing "if available" language for collective goals (feature is fully available)
+    - Removed misleading "Use images" tip from Tips for Success section (feature doesn't exist)
+    - Fixed contradictory troubleshooting text about daily limits (clarified to use inventory and per-student limits)
+  - **Payroll (docs/features/payroll/running-payroll.md)**:
+    - Removed non-existent automatic payroll feature documentation (entire section)
+    - Added guidance for manual payroll scheduling and consistency
+    - Clarified that break time IS paid (system does not exclude breaks from hours worked)
+    - Added Q&A explaining how to handle unpaid breaks if desired
+    - Updated all automatic payroll references to reflect manual-only operation
+  - **Banking (docs/features/banking/transferring-money.md)**:
+    - Removed non-existent transfer limits documentation (daily limits, min/max transfer amounts)
+    - Simplified to only document actual rules (no negative balances)
 
 ### Dependencies
 - Bump `requests` from 2.32.4 to 2.32.5
