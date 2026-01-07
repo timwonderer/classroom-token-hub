@@ -34,11 +34,11 @@ class AnalyticsAlert(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     # Deterministic identity (prevents duplicate / zombie alerts)
-    alert_key = db.Column(db.String(100), nullable=False)  # e.g. 'low_participation_rate'
+    alert_key = db.Column(db.String(100), nullable=False)  # e.g. 'participation_low'
     join_code = db.Column(db.String(20), nullable=False, index=True)
 
     # Snapshot window this alert applies to
-    window_type = db.Column(db.String(10), nullable=False)  # 'week', 'month'
+    window_type = db.Column(db.String(10), nullable=False)  # 'week', 'month', 'pay_cycle', 'rent_cycle' (see analytics.ALLOWED_WINDOW_TYPES)
     window_start = db.Column(db.DateTime, nullable=False)
     window_end = db.Column(db.DateTime, nullable=False)
 
