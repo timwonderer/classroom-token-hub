@@ -424,16 +424,6 @@
 </style>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
-    const classSelect = document.getElementById('analyticsClassSelect');
-    if (classSelect) {
-      classSelect.addEventListener('change', () => {
-        const baseUrl = classSelect.dataset.switchUrl || "{{ url_for('analytics.dashboard') }}";
-        const targetUrl = new URL(baseUrl, window.location.origin);
-        targetUrl.searchParams.set('join_code', classSelect.value);
-        window.location.assign(targetUrl.toString());
-      });
-    }
-
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
     [...tooltipTriggerList].map((tooltipTriggerEl) => new bootstrap.Tooltip(tooltipTriggerEl));
   });

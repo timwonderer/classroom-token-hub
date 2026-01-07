@@ -1843,9 +1843,9 @@ class AnalyticsSnapshot(db.Model):
     avg_student_balance = db.Column(db.Float, nullable=True)  # Average balance (for CWI comparison only)
     
     # Drift & Anomaly Indicators (Trend-based)
-    balance_trend = db.Column(db.String(20), nullable=True)  # 'improving', 'stable', 'worsening'
+    balance_trend = db.Column(db.String(20), nullable=True)  # 'increasing', 'stable', 'decreasing'
     velocity_trend = db.Column(db.String(20), nullable=True)  # 'increasing', 'stable', 'decreasing'
-    participation_trend = db.Column(db.String(20), nullable=True)  # 'improving', 'stable', 'declining'
+    participation_trend = db.Column(db.String(20), nullable=True)  # 'increasing', 'stable', 'decreasing'
     
     # Additional context (non-student-identifying)
     total_students = db.Column(db.Integer, nullable=False)  # Total enrolled students
@@ -1916,5 +1916,4 @@ class AnalyticsEvent(db.Model):
     
     def __repr__(self):
         return f'<AnalyticsEvent {self.event_type} on {self.event_date.date()} for {self.join_code}>'
-
 
