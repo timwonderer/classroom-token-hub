@@ -20,12 +20,13 @@ Per spec section 4.2:
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 
 from app.extensions import db
 from app.models import (
     Student, Transaction, TapEvent, StudentBlock, PayrollSettings,
-    RentSettings, AnalyticsSnapshot, AnalyticsAlert
+    RentSettings, AnalyticsSnapshot, AnalyticsAlert, TeacherBlock,
+    StudentTeacher, DemoStudent
 )
 from app.utils.economy_balance import EconomyBalanceChecker
 
@@ -80,26 +81,64 @@ class AnalyticsEngine:
         self.teacher_id = teacher_id
         self.join_code = join_code
         self.economy_checker = EconomyBalanceChecker(teacher_id)
+
+    def _get_block_for_join_code(self) -> Optional[str]:
+        """Resolve the period/block for a join code scoped to the current teacher."""
+        block_row = TeacherBlock.query.with_entities(TeacherBlock.block).filter(
+            TeacherBlock.teacher_id == self.teacher_id,
+            TeacherBlock.join_code == self.join_code
+        ).first()
+        if not block_row:
+            block_row = StudentBlock.query.with_entities(StudentBlock.period).filter(
+                StudentBlock.join_code == self.join_code
+            ).first()
+        if block_row and block_row[0]:
+            return block_row[0].strip().upper()
+        return None
     
     def _get_enrolled_students(self) -> List[Student]:
         """Get all students enrolled in this class period."""
-        return Student.query.join(StudentBlock).filter(
-            StudentBlock.join_code == self.join_code
-        ).all()
+        demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
+        query = (
+            Student.query
+            .join(StudentTeacher, StudentTeacher.student_id == Student.id)
+            .join(StudentBlock, StudentBlock.student_id == Student.id)
+            .filter(
+                StudentTeacher.admin_id == self.teacher_id,
+                ~Student.id.in_(demo_ids_subq)
+            )
+        )
+
+        block = self._get_block_for_join_code()
+        if block:
+            query = query.filter(or_(
+                StudentBlock.join_code == self.join_code,
+                and_(
+                    StudentBlock.join_code.is_(None),
+                    StudentBlock.period == block
+                )
+            ))
+        else:
+            query = query.filter(StudentBlock.join_code == self.join_code)
+
+        return query.distinct().all()
     
     def _get_cwi(self) -> float:
         """Calculate current CWI for this class."""
         # PayrollSettings may be linked by block or teacher_id
         # Try to find by block first (since block is period identifier)
-        payroll_settings = PayrollSettings.query.filter_by(
-            teacher_id=self.teacher_id
-        ).filter(
-            # Match by block if available, otherwise use global settings
-            or_(
-                PayrollSettings.block == self.join_code,
-                PayrollSettings.block.is_(None)
-            )
-        ).first()
+        block = self._get_block_for_join_code()
+        payroll_settings = None
+        if block:
+            payroll_settings = PayrollSettings.query.filter_by(
+                teacher_id=self.teacher_id,
+                block=block
+            ).first()
+        if not payroll_settings:
+            payroll_settings = PayrollSettings.query.filter_by(
+                teacher_id=self.teacher_id,
+                block=None
+            ).first()
         
         if not payroll_settings:
             return 0.0
@@ -254,7 +293,7 @@ class AnalyticsEngine:
 
         students = self._get_enrolled_students()
         total_students = len(students)
-        if total_students == 0:
+        if total_students == 0 or cwi <= 0:
             return 0.0
 
         passing_students = 0
@@ -432,12 +471,15 @@ class AnalyticsEngine:
             })
         
         # Alert: Budget survival
-        if metrics.budget_survival_pass_rate < 50:
+        if metrics.cwi_value > 0 and metrics.budget_survival_pass_rate < 50:
             alerts.append({
                 'alert_type': 'budget_survival_low',
                 'severity': 'critical',
-                'what_changed': f'Only {metrics.budget_survival_pass_rate:.1f}% of students have positive balances',
-                'why_it_matters': 'Many students may be struggling with insolvency',
+                'what_changed': (
+                    f'Only {metrics.budget_survival_pass_rate:.1f}% of students can save '
+                    'at least 10% of weekly income'
+                ),
+                'why_it_matters': 'Many students may be struggling to keep up with recurring expenses',
                 'suggested_action': 'URGENT: Review rent and expense settings. Consider temporary relief or wage adjustment.',
             })
         
