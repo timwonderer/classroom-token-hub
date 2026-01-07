@@ -11,8 +11,8 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from app import db
 from app.models import (
-    Admin, Student, StudentBlock, Transaction,
-    PayrollSettings, AnalyticsAlert
+    Admin, Student, StudentBlock, StudentTeacher, TeacherBlock,
+    Transaction, PayrollSettings, AnalyticsAlert, DemoStudent
 )
 from app.utils.analytics_engine import AnalyticsEngine
 from hash_utils import get_random_salt, hash_username
@@ -31,12 +31,13 @@ def setup_analytics_test(client):
     
     # Create join code
     join_code = "TEST123"
+    block = "A"
     
     # Create payroll settings
     # Note: PayrollSettings uses 'block' field, not 'join_code'
     payroll = PayrollSettings(
         teacher_id=admin.id,
-        block=join_code,  # Using join_code as block identifier
+        block=block,
         pay_rate=0.25,  # $0.25/min = $15/hour
         expected_weekly_hours=5.0,
         payroll_frequency_days=7,
@@ -52,7 +53,7 @@ def setup_analytics_test(client):
         student = Student(
             first_name=f"Student{i}",
             last_initial="T",
-            block="A",
+            block=block,
             salt=salt,
             username_hash=hash_username(f"student{i}", salt),
             pin_hash="fake-hash",
@@ -60,24 +61,39 @@ def setup_analytics_test(client):
         )
         db.session.add(student)
         db.session.flush()
+
+        db.session.add(StudentTeacher(student_id=student.id, admin_id=admin.id))
         
         # Link student to period
         student_block = StudentBlock(
             student_id=student.id,
-            period="A",
+            period=block,
             join_code=join_code
         )
         db.session.add(student_block)
+        db.session.add(TeacherBlock(
+            teacher_id=admin.id,
+            block=block,
+            first_name=student.first_name,
+            last_initial=student.last_initial,
+            last_name_hash_by_part=[],
+            dob_sum=0,
+            salt=b'salt',
+            first_half_hash="mock",
+            join_code=join_code,
+            student_id=student.id,
+            is_claimed=True
+        ))
         students.append(student)
     
     db.session.commit()
     
-    return admin, join_code, students, payroll
+    return admin, join_code, block, students, payroll
 
 
 def test_analytics_engine_initialization(client, setup_analytics_test):
     """Test that AnalyticsEngine initializes correctly."""
-    admin, join_code, students, payroll = setup_analytics_test
+    admin, join_code, block, students, payroll = setup_analytics_test
     
     engine = AnalyticsEngine(admin.id, join_code)
     
@@ -88,7 +104,7 @@ def test_analytics_engine_initialization(client, setup_analytics_test):
 
 def test_calculate_cwi(client, setup_analytics_test):
     """Test CWI calculation."""
-    admin, join_code, students, payroll = setup_analytics_test
+    admin, join_code, block, students, payroll = setup_analytics_test
     
     engine = AnalyticsEngine(admin.id, join_code)
     cwi = engine._get_cwi()
@@ -100,7 +116,7 @@ def test_calculate_cwi(client, setup_analytics_test):
 
 def test_participation_rate_calculation(client, setup_analytics_test):
     """Test participation rate calculation."""
-    admin, join_code, students, payroll = setup_analytics_test
+    admin, join_code, block, students, payroll = setup_analytics_test
     
     # Add transactions for 3 out of 5 students
     now = datetime.now(timezone.utc)
@@ -133,7 +149,7 @@ def test_participation_rate_calculation(client, setup_analytics_test):
 
 def test_money_velocity_calculation(client, setup_analytics_test):
     """Test money velocity calculation."""
-    admin, join_code, students, payroll = setup_analytics_test
+    admin, join_code, block, students, payroll = setup_analytics_test
     
     # Add 10 transactions over 5 days for 5 students
     now = datetime.now(timezone.utc)
@@ -164,7 +180,7 @@ def test_money_velocity_calculation(client, setup_analytics_test):
 
 def test_snapshot_creation(client, setup_analytics_test):
     """Test creating an analytics snapshot."""
-    admin, join_code, students, payroll = setup_analytics_test
+    admin, join_code, block, students, payroll = setup_analytics_test
     
     # Add some activity
     now = datetime.now(timezone.utc)
@@ -199,7 +215,7 @@ def test_snapshot_creation(client, setup_analytics_test):
 
 def test_snapshot_caching(client, setup_analytics_test):
     """Test that snapshots are cached and reused."""
-    admin, join_code, students, payroll = setup_analytics_test
+    admin, join_code, block, students, payroll = setup_analytics_test
     
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(days=7)
@@ -219,7 +235,7 @@ def test_snapshot_caching(client, setup_analytics_test):
 
 def test_alert_generation(client, setup_analytics_test):
     """Test that alerts are generated for anomalies."""
-    admin, join_code, students, payroll = setup_analytics_test
+    admin, join_code, block, students, payroll = setup_analytics_test
     
     # Create scenario with low participation (no activity)
     now = datetime.now(timezone.utc)
@@ -242,14 +258,15 @@ def test_alert_generation(client, setup_analytics_test):
 
 def test_multi_tenancy_scoping(client, setup_analytics_test):
     """Test that analytics are properly scoped by join_code."""
-    admin, join_code, students, payroll = setup_analytics_test
+    admin, join_code, block, students, payroll = setup_analytics_test
     
     # Create a second join code with different data
     join_code2 = "TEST456"
+    block2 = "B"
     
     payroll2 = PayrollSettings(
         teacher_id=admin.id,
-        block=join_code2,  # Using join_code as block identifier
+        block=block2,
         pay_rate=0.30,
         expected_weekly_hours=6.0,
         payroll_frequency_days=7,
@@ -257,6 +274,18 @@ def test_multi_tenancy_scoping(client, setup_analytics_test):
         is_active=True
     )
     db.session.add(payroll2)
+    db.session.add(TeacherBlock(
+        teacher_id=admin.id,
+        block=block2,
+        first_name="Seat",
+        last_initial="B",
+        last_name_hash_by_part=[],
+        dob_sum=0,
+        salt=b'salt',
+        first_half_hash="mock",
+        join_code=join_code2,
+        is_claimed=False
+    ))
     db.session.commit()
     
     # Create engines for both
@@ -274,7 +303,7 @@ def test_multi_tenancy_scoping(client, setup_analytics_test):
 
 def test_no_student_names_in_metrics(client, setup_analytics_test):
     """Test that student names never appear in default metrics (per spec section 9)."""
-    admin, join_code, students, payroll = setup_analytics_test
+    admin, join_code, block, students, payroll = setup_analytics_test
     
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(days=7)
@@ -289,7 +318,7 @@ def test_no_student_names_in_metrics(client, setup_analytics_test):
 
 def test_trend_calculation(client, setup_analytics_test):
     """Test trend calculation between periods."""
-    admin, join_code, students, payroll = setup_analytics_test
+    admin, join_code, block, students, payroll = setup_analytics_test
     
     engine = AnalyticsEngine(admin.id, join_code)
     
@@ -309,3 +338,82 @@ def test_trend_calculation(client, setup_analytics_test):
     # No previous: stable
     trend = engine.calculate_trend(100.0, None)
     assert trend == 'stable'
+
+
+def test_demo_students_excluded_from_enrollment(client, setup_analytics_test):
+    """Demo students should not be included in analytics enrollment."""
+    admin, join_code, block, students, payroll = setup_analytics_test
+    demo_student = students[0]
+    demo = DemoStudent(
+        admin_id=admin.id,
+        student_id=demo_student.id,
+        session_id="demo-session",
+        created_at=datetime.now(timezone.utc),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+        is_active=True
+    )
+    db.session.add(demo)
+    db.session.commit()
+
+    engine = AnalyticsEngine(admin.id, join_code)
+    enrolled = engine._get_enrolled_students()
+
+    assert demo_student not in enrolled
+    assert len(enrolled) == 4
+
+
+def test_block_resolution_falls_back_to_student_block(client, setup_analytics_test):
+    """Block resolution uses StudentBlock when TeacherBlock lacks join_code."""
+    admin, join_code, block, students, payroll = setup_analytics_test
+    legacy_join_code = "LEGACY123"
+    legacy_salt = get_random_salt()
+    legacy_student = Student(
+        first_name="Legacy",
+        last_initial="L",
+        block="C",
+        salt=legacy_salt,
+        username_hash=hash_username("legacyuser", legacy_salt),
+        pin_hash="fake-hash",
+        teacher_id=admin.id
+    )
+    db.session.add(legacy_student)
+    db.session.flush()
+    db.session.add(StudentTeacher(student_id=legacy_student.id, admin_id=admin.id))
+    db.session.add(StudentBlock(
+        student_id=legacy_student.id,
+        period="C",
+        join_code=legacy_join_code
+    ))
+    db.session.commit()
+
+    engine = AnalyticsEngine(admin.id, legacy_join_code)
+    assert engine._get_block_for_join_code() == "C"
+
+
+def test_enrolled_students_include_null_join_code_with_matching_block(client, setup_analytics_test):
+    """Students with null join codes should be included if block matches."""
+    admin, join_code, block, students, payroll = setup_analytics_test
+    null_salt = get_random_salt()
+    null_student = Student(
+        first_name="Null",
+        last_initial="N",
+        block=block,
+        salt=null_salt,
+        username_hash=hash_username("nulluser", null_salt),
+        pin_hash="fake-hash",
+        teacher_id=admin.id
+    )
+    db.session.add(null_student)
+    db.session.flush()
+    db.session.add(StudentTeacher(student_id=null_student.id, admin_id=admin.id))
+    db.session.add(StudentBlock(
+        student_id=null_student.id,
+        period=block,
+        join_code=None
+    ))
+    db.session.commit()
+
+    engine = AnalyticsEngine(admin.id, join_code)
+    enrolled = engine._get_enrolled_students()
+
+    assert null_student in enrolled

@@ -129,7 +129,7 @@ class AnalyticsEngine:
         else:
             query = query.filter(StudentBlock.join_code == self.join_code)
 
-        return query.distinct().all()
+        return query.distinct(Student.id).all()
     
     def _get_cwi(self) -> float:
         """Calculate current CWI for this class."""
@@ -306,8 +306,11 @@ class AnalyticsEngine:
         
         if cwi <= 0:
             logging.warning(
-            f'Invalid CWI ({cwi}) for teacher_id={self.teacher_id}, '
-            f'join_code={self.join_code}. Check PayrollSettings configuration.'
+                "Invalid CWI (%s) for teacher_id=%s, join_code=%s. "
+                "Check PayrollSettings configuration.",
+                cwi,
+                self.teacher_id,
+                self.join_code,
             )
             return 0.0
 
