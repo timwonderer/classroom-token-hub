@@ -6,14 +6,17 @@
 <div class="d-flex align-items-center gap-2 flex-wrap">
   {% if available_classes %}
   <div class="d-flex align-items-center gap-2">
-    <label class="small text-muted mb-0" for="analyticsClassSelect">Class</label>
+    <label class="small text-muted mb-0" for="classDropdownButton">Class</label>
     <div class="dropdown">
     <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" id="classDropdownButton" data-bs-toggle="dropdown" aria-expanded="false">
+      {% set selected_class = namespace(found=False) %}
       {% for class_option in available_classes %}
         {% if class_option.join_code == join_code %}
           {{ class_option.label }} ({{ class_option.block }})
+          {% set selected_class.found = True %}
         {% endif %}
       {% endfor %}
+      {% if not selected_class.found %}Select Class{% endif %}
     </button>
     <ul class="dropdown-menu" aria-labelledby="classDropdownButton">
       {% for class_option in available_classes %}
@@ -51,16 +54,16 @@
   <!-- System Health Metrics Section (Always Visible per spec 4.1) -->
   <div class="row mb-1">
     <div class="col-12">
-      <h2 class=" mb-3">
+      <h2 class="mb-3">
                Classroom Macroeconomics Indicators
         <br>
-        <small class="text-muted" style="font-size:1.5rem"> Week of {{ window_start|format_datetime('%b %d') }} to {{ window_end|format_datetime('%b %d, %Y') }}</small>
+        <small class="text-muted" style="font-size:1.5rem"> {% if window_type == 'week' %}Week{% elif window_type == 'month' %}Month{% else %}Period{% endif %} of {{ window_start|format_datetime('%b %d') }} to {{ window_end|format_datetime('%b %d, %Y') }}</small>
       </h2>
     </div>
   </div>
-   <div class="row mb-4">
+  <div class="row mb-4">
     <div class="col-12">
-      <div class="card border-2 border-var(--primary) shadow-sm">
+      <div class="card border-2 border-primary shadow-sm">
         <div class="card-body">
           <h5 class="card-title">
             <span class="material-symbols-outlined align-middle me-2">trending_up</span>
@@ -91,7 +94,7 @@
 
   <div class="row mb-4">
     <div class="col-12">
-      <div class="card border-2 border-var(--primary) shadow-sm">
+      <div class="card border-2 border-primary shadow-sm">
         <div class="table-responsive">
           <table class="table align-middle mb-0">
             <thead class="table-light">
@@ -125,7 +128,7 @@
                         {% if snapshot.participation_trend == 'increasing' %}
                         <span class="badge bg-success-subtle text-success"><i class="bi bi-arrow-up"></i> Increasing</span>
                         {% elif snapshot.participation_trend == 'decreasing' %}
-                        <span class="badge bg-danger-subtle text-danger"><i class="bi bi-arrow-down"></i> Declining</span>
+                        <span class="badge bg-danger-subtle text-danger"><i class="bi bi-arrow-down"></i> Decreasing</span>
                         {% else %}
                         <span class="badge bg-secondary-subtle text-secondary"><i class="bi bi-arrow-right"></i> Stable</span>
                         {% endif %}

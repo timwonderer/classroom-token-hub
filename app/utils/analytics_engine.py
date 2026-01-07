@@ -20,7 +20,7 @@ Per spec section 4.2:
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, true
 
 from app.extensions import db
 from app.models import (
@@ -624,7 +624,7 @@ class AnalyticsEngine:
             AnalyticsAlert.window_start == window_start,
             AnalyticsAlert.window_end == window_end,
             AnalyticsAlert.resolved_at.is_(None),
-            ~AnalyticsAlert.alert_key.in_(active_alert_keys) if active_alert_keys else True
+            ~AnalyticsAlert.alert_key.in_(active_alert_keys) if active_alert_keys else true()
         ).all()
 
         for alert in stale_alerts:
