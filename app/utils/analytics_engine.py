@@ -430,7 +430,6 @@ class AnalyticsEngine:
                 'why_it_matters': 'Declining activity may indicate students are hoarding or disengaged',
                 'suggested_action': 'Consider: Add new store items, host a special event, or review pricing',
             })
-            # Must never default to blaming students.
         
         # Alert: Budget survival
         if metrics.budget_survival_pass_rate < 50:
@@ -477,7 +476,7 @@ class AnalyticsEngine:
             Transaction.join_code == self.join_code,
             Transaction.timestamp >= window_start,
             Transaction.timestamp < window_end,
-            Transaction.is_void == False
+            Transaction.is_void.is_(False)
         ).count()
         
         # Calculate average balance (for CWI comparison only, not for ranking)

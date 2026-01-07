@@ -12,14 +12,14 @@ Key Principles:
 """
 
 from datetime import datetime, timedelta, timezone
-from flask import Blueprint, render_template, session, jsonify, request, flash, redirect, url_for
+from flask import Blueprint, session, jsonify, request, flash, redirect, url_for
 from sqlalchemy import desc
 
 from app.extensions import db, limiter
 from app.auth import admin_required
 from app.models import (
     Admin, AnalyticsAlert, AnalyticsEvent,
-    Student, StudentBlock
+    PayrollSettings, RentSettings, Student, StudentBlock
 )
 from app.models import Transaction
 
@@ -29,7 +29,6 @@ from app.utils.analytics_engine import AnalyticsEngine
 from app.utils.helpers import render_template_with_fallback as render_template
 
 import pytz
-from werkzeug.exceptions import BadRequest
 from jinja2 import TemplateNotFound
 
 # Timezone
@@ -39,7 +38,72 @@ PACIFIC = pytz.timezone('America/Los_Angeles')
 analytics_bp = Blueprint('analytics', __name__, url_prefix='/admin/analytics')
 
 
-def get_time_window(window_type: str, custom_start=None, custom_end=None):
+def get_block_for_join_code(join_code: str):
+    block_row = StudentBlock.query.with_entities(StudentBlock.period).filter(
+        StudentBlock.join_code == join_code
+    ).first()
+    if block_row:
+        period = block_row[0]
+        return period.strip().upper() if period else None
+    return None
+
+
+def get_pay_cycle_days(teacher_id: int, join_code: str) -> int:
+    block = get_block_for_join_code(join_code)
+    payroll_settings = None
+    if block:
+        payroll_settings = PayrollSettings.query.filter_by(
+            teacher_id=teacher_id,
+            block=block
+        ).first()
+    if not payroll_settings:
+        payroll_settings = PayrollSettings.query.filter_by(
+            teacher_id=teacher_id,
+            block=None
+        ).first()
+    if payroll_settings and payroll_settings.payroll_frequency_days:
+        return payroll_settings.payroll_frequency_days
+    return 7
+
+
+def get_rent_cycle_days(teacher_id: int, join_code: str) -> int:
+    block = get_block_for_join_code(join_code)
+    rent_settings = None
+    if block:
+        rent_settings = RentSettings.query.filter_by(
+            teacher_id=teacher_id,
+            block=block
+        ).first()
+    if not rent_settings:
+        rent_settings = RentSettings.query.filter_by(
+            teacher_id=teacher_id,
+            block=None
+        ).first()
+    if not rent_settings:
+        return 30
+    frequency_type = rent_settings.frequency_type or 'monthly'
+    if frequency_type == 'daily':
+        return 1
+    if frequency_type == 'weekly':
+        return 7
+    if frequency_type == 'custom':
+        custom_value = rent_settings.custom_frequency_value or 1
+        custom_unit = rent_settings.custom_frequency_unit or 'days'
+        if custom_unit == 'weeks':
+            return custom_value * 7
+        if custom_unit == 'months':
+            return custom_value * 30
+        return custom_value
+    return 30
+
+
+def get_time_window(
+    window_type: str,
+    teacher_id: int,
+    join_code: str,
+    custom_start=None,
+    custom_end=None
+):
     """
     Calculate time window boundaries.
     
@@ -63,13 +127,13 @@ def get_time_window(window_type: str, custom_start=None, custom_end=None):
         window_end = now
     elif window_type == 'pay_cycle':
         # Based on payroll frequency (default 7 days)
-        # TODO: Get actual payroll frequency from settings
-        window_start = now - timedelta(days=7)
+        pay_cycle_days = get_pay_cycle_days(teacher_id, join_code)
+        window_start = now - timedelta(days=pay_cycle_days)
         window_end = now
     elif window_type == 'rent_cycle':
         # Based on rent frequency (default monthly)
-        # TODO: Get actual rent frequency from settings
-        window_start = now - timedelta(days=30)
+        rent_cycle_days = get_rent_cycle_days(teacher_id, join_code)
+        window_start = now - timedelta(days=rent_cycle_days)
         window_end = now
     elif window_type == 'custom' and custom_start and custom_end:
         window_start = custom_start
@@ -106,7 +170,7 @@ def dashboard():
     window_type = requested_window_type if requested_window_type in ALLOWED_WINDOW_TYPES else 'week'
     
     # Calculate time window
-    window_start, window_end = get_time_window(window_type)
+    window_start, window_end = get_time_window(window_type, teacher_id, join_code)
     
     # Initialize analytics engine
     engine = AnalyticsEngine(teacher_id, join_code)
@@ -165,7 +229,7 @@ def api_snapshot(window_type):
         return jsonify({'error': 'No class period selected'}), 400
     
     # Calculate time window
-    window_start, window_end = get_time_window(window_type)
+    window_start, window_end = get_time_window(window_type, teacher_id, join_code)
     
     # Initialize analytics engine
     engine = AnalyticsEngine(teacher_id, join_code)
@@ -267,6 +331,7 @@ def acknowledge_alert(alert_id):
         return redirect(url_for('analytics.dashboard'))
     
     alert.acknowledge()
+    db.session.commit()
     flash('Alert acknowledged.', 'success')
     
     return redirect(url_for('analytics.dashboard'))
@@ -282,7 +347,6 @@ def events():
     - Shows rent changes, wage changes, inflation events, etc.
     - Provides context for understanding metric changes.
     """
-    teacher_id = session.get('admin_id')
     join_code = session.get('current_join_code')
     
     if not join_code:
@@ -373,10 +437,6 @@ def student_drill_down(student_id):
             # If enrollment is less than a day old, treat as a very short enrollment
             weeks_enrolled = 0
     
-    if not student:
-        flash('Student not found in this class period.', 'danger')
-        return redirect(url_for('analytics.dashboard'))
-    
     # Initialize analytics engine
     engine = AnalyticsEngine(teacher_id, join_code)
     cwi = engine._get_cwi()
@@ -389,8 +449,6 @@ def student_drill_down(student_id):
     
     # Calculate expected balance based on CWI
     # This is a simplified calculation - could be enhanced
-    # Assuming enrolled for full semester (18 weeks as default)
-    weeks_enrolled = 18  # TODO: Calculate actual enrollment duration
     expected_balance = cwi * weeks_enrolled
     
     # Calculate deviation
@@ -405,7 +463,7 @@ def student_drill_down(student_id):
         Transaction.student_id == student_id,
         Transaction.join_code == join_code,
         Transaction.timestamp >= thirty_days_ago,
-        Transaction.is_void == False
+        Transaction.is_void.is_(False)
     ).order_by(Transaction.timestamp.desc()).limit(50).all()
     
     try:
@@ -421,7 +479,6 @@ def student_drill_down(student_id):
         )
     except TemplateNotFound:
         # Fallback: return JSON response if template not found
-        return jsonify({'error': 'Template not found', 'student_id': student.id}), 404
         return jsonify({
             'error': 'Template not found',
             'student_id': student.id,
@@ -439,21 +496,4 @@ def student_drill_down(student_id):
                 } for t in recent_transactions
             ],
             'join_code': join_code
-        })
-        return jsonify({
-            'student_id': student.id,
-            'student_name': student.name,
-            'current_balance': current_balance,
-            'expected_balance': expected_balance,
-            'deviation': deviation,
-            'cwi': cwi,
-            'recent_transactions': [
-                {
-                    'id': t.id,
-                    'timestamp': t.timestamp.isoformat(),
-                    'amount': t.amount,
-                    'description': t.description
-                } for t in recent_transactions
-            ],
-            'join_code': join_code
-        })
+        }), 404
