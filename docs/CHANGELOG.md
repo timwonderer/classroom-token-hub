@@ -34,6 +34,8 @@ and this project follows semantic versioning principles.
   - **After**: Same search returns only 15 user-facing results, filtering out 27 internal documents
 
 ### Fixed
+- **Analytics Snapshot API Validation** - Reject invalid analytics window types to keep snapshot endpoints aligned with supported time windows.
+- **Analytics Dashboard Script Cleanup** - Removed unused class-switcher script to match the dropdown-based selector.
 - **Documentation Table of Contents** - Added YAML front matter to all main documentation files to fix table of contents display showing directory paths instead of proper titles
   - Updated: Student Guide, Teacher Manual, Architecture Guide, API Reference, Database Schema, Changelog, Deployment Guide
 
