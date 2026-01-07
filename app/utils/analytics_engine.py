@@ -474,7 +474,7 @@ class AnalyticsEngine:
                 'alert_key': 'cwi_deviation',
                 'severity': 'warning',
                 'what_changed': f'Only {metrics.cwi_deviation_within_20pct:.1f}% of students are tracking expected income',
-                'why_it_matters': 'Large deviations suggest economy settings may not match actual behavior',
+                'why_it.matters': 'Large deviations suggest economy settings may not match actual behavior',
                 'suggested_action': 'Review: Are wages appropriate for attendance patterns? Are expenses too high? Check the Economy Health page.',
             })
         
@@ -573,43 +573,38 @@ class AnalyticsEngine:
         db.session.commit()
         
         # Generate and handle alerts according to new AnalyticsAlert lifecycle
-        alerts = self.generate_alerts(health_metrics, trends)
-        # --- Analytics Alert Lifecycle Handling ---
         active_alert_keys = set()
 
         for alert_data in alerts:
             alert_key = alert_data['alert_key']
             active_alert_keys.add(alert_key)
 
-            alert = AnalyticsAlert.query.filter_by(
-                teacher_id=self.teacher_id,
-                alert_key=alert_key,
-                join_code=self.join_code,
-                window_type=window_type,
-                window_start=window_start,
-                window_end=window_end,
-                resolved_at=None
+            alert = AnalyticsAlert.query.filter(
+                AnalyticsAlert.alert_key == alert_key,
+                AnalyticsAlert.join_code == self.join_code,
+                AnalyticsAlert.window_type == window_type,
+                AnalyticsAlert.window_start == window_start,
+                AnalyticsAlert.window_end == window_end,
+                AnalyticsAlert.resolved_at.is_(None)
             ).first()
 
             if not alert:
                 alert = AnalyticsAlert(
-                    teacher_id=self.teacher_id,
                     alert_key=alert_key,
                     join_code=self.join_code,
                     window_type=window_type,
                     window_start=window_start,
                     window_end=window_end,
-                    alert_type=alert_data.get('alert_type', 'general'),
                     severity=alert_data['severity'],
                     what_changed=alert_data['what_changed'],
                     why_it_matters=alert_data['why_it_matters'],
-                    suggested_action=alert_data.get('suggested_action')
+                    suggested_action=alert_data.get('suggested_action'),
+                    created_at=datetime.now(timezone.utc)
                 )
                 db.session.add(alert)
 
         # Resolve alerts from this window that no longer apply
         stale_alerts = AnalyticsAlert.query.filter(
-            AnalyticsAlert.teacher_id == self.teacher_id,
             AnalyticsAlert.join_code == self.join_code,
             AnalyticsAlert.window_type == window_type,
             AnalyticsAlert.window_start == window_start,
