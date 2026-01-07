@@ -94,12 +94,25 @@ def upgrade():
         batch_op.create_index(batch_op.f('ix_analytics_snapshots_join_code'), ['join_code'], unique=False)
         batch_op.create_index('ix_analytics_teacher_window', ['teacher_id', 'window_type', 'window_start'], unique=False)
 
+    # Conditionally drop index and columns from admin_credentials if they exist
+    # These may not exist depending on which migration path was taken
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    
+    admin_cred_indexes = {idx['name'] for idx in inspector.get_indexes('admin_credentials')}
+    admin_cred_columns = {col['name'] for col in inspector.get_columns('admin_credentials')}
+    
     with op.batch_alter_table('admin_credentials', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_admin_credentials_credential_id'))
-        batch_op.drop_column('public_key')
-        batch_op.drop_column('aaguid')
-        batch_op.drop_column('sign_count')
-        batch_op.drop_column('transports')
+        if 'ix_admin_credentials_credential_id' in admin_cred_indexes:
+            batch_op.drop_index(batch_op.f('ix_admin_credentials_credential_id'))
+        if 'public_key' in admin_cred_columns:
+            batch_op.drop_column('public_key')
+        if 'aaguid' in admin_cred_columns:
+            batch_op.drop_column('aaguid')
+        if 'sign_count' in admin_cred_columns:
+            batch_op.drop_column('sign_count')
+        if 'transports' in admin_cred_columns:
+            batch_op.drop_column('transports')
 
     with op.batch_alter_table('banking_settings', schema=None) as batch_op:
         batch_op.alter_column('teacher_id',
@@ -236,12 +249,23 @@ def upgrade():
                existing_server_default=sa.text('false'))
         batch_op.drop_index(batch_op.f('ix_students_teacher_id'))
 
+    # Conditionally drop index and columns from system_admin_credentials if they exist
+    # Refresh inspector to ensure we have current database state
+    inspector = sa.inspect(bind)
+    sys_admin_cred_indexes = {idx['name'] for idx in inspector.get_indexes('system_admin_credentials')}
+    sys_admin_cred_columns = {col['name'] for col in inspector.get_columns('system_admin_credentials')}
+    
     with op.batch_alter_table('system_admin_credentials', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_system_admin_credentials_credential_id'))
-        batch_op.drop_column('public_key')
-        batch_op.drop_column('aaguid')
-        batch_op.drop_column('sign_count')
-        batch_op.drop_column('transports')
+        if 'ix_system_admin_credentials_credential_id' in sys_admin_cred_indexes:
+            batch_op.drop_index(batch_op.f('ix_system_admin_credentials_credential_id'))
+        if 'public_key' in sys_admin_cred_columns:
+            batch_op.drop_column('public_key')
+        if 'aaguid' in sys_admin_cred_columns:
+            batch_op.drop_column('aaguid')
+        if 'sign_count' in sys_admin_cred_columns:
+            batch_op.drop_column('sign_count')
+        if 'transports' in sys_admin_cred_columns:
+            batch_op.drop_column('transports')
 
     with op.batch_alter_table('tap_events', schema=None) as batch_op:
         batch_op.create_index(batch_op.f('ix_tap_events_is_deleted'), ['is_deleted'], unique=False)
