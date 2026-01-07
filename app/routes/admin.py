@@ -1754,6 +1754,27 @@ def students():
                          current_page="students")
 
 
+@admin_bp.route('/current-class', methods=['POST'])
+@admin_required
+def set_current_class():
+    """Set the current class join code for admin-scoped views."""
+    data = request.get_json(silent=True) or {}
+    join_code = (data.get('join_code') or '').strip()
+    if not join_code:
+        return jsonify({'status': 'error', 'message': 'Join code required'}), 400
+
+    admin_id = session.get('admin_id')
+    teacher_block = TeacherBlock.query.filter_by(
+        teacher_id=admin_id,
+        join_code=join_code
+    ).first()
+    if not teacher_block:
+        return jsonify({'status': 'error', 'message': 'Class period not found'}), 404
+
+    session['current_join_code'] = join_code
+    return jsonify({'status': 'success'}), 200
+
+
 @admin_bp.route('/students/<int:student_id>')
 @admin_required
 def student_detail(student_id):

@@ -232,6 +232,7 @@ def admin_required(f):
                 return redirect(f"{url_for('admin.login')}?next={encoded_next}")
 
         session['last_activity'] = now.isoformat()
+        ensure_admin_join_code(admin.id)
         return f(*args, **kwargs)
     return decorated_function
 
@@ -284,6 +285,30 @@ def get_current_admin():
         return None
     from app.models import Admin  # Imported lazily to avoid circular import
     return Admin.query.get(admin_id)
+
+
+def ensure_admin_join_code(admin_id):
+    """Ensure an admin has a current join code selected in session."""
+    if not admin_id:
+        return
+
+    join_code = session.get('current_join_code')
+    if join_code:
+        from app.models import TeacherBlock  # Imported lazily to avoid circular import
+        if TeacherBlock.query.filter_by(teacher_id=admin_id, join_code=join_code).first():
+            return
+        session.pop('current_join_code', None)
+
+    from app.models import TeacherBlock  # Imported lazily to avoid circular import
+    teacher_block = (
+        TeacherBlock.query
+        .filter_by(teacher_id=admin_id)
+        .filter(TeacherBlock.join_code.isnot(None))
+        .order_by(TeacherBlock.block, TeacherBlock.join_code)
+        .first()
+    )
+    if teacher_block and teacher_block.join_code:
+        session['current_join_code'] = teacher_block.join_code
 
 
 def get_admin_student_query(include_unassigned=True):
