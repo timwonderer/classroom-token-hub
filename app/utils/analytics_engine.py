@@ -89,9 +89,16 @@ class AnalyticsEngine:
             TeacherBlock.join_code == self.join_code
         ).first()
         if not block_row:
-            block_row = StudentBlock.query.with_entities(StudentBlock.period).filter(
-                StudentBlock.join_code == self.join_code
-            ).first()
+            block_row = (
+                StudentBlock.query.with_entities(StudentBlock.period)
+                .join(Student, Student.id == StudentBlock.student_id)
+                .join(StudentTeacher, StudentTeacher.student_id == Student.id)
+                .filter(
+                    StudentBlock.join_code == self.join_code,
+                    StudentTeacher.admin_id == self.teacher_id,
+                )
+                .first()
+            )
         if block_row and block_row[0]:
             return block_row[0].strip().upper()
         return None
