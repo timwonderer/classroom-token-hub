@@ -459,6 +459,14 @@ class Transaction(db.Model):
     # All times stored as UTC
     date_funds_available = db.Column(db.DateTime, default=_utc_now)
 
+    # Automatic Discount metadata (v1.5 - Auditing and debugging)
+    discount_applied = db.Column(db.Boolean, default=False, nullable=False)  # Whether discount was applied
+    discount_behavior = db.Column(db.String(20), nullable=True)  # 'pays_on_time', 'insured', 'savings_buffer', or null
+    discount_tier = db.Column(db.String(10), nullable=True)  # 'minor', 'normal', 'major', or null
+    discount_percentage = db.Column(db.Float, nullable=True)  # Actual percentage applied (5.0, 10.0, or 15.0)
+    discount_amount = db.Column(db.Float, nullable=True)  # Dollar amount of discount
+    discount_reason = db.Column(db.String(255), nullable=True)  # Human-readable explanation
+
     # Relationship to track which teacher created this transaction
     teacher = db.relationship('Admin', backref=db.backref('transactions', lazy='dynamic'))
 
@@ -593,6 +601,11 @@ class StoreItem(db.Model):
 
     # Redemption prompt (for delayed use items)
     redemption_prompt = db.Column(db.Text, nullable=True)  # Optional prompt shown to students when redeeming delayed items
+
+    # Automatic Discount settings (v1.5 - Financial Responsibility Incentives)
+    # One discount behavior per item (nullable = no discount)
+    discount_behavior = db.Column(db.String(20), nullable=True)  # null, 'pays_on_time', 'insured', 'savings_buffer'
+    discount_tier = db.Column(db.String(10), nullable=True)  # 'minor' (5%), 'normal' (10%), 'major' (15%)
 
     # Relationships
     teacher = db.relationship('Admin', backref=db.backref('store_items', lazy='dynamic'))
@@ -1384,6 +1397,10 @@ class BankingSettings(db.Model):
     overdraft_fee_progressive_2 = db.Column(db.Float, default=0.0)  # Second tier fee
     overdraft_fee_progressive_3 = db.Column(db.Float, default=0.0)  # Third tier fee
     overdraft_fee_progressive_cap = db.Column(db.Float, nullable=True)  # Maximum total fees per period
+
+    # Automatic Discount settings (v1.5 - Savings Buffer Threshold)
+    # Multiplier for savings buffer discount eligibility (1.0, 1.5, or 2.0 × CWI)
+    savings_buffer_multiplier = db.Column(db.Float, default=1.5)  # Default: 1.5× CWI
 
     # Metadata
     is_active = db.Column(db.Boolean, default=True)
