@@ -37,6 +37,13 @@ PACIFIC = pytz.timezone('America/Los_Angeles')
 # Create blueprint
 analytics_bp = Blueprint('analytics', __name__, url_prefix='/admin/analytics')
 
+
+def _anchor_window_end(now_utc: datetime) -> datetime:
+    """Align window end to the start of the current Pacific day for stable caching."""
+    now_pacific = now_utc.astimezone(PACIFIC)
+    anchor_pacific = now_pacific.replace(hour=0, minute=0, second=0, microsecond=0)
+    return anchor_pacific.astimezone(timezone.utc)
+
 def get_teacher_class_options(teacher_id: int):
     if not teacher_id:
         return []
@@ -159,32 +166,33 @@ def get_time_window(
         Tuple of (window_start, window_end)
     """
     now = datetime.now(timezone.utc)
+    anchored_end = _anchor_window_end(now)
     
     if window_type == 'week':
         # Last 7 days
-        window_start = now - timedelta(days=7)
-        window_end = now
+        window_start = anchored_end - timedelta(days=7)
+        window_end = anchored_end
     elif window_type == 'month':
         # Last 30 days
-        window_start = now - timedelta(days=30)
-        window_end = now
+        window_start = anchored_end - timedelta(days=30)
+        window_end = anchored_end
     elif window_type == 'pay_cycle':
         # Based on payroll frequency (default 7 days)
         pay_cycle_days = get_pay_cycle_days(teacher_id, join_code)
-        window_start = now - timedelta(days=pay_cycle_days)
-        window_end = now
+        window_start = anchored_end - timedelta(days=pay_cycle_days)
+        window_end = anchored_end
     elif window_type == 'rent_cycle':
         # Based on rent frequency (default monthly)
         rent_cycle_days = get_rent_cycle_days(teacher_id, join_code)
-        window_start = now - timedelta(days=rent_cycle_days)
-        window_end = now
+        window_start = anchored_end - timedelta(days=rent_cycle_days)
+        window_end = anchored_end
     elif window_type == 'custom' and custom_start and custom_end:
         window_start = custom_start
         window_end = custom_end
     else:
         # Default to week
-        window_start = now - timedelta(days=7)
-        window_end = now
+        window_start = anchored_end - timedelta(days=7)
+        window_end = anchored_end
     
     return window_start, window_end
 
@@ -224,6 +232,9 @@ def dashboard():
     # Get active alerts
     active_alerts = AnalyticsAlert.query.filter(
         AnalyticsAlert.join_code == join_code,
+        AnalyticsAlert.window_type == window_type,
+        AnalyticsAlert.window_start == window_start,
+        AnalyticsAlert.window_end == window_end,
         AnalyticsAlert.resolved_at.is_(None)
     ).order_by(
         # Sort by severity: critical, warning, info
@@ -331,9 +342,17 @@ def api_alerts():
     
     if not join_code:
         return jsonify({'error': 'No class period selected'}), 400
+
+    requested_window_type = request.args.get('window', 'week')
+    window_type = requested_window_type if requested_window_type in ALLOWED_WINDOW_TYPES else 'week'
+    teacher_id = session.get('admin_id')
+    window_start, window_end = get_time_window(window_type, teacher_id, join_code)
     
     active_alerts = AnalyticsAlert.query.filter(
         AnalyticsAlert.join_code == join_code,
+        AnalyticsAlert.window_type == window_type,
+        AnalyticsAlert.window_start == window_start,
+        AnalyticsAlert.window_end == window_end,
         AnalyticsAlert.resolved_at.is_(None)
     ).order_by(
         desc(AnalyticsAlert.severity == 'critical'),

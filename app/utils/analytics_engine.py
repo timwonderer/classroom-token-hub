@@ -26,7 +26,7 @@ from app.extensions import db
 from app.models import (
     Student, Transaction, TapEvent, StudentBlock, PayrollSettings,
     RentSettings, AnalyticsSnapshot, AnalyticsAlert, TeacherBlock,
-    StudentTeacher, DemoStudent
+    StudentTeacher
 )
 from app.utils.economy_balance import EconomyBalanceChecker
 import logging
@@ -106,30 +106,39 @@ class AnalyticsEngine:
     
     def _get_enrolled_students(self) -> List[Student]:
         """Get all students enrolled in this class period."""
-        demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
         query = (
             Student.query
             .join(StudentTeacher, StudentTeacher.student_id == Student.id)
-            .join(StudentBlock, StudentBlock.student_id == Student.id)
-            .filter(
-                StudentTeacher.admin_id == self.teacher_id,
-                ~Student.id.in_(demo_ids_subq)
-            )
+            .filter(StudentTeacher.admin_id == self.teacher_id)
         )
 
         block = self._get_block_for_join_code()
-        if block:
-            query = query.filter(or_(
-                StudentBlock.join_code == self.join_code,
-                and_(
-                    StudentBlock.join_code.is_(None),
-                    StudentBlock.period == block
-                )
-            ))
-        else:
-            query = query.filter(StudentBlock.join_code == self.join_code)
 
-        return query.distinct(Student.id).all()
+        teacherblock_ids = (
+            TeacherBlock.query.with_entities(TeacherBlock.student_id)
+            .filter(
+                TeacherBlock.teacher_id == self.teacher_id,
+                TeacherBlock.join_code == self.join_code,
+                TeacherBlock.is_claimed.is_(True),
+                TeacherBlock.student_id.isnot(None)
+            )
+        )
+
+        studentblock_filters = [StudentBlock.join_code == self.join_code]
+        if block:
+            studentblock_filters.append(and_(
+                StudentBlock.join_code.is_(None),
+                StudentBlock.period == block
+            ))
+
+        studentblock_ids = (
+            StudentBlock.query.with_entities(StudentBlock.student_id)
+            .filter(or_(*studentblock_filters))
+        )
+
+        scoped_student_ids = teacherblock_ids.union(studentblock_ids).subquery()
+
+        return query.filter(Student.id.in_(scoped_student_ids)).distinct(Student.id).all()
     
     def _get_cwi(self) -> float:
         """Calculate current CWI for this class."""
@@ -468,13 +477,12 @@ class AnalyticsEngine:
             })
         
         # Alert: CWI deviation
-        cwi_within_band = metrics.cwi_deviation_within_20pct / 100
-        if cwi_within_band < (1 - self.CWI_DEVIATION_WARNING_THRESHOLD):
+        if metrics.cwi_deviation_within_20pct < (100 * (1 - self.CWI_DEVIATION_WARNING_THRESHOLD)):
             alerts.append({
                 'alert_key': 'cwi_deviation',
                 'severity': 'warning',
                 'what_changed': f'Only {metrics.cwi_deviation_within_20pct:.1f}% of students are tracking expected income',
-                'why_it.matters': 'Large deviations suggest economy settings may not match actual behavior',
+                'why_it_matters': 'Large deviations suggest economy settings may not match actual behavior',
                 'suggested_action': 'Review: Are wages appropriate for attendance patterns? Are expenses too high? Check the Economy Health page.',
             })
         
@@ -573,22 +581,24 @@ class AnalyticsEngine:
         db.session.commit()
         
         # Generate and handle alerts according to new AnalyticsAlert lifecycle
+        alerts = self.generate_alerts(health_metrics, trends)
         active_alert_keys = set()
 
         for alert_data in alerts:
             alert_key = alert_data['alert_key']
             active_alert_keys.add(alert_key)
 
-            alert = AnalyticsAlert.query.filter(
+            # Check if alert already exists for this window
+            existing_alert = AnalyticsAlert.query.filter(
                 AnalyticsAlert.alert_key == alert_key,
                 AnalyticsAlert.join_code == self.join_code,
                 AnalyticsAlert.window_type == window_type,
                 AnalyticsAlert.window_start == window_start,
-                AnalyticsAlert.window_end == window_end,
-                AnalyticsAlert.resolved_at.is_(None)
+                AnalyticsAlert.window_end == window_end
             ).first()
 
-            if not alert:
+            # Only create if doesn't exist (regardless of resolved status)
+            if not existing_alert:
                 alert = AnalyticsAlert(
                     alert_key=alert_key,
                     join_code=self.join_code,
@@ -602,6 +612,10 @@ class AnalyticsEngine:
                     created_at=datetime.now(timezone.utc)
                 )
                 db.session.add(alert)
+            elif existing_alert.resolved_at:
+                # If alert was previously resolved, re-activate it
+                existing_alert.resolved_at = None
+                existing_alert.created_at = datetime.now(timezone.utc)
 
         # Resolve alerts from this window that no longer apply
         stale_alerts = AnalyticsAlert.query.filter(
@@ -610,7 +624,7 @@ class AnalyticsEngine:
             AnalyticsAlert.window_start == window_start,
             AnalyticsAlert.window_end == window_end,
             AnalyticsAlert.resolved_at.is_(None),
-            ~AnalyticsAlert.alert_key.in_(active_alert_keys)
+            ~AnalyticsAlert.alert_key.in_(active_alert_keys) if active_alert_keys else True
         ).all()
 
         for alert in stale_alerts:
