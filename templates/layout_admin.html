@@ -98,7 +98,7 @@
             </a>
 
             {% set classroom_open = current_page in ['students', 'attendance', 'hall_pass', 'announcements', 'issues'] %}
-            {% set economy_open = current_page in ['economy_health', 'payroll', 'store', 'banking'] %}
+            {% set economy_open = current_page in ['economy_health', 'payroll', 'store', 'banking', 'analytics'] %}
             {% set bills_open = current_page in ['rent', 'insurance'] %}
             {% set settings_open = current_page in ['settings', 'passkey_settings', 'feature_settings', 'deletion_requests'] %}
 
@@ -151,6 +151,9 @@
                         </a>
                         <a href="{{ url_for('admin.banking') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'banking' %}active{% endif %}">
                             <span class="material-symbols-outlined">account_balance</span> Banking
+                        </a>
+                        <a href="{{ url_for('analytics.dashboard') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'analytics' %}active{% endif %}">
+                            <span class="material-symbols-outlined">analytics</span> Analytics
                         </a>
                     </div>
                 </div>

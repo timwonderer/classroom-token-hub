@@ -1,0 +1,314 @@
+{% extends "layout_admin.html" %}
+{% block page_title %}Analytics Dashboard{% endblock %}
+{% block page_icon %}analytics{% endblock %}
+
+{% block page_header_actions %}
+<div class="btn-group" role="group">
+  <a href="{{ url_for('analytics.dashboard', window='week') }}" class="btn {% if window_type == 'week' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+    Week
+  </a>
+  <a href="{{ url_for('analytics.dashboard', window='month') }}" class="btn {% if window_type == 'month' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+    Month
+  </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <!-- Per spec section 13: "Something is drifting — and I know what lever to pull." -->
+  
+  {% if not snapshot %}
+  <div class="alert alert-info">
+    <i class="bi bi-info-circle me-2"></i>
+    <strong>No analytics data available yet.</strong> Analytics will appear once students start participating.
+  </div>
+  {% else %}
+  
+  <!-- System Health Metrics Section (Always Visible per spec 4.1) -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <h2 class="h4 mb-3">
+        <span class="material-symbols-outlined align-middle me-2">monitor_heart</span>
+        System Health
+        <small class="text-muted">— {{ window_start|format_datetime('%b %d') }} to {{ window_end|format_datetime('%b %d, %Y') }}</small>
+      </h2>
+    </div>
+  </div>
+  
+  <!-- Health Metrics Cards (5-second readability target) -->
+  <div class="row g-3 mb-4">
+    <!-- Participation Rate -->
+    <div class="col-md-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-start justify-content-between">
+            <div>
+              <p class="text-muted mb-1 small">Participation Rate</p>
+              <h3 class="mb-0 {% if snapshot.participation_rate >= 70 %}text-success{% elif snapshot.participation_rate >= 50 %}text-warning{% else %}text-danger{% endif %}">
+                {{ "%.1f"|format(snapshot.participation_rate) }}%
+              </h3>
+              <p class="small text-muted mb-0">
+                {{ snapshot.active_students }} of {{ snapshot.total_students }} active
+              </p>
+            </div>
+            <div class="text-end">
+              <span class="material-symbols-outlined text-muted fs-1">group</span>
+              {% if snapshot.participation_trend %}
+              <div class="small mt-1">
+                {% if snapshot.participation_trend == 'improving' %}
+                <span class="badge bg-success-subtle text-success">
+                  <i class="bi bi-arrow-up"></i> Improving
+                </span>
+                {% elif snapshot.participation_trend == 'worsening' %}
+                <span class="badge bg-danger-subtle text-danger">
+                  <i class="bi bi-arrow-down"></i> Declining
+                </span>
+                {% else %}
+                <span class="badge bg-secondary-subtle text-secondary">
+                  <i class="bi bi-arrow-right"></i> Stable
+                </span>
+                {% endif %}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Money Velocity -->
+    <div class="col-md-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-start justify-content-between">
+            <div>
+              <p class="text-muted mb-1 small">Money Velocity</p>
+              <h3 class="mb-0">{{ "%.2f"|format(snapshot.money_velocity) }}</h3>
+              <p class="small text-muted mb-0">transactions/student/day</p>
+            </div>
+            <div class="text-end">
+              <span class="material-symbols-outlined text-muted fs-1">speed</span>
+              {% if snapshot.velocity_trend %}
+              <div class="small mt-1">
+                {% if snapshot.velocity_trend == 'increasing' %}
+                <span class="badge bg-success-subtle text-success">
+                  <i class="bi bi-arrow-up"></i> Increasing
+                </span>
+                {% elif snapshot.velocity_trend == 'decreasing' %}
+                <span class="badge bg-warning-subtle text-warning">
+                  <i class="bi bi-arrow-down"></i> Decreasing
+                </span>
+                {% else %}
+                <span class="badge bg-secondary-subtle text-secondary">
+                  <i class="bi bi-arrow-right"></i> Stable
+                </span>
+                {% endif %}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- CWI Deviation -->
+    <div class="col-md-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-start justify-content-between">
+            <div>
+              <p class="text-muted mb-1 small">On-Track Students</p>
+              <h3 class="mb-0 {% if snapshot.cwi_deviation_within_20pct >= 80 %}text-success{% elif snapshot.cwi_deviation_within_20pct >= 60 %}text-warning{% else %}text-danger{% endif %}">
+                {{ "%.1f"|format(snapshot.cwi_deviation_within_20pct) }}%
+              </h3>
+              <p class="small text-muted mb-0">within ±20% of CWI</p>
+            </div>
+            <div class="text-end">
+              <span class="material-symbols-outlined text-muted fs-1">target</span>
+              {% if snapshot.balance_trend %}
+              <div class="small mt-1">
+                {% if snapshot.balance_trend == 'improving' %}
+                <span class="badge bg-success-subtle text-success">
+                  <i class="bi bi-arrow-up"></i> Improving
+                </span>
+                {% elif snapshot.balance_trend == 'worsening' %}
+                <span class="badge bg-danger-subtle text-danger">
+                  <i class="bi bi-arrow-down"></i> Worsening
+                </span>
+                {% else %}
+                <span class="badge bg-secondary-subtle text-secondary">
+                  <i class="bi bi-arrow-right"></i> Stable
+                </span>
+                {% endif %}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Budget Survival -->
+    <div class="col-md-6 col-lg-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body">
+          <div class="d-flex align-items-start justify-content-between">
+            <div>
+              <p class="text-muted mb-1 small">Budget Survival</p>
+              <h3 class="mb-0 {% if snapshot.budget_survival_pass_rate >= 80 %}text-success{% elif snapshot.budget_survival_pass_rate >= 60 %}text-warning{% else %}text-danger{% endif %}">
+                {{ "%.1f"|format(snapshot.budget_survival_pass_rate) }}%
+              </h3>
+              <p class="small text-muted mb-0">students solvent</p>
+            </div>
+            <div class="text-end">
+              <span class="material-symbols-outlined text-muted fs-1">account_balance</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- CWI Context (Per spec: all monetary metrics must be CWI-relative) -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-body">
+          <h5 class="card-title">
+            <span class="material-symbols-outlined align-middle me-2">trending_up</span>
+            CWI Context
+          </h5>
+          <p class="mb-2">
+            <strong>Current CWI:</strong> ${{ "%.2f"|format(snapshot.cwi_value) }}/week
+          </p>
+          <p class="small text-muted mb-0">
+            This is the expected weekly income for perfect attendance. All metrics above are relative to this baseline.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Alerts Section (Per spec 6.2: Visual alerts only, explain what/why/how) -->
+  {% if alerts %}
+  <div class="row mb-4">
+    <div class="col-12">
+      <h2 class="h4 mb-3">
+        <span class="material-symbols-outlined align-middle me-2">warning</span>
+        Alerts & Recommendations
+      </h2>
+    </div>
+    
+    {% for alert in alerts %}
+    <div class="col-12 mb-3">
+      <div class="alert {% if alert.severity == 'critical' %}alert-danger{% elif alert.severity == 'warning' %}alert-warning{% else %}alert-info{% endif %} d-flex align-items-start">
+        <div class="flex-grow-1">
+          <h6 class="alert-heading mb-2">
+            {% if alert.severity == 'critical' %}
+            <i class="bi bi-exclamation-octagon-fill me-2"></i>
+            {% elif alert.severity == 'warning' %}
+            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+            {% else %}
+            <i class="bi bi-info-circle-fill me-2"></i>
+            {% endif %}
+            {{ alert.what_changed | e }}
+          </h6>
+          <p class="mb-2"><strong>Why this matters:</strong> {{ alert.why_it_matters | e }}</p>
+          {% if alert.suggested_action %}
+          <p class="mb-0"><strong>What to do:</strong> {{ alert.suggested_action | e }}</p>
+          {% endif %}
+        </div>
+        {% if not alert.acknowledged_at %}
+        <div class="ms-3">
+          <form action="{{ url_for('analytics.acknowledge_alert', alert_id=alert.id) }}" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-check"></i> Acknowledge
+            </button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  
+  <!-- Recent Events (Per spec 5.2: Provide context annotations) -->
+  {% if events %}
+  <div class="row mb-4">
+    <div class="col-12">
+      <h2 class="h4 mb-3">
+        <span class="material-symbols-outlined align-middle me-2">event</span>
+        Recent Events
+      </h2>
+      <div class="card border-0 shadow-sm">
+        <div class="list-group list-group-flush">
+          {% for event in events %}
+          <div class="list-group-item">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <h6 class="mb-1">{{ event.description | e }}</h6>
+                <p class="small text-muted mb-0">
+                  {{ event.event_date|format_datetime('%b %d, %Y at %I:%M %p') }}
+                  {% if event.old_value and event.new_value %}
+                  — Changed from ${{ "%.2f"|format(event.old_value) }} to ${{ "%.2f"|format(event.new_value) }}
+                  {% endif %}
+                </p>
+              </div>
+              <span class="badge bg-secondary-subtle text-secondary">{{ event.event_type | e }}</span>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="card-footer bg-transparent border-0 text-end">
+          <a href="{{ url_for('analytics.events') }}" class="btn btn-sm btn-outline-primary">
+            View All Events <i class="bi bi-arrow-right"></i>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  
+  <!-- Additional Context -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm bg-light">
+        <div class="card-body">
+          <h6 class="card-title">
+            <span class="material-symbols-outlined align-middle me-2">info</span>
+            About These Metrics
+          </h6>
+          <p class="small mb-2">
+            <strong>Participation Rate:</strong> Percentage of enrolled students who had any activity (transactions or attendance) during this period.
+          </p>
+          <p class="small mb-2">
+            <strong>Money Velocity:</strong> Average number of transactions per student per day. Higher velocity indicates an active economy.
+          </p>
+          <p class="small mb-2">
+            <strong>On-Track Students:</strong> Percentage of students whose current balance is within ±20% of expected earnings based on CWI.
+          </p>
+          <p class="small mb-0">
+            <strong>Budget Survival:</strong> Percentage of students currently maintaining positive balances, indicating they can cover expenses.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  {% endif %}
+</div>
+
+<style>
+.fs-1 {
+  font-size: 3rem !important;
+}
+.card {
+  transition: transform 0.2s ease;
+}
+.card:hover {
+  transform: translateY(-2px);
+}
+</style>
+{% endblock %}
