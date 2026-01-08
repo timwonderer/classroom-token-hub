@@ -63,12 +63,12 @@ Creates or updates a Pulsetic-only firewall (port 443) using the official Digita
 
 **Prerequisites:** `python3`, `pydo` (`pip install pydo`), and a DigitalOcean token via `DIGITALOCEAN_ACCESS_TOKEN` or doctl config.
 
-#### `add-uptimerobot-to-firewall.sh`
+#### `add-pulsetic-to-firewall.sh`
 Adds only Pulsetic monitoring IPs to an existing firewall using `pydo`. Use this if you already have Cloudflare configured.
 
 **Usage:**
 ```bash
-./scripts/add-uptimerobot-to-firewall.sh <firewall-id>
+./scripts/add-pulsetic-to-firewall.sh <firewall-id>
 ```
 
 #### `create-github-actions-firewall.py`

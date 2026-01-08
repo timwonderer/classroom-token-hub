@@ -47,7 +47,7 @@ How to stand up the landing-page demo endpoints (teacher and student) using the 
 - References existing scheduler job and schema
 - Provides curl example to mint a demo session URL for embedding
 
-### [UptimeRobot Monitoring Setup](UPTIMEROBOT_SETUP.md)
+### [Pulsetic Monitoring Setup](PULSETIC_SETUP.md)
 
 Complete guide for setting up UptimeRobot monitoring and creating a public status page.
 

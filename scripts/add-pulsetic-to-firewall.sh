@@ -3,7 +3,7 @@
 # Add Pulsetic IPs to DigitalOcean Firewall (pydo client)
 #
 # Usage:
-#   ./add-uptimerobot-to-firewall.sh <firewall-id>
+#   ./add-pulsetic-to-firewall.sh <firewall-id>
 #
 # Requirements:
 #   - python3

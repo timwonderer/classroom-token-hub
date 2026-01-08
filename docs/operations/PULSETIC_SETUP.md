@@ -264,7 +264,7 @@ If you want to monitor that authentication works:
 **Fix - Option 1: Automated (Recommended)**
 ```bash
 # Add all UptimeRobot IPs to your firewall automatically
-./scripts/add-uptimerobot-to-firewall.sh <firewall-id>
+./scripts/add-pulsetic-to-firewall.sh <firewall-id>
 
 # Or create/update complete firewall with Cloudflare + UptimeRobot
 ./scripts/setup-firewall-complete.sh update <firewall-id>
