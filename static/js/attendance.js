@@ -244,13 +244,21 @@ function updateHallPassOverlay(period, hallPass) {
     passInfoDisplay.style.display = 'block';
     passInfoDisplay.textContent = ''; // Clear existing content
 
+    const buildStatusLabel = (iconClass, text) => {
+      const strong = document.createElement('strong');
+      const icon = document.createElement('i');
+      icon.className = `bi ${iconClass} me-1`;
+      icon.setAttribute('aria-hidden', 'true');
+      strong.appendChild(icon);
+      strong.appendChild(document.createTextNode(text));
+      return strong;
+    };
+
     if (hallPass.status === 'pending') {
       const alertDiv = document.createElement('div');
       alertDiv.className = 'alert alert-warning mb-2';
 
-      const strong = document.createElement('strong');
-      strong.textContent = '🕐 Hall Pass: Pending Approval';
-      alertDiv.appendChild(strong);
+      alertDiv.appendChild(buildStatusLabel('bi-hourglass-split', 'Hall Pass: Pending Approval'));
       alertDiv.appendChild(document.createElement('br'));
 
       const small = document.createElement('small');
@@ -269,9 +277,7 @@ function updateHallPassOverlay(period, hallPass) {
       const alertDiv = document.createElement('div');
       alertDiv.className = 'alert alert-success mb-2';
 
-      const strong = document.createElement('strong');
-      strong.textContent = '✅ Hall Pass Approved!';
-      alertDiv.appendChild(strong);
+      alertDiv.appendChild(buildStatusLabel('bi-check-circle-fill', 'Hall Pass Approved!'));
       alertDiv.appendChild(document.createElement('br'));
 
       const badge = document.createElement('span');
@@ -291,9 +297,7 @@ function updateHallPassOverlay(period, hallPass) {
       const alertDiv = document.createElement('div');
       alertDiv.className = 'alert alert-info mb-2';
 
-      const strong = document.createElement('strong');
-      strong.textContent = '📍 Currently Out';
-      alertDiv.appendChild(strong);
+      alertDiv.appendChild(buildStatusLabel('bi-geo-alt-fill', 'Currently Out'));
       alertDiv.appendChild(document.createElement('br'));
 
       const badge = document.createElement('span');
@@ -312,9 +316,7 @@ function updateHallPassOverlay(period, hallPass) {
       const alertDiv = document.createElement('div');
       alertDiv.className = 'alert alert-danger mb-2';
 
-      const strong = document.createElement('strong');
-      strong.textContent = '❌ Hall Pass Denied';
-      alertDiv.appendChild(strong);
+      alertDiv.appendChild(buildStatusLabel('bi-x-circle-fill', 'Hall Pass Denied'));
       alertDiv.appendChild(document.createElement('br'));
 
       const small = document.createElement('small');

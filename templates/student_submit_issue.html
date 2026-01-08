@@ -1,11 +1,27 @@
 {% extends "layout_student.html" %}
 
-{% block page_icon %}flag{% endblock %}
+{% block page_icon %}support_agent{% endblock %}
+
+{% block extra_styles %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+<style>
+    .EasyMDEContainer .CodeMirror {
+        min-height: 120px;
+    }
+    .editor-toolbar {
+        border-radius: 4px 4px 0 0;
+    }
+    .CodeMirror {
+        border-radius: 0 0 4px 4px;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
+
 <div class="container">
     <div class="row justify-content-center">
-        <div class="col-lg-8">
+        <div class="col-lg">
             <!-- Back Button -->
             <a href="{{ url_for('student.help_support') }}" class="btn btn-outline-secondary mb-3">
                 <i class="bi bi-arrow-left me-2"></i>Back to Help & Support
@@ -14,60 +30,54 @@
             <div class="card shadow">
                 <div class="card-header bg-primary text-white">
                     <h4 class="mb-0">
-                        <i class="bi bi-flag-fill me-2"></i>
-                        {% if issue_type == 'transaction' %}
-                            Report Transaction Issue
-                        {% else %}
-                            Report an Issue
-                        {% endif %}
+                        <span class="material-symbols-outlined" style="font-size:28pt; vertical-align:middle; margin-right:8px;">
+                            problem
+                        </span>
+                        Details about the issue
                     </h4>
                 </div>
                 <div class="card-body">
                     <!-- Transaction Info (if applicable) -->
                     {% if issue_type == 'transaction' and transaction %}
-                    <div class="alert alert-info">
-                        <h6 class="alert-heading">
-                            <i class="bi bi-receipt me-2"></i>Transaction Details
-                        </h6>
-                        <div class="row">
-                            <div class="col-sm-6">
-                                <strong>Amount:</strong> ${{ "%.2f"|format(transaction.amount) }}
-                            </div>
-                            <div class="col-sm-6">
-                                <strong>Account:</strong> {{ transaction.account_type|title }}
-                            </div>
-                        </div>
-                        <div class="row mt-2">
-                            <div class="col-sm-6">
-                                <strong>Description:</strong> {{ transaction.description }}
-                            </div>
-                            <div class="col-sm-6">
-                                <strong>Date:</strong>
+                    <div class="alert alert-info lh-lg ">
+                        <h5 class="alert-heading">
+                            <i class="bi bi-receipt-cutoff"></i> You are creating support ticket for this transaction:
+                        </h5>
+                            <ul class="mb-0">
+                                <li><strong>Amount:</strong> ${{ "%.2f"|format(transaction.amount) }}</li>          
+                                <li><strong>Account:</strong> {{ transaction.account_type|title }}</li>
+                                <li><strong>Description:</strong> {{ transaction.description }}</li>
+                                <li><strong>Date:</strong>
                                 {% if transaction.timestamp %}
-                                    <span class="local-timestamp" data-timestamp="{{ transaction.timestamp.isoformat() }}Z"></span>
+                                    <span class="local-timestamp" data-timestamp="{{ format_utc_iso(transaction.timestamp) }}"></span>
                                 {% else %}
                                     N/A
                                 {% endif %}
-                            </div>
-                        </div>
+                                </li>
+                            </ul>
                     </div>
                     {% endif %}
 
                     <!-- Instructions -->
-                    <div class="alert alert-warning">
-                        <i class="bi bi-info-circle-fill me-2"></i>
-                        <strong>Important:</strong> Your teacher will review this issue first. Be clear and specific about what went wrong.
-                        {% if issue_type == 'transaction' %}
-                        <br><small>Explain what's wrong with this specific transaction.</small>
+                   
+                    {% if issue_type == 'transaction' %}
+                        <h4>Tell us what's wrong with this transaction</h4>
                         {% endif %}
+                    <div class="mt-2 mb-4 p-3 bg-light rounded">
+                        <h6 class="mb-2"><i class="bi bi-lightbulb-fill me-2 text-warning"></i>Tips for Good Reports</h6>
+                        <ul class="mb-0">
+                            <li>Be specific about what went wrong</li>
+                            <li>Include what you were trying to do</li>
+                            <li>Mention when the problem happened (if you remember)</li>
+                            <li>Explain what you expected to happen instead</li>
+                        </ul>
                     </div>
-
                     <!-- Form -->
                     <form method="POST" action="">
                         {{ form.csrf_token }}
 
                         <!-- Category Selection -->
-                        <div class="mb-3">
+                        <div class="mb-3 text-primary fw-bold">
                             {{ form.category_id.label(class="form-label required") }}
                             {{ form.category_id(class="form-select" ~ (" is-invalid" if form.category_id.errors else "")) }}
                             {% if form.category_id.errors %}
@@ -75,11 +85,11 @@
                                     {{ form.category_id.errors[0] }}
                                 </div>
                             {% endif %}
-                            <small class="form-text text-muted">Select the type of issue you're experiencing.</small>
+                            <small class="form-text text-muted fw-normal">Select the type of issue you're experiencing.</small>
                         </div>
 
                         <!-- Explanation -->
-                        <div class="mb-3">
+                        <div class="mb-3 text-primary fw-bold">
                             {{ form.explanation.label(class="form-label required") }}
                             {{ form.explanation(class="form-control" ~ (" is-invalid" if form.explanation.errors else ""), rows=5, placeholder="Describe what happened. Be specific!") }}
                             {% if form.explanation.errors %}
@@ -87,13 +97,13 @@
                                     {{ form.explanation.errors[0] }}
                                 </div>
                             {% endif %}
-                            <small class="form-text text-muted">
+                            <small class="form-text text-muted fw-normal">
                                 <span id="explanation-counter">0</span> / 1000 characters
                             </small>
                         </div>
 
                         <!-- Expected Outcome -->
-                        <div class="mb-3">
+                        <div class="mb-3 text-primary fw-bold">
                             {{ form.expected_outcome.label(class="form-label") }}
                             {{ form.expected_outcome(class="form-control" ~ (" is-invalid" if form.expected_outcome.errors else ""), rows=3, placeholder="What should it be instead? (Optional)") }}
                             {% if form.expected_outcome.errors %}
@@ -101,11 +111,16 @@
                                     {{ form.expected_outcome.errors[0] }}
                                 </div>
                             {% endif %}
-                            <small class="form-text text-muted">
+                            <small class="form-text text-muted fw-normal">
                                 Optional: What did you expect to happen?
+                                <span id="expected-outcome-counter">0</span> / 1000 characters
                             </small>
                         </div>
-
+                         <div class="alert alert-warning" role="alert">
+                        <h5 class="alert-heading">
+                        <strong>WARNING</strong></h5>
+                        <p class="mb-0">Once you submit this form, you will not be able to edit or delete this issue. Be sure to double-check the information you are providing is accurate before submitting your ticket.</p>
+                                </div>
                         <!-- Submit Button -->
                         <div class="d-grid gap-2">
                             {{ form.submit(class="btn btn-primary btn-lg") }}
@@ -113,35 +128,62 @@
                     </form>
 
                     <!-- Help Text -->
-                    <div class="mt-4 p-3 bg-light rounded">
-                        <h6 class="mb-2"><i class="bi bi-lightbulb-fill me-2 text-warning"></i>Tips for Good Reports</h6>
-                        <ul class="mb-0 small">
-                            <li>Be specific about what went wrong</li>
-                            <li>Include what you were trying to do</li>
-                            <li>Mention when the problem happened (if you remember)</li>
-                            <li>Explain what you expected to happen instead</li>
-                        </ul>
-                    </div>
+                    
                 </div>
             </div>
         </div>
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
 <script>
-// Character counter for explanation field
+// Markdown editors with character counters
 document.addEventListener('DOMContentLoaded', function() {
     const explanationField = document.getElementById('{{ form.explanation.id }}');
-    const counter = document.getElementById('explanation-counter');
+    const explanationCounter = document.getElementById('explanation-counter');
+    const expectedOutcomeField = document.getElementById('{{ form.expected_outcome.id }}');
+    const expectedOutcomeCounter = document.getElementById('expected-outcome-counter');
 
-    if (explanationField && counter) {
-        function updateCounter() {
-            counter.textContent = explanationField.value.length;
+    function wireMarkdownEditor(field, counter, options) {
+        if (!field) {
+            return null;
         }
 
-        explanationField.addEventListener('input', updateCounter);
-        updateCounter(); // Initialize counter
+        const editor = new EasyMDE({
+            element: field,
+            spellChecker: false,
+            autoDownloadFontAwesome: false,
+            status: false,
+            ...options,
+        });
+
+        // Remove required attribute from hidden textarea to allow form submission
+        // Server-side validation will still enforce the required field
+        field.removeAttribute('required');
+
+        if (counter) {
+            const updateCounter = function() {
+                counter.textContent = editor.value().length;
+            };
+            editor.codemirror.on('change', updateCounter);
+            updateCounter();
+        }
+
+        return editor;
     }
+
+    wireMarkdownEditor(explanationField, explanationCounter, {
+        toolbar: ["bold", "italic", "heading", "|", "unordered-list", "ordered-list", "|", "link", "quote", "|", "preview", "guide"],
+        placeholder: "Describe what happened. Be specific!",
+    });
+
+    wireMarkdownEditor(expectedOutcomeField, expectedOutcomeCounter, {
+        toolbar: ["bold", "italic", "|", "unordered-list", "ordered-list", "|", "link", "|", "preview"],
+        placeholder: "What should it be instead? (Optional)",
+    });
 });
 </script>
 {% endblock %}

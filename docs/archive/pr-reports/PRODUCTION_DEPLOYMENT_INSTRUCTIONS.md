@@ -180,10 +180,10 @@ Layer 3 (Exception): IntegrityError caught and handled gracefully
 
 The ownership check should prevent this attack:
 ```
-1. Student A (ID=1) files claim for transaction T1 (student_id=1) ✅
+1. Student A (ID=1) files claim for transaction T1 (student_id=1) 
 2. Attacker changes claim.transaction_id to T2 (student_id=2)
 3. Admin approves claim
-4. Expected: BLOCKED with security alert ✅
+4. Expected: BLOCKED with security alert 
 5. Actual: Does the code do this?
 ```
 
@@ -361,11 +361,11 @@ Steps:
 11. Verify student balance increased by reimbursement amount
 
 Expected Results:
-✅ Claim submitted successfully
-✅ Claim appears in pending queue
-✅ Admin can see transaction details
-✅ Approval creates refund transaction
-✅ Student balance updated correctly
+ Claim submitted successfully
+ Claim appears in pending queue
+ Admin can see transaction details
+ Approval creates refund transaction
+ Student balance updated correctly
 ```
 
 **Test Checklist:**
@@ -395,11 +395,11 @@ Steps:
 8. Verify rejection
 
 Expected Results:
-✅ First claim succeeds
-✅ Second attempt: Transaction not in dropdown
-✅ Manual form submission: Error message shown
-✅ Error: "This transaction already has a claim"
-✅ No duplicate claim created in database
+ First claim succeeds
+ Second attempt: Transaction not in dropdown
+ Manual form submission: Error message shown
+ Error: "This transaction already has a claim"
+ No duplicate claim created in database
 ```
 
 **Test Checklist:**
@@ -428,11 +428,11 @@ Steps:
 6. Check application logs for IntegrityError
 
 Expected Results:
-✅ One claim succeeds (shows success message)
-✅ Other claim fails (shows error message)
-✅ Database has exactly ONE claim for transaction T1
-✅ No application crash or 500 error
-✅ Both users see appropriate feedback
+ One claim succeeds (shows success message)
+ Other claim fails (shows error message)
+ Database has exactly ONE claim for transaction T1
+ No application crash or 500 error
+ Both users see appropriate feedback
 ```
 
 **Test Checklist:**
@@ -462,13 +462,13 @@ Steps:
 7. Check for validation error
 
 Expected Results:
-✅ Transaction marked as void successfully
-✅ Claim shows in pending queue
-✅ Claim approval blocked with error message
-✅ Error: "Linked transaction has been voided"
-✅ Claim remains in pending status
-✅ No refund transaction created
-✅ Student balance unchanged
+ Transaction marked as void successfully
+ Claim shows in pending queue
+ Claim approval blocked with error message
+ Error: "Linked transaction has been voided"
+ Claim remains in pending status
+ No refund transaction created
+ Student balance unchanged
 ```
 
 **Test Checklist:**
@@ -503,15 +503,15 @@ Steps:
 7. Check application logs for security alert
 
 Expected Results:
-✅ Database modification succeeds (we can change it)
-✅ Admin sees claim with Alice's transaction linked
-✅ Approval BLOCKED with validation error
-✅ Error message mentions ownership mismatch
-✅ Error shows both student IDs for debugging
-✅ Security alert logged: "Transaction ownership mismatch"
-✅ Log includes claim ID and student IDs
-✅ Claim remains pending (not approved)
-✅ No refund issued
+ Database modification succeeds (we can change it)
+ Admin sees claim with Alice's transaction linked
+ Approval BLOCKED with validation error
+ Error message mentions ownership mismatch
+ Error shows both student IDs for debugging
+ Security alert logged: "Transaction ownership mismatch"
+ Log includes claim ID and student IDs
+ Claim remains pending (not approved)
+ No refund issued
 ```
 
 **Test Checklist:**
@@ -551,13 +551,13 @@ Steps:
 7. Check application logs for errors
 
 Expected Results:
-✅ Normal date filtering works correctly
-✅ SQL injection attempt #1: "Invalid date format" error shown
-✅ SQL injection attempt #2: "Invalid date format" error shown
-✅ No database errors
-✅ All tables intact (no DROP executed)
-✅ No unexpected data returned
-✅ User-friendly error message guides to correct format
+ Normal date filtering works correctly
+ SQL injection attempt #1: "Invalid date format" error shown
+ SQL injection attempt #2: "Invalid date format" error shown
+ No database errors
+ All tables intact (no DROP executed)
+ No unexpected data returned
+ User-friendly error message guides to correct format
 ```
 
 **Test Checklist:**
@@ -588,12 +588,12 @@ Steps:
 7. Verify approval succeeds
 
 Expected Results:
-✅ Non-monetary claim form doesn't show transaction field
-✅ Claim submitted successfully
-✅ Admin approval works normally
-✅ No validation errors related to transactions
-✅ Ownership check skipped (no transaction)
-✅ Void check skipped (no transaction)
+ Non-monetary claim form doesn't show transaction field
+ Claim submitted successfully
+ Admin approval works normally
+ No validation errors related to transactions
+ Ownership check skipped (no transaction)
+ Void check skipped (no transaction)
 ```
 
 **Test Checklist:**
@@ -620,10 +620,10 @@ Steps:
 6. Verify refund issued correctly
 
 Expected Results:
-✅ Legacy claims work as before
-✅ No transaction linking required
-✅ Security checks don't interfere
-✅ Approval and payment work normally
+ Legacy claims work as before
+ No transaction linking required
+ Security checks don't interfere
+ Approval and payment work normally
 ```
 
 **Test Checklist:**
@@ -704,14 +704,14 @@ Create a test report:
 
 | Test Case | Status | Notes |
 |-----------|--------|-------|
-| Normal Claim Submission | ✅ PASS | |
-| Duplicate Claim Prevention | ✅ PASS | |
-| Concurrent Race Condition | ✅ PASS | Tested with <1s timing |
-| Void Transaction Rejection | ✅ PASS | |
-| Cross-Student Fraud Prevention | ✅ PASS | Security log confirmed |
-| SQL Injection Prevention | ✅ PASS | All injection attempts blocked |
-| Non-Monetary Claims | ✅ PASS | |
-| Legacy Monetary Claims | ✅ PASS | |
+| Normal Claim Submission |  PASS | |
+| Duplicate Claim Prevention |  PASS | |
+| Concurrent Race Condition |  PASS | Tested with <1s timing |
+| Void Transaction Rejection |  PASS | |
+| Cross-Student Fraud Prevention |  PASS | Security log confirmed |
+| SQL Injection Prevention |  PASS | All injection attempts blocked |
+| Non-Monetary Claims |  PASS | |
+| Legacy Monetary Claims |  PASS | |
 
 ## Performance Test Results
 - Claim Submission: [X ms]
@@ -719,10 +719,10 @@ Create a test report:
 - Banking Filter: [X ms]
 
 ## Browser Compatibility
-- Chrome: ✅ PASS
-- Firefox: ✅ PASS
-- Safari: ✅ PASS
-- Edge: ✅ PASS
+- Chrome:  PASS
+- Firefox:  PASS
+- Safari:  PASS
+- Edge:  PASS
 
 ## Issues Found
 [List any issues, or write "None"]
@@ -1065,12 +1065,12 @@ Create migration report:
 - Errors: [None / List errors]
 
 ## Post-Migration Verification
-- [✅] Constraint exists in database
-- [✅] Constraint enforces uniqueness (tested)
-- [✅] Application started successfully
-- [✅] No errors in application logs
-- [✅] Insurance pages load correctly
-- [✅] Duplicate claim test blocked (Test Case 2)
+- [] Constraint exists in database
+- [] Constraint enforces uniqueness (tested)
+- [] Application started successfully
+- [] No errors in application logs
+- [] Insurance pages load correctly
+- [] Duplicate claim test blocked (Test Case 2)
 
 ## Rollback Plan
 - Rollback Command: `flask db downgrade -1`
@@ -1078,9 +1078,9 @@ Create migration report:
 - Rollback Tested: [Yes/No]
 
 ## Production Readiness
-- [✅] Migration successful on staging
-- [✅] No data loss
-- [✅] Application stable after migration
+- [] Migration successful on staging
+- [] No data loss
+- [] Application stable after migration
 - [ ] Ready to apply to production
 
 ## Notes

@@ -317,11 +317,11 @@ Transaction(
 ## Immediate Action Items
 
 ### Phase 1: Stop the Bleeding (CRITICAL)
-1. ✅ Add teacher_id filter to ALL transaction queries in student routes
-2. ✅ Add teacher_id to ALL transaction creations
-3. ✅ Replace balance properties with scoped method calls
-4. ✅ Add teacher_id filter to student items queries
-5. ✅ Add teacher_id filter to insurance queries
+1.  Add teacher_id filter to ALL transaction queries in student routes
+2.  Add teacher_id to ALL transaction creations
+3.  Replace balance properties with scoped method calls
+4.  Add teacher_id filter to student items queries
+5.  Add teacher_id filter to insurance queries
 
 ### Phase 2: Architecture Refactor (HIGH PRIORITY)
 1. Create migration to add missing teacher_id values to existing transactions

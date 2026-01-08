@@ -98,7 +98,7 @@ When creating new operational documentation:
 
 ## Related Documentation
 
-- **[Deployment Guide](../DEPLOYMENT.md)** - Initial setup and deployment procedures
+- **[Deployment Guide](../Deployment_Guide.md)** - Initial setup and deployment procedures
 - **[Migration Guide](../development/MIGRATION_GUIDE.md)** - Database schema migrations
 - **[System Admin Design](../development/SYSADMIN_INTERFACE_DESIGN.md)** - Admin interface features
 
@@ -109,7 +109,7 @@ For critical issues:
 1. Check the relevant operational guide in this directory
 2. Review error logs via the System Admin portal
 3. Consult the [Troubleshooting section](../README.md#troubleshooting) in main docs
-4. Review recent changes in [CHANGELOG.md](../../CHANGELOG.md)
+4. Review recent changes in [CHANGELOG.md](../CHANGELOG.md)
 
 ---
 

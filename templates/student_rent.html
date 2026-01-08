@@ -54,22 +54,109 @@
     </div>
 </div>
 
-<div class="card mb-4 {% if status.is_paid %}border-success{% elif status.is_late %}border-danger{% else %}border-warning{% endif %}">
-    <div class="card-header {% if status.is_paid %}bg-success text-white{% elif status.is_late %}bg-danger text-white{% else %}bg-warning text-primary{% endif %}">
+{# Determine rent status styling based on days until due and payment status #}
+{% if status.is_paid %}
+    {% set card_border = "border-success" %}
+    {% set card_header_bg = "bg-success text-white" %}
+    {% set status_icon = "check_circle" %}
+    {% set status_text = "Paid" %}
+{% elif status.is_late or (days_until_due is not none and days_until_due < 0) %}
+    {# Past due status: status.is_late is authoritative (checks grace period),
+       days_until_due < 0 is a fallback visual indicator for overdue bills #}
+    {% set card_border = "border-dark" %}
+    {% set card_header_bg = "bg-dark text-white" %}
+    {% set status_icon = "cancel" %}
+    {% set status_text = "Past due, pay now" %}
+{% elif not status.rent_is_active %}
+    {% set card_border = "border-primary" %}
+    {% set card_header_bg = "bg-primary text-white" %}
+    {% set status_icon = "info" %}
+    {% set status_text = "No rent is due yet" %}
+{% elif days_until_due is not none %}
+    {% if days_until_due < 3 %}
+        {# Due today or within 2 days - crimson (danger) #}
+        {% set card_border = "border-danger" %}
+        {% set card_header_bg = "bg-danger text-white" %}
+        {% set status_icon = "warning" %}
+        {% set status_text = "Due, pay soon" %}
+    {% elif days_until_due <= 7 %}
+        {# 3-7 days - light red (danger-subtle) #}
+        {% set card_border = "border-danger" %}
+        {% set card_header_bg = "bg-danger bg-opacity-25 text-dark" %}
+        {% set status_icon = "schedule" %}
+        {% set status_text = "Rent due in " ~ days_until_due ~ " days" %}
+    {% else %}
+        {# More than 7 days - warning color #}
+        {% set card_border = "border-warning" %}
+        {% set card_header_bg = "bg-warning text-dark" %}
+        {% set status_icon = "calendar_today" %}
+        {% set status_text = "Rent will be due in " ~ days_until_due ~ " days" %}
+    {% endif %}
+{% else %}
+    {# Fallback #}
+    {% set card_border = "border-warning" %}
+    {% set card_header_bg = "bg-warning text-dark" %}
+    {% set status_icon = "calendar_today" %}
+    {% set status_text = "Upcoming - Not Yet Paid" %}
+{% endif %}
+
+<div class="card mb-4 {{ card_border }}">
+    <div class="card-header {{ card_header_bg }}">
         <h5 class="mb-0 d-flex align-items-center justify-content-between">
             <span>Class: {{ current_block|upper }}</span>
             <span>
-                {% if status.is_paid %}
-                <span class="material-symbols-outlined" style="vertical-align: middle;">check_circle</span> Paid
-                {% elif status.is_late %}
-                <span class="material-symbols-outlined" style="vertical-align: middle;">cancel</span> Past Due
-                {% else %}
-                <span class="material-symbols-outlined" style="vertical-align: middle;">calendar_today</span> Upcoming - Not Yet Paid
-                {% endif %}
+                <span class="material-symbols-outlined" style="vertical-align: middle;">{{ status_icon }}</span> {{ status_text }}
             </span>
         </h5>
     </div>
     <div class="card-body student-theme">
+        <div class="mb-3">
+            <p class="mb-1 text-muted"><strong>Monthly Rent:</strong></p>
+            <h3 class="text-primary mb-0">${{ "%.2f"|format(settings.rent_amount) }}</h3>
+        </div>
+
+        {# Show rent items persistently if they exist #}
+        {% if rent_items and rent_items|length > 0 %}
+        <div class="mb-3">
+            <p class="mb-1 text-muted"><strong>What Your Rent Includes:</strong></p>
+            <ul class="list-unstyled mb-0">
+                {% for item in rent_items %}
+                <li class="d-flex align-items-start mb-2">
+                    <span class="material-symbols-outlined text-success me-2" style="font-size: 20px;">check_circle</span>
+                    <div>
+                        <strong>{{ item.name }}</strong>
+                        {% if item.description %}
+                        <br><small class="text-muted">{{ item.description }}</small>
+                        {% endif %}
+                        {% if item.is_available_in_store and item.store_price %}
+                        <br><small class="text-secondary">💡 Available separately in store for ${{ "%.2f"|format(item.store_price) }}
+                        {% if item.purchase_duration == 'per_period' %}
+                            <strong>(valid until next rent is due)</strong>
+                        {% else %}
+                            <strong>(per use)</strong>
+                        {% endif %}
+                        </small>
+                        {% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% if rent_items|selectattr('is_available_in_store')|list|length > 0 %}
+            <div class="alert alert-info mt-2 mb-0">
+                <small><strong>Pro tip:</strong> By paying rent, you get all {{ rent_items|length }} items for ${{ "%.2f"|format(settings.rent_amount) }}, which is better value than buying them separately!</small>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="mb-3">
+            <p class="mb-1 text-muted"><strong>Due Date:</strong></p>
+            <p class="mb-0">{{ due_date.strftime('%B %d, %Y') }}</p>
+        </div>
+
+        <hr>
+
+        {# Payment status and actions #}
         {% if not status.rent_is_active %}
         <div class="alert alert-info mb-0">
             <strong>Not Yet Due</strong>
@@ -82,17 +169,6 @@
             <br>You can now pay rent early! Due date: {{ due_date.strftime('%B %d, %Y') }}
         </div>
         {% endif %}
-        <div class="mb-3">
-            <p class="mb-1 text-muted"><strong>Monthly Rent:</strong></p>
-            <h3 class="text-primary mb-0">${{ "%.2f"|format(settings.rent_amount) }}</h3>
-        </div>
-
-        <div class="mb-3">
-            <p class="mb-1 text-muted"><strong>Due Date:</strong></p>
-            <p class="mb-0">{{ due_date.strftime('%B %d, %Y') }}</p>
-        </div>
-
-        <hr>
 
         {% if status.is_paid %}
         <div class="alert alert-success mb-0">

@@ -5,7 +5,7 @@
 
 ---
 
-## 🎯 Highlights
+##  Highlights
 
 - Finalized the comprehensive legacy account migration toolkit and documentation
 - Added safety checks for the `student_blocks` join code migration to handle partially applied schemas
@@ -15,7 +15,7 @@
 
 ---
 
-## 🚀 New & Notable
+##  New & Notable
 
 ### Legacy Migration Readiness
 - **Comprehensive migration script** (`scripts/comprehensive_legacy_migration.py`) now paired with a detailed operations guide to move all legacy records to the join-code model.
@@ -32,13 +32,13 @@
 
 ---
 
-## 🧪 Testing
+##  Testing
 
 - Migration script and safeguards covered by the comprehensive migration test suite (`tests/test_comprehensive_legacy_migration.py`).
 
 ---
 
-## 📌 Upgrade Notes
+##  Upgrade Notes
 
 1. Apply migrations (`flask db upgrade`) to ensure `student_blocks.join_code` exists and is indexed.
 2. Run `scripts/comprehensive_legacy_migration.py --dry-run` first, then run without `--dry-run` to backfill legacy data.

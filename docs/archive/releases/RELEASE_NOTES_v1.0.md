@@ -231,7 +231,7 @@ If upgrading from a pre-1.0 version:
 3. Update dependencies: `pip install -r requirements.txt`
 4. Run migrations: `flask db upgrade`
 5. **Interactive backfill:** If you have legacy transactions without join codes, administrators will be prompted during normal operation to verify which class period those transactions belong to
-6. Review the [CHANGELOG.md](CHANGELOG.md) for breaking changes
+6. Review the [CHANGELOG.md](../../CHANGELOG.md) for breaking changes
 
 ---
 
@@ -263,7 +263,7 @@ Development continues with planned features for future releases:
 - Custom condition builder for advanced rules
 - Parent portal (optional, privacy-controlled)
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for the complete roadmap.
+See [../../development/DEVELOPMENT.md](../../development/DEVELOPMENT.md) for the complete roadmap.
 
 ---
 
@@ -279,19 +279,19 @@ For questions about licensing, please see [LICENSE.md](LICENSE.md).
 
 This project was developed to serve real classrooms and real students learning financial literacy. Special thanks to the educators who have provided feedback and testing throughout development.
 
-For technical questions, bug reports, or feature requests, please open an issue on GitHub or consult the documentation at [docs/README.md](docs/README.md).
+For technical questions, bug reports, or feature requests, please open an issue on GitHub or consult the documentation at [docs/README.md](../../README.md).
 
 ---
 
 ## Resources
 
-- **Documentation:** [docs/README.md](docs/README.md)
-- **Student Guide:** [docs/user-guides/student_guide.md](docs/user-guides/student_guide.md)
-- **Teacher Manual:** [docs/user-guides/teacher_manual.md](docs/user-guides/teacher_manual.md)
-- **Development Priorities:** [DEVELOPMENT.md](DEVELOPMENT.md)
-- **Security Audits:** [docs/security/](docs/security/)
-- **Changelog:** [CHANGELOG.md](CHANGELOG.md)
-- **Project History:** [PROJECT_HISTORY.md](PROJECT_HISTORY.md)
+- **Documentation:** [docs/README.md](../../README.md)
+- **Student Guide:** [docs/user-guides/student_guide.md](../../user-guides/student_guide.md)
+- **Teacher Manual:** [docs/user-guides/teacher_manual.md](../../user-guides/teacher_manual.md)
+- **Development Priorities:** [../../development/DEVELOPMENT.md](../../development/DEVELOPMENT.md)
+- **Security Audits:** [docs/security/](../../security/)
+- **Changelog:** [../../CHANGELOG.md](../../CHANGELOG.md)
+- **Project History:** [../../project/PROJECT_HISTORY.md](../../project/PROJECT_HISTORY.md)
 
 ---
 
