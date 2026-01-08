@@ -1,8 +1,8 @@
 #!/bin/bash
 #
-# Add UptimeRobot IPs to DigitalOcean Firewall
+# Add Pulsetic IPs to DigitalOcean Firewall
 #
-# This script automatically fetches UptimeRobot's monitoring IPs and adds them
+# This script automatically fetches Pulsetic's monitoring IPs and adds them
 # to your DigitalOcean firewall, allowing health check monitoring while keeping
 # your server protected behind Cloudflare.
 #
@@ -30,7 +30,9 @@ if ! command -v jq &> /dev/null; then
     exit 1
 fi
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-UPTIMEROBOT_IPS=($(jq -r '.uptimerobot.ipv4[]' "$SCRIPT_DIR/firewall-ips.json"))
+PULSETIC_IPV4=($(jq -r '.pulsetic.ipv4[]' "$SCRIPT_DIR/firewall-ips.json"))
+PULSETIC_IPV6=($(jq -r '.pulsetic.ipv6[]' "$SCRIPT_DIR/firewall-ips.json"))
+PULSETIC_TOTAL=$(( ${#PULSETIC_IPV4[@]} + ${#PULSETIC_IPV6[@]} ))
 
 # Check if firewall ID is provided
 if [ -z "$1" ]; then
@@ -87,7 +89,7 @@ if ! doctl compute firewall get "$FIREWALL_ID" &> /dev/null; then
     exit 1
 fi
 
-echo -e "${GREEN}Adding UptimeRobot IPs to firewall: $FIREWALL_ID${NC}"
+echo -e "${GREEN}Adding Pulsetic IPs to firewall: $FIREWALL_ID${NC}"
 echo ""
 
 # Get current firewall rules
@@ -95,15 +97,35 @@ FIREWALL_NAME=$(doctl compute firewall get "$FIREWALL_ID" --format Name --no-hea
 echo "Firewall name: $FIREWALL_NAME"
 echo ""
 
-# Add each UptimeRobot IP to the firewall
-echo "Adding ${#UPTIMEROBOT_IPS[@]} UptimeRobot IP addresses..."
+# Add each Pulsetic IP to the firewall
+echo "Adding ${PULSETIC_TOTAL} Pulsetic IP addresses..."
 echo ""
 
 SUCCESS_COUNT=0
 SKIP_COUNT=0
 ERROR_COUNT=0
 
-for IP in "${UPTIMEROBOT_IPS[@]}"; do
+for IP in "${PULSETIC_IPV4[@]}"; do
+    echo -n "Adding $IP ... "
+
+    # Add rule for HTTPS (443) - health checks use HTTPS
+    if doctl compute firewall add-rules "$FIREWALL_ID" \
+        --inbound-rules "protocol:tcp,ports:443,address:$IP" &> /dev/null; then
+        echo -e "${GREEN}✓${NC}"
+        ((SUCCESS_COUNT++))
+    else
+        # Check if it already exists (doctl returns error if rule already exists)
+        if doctl compute firewall get "$FIREWALL_ID" --format InboundRules --no-header | grep -q "$IP"; then
+            echo -e "${YELLOW}(already exists)${NC}"
+            ((SKIP_COUNT++))
+        else
+            echo -e "${RED}✗ failed${NC}"
+            ((ERROR_COUNT++))
+        fi
+    fi
+done
+
+for IP in "${PULSETIC_IPV6[@]}"; do
     echo -n "Adding $IP ... "
 
     # Add rule for HTTPS (443) - health checks use HTTPS
@@ -137,9 +159,9 @@ if [ $ERROR_COUNT -gt 0 ]; then
     exit 1
 fi
 
-echo -e "${GREEN}✓ UptimeRobot IPs successfully added to firewall!${NC}"
+echo -e "${GREEN}✓ Pulsetic IPs successfully added to firewall!${NC}"
 echo ""
 echo "Next steps:"
 echo "  1. Verify rules: doctl compute firewall get $FIREWALL_ID"
-echo "  2. Test UptimeRobot monitoring"
+echo "  2. Test Pulsetic monitoring"
 echo "  3. Check app logs for successful health checks"

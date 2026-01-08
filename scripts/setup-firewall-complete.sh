@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-# Complete DigitalOcean Firewall Setup for Cloudflare + UptimeRobot
+# Complete DigitalOcean Firewall Setup for Cloudflare + Pulsetic
 #
 # This script creates or updates a DigitalOcean firewall with all necessary
-# rules for Cloudflare proxy and UptimeRobot monitoring.
+# rules for Cloudflare proxy and Pulsetic monitoring.
 #
 # Prerequisites:
 #   - doctl installed and authenticated
@@ -46,15 +46,16 @@ fi
 
 CLOUDFLARE_IPV4=($(jq -r '.cloudflare.ipv4[]' "$SCRIPT_DIR/firewall-ips.json"))
 CLOUDFLARE_IPV6=($(jq -r '.cloudflare.ipv6[]' "$SCRIPT_DIR/firewall-ips.json"))
-UPTIMEROBOT_IPS=($(jq -r '.uptimerobot.ipv4[]' "$SCRIPT_DIR/firewall-ips.json"))
+PULSETIC_IPV4=($(jq -r '.pulsetic.ipv4[]' "$SCRIPT_DIR/firewall-ips.json"))
+PULSETIC_IPV6=($(jq -r '.pulsetic.ipv6[]' "$SCRIPT_DIR/firewall-ips.json"))
 
 # Validate arrays are not empty
 if [ ${#CLOUDFLARE_IPV4[@]} -eq 0 ] || [ ${#CLOUDFLARE_IPV6[@]} -eq 0 ]; then
     echo -e "${RED}Error: Failed to load Cloudflare IPs from firewall-ips.json${NC}"
     exit 1
 fi
-if [ ${#UPTIMEROBOT_IPS[@]} -eq 0 ]; then
-    echo -e "${YELLOW}Warning: No UptimeRobot IPs loaded from firewall-ips.json${NC}"
+if [ ${#PULSETIC_IPV4[@]} -eq 0 ] && [ ${#PULSETIC_IPV6[@]} -eq 0 ]; then
+    echo -e "${YELLOW}Warning: No Pulsetic IPs loaded from firewall-ips.json${NC}"
 fi
 # Function to check prerequisites
 check_prerequisites() {
@@ -114,8 +115,13 @@ build_inbound_rules() {
         RULES+="{\"protocol\":\"tcp\",\"ports\":\"443\",\"sources\":{\"addresses\":[\"$IP\"]}},"
     done
 
-    # Add UptimeRobot HTTPS rules
-    for IP in "${UPTIMEROBOT_IPS[@]}"; do
+    # Add Pulsetic HTTPS rules (IPv4)
+    for IP in "${PULSETIC_IPV4[@]}"; do
+        RULES+="{\"protocol\":\"tcp\",\"ports\":\"443\",\"sources\":{\"addresses\":[\"$IP\"]}},"
+    done
+
+    # Add Pulsetic HTTPS rules (IPv6)
+    for IP in "${PULSETIC_IPV6[@]}"; do
         RULES+="{\"protocol\":\"tcp\",\"ports\":\"443\",\"sources\":{\"addresses\":[\"$IP\"]}},"
     done
 
@@ -151,13 +157,14 @@ create_firewall() {
     INBOUND_RULES=$(build_inbound_rules "$SSH_IP")
 
     # Create firewall
-    FIREWALL_NAME="cloudflare-uptimerobot-firewall"
+    FIREWALL_NAME="cloudflare-pulsetic-firewall"
 
     echo "Firewall configuration:"
     echo "  Name: $FIREWALL_NAME"
     echo "  Cloudflare IPv4 ranges: ${#CLOUDFLARE_IPV4[@]}"
     echo "  Cloudflare IPv6 ranges: ${#CLOUDFLARE_IPV6[@]}"
-    echo "  UptimeRobot IPs: ${#UPTIMEROBOT_IPS[@]}"
+    echo "  Pulsetic IPv4 IPs: ${#PULSETIC_IPV4[@]}"
+    echo "  Pulsetic IPv6 IPs: ${#PULSETIC_IPV6[@]}"
     echo "  SSH IP: ${SSH_IP:-none}"
     echo "  Total inbound rules: $(echo "$INBOUND_RULES" | jq '. | length')"
     echo ""
@@ -184,7 +191,7 @@ create_firewall() {
     echo "Next steps:"
     echo "  1. Test your website through Cloudflare (should work)"
     echo "  2. Try accessing droplet IP directly (should timeout)"
-    echo "  3. Test UptimeRobot monitoring"
+    echo "  3. Test Pulsetic monitoring"
     echo "  4. Verify SSH access works from $SSH_IP"
 }
 
@@ -240,18 +247,25 @@ update_firewall() {
 
     echo "  Added $ADD_COUNT Cloudflare rules"
 
-    # Add UptimeRobot IPs
-    echo "Adding UptimeRobot IP addresses..."
-    ROBOT_COUNT=0
+    # Add Pulsetic IPs
+    echo "Adding Pulsetic IP addresses..."
+    PULSETIC_COUNT=0
 
-    for IP in "${UPTIMEROBOT_IPS[@]}"; do
+    for IP in "${PULSETIC_IPV4[@]}"; do
         if doctl compute firewall add-rules "$FIREWALL_ID" \
             --inbound-rules "protocol:tcp,ports:443,address:$IP" &> /dev/null; then
-            ((ROBOT_COUNT++))
+            ((PULSETIC_COUNT++))
         fi
     done
 
-    echo "  Added $ROBOT_COUNT UptimeRobot rules"
+    for IP in "${PULSETIC_IPV6[@]}"; do
+        if doctl compute firewall add-rules "$FIREWALL_ID" \
+            --inbound-rules "protocol:tcp,ports:443,address:$IP" &> /dev/null; then
+            ((PULSETIC_COUNT++))
+        fi
+    done
+
+    echo "  Added $PULSETIC_COUNT Pulsetic rules"
     echo ""
     echo -e "${GREEN}✓ Firewall updated successfully!${NC}"
 }

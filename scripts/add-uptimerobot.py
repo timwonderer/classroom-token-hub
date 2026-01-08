@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Add all UptimeRobot IPs to DigitalOcean firewall.
+Add all Pulsetic IPs to DigitalOcean firewall.
 
 Usage:
     python3 scripts/add-uptimerobot.py <firewall-id>
@@ -43,9 +43,11 @@ def main():
     with open(json_path) as f:
         data = json.load(f)
 
-    uptimerobot_ips = data['uptimerobot']['ipv4']
+    pulsetic_ipv4 = data['pulsetic']['ipv4']
+    pulsetic_ipv6 = data['pulsetic']['ipv6']
+    pulsetic_ips = pulsetic_ipv4 + pulsetic_ipv6
 
-    print(f"{GREEN}Adding {len(uptimerobot_ips)} UptimeRobot IPs to firewall: {firewall_id}{NC}\n")
+    print(f"{GREEN}Adding {len(pulsetic_ips)} Pulsetic IPs to firewall: {firewall_id}{NC}\n")
 
     # Verify firewall exists
     success, error = run_command(f'doctl compute firewall get {firewall_id} > /dev/null 2>&1')
@@ -59,7 +61,7 @@ def main():
     skipped = 0
     failed = 0
 
-    for ip in uptimerobot_ips:
+    for ip in pulsetic_ips:
         print(f"Adding {ip} ... ", end='', flush=True)
 
         cmd = f'doctl compute firewall add-rules {firewall_id} --inbound-rules "protocol:tcp,ports:443,address:{ip}"'
@@ -73,7 +75,8 @@ def main():
             check_cmd = f'doctl compute firewall get {firewall_id} --format InboundRules --no-header'
             result = subprocess.run(check_cmd, shell=True, capture_output=True, text=True)
 
-            if ip.replace('/32', '') in result.stdout:
+            normalized_ip = ip.split('/')[0]
+            if normalized_ip in result.stdout:
                 print(f"{YELLOW}(already exists){NC}")
                 skipped += 1
             else:
@@ -94,7 +97,7 @@ def main():
         print(f"\n{YELLOW}Warning: Some IPs failed to add. Check the output above.{NC}")
         sys.exit(1)
     else:
-        print(f"\n{GREEN}✓ UptimeRobot IPs successfully added to firewall!{NC}")
+        print(f"\n{GREEN}✓ Pulsetic IPs successfully added to firewall!{NC}")
 
 if __name__ == '__main__':
     main()
