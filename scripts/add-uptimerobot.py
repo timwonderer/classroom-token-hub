@@ -37,6 +37,7 @@ def main():
     pulsetic_ips = ipv4 + ipv6
 
     print(f"{GREEN}Adding {len(pulsetic_ips)} Pulsetic IPs to firewall: {firewall_id}{NC}\n")
+    print(f"{GREEN}Adding {len(pulsetic_ips)} Pulsetic IPs to firewall: {firewall_id}{NC}\n")
 
     added = update_firewall(client, firewall_id, pulsetic_ips)
     print(f"\n{GREEN}OK: Added {added} Pulsetic rules via pydo{NC}")
