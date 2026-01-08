@@ -244,16 +244,7 @@ update_firewall() {
 
     # Add Pulsetic IPs
     echo "Adding Pulsetic IP addresses..."
-    PULSETIC_COUNT=0
-
-    for IP in "${PULSETIC_IPV4[@]}"; do
-        if doctl compute firewall add-rules "$FIREWALL_ID" \
-            --inbound-rules "protocol:tcp,ports:443,address:$IP" &> /dev/null; then
-            ((PULSETIC_COUNT++))
-        fi
-    done
-
-    for IP in "${PULSETIC_IPV6[@]}"; do
+    for IP in "${PULSETIC_IPV4[@]}" "${PULSETIC_IPV6[@]}"; do
         if doctl compute firewall add-rules "$FIREWALL_ID" \
             --inbound-rules "protocol:tcp,ports:443,address:$IP" &> /dev/null; then
             ((PULSETIC_COUNT++))
