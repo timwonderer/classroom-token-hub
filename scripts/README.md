@@ -34,7 +34,9 @@ python scripts/cleanup_invite_codes.py
 ### Firewall Management
 
 #### `setup-firewall-complete.sh`
-Automated DigitalOcean firewall setup with Cloudflare and Pulsetic IP ranges. Creates or updates firewall rules to allow traffic only from Cloudflare's proxy and Pulsetic monitoring.
+Automated DigitalOcean firewall setup with Cloudflare and Pulsetic IP ranges using the official DigitalOcean `pydo` client. Creates or updates firewall rules to allow traffic only from Cloudflare's proxy and Pulsetic monitoring.
+
+**Note:** DigitalOcean firewalls allow up to 50 inbound rules. Cloudflare + Pulsetic often exceed this limit. Use separate firewalls when needed.
 
 **Usage:**
 ```bash
@@ -45,10 +47,24 @@ Automated DigitalOcean firewall setup with Cloudflare and Pulsetic IP ranges. Cr
 ./scripts/setup-firewall-complete.sh update <firewall-id>
 ```
 
-**Prerequisites:** `doctl` and `jq` installed and authenticated
+**Prerequisites:** `python3`, `pydo` (`pip install pydo`), and a DigitalOcean token via `DIGITALOCEAN_ACCESS_TOKEN` or doctl config.
+
+#### `setup-pulsetic-firewall.sh`
+Creates or updates a Pulsetic-only firewall (port 443) using the official DigitalOcean `pydo` client. Use alongside a separate Cloudflare firewall.
+
+**Usage:**
+```bash
+# Create new firewall
+./scripts/setup-pulsetic-firewall.sh create <droplet-id>
+
+# Update existing firewall
+./scripts/setup-pulsetic-firewall.sh update <firewall-id>
+```
+
+**Prerequisites:** `python3`, `pydo` (`pip install pydo`), and a DigitalOcean token via `DIGITALOCEAN_ACCESS_TOKEN` or doctl config.
 
 #### `add-uptimerobot-to-firewall.sh`
-Adds only Pulsetic monitoring IPs to an existing firewall. Use this if you already have Cloudflare configured.
+Adds only Pulsetic monitoring IPs to an existing firewall using `pydo`. Use this if you already have Cloudflare configured.
 
 **Usage:**
 ```bash

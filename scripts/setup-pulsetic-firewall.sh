@@ -1,9 +1,10 @@
 #!/bin/bash
 #
-# Add Pulsetic IPs to DigitalOcean Firewall (pydo client)
+# Pulsetic-only DigitalOcean Firewall Setup (pydo client)
 #
 # Usage:
-#   ./add-uptimerobot-to-firewall.sh <firewall-id>
+#   ./setup-pulsetic-firewall.sh create <droplet-id>
+#   ./setup-pulsetic-firewall.sh update <firewall-id>
 #
 # Requirements:
 #   - python3
@@ -12,12 +13,6 @@
 
 set -e
 
-if [ -z "$1" ]; then
-    echo "Error: Firewall ID required"
-    echo "Usage: $0 <firewall-id>"
-    exit 1
-fi
-
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 if ! command -v python3 &> /dev/null; then
@@ -25,4 +20,4 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-exec python3 "$SCRIPT_DIR/pulsetic_firewall.py" update "$1"
+exec python3 "$SCRIPT_DIR/pulsetic_firewall.py" "$@"
