@@ -14,10 +14,14 @@ from logging.handlers import RotatingFileHandler
 
 from flask import Flask, request, render_template, session, g, url_for
 from dotenv import load_dotenv
+from pathlib import Path
 
-# Load environment variables
-load_dotenv()
-
+# Load environment variables from project root
+# Explicitly specify path to ensure .env is found regardless of working directory
+project_root = Path(__file__).parent.parent
+dotenv_path = project_root / '.env'
+# Force-load .env so CLI commands pick up required settings even if env vars are absent
+load_dotenv(dotenv_path=dotenv_path, override=True)
 
 # Validate required environment variables
 required_env_vars = ["SECRET_KEY", "DATABASE_URL", "FLASK_ENV", "ENCRYPTION_KEY", "PEPPER_KEY"]
@@ -165,6 +169,7 @@ def create_app():
     # Add built-in functions to Jinja2 globals
     app.jinja_env.globals['min'] = min
     app.jinja_env.globals['max'] = max
+    app.jinja_env.globals['format_utc_iso'] = format_utc_iso
 
     def is_maintenance_mode_enabled():
         """Return True when maintenance mode is enabled via environment variable."""
@@ -214,7 +219,6 @@ def create_app():
             return None
 
         # Allow system admin login/logout routes so admins can establish a bypass session.
-        # Also allow passkey authentication endpoints for passwordless login.
         if request.endpoint in {
             "sysadmin.login",
             "sysadmin.logout",
@@ -521,12 +525,16 @@ def create_app():
     from app.routes.system_admin import sysadmin_bp
     from app.routes.student import student_bp
     from app.routes.admin import admin_bp
+    from app.routes.docs import docs_bp
+    from app.routes.analytics import analytics_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(sysadmin_bp)
     app.register_blueprint(student_bp)
     app.register_blueprint(admin_bp)
+    app.register_blueprint(docs_bp)
+    app.register_blueprint(analytics_bp)
 
     # -------------------- SECURITY HEADERS --------------------
     @app.after_request
@@ -565,15 +573,28 @@ def create_app():
 
         # Content Security Policy (CSP)
         # Restricts resource loading to prevent XSS attacks
-        # Adjusted for Google Fonts, Material Icons, Cloudflare Turnstile, jsdelivr CDN (Bootstrap, EasyMDE, zxcvbn), Font Awesome, and Passwordless.dev
+        # Adjusted for Google Fonts, Material Icons, Cloudflare Turnstile, jsdelivr CDN, Font Awesome, and Passwordless.dev
+        passwordless_script_src = "https://cdn.passwordless.dev"
+        passwordless_connect_src = "https://cdn.passwordless.dev https://v4.passwordless.dev"
         csp_directives = [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://cdn.passwordless.dev",
+            (
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' "
+                "https://challenges.cloudflare.com https://cdn.jsdelivr.net "
+                "https://static.cloudflareinsights.com "
+                f"{passwordless_script_src}"
+            ),
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
             "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
             "img-src 'self' data: https:",
-            "connect-src 'self' https://challenges.cloudflare.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://cdn.passwordless.dev https://v4.passwordless.dev",
+            (
+                "connect-src 'self' https://challenges.cloudflare.com "
+                "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com "
+                "https://static.cloudflareinsights.com "
+                f"{passwordless_connect_src}"
+            ),
             "frame-src https://challenges.cloudflare.com",
+            "worker-src 'self' blob:",
             "base-uri 'self'",
             "form-action 'self'",
         ]

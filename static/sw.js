@@ -13,6 +13,10 @@ const CDN_RESOURCES = [
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css',
   'https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js'
 ];
+const PASSKEY_HOSTS = [
+  'cdn.passwordless.dev',
+  'v4.passwordless.dev'
+];
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
@@ -71,6 +75,10 @@ self.addEventListener('fetch', (event) => {
   if (url.hostname === 'fonts.googleapis.com' ||
       url.hostname === 'fonts.gstatic.com') {
     return; // Don't intercept - browser handles fonts correctly on its own
+  }
+
+  if (PASSKEY_HOSTS.includes(url.hostname)) {
+    return; // Avoid caching passkey scripts/requests; let CSP be enforced by the page
   }
 
   // Handle CDN resources - network-first strategy

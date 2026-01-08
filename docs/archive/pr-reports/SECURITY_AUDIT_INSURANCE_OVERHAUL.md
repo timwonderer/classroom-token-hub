@@ -3,7 +3,7 @@
 **Branch Evaluated:** `codex/add-insurance-claim-processing-modes`
 **Audit Date:** 2025-11-24
 **Auditor:** Claude Code
-**Status:** ⚠️ Critical Issues Found - DO NOT MERGE without fixes
+**Status:**  Critical Issues Found - DO NOT MERGE without fixes
 
 ---
 
@@ -15,7 +15,7 @@ The insurance overhaul implementation on branch `codex/add-insurance-claim-proce
 
 ---
 
-## 🔴 P0 CRITICAL BUGS (Must Fix Before Merge)
+##  P0 CRITICAL BUGS (Must Fix Before Merge)
 
 ### P0-1: Race Condition in One-Claim-Per-Transaction Enforcement
 
@@ -42,7 +42,7 @@ if transaction_already_claimed:
 
 # Line 1132-1133: Actually create the claim
 db.session.add(claim)
-db.session.commit()  # ⚠️ RACE CONDITION WINDOW!
+db.session.commit()  #  RACE CONDITION WINDOW!
 ```
 
 #### Attack Scenario
@@ -124,7 +124,7 @@ Admin claim approval does NOT validate whether the linked transaction has been v
 # Line 1752-1755: Calculate claim amount from transaction
 def _claim_base_amount(target_claim):
     if target_claim.policy.claim_type == 'transaction_monetary' and target_claim.transaction:
-        return abs(target_claim.transaction.amount)  # ⚠️ NO check for is_void!
+        return abs(target_claim.transaction.amount)  #  NO check for is_void!
     return target_claim.claim_amount or 0.0
 
 # Line 1839-1857: Approve and pay claim
@@ -136,7 +136,7 @@ claim.approved_amount = approved_amount
 # Line 1866-1874: Create reimbursement transaction
 transaction = Transaction(
     student_id=student.id,
-    amount=approved_amount,  # ⚠️ Paying for a voided transaction!
+    amount=approved_amount,  #  Paying for a voided transaction!
     type='insurance_reimbursement',
     description=transaction_description,
 )
@@ -217,7 +217,7 @@ When approving a claim, the system trusts that `claim.transaction_id` belongs to
 # Line 1752-1755: Trusts transaction ownership
 def _claim_base_amount(target_claim):
     # Assumes target_claim.transaction belongs to target_claim.student
-    # ⚠️ NO ownership validation!
+    #  NO ownership validation!
     if target_claim.policy.claim_type == 'transaction_monetary' and target_claim.transaction:
         return abs(target_claim.transaction.amount)
     return target_claim.claim_amount or 0.0
@@ -268,7 +268,7 @@ if claim.policy.claim_type == 'transaction_monetary' and claim.transaction:
 
 ---
 
-## 🟠 P1 HIGH SEVERITY ISSUES
+##  P1 HIGH SEVERITY ISSUES
 
 ### P1-1: SQL Injection in Transaction Date Filtering
 
@@ -289,7 +289,7 @@ end_date = request.args.get('end_date')
 
 # Line 3268-3270: Direct SQL injection via f-string
 if end_date:
-    # ⚠️ CRITICAL: User input directly in SQL!
+    #  CRITICAL: User input directly in SQL!
     query = query.filter(Transaction.timestamp < text(f"'{end_date}'::date + interval '1 day'"))
 ```
 
@@ -499,7 +499,7 @@ Document this as a known limitation. In practice:
 
 ---
 
-## 🟡 P2 EFFICIENCY ISSUES
+##  P2 EFFICIENCY ISSUES
 
 ### E1: N+1 Query Problem in Claims List
 
@@ -518,7 +518,7 @@ claims = (
     .join(Student, InsuranceClaim.student_id == Student.id)
     .filter(Student.id.in_(student_ids_subq))
     .order_by(InsuranceClaim.filed_date.desc())
-    .all()  # ⚠️ Doesn't eager-load relationships
+    .all()  #  Doesn't eager-load relationships
 )
 ```
 
@@ -612,7 +612,7 @@ def downgrade():
 
 ---
 
-## 📊 Summary Table
+##  Summary Table
 
 | ID | Severity | Type | Issue | Location | Fix Effort |
 |----|----------|------|-------|----------|------------|
@@ -626,23 +626,23 @@ def downgrade():
 
 ---
 
-## ✅ Security Aspects That Are Correct
+##  Security Aspects That Are Correct
 
 The following were reviewed and found to be secure:
 
-- ✅ **Transaction ownership validated at submission** (student.py:1042)
-- ✅ **Admin authorization properly scoped** via `_student_scope_subquery()`
-- ✅ **CSRF protection** enabled via WTForms
-- ✅ **ORM parameterization** prevents most SQL injection
-- ✅ **Multi-tenancy isolation** via teacher_id filtering
-- ✅ **Policy ownership validation** (admin.py:1478)
-- ✅ **No XSS vulnerabilities** (proper template escaping)
-- ✅ **No direct file operations** from user input
-- ✅ **Proper use of foreign keys** and referential integrity
+-  **Transaction ownership validated at submission** (student.py:1042)
+-  **Admin authorization properly scoped** via `_student_scope_subquery()`
+-  **CSRF protection** enabled via WTForms
+-  **ORM parameterization** prevents most SQL injection
+-  **Multi-tenancy isolation** via teacher_id filtering
+-  **Policy ownership validation** (admin.py:1478)
+-  **No XSS vulnerabilities** (proper template escaping)
+-  **No direct file operations** from user input
+-  **Proper use of foreign keys** and referential integrity
 
 ---
 
-## 🔧 Recommended Remediation Plan
+##  Recommended Remediation Plan
 
 ### Phase 1: Critical Fixes (Before Merge) - Est. 2-4 hours
 
@@ -689,7 +689,7 @@ The following were reviewed and found to be secure:
 
 ---
 
-## 📝 Testing Recommendations
+##  Testing Recommendations
 
 ### Security Tests
 
@@ -764,7 +764,7 @@ def test_claims_list_performance():
 
 ---
 
-## 🎯 Acceptance Criteria for Merge
+##  Acceptance Criteria for Merge
 
 Before merging `codex/add-insurance-claim-processing-modes` to main:
 
@@ -779,7 +779,7 @@ Before merging `codex/add-insurance-claim-processing-modes` to main:
 
 ---
 
-## 📚 References
+##  References
 
 - **CWE-89:** SQL Injection
 - **CWE-362:** Concurrent Execution using Shared Resource with Improper Synchronization ('Race Condition')
@@ -788,7 +788,7 @@ Before merging `codex/add-insurance-claim-processing-modes` to main:
 
 ---
 
-## 📞 Contact
+##  Contact
 
 For questions about this security audit, contact the development team or create an issue in the repository.
 

@@ -30,7 +30,7 @@ Adds a data migration system to transition legacy students from the deprecated `
 
 ### Manual Testing Required
 
-**⚠️ This PR requires manual testing as it's a data migration:**
+** This PR requires manual testing as it's a data migration:**
 
 1. **Before running migration:**
 
@@ -71,9 +71,9 @@ Adds a data migration system to transition legacy students from the deprecated `
 
 The migration:
 
-- Uses existing `student_teachers` table ✓
-- Uses existing `teacher_blocks` table ✓
-- No schema changes required ✓
+- Uses existing `student_teachers` table 
+- Uses existing `teacher_blocks` table 
+- No schema changes required 
 
 ## Checklist
 
@@ -138,7 +138,7 @@ Step 4: Creating TeacherBlock entries...
 Created 250+ TeacherBlock entries
 
 Step 5: Committing changes to database...
-✓ All changes committed successfully!
+ All changes committed successfully!
 
 ```markdown
 Legacy students migrated: 250+
@@ -155,7 +155,7 @@ Join codes by teacher and block:
    Teacher 1, Block F: JKL012
    Teacher 1, Block X: MNO345
 
-✓ Migration complete! All legacy students now use the new system.
+ Migration complete! All legacy students now use the new system.
 ```
 
 ======================================================================
@@ -175,7 +175,7 @@ Step 4: Creating TeacherBlock entries...
 Created 250+ TeacherBlock entries
 
 Step 5: Committing changes to database...
-✓ All changes committed successfully!
+ All changes committed successfully!
 
 ======================================================================
 MIGRATION SUMMARY
@@ -194,7 +194,7 @@ Join codes by teacher and block:
   Teacher 1, Block F: JKL012
   Teacher 1, Block X: MNO345
 
-✓ Migration complete! All legacy students now use the new system.
+ Migration complete! All legacy students now use the new system.
 
 ```
 
@@ -207,10 +207,10 @@ This PR advances the multi-tenancy hardening efforts outlined in `AGENTS.md`:
 
 **What this PR does:**
 
-- ✅ Populates `student_teachers` associations for all legacy students
-- ✅ Maintains `teacher_id` compatibility (doesn't remove deprecated field yet)
-- ✅ Creates proper TeacherBlock roster entries for tenant isolation
-- ✅ Uses scoped query pattern (relies on existing associations)
+-  Populates `student_teachers` associations for all legacy students
+-  Maintains `teacher_id` compatibility (doesn't remove deprecated field yet)
+-  Creates proper TeacherBlock roster entries for tenant isolation
+-  Uses scoped query pattern (relies on existing associations)
 
 **Next steps toward full multi-tenancy:**
 

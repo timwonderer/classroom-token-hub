@@ -2,7 +2,7 @@
 
 This document explains how to use the `seed_multi_tenancy_test_data.py` script to populate your database with comprehensive test data for validating the join_code-based multi-tenancy fixes.
 
-## 🎯 Purpose
+##  Purpose
 
 The seeding script creates realistic test data specifically designed to validate:
 
@@ -10,7 +10,7 @@ The seeding script creates realistic test data specifically designed to validate
 2. **Same-teacher multi-period isolation** - Students with the same teacher in different periods see isolated data per period
 3. **Join code as source of truth** - All data (transactions, balances, items, insurance) properly scoped by join_code
 
-## 📋 Prerequisites
+##  Prerequisites
 
 Before running the script:
 
@@ -30,7 +30,7 @@ Before running the script:
    pip install -r requirements.txt
    ```
 
-## 🚀 Running the Script
+##  Running the Script
 
 ### Basic Usage
 
@@ -51,25 +51,25 @@ The script will:
 ### Expected Output
 
 ```
-🌱 Starting database seeding...
+ Starting database seeding...
 ============================================================
 
-📚 Creating teachers and class periods...
-  ✓ Created teacher: ms_johnson
+ Creating teachers and class periods...
+   Created teacher: ms_johnson
     • Period A: English 1st Period (Join: A7K2M9)
     • Period B: English 3rd Period (Join: P3XW8R)
     ...
 
-👥 Creating students...
+ Creating students...
   Student: Emma Evans
-    ✓ Enrolled in ms_johnson - English 1st Period (A7K2M9)
-    ✓ Enrolled in ms_johnson - English 3rd Period (P3XW8R)
+     Enrolled in ms_johnson - English 1st Period (A7K2M9)
+     Enrolled in ms_johnson - English 3rd Period (P3XW8R)
   ...
 
-📝 Writing credentials to file...
-✅ Credentials written to: TEST_CREDENTIALS.txt
+ Writing credentials to file...
+ Credentials written to: TEST_CREDENTIALS.txt
 
-📊 SEEDING SUMMARY
+ SEEDING SUMMARY
 ============================================================
 Teachers created: 4
 Students created: 15
@@ -85,10 +85,10 @@ Payroll settings: 10
 Rent settings: 10
 ============================================================
 
-✨ Seeding complete!
+ Seeding complete!
 ```
 
-## 📖 Test Data Structure
+##  Test Data Structure
 
 ### Teachers Created
 
@@ -119,7 +119,7 @@ Rent settings: 10
 - **David Davis** - mr_smith Period D + mrs_davis Period B
 - **Henry Harris** - ms_johnson Period A + mr_smith Period A + mrs_davis Period B
 
-#### Same Teacher, Multiple Periods (CRITICAL TEST CASES) 🔥
+#### Same Teacher, Multiple Periods (CRITICAL TEST CASES) 
 - **Emma Evans** - ms_johnson Period A + Period B
 - **Frank Fisher** - ms_johnson Period B + Period C
 - **Grace Garcia** - mr_smith Period A + Period D
@@ -149,7 +149,7 @@ For each student enrollment (student + teacher + period):
   - Payroll rate and schedule
   - Rent amount and frequency
 
-## 🧪 Credentials Output
+##  Credentials Output
 
 All login credentials are written to `TEST_CREDENTIALS.txt`:
 
@@ -193,7 +193,7 @@ ms_johnson - Period A: English 1st Period
   Join Code: A7K2M9
 ```
 
-## ✅ Validation Checklist
+##  Validation Checklist
 
 After seeding, test the following scenarios:
 
@@ -210,12 +210,12 @@ Steps:
 6. Check balance again - should be DIFFERENT (e.g., $200)
 7. Transaction history should show ONLY Period B transactions
 
-**Expected Result**: ✅ Complete isolation between periods
+**Expected Result**:  Complete isolation between periods
 - Balances are different for each period
 - Transactions filtered by join_code
 - No mixing of data
 
-**Failure Case**: ❌ If balances are combined or transactions mixed, join_code isolation is broken!
+**Failure Case**:  If balances are combined or transactions mixed, join_code isolation is broken!
 
 ### 2. Different Teachers
 
@@ -228,7 +228,7 @@ Steps:
 4. Switch to mr_smith's class
 5. Verify different balance and transaction set
 
-**Expected Result**: ✅ No cross-teacher data leakage
+**Expected Result**:  No cross-teacher data leakage
 
 ### 3. Store Items Visibility
 
@@ -240,7 +240,7 @@ Steps:
 3. Some items should be visible to all periods (Homework Pass, Extra Credit)
 4. Some items should be Period A only (check block visibility settings)
 
-**Expected Result**: ✅ Block visibility respected
+**Expected Result**:  Block visibility respected
 
 ### 4. Insurance Policies
 
@@ -252,7 +252,7 @@ Steps:
 3. Verify tiered policies (Paycheck Protection Basic/Standard/Premium) are grouped
 4. Confirm block visibility filtering works
 
-**Expected Result**: ✅ Policies filtered by period
+**Expected Result**:  Policies filtered by period
 
 ### 5. Transaction join_code Population
 
@@ -269,7 +269,7 @@ GROUP BY join_code
 ORDER BY count DESC;
 ```
 
-**Expected Result**: ✅ Zero NULL join_codes
+**Expected Result**:  Zero NULL join_codes
 
 ### 6. Balance Calculations
 
@@ -290,9 +290,9 @@ GROUP BY join_code;
 
 2. Compare with balances shown in UI for each period
 
-**Expected Result**: ✅ UI balances match per-join_code database calculations
+**Expected Result**:  UI balances match per-join_code database calculations
 
-## 🔧 Troubleshooting
+##  Troubleshooting
 
 ### Import Errors
 
@@ -329,7 +329,7 @@ flask db upgrade
 export PEPPER_KEY="your_pepper_key_here"
 ```
 
-## 📊 Data Analysis Queries
+##  Data Analysis Queries
 
 After seeding, use these queries to analyze the data:
 
@@ -388,7 +388,7 @@ GROUP BY s.id, s.first_name, s.last_initial, ip.title, si.status,
 ORDER BY s.first_name;
 ```
 
-## 🎓 Testing Workflow
+##  Testing Workflow
 
 Recommended testing workflow after seeding:
 
@@ -402,7 +402,7 @@ Recommended testing workflow after seeding:
    - Verify basic functionality works
    - Confirm balances and transactions display correctly
 
-3. **Phase 3: UI Testing - Same Teacher Multi-Period** ⭐ **CRITICAL**
+3. **Phase 3: UI Testing - Same Teacher Multi-Period**  **CRITICAL**
    - Login as Emma, Frank, or Grace
    - Switch between periods
    - Verify complete data isolation
@@ -425,33 +425,33 @@ Recommended testing workflow after seeding:
    - Test session management
    - Verify no session bleed between contexts
 
-## 📝 Notes
+##  Notes
 
 - **All transactions include join_code** - This is the key fix!
 - **Session tracks current_join_code** - Not just teacher_id
 - **Queries filter by join_code** - For proper isolation
 - **Balance calculations scoped by join_code** - No aggregation across periods
 
-## 🚨 Red Flags to Watch For
+##  Red Flags to Watch For
 
 If you see any of these, the multi-tenancy fix is broken:
 
-❌ Student sees combined balance from multiple periods with same teacher
-❌ Transactions from different periods appear together
-❌ Store items visible across periods when they shouldn't be
-❌ Insurance policies showing from wrong period
-❌ Any transaction with `join_code = NULL`
-❌ Session shows wrong period after switching
-❌ Balance changes when switching periods (should be recalculated per period)
+ Student sees combined balance from multiple periods with same teacher
+ Transactions from different periods appear together
+ Store items visible across periods when they shouldn't be
+ Insurance policies showing from wrong period
+ Any transaction with `join_code = NULL`
+ Session shows wrong period after switching
+ Balance changes when switching periods (should be recalculated per period)
 
-## ✅ Success Indicators
+##  Success Indicators
 
-✅ Each period shows isolated balance
-✅ Switching periods changes visible transactions
-✅ All transactions have join_code populated
-✅ Store/insurance filtered by period
-✅ Same student can have different balances in different periods (same or different teacher)
-✅ Manual SQL queries match UI calculations per join_code
+ Each period shows isolated balance
+ Switching periods changes visible transactions
+ All transactions have join_code populated
+ Store/insurance filtered by period
+ Same student can have different balances in different periods (same or different teacher)
+ Manual SQL queries match UI calculations per join_code
 
 ---
 

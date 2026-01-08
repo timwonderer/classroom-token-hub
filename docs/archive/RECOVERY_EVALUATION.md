@@ -5,13 +5,13 @@ The "student-assisted" account recovery method allows a teacher to reset their c
 
 ## Analysis
 
-### ✅ Strengths
+###  Strengths
 *   **Self-Serve & Autonomous:** Completely eliminates the need for IT support or System Administrator tickets, empowering the teacher to resolve lockouts immediately in the classroom.
 *   **Minimal Data Collection:** Avoids storing sensitive recovery emails or phone numbers, adhering to strict privacy constraints.
 *   **Contextual Security:** Relies on "something you have" (a class of students) and "something you know" (your roster structure), which is a unique and context-aware security factor.
 *   **Distributed Trust:** By requiring multiple students to verify, the risk of a single compromised student account hijacking the teacher's account is mitigated (once the "one from each period" rule is enforced).
 
-### ⚠️ Risks & Weaknesses
+###  Risks & Weaknesses
 *   **Student Dependency:** Recovery is impossible if no students are available (e.g., summer break, empty classroom).
     *   *Mitigation:* This is considered acceptable as teachers typically create new accounts for new classes at the start of a school year.
 *   **Collusion Risk:** Without strict enforcement of student diversity (different periods), a small group of colluding students in a single class could theoretically takeover a teacher's account if they guess the `dob_sum`. (Mitigated by the new enforcement logic).

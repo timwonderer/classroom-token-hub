@@ -1,7 +1,7 @@
 :root {
     --primary: #1a4d47;
     --primary-hover: #2a5d57;
-    --secondary: #D3AF37;
+    --secondary: #d3af37;
     --secondary-hover: #c49564;
     --background: #f5f5f3;
     --surface: #fafaf8;
@@ -54,6 +54,16 @@ h1, h2, h3, h4, h5, h6 {
     letter-spacing: -0.02em;
 }
 
+.guide-icon {
+    font-size: 25pt;
+    vertical-align: middle;
+}
+
+.guide-icon-sm {
+    font-size: 20pt;
+    vertical-align: middle;
+}
+
 a {
     color: var(--primary);
     text-decoration: none;
@@ -98,9 +108,21 @@ a:hover {
     color: white;
 }
 
-.btn-primary:hover, .btn-primary:focus {
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:focus-visible,
+.btn-primary:active,
+.btn-primary.active {
     background-color: var(--primary-hover);
     border-color: var(--primary-hover);
+    color: white;
+}
+
+.btn-primary:disabled,
+.btn-primary.disabled {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    opacity: 0.65;
 }
 
 .btn-secondary {
@@ -109,20 +131,77 @@ a:hover {
     color: var(--primary);
 }
 
-.btn-secondary:hover {
+.btn-secondary:hover,
+.btn-secondary:focus,
+.btn-secondary:focus-visible,
+.btn-secondary:active,
+.btn-secondary.active {
     background-color: var(--secondary-hover);
     border-color: var(--secondary-hover);
     color: var(--primary);
 }
 
+.btn-secondary:disabled,
+.btn-secondary.disabled {
+    background-color: var(--secondary);
+    border-color: var(--secondary);
+    opacity: 0.65;
+}
+
 .btn-outline-primary {
     color: var(--primary);
     border-color: var(--primary);
+    background-color: transparent;
 }
 
-.btn-outline-primary:hover {
+.btn-outline-primary:hover,
+.btn-outline-primary:focus,
+.btn-outline-primary:focus-visible {
     background-color: var(--primary);
+    border-color: var(--primary);
     color: white;
+}
+
+.btn-outline-primary:active,
+.btn-outline-primary.active {
+    background-color: var(--primary-hover);
+    border-color: var(--primary-hover);
+    color: white;
+}
+
+.btn-outline-primary:disabled,
+.btn-outline-primary.disabled {
+    color: var(--primary);
+    border-color: var(--primary);
+    opacity: 0.65;
+}
+
+.btn-outline-secondary {
+    color: var(--secondary);
+    border-color: var(--secondary);
+    background-color: transparent;
+}
+
+.btn-outline-secondary:hover,
+.btn-outline-secondary:focus,
+.btn-outline-secondary:focus-visible {
+    background-color: var(--secondary);
+    border-color: var(--secondary);
+    color: var(--primary);
+}
+
+.btn-outline-secondary:active,
+.btn-outline-secondary.active {
+    background-color: var(--secondary-hover);
+    border-color: var(--secondary-hover);
+    color: var(--primary);
+}
+
+.btn-outline-secondary:disabled,
+.btn-outline-secondary.disabled {
+    color: var(--secondary);
+    border-color: var(--secondary);
+    opacity: 0.65;
 }
 
 .btn-white {
@@ -131,10 +210,42 @@ a:hover {
     color: var(--text-primary);
 }
 
-.btn-white:hover {
+.btn-white:hover,
+.btn-white:focus,
+.btn-white:focus-visible {
     background-color: var(--background);
     border-color: var(--primary);
     color: var(--primary);
+}
+
+.btn-white:active,
+.btn-white.active {
+    background-color: var(--background);
+    border-color: var(--primary-hover);
+    color: var(--primary-hover);
+}
+
+.btn-white:disabled,
+.btn-white.disabled {
+    background-color: white;
+    border-color: var(--border-color);
+    opacity: 0.65;
+}
+
+.contextual-help-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: #6c757d;
+    transition: color 0.2s;
+}
+
+.contextual-help-link:hover {
+    color: var(--primary);
+}
+
+.contextual-help-link .help-text {
+    font-size: 0.875rem;
 }
 
 .dashboard-greeting {
@@ -152,7 +263,6 @@ a:hover {
 .card {
     background: var(--surface);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
     box-shadow: var(--shadow-sm);
 }
 
@@ -439,7 +549,8 @@ a:hover {
     color: white;
 }
 
-.nav-accordion-btn:not(.collapsed) {
+.dropdown.show .nav-accordion-btn,
+.nav-accordion-btn.show {
     background-color: rgba(255, 255, 255, 0.15);
     color: white;
     box-shadow: none;
@@ -487,7 +598,6 @@ a:hover {
 .balance-card {
     background: linear-gradient(135deg, var(--primary), var(--primary-hover));
     color: white;
-    border-radius: var(--radius-lg);
     padding: 2rem;
     box-shadow: var(--shadow-md);
     position: relative;
@@ -693,7 +803,6 @@ body.maintenance-active .main-content {
 .hall-pass-card {
     background: var(--surface);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-md);
     box-shadow: var(--shadow-md);
     padding: 1.25rem;
     position: relative;
@@ -780,10 +889,23 @@ body.maintenance-active .main-content {
         overflow-x: hidden;
     }
 
-    /* Hide desktop sidebar on mobile to prevent horizontal overflow */
+    /* Slide-out sidebar on mobile instead of hiding */
     .sidebar,
     .student-sidebar {
-        display: none !important;
+        position: fixed;
+        top: 0;
+        left: 0;
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        z-index: 1100;
+        height: 100vh;
+        overflow-y: auto;
+    }
+
+    .sidebar.show,
+    .student-sidebar.show {
+        transform: translateX(0);
+        box-shadow: 0 0 30px rgba(0, 0, 0, 0.3);
     }
 
     /* Reset main content to fill screen without sidebar margin */
@@ -795,16 +917,27 @@ body.maintenance-active .main-content {
         padding: 1rem !important;
     }
 
-    /* Ensure page header doesn't overflow */
+    /* Ensure page header doesn't overflow and doesn't overlap with hamburger menu */
     .page-header {
         flex-direction: column;
         align-items: flex-start;
+        padding-left: 64px; /* Make room for hamburger button */
+    }
+
+    .page-header h1 {
+        font-size: 1.5rem; /* Slightly smaller on mobile */
+    }
+
+    .page-header .eyebrow {
+        font-size: 0.7rem;
     }
 
     .page-header-actions {
         width: 100%;
         justify-content: flex-start;
         margin-top: 0.5rem;
+        flex-wrap: wrap;
+        gap: 0.5rem;
     }
 
     /* Ensure tables scroll horizontally within their container */
@@ -816,6 +949,48 @@ body.maintenance-active .main-content {
     /* Add padding at bottom for mobile nav */
     body {
         padding-bottom: 70px;
+    }
+
+    /* Make all buttons in page-header-actions icon-only on mobile */
+    .page-header-actions .btn {
+        padding: 0.5rem;
+        min-width: 40px;
+        height: 40px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+    /* Hide text in buttons in an accessible way, show only icons */
+    .page-header-actions .btn span:not(.material-symbols-outlined) {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    /* For buttons without icons, hide the text visually but keep layout */
+    .page-header-actions .btn:not(:has(.material-symbols-outlined)) {
+        color: transparent;
+        text-shadow: none;
+    }
+
+    .page-header-actions .btn .material-symbols-outlined {
+        font-size: 24px;
+        margin: 0;
+    }
+
+    /* Show contextual help link icon on mobile */
+    .contextual-help-link {
+        display: inline-flex !important;
+    }
+
+    .contextual-help-link .help-text {
+        display: none;
     }
 }
 
@@ -859,4 +1034,59 @@ body.maintenance-active .main-content {
 
 .mobile-bottom-nav a:hover {
     color: var(--primary, #1a4d47);
+}
+
+/* Mobile Menu Toggle Button */
+.mobile-menu-toggle {
+    position: fixed;
+    top: 1rem;
+    left: 1rem;
+    z-index: 1060;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: var(--primary);
+    color: white;
+    border: none;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.mobile-menu-toggle:hover,
+.mobile-menu-toggle:focus {
+    background: var(--primary-hover);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    transform: scale(1.05);
+}
+
+.mobile-menu-toggle:active {
+    transform: scale(0.95);
+}
+
+@media (max-width: 767.98px) {
+    .mobile-menu-toggle {
+        display: flex;
+    }
+}
+
+/* Sidebar Backdrop */
+.sidebar-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1040;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.sidebar-backdrop.show {
+    opacity: 1;
+    visibility: visible;
 }

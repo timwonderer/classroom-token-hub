@@ -4,12 +4,12 @@
 
 This PR fixes a critical scoping issue with insurance policies and adds fun marketing badge features for teachers to use when promoting insurance plans to students.
 
-## Problem: Schrödinger's Insurance 🐱📦
+## Problem: Schrödinger's Insurance 
 
 Students could see insurance policies from **all teachers** in the system, not just their own. This created a quantum state where:
-- ✅ Admin sees "Paycheck Protection Classic" (their policy)
-- ❌ Admin doesn't see "Basic Paycheck Protection" (created by another teacher or has NULL teacher_id)
-- ✅ Student sees BOTH policies (bug!)
+-  Admin sees "Paycheck Protection Classic" (their policy)
+-  Admin doesn't see "Basic Paycheck Protection" (created by another teacher or has NULL teacher_id)
+-  Student sees BOTH policies (bug!)
 
 Additionally, the student portal had hardcoded styling that made the 3rd policy in the database always show as "Best Value!" regardless of its actual attributes.
 
@@ -41,24 +41,24 @@ Teachers can now add marketing badges to insurance policies through the admin pa
 **17 Badge Options:**
 
 **Serious badges:**
-- Best Value! (⭐ grade)
-- Most Popular (📈 trending_up)
-- Recommended (✓ verified)
-- Premium Coverage (🏅 workspace_premium)
+- Best Value! ( grade)
+- Most Popular ( trending_up)
+- Recommended ( verified)
+- Premium Coverage ( workspace_premium)
 - Limited Time Offer (⏰ schedule)
-- New! (🆕 new_releases)
-- Fan Favorite (❤️ favorite)
+- New! ( new_releases)
+- Fan Favorite ( favorite)
 
 **Fun/Silly badges:**
-- YOLO Protection (🎲 casino)
-- Trust Me Bro (🤝 handshake)
-- Definitely Not a Scam (✓ verified_user)
-- Your Parents Would Approve (👨‍👩‍👧 family_restroom)
-- As Seen on TV (📺 live_tv)
-- Industry Leading* (🏆 emoji_events)
-- Chaos Insurance (🌀 tornado)
-- The Responsible Choice™ (✓ check_circle)
-- The One Your Friend Has (👥 groups)
+- YOLO Protection ( casino)
+- Trust Me Bro ( handshake)
+- Definitely Not a Scam ( verified_user)
+- Your Parents Would Approve ( family_restroom)
+- As Seen on TV ( live_tv)
+- Industry Leading* ( emoji_events)
+- Chaos Insurance ( tornado)
+- The Responsible Choice™ ( check_circle)
+- The One Your Friend Has ( groups)
 
 **Visual Styling:**
 - Each badge has unique color scheme (primary, danger, warning, success, info, dark)

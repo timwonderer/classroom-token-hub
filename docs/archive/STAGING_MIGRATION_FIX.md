@@ -14,18 +14,18 @@ UserWarning: Revision a1b2c3d4e5f6 is present more than once
 Staging branch had **three files with overlapping issues**:
 
 1. `a1b2c3d4e5f6_add_rent_system.py`
-   - ✅ Correct migration (created 2025-11-16)
+   -  Correct migration (created 2025-11-16)
    - Revision: `a1b2c3d4e5f6`
    - Purpose: Add rent system tables
 
 2. `a1b2c3d4e5f6_add_join_code_to_transaction.py`
-   - ❌ **DUPLICATE - REMOVED**
+   -  **DUPLICATE - REMOVED**
    - Revision: `a1b2c3d4e5f6` (same as above - CONFLICT!)
    - down_revision: `None` (orphaned root migration)
    - This was the broken version
 
 3. `00212c18b0ac_add_join_code_to_transaction.py`
-   - ✅ Correct migration (fixed version)
+   -  Correct migration (fixed version)
    - Revision: `00212c18b0ac` (unique)
    - down_revision: `b6bc11a3a665` (proper parent)
 
@@ -49,33 +49,33 @@ Staging branch had **three files with overlapping issues**:
 ### Before Fix:
 ```
 Total Migrations: 65
-Root Migrations: 2 ❌ (should be 1)
+Root Migrations: 2  (should be 1)
   - 02f217d8b08e (clean_initial_migration)
   - a1b2c3d4e5f6 (add_join_code - ORPHANED)
 Head Migrations: 1
-Duplicate Revisions: a1b2c3d4e5f6 (2 files) ❌
+Duplicate Revisions: a1b2c3d4e5f6 (2 files) 
 ```
 
 ### After Fix:
 ```
 Total Migrations: 64
-Root Migrations: 1 ✅
+Root Migrations: 1 
   - 02f217d8b08e (clean_initial_migration)
-Head Migrations: 1 ✅
+Head Migrations: 1 
   - 00212c18b0ac (add_join_code_to_transaction)
-Duplicate Revisions: None ✅
+Duplicate Revisions: None 
 ```
 
 ## Migration Chain Status
 
-✅ **All Checks Passed:**
-- ✅ Single root migration
-- ✅ Single head migration
-- ✅ No duplicate revision IDs
-- ✅ No missing migrations
-- ✅ No orphaned migrations
-- ✅ No circular dependencies
-- ✅ Valid migration chain from root to head
+ **All Checks Passed:**
+-  Single root migration
+-  Single head migration
+-  No duplicate revision IDs
+-  No missing migrations
+-  No orphaned migrations
+-  No circular dependencies
+-  Valid migration chain from root to head
 
 ## Testing the Fix
 
@@ -90,9 +90,9 @@ flask db upgrade
 INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
 INFO  [alembic.runtime.migration] Will assume transactional DDL.
 INFO  [alembic.runtime.migration] Running upgrade b6bc11a3a665 -> 00212c18b0ac, Add join_code to transaction table for period-level isolation
-✅ Added join_code column to transaction table
-⚠️  WARNING: Existing transactions have NULL join_code
-⚠️  Run backfill script to populate join_code for historical data
+ Added join_code column to transaction table
+  WARNING: Existing transactions have NULL join_code
+  Run backfill script to populate join_code for historical data
 ```
 
 ## Next Steps for Staging
@@ -125,12 +125,12 @@ INFO  [alembic.runtime.migration] Running upgrade b6bc11a3a665 -> 00212c18b0ac, 
 
 ## Important Notes
 
-⚠️ **After Migration:**
+ **After Migration:**
 - Existing transactions will have `join_code = NULL`
 - Application should handle NULL join_code during transition
 - Plan backfill strategy before making join_code NOT NULL
 
-⚠️ **For Production:**
+ **For Production:**
 - This same fix should be applied to main/production
 - Already fixed on branch: `claude/fix-migration-issues-01YRwKEH1gsZs4Uhhb7TCunF`
 

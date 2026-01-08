@@ -222,7 +222,7 @@
             <div class="card-body">
                 <p class="small text-muted">
                     {% if enrollment.policy.no_repurchase_after_cancel %}
-                        ⚠️ <strong>Warning:</strong> If you cancel this policy, you must wait {{ enrollment.policy.repurchase_wait_days }} days before you can repurchase it.
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i><strong>Warning:</strong> If you cancel this policy, you must wait {{ enrollment.policy.repurchase_wait_days }} days before you can repurchase it.
                     {% else %}
                         You can cancel your policy at any time.
                     {% endif %}

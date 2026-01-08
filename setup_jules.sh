@@ -153,11 +153,11 @@ read -p "Do you want to seed the database with test data? (y/n) " -n 1 -r
 echo ""
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "Seeding database with test data..."
-    if [ -f "seed_dummy_students.py" ]; then
-        python seed_dummy_students.py
+    if [ -f "scripts/seed_dummy_students.py" ]; then
+        python scripts/seed_dummy_students.py
         print_status "Test data seeded"
     else
-        print_warning "seed_dummy_students.py not found - skipping"
+        print_warning "scripts/seed_dummy_students.py not found - skipping"
     fi
 fi
 

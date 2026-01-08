@@ -1,0 +1,772 @@
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+<link href="{{ static_url('css/style.css') }}" rel="stylesheet">
+<!-- Getting Started Widget - Floating onboarding checklist -->
+<div id="gettingStartedWidget" class="getting-started-widget" style="display: none;">
+    <!-- Circular Bubble (Collapsed State) -->
+    <div id="gsBubble" class="gs-bubble" data-bs-toggle="collapse" data-bs-target="#gsBody" aria-expanded="false" aria-controls="gsBody" data-bs-toggle="tooltip" data-bs-placement="left" title="I can help you set up your classroom economy!">
+        
+        <span class="material-symbols-outlined gs-bubble-icon">rocket_launch</span>
+        <span class="gs-bubble-badge" id="gsBubbleBadge">0/9</span>
+    </div>
+
+    <!-- Widget Panel (Expanded State) -->
+    <div class="gs-panel collapse" id="gsBody">
+        <!-- Panel Header -->
+        <div class="gs-panel-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="material-symbols-outlined">rocket_launch</span>
+                    <h6 class="mb-0">Getting Started</h6>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="gs-progress-badge" id="gsProgressBadge">0/9</span>
+                    <button class="btn-close-widget" onclick="dismissGettingStarted(event)" title="Dismiss permanently">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel Body -->
+        <div class="gs-panel-body">
+        <p class="text-primary  mb-3">To help you get started, we have compiled a list of settings you may want to visit to set up your classroom economy system!</p>
+
+        <!-- Checklist Items -->
+        <div class="gs-checklist">
+            <!-- REQUIRED TASKS -->
+            <div class="gs-section-header">
+                
+                <span class="badge bg-danger" style="font-size: 0.9rem;"><i class="bi bi-exclamation-circle"></i> REQUIRED TASKS</span>
+                <p class="text-danger small mt-2 mb-0">These tasks are required because your classroom economy system won't function properly without them.</p>
+            </div>
+
+            <!-- Upload Roster -->
+            <div class="gs-item" data-task="roster" data-required="true">
+                <div class="gs-item-content">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="task-roster" disabled>
+                        <label class="form-check-label" for="task-roster">
+                            <strong>Create a class</strong>
+                        </label>
+                    </div>
+                    <div class="gs-item-actions">
+                        <a href="{{ url_for('admin.students') }}" class="btn btn-sm btn-outline-primary">
+                            Go <span class="material-symbols-outlined ms-1" style="font-size: 16px;">arrow_forward</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Set Up Payroll (Required) -->
+            <div class="gs-item" data-task="payroll" data-required="true">
+                <div class="gs-item-content">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="task-payroll" disabled>
+                        <label class="form-check-label" for="task-payroll">
+                            <strong>Set up pay rate</strong>
+                        </label>
+                    </div>
+                    <div class="gs-item-actions">
+                        <a href="{{ url_for('admin.payroll') }}#settings" class="btn btn-sm btn-outline-primary">
+                            Go <span class="material-symbols-outlined ms-1" style="font-size: 16px;">arrow_forward</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OPTIONAL FEATURES -->
+            <div class="gs-section-header mt-3">
+                <span class="badge bg-secondary" style="font-size: 0.9rem;"><i class="bi bi-bookmark-star"></i> ADDITIONAL FEATURES</span>
+                <p class="text-primary small mt-2 mb-0">These features are optional but can enhance your classroom economy experience. Feel free to skip any that don't fit your needs.</p>
+            </div>
+
+            <!-- Configure Store (Optional) -->
+            <div class="gs-item" data-task="store" data-optional="true">
+                <div class="gs-item-content">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="task-store" disabled>
+                        <label class="form-check-label" for="task-store">
+                            <strong>Add store items</strong>
+                        </label>
+                    </div>
+                    <div class="gs-item-actions">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="skipTask(event, 'store')">
+                            Skip
+                        </button>
+                        <a href="{{ url_for('admin.store_management') }}" class="btn btn-sm btn-outline-primary">
+                            Go <span class="material-symbols-outlined ms-1" style="font-size: 16px;">arrow_forward</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configure Banking (Optional) -->
+            <div class="gs-item" data-task="banking" data-optional="true">
+                <div class="gs-item-content">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="task-banking" disabled>
+                        <label class="form-check-label" for="task-banking">
+                            <strong>Customize bank rates</strong>
+                        </label>
+                    </div>
+                    <div class="gs-item-actions">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="skipTask(event, 'banking')">
+                            Skip
+                        </button>
+                        <a href="{{ url_for('admin.banking') }}" class="btn btn-sm btn-outline-primary">
+                            Go <span class="material-symbols-outlined ms-1" style="font-size: 16px;">arrow_forward</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configure Rent (Optional) -->
+            <div class="gs-item" data-task="rent" data-optional="true">
+                <div class="gs-item-content">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="task-rent" disabled>
+                        <label class="form-check-label" for="task-rent">
+                            <strong>Set up rent</strong>
+                        </label>
+                    </div>
+                    <div class="gs-item-actions">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="skipTask(event, 'rent')">
+                            Skip
+                        </button>
+                        <a href="{{ url_for('admin.rent_settings') }}" class="btn btn-sm btn-outline-primary">
+                            Go <span class="material-symbols-outlined ms-1" style="font-size: 16px;">arrow_forward</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configure Insurance (Optional) -->
+            <div class="gs-item" data-task="insurance" data-optional="true">
+                <div class="gs-item-content">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="task-insurance" disabled>
+                        <label class="form-check-label" for="task-insurance">
+                            <strong>Set up insurance</strong>
+                        </label>
+                    </div>
+                    <div class="gs-item-actions">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="skipTask(event, 'insurance')">
+                            Skip
+                        </button>
+                        <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-sm btn-outline-primary">
+                            Go <span class="material-symbols-outlined ms-1" style="font-size: 16px;">arrow_forward</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configure Hall Passes (Optional) -->
+            <div class="gs-item" data-task="hall_pass" data-optional="true">
+                <div class="gs-item-content">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="task-hall_pass" disabled>
+                        <label class="form-check-label" for="task-hall_pass">
+                            <strong>Set up hall passes</strong>
+                        </label>
+                    </div>
+                    <div class="gs-item-actions">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="skipTask(event, 'hall_pass')">
+                            Skip
+                        </button>
+                        <a href="{{ url_for('admin.hall_pass') }}" class="btn btn-sm btn-outline-primary">
+                            Go <span class="material-symbols-outlined ms-1" style="font-size: 16px;">arrow_forward</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Customize Personalization (Optional) -->
+            <div class="gs-item" data-task="personalization" data-optional="true">
+                <div class="gs-item-content">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="task-personalization" disabled>
+                        <label class="form-check-label" for="task-personalization">
+                            <strong>Customize personalization</strong>
+                        </label>
+                    </div>
+                    <div class="gs-item-actions">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="skipTask(event, 'personalization')">
+                            Skip
+                        </button>
+                        <a href="{{ url_for('admin.settings') }}" class="btn btn-sm btn-outline-primary">
+                            Go <span class="material-symbols-outlined ms-1" style="font-size: 16px;">arrow_forward</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Set Up Passkey (Optional) -->
+            <div class="gs-item" data-task="passkey" data-optional="true">
+                <div class="gs-item-content">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="task-passkey" disabled>
+                        <label class="form-check-label" for="task-passkey">
+                            <strong>Set up passkey</strong>
+                        </label>
+                    </div>
+                    <div class="gs-item-actions">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="skipTask(event, 'passkey')">
+                            Skip
+                        </button>
+                        <a href="{{ url_for('admin.passkey_settings') }}" class="btn btn-sm btn-outline-primary">
+                            Go <span class="material-symbols-outlined ms-1" style="font-size: 16px;">arrow_forward</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        </div>
+    </div>
+</div>
+
+<style>
+root {
+    font-family:'Inter', sans-serif;
+}
+.getting-started-widget {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 1050;
+}
+
+/* Circular Bubble (Collapsed State) */
+.gs-bubble {
+    width: 64px;
+    height: 64px;
+    background: var(--primary);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px #00000033;
+    transition: all 0.3s ease;
+    position: relative;
+    animation: slideInUp 0.3s ease-out;
+    border-style: solid;
+    border-color:var(--secondary);
+}
+
+.gs-bubble:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+    animation: slideInUp 0.3s ease-out;
+}
+
+
+
+.gs-bubble-icon {
+    color: white;
+    font-size: 32px;
+    font-weight: 400;
+}
+
+.gs-bubble-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #dc3545;
+    color: white;
+    border-radius: 12px;
+    padding: 2px 6px;
+    font-size: 11px;
+    font-weight: 700;
+    min-width: 24px;
+    text-align: center;
+}
+
+/* Hide bubble when panel is expanded */
+.getting-started-widget:has(#gsBody.show) .gs-bubble {
+    display: none;
+}
+
+/* Panel (Expanded State) */
+.gs-panel {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 400px;
+    max-width: calc(100vw - 48px);
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    border: 3px solid var(--secondary);
+    animation: slideInUp 0.3s ease-out;
+}
+
+.gs-panel-header {
+    padding: 16px;
+    background: var(--primary);
+    color: white;
+    border-radius: 10px 10px 0 0;
+    cursor: pointer;
+    user-select: none;
+}
+
+.gs-panel-header h6 {
+    color: white;
+    font-weight:400;
+}
+
+.gs-panel-header .material-symbols-outlined {
+    color: var(--secondary);
+    font-weight:400;
+}
+
+.gs-progress-badge {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.btn-close-widget {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 0;
+    margin-left: 8px;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+}
+
+.btn-close-widget:hover {
+    opacity: 1;
+}
+
+.btn-close-widget .material-symbols-outlined {
+    font-size: 20px;
+}
+
+.gs-panel-body {
+    padding: 16px;
+    max-height: 500px;
+    overflow-y: auto;
+}
+
+@keyframes slideInUp {
+    from {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.gs-checklist {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.gs-section-header {
+    margin-top: 8px;
+    margin-bottom: 8px;
+    padding-left: 4px;
+}
+
+.gs-section-header:first-child {
+    margin-top: 0;
+}
+
+.gs-section-header .badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 4px 10px;
+    letter-spacing: 0.5px;
+}
+
+.gs-item {
+    border: 1px solid var(--secondary);
+    border-radius: 8px;
+    padding: 12px;
+    background: #f8f9fa;
+    transition: all 0.2s;
+}
+
+.gs-item:hover {
+    background: #e9ecef;
+    border-color: var(--primary);
+}
+
+.gs-item.completed {
+    background: #d1e7dd;
+    border-color: #198754;
+}
+
+.gs-item.completed .form-check-input:checked {
+    background-color: #198754;
+    border-color: #198754;
+}
+
+.gs-item-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.gs-item-content .form-check {
+    flex: 1;
+    margin: 0;
+}
+
+.gs-item-content .form-check-label {
+    cursor: default;
+    margin-bottom: 0;
+}
+
+.gs-item-actions {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.gs-item-actions .btn {
+    padding: 4px 12px;
+    font-size: 0.875rem;
+}
+
+.gs-item-actions .btn-outline-primary:hover {
+    background-color: var(--bs-success);
+    border: 1px solid var(--bs-success);
+    color: white;
+}
+
+.gs-item-actions .btn-outline-secondary:hover {
+    background-color:var(--bs-warning);
+    border: 1px solid var(--bs-warning);
+    color: white;
+}
+
+/* Hide skipped items */
+.gs-item.skipped {
+    background: #f8f9fa;
+    opacity: 0.6;
+    border-color: #dee2e6;
+}
+
+.gs-item.skipped .form-check-input {
+    opacity: 0.5;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+    .getting-started-widget {
+        bottom: 16px;
+        right: 16px;
+    }
+
+    .gs-bubble {
+        width: 56px;
+        height: 56px;
+    }
+
+    .gs-bubble-icon {
+        font-size: 28px;
+    }
+
+    .gs-bubble-badge {
+        font-size: 10px;
+        padding: 2px 5px;
+    }
+
+    .gs-panel {
+        max-width: calc(100vw - 32px);
+    }
+
+    .gs-congratulations {
+        background-color:#1a4d47;
+        color:white;
+        
+        padding: 10px;
+        
+    }
+}
+</style>
+
+<script>
+// Getting Started Widget functionality
+(function() {
+    let widgetDismissed = false;
+
+    // Initialize widget
+    function initGettingStartedWidget() {
+        // Initialize Bootstrap tooltip
+        const tooltip = new bootstrap.Tooltip(document.getElementById('gsBubble'));
+        
+        // Check completion status from backend (which also checks if dismissed)
+        checkTaskCompletion();
+    }
+
+    // Check which tasks are completed
+    function checkTaskCompletion() {
+        fetch('/admin/onboarding/status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Check if widget is dismissed
+                    if (data.dismissed) {
+                        widgetDismissed = true;
+                        const widget = document.getElementById('gettingStartedWidget');
+                        if (widget) {
+                            widget.style.display = 'none';
+                        }
+                        return;
+                    }
+
+                    // Check if no class period is selected
+                    if (data.no_class_period) {
+                        // Show widget but with a message about selecting a class period
+                        const widget = document.getElementById('gettingStartedWidget');
+                        if (widget) {
+                            widget.style.display = 'block';
+                        }
+                        showNoClassPeriodMessage();
+                        return;
+                    }
+
+                    // Show widget
+                    const widget = document.getElementById('gettingStartedWidget');
+                    if (widget) {
+                        widget.style.display = 'block';
+                    }
+
+                    // Remove any "no class period" message if it exists
+                    const noClassMsg = document.querySelector('.gs-no-class-period');
+                    if (noClassMsg) {
+                        noClassMsg.remove();
+                    }
+
+                    const completion = data.completion || {};
+                    const skippedTasks = data.skipped || {};
+                    const dataCompleted = data.data_completed || {};
+                    const hasDataCompleted = Object.keys(dataCompleted).length > 0;
+
+                    // Update UI for each task
+                    Object.keys(completion).forEach(task => {
+                        if (!completion[task]) {
+                            return;
+                        }
+
+                        const isSkipped = Boolean(skippedTasks[task]);
+                        const isDoneByData = Boolean(dataCompleted[task]);
+                        const status = isSkipped && (!hasDataCompleted || !isDoneByData) ? 'skipped' : 'done';
+                        markTaskComplete(task, status);
+                    });
+
+                    updateProgress();
+                }
+            })
+            .catch(error => console.error('Error checking task completion:', error));
+    }
+
+    // Mark task as complete
+    function markTaskComplete(taskName, status = 'done') {
+        const checkbox = document.getElementById(`task-${taskName}`);
+        const item = document.querySelector(`[data-task="${taskName}"]`);
+
+        if (checkbox && item) {
+            checkbox.checked = true;
+            item.classList.add('completed');
+            updateTaskActions(item, status);
+        }
+    }
+
+    function updateTaskActions(item, status) {
+        const actions = item.querySelector('.gs-item-actions');
+        if (!actions) {
+            return;
+        }
+
+        if (status === 'skipped') {
+            item.classList.add('skipped');
+        }
+
+        const label = status === 'skipped' ? 'Skipped' : 'Done';
+        const buttonClass = status === 'skipped' ? 'btn-outline-secondary' : 'btn-outline-primary';
+
+        actions.innerHTML = `
+            <button class="btn btn-sm ${buttonClass}" disabled aria-disabled="true">
+                ${label}
+            </button>
+        `;
+        actions.dataset.state = status;
+    }
+
+    // Skip task (for optional features)
+    window.skipTask = function(event, taskName) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const item = document.querySelector(`[data-task="${taskName}"]`);
+        if (item) {
+            item.classList.add('skipped');
+            markTaskComplete(taskName, 'skipped');  // Mark as "complete" (skipped)
+
+            // Save skip status
+            fetch('/admin/onboarding/skip-task', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name="csrf-token"]').content
+                },
+                body: JSON.stringify({ task: taskName })
+            }).catch(error => console.error('Error skipping task:', error));
+        }
+    };
+
+    // Note: We show ALL features now, not just enabled ones
+    // Teachers can skip features they don't want to use
+    // Update progress badge
+    function updateProgress() {
+        const allTasks = document.querySelectorAll('.gs-item:not([style*="display: none"])');
+        const completedTasks = document.querySelectorAll('.gs-item.completed:not([style*="display: none"])');
+        const total = allTasks.length;
+        const completed = completedTasks.length;
+
+        // Update both bubble badge and panel badge
+        const bubbleBadge = document.getElementById('gsBubbleBadge');
+        const panelBadge = document.getElementById('gsProgressBadge');
+
+        if (bubbleBadge) {
+            bubbleBadge.textContent = `${completed}/${total}`;
+        }
+        if (panelBadge) {
+            panelBadge.textContent = `${completed}/${total}`;
+        }
+
+        // Auto-dismiss if all required tasks are complete
+        const requiredTasks = document.querySelectorAll('.gs-item:not([data-optional="true"]):not([style*="display: none"])');
+        const completedRequired = document.querySelectorAll('.gs-item.completed:not([data-optional="true"]):not([style*="display: none"])');
+
+        if (requiredTasks.length > 0 && requiredTasks.length === completedRequired.length) {
+            // All required tasks complete - could auto-collapse or show congratulations
+            showCongratulations();
+        }
+    }
+
+    // Show congratulations message
+    function showCongratulations() {
+        const body = document.getElementById('gsBody');
+        if (body && !document.querySelector('.gs-congratulations')) {
+            const congrats = document.createElement('div');
+            congrats.className = ' gs-congratulations mt-2';
+            congrats.innerHTML = `
+                <div class=" align-items-start gap-2" style="padding:10px; border-radius: 0px 0px 10px 10px;background-color:#1a4d47; color:white; ">
+                    <h5 style="color:var(--secondary)"> <span class="material-symbols-outlined">celebration</span> Great job!</h5>
+                    
+                       
+                        <p class="mb-0 small" style="font-weight:300">You've completed all required setup tasks.
+                        You can now dismiss this widget or continue with optional features.</p>
+                   
+                </div>
+            `;
+            body.appendChild(congrats);
+        }
+    }
+
+    // Show message when no class period is selected
+    function showNoClassPeriodMessage() {
+        const body = document.querySelector('.gs-panel-body');
+        if (body && !document.querySelector('.gs-no-class-period')) {
+            // Clear existing checklist
+            const checklist = document.querySelector('.gs-checklist');
+            if (checklist) {
+                checklist.style.display = 'none';
+            }
+
+            const message = document.createElement('div');
+            message.className = 'alert alert-info gs-no-class-period';
+            message.innerHTML = `
+                <div class="d-flex align-items-start gap-2">
+                    <span class="material-symbols-outlined">info</span>
+                    <div>
+                        <strong>Select a Class Period First</strong>
+                        <p class="mb-0 mt-2">To start setting up your classroom economy, please select or create a class period from the class period dropdown in the navigation bar.</p>
+                    </div>
+                </div>
+            `;
+            body.insertBefore(message, body.firstChild);
+        }
+    }
+
+    // Make panel header also collapsible (click anywhere on header to collapse)
+    const gsPanelHeader = document.querySelector('.gs-panel-header');
+    if (gsPanelHeader) {
+        gsPanelHeader.setAttribute('data-bs-toggle', 'collapse');
+        gsPanelHeader.setAttribute('data-bs-target', '#gsBody');
+    }
+
+    // Dismiss widget permanently
+    window.dismissGettingStarted = function(event) {
+        event.stopPropagation();
+
+        if (confirm('Are you sure you want to dismiss this getting started guide? You can always access settings from the navigation menu.')) {
+            // Call backend to persist dismissal
+            fetch('/admin/onboarding/dismiss-widget', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('[name="csrf-token"]').content
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    widgetDismissed = true;
+                    const widget = document.getElementById('gettingStartedWidget');
+                    widget.style.animation = 'slideOutDown 0.3s ease-out';
+                    setTimeout(() => {
+                        widget.style.display = 'none';
+                    }, 300);
+                } else {
+                    console.error('Failed to dismiss widget:', data.message);
+                    alert('Could not dismiss the getting started guide. Please try again.');
+                }
+            })
+            .catch(error => {
+                console.error('Error dismissing widget:', error);
+                alert('An error occurred while dismissing the getting started guide. Please try again.');
+            });
+        }
+    };
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', initGettingStartedWidget);
+
+    // Re-check completion when returning to page
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden && !widgetDismissed) {
+            checkTaskCompletion();
+        }
+    });
+})();
+</script>
+
+<style>
+@keyframes slideOutDown {
+    from {
+        transform: translateY(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateY(100%);
+        opacity: 0;
+    }
+}
+</style>

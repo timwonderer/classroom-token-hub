@@ -14,17 +14,17 @@ import hmac
 import os
 
 from flask import request, current_app, session, render_template, url_for
-from jinja2 import TemplateNotFound
 from markupsafe import Markup
 import markdown
 import bleach
 
-from .device import is_mobile
-
 
 def render_template_with_fallback(template_name, **context):
     """
-    Renders a template, falling back to a mobile version if the user is on a mobile device.
+    Renders a template with static_url helper available.
+
+    Note: Mobile-specific templates have been removed. The responsive design
+    now uses CSS media queries and adaptive layouts instead.
     """
     # Ensure static_url helper is always available even if Jinja globals/context processors are missing
     static_url_func = current_app.jinja_env.globals.get('static_url')
@@ -47,16 +47,6 @@ def render_template_with_fallback(template_name, **context):
         static_url_func = _fallback_static_url
 
     context.setdefault('static_url', static_url_func)
-
-    if session.get('force_desktop'):
-        return render_template(template_name, **context)
-
-    if is_mobile() and not session.get('force_desktop'):
-        try:
-            mobile_template_name = f"mobile/{template_name}"
-            return render_template(mobile_template_name, **context)
-        except TemplateNotFound:
-            pass  # Fall back to the desktop version
 
     return render_template(template_name, **context)
 

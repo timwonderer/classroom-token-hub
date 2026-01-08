@@ -66,6 +66,7 @@
                                     <th>Date</th>
                                     <th>Action</th>
                                     <th>Time</th>
+                                    <th>Report</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -73,7 +74,7 @@
                                 <tr>
                                     <td>
                                         {% if event.timestamp %}
-                                            <span class="local-timestamp" data-timestamp="{{ event.timestamp.isoformat() }}Z" data-format="compact-date"></span>
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(event.timestamp) }}" data-format="compact-date"></span>
                                         {% else %}
                                             N/A
                                         {% endif %}
@@ -86,10 +87,18 @@
                                     </td>
                                     <td>
                                         {% if event.timestamp %}
-                                            <span class="local-timestamp" data-timestamp="{{ event.timestamp.isoformat() }}Z" data-format="time"></span>
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(event.timestamp) }}" data-format="time"></span>
                                         {% else %}
                                             N/A
                                         {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('student.report_tap_event_issue', tap_event_id=event.id) }}"
+                                           class="btn btn-sm btn-link text-muted p-0"
+                                           title="Report an issue with this attendance record"
+                                           data-bs-toggle="tooltip">
+                                            <span class="material-symbols-outlined fs-6">help</span>
+                                        </a>
                                     </td>
                                 </tr>
                                 {% endfor %}

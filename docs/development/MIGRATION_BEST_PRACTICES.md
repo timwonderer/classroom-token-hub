@@ -33,9 +33,9 @@ def upgrade():
     if not column_exists('table_name', 'column_name'):
         with op.batch_alter_table('table_name', schema=None) as batch_op:
             batch_op.add_column(sa.Column('column_name', sa.Integer(), nullable=True))
-        print("✅ Added column_name to table_name")
+        print(" Added column_name to table_name")
     else:
-        print("⚠️  Column 'column_name' already exists on 'table_name', skipping...")
+        print("  Column 'column_name' already exists on 'table_name', skipping...")
 ```
 
 ### 2. Check if Foreign Keys Exist Before Creating
@@ -55,9 +55,9 @@ def upgrade():
     if not foreign_key_exists('table_name', 'fk_constraint_name'):
         with op.batch_alter_table('table_name', schema=None) as batch_op:
             batch_op.create_foreign_key('fk_constraint_name', 'other_table', ['column_id'], ['id'])
-        print("✅ Added foreign key constraint fk_constraint_name")
+        print(" Added foreign key constraint fk_constraint_name")
     else:
-        print("⚠️  Foreign key 'fk_constraint_name' already exists, skipping...")
+        print("  Foreign key 'fk_constraint_name' already exists, skipping...")
 ```
 
 ### 3. Check if Indexes Exist Before Creating
@@ -76,9 +76,9 @@ def index_exists(table_name, index_name):
 def upgrade():
     if not index_exists('table_name', 'ix_table_column'):
         op.create_index('ix_table_column', 'table_name', ['column_name'])
-        print("✅ Added index ix_table_column")
+        print(" Added index ix_table_column")
     else:
-        print("⚠️  Index 'ix_table_column' already exists, skipping...")
+        print("  Index 'ix_table_column' already exists, skipping...")
 ```
 
 ### 4. Check Column Nullability Before Altering
@@ -99,9 +99,9 @@ def upgrade():
     if column and column.get('nullable', True):
         with op.batch_alter_table('table_name', schema=None) as batch_op:
             batch_op.alter_column('column_name', nullable=False)
-        print("✅ Set column_name to NOT NULL")
+        print(" Set column_name to NOT NULL")
     else:
-        print("⚠️  Column 'column_name' is already NOT NULL, skipping...")
+        print("  Column 'column_name' is already NOT NULL, skipping...")
 ```
 
 ## Downgrade Functions
@@ -114,25 +114,25 @@ def downgrade():
     if foreign_key_exists('table_name', 'fk_constraint_name'):
         with op.batch_alter_table('table_name', schema=None) as batch_op:
             batch_op.drop_constraint('fk_constraint_name', type_='foreignkey')
-        print("❌ Dropped foreign key constraint fk_constraint_name")
+        print(" Dropped foreign key constraint fk_constraint_name")
     else:
-        print("⚠️  Foreign key 'fk_constraint_name' does not exist, skipping...")
+        print("  Foreign key 'fk_constraint_name' does not exist, skipping...")
     
     # Drop column if it exists
     if column_exists('table_name', 'column_name'):
         with op.batch_alter_table('table_name', schema=None) as batch_op:
             batch_op.drop_column('column_name')
-        print("❌ Dropped column_name from table_name")
+        print(" Dropped column_name from table_name")
     else:
-        print("⚠️  Column 'column_name' does not exist, skipping...")
+        print("  Column 'column_name' does not exist, skipping...")
 
 ## Logging Best Practices
 
 Use clear, informative log messages:
 
-- ✅ Use green checkmarks for successful operations
-- ⚠️ Use warning symbols for skipped operations (already exists)
-- ❌ Use red X for reversions/removals
+-  Use green checkmarks for successful operations
+-  Use warning symbols for skipped operations (already exists)
+-  Use red X for reversions/removals
 
 This helps operators understand what the migration is doing and whether it's making changes or skipping already-applied changes.
 
@@ -157,14 +157,14 @@ See `tests/test_migration_idempotency.py` for test examples.
 
 ## Common Pitfalls to Avoid
 
-1. ❌ **Don't** use `op.add_column()` directly without checking if column exists
-2. ❌ **Don't** use `op.create_foreign_key()` without checking if FK exists
-3. ❌ **Don't** use `op.create_index()` without checking if index exists
-4. ❌ **Don't** assume the database is in a clean state
-5. ❌ **Don't** forget to handle ENUM types and other PostgreSQL-specific features
-6. ✅ **Do** always check for existence before creating schema elements
-7. ✅ **Do** log clear messages about what the migration is doing
-8. ✅ **Do** test migrations on a copy of production data when possible
+1.  **Don't** use `op.add_column()` directly without checking if column exists
+2.  **Don't** use `op.create_foreign_key()` without checking if FK exists
+3.  **Don't** use `op.create_index()` without checking if index exists
+4.  **Don't** assume the database is in a clean state
+5.  **Don't** forget to handle ENUM types and other PostgreSQL-specific features
+6.  **Do** always check for existence before creating schema elements
+7.  **Do** log clear messages about what the migration is doing
+8.  **Do** test migrations on a copy of production data when possible
 
 ## Migration Review Checklist
 

@@ -9,7 +9,7 @@ This guide describes how to stand up the read-only style demo endpoints that pow
 - Schema: `demo_students` table (see `docs/technical-reference/database_schema.md`)
 
 ## Prerequisites
-- A separate deployment for the demo (do **not** point at production data). Follow `docs/DEPLOYMENT.md` for the base setup.
+- A separate deployment for the demo (do **not** point at production data). Follow `docs/Deployment_Guide.md` for the base setup.
 - Environment configured with production-like settings plus Turnstile keys (or leave unset to bypass during testing).
 - APScheduler running so `cleanup_expired_demo_sessions_job` executes every 5 minutes (see `app/scheduled_tasks.py`).
 
@@ -20,7 +20,7 @@ This guide describes how to stand up the read-only style demo endpoints that pow
 
 2) **Seed safe sample data**  
    - Option A: Upload a CSV using `student_upload_template.csv`.  
-   - Option B: Run `python seed_dummy_students.py` for quick placeholder students (no real PII).  
+   - Option B: Run `python scripts/seed_dummy_students.py` for quick placeholder students (no real PII).  
    - Add a few store items and attendance/payroll settings via the admin UI to make the teacher dashboard feel real.
 
 3) **Create a live demo student session (for the iframe)**  
