@@ -1,10 +1,9 @@
 #!/bin/bash
 #
-# Complete DigitalOcean Firewall Setup for Cloudflare + Pulsetic (pydo client)
+# Add Pulsetic IPs to DigitalOcean Firewall (pydo client)
 #
 # Usage:
-#   ./setup-firewall-complete.sh create <droplet-id> [ssh-ip]
-#   ./setup-firewall-complete.sh update <firewall-id>
+#   ./add-pulsetic-to-firewall.sh <firewall-id>
 #
 # Requirements:
 #   - python3
@@ -13,6 +12,12 @@
 
 set -e
 
+if [ -z "$1" ]; then
+    echo "Error: Firewall ID required"
+    echo "Usage: $0 <firewall-id>"
+    exit 1
+fi
+
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 if ! command -v python3 &> /dev/null; then
@@ -20,4 +25,4 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-exec python3 "$SCRIPT_DIR/firewall_complete.py" "$@"
+exec python3 "$SCRIPT_DIR/pulsetic_firewall.py" update "$1"

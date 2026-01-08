@@ -622,7 +622,7 @@ The project is ready for version 1.0 release. All critical blockers have been re
 
 ### Previous Changes
 - Continued repository organization and documentation cleanup
-- Moved `UPTIMEROBOT_SETUP.md` to `docs/operations/` for better organization
+- Moved `PULSETIC_SETUP.md` to `docs/operations/` for better organization
 - Moved additional PR-specific reports to `docs/archive/pr-reports/`
 - Updated `docs/operations/README.md` with comprehensive guide listings
 - Added migration to align `rent_settings` schema with application model by including the `block` column

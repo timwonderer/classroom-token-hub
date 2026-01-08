@@ -40,8 +40,9 @@ jobs:
         TURNSTILE_SECRET="${{ secrets.TURNSTILE_SECRET_KEY || '' }}"
         PASSWORDLESS_API_KEY="${{ secrets.PASSWORDLESS_API_KEY || '' }}"
         PASSWORDLESS_API_PUBLIC="${{ secrets.PASSWORDLESS_API_PUBLIC || '' }}"
+        DIGITALOCEAN_ACCESS_TOKEN="${{ secrets.DIGITALOCEAN_ACCESS_TOKEN || '' }}"
 
-        SSH_ENV_VARS="MAINT_MODE=$(printf %q "$MAINT_MODE") MAINT_MESSAGE=$(printf %q "$MAINT_MESSAGE") MAINT_END=$(printf %q "$MAINT_END") MAINT_CONTACT=$(printf %q "$MAINT_CONTACT") TURNSTILE_SITE=$(printf %q "$TURNSTILE_SITE") TURNSTILE_SECRET=$(printf %q "$TURNSTILE_SECRET") PASSWORDLESS_API_KEY=$(printf %q "$PASSWORDLESS_API_KEY") PASSWORDLESS_API_PUBLIC=$(printf %q "$PASSWORDLESS_API_PUBLIC")"
+        SSH_ENV_VARS="MAINT_MODE=$(printf %q "$MAINT_MODE") MAINT_MESSAGE=$(printf %q "$MAINT_MESSAGE") MAINT_END=$(printf %q "$MAINT_END") MAINT_CONTACT=$(printf %q "$MAINT_CONTACT") TURNSTILE_SITE=$(printf %q "$TURNSTILE_SITE") TURNSTILE_SECRET=$(printf %q "$TURNSTILE_SECRET") PASSWORDLESS_API_KEY=$(printf %q "$PASSWORDLESS_API_KEY") PASSWORDLESS_API_PUBLIC=$(printf %q "$PASSWORDLESS_API_PUBLIC") DIGITALOCEAN_ACCESS_TOKEN=$(printf %q "$DIGITALOCEAN_ACCESS_TOKEN")"
 
         # Connect to the production server and deploy
         # SECURITY: Removed -o StrictHostKeyChecking=no (now uses known_hosts)
@@ -75,6 +76,7 @@ jobs:
           sed -i '/^TURNSTILE_SECRET_KEY=/d' .env 2>/dev/null || true
           sed -i '/^PASSWORDLESS_API_KEY=/d' .env 2>/dev/null || true
           sed -i '/^PASSWORDLESS_API_PUBLIC=/d' .env 2>/dev/null || true
+          sed -i '/^DIGITALOCEAN_ACCESS_TOKEN=/d' .env 2>/dev/null || true
 
           # Add updated variables from GitHub
           echo "MAINTENANCE_MODE=${MAINT_MODE}" >> .env
@@ -100,6 +102,12 @@ jobs:
           if [ -n "${PASSWORDLESS_API_PUBLIC}" ]; then
             echo "PASSWORDLESS_API_PUBLIC=${PASSWORDLESS_API_PUBLIC}" >> .env
             echo "✓ Passwordless.dev public key configured (length: ${#PASSWORDLESS_API_PUBLIC})"
+          fi
+
+          # Add DigitalOcean token if provided (for pydo scripts)
+          if [ -n "${DIGITALOCEAN_ACCESS_TOKEN}" ]; then
+            echo "DIGITALOCEAN_ACCESS_TOKEN=${DIGITALOCEAN_ACCESS_TOKEN}" >> .env
+            echo "✓ DigitalOcean access token configured (length: ${#DIGITALOCEAN_ACCESS_TOKEN})"
           fi
 
           # Verify .env file contains the keys
@@ -167,4 +175,3 @@ jobs:
           echo 'Deployment completed successfully.'
 
         EOF
-
