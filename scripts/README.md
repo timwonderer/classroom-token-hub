@@ -83,7 +83,7 @@ python3 scripts/create-github-actions-firewall.py <droplet-id>
 
 #### `firewall-ips.json`
 Reference file containing all Cloudflare and Pulsetic IP ranges in JSON format. Use for manual setup or custom automation.
-Reference file containing all Cloudflare and Pulsetic IP ranges in JSON format. Use for manual setup or custom automation.
+
 
 **Documentation:** [DigitalOcean & Cloudflare Setup Guide](../docs/operations/DIGITALOCEAN_CLOUDFLARE_SETUP.md)
 

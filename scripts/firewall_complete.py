@@ -13,7 +13,7 @@ import argparse
 import json
 import os
 from pathlib import Path
-from typing import Iterable, List, Sequence, Tuple
+from typing import List, Sequence, Tuple
 
 from pulsetic_firewall import get_client, load_token, unwrap_response
 
@@ -76,11 +76,18 @@ def build_inbound_rules(
             }
         )
 
-    for ip in cloudflare_ipv4 + cloudflare_ipv6:
+    for ip in cloudflare_ipv4:
         rules.append({"protocol": "tcp", "ports": "80", "sources": {"addresses": [ip]}})
         rules.append({"protocol": "tcp", "ports": "443", "sources": {"addresses": [ip]}})
 
-    for ip in pulsetic_ipv4 + pulsetic_ipv6:
+    for ip in cloudflare_ipv6:
+        rules.append({"protocol": "tcp", "ports": "80", "sources": {"addresses": [ip]}})
+        rules.append({"protocol": "tcp", "ports": "443", "sources": {"addresses": [ip]}})
+
+    for ip in pulsetic_ipv4:
+        rules.append({"protocol": "tcp", "ports": "443", "sources": {"addresses": [ip]}})
+
+    for ip in pulsetic_ipv6:
         rules.append({"protocol": "tcp", "ports": "443", "sources": {"addresses": [ip]}})
 
     return rules
