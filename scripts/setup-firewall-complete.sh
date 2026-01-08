@@ -115,13 +115,8 @@ build_inbound_rules() {
         RULES+="{\"protocol\":\"tcp\",\"ports\":\"443\",\"sources\":{\"addresses\":[\"$IP\"]}},"
     done
 
-    # Add Pulsetic HTTPS rules (IPv4)
-    for IP in "${PULSETIC_IPV4[@]}"; do
-        RULES+="{\"protocol\":\"tcp\",\"ports\":\"443\",\"sources\":{\"addresses\":[\"$IP\"]}},"
-    done
-
-    # Add Pulsetic HTTPS rules (IPv6)
-    for IP in "${PULSETIC_IPV6[@]}"; do
+    # Add Pulsetic HTTPS rules
+    for IP in "${PULSETIC_IPV4[@]}" "${PULSETIC_IPV6[@]}"; do
         RULES+="{\"protocol\":\"tcp\",\"ports\":\"443\",\"sources\":{\"addresses\":[\"$IP\"]}},"
     done
 
