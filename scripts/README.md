@@ -34,7 +34,7 @@ python scripts/cleanup_invite_codes.py
 ### Firewall Management
 
 #### `setup-firewall-complete.sh`
-Automated DigitalOcean firewall setup with Cloudflare and UptimeRobot IP ranges. Creates or updates firewall rules to allow traffic only from Cloudflare's proxy and UptimeRobot monitoring.
+Automated DigitalOcean firewall setup with Cloudflare and Pulsetic IP ranges. Creates or updates firewall rules to allow traffic only from Cloudflare's proxy and Pulsetic monitoring.
 
 **Usage:**
 ```bash
@@ -48,7 +48,7 @@ Automated DigitalOcean firewall setup with Cloudflare and UptimeRobot IP ranges.
 **Prerequisites:** `doctl` and `jq` installed and authenticated
 
 #### `add-uptimerobot-to-firewall.sh`
-Adds only UptimeRobot monitoring IPs to an existing firewall. Use this if you already have Cloudflare configured.
+Adds only Pulsetic monitoring IPs to an existing firewall. Use this if you already have Cloudflare configured.
 
 **Usage:**
 ```bash
@@ -66,7 +66,7 @@ python3 scripts/create-github-actions-firewall.py <droplet-id>
 **Note:** Multiple firewalls can be applied to one droplet. This creates a dedicated firewall for GitHub Actions, keeping your main firewall clean.
 
 #### `firewall-ips.json`
-Reference file containing all Cloudflare and UptimeRobot IP ranges in JSON format. Use for manual setup or custom automation.
+Reference file containing all Cloudflare and Pulsetic IP ranges in JSON format. Use for manual setup or custom automation.
 
 **Documentation:** [DigitalOcean & Cloudflare Setup Guide](../docs/operations/DIGITALOCEAN_CLOUDFLARE_SETUP.md)
 
