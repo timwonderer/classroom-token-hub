@@ -76,18 +76,11 @@ def build_inbound_rules(
             }
         )
 
-    for ip in cloudflare_ipv4:
+    for ip in cloudflare_ipv4 + cloudflare_ipv6:
         rules.append({"protocol": "tcp", "ports": "80", "sources": {"addresses": [ip]}})
         rules.append({"protocol": "tcp", "ports": "443", "sources": {"addresses": [ip]}})
 
-    for ip in cloudflare_ipv6:
-        rules.append({"protocol": "tcp", "ports": "80", "sources": {"addresses": [ip]}})
-        rules.append({"protocol": "tcp", "ports": "443", "sources": {"addresses": [ip]}})
-
-    for ip in pulsetic_ipv4:
-        rules.append({"protocol": "tcp", "ports": "443", "sources": {"addresses": [ip]}})
-
-    for ip in pulsetic_ipv6:
+    for ip in pulsetic_ipv4 + pulsetic_ipv6:
         rules.append({"protocol": "tcp", "ports": "443", "sources": {"addresses": [ip]}})
 
     return rules
@@ -114,7 +107,7 @@ def check_rule_limit(rule_count: int) -> None:
 
 
 def create_firewall(
-    client,
+    client: Client,
     droplet_id: int,
     ssh_ip: str | None,
     cf_ipv4: Sequence[str],
