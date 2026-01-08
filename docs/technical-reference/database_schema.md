@@ -1,8 +1,12 @@
+---
+title: Database Schema Documentation
+category: technical-reference
+roles: [developer]
+---
+
 # Database Schema Documentation
 
 This document summarizes the database schema for Classroom Token Hub based on `app/models.py`. All timestamps are stored in UTC.
-
----
 
 ## Core Models
 
@@ -277,3 +281,8 @@ Key fields: `student_id`, `created_at`, `expires_at`.
 - Prefer `student_teachers` for ownership; `students.teacher_id` is scheduled for removal once all data is migrated.
 - All monetary values are stored as floating point; rounding is handled in business logic.
 - Indices are defined on frequent lookup fields (e.g., join codes, student/teacher IDs, timestamps) to support pagination and scoped queries.
+
+## Full Documentation
+
+For the complete documentation set, visit:
+https://github.com/timwonderer/classroom-economy/tree/main/docs

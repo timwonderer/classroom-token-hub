@@ -14,15 +14,15 @@
 This validation confirms that all reported vulnerabilities are **ACCURATE and present** in the codebase. The findings represent legitimate security concerns that require remediation. The reports provide a solid foundation for security hardening efforts.
 
 **Validation Status:**
-- ✅ All network infrastructure findings confirmed
-- ✅ All access control and secrets findings confirmed
-- ✅ All source code vulnerability findings confirmed
+-  All network infrastructure findings confirmed
+-  All access control and secrets findings confirmed
+-  All source code vulnerability findings confirmed
 
 ---
 
 ## 1. Network Infrastructure Vulnerabilities - VALIDATED
 
-### 1.1 IP Masking & Logging Blindness - ✅ CONFIRMED
+### 1.1 IP Masking & Logging Blindness -  CONFIRMED
 
 **Evidence:**
 ```python
@@ -42,7 +42,7 @@ This validation confirms that all reported vulnerabilities are **ACCURATE and pr
 
 ---
 
-### 1.2 Origin Server Exposure - ⚠️ CANNOT VALIDATE REMOTELY
+### 1.2 Origin Server Exposure -  CANNOT VALIDATE REMOTELY
 
 **Evidence:**
 ```bash
@@ -59,7 +59,7 @@ This validation confirms that all reported vulnerabilities are **ACCURATE and pr
 
 ---
 
-### 1.3 SSL/TLS Configuration - ⚠️ CANNOT VALIDATE FROM CODE
+### 1.3 SSL/TLS Configuration -  CANNOT VALIDATE FROM CODE
 
 **Evidence:**
 ```
@@ -75,7 +75,7 @@ This validation confirms that all reported vulnerabilities are **ACCURATE and pr
 
 ## 2. Access Control, Secrets, & Codebase Vulnerabilities - VALIDATED
 
-### 2.1 Plaintext Secrets in Database - ✅ CONFIRMED
+### 2.1 Plaintext Secrets in Database -  CONFIRMED
 
 **Evidence:**
 ```python
@@ -99,7 +99,7 @@ totp_secret = db.Column(db.String(32), nullable=False)
 
 ---
 
-### 2.2 Environment Variable Exposure - ✅ CONFIRMED
+### 2.2 Environment Variable Exposure -  CONFIRMED
 
 **Evidence:**
 ```python
@@ -130,7 +130,7 @@ def _get_pepper() -> bytes:
 
 ---
 
-### 2.3 Weak User Hashing (Global Pepper) - ✅ CONFIRMED
+### 2.3 Weak User Hashing (Global Pepper) -  CONFIRMED
 
 **Evidence:**
 ```python
@@ -158,7 +158,7 @@ def hash_username_lookup(username: str) -> str:
 
 ---
 
-### 2.4 Codebase Exposure (.git) - ✅ CONFIRMED
+### 2.4 Codebase Exposure (.git) -  CONFIRMED
 
 **Evidence:**
 ```bash
@@ -184,7 +184,7 @@ drwxrwxr-x  7 runner runner  4096 Nov 26 13:34 .git
 
 ## 3. Source Code Vulnerabilities - VALIDATED
 
-### 3.1 Financial Race Conditions - ✅ CONFIRMED (Partially Mitigated)
+### 3.1 Financial Race Conditions -  CONFIRMED (Partially Mitigated)
 
 **Evidence:**
 ```python
@@ -233,7 +233,7 @@ The code does **NOT** use `with_for_update()` on the student balance check (line
 
 ---
 
-### 3.2 Denial of Service (Login Loop) - ✅ CONFIRMED
+### 3.2 Denial of Service (Login Loop) -  CONFIRMED
 
 **Evidence:**
 ```python
@@ -270,7 +270,7 @@ if not student:
 
 ---
 
-### 3.3 Cross-Site Scripting (XSS) - ✅ CONFIRMED
+### 3.3 Cross-Site Scripting (XSS) -  CONFIRMED
 
 **Evidence:**
 ```html
@@ -310,7 +310,7 @@ period_states_json = json.dumps(period_states, separators=(',', ':'))
 
 ---
 
-### 3.4 Inventory Management Logic - ✅ CONFIRMED
+### 3.4 Inventory Management Logic -  CONFIRMED
 
 **Evidence:**
 ```python
@@ -349,7 +349,7 @@ if result.rowcount == 0:
 
 ## 4. Additional Findings (Not in Original Reports)
 
-### 4.1 Error Logging May Expose Sensitive Data - ⚠️ POTENTIAL ISSUE
+### 4.1 Error Logging May Expose Sensitive Data -  POTENTIAL ISSUE
 
 **Evidence:**
 ```python

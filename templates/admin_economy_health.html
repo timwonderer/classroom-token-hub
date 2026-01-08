@@ -1,14 +1,121 @@
 {% extends "layout_admin.html" %}
+{% import "macros/help.html" as help %}
 {% block page_title %}Economy Health{% endblock %}
 {% block page_icon %}monitor_heart{% endblock %}
+{% block page_header_actions %}
+  <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#economyHealthGuide" aria-controls="economyHealthGuide">
+    <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
+  </button>
+{% endblock %}
 {% block content %}
+<div class="offcanvas offcanvas-end" tabindex="-1" id="economyHealthGuide" aria-labelledby="economyHealthGuideLabel">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title" id="economyHealthGuideLabel">How to: CWI Balancing</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body">
+    <p>Use this dashboard to balance payroll, rent, insurance, banking, and store pricing around your CWI.</p>
+    <div class="accordion mt-4 mb-4" id="economyHealthGuideAccordion">
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="economyHealthGuideHeadingCwi">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideCwi" aria-expanded="false" aria-controls="economyHealthGuideCwi">
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">monitor_heart</span>
+            <strong>Understand Your CWI</strong>
+          </button>
+        </h2>
+        <div id="economyHealthGuideCwi" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingCwi" data-bs-parent="#economyHealthGuideAccordion">
+          <div class="accordion-body">
+            <p><strong>What is CWI?</strong> Your Classroom Wage Index represents the average weekly income students can expect to earn.</p>
+
+            <p class="mb-2"><strong>How it's calculated:</strong></p>
+            <p class="mb-3"><code>CWI = Pay Rate × Expected Weekly Hours</code></p>
+
+            <p class="mb-2"><strong>Example:</strong></p>
+            <ul class="mb-3">
+              <li>Pay rate: $10/hour</li>
+              <li>Expected hours: 5 hours/week</li>
+              <li><strong>CWI = $50/week</strong></li>
+            </ul>
+
+            <div class="alert alert-success mb-3">
+              <strong><i class="bi bi-cash-coin me-1"></i>Why CWI Matters:</strong> Use it to balance your economy. Rent should be 20-40% of CWI; store items should generally range from 10-200% of CWI depending on desirability.
+            </div>
+
+            <div class="alert alert-info mb-0">
+              <strong><i class="bi bi-gear-fill me-1"></i>Setup:</strong> If payroll is not configured yet, set it up first to unlock CWI calculations.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="economyHealthGuideHeadingHours">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideHours" aria-expanded="false" aria-controls="economyHealthGuideHours">
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">schedule</span>
+            <strong>Update Expected Hours</strong>
+          </button>
+        </h2>
+        <div id="economyHealthGuideHours" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingHours" data-bs-parent="#economyHealthGuideAccordion">
+          <div class="accordion-body">
+            <p>Adjust expected hours to match your class schedule and update per class or across all classes.</p>
+          </div>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="economyHealthGuideHeadingSettingsBreakdown">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideSettingsBreakdown" aria-expanded="false" aria-controls="economyHealthGuideSettingsBreakdown">
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
+            <strong>Settings Breakdown</strong>
+          </button>
+        </h2>
+        <div id="economyHealthGuideSettingsBreakdown" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingSettingsBreakdown" data-bs-parent="#economyHealthGuideAccordion">
+          <div class="accordion-body">
+            <ul class="mb-0">
+              <li><strong>Class selector:</strong> choose which class period you are reviewing. Each class has its own CWI based on its payroll settings.</li>
+              <li><strong>Expected weekly hours:</strong> updates the CWI and balance calculations for the selected class.</li>
+              <li><strong>Balance snapshot:</strong> flags mismatches between CWI and costs so you can adjust settings.</li>
+            </ul>
+            <div class="alert alert-info mt-3 mb-0">
+              <strong>Side effects:</strong> Adjusting hours changes CWI immediately for the selected class.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="economyHealthGuideHeadingBalance">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#economyHealthGuideBalance" aria-expanded="false" aria-controls="economyHealthGuideBalance">
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">balance</span>
+            <strong>Balance Snapshot</strong>
+          </button>
+        </h2>
+        <div id="economyHealthGuideBalance" class="accordion-collapse collapse mt-2" aria-labelledby="economyHealthGuideHeadingBalance" data-bs-parent="#economyHealthGuideAccordion">
+          <div class="accordion-body">
+            <p>Review the balance snapshot to see how rent, insurance, fines, and store prices compare to CWI.</p>
+            <div class="alert alert-warning mb-0">
+              <strong>Watch for flags:</strong> Large gaps suggest a setting may be too high or too low.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="container-fluid py-3">
   <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-3">
-    <p class="text-muted mb-0">Review your current CWI and see how payroll, rent, banking, insurance, and the store fit together.</p>
-    <div class="btn-group" role="group" aria-label="CWI scope">
-      <a class="btn {% if scope != 'class' %}btn-primary text-white{% else %}btn-white{% endif %}" href="{{ url_for('admin.economy_health', scope='all') }}">All classes</a>
-      <a class="btn {% if scope == 'class' %}btn-primary text-white{% else %}btn-white{% endif %}" href="{{ url_for('admin.economy_health', scope='class', block=selected_block or (blocks[0] if blocks else None)) }}">Individual class</a>
+    <div class="d-flex align-items-center gap-2">
+      <p class="text-muted mb-0">Review your current CWI and see how payroll, rent, banking, insurance, and the store fit together.</p>
+      {{ help.help_icon("diagnostics/teacher-attendance-payroll", "Economy health help") }}
     </div>
+    {% if blocks|length > 1 %}
+    <div class="d-flex align-items-center gap-2">
+      <label for="classSelector" class="text-muted mb-0">Class:</label>
+      <select id="classSelector" class="form-select form-select-sm" style="width: auto;" onchange="window.location.href='{{ url_for('admin.economy_health') }}?block=' + encodeURIComponent(this.value)">
+        {% for block in blocks %}
+        <option value="{{ block }}" {% if selected_block == block %}selected{% endif %}>{{ block }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
   </div>
 
   {% if not payroll_settings %}
@@ -59,7 +166,7 @@
                 <form method="post" action="{{ url_for('admin.update_expected_weekly_hours') }}">
                   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                   <input type="hidden" name="cwi_block" value="{{ selected_block }}">
-                  <input type="hidden" name="next" value="{{ url_for('admin.economy_health', block=selected_block, scope=scope) }}">
+                  <input type="hidden" name="next" value="{{ url_for('admin.economy_health', block=selected_block) }}">
                   <div class="input-group">
                     <input type="number" step="0.25" min="0.25" max="80" name="expected_weekly_hours" class="form-control" value="{{ expected_hours }}">
                     <button class="btn btn-primary" type="submit">Update</button>
@@ -71,29 +178,6 @@
                 </form>
               </div>
             </div>
-            {% if scope == 'class' %}
-            <div class="col-md-4">
-              <div class="p-3 bg-light rounded h-100">
-                <div class="text-muted small">Class/Block</div>
-                <form method="get">
-                  <input type="hidden" name="scope" value="class">
-                  <select name="block" class="form-select mb-2" onchange="this.form.submit()">
-                    {% if not blocks %}
-                      <option value="">No classes yet</option>
-                    {% else %}
-                      {% for blk in blocks %}
-                        <option value="{{ blk }}" {% if selected_block == blk %}selected{% endif %}>{{ blk }}</option>
-                      {% endfor %}
-                    {% endif %}
-                  </select>
-                  <div class="d-flex gap-2">
-                    <button class="btn btn-primary flex-grow-1" type="submit">Apply</button>
-                    <a class="btn btn-outline-secondary" href="{{ url_for('admin.economy_health', scope='class') }}">Clear</a>
-                  </div>
-                </form>
-              </div>
-            </div>
-            {% endif %}
           </div>
           <div class="mt-3">
             <div class="small text-muted">Calculation notes:</div>

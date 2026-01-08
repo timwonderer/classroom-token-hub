@@ -33,6 +33,7 @@ class EconomyBalanceChecker {
      */
     initializeAutoValidation() {
         const inputs = document.querySelectorAll('[data-economy-validate]');
+        const triggerInputs = document.querySelectorAll('[data-economy-trigger]');
 
         inputs.forEach(input => {
             input.addEventListener('input', (e) => {
@@ -44,6 +45,17 @@ class EconomyBalanceChecker {
 
             input.addEventListener('blur', (e) => {
                 this.validateInput(e.target);
+            });
+        });
+
+        triggerInputs.forEach(input => {
+            const targetSelector = input.dataset.economyTrigger;
+            if (!targetSelector) return;
+            const target = document.querySelector(targetSelector);
+            if (!target) return;
+            const eventType = input.tagName === 'SELECT' ? 'change' : 'input';
+            input.addEventListener(eventType, () => {
+                target.dispatchEvent(new Event('input'));
             });
         });
     }
@@ -61,6 +73,9 @@ class EconomyBalanceChecker {
         }
 
         const frequency = input.dataset.economyFrequency || 'weekly';
+        const claimTypeTarget = input.dataset.economyClaimTypeTarget;
+        const coverageTarget = input.dataset.economyCoverageTarget;
+        const periodTarget = input.dataset.economyPeriodTarget;
 
         // Collect block parameter (important for multi-class teachers)
         let additionalParams = {};
@@ -71,6 +86,26 @@ class EconomyBalanceChecker {
         // CRITICAL: Always include block parameter so validation uses the correct payroll settings
         if (settingsBlockInput) {
             additionalParams.block = settingsBlockInput.value;
+        }
+        if (feature === 'insurance') {
+            const getParamValue = (targetSelector, paramName) => {
+                if (!targetSelector) return;
+                const field = document.querySelector(targetSelector);
+                if (!field) return;
+
+                const parsedValue = parseFloat(field.value);
+                if (!isNaN(parsedValue) && parsedValue > 0) {
+                    additionalParams[paramName] = parsedValue;
+                }
+            };
+
+            const claimTypeField = claimTypeTarget ? document.querySelector(claimTypeTarget) : null;
+            if (claimTypeField && claimTypeField.value) {
+                additionalParams.claim_type = claimTypeField.value;
+            }
+
+            getParamValue(coverageTarget, 'max_claim_amount');
+            getParamValue(periodTarget, 'max_payout_per_period');
         }
 
         // For rent validation, collect additional frequency parameters from the form

@@ -1,3 +1,9 @@
+---
+title: API Reference
+category: technical-reference
+roles: [developer]
+---
+
 # API Reference
 
 This document provides a reference for all the API endpoints available in the Classroom Token Hub application.
@@ -288,3 +294,8 @@ These routes require an active system administrator login session.
 -   **`GET, POST /sysadmin/dashboard`**: The main dashboard for system admins, showing system-wide statistics and management options.
 -   **`GET /sysadmin/logs`**: Displays the application's log file output.
 -   **`GET /sysadmin/logout`**: Logs the system admin out of their session.
+
+## Full Documentation
+
+For the complete documentation set, visit:
+https://github.com/timwonderer/classroom-economy/tree/main/docs

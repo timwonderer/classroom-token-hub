@@ -205,7 +205,7 @@ def admin_required(f):
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        current_app.logger.info(f"🧪 Admin access attempt: session = {dict(session)}")
+        current_app.logger.info(f"Admin access attempt: session = {dict(session)}")
         if not session.get("is_admin"):
             flash("You must be an admin to view this page.")
             encoded_next = urllib.parse.quote(request.path, safe="")
@@ -226,12 +226,13 @@ def admin_required(f):
         if last_activity:
             last_activity = datetime.fromisoformat(last_activity)
             if (now - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
-                session.pop("is_admin", None)
+                session.clear()
                 flash("Admin session expired. Please log in again.")
                 encoded_next = urllib.parse.quote(request.path, safe="")
                 return redirect(f"{url_for('admin.login')}?next={encoded_next}")
 
         session['last_activity'] = now.isoformat()
+        ensure_admin_join_code(admin.id)
         return f(*args, **kwargs)
     return decorated_function
 
@@ -253,7 +254,7 @@ def system_admin_required(f):
         if last_activity:
             last_activity = datetime.fromisoformat(last_activity)
             if now - last_activity > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
-                session.pop("is_system_admin", None)
+                session.clear()
                 flash("Session expired. Please log in again.")
                 return redirect(url_for('sysadmin.login', next=request.path))
         session['last_activity'] = now.isoformat()
@@ -284,6 +285,30 @@ def get_current_admin():
         return None
     from app.models import Admin  # Imported lazily to avoid circular import
     return Admin.query.get(admin_id)
+
+
+def ensure_admin_join_code(admin_id):
+    """Ensure an admin has a current join code selected in session."""
+    from app.models import TeacherBlock  # Imported lazily to avoid circular import
+
+    if not admin_id:
+        return
+
+    join_code = session.get('current_join_code')
+    if join_code:
+        if TeacherBlock.query.filter_by(teacher_id=admin_id, join_code=join_code).first():
+            return
+        session.pop('current_join_code', None)
+
+    teacher_block = (
+        TeacherBlock.query
+        .filter_by(teacher_id=admin_id)
+        .filter(TeacherBlock.join_code.isnot(None))
+        .order_by(TeacherBlock.block, TeacherBlock.join_code)
+        .first()
+    )
+    if teacher_block and teacher_block.join_code:
+        session['current_join_code'] = teacher_block.join_code
 
 
 def get_admin_student_query(include_unassigned=True):

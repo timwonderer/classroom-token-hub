@@ -158,7 +158,7 @@ class TestAnnouncementModel:
         """Test priority CSS classes and icons."""
         priorities = ['low', 'normal', 'high', 'urgent']
         expected_classes = ['alert-secondary', 'alert-info', 'alert-warning', 'alert-danger']
-        expected_icons = ['📌', '📢', '⚠️', '🚨']
+        expected_icons = ['push_pin', 'campaign', 'warning', 'error']
 
         for priority, expected_class, expected_icon in zip(priorities, expected_classes, expected_icons):
             announcement = Announcement(

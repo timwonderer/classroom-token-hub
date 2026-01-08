@@ -41,6 +41,10 @@ Core Python module that:
 Rent:      2.0-2.5x CWI (default: 2.25x)
 Utilities: 0.20-0.30x CWI (default: 0.25x)
 Insurance: 0.05-0.12x CWI (default: 0.08x)
+Coverage: 3-5x premium (default: 4x)
+Period cap: 6-10x premium (default: 8x)
+Savings APY: 6-18% (default: 10-12%)
+Savings monthly rate: 0.5-1.5% (default: 1.0%)
 Fines:     0.05-0.15x CWI (default: 0.10x)
 
 Store Items:
