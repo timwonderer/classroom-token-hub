@@ -114,21 +114,43 @@ def upgrade():
         if 'transports' in admin_cred_columns:
             batch_op.drop_column('transports')
 
+    # Helper function to get existing indexes for a table
+    def get_existing_indexes(table_name):
+        return {idx['name'] for idx in inspector.get_indexes(table_name)}
+
+    banking_settings_indexes = get_existing_indexes('banking_settings')
     with op.batch_alter_table('banking_settings', schema=None) as batch_op:
         batch_op.alter_column('teacher_id',
                existing_type=sa.INTEGER(),
                nullable=False)
-        batch_op.create_index(batch_op.f('ix_banking_settings_teacher_id'), ['teacher_id'], unique=False)
+        if 'ix_banking_settings_teacher_id' not in banking_settings_indexes:
+            batch_op.create_index(batch_op.f('ix_banking_settings_teacher_id'), ['teacher_id'], unique=False)
 
+    hall_pass_logs_indexes = get_existing_indexes('hall_pass_logs')
     with op.batch_alter_table('hall_pass_logs', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_hall_pass_logs_student_join_code'))
+        if 'ix_hall_pass_logs_student_join_code' in hall_pass_logs_indexes:
+            batch_op.drop_index(batch_op.f('ix_hall_pass_logs_student_join_code'))
 
+    hall_pass_settings_indexes = get_existing_indexes('hall_pass_settings')
     with op.batch_alter_table('hall_pass_settings', schema=None) as batch_op:
         batch_op.alter_column('teacher_id',
                existing_type=sa.INTEGER(),
                nullable=False)
-        batch_op.create_index(batch_op.f('ix_hall_pass_settings_teacher_id'), ['teacher_id'], unique=False)
+        if 'ix_hall_pass_settings_teacher_id' not in hall_pass_settings_indexes:
+            batch_op.create_index(batch_op.f('ix_hall_pass_settings_teacher_id'), ['teacher_id'], unique=False)
 
+    # Helper function to get existing unique constraints for a table
+    def get_unique_constraints(table_name):
+        return {uc['name'] for uc in inspector.get_unique_constraints(table_name)}
+    
+    # Helper function to get existing foreign keys for a table
+    def get_foreign_keys(table_name):
+        return {fk['name'] for fk in inspector.get_foreign_keys(table_name)}
+
+    insurance_indexes = get_existing_indexes('insurance_policies')
+    insurance_unique_constraints = get_unique_constraints('insurance_policies')
+    insurance_foreign_keys = get_foreign_keys('insurance_policies')
+    
     with op.batch_alter_table('insurance_policies', schema=None) as batch_op:
         batch_op.alter_column('policy_code',
                existing_type=sa.VARCHAR(length=16),
@@ -142,11 +164,15 @@ def upgrade():
         batch_op.alter_column('bundle_discount_amount',
                existing_type=sa.DOUBLE_PRECISION(precision=53),
                nullable=True)
-        batch_op.drop_constraint(batch_op.f('uq_insurance_policies_policy_code'), type_='unique')
-        batch_op.drop_index(batch_op.f('ix_insurance_policies_policy_code'))
-        batch_op.create_index(batch_op.f('ix_insurance_policies_policy_code'), ['policy_code'], unique=True)
-        batch_op.drop_constraint(batch_op.f('fk_insurance_policies_teacher_id'), type_='foreignkey')
-        batch_op.create_foreign_key(None, 'admins', ['teacher_id'], ['id'])
+        if 'uq_insurance_policies_policy_code' in insurance_unique_constraints:
+            batch_op.drop_constraint(batch_op.f('uq_insurance_policies_policy_code'), type_='unique')
+        if 'ix_insurance_policies_policy_code' in insurance_indexes:
+            batch_op.drop_index(batch_op.f('ix_insurance_policies_policy_code'))
+        # Only create the index if it doesn't already exist (unique index)
+        if 'ix_insurance_policies_policy_code' not in insurance_indexes:
+            batch_op.create_index(batch_op.f('ix_insurance_policies_policy_code'), ['policy_code'], unique=True)
+        if 'fk_insurance_policies_teacher_id' in insurance_foreign_keys:
+            batch_op.drop_constraint(batch_op.f('fk_insurance_policies_teacher_id'), type_='foreignkey')
 
     with op.batch_alter_table('payroll_fines', schema=None) as batch_op:
         batch_op.alter_column('teacher_id',
@@ -162,7 +188,9 @@ def upgrade():
         batch_op.alter_column('teacher_id',
                existing_type=sa.INTEGER(),
                nullable=False)
-        batch_op.create_index(batch_op.f('ix_payroll_settings_teacher_id'), ['teacher_id'], unique=False)
+        payroll_settings_indexes = get_existing_indexes('payroll_settings')
+        if 'ix_payroll_settings_teacher_id' not in payroll_settings_indexes:
+            batch_op.create_index(batch_op.f('ix_payroll_settings_teacher_id'), ['teacher_id'], unique=False)
 
     with op.batch_alter_table('rent_items', schema=None) as batch_op:
         batch_op.alter_column('store_price',
@@ -170,8 +198,10 @@ def upgrade():
                type_=sa.Numeric(precision=10, scale=2),
                existing_nullable=True)
 
+    rent_payments_indexes = get_existing_indexes('rent_payments')
     with op.batch_alter_table('rent_payments', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_rent_payments_student_join_code'))
+        if 'ix_rent_payments_student_join_code' in rent_payments_indexes:
+            batch_op.drop_index(batch_op.f('ix_rent_payments_student_join_code'))
 
     # Backfill rent_settings.teacher_id before enforcing NOT NULL to avoid failures on legacy rows
     bind = op.get_bind()
@@ -224,30 +254,42 @@ def upgrade():
                existing_type=sa.BOOLEAN(),
                nullable=True,
                existing_server_default=sa.text('false'))
-        batch_op.create_index(batch_op.f('ix_rent_settings_teacher_id'), ['teacher_id'], unique=False)
-        batch_op.drop_column('late_fee')
+        rent_settings_indexes = get_existing_indexes('rent_settings')
+        if 'ix_rent_settings_teacher_id' not in rent_settings_indexes:
+            batch_op.create_index(batch_op.f('ix_rent_settings_teacher_id'), ['teacher_id'], unique=False)
+        rent_settings_columns = {col['name'] for col in inspector.get_columns('rent_settings')}
+        if 'late_fee' in rent_settings_columns:
+            batch_op.drop_column('late_fee')
 
     with op.batch_alter_table('store_items', schema=None) as batch_op:
         batch_op.alter_column('teacher_id',
                existing_type=sa.INTEGER(),
                nullable=False)
 
+    student_insurance_indexes = get_existing_indexes('student_insurance')
     with op.batch_alter_table('student_insurance', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_student_insurance_student_join_code'))
+        if 'ix_student_insurance_student_join_code' in student_insurance_indexes:
+            batch_op.drop_index(batch_op.f('ix_student_insurance_student_join_code'))
 
+    student_items_indexes = get_existing_indexes('student_items')
     with op.batch_alter_table('student_items', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_student_items_student_join_code'))
+        if 'ix_student_items_student_join_code' in student_items_indexes:
+            batch_op.drop_index(batch_op.f('ix_student_items_student_join_code'))
 
+    student_recovery_codes_fks = get_foreign_keys('student_recovery_codes')
     with op.batch_alter_table('student_recovery_codes', schema=None) as batch_op:
-        batch_op.drop_constraint(batch_op.f('student_recovery_codes_recovery_request_id_fkey'), type_='foreignkey')
-        batch_op.create_foreign_key(None, 'recovery_requests', ['recovery_request_id'], ['id'])
+        if 'student_recovery_codes_recovery_request_id_fkey' in student_recovery_codes_fks:
+            batch_op.drop_constraint(batch_op.f('student_recovery_codes_recovery_request_id_fkey'), type_='foreignkey')
+            batch_op.create_foreign_key(None, 'recovery_requests', ['recovery_request_id'], ['id'])
 
+    students_indexes = get_existing_indexes('students')
     with op.batch_alter_table('students', schema=None) as batch_op:
         batch_op.alter_column('has_completed_profile_migration',
                existing_type=sa.BOOLEAN(),
                nullable=True,
                existing_server_default=sa.text('false'))
-        batch_op.drop_index(batch_op.f('ix_students_teacher_id'))
+        if 'ix_students_teacher_id' in students_indexes:
+            batch_op.drop_index(batch_op.f('ix_students_teacher_id'))
 
     # Conditionally drop index and columns from system_admin_credentials if they exist
     # Refresh inspector to ensure we have current database state
@@ -267,18 +309,27 @@ def upgrade():
         if 'transports' in sys_admin_cred_columns:
             batch_op.drop_column('transports')
 
+    tap_events_indexes = get_existing_indexes('tap_events')
     with op.batch_alter_table('tap_events', schema=None) as batch_op:
-        batch_op.create_index(batch_op.f('ix_tap_events_is_deleted'), ['is_deleted'], unique=False)
+        if 'ix_tap_events_is_deleted' not in tap_events_indexes:
+            batch_op.create_index(batch_op.f('ix_tap_events_is_deleted'), ['is_deleted'], unique=False)
 
+    teacher_blocks_fks = get_foreign_keys('teacher_blocks')
     with op.batch_alter_table('teacher_blocks', schema=None) as batch_op:
-        batch_op.drop_constraint(batch_op.f('teacher_blocks_student_id_fkey'), type_='foreignkey')
-        batch_op.create_foreign_key(None, 'students', ['student_id'], ['id'])
+        if 'teacher_blocks_student_id_fkey' in teacher_blocks_fks:
+            batch_op.drop_constraint(batch_op.f('teacher_blocks_student_id_fkey'), type_='foreignkey')
+            batch_op.create_foreign_key(None, 'students', ['student_id'], ['id'])
 
+    transaction_indexes = get_existing_indexes('transaction')
+    transaction_fks = get_foreign_keys('transaction')
     with op.batch_alter_table('transaction', schema=None) as batch_op:
-        batch_op.drop_index(batch_op.f('ix_transaction_student_join_code'))
-        batch_op.drop_index(batch_op.f('ix_transaction_teacher_id'))
-        batch_op.drop_constraint(batch_op.f('fk_transaction_teacher_id_admins'), type_='foreignkey')
-        batch_op.create_foreign_key(None, 'admins', ['teacher_id'], ['id'])
+        if 'ix_transaction_student_join_code' in transaction_indexes:
+            batch_op.drop_index(batch_op.f('ix_transaction_student_join_code'))
+        if 'ix_transaction_teacher_id' in transaction_indexes:
+            batch_op.drop_index(batch_op.f('ix_transaction_teacher_id'))
+        if 'fk_transaction_teacher_id_admins' in transaction_fks:
+            batch_op.drop_constraint(batch_op.f('fk_transaction_teacher_id_admins'), type_='foreignkey')
+            batch_op.create_foreign_key(None, 'admins', ['teacher_id'], ['id'])
 
     # ### end Alembic commands ###
 
