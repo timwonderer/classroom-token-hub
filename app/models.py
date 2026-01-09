@@ -1268,6 +1268,10 @@ class Admin(db.Model):
     last_login = db.Column(db.DateTime, nullable=True)
     has_assigned_students = db.Column(db.Boolean, default=False, nullable=False)  # One-time setup flag
 
+    # ToS Acknowledgment
+    tos_accepted = db.Column(db.Boolean, default=False, nullable=False, server_default='false')
+    tos_accepted_at = db.Column(db.DateTime, nullable=True)
+
     def get_display_name(self):
         """Return display_name if set, otherwise fall back to username"""
         return self.display_name if self.display_name else self.username
