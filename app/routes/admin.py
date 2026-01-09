@@ -4447,6 +4447,13 @@ def hall_pass():
     )
 
 
+@admin_bp.route('/hall-pass/setup')
+@admin_required
+def hall_pass_setup():
+    """Configure hall pass types, queue limits, and simultaneous limits."""
+    return render_template('hall_pass_setup.html')
+
+
 # -------------------- ECONOMY HEALTH --------------------
 
 @admin_bp.route('/economy-health')

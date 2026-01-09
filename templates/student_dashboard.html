@@ -321,12 +321,7 @@
                         <label class="form-label small fw-bold text-uppercase text-secondary">Reason</label>
                         <select class="form-select form-select-lg" id="hallPassReason">
                             <option value="" selected disabled>Select a reason...</option>
-                            <option value="Bathroom">Bathroom</option>
-                            <option value="Water">Water</option>
-                            <option value="Nurse">Nurse</option>
-                            <option value="Office">Office</option>
-                            <option value="Other">Other</option>
-                            <option value="Done for the day">Done for the Day</option>
+                            <!-- Options will be loaded dynamically from teacher's configuration -->
                         </select>
                     </div>
                     <div class="mb-3">
@@ -347,6 +342,50 @@
 {% block extra_scripts %}
 <script>
     const TEACHER_ID = {{ teacher_id }};
+
+    // Load available pass types from teacher configuration
+    function loadPassTypes() {
+        fetch(`/api/hall-pass/available-types?teacher_id=${TEACHER_ID}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const select = document.getElementById('hallPassReason');
+                    // Clear existing options except the first (placeholder)
+                    while (select.options.length > 1) {
+                        select.remove(1);
+                    }
+
+                    // Add pass types from configuration
+                    data.pass_types.forEach(pt => {
+                        const option = document.createElement('option');
+                        option.value = pt.name;
+                        option.textContent = pt.name;
+                        select.appendChild(option);
+                    });
+
+                    // Add "Done for the day" option at the end
+                    const doneOption = document.createElement('option');
+                    doneOption.value = 'Done for the day';
+                    doneOption.textContent = 'Done for the Day';
+                    select.appendChild(doneOption);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading pass types:', error);
+                // Fallback to default options if API fails
+                const select = document.getElementById('hallPassReason');
+                const defaults = ['Bathroom', 'Water Fountain', 'Office', 'Nurse', 'Done for the day'];
+                defaults.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    select.appendChild(option);
+                });
+            });
+    }
+
+    // Load pass types when page loads
+    document.addEventListener('DOMContentLoaded', loadPassTypes);
 </script>
 <script src="{{ static_url('js/attendance.js') }}"></script>
 {% endblock %}

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hall Pass Configuration</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f9fa;
+        }
+        .setup-container {
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        .pass-type-row {
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            gap: 1rem;
+            align-items: start;
+        }
+        .pass-type-row .form-group {
+            flex: 1;
+            margin-bottom: 0;
+        }
+        .pass-type-row .btn-remove {
+            margin-top: 1.85rem;
+        }
+        .info-text {
+            color: #6c757d;
+            font-size: 0.875rem;
+        }
+        .add-pass-type {
+            width: 100%;
+            border: 2px dashed #dee2e6;
+            background: white;
+            color: #6c757d;
+            padding: 1rem;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        .add-pass-type:hover {
+            border-color: #0d6efd;
+            color: #0d6efd;
+            background: #f8f9fa;
+        }
+        .limit-input {
+            max-width: 150px;
+        }
+    </style>
+</head>
+<body>
+    <div class="setup-container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="mb-2">
+                    <span class="material-symbols-outlined align-middle">settings</span>
+                    Hall Pass Configuration
+                </h1>
+                <p class="text-muted">Configure pass types, queue limits, and simultaneous limits for your classroom.</p>
+            </div>
+            <a href="{{ url_for('admin.hall_pass') }}" class="btn btn-outline-secondary">
+                <span class="material-symbols-outlined align-middle">arrow_back</span>
+                Back to Hall Passes
+            </a>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h5 class="card-title">How It Works</h5>
+                <ul class="mb-0">
+                    <li><strong>Pass Type Name:</strong> The destination students can select (e.g., Bathroom, Office, Nurse)</li>
+                    <li><strong>Queue Limit:</strong> Maximum number of students who can be waiting + currently out for this destination (leave blank for unlimited)</li>
+                    <li><strong>Simultaneous Limit:</strong> Maximum number of students who can be out at the same time for this destination (leave blank for unlimited)</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Pass Types</h5>
+            </div>
+            <div class="card-body">
+                <div id="passTypesContainer">
+                    <!-- Pass type rows will be dynamically added here -->
+                </div>
+
+                <button type="button" class="add-pass-type" onclick="addPassType()">
+                    <span class="material-symbols-outlined align-middle">add</span>
+                    Add Pass Type
+                </button>
+
+                <hr class="my-4">
+
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-primary" onclick="saveConfiguration()">
+                        <span class="material-symbols-outlined align-middle">save</span>
+                        Save Configuration
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" onclick="loadConfiguration()">
+                        <span class="material-symbols-outlined align-middle">refresh</span>
+                        Reset to Saved
+                    </button>
+                </div>
+
+                <div id="feedbackMessage" class="mt-3" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let passTypeCounter = 0;
+
+        function addPassType(name = '', queueLimit = '', simultaneousLimit = '') {
+            passTypeCounter++;
+            const id = `passType-${passTypeCounter}`;
+
+            const html = `
+                <div class="pass-type-row" id="${id}">
+                    <div class="form-group">
+                        <label class="form-label">Pass Type Name</label>
+                        <input type="text" class="form-control pass-name" placeholder="e.g., Bathroom" value="${name}" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Queue Limit <span class="info-text">(optional)</span></label>
+                        <input type="number" class="form-control limit-input queue-limit" placeholder="Unlimited" min="0" value="${queueLimit}">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Simultaneous Limit <span class="info-text">(optional)</span></label>
+                        <input type="number" class="form-control limit-input simultaneous-limit" placeholder="Unlimited" min="0" value="${simultaneousLimit}">
+                    </div>
+                    <div>
+                        <button type="button" class="btn btn-danger btn-sm btn-remove" onclick="removePassType('${id}')">
+                            <span class="material-symbols-outlined">delete</span>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            document.getElementById('passTypesContainer').insertAdjacentHTML('beforeend', html);
+        }
+
+        function removePassType(id) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.remove();
+            }
+        }
+
+        function getPassTypes() {
+            const rows = document.querySelectorAll('.pass-type-row');
+            const passTypes = [];
+
+            rows.forEach(row => {
+                const name = row.querySelector('.pass-name').value.trim();
+                const queueLimit = row.querySelector('.queue-limit').value.trim();
+                const simultaneousLimit = row.querySelector('.simultaneous-limit').value.trim();
+
+                if (name) {
+                    passTypes.push({
+                        name: name,
+                        queue_limit: queueLimit ? parseInt(queueLimit) : null,
+                        simultaneous_limit: simultaneousLimit ? parseInt(simultaneousLimit) : null
+                    });
+                }
+            });
+
+            return passTypes;
+        }
+
+        function showFeedback(message, isError = false) {
+            const feedback = document.getElementById('feedbackMessage');
+            feedback.className = `alert ${isError ? 'alert-danger' : 'alert-success'} mt-3`;
+            feedback.textContent = message;
+            feedback.style.display = 'block';
+
+            setTimeout(() => {
+                feedback.style.display = 'none';
+            }, 5000);
+        }
+
+        function saveConfiguration() {
+            const passTypes = getPassTypes();
+
+            if (passTypes.length === 0) {
+                showFeedback('Please add at least one pass type.', true);
+                return;
+            }
+
+            // Validate that all pass types have names
+            for (const pt of passTypes) {
+                if (!pt.name) {
+                    showFeedback('All pass types must have a name.', true);
+                    return;
+                }
+            }
+
+            fetch('/api/hall-pass/setup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ pass_types: passTypes })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showFeedback('Configuration saved successfully!');
+                } else {
+                    showFeedback(data.message || 'Failed to save configuration.', true);
+                }
+            })
+            .catch(error => {
+                console.error('Error saving configuration:', error);
+                showFeedback('An error occurred while saving.', true);
+            });
+        }
+
+        function loadConfiguration() {
+            fetch('/api/hall-pass/setup')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Clear existing pass types
+                    document.getElementById('passTypesContainer').innerHTML = '';
+                    passTypeCounter = 0;
+
+                    // Add pass types from server
+                    data.pass_types.forEach(pt => {
+                        addPassType(
+                            pt.name,
+                            pt.queue_limit !== null ? pt.queue_limit : '',
+                            pt.simultaneous_limit !== null ? pt.simultaneous_limit : ''
+                        );
+                    });
+
+                    if (data.pass_types.length === 0) {
+                        // Add one empty row if none exist
+                        addPassType();
+                    }
+                } else {
+                    showFeedback('Failed to load configuration.', true);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading configuration:', error);
+                showFeedback('An error occurred while loading.', true);
+            });
+        }
+
+        // Load configuration on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadConfiguration();
+        });
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
