@@ -1,8 +1,8 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-01-01
+**Last Updated:** 2026-01-09
 **Current Version:** 1.6.0
-**Target:** 1.7.0 Feature Release
+**Target:** 1.7.0 Feature Release (Analytics, Rent Itemization, Mobile Navigation)
 
 ---
 
@@ -22,6 +22,19 @@
 ---
 
 ## Recent Releases
+
+### 🎯 Version 1.7.0 - In Progress (Analytics, Rent Itemization, Mobile Navigation)
+
+**Major feature release focused on system health analytics, flexible rent options, and mobile accessibility:**
+
+#### Key Accomplishments (Pending Release)
+- ✅ **Analytics Dashboard** - System health observability with CWI-relative metrics
+- ✅ **Rent Itemization** - Teachers can specify what rent pays for with store alternatives
+- ✅ **Mobile Navigation** - Full navigation menu accessible on mobile and PWA
+- ✅ **Rent Privilege Badges** - Visual indicators for active rent privileges
+- ✅ **Documentation Organization** - Archived historic files, consolidated duplicates
+
+See draft [RELEASE_NOTES_v1.7.0.md](docs/archive/releases/RELEASE_NOTES_v1.7.0.md) for full details.
 
 ### ✅ Version 1.6.0 - January 1, 2026
 

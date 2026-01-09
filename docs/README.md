@@ -66,6 +66,9 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 - **[Network Vulnerability Report](security/NETWORK_VULNERABILITY_REPORT.md)** - Network security assessment.
 
 ### Archive & Releases
+- **[Release Notes v1.7.0](archive/releases/RELEASE_NOTES_v1.7.0.md)** - Analytics Dashboard, Rent Itemization, Mobile Navigation (Draft - January 2026)
+- **[Release Notes v1.6.0](archive/releases/RELEASE_NOTES_v1.6.0.md)** - Repository Organization and Stability (January 1, 2026)
+- **[Release Notes v1.5.0](archive/releases/RELEASE_NOTES_v1.5.0.md)** - Issue Resolution & Escalation System (December 29, 2025)
 - **[Release Notes v1.4.0](archive/releases/RELEASE_NOTES_v1.4.0.md)** - Announcement system, UI/UX enhancements, security fixes (Dec 27, 2025)
 - **[Release Notes v1.3.0](archive/releases/RELEASE_NOTES_v1.3.0.md)** - Passwordless authentication, encrypted TOTP, security audit (Dec 25, 2025)
 - **[Release Notes v1.2.1](archive/releases/RELEASE_NOTES_v1.2.1.md)** - Migration hardening, join code audits (Dec 21, 2025)
