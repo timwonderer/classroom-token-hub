@@ -298,7 +298,7 @@ and this project follows semantic versioning principles.
     - Added explicit permissions to `toggle-maintenance.yml`, `check-migrations.yml`, and `deploy.yml`
     - Follows principle of least privilege for workflow security
     - Reduces workflow attack surface
-  - **Documentation**: Added `SECURITY_FIXES_SUMMARY.md` with complete analysis of all 62 alerts
+  - **Documentation**: Added `docs/archive/SECURITY_FIXES_SUMMARY.md` with complete analysis of all 62 alerts
   - **Summary**: Fixed 23+ real security issues, suppressed 2 false positives, reviewed 37 false positives (already mitigated)
 - **Enhanced Open Redirect Protection** - Improved URL validation in student class enrollment redirects
   - Upgraded `_is_safe_url()` function to use same-origin validation
@@ -385,7 +385,7 @@ and this project follows semantic versioning principles.
   - Added `encrypt_totp()` and `decrypt_totp()` helper functions in `app/utils/encryption.py`
   - All new admin/system admin accounts store encrypted TOTP secrets (base64-encoded)
   - Backward compatible: `decrypt_totp()` handles both encrypted and legacy plaintext secrets transparently
-  - **MIGRATION REQUIRED**: Column length expanded from VARCHAR(32) to VARCHAR(200) - See `MIGRATION_TOTP_ENCRYPTION.md`
+  - **MIGRATION REQUIRED**: Column length expanded from VARCHAR(32) to VARCHAR(200) - See `docs/archive/MIGRATION_TOTP_ENCRYPTION.md`
   - Defense in depth: Database compromise alone no longer sufficient to generate valid 2FA codes
   - **Note:** Still requires `ENCRYPTION_KEY` security - future migration to AWS Secrets Manager/Vault recommended
   - Files changed: `app/utils/encryption.py`, `app/models.py`, `app/routes/admin.py`, `app/routes/system_admin.py`, `wsgi.py`, `create_admin.py`
