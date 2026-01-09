@@ -32,7 +32,23 @@
             No recent hall pass activity
         </div>
 
-        <div id="passesList" class="hall-pass-grid"></div>
+        <div class="table-responsive">
+            <table class="table table-hover" id="passesList">
+                <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Period</th>
+                        <th>Status</th>
+                        <th>Destination</th>
+                        <th>Left At</th>
+                        <th>Time Elapsed</th>
+                        <th>Returned At</th>
+                    </tr>
+                </thead>
+                <tbody id="passesTableBody">
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <script>
@@ -52,61 +68,55 @@
             return `${diffMins} minutes ago`;
         }
 
+        function getDuration(leftTime, returnTime) {
+            const left = new Date(leftTime);
+            const returned = new Date(returnTime);
+            const diffMs = returned - left;
+            const diffMins = Math.floor(diffMs / 60000);
+
+            if (diffMins < 1) return '< 1 min';
+            if (diffMins === 1) return '1 min';
+            return `${diffMins} mins`;
+        }
+
         function renderPasses(passes) {
-            const passesList = document.getElementById('passesList');
+            const tableBody = document.getElementById('passesTableBody');
             const noPassesMessage = document.getElementById('noPassesMessage');
+            const table = document.getElementById('passesList');
 
             if (!passes || passes.length === 0) {
-                passesList.innerHTML = '';
+                tableBody.innerHTML = '';
+                table.style.display = 'none';
                 noPassesMessage.style.display = 'block';
                 return;
             }
 
             noPassesMessage.style.display = 'none';
+            table.style.display = 'table';
 
             const html = passes.map(pass => {
                 const isOut = pass.status === 'left';
-                const statusClass = isOut ? 'out' : 'returned';
                 const statusText = isOut ? 'Out Now' : 'Returned';
+                const statusClass = isOut ? 'badge bg-warning text-dark' : 'badge bg-success';
+                const timeElapsed = isOut 
+                    ? getTimeElapsed(pass.left_time) 
+                    : (pass.return_time ? getDuration(pass.left_time, pass.return_time) : '—');
+                const returnTime = pass.return_time ? window.TimezoneUtils.formatTimestamp(pass.return_time) : '—';
 
                 return `
-                <div class="hall-pass-card ${statusClass}">
-                    ${isOut
-                        ? `<span class="time-badge">${getTimeElapsed(pass.left_time)}</span>`
-                        : `<span class="status-chip returned">${statusText}</span>`
-                    }
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="icon-circle bg-primary bg-opacity-10 text-primary">
-                                <span class="material-symbols-outlined">person</span>
-                            </div>
-                            <div>
-                                <div class="h5 fw-bold mb-0">${pass.student_name}</div>
-                                <div class="text-muted small">Period ${pass.period}</div>
-                            </div>
-                        </div>
-                        ${isOut ? `<span class="status-chip out">${statusText}</span>` : ''}
-                    </div>
-                    <div class="info-grid mb-2">
-                        <div class="info-item">
-                            <div class="info-label">Destination</div>
-                            <div class="info-value">${pass.destination || '—'}</div>
-                        </div>
-                        <div class="info-item">
-                            <div class="info-label">Left at</div>
-                            <div class="info-value">${window.TimezoneUtils.formatTimestamp(pass.left_time)}</div>
-                        </div>
-                        ${pass.return_time ? `
-                        <div class="info-item">
-                            <div class="info-label">Returned at</div>
-                            <div class="info-value">${window.TimezoneUtils.formatTimestamp(pass.return_time)}</div>
-                        </div>` : ''}
-                    </div>
-                </div>
+                <tr class="${isOut ? 'table-warning' : ''}">
+                    <td class="fw-semibold">${pass.student_name}</td>
+                    <td>${pass.period}</td>
+                    <td><span class="${statusClass}">${statusText}</span></td>
+                    <td>${pass.destination || '—'}</td>
+                    <td>${window.TimezoneUtils.formatTimestamp(pass.left_time)}</td>
+                    <td>${timeElapsed}</td>
+                    <td>${returnTime}</td>
+                </tr>
             `;
             }).join('');
 
-            passesList.innerHTML = html;
+            tableBody.innerHTML = html;
         }
 
         function fetchActivePasses() {

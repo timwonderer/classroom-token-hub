@@ -631,11 +631,33 @@ class HallPassSettings(db.Model):
     # Queue limit (when queue + currently out >= this number, restrict certain passes)
     queue_limit = db.Column(db.Integer, default=10, nullable=False)
 
+    # NEW: Pass type configurations stored as JSON
+    # Format: [{"name": "Bathroom", "queue_limit": 5, "simultaneous_limit": 2}, ...]
+    # If null or empty, fallback to default pass types
+    pass_types = db.Column(db.JSON, nullable=True)
+
     created_at = db.Column(db.DateTime, default=_utc_now)
     updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now)
 
     # Relationships
     teacher = db.relationship('Admin', backref=db.backref('hall_pass_settings', lazy='dynamic'))
+
+    @staticmethod
+    def get_default_pass_types():
+        """Return default pass types when teacher hasn't configured any."""
+        return [
+            {"name": "Bathroom", "queue_limit": None, "simultaneous_limit": None},
+            {"name": "Water Fountain", "queue_limit": None, "simultaneous_limit": None},
+            {"name": "Office", "queue_limit": None, "simultaneous_limit": None},
+            {"name": "Nurse", "queue_limit": None, "simultaneous_limit": None},
+            {"name": "Counselor", "queue_limit": None, "simultaneous_limit": None}
+        ]
+
+    def get_pass_types(self):
+        """Get pass types with fallback to defaults if not configured."""
+        if self.pass_types and len(self.pass_types) > 0:
+            return self.pass_types
+        return self.get_default_pass_types()
 
 
 # -------------------- STORE MODELS --------------------
