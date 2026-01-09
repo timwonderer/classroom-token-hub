@@ -1013,8 +1013,7 @@ def signup():
                 "admin_signup_totp.html",
                 form=totp_form,
                 qr_b64=img_b64,
-                totp_secret=totp_secret,
-                tos_agreed=True
+                totp_secret=totp_secret
             )
         # Step 5: Validate entered TOTP code
         current_app.logger.info(f"TOTP code submitted (length: {len(totp_code)})")
@@ -1051,37 +1050,6 @@ def signup():
         salt = get_random_salt()
         dob_sum_str = str(dob_sum).encode()
         dob_sum_hash = hash_hmac(dob_sum_str, salt)
-
-        # Check ToS acknowledgement
-        tos_agreed = request.form.get('tos_agreed') == 'true'
-        if not tos_agreed:
-            # Should have been caught by frontend, but safety check
-            current_app.logger.warning("Admin signup: ToS not agreed")
-            msg = "You must agree to the Terms of Service and Privacy Policy."
-            if is_json:
-                return jsonify(status="error", message=msg), 400
-            flash(msg, "error")
-
-            # Show QR again for retry
-            totp_uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=username, issuer_name="Classroom Economy Admin")
-            img = qrcode.make(totp_uri)
-            buf = io.BytesIO()
-            img.save(buf, format='PNG')
-            buf.seek(0)
-            img_b64 = base64.b64encode(buf.read()).decode('utf-8')
-
-            # Populate form with data
-            totp_form = AdminTOTPConfirmForm()
-            totp_form.username.data = username
-            totp_form.invite_code.data = invite_code
-            totp_form.dob_sum.data = dob_input.strftime("%Y-%m-%d")
-            return render_template(
-                "admin_signup_totp.html",
-                form=totp_form,
-                qr_b64=img_b64,
-                totp_secret=totp_secret,
-                tos_agreed=True
-            )
 
         # Encrypt TOTP secret before storing
         encrypted_totp_secret = encrypt_totp(totp_secret)
