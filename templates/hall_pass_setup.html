@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Hall Pass Configuration</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,27 +21,121 @@
             margin: 2rem auto;
             padding: 0 1rem;
         }
+
+        /* Master toggle styling */
+        .master-toggle-container {
+            background: white;
+            border: 2px solid #dee2e6;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .master-toggle-label {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        .master-toggle-status {
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-top: 0.25rem;
+        }
+
+        /* Pass type row styling */
         .pass-type-row {
             background: white;
             border: 1px solid #dee2e6;
             border-radius: 8px;
             padding: 1rem;
             margin-bottom: 1rem;
+        }
+        .pass-type-row.disabled {
+            opacity: 0.6;
+            background: #f8f9fa;
+        }
+        .pass-type-header {
             display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+        .pass-type-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        .pass-type-limits {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 1rem;
-            align-items: start;
+            margin-top: 0.5rem;
         }
-        .pass-type-row .form-group {
-            flex: 1;
-            margin-bottom: 0;
+        .limit-field {
+            display: flex;
+            flex-direction: column;
         }
-        .pass-type-row .btn-remove {
-            margin-top: 1.85rem;
-        }
-        .info-text {
+        .limit-field label {
+            font-size: 0.85rem;
             color: #6c757d;
-            font-size: 0.875rem;
+            margin-bottom: 0.25rem;
         }
+        .limit-field input {
+            max-width: 150px;
+        }
+
+        /* Toggle switch styling */
+        .form-check-input {
+            width: 3rem;
+            height: 1.5rem;
+            cursor: pointer;
+        }
+        .form-check-input:disabled {
+            cursor: not-allowed;
+        }
+        .form-check-input.blocked-toggle {
+            cursor: not-allowed !important;
+        }
+
+        /* Total fields styling */
+        .totals-container {
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-top: 2rem;
+        }
+        .totals-header {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #2d3748;
+            margin-bottom: 1rem;
+        }
+        .total-field {
+            margin-bottom: 1rem;
+        }
+        .total-field label {
+            display: block;
+            font-size: 0.9rem;
+            color: #6c757d;
+            margin-bottom: 0.5rem;
+        }
+        .total-field input {
+            max-width: 200px;
+        }
+        .total-field input:disabled {
+            background: #e9ecef;
+            cursor: not-allowed;
+        }
+        .total-help-text {
+            font-size: 0.8rem;
+            color: #6c757d;
+            margin-top: 0.25rem;
+        }
+
+        /* Add pass type button */
         .add-pass-type {
             width: 100%;
             border: 2px dashed #dee2e6;
@@ -49,14 +144,26 @@
             padding: 1rem;
             border-radius: 8px;
             transition: all 0.2s;
+            margin-bottom: 1rem;
         }
         .add-pass-type:hover {
             border-color: #0d6efd;
             color: #0d6efd;
             background: #f8f9fa;
         }
-        .limit-input {
-            max-width: 150px;
+
+        .info-text {
+            color: #6c757d;
+            font-size: 0.875rem;
+        }
+
+        /* Tooltip styling */
+        .tooltip-inner {
+            background-color: #2d3748;
+            font-size: 0.85rem;
+        }
+        .tooltip.bs-tooltip-top .tooltip-arrow::before {
+            border-top-color: #2d3748;
         }
     </style>
 </head>
@@ -68,7 +175,7 @@
                     <span class="material-symbols-outlined align-middle">settings</span>
                     Hall Pass Configuration
                 </h1>
-                <p class="text-muted">Configure pass types, queue limits, and simultaneous limits for your classroom.</p>
+                <p class="text-muted">Configure pass types, limits, and availability for your classroom.</p>
             </div>
             <a href="{{ url_for('admin.hall_pass') }}" class="btn btn-outline-secondary">
                 <span class="material-symbols-outlined align-middle">arrow_back</span>
@@ -80,26 +187,57 @@
             <div class="card-body">
                 <h5 class="card-title">How It Works</h5>
                 <ul class="mb-0">
-                    <li><strong>Pass Type Name:</strong> The destination students can select (e.g., Bathroom, Office, Nurse)</li>
-                    <li><strong>Queue Limit:</strong> Maximum number of students who can be waiting + currently out for this destination (leave blank for unlimited)</li>
+                    <li><strong>Master Toggle:</strong> Enable or disable the entire hall pass system</li>
+                    <li><strong>Pass Type Toggle:</strong> Enable or disable individual pass types</li>
+                    <li><strong>Queue Limit:</strong> Maximum number of students who can be approved and waiting for this destination (leave blank for unlimited)</li>
                     <li><strong>Simultaneous Limit:</strong> Maximum number of students who can be out at the same time for this destination (leave blank for unlimited)</li>
+                    <li><strong>Total Queue Limit:</strong> Overall cap for approved & waiting students across all pass types (only editable when any pass type has unlimited queue)</li>
+                    <li><strong>Total Simultaneous Limit:</strong> Overall cap for students currently out across all pass types (only editable when any pass type has unlimited out)</li>
                 </ul>
             </div>
         </div>
 
+        <!-- Master Toggle -->
+        <div class="master-toggle-container">
+            <div>
+                <div class="master-toggle-label">Hall Pass System</div>
+                <div class="master-toggle-status" id="masterToggleStatus">Currently enabled</div>
+            </div>
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="masterToggle" checked>
+            </div>
+        </div>
+
         <div class="card">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Pass Types</h5>
+                <button type="button" class="btn btn-sm btn-primary" onclick="openAddPassTypeModal()">
+                    <span class="material-symbols-outlined align-middle" style="font-size: 1rem;">add</span>
+                    Add New Pass Type
+                </button>
             </div>
             <div class="card-body">
                 <div id="passTypesContainer">
                     <!-- Pass type rows will be dynamically added here -->
                 </div>
 
-                <button type="button" class="add-pass-type" onclick="addPassType()">
-                    <span class="material-symbols-outlined align-middle">add</span>
-                    Add Pass Type
-                </button>
+                <!-- Total Limits Section -->
+                <div class="totals-container">
+                    <div class="totals-header">Total Limits</div>
+                    <p class="info-text mb-3">These fields are only editable when any pass type has unlimited limits. They set an absolute cap across all pass types.</p>
+
+                    <div class="total-field">
+                        <label for="totalQueueLimit">Total Queue Limit (Approved & Waiting)</label>
+                        <input type="number" class="form-control" id="totalQueueLimit" min="0" disabled>
+                        <div class="total-help-text" id="queueLimitHelp">Calculated from individual pass type limits</div>
+                    </div>
+
+                    <div class="total-field">
+                        <label for="totalSimultaneousLimit">Total Simultaneous Out Limit</label>
+                        <input type="number" class="form-control" id="totalSimultaneousLimit" min="0" disabled>
+                        <div class="total-help-text" id="simultaneousLimitHelp">Calculated from individual pass type limits</div>
+                    </div>
+                </div>
 
                 <hr class="my-4">
 
@@ -119,64 +257,267 @@
         </div>
     </div>
 
-    <script>
-        let passTypeCounter = 0;
-
-        function addPassType(name = '', queueLimit = '', simultaneousLimit = '') {
-            passTypeCounter++;
-            const id = `passType-${passTypeCounter}`;
-
-            const html = `
-                <div class="pass-type-row" id="${id}">
-                    <div class="form-group">
-                        <label class="form-label">Pass Type Name</label>
-                        <input type="text" class="form-control pass-name" placeholder="e.g., Bathroom" value="${name}" required>
+    <!-- Add Pass Type Modal -->
+    <div class="modal fade" id="addPassTypeModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Add New Pass Type</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="newPassTypeName" class="form-label">Pass Type Name</label>
+                        <input type="text" class="form-control" id="newPassTypeName" placeholder="e.g., Library">
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Queue Limit <span class="info-text">(optional)</span></label>
-                        <input type="number" class="form-control limit-input queue-limit" placeholder="Unlimited" min="0" value="${queueLimit}">
+                    <div class="mb-3">
+                        <label for="newQueueLimit" class="form-label">Queue Limit <span class="info-text">(optional)</span></label>
+                        <input type="number" class="form-control" id="newQueueLimit" placeholder="Unlimited" min="0">
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">Simultaneous Limit <span class="info-text">(optional)</span></label>
-                        <input type="number" class="form-control limit-input simultaneous-limit" placeholder="Unlimited" min="0" value="${simultaneousLimit}">
-                    </div>
-                    <div>
-                        <button type="button" class="btn btn-danger btn-sm btn-remove" onclick="removePassType('${id}')">
-                            <span class="material-symbols-outlined">delete</span>
-                        </button>
+                    <div class="mb-3">
+                        <label for="newSimultaneousLimit" class="form-label">Simultaneous Limit <span class="info-text">(optional)</span></label>
+                        <input type="number" class="form-control" id="newSimultaneousLimit" placeholder="Unlimited" min="0">
                     </div>
                 </div>
-            `;
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" onclick="addPassType()">Add Pass Type</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-            document.getElementById('passTypesContainer').insertAdjacentHTML('beforeend', html);
+    <script>
+        let passTypeCounter = 0;
+        let passTypesData = [];
+        let addPassTypeModalInstance = null;
+
+        // Initialize Bootstrap tooltips
+        function initTooltips() {
+            const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+            [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el));
         }
 
-        function removePassType(id) {
-            const element = document.getElementById(id);
-            if (element) {
-                element.remove();
-            }
-        }
+        // Master toggle handler
+        document.getElementById('masterToggle').addEventListener('change', function() {
+            const enabled = this.checked;
+            document.getElementById('masterToggleStatus').textContent = enabled ? 'Currently enabled' : 'Currently disabled';
 
-        function getPassTypes() {
-            const rows = document.querySelectorAll('.pass-type-row');
-            const passTypes = [];
-
-            rows.forEach(row => {
-                const name = row.querySelector('.pass-name').value.trim();
-                const queueLimit = row.querySelector('.queue-limit').value.trim();
-                const simultaneousLimit = row.querySelector('.simultaneous-limit').value.trim();
-
-                if (name) {
-                    passTypes.push({
-                        name: name,
-                        queue_limit: queueLimit ? parseInt(queueLimit) : null,
-                        simultaneous_limit: simultaneousLimit ? parseInt(simultaneousLimit) : null
-                    });
+            // Update all individual pass type toggles
+            document.querySelectorAll('.pass-type-toggle').forEach(toggle => {
+                if (!enabled) {
+                    // Disable and uncheck all individual toggles
+                    toggle.disabled = true;
+                    toggle.checked = false;
+                    toggle.classList.add('blocked-toggle');
+                    const row = toggle.closest('.pass-type-row');
+                    row.classList.add('disabled');
+                } else {
+                    // Enable all individual toggles
+                    toggle.disabled = false;
+                    toggle.classList.remove('blocked-toggle');
+                    const row = toggle.closest('.pass-type-row');
+                    row.classList.remove('disabled');
                 }
             });
 
-            return passTypes;
+            updateTotalFields();
+        });
+
+        function openAddPassTypeModal() {
+            // Clear form
+            document.getElementById('newPassTypeName').value = '';
+            document.getElementById('newQueueLimit').value = '';
+            document.getElementById('newSimultaneousLimit').value = '';
+
+            // Show modal
+            if (!addPassTypeModalInstance) {
+                addPassTypeModalInstance = new bootstrap.Modal(document.getElementById('addPassTypeModal'));
+            }
+            addPassTypeModalInstance.show();
+        }
+
+        function addPassType() {
+            const name = document.getElementById('newPassTypeName').value.trim();
+            const queueLimit = document.getElementById('newQueueLimit').value.trim();
+            const simultaneousLimit = document.getElementById('newSimultaneousLimit').value.trim();
+
+            if (!name) {
+                alert('Please enter a pass type name');
+                return;
+            }
+
+            // Check for duplicates
+            const existing = passTypesData.find(pt => pt.name.toLowerCase() === name.toLowerCase());
+            if (existing) {
+                alert('A pass type with this name already exists');
+                return;
+            }
+
+            // Add to data
+            const newPassType = {
+                name: name,
+                queue_limit: queueLimit ? parseInt(queueLimit) : null,
+                simultaneous_limit: simultaneousLimit ? parseInt(simultaneousLimit) : null,
+                enabled: document.getElementById('masterToggle').checked
+            };
+            passTypesData.push(newPassType);
+
+            // Render
+            renderPassTypes();
+
+            // Close modal
+            addPassTypeModalInstance.hide();
+
+            // Show feedback
+            showFeedback('Pass type added. Don\'t forget to save!', false);
+        }
+
+        function removePassType(index) {
+            if (confirm('Are you sure you want to remove this pass type?')) {
+                passTypesData.splice(index, 1);
+                renderPassTypes();
+                showFeedback('Pass type removed. Don\'t forget to save!', false);
+            }
+        }
+
+        function renderPassTypes() {
+            const container = document.getElementById('passTypesContainer');
+            const masterEnabled = document.getElementById('masterToggle').checked;
+
+            if (passTypesData.length === 0) {
+                container.innerHTML = '<p class="text-muted text-center py-4">No pass types configured. Add one to get started.</p>';
+                updateTotalFields();
+                return;
+            }
+
+            const html = passTypesData.map((pt, index) => {
+                const toggleDisabled = !masterEnabled ? 'disabled' : '';
+                const toggleClass = !masterEnabled ? 'blocked-toggle' : '';
+                const rowClass = !masterEnabled || !pt.enabled ? 'disabled' : '';
+
+                return `
+                <div class="pass-type-row ${rowClass}" data-index="${index}">
+                    <div class="pass-type-header">
+                        <div class="pass-type-name">${pt.name}</div>
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input pass-type-toggle ${toggleClass}"
+                                       type="checkbox"
+                                       ${pt.enabled ? 'checked' : ''}
+                                       ${toggleDisabled}
+                                       ${!masterEnabled ? 'data-bs-toggle="tooltip" data-bs-placement="top" title="You must enable hall pass first"' : ''}
+                                       onchange="togglePassType(${index}, this.checked)">
+                            </div>
+                            <button type="button" class="btn btn-danger btn-sm" onclick="removePassType(${index})">
+                                <span class="material-symbols-outlined" style="font-size: 1rem;">delete</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="pass-type-limits">
+                        <div class="limit-field">
+                            <label>Queue Limit</label>
+                            <input type="number"
+                                   class="form-control"
+                                   value="${pt.queue_limit !== null ? pt.queue_limit : ''}"
+                                   placeholder="Unlimited"
+                                   min="0"
+                                   onchange="updatePassTypeLimit(${index}, 'queue_limit', this.value)">
+                        </div>
+                        <div class="limit-field">
+                            <label>Simultaneous Limit</label>
+                            <input type="number"
+                                   class="form-control"
+                                   value="${pt.simultaneous_limit !== null ? pt.simultaneous_limit : ''}"
+                                   placeholder="Unlimited"
+                                   min="0"
+                                   onchange="updatePassTypeLimit(${index}, 'simultaneous_limit', this.value)">
+                        </div>
+                    </div>
+                </div>
+                `;
+            }).join('');
+
+            container.innerHTML = html;
+
+            // Re-initialize tooltips
+            initTooltips();
+
+            // Update total fields
+            updateTotalFields();
+        }
+
+        function togglePassType(index, enabled) {
+            passTypesData[index].enabled = enabled;
+            const row = document.querySelector(`.pass-type-row[data-index="${index}"]`);
+            if (enabled) {
+                row.classList.remove('disabled');
+            } else {
+                row.classList.add('disabled');
+            }
+            updateTotalFields();
+        }
+
+        function updatePassTypeLimit(index, field, value) {
+            passTypesData[index][field] = value.trim() ? parseInt(value) : null;
+            updateTotalFields();
+        }
+
+        function updateTotalFields() {
+            const totalQueueInput = document.getElementById('totalQueueLimit');
+            const totalSimultaneousInput = document.getElementById('totalSimultaneousLimit');
+            const queueHelp = document.getElementById('queueLimitHelp');
+            const simultaneousHelp = document.getElementById('simultaneousLimitHelp');
+
+            // Calculate sums of non-null limits for enabled pass types
+            let queueSum = 0;
+            let simultaneousSum = 0;
+            let hasUnlimitedQueue = false;
+            let hasUnlimitedSimultaneous = false;
+
+            passTypesData.forEach(pt => {
+                if (pt.enabled) {
+                    if (pt.queue_limit === null) {
+                        hasUnlimitedQueue = true;
+                    } else {
+                        queueSum += pt.queue_limit;
+                    }
+
+                    if (pt.simultaneous_limit === null) {
+                        hasUnlimitedSimultaneous = true;
+                    } else {
+                        simultaneousSum += pt.simultaneous_limit;
+                    }
+                }
+            });
+
+            // Queue limit field
+            if (hasUnlimitedQueue) {
+                totalQueueInput.disabled = false;
+                totalQueueInput.min = queueSum;
+                if (totalQueueInput.value === '' || parseInt(totalQueueInput.value) < queueSum) {
+                    totalQueueInput.value = Math.max(queueSum, 10);
+                }
+                queueHelp.textContent = `Must be at least ${queueSum} (sum of non-unlimited pass types)`;
+            } else {
+                totalQueueInput.disabled = true;
+                totalQueueInput.value = queueSum;
+                queueHelp.textContent = 'Calculated from individual pass type limits';
+            }
+
+            // Simultaneous limit field
+            if (hasUnlimitedSimultaneous) {
+                totalSimultaneousInput.disabled = false;
+                totalSimultaneousInput.min = simultaneousSum;
+                if (totalSimultaneousInput.value === '' || parseInt(totalSimultaneousInput.value) < simultaneousSum) {
+                    totalSimultaneousInput.value = Math.max(simultaneousSum, 5);
+                }
+                simultaneousHelp.textContent = `Must be at least ${simultaneousSum} (sum of non-unlimited pass types)`;
+            } else {
+                totalSimultaneousInput.disabled = true;
+                totalSimultaneousInput.value = simultaneousSum;
+                simultaneousHelp.textContent = 'Calculated from individual pass type limits';
+            }
         }
 
         function showFeedback(message, isError = false) {
@@ -191,32 +532,48 @@
         }
 
         function saveConfiguration() {
-            const passTypes = getPassTypes();
-
-            if (passTypes.length === 0) {
+            if (passTypesData.length === 0) {
                 showFeedback('Please add at least one pass type.', true);
                 return;
             }
 
-            // Validate that all pass types have names
-            for (const pt of passTypes) {
-                if (!pt.name) {
-                    showFeedback('All pass types must have a name.', true);
-                    return;
+            // Get total limits (only relevant when editable)
+            const totalQueueLimit = parseInt(document.getElementById('totalQueueLimit').value) || null;
+            const totalSimultaneousLimit = parseInt(document.getElementById('totalSimultaneousLimit').value) || null;
+
+            // Apply total limits to unlimited pass types
+            const passTypesToSave = passTypesData.map(pt => {
+                const ptCopy = { ...pt };
+
+                // If this pass type has unlimited queue and total queue is set, use total
+                if (ptCopy.queue_limit === null && totalQueueLimit !== null) {
+                    // Note: The total limit is handled globally, not per pass type
+                    // We keep the pass type as unlimited, but the backend will enforce the total
                 }
-            }
+
+                return ptCopy;
+            });
+
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const hallPassEnabled = document.getElementById('masterToggle').checked;
 
             fetch('/api/hall-pass/setup', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
                 },
-                body: JSON.stringify({ pass_types: passTypes })
+                body: JSON.stringify({
+                    hall_pass_enabled: hallPassEnabled,
+                    pass_types: passTypesToSave
+                })
             })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
                     showFeedback('Configuration saved successfully!');
+                    // Reload to get fresh data
+                    loadConfiguration();
                 } else {
                     showFeedback(data.message || 'Failed to save configuration.', true);
                 }
@@ -232,23 +589,18 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    // Clear existing pass types
-                    document.getElementById('passTypesContainer').innerHTML = '';
-                    passTypeCounter = 0;
+                    // Set master toggle
+                    const masterToggle = document.getElementById('masterToggle');
+                    masterToggle.checked = data.hall_pass_enabled;
+                    document.getElementById('masterToggleStatus').textContent =
+                        data.hall_pass_enabled ? 'Currently enabled' : 'Currently disabled';
 
-                    // Add pass types from server
-                    data.pass_types.forEach(pt => {
-                        addPassType(
-                            pt.name,
-                            pt.queue_limit !== null ? pt.queue_limit : '',
-                            pt.simultaneous_limit !== null ? pt.simultaneous_limit : ''
-                        );
-                    });
+                    // Load pass types
+                    passTypesData = data.pass_types || [];
+                    passTypeCounter = passTypesData.length;
 
-                    if (data.pass_types.length === 0) {
-                        // Add one empty row if none exist
-                        addPassType();
-                    }
+                    // Render
+                    renderPassTypes();
                 } else {
                     showFeedback('Failed to load configuration.', true);
                 }

@@ -1409,12 +1409,14 @@ def get_hall_pass_setup():
         # Return default configuration
         return jsonify({
             "status": "success",
+            "hall_pass_enabled": True,
             "pass_types": HallPassSettings.get_default_pass_types()
         })
 
     # Return configured pass types with fallback to defaults
     return jsonify({
         "status": "success",
+        "hall_pass_enabled": settings.queue_enabled,
         "pass_types": settings.get_pass_types()
     })
 
@@ -1427,6 +1429,11 @@ def save_hall_pass_setup():
     data = request.get_json()
 
     pass_types = data.get('pass_types', [])
+    hall_pass_enabled = data.get('hall_pass_enabled', True)
+
+    # Validate hall_pass_enabled
+    if not isinstance(hall_pass_enabled, bool):
+        return jsonify({"status": "error", "message": "hall_pass_enabled must be a boolean"}), 400
 
     # Validate pass_types format
     if not isinstance(pass_types, list):
@@ -1439,6 +1446,12 @@ def save_hall_pass_setup():
             return jsonify({"status": "error", "message": "Each pass type must have a name"}), 400
         if not pt['name'].strip():
             return jsonify({"status": "error", "message": "Pass type name cannot be empty"}), 400
+
+        # Validate enabled (defaults to True if not provided)
+        if 'enabled' not in pt:
+            pt['enabled'] = True
+        if not isinstance(pt['enabled'], bool):
+            return jsonify({"status": "error", "message": "enabled must be a boolean"}), 400
 
         # Validate queue_limit and simultaneous_limit (can be None or positive integer)
         for field in ['queue_limit', 'simultaneous_limit']:
@@ -1459,12 +1472,13 @@ def save_hall_pass_setup():
             settings = HallPassSettings(
                 teacher_id=teacher_id,
                 block=None,
-                queue_enabled=True,
+                queue_enabled=hall_pass_enabled,
                 queue_limit=10,
                 pass_types=pass_types
             )
             db.session.add(settings)
         else:
+            settings.queue_enabled = hall_pass_enabled
             settings.pass_types = pass_types
             settings.updated_at = datetime.now(timezone.utc)
 
@@ -1473,6 +1487,7 @@ def save_hall_pass_setup():
         return jsonify({
             "status": "success",
             "message": "Hall pass configuration saved successfully",
+            "hall_pass_enabled": settings.queue_enabled,
             "pass_types": settings.get_pass_types()
         })
 
@@ -1500,11 +1515,13 @@ def get_available_hall_pass_types():
             "pass_types": HallPassSettings.get_default_pass_types()
         })
 
-    # Return just the names for the dropdown
+    # Return just the names for enabled pass types
     pass_types = settings.get_pass_types()
+    enabled_pass_types = [{"name": pt["name"]} for pt in pass_types if pt.get("enabled", True)]
+
     return jsonify({
         "status": "success",
-        "pass_types": [{"name": pt["name"]} for pt in pass_types]
+        "pass_types": enabled_pass_types
     })
 
 

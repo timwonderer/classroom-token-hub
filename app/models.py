@@ -646,17 +646,23 @@ class HallPassSettings(db.Model):
     def get_default_pass_types():
         """Return default pass types when teacher hasn't configured any."""
         return [
-            {"name": "Bathroom", "queue_limit": None, "simultaneous_limit": None},
-            {"name": "Water Fountain", "queue_limit": None, "simultaneous_limit": None},
-            {"name": "Office", "queue_limit": None, "simultaneous_limit": None},
-            {"name": "Nurse", "queue_limit": None, "simultaneous_limit": None},
-            {"name": "Counselor", "queue_limit": None, "simultaneous_limit": None}
+            {"name": "Bathroom", "queue_limit": None, "simultaneous_limit": None, "enabled": True},
+            {"name": "Water Fountain", "queue_limit": None, "simultaneous_limit": None, "enabled": True},
+            {"name": "Office", "queue_limit": None, "simultaneous_limit": None, "enabled": True},
+            {"name": "Nurse", "queue_limit": None, "simultaneous_limit": None, "enabled": True},
+            {"name": "Counselor", "queue_limit": None, "simultaneous_limit": None, "enabled": True}
         ]
 
     def get_pass_types(self):
         """Get pass types with fallback to defaults if not configured."""
         if self.pass_types and len(self.pass_types) > 0:
-            return self.pass_types
+            # Ensure all pass types have an 'enabled' field (backward compatibility)
+            pass_types_with_enabled = []
+            for pt in self.pass_types:
+                if 'enabled' not in pt:
+                    pt['enabled'] = True
+                pass_types_with_enabled.append(pt)
+            return pass_types_with_enabled
         return self.get_default_pass_types()
 
 
