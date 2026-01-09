@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 
 from app import db
 from app.models import Admin, AdminInviteCode
+from hash_utils import get_random_salt, hash_hmac
+from app.utils.encryption import encrypt_totp
 
 
 def test_admin_signup_without_tos_agreement_fails(client):
@@ -115,7 +117,11 @@ def test_admin_signup_complete_saves_tos_acceptance(client):
     assert isinstance(admin.tos_accepted_at, datetime)
 
     # Verify timestamp is recent (within last minute)
-    time_diff = datetime.now(timezone.utc) - admin.tos_accepted_at.replace(tzinfo=timezone.utc)
+    # Handle both naive and timezone-aware datetimes safely
+    tos_time = admin.tos_accepted_at
+    if tos_time.tzinfo is None:
+        tos_time = tos_time.replace(tzinfo=timezone.utc)
+    time_diff = datetime.now(timezone.utc) - tos_time
     assert time_diff.total_seconds() < 60
 
 
@@ -126,9 +132,6 @@ def test_admin_model_has_tos_fields(client):
     assert hasattr(Admin, 'tos_accepted_at')
 
     # Create an admin and verify defaults
-    from hash_utils import get_random_salt, hash_hmac
-    from app.utils.encryption import encrypt_totp
-
     totp_secret = pyotp.random_base32()
     encrypted_secret = encrypt_totp(totp_secret)
     salt = get_random_salt()
