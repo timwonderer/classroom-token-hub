@@ -1,9 +1,10 @@
 
 import unittest
-from datetime import datetime, timezone
+import pyotp
+
 from app import create_app, db
 from app.models import Admin, AdminInviteCode
-from hash_utils import hash_hmac, get_random_salt
+
 
 class TestAdminTos(unittest.TestCase):
     def setUp(self):
@@ -61,7 +62,6 @@ class TestAdminTos(unittest.TestCase):
         with self.client.session_transaction() as sess:
             totp_secret = sess.get('admin_totp_secret')
 
-        import pyotp
         totp = pyotp.TOTP(totp_secret)
         code = totp.now()
 
@@ -70,7 +70,7 @@ class TestAdminTos(unittest.TestCase):
             'invite_code': invite_code,
             'dob_sum': '1990-01-01',
             'totp_code': code,
-            'tos_agreed': 'true' # Include it again as hidden field persists or session logic
+            'tos_agreed': 'true'  # Include it again as hidden field persists or session logic
         }, follow_redirects=True)
 
         self.assertIn(b'Admin account created successfully', response.data)
@@ -80,6 +80,80 @@ class TestAdminTos(unittest.TestCase):
         self.assertIsNotNone(admin)
         self.assertTrue(admin.tos_accepted)
         self.assertIsNotNone(admin.tos_accepted_at)
+
+    def test_totp_submission_without_tos_agreement(self):
+        # Create an invite code
+        invite_code = "TESTCODE123"
+        db.session.add(AdminInviteCode(code=invite_code))
+        db.session.commit()
+
+        # Simulate signup with ToS agreement
+        response = self.client.post('/admin/signup', data={
+            'username': 'newadmin',
+            'invite_code': invite_code,
+            'dob_sum': '1990-01-01',
+            'tos_agreed': 'true'
+        })
+
+        # Retrieve the secret from the session
+        with self.client.session_transaction() as sess:
+            totp_secret = sess.get('admin_totp_secret')
+
+        totp = pyotp.TOTP(totp_secret)
+        code = totp.now()
+
+        # Now simulate TOTP confirmation without ToS agreement
+        response = self.client.post('/admin/signup', data={
+            'username': 'newadmin',
+            'invite_code': invite_code,
+            'dob_sum': '1990-01-01',
+            'totp_code': code,
+            'tos_agreed': 'false'  # Bypassing frontend by submitting false
+        }, follow_redirects=True)
+
+        # Should fail (flash message error)
+        self.assertIn(b'You must agree to the Terms of Service', response.data)
+
+        # Verify admin was not created
+        admin = Admin.query.filter_by(username='newadmin').first()
+        self.assertIsNone(admin)
+
+    def test_totp_submission_without_tos_parameter(self):
+        # Create an invite code
+        invite_code = "TESTCODE123"
+        db.session.add(AdminInviteCode(code=invite_code))
+        db.session.commit()
+
+        # Simulate signup with ToS agreement
+        response = self.client.post('/admin/signup', data={
+            'username': 'newadmin',
+            'invite_code': invite_code,
+            'dob_sum': '1990-01-01',
+            'tos_agreed': 'true'
+        })
+
+        # Retrieve the secret from the session
+        with self.client.session_transaction() as sess:
+            totp_secret = sess.get('admin_totp_secret')
+
+        totp = pyotp.TOTP(totp_secret)
+        code = totp.now()
+
+        # Now simulate TOTP confirmation without tos_agreed parameter
+        response = self.client.post('/admin/signup', data={
+            'username': 'newadmin',
+            'invite_code': invite_code,
+            'dob_sum': '1990-01-01',
+            'totp_code': code
+            # tos_agreed is missing
+        }, follow_redirects=True)
+
+        # Should fail (flash message error)
+        self.assertIn(b'You must agree to the Terms of Service', response.data)
+
+        # Verify admin was not created
+        admin = Admin.query.filter_by(username='newadmin').first()
+        self.assertIsNone(admin)
 
     def test_schema_columns_exist(self):
         # Verify columns exist on the model

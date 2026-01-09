@@ -935,9 +935,10 @@ def signup():
             return redirect(url_for('admin.signup'))
 
         # Validate ToS for initial signup
+        # Validate ToS for initial signup
         if not is_totp_submission and request.form.get('tos_agreed') != 'true':
-             flash("You must agree to the Terms of Service and Privacy Policy.", "error")
-             return redirect(url_for('admin.signup'))
+            flash("You must agree to the Terms of Service and Privacy Policy.", "error")
+            return redirect(url_for('admin.signup'))
 
         # Step 1: Validate invite code
         current_app.logger.info(f"Validating invite code")
@@ -1013,8 +1014,7 @@ def signup():
                 "admin_signup_totp.html",
                 form=totp_form,
                 qr_b64=img_b64,
-                totp_secret=totp_secret,
-                tos_agreed=True
+                totp_secret=totp_secret
             )
         # Step 5: Validate entered TOTP code
         current_app.logger.info(f"TOTP code submitted (length: {len(totp_code)})")
@@ -1080,7 +1080,7 @@ def signup():
                 form=totp_form,
                 qr_b64=img_b64,
                 totp_secret=totp_secret,
-                tos_agreed=True
+                tos_agreed=False
             )
 
         # Encrypt TOTP secret before storing
