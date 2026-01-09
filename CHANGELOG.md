@@ -8,6 +8,12 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Added
+- **ToS Acknowledgment Modal** - Implemented a modal during admin sign-up that requires explicit acknowledgment of Terms of Service and Privacy Policy.
+  - Modal blocks the sign-up process until the "I have read and agree" checkbox is checked.
+  - `tos_accepted` status and timestamp are recorded in the `Admin` table.
+  - Ensures compliance with legal requirements for teacher account creation.
+
 ### Fixed
 - **Analytics Events Value Display** - Show zero-value economy changes in the analytics events timeline by checking for `None` instead of falsy values.
 - **EasyMDE Form Submission** - Fixed issue where forms with EasyMDE markdown editors could not be submitted due to hidden required fields
