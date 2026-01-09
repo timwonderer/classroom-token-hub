@@ -1,4 +1,11 @@
-Classroom Economy Analytics System — Development Specification
+---
+title: Analytics System Specification
+description: System health observability dashboard with CWI-relative metrics and actionable insights
+keywords: [analytics, dashboard, metrics, CWI, system health, observability]
+roles: [teacher, developer]
+---
+
+# Classroom Economy Analytics System — Development Specification
 
 This document defines the scope, constraints, metrics, and invariants governing the Analytics feature in the Classroom Economy App.
 
