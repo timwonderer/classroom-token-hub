@@ -3,32 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Classroom Token Hub - An educational banking simulation platform for teaching financial literacy in classrooms">
-    <meta name="keywords" content="classroom economy, financial literacy, educational software, banking simulation, token economy">
-    <meta name="author" content="Classroom Token Hub">
-
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://timwonderer.github.io/classroom-economy/">
-    <meta property="og:title" content="Classroom Token Hub - Educational Banking Simulation">
-    <meta property="og:description" content="Interactive banking and classroom management platform for teaching financial literacy">
-    <meta property="og:image" content="https://timwonderer.github.io/classroom-economy/images/student_dashboard.png">
-
-    <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image">
-    <meta property="twitter:url" content="https://timwonderer.github.io/classroom-economy/">
-    <meta property="twitter:title" content="Classroom Token Hub - Educational Banking Simulation">
-    <meta property="twitter:description" content="Interactive banking and classroom management platform for teaching financial literacy">
-    <meta property="twitter:image" content="https://timwonderer.github.io/classroom-economy/images/student_dashboard.png">
-
-    <title>Classroom Token Hub - Educational Banking Simulation</title>
+    <meta name="description" content="Classroom Token Hub - An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.">
+    <title>Classroom Token Hub - Classroom Economy System</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
     <link rel="icon" type="image/png" href="icon-192.png">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
     <style>
         * {
             margin: 0;
@@ -93,12 +76,6 @@
             font-weight: 700;
         }
 
-        .nav-right {
-            display: flex;
-            align-items: center;
-            gap: 2rem;
-        }
-
         .nav-links {
             display: flex;
             gap: 2rem;
@@ -118,22 +95,23 @@
 
         .btn {
             padding: 0.75rem 1.5rem;
+            
             text-decoration: none;
             font-weight: 600;
+            
             display: inline-block;
         }
 
         .btn-primary {
             background-color: var(--primary-color);
             color: white;
-            border: 2px solid var(--primary-color);
         }
 
         .btn-primary:hover {
-            background-color: var(--secondary-color);
-            border-style: solid;
-            border-color: white;
-            border-width: 2px;
+            border-style:solid;
+            border-color:white;
+            border-width:2px;
+            
         }
 
         .btn-secondary {
@@ -147,67 +125,45 @@
             color: white;
         }
 
-        .btn-outline-primary {
-            color: white;
-            border-color: white;
-            background-color: transparent;
-        }
-
-        .btn-outline-primary:hover{
-            color: white;
-            border-color: white;
-            background-color: var(--secondary-color);
-        }
-
         /* Hero Section */
         .hero {
             background: var(--primary-dark);
             color: white;
-            padding: 2rem 0 3rem;
+            padding: 0rem 0rem 2rem 0rem;
             text-align: center;
         }
 
         .hero-container {
             margin: 0 auto;
-            
-            padding: 0 2rem;
         }
 
         .hero h2 {
             font-size: 3rem;
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
             font-weight: 300;
         }
 
         .hero p {
             font-size: 1.25rem;
-            margin-bottom: 1rem;
+            margin-bottom: 2rem;
             opacity: 0.95;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
         }
 
-        .hero-subtext {
-            font-size: 1rem;
-            opacity: 0.85;
-            margin-bottom: 1.5rem;
-        }
-
-        .hero-actions {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
+      
 
         /* Badge */
-        .version-badge {
+        .badge {
             display: inline-block;
             padding: 0.5rem 1rem;
-            background-color: #f9d004;
-            color: #1a1a1a;
+            background-color: var(--secondary-color);
+            color: white;
+           
             font-size: 0.875rem;
-            font-weight: 700;
-            margin-bottom: 1.5rem;
-            border-radius: 999px;
+            font-weight: 600;
+            margin-bottom: 1rem;
         }
 
         /* Container */
@@ -238,11 +194,15 @@
         .feature-card {
             background-color: var(--bg-white);
             padding: 2rem;
+            
             box-shadow: var(--shadow);
             transition: transform 0.3s, box-shadow 0.3s;
         }
 
-     
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-lg);
+        }
 
         .feature-icon {
             font-family: 'Material Symbols Outlined', sans-serif;
@@ -263,18 +223,6 @@
             line-height: 1.8;
         }
 
-        .feature-badge {
-            display: inline-block;
-            background-color: var(--accent-color);
-            color: white;
-            padding: 0.2rem 0.6rem;
-            border-radius: 0.75rem;
-            font-size: 0.7rem;
-            font-weight: 700;
-            margin-left: 0.5rem;
-            vertical-align: middle;
-        }
-
         /* Screenshots */
         .screenshots-grid {
             display: grid;
@@ -289,6 +237,8 @@
             box-shadow: var(--shadow);
             transition: transform 0.3s;
         }
+
+       
 
         .screenshot-card img {
             width: 100%;
@@ -429,6 +379,7 @@
         .stats {
             background-color: var(--bg-white);
             padding: 3rem 2rem;
+            
             box-shadow: var(--shadow);
             margin-bottom: 4rem;
         }
@@ -452,33 +403,53 @@
             font-size: 1rem;
         }
 
-        /* Sign In Section */
-        .signin-grid {
-            max-width: 900px;
-            margin: 0 auto;
+        /* Access Form Section */
+        .access-section {
+            background-color: var(--bg-white);
+            padding: 3rem;
+            
+            box-shadow: var(--shadow);
         }
 
-        .signin-card {
+        .access-section h2 {
             text-align: center;
+            margin-bottom: 1.5rem;
+            color: var(--text-dark);
         }
 
-        .signin-card .btn {
-            margin-top: 1rem;
-        }
-
-        .signin-note {
+        .access-section p {
             text-align: center;
+            margin-bottom: 2rem;
             color: var(--text-light);
-            margin-top: 2rem;
+            font-size: 1.1rem;
         }
 
-        .signin-note a {
-            color: var(--secondary-color);
-            text-decoration: none;
+        .form-embed {
+            min-height: 800px;
+            border: none;
+            width: 100%;
+            
         }
 
-        .signin-note a:hover {
-            text-decoration: underline;
+        .form-placeholder {
+            background-color: var(--bg-light);
+            padding: 4rem 2rem;
+            
+            text-align: center;
+            border: 2px dashed var(--border-color);
+        }
+
+        .form-placeholder h3 {
+            color: var(--text-dark);
+            margin-bottom: 1rem;
+        }
+
+        .form-placeholder code {
+            background-color: var(--text-dark);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            
+            font-family: monospace;
         }
 
         /* Footer */
@@ -515,21 +486,10 @@
 
         footer p {
             opacity: 0.7;
+            
         }
 
         /* Responsive */
-        @media (max-width: 900px) {
-            .nav-container {
-                flex-direction: column;
-                gap: 1rem;
-            }
-
-            .nav-right {
-                flex-direction: column;
-                gap: 1rem;
-            }
-        }
-
         @media (max-width: 768px) {
             .hero h2 {
                 font-size: 2rem;
@@ -553,6 +513,10 @@
                 grid-template-columns: 1fr;
             }
 
+            .screenshots-grid {
+                grid-template-columns: 1fr;
+            }
+
             .stats-grid {
                 grid-template-columns: 1fr;
             }
@@ -564,16 +528,16 @@
     <nav>
         <div class="nav-container">
             <a href="#" class="logo">
+                
                 <h1 style="font-size:20pt;"><span class="material-symbols-outlined" style="font-size:20pt; vertical-align:-15%;">local_atmstorefinance_mode</span> <span style="color:var(--primary-color)">Classroom Token Hub</span></h1>
             </a>
-            <div class="nav-right">
-                <div class="nav-links" style="font-size:15pt;">
-                    <a href="#features">Features</a>
-                    <a href="#designs">Designs</a>
-                    <a href="https://app.classroomtokenhub.com/docs" target="_blank" rel="noopener">Docs <span class="material-symbols-outlined" style="vertical-align:middle;color:var(--secondary-color)">menu_book</span></a>
-                    <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener">Status <span class="material-symbols-outlined" style="vertical-align:middle;color:var(--secondary-color)">monitor_heart</span></a>
-                    <a href="https://github.com/timwonderer/classroom-economy" target="_blank" rel="noopener">GitHub Repo <span class="material-symbols-outlined" style="vertical-align:middle;color:var(--secondary-color)">graph_8</span></a>
-                </div>
+            <div class="nav-links" style="font-size:15pt;">
+                <a href="#features">Features</a>
+                <a href="#designs">Designs</a>
+                <a href="https://classroomtokenhub.com/docs" target="_blank" rel="noopener">Docs <span class="material-symbols-outlined" style="vertical-align:middle;color:var(--secondary-color)">menu_book</span> </a>
+                <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener">Status <span class="material-symbols-outlined" style="vertical-align:middle;color:var(--secondary-color)">monitor_heart</span> </a>
+
+                <a href="https://github.com/timwonderer/classroom-economy" target="_blank" rel="noopener">GitHub Repo <span class="material-symbols-outlined" style="vertical-align:middle;color:var(--secondary-color)">graph_8</span> </a>
             </div>
         </div>
     </nav>
@@ -581,117 +545,118 @@
     <!-- Hero Section -->
     <section class="hero">
         <div class="hero-container">
-            <div class="version-badge mt-4 mb-4" style="font-weight:400">Version 1.7.0 Released with Analytics Dashboard, Rent Itemization, Enhanced Mobile Navigation.</div>
-            <h2 class="mb-0" >Classroom Economy System, <span style="font-weight:600; color:#f9d004">Reimagined.</span></strong></h2>
-            <p class="mb-5" style="font-size:15pt; font-weight:300">New approach to behavioral management that promotes student engagement, personal responsibility, and financial literacy.</p>
-            
-            <div class="hero-actions">
-                <a href="#signin" class="btn btn-primary" style="border-color:white">Log in to Classroom Token Hub</a>
-            </div>
+           <br>
+            <div class="alert alert-success mb-5 text-center" role="alert" style="width:fit-content; margin:auto;"><i class="bi bi-menu-button-fill"></i> v1.6.0+ brings rent itemization, enhanced documentation, persistent onboarding widgets, and more!</div>
+            <h2>Classroom Economy System, <span style="font-weight:600; color:#f9d004">Reimagined.</span></strong></h2>
+            <p>New approach to behavioral management that promotes student engagement, personal responsibility, and financial literacy.</p>
+
         </div>
     </section>
 
-    <div class="container" id="learn-more">
-        <h2 class="section-title"><span style="font-weight:300;">The App for Built for Now,</span> and the Future too.</h2>
-        <div class="stats">
-            <div class="stats-grid">
-                <div class="stat">
+    <!-- Stats Section -->
+    <div class="container">
+            <h2 class="section-title"><span style="font-weight:300;">The App for Built for Now,</span> and the Future too.</h2>
+            <div class="stats">
+                <div class="stats-grid">
+                    <div class="stat">
                     <span class="material-symbols-outlined" style="font-size:50pt; color:#c6a70d">database</span>
                     <h4>PostgreSQL <span style="font-weight:300;">powered</span></h4>
                     <p>Big class? Bring it.</p>
                     <p>Normalized schema plus materialized views tuned for classroom-scale workloads.</p>
                     
                     </div>
-                <div class="stat">
+                    <div class="stat">
                     <span class="material-symbols-outlined" style="font-size:50pt; color:#c6a70d">mobile_arrow_down</span>
                     <h4>Continously <span style="font-weight:300;">available</span></h4>
                     <p>No signals? No sweat.</p>
                     <p>Progressive Web App with Caching means you can use it anywhere.</p>
                     
                     </div>
-                <div class="stat">
+                    <div class="stat">
                      <span class="material-symbols-outlined" style="font-size:50pt; color:#c6a70d">visibility_off</span>
                     <h4>Privacy <span style="font-weight:300;">centered</span></h4>
                     <p>We literally don't know you.</p>
                     <p>Minimal personal information by design to minimize data exposure.</p>
                     
                     </div>
-                 <div class="stat">
+                    <div class="stat">
                     <span class="material-symbols-outlined" style="font-size:50pt; color:#c6a70d">shield_lock</span>
                     <h4>Security<span style="font-weight:300;"> focused</span></h4>
                     <p>More protected than your bank.</p>
                     <p>Passkey authentication, TOTP 2FA, CSRF protection, and encrypted PII across the stack.</p>
                     
                     </div>
+                </div>
             </div>
-        </div>
 
         <!-- Features Section -->
         <section id="features" class="section">
             <h2 class="section-title"><span style="font-weight:300;">Complex Classroom Economy?</span> Handled.</h2>
             <div class="features-grid">
                 <div class="feature-card">
-                    <div class="feature-icon" aria-hidden="true">insights</div>
-                    <h3>Analytics Dashboard <span class="feature-badge">NEW</span></h3>
-                    <p>System health metrics with CWI-relative analysis, participation tracking, and actionable insights for economy optimization.</p>
+                    <div class="feature-icon" aria-hidden="true">attach_money</div>
+                    <h3>Banking Simulation</h3>
+                    <p>Students manage checking and savings accounts, learning real-world financial concepts through hands-on experience with virtual tokens.</p>
                 </div>
 
                 <div class="feature-card">
-                    <div class="feature-icon" aria-hidden="true">home</div>
-                    <h3>Rent Itemization <span class="feature-badge">NEW</span></h3>
-                    <p>Break down what rent covers, offer store alternatives, and teach students about value bundling with transparent pricing.</p>
-                </div>
-
-                <div class="feature-card">
-                    <div class="feature-icon" aria-hidden="true">schedule</div>
-                    <h3>Attendance Tracking</h3>
-                    <p>Automatic time logging with Start Work/Break Done system. Students earn tokens by participating in class.</p>
+                    <div class="feature-icon" aria-hidden="true">dashboard</div>
+                    <h3>Teacher Dashboard</h3>
+                    <p>Comprehensive management tools for running payroll, configuring settings, tracking attendance, and managing classroom economies.</p>
                 </div>
 
                 <div class="feature-card">
                     <div class="feature-icon" aria-hidden="true">payments</div>
                     <h3>Automated Payroll</h3>
-                    <p>Configurable pay rates, schedules, rewards, and fines. Run payroll automatically or manually based on attendance.</p>
+                    <p>Configure pay rates, schedules, and automatic rewards or fines. Let the system handle the calculations while you focus on teaching.</p>
                 </div>
 
                 <div class="feature-card">
                     <div class="feature-icon" aria-hidden="true">storefront</div>
                     <h3>Classroom Store</h3>
-                    <p>Virtual and physical items with bundles, expirations, collective goals, and redemption tracking.</p>
+                    <p>Virtual and physical items with bundles, expirations, and redemption tracking. Students learn budgeting and purchasing decisions.</p>
                 </div>
 
                 <div class="feature-card">
-                    <div class="feature-icon" aria-hidden="true">account_balance</div>
-                    <h3>Banking Simulation</h3>
-                    <p>Checking and savings accounts with configurable interest rates, transfers, and complete transaction history.</p>
+                    <div class="feature-icon" aria-hidden="true">confirmation_number</div>
+                    <h3>Hall Pass System</h3>
+                    <p>Time-limited passes with automatic tracking and cost management. Teaches responsibility and time management.</p>
                 </div>
 
                 <div class="feature-card">
-                    <div class="feature-icon" aria-hidden="true">shield</div>
-                    <h3>Insurance System</h3>
-                    <p>Teach risk management through optional insurance policies with claims, enrollments, and premium payments.</p>
+                    <div class="feature-icon" aria-hidden="true">health_and_safety</div>
+                    <h3>Insurance & Rent</h3>
+                    <p>Optional insurance policies and rent systems add real-world financial complexity for advanced lessons. <strong>New!</strong> Itemized rent breakdown with store integration.</p>
                 </div>
 
                 <div class="feature-card">
-                    <div class="feature-icon" aria-hidden="true">badge</div>
-                    <h3>Hall Pass Management</h3>
-                    <p>Time-limited passes with automatic tracking, approvals, and customizable settings per class.</p>
+                    <div class="feature-icon" aria-hidden="true">install_mobile</div>
+                    <h3>Progressive Web App</h3>
+                    <p>Install as a mobile app on any device. Works offline with intelligent caching for fast, reliable access anywhere.</p>
                 </div>
 
                 <div class="feature-card">
-                    <div class="feature-icon" aria-hidden="true">phone_iphone</div>
-                    <h3>Progressive Web App <span class="feature-badge">ENHANCED</span></h3>
-                    <p>Install as a mobile app on iOS and Android. Enhanced hamburger menu navigation for seamless mobile experience.</p>
+                    <div class="feature-icon" aria-hidden="true">security</div>
+                    <h3>Security First</h3>
+                    <p>WebAuthn/FIDO2 passkey authentication, encrypted TOTP secrets, PII encryption at rest, CSRF protection, and more. <strong>This might as well be an actual bank.</strong></p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon" aria-hidden="true">accessibility_new</div>
+                    <h3>Accessible Design</h3>
+                    <p>Built following WCAG 2.1 guidelines with screen reader support, keyboard navigation, and high contrast for all students.</p>
                 </div>
             </div>
         </section>
+
+    
 
         <!-- Screenshots Section -->
         <section id="designs" class="section">
             <h2 class="section-title"><span style="font-weight:300;">Another Hard to Learn App?</span> Not Us.</h2>
             <div class="screenshots-grid">
-                <div class="screenshot-card">
-                    <div class="screenshot-placeholder"><img src="teacher_dashboard.png" alt="Teacher Dashboard Screenshot"></div>
+                <div class="screenshot-card" >
+                    <div class="screenshot-placeholder"> <img src="teacher_dashboard.png" alt="Teacher Dashboard Screenshot"></div>
                     <div class="caption">
                         <h3>Teacher Dashboard</h3>
                         <p>Manage your classroom economy with an intuitive interface. Run payroll, track students, and configure all settings in one place.</p>
@@ -711,7 +676,7 @@
                     </div>
                 </div>
 
-                <div class="screenshot-card">
+                <div class="screenshot-card" >
                     <div class="screenshot-placeholder">
                         <div class="phone-frame">
                             <img src="classroomtokenhub.com_admin_(Pixel 7).png" alt="Mobile-Optimized Screenshot">
@@ -750,27 +715,68 @@
             </div>
         </div>
 
-        <!-- Sign In Section -->
-        <section id="signin" class="section">
-            <h2 class="section-title">Sign In to Your Account</h2>
-            <div class="features-grid signin-grid " >
-                <div class="feature-card signin-card text-white" style="background-color:#2F4F7F">
-                    <div class="material-symbols-outlined" aria-hidden="true" style="font-size:48px">school</div>
-                    <h3 class="text-white">Student Sign In</h3>
-                    <p class="text-white">Access your account, check balances, shop the store, and manage your classroom economy.</p>
-                    <a href="https://app.classroomtokenhub.com/student/login" class="btn btn-outline-primary">Sign In as Student</a>
-                </div>
+        
 
-                <div class="feature-card signin-card text-white" style="background-color:var(--primary-color)">
-                    <div class="material-symbols-outlined" aria-hidden="true" style="font-size:48px">supervisor_account</div>
-                    <h3 class="text-white">Teacher Sign In</h3>
-                    <p class="text-white">Manage your classroom, run payroll, configure settings, and view analytics.</p>
-                    <a href="https://app.classroomtokenhub.com/admin/login" class="btn btn-outline-primary">Sign In as Teacher</a>
+        <!-- Tech Stack Section -->
+        <section class="section">
+            <h2 class="section-title"><span style="font-weight:300;">LATEST: </span>v1.6.0+</h2>
+            <div class="stats">
+                <div style="margin: 0 auto;">
+                    <h4>
+                       Rent Itemization Feature
+                    </h4>
+                    <p style="font-size: 1.1rem; margin-bottom: 2rem; color: var(--text-light);">
+                        Teachers can now specify what rent pays for and offer items as store alternatives. Students see an itemized breakdown of what their rent covers, and can purchase individual components separately at higher prices if they're late on rent. Includes per-use and per-period purchase options with automatic expiration tracking.
+                    </p>
+                    <h4>
+                       Enhanced Documentation & Organization
+                    </h4>
+                    <p style="font-size: 1.1rem; margin-bottom: 2rem; color: var(--text-light);">
+                        Improved repository structure with consolidated documentation, standardized file paths, and better navigation. Added markdown rendering system for clearer in-app documentation and help resources.
+                    </p>
+                    <h4>
+                       Persistent Onboarding Widget
+                    </h4>
+                    <p style="font-size: 1.1rem; margin-bottom: 2rem; color: var(--text-light);">
+                        Widget state now persists to database instead of browser localStorage. Your onboarding progress syncs across logins and devices, and skipped tasks are properly tracked. No more losing your setup progress!
+                    </p>
+                    <div>
+                    <h4>
+                       In-Context Help and Support Offcanvas
+                    </h4>
+                    <p style="font-size: 1.1rem; margin-bottom: 2rem; color: var(--text-light);">
+                        Access Help and Support documentation without leaving your current page. The offcanvas sidebar contains quick start guides and troubleshooting tips accessible from any feature page via the "Need Help?" button.
+                    </p>
+                    <img src="off_canvas_example.gif" alt="Offcanvas Help Screenshot" style="max-width:100%; box-shadow: var(--shadow); border-radius: 1rem;">
+                    </div>
+
                 </div>
             </div>
-            <p class="signin-note">System administrators can <a href="https://app.classroomtokenhub.com/sysadmin/login">sign in here</a>.</p>
+        </section>
+
+        <section class="section">
+            <h2 class="section-title"><span style="font-weight:300;">Uptime is our priority, </span>Always.</h2>
+            <div class="stats">
+
+      <div id="pulsetic-badge"></div>
+      <h4 class='h5 text-muted'>Current Web App Status</h4>
+    <script src="https://cdn.pulsetic.com/index.js" async></script>
+    <script>
+        window.onload = function () {
+        Pulsetic.init({
+          monitor_id: 130967,
+          element_id: "pulsetic-badge"
+    });
+    }
+    </script>
+      
+            </div>
+            
         </section>
     </div>
+
+    
+  
 
     <!-- Footer -->
     <footer>
@@ -782,10 +788,12 @@
                 <a href="https://github.com/timwonderer/classroom-economy/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
                 <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" target="_blank" rel="noopener">License</a>
             </div>
-            <p>&copy; 2026 Classroom Token Hub. Licensed under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" style="color: #de9b37;" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a>, which makes this app free for educational use</p>
+            <p>&copy; 2025 Classroom Token Hub. Licensed under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" style="color: #de9b37;" target="_blank">PolyForm Noncommercial 1.0.0</a>, which makes this app free for educational use</p>
             <p><i>Built by a classroom teacher who had the mindset of "I'll just make it myself."</i></p><br>
-            <img alt="GitHub Release" src="https://img.shields.io/github/v/release/timwonderer/classroom-economy?link=https%3A%2F%2Fgithub.com%2Ftimwonderer%2Fclassroom-economy">
+             <img alt="GitHub Release" src="https://img.shields.io/github/v/release/timwonderer/classroom-economy?link=https%3A%2F%2Fgithub.com%2Ftimwonderer%2Fclassroom-economy">
         </div>
     </footer>
+
+
 </body>
 </html>
