@@ -967,16 +967,19 @@ def hall_pass_terminal_use():
             pass_types = settings.get_pass_types()
 
             # Find configuration for this destination
-            pass_type_config = None
-            for pt in pass_types:
-                if pt['name'].lower() == log_entry.reason.lower():
-                    pass_type_config = pt
-                    break
+            pass_type_config = next((pt for pt in pass_types if pt['name'].lower() == log_entry.reason.lower()), None)
+
+            # Check if pass type is enabled
+            if pass_type_config and not pass_type_config.get('enabled', True):
+                return jsonify({
+                    "status": "error",
+                    "message": f"{log_entry.reason} pass type is currently disabled."
+                }), 403
 
             # Check simultaneous limit
             if pass_type_config and pass_type_config.get('simultaneous_limit') is not None:
                 # Get user's timezone for today's count
-                tz_name = 'America/Los_Angeles'  # Default timezone for terminal
+                tz_name = 'America/Los_Angeles'  # TODO: This should be configurable per teacher/school
                 try:
                     user_tz = pytz.timezone(tz_name)
                 except pytz.UnknownTimeZoneError:
@@ -1498,8 +1501,9 @@ def save_hall_pass_setup():
 
 
 @api_bp.route('/hall-pass/available-types', methods=['GET'])
+@login_required
 def get_available_hall_pass_types():
-    """Get available pass types for a teacher (public endpoint for student use)"""
+    """Get available pass types for a teacher (endpoint for authenticated student use)"""
     teacher_id = request.args.get('teacher_id', type=int)
 
     if not teacher_id:
@@ -1792,17 +1796,13 @@ def handle_tap():
             pass_types = settings.get_pass_types()
 
             # Find configuration for this specific destination/reason
-            pass_type_config = None
-            for pt in pass_types:
-                if pt['name'].lower() == reason.lower():
-                    pass_type_config = pt
-                    break
+            pass_type_config = next((pt for pt in pass_types if pt['name'].lower() == reason.lower()), None)
 
             # If queue is disabled globally, check if we should block this request
-            # (we can still allow passes if they have unlimited queue limits)
+            # (we can still allow passes if they have unlimited limits for BOTH queue and simultaneous)
             if not settings.queue_enabled:
-                # Allow if this pass type has no limits or if it's configured
-                if pass_type_config and (pass_type_config.get('queue_limit') is None or pass_type_config.get('simultaneous_limit') is None):
+                # Allow only if this pass type has BOTH limits set to unlimited
+                if pass_type_config and (pass_type_config.get('queue_limit') is None and pass_type_config.get('simultaneous_limit') is None):
                     pass  # Allow through
                 else:
                     return jsonify({

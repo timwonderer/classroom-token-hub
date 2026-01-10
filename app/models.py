@@ -655,15 +655,13 @@ class HallPassSettings(db.Model):
 
     def get_pass_types(self):
         """Get pass types with fallback to defaults if not configured."""
-        if self.pass_types and len(self.pass_types) > 0:
-            # Ensure all pass types have an 'enabled' field (backward compatibility)
-            pass_types_with_enabled = []
-            for pt in self.pass_types:
-                if 'enabled' not in pt:
-                    pt['enabled'] = True
-                pass_types_with_enabled.append(pt)
-            return pass_types_with_enabled
-        return self.get_default_pass_types()
+        if not self.pass_types:
+            return self.get_default_pass_types()
+
+        # Ensure all pass types have an 'enabled' field (backward compatibility)
+        for pt in self.pass_types:
+            pt.setdefault('enabled', True)
+        return self.pass_types
 
 
 # -------------------- STORE MODELS --------------------

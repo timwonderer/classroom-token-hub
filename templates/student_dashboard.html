@@ -372,9 +372,9 @@
             })
             .catch(error => {
                 console.error('Error loading pass types:', error);
-                // Fallback to default options if API fails
+                // Fallback to default options if API fails (matches model defaults)
                 const select = document.getElementById('hallPassReason');
-                const defaults = ['Bathroom', 'Water Fountain', 'Office', 'Nurse', 'Done for the day'];
+                const defaults = ['Bathroom', 'Water Fountain', 'Office', 'Nurse', 'Counselor', 'Done for the day'];
                 defaults.forEach(name => {
                     const option = document.createElement('option');
                     option.value = name;

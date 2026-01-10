@@ -94,21 +94,33 @@
             noPassesMessage.style.display = 'none';
             table.style.display = 'table';
 
+            // HTML escape function to prevent XSS
+            const escapeHtml = (text) => {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            };
+
             const html = passes.map(pass => {
                 const isOut = pass.status === 'left';
                 const statusText = isOut ? 'Out Now' : 'Returned';
                 const statusClass = isOut ? 'badge bg-warning text-dark' : 'badge bg-success';
-                const timeElapsed = isOut 
-                    ? getTimeElapsed(pass.left_time) 
+                const timeElapsed = isOut
+                    ? getTimeElapsed(pass.left_time)
                     : (pass.return_time ? getDuration(pass.left_time, pass.return_time) : '—');
                 const returnTime = pass.return_time ? window.TimezoneUtils.formatTimestamp(pass.return_time) : '—';
 
+                // Escape all user-provided data to prevent XSS
+                const studentName = escapeHtml(pass.student_name || '');
+                const period = escapeHtml(pass.period || '');
+                const destination = escapeHtml(pass.destination || '');
+
                 return `
                 <tr class="${isOut ? 'table-warning' : ''}">
-                    <td class="fw-semibold">${pass.student_name}</td>
-                    <td>${pass.period}</td>
+                    <td class="fw-semibold">${studentName}</td>
+                    <td>${period}</td>
                     <td><span class="${statusClass}">${statusText}</span></td>
-                    <td>${pass.destination || '—'}</td>
+                    <td>${destination || '—'}</td>
                     <td>${window.TimezoneUtils.formatTimestamp(pass.left_time)}</td>
                     <td>${timeElapsed}</td>
                     <td>${returnTime}</td>
