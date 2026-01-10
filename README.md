@@ -2,7 +2,7 @@
 
 An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.
 
-**Version:** 1.6.0
+**Version:** 1.7.0
 
 ---
 
@@ -12,7 +12,7 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Version 1.6.0 Released! Recent enhancements include mobile navigation improvements with hamburger menu for PWA, repository organization, multi-tenancy fixes, and documentation improvements. Major updates include fixing critical HallPassSettings multi-tenancy violations, consolidating duplicate files, and improving deployment reliability. See [RELEASE_NOTES_v1.6.0.md](docs/archive/releases/RELEASE_NOTES_v1.6.0.md) for full details.
+**Project Status:** Version 1.7.0 Released! Major new features include a comprehensive analytics dashboard with system health metrics, flexible rent itemization with store integration, enhanced mobile navigation with PWA support, and visual privilege badges for rent items. This release focuses on providing teachers with actionable insights and giving students clearer understanding of rent value. See [RELEASE_NOTES_v1.7.0.md](docs/archive/releases/RELEASE_NOTES_v1.7.0.md) for full details.
 
 ---
 
@@ -22,6 +22,7 @@ An interactive banking and classroom management platform for teaching students a
 
 - **System Admin Portal** — Manage teachers (including account recovery), review error logs, and adjust student ownership
 - **Teacher Dashboard** — Manage students, run payroll, configure rent/insurance/banking settings
+- **Analytics Dashboard** — System health metrics, CWI analysis, participation tracking, and trend monitoring
 - **Student Portal** — View balances, redeem store items, track attendance, and manage hall passes
 - **Join-Code Rosters** — Upload rosters and let students self-claim seats securely
 - **Shared Students** — Link multiple teachers to the same student via `student_teachers`
@@ -29,6 +30,7 @@ An interactive banking and classroom management platform for teaching students a
 - **Automated Payroll** — Configurable pay rates, schedules, and rewards/fines
 - **Transaction Logging** — Complete audit trail of all financial activities scoped by teacher
 - **Classroom Store** — Virtual/physical items with bundles, expirations, and redemption tracking
+- **Rent Itemization** — Specify what rent covers with store alternatives and privilege tracking
 - **Hall Pass System** — Time-limited passes with automatic tracking
 - **Insurance System** — Policies, enrollments, and claims managed in-app
 - **Rent & Fees** — Optional recurring rent with waivers and late-fee configuration
@@ -332,4 +334,4 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 Built for educators and students to make learning about finance engaging and practical.
 
-**Last Updated:** 2026-01-01
+**Last Updated:** 2026-01-09

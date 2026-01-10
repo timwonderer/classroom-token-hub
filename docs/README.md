@@ -31,6 +31,7 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 - **[Architecture Guide](technical-reference/architecture.md)** - Stack, project layout, patterns, and security posture.
 - **[Database Schema](technical-reference/database_schema.md)** - Current models and relationships.
 - **[API Reference](technical-reference/api_reference.md)** - REST endpoints and authentication expectations.
+- **[Analytics Specification](technical-reference/Class-economy-analytics-specs.md)** - System health observability and analytics dashboard.
 - **[Economy Specification](technical-reference/ECONOMY_SPECIFICATION.md)** - Developer-only ratios and balancing rules.
 - **[Timezone Handling](technical-reference/TIMEZONE_HANDLING.md)** - UTC storage and conversion patterns.
 
@@ -46,14 +47,14 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 - **[Migration Status](development/MIGRATION_STATUS_REPORT.md)** - Database migration status tracking.
 
 ### Project & Planning
-- **[Project History](project/PROJECT_HISTORY.md)** - Philosophy, evolution, and milestone context.
-- **[Implementation Progress](project/IMPLEMENTATION_PROGRESS.md)** - Feature-by-feature delivery tracking.
+- **[Project History](../PROJECT_HISTORY.md)** - Philosophy, evolution, and milestone context (root-level canonical version).
+- **[Implementation Progress](archive/IMPLEMENTATION_PROGRESS.md)** - Historic feature-by-feature delivery tracking (archived).
 
 ### Deployment & Operations
 - **[Deployment Guide](Deployment_Guide.md)** - Environment variables, CI/CD references, and production checklist.
 - **[Operations README](operations/README.md)** - Cleanup, demo session hygiene, and PII audit procedures.
 - **[Multi-Tenancy Fix Deployment](operations/MULTI_TENANCY_FIX_DEPLOYMENT.md)** - Deployment procedures for multi-tenancy fixes.
-- **[Changelog](CHANGELOG.md)** - Notable changes and release notes.
+- **[Changelog](../CHANGELOG.md)** - Notable changes and release notes (root-level canonical version).
 
 ### Security
 - **[Security Audit 2025](operations/SECURITY_AUDIT_2025.md)** - Comprehensive security audit findings.
@@ -65,6 +66,9 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 - **[Network Vulnerability Report](security/NETWORK_VULNERABILITY_REPORT.md)** - Network security assessment.
 
 ### Archive & Releases
+- **[Release Notes v1.7.0](archive/releases/RELEASE_NOTES_v1.7.0.md)** - Analytics Dashboard, Rent Itemization, Mobile Navigation (Draft - January 2026)
+- **[Release Notes v1.6.0](archive/releases/RELEASE_NOTES_v1.6.0.md)** - Repository Organization and Stability (January 1, 2026)
+- **[Release Notes v1.5.0](archive/releases/RELEASE_NOTES_v1.5.0.md)** - Issue Resolution & Escalation System (December 29, 2025)
 - **[Release Notes v1.4.0](archive/releases/RELEASE_NOTES_v1.4.0.md)** - Announcement system, UI/UX enhancements, security fixes (Dec 27, 2025)
 - **[Release Notes v1.3.0](archive/releases/RELEASE_NOTES_v1.3.0.md)** - Passwordless authentication, encrypted TOTP, security audit (Dec 25, 2025)
 - **[Release Notes v1.2.1](archive/releases/RELEASE_NOTES_v1.2.1.md)** - Migration hardening, join code audits (Dec 21, 2025)
@@ -103,10 +107,11 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 | [Architecture Guide](technical-reference/architecture.md) | Developers | System architecture and patterns | 2025-11-23 |
 | [Database Schema](technical-reference/database_schema.md) | Developers | Current models and relationships | 2025-11-23 |
 | [API Reference](technical-reference/api_reference.md) | Developers | REST API documentation | 2025-11-23 |
+| [Analytics Specification](technical-reference/Class-economy-analytics-specs.md) | Developers | Analytics dashboard and metrics | 2026-01-09 |
 | [Classroom Economy Guide](user-guides/economy_guide.md) | Teachers | Economy ranges and balance checks | 2025-12-28 |
 | [Deployment Guide](Deployment_Guide.md) | DevOps | Deployment instructions | 2025-11-25 |
 | [Economy Specification](technical-reference/ECONOMY_SPECIFICATION.md) | Developers | Financial system spec | 2025-12-11 |
-| [Changelog](../CHANGELOG.md) | All | Version history and changes | 2025-12-27 |
+| [Changelog](../CHANGELOG.md) | All | Version history and changes | 2026-01-09 |
 | [README](../README.md) | All | Project overview and quick start | 2025-12-21 |
 
 ---

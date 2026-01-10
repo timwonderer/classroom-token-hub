@@ -136,7 +136,7 @@ Comprehensively addressed 62 security alerts identified by CodeQL scanning (#737
 - All 62 alerts addressed appropriately
 
 **Documentation**
-- Added `../../security/SECURITY_FIXES_SUMMARY.md` with complete analysis of all alerts
+- Added `../SECURITY_FIXES_SUMMARY.md` with complete analysis of all alerts
 - Documents remaining alerts as false positives with justification
 
 ### Enhanced Open Redirect Protection
@@ -316,7 +316,7 @@ None - This is a feature and UI-focused release with no schema changes
 1. **Security Scanner**
    - All CodeQL security alerts now resolved (62 total, including 9 URL redirection findings)
    - Review `_is_safe_url()` implementation in `app/routes/student.py`
-   - See `../../security/SECURITY_FIXES_SUMMARY.md` for detailed analysis
+   - See `../SECURITY_FIXES_SUMMARY.md` for detailed analysis
 
 2. **Dependencies**
    - Run `pip install -r requirements.txt` to update dependencies:

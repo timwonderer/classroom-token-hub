@@ -4,6 +4,9 @@ This directory contains historical release notes for Classroom Token Hub.
 
 ## Available Releases
 
+- **[v1.7.0](RELEASE_NOTES_v1.7.0.md)** - Analytics Dashboard, Rent Itemization, Mobile Navigation (Draft - January 2026)
+- **[v1.6.0](RELEASE_NOTES_v1.6.0.md)** - Repository Organization and Stability (January 1, 2026)
+- **[v1.5.0](RELEASE_NOTES_v1.5.0.md)** - Issue Resolution & Escalation System (December 29, 2025)
 - **[v1.4.0](RELEASE_NOTES_v1.4.0.md)** - Announcement system, UI/UX enhancements, security fixes (December 27, 2025)
 - **[v1.3.0](RELEASE_NOTES_v1.3.0.md)** - Passwordless authentication (passkeys), encrypted TOTP, security audit (December 25, 2025)
 - **[v1.2.1](RELEASE_NOTES_v1.2.1.md)** - Migration hardening, join code audits, multi-tenancy fixes (December 21, 2025)
