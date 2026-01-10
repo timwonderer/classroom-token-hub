@@ -21,3 +21,9 @@ This page is now a shortcut list. Each link is a short diagnostic checklist to a
 - [Rent or insurance settings are not behaving](/docs/diagnostics/teacher-rent-insurance)
 - [Hall passes are stuck or not approving](/docs/diagnostics/teacher-hall-pass)
 - [Announcements or issue reports are missing](/docs/diagnostics/teacher-announcements-issues)
+- [Analytics dashboard not loading or showing wrong data](/docs/diagnostics/teacher-analytics) **(v1.7+)**
+- [Rent itemization or privilege badges not working](/docs/diagnostics/teacher-rent-itemization) **(v1.7+)**
+
+## Feature Guides (v1.7+)
+- [Interpreting Analytics Dashboard](/docs/features/analytics/interpreting-analytics) - Complete guide to system health metrics
+- [Rent Itemization Setup](/docs/features/rent/itemization-guide) - How to set up itemized rent with store alternatives

@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Classroom Token Hub - An educational banking simulation platform for teaching financial literacy in classrooms">
+    <meta name="keywords" content="classroom economy, financial literacy, educational software, banking simulation, token economy">
+    <meta name="author" content="Classroom Token Hub">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://timwonderer.github.io/classroom-economy/">
+    <meta property="og:title" content="Classroom Token Hub - Educational Banking Simulation">
+    <meta property="og:description" content="Interactive banking and classroom management platform for teaching financial literacy">
+    <meta property="og:image" content="https://timwonderer.github.io/classroom-economy/images/student_dashboard.png">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://timwonderer.github.io/classroom-economy/">
+    <meta property="twitter:title" content="Classroom Token Hub - Educational Banking Simulation">
+    <meta property="twitter:description" content="Interactive banking and classroom management platform for teaching financial literacy">
+    <meta property="twitter:image" content="https://timwonderer.github.io/classroom-economy/images/student_dashboard.png">
+
+    <title>Classroom Token Hub - Educational Banking Simulation</title>
+
+    <!-- Google Material Symbols -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+
+    <style>
+        :root {
+            --primary: #1a4d47;
+            --primary-dark: #134039;
+            --primary-light: #2a6d67;
+            --secondary: #d4a574;
+            --secondary-dark: #b89464;
+            --accent: #4a9d94;
+            --text-dark: #2c3e50;
+            --text-light: #6c757d;
+            --bg-light: #f8f9fa;
+            --white: #ffffff;
+            --shadow: rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-dark);
+            background: var(--bg-light);
+        }
+
+        /* Header/Navigation */
+        .header {
+            background: var(--white);
+            box-shadow: 0 2px 10px var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .nav-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: var(--white);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .btn-secondary {
+            background: var(--white);
+            color: var(--primary);
+            border: 2px solid var(--primary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--primary);
+            color: var(--white);
+        }
+
+        /* Hero Section */
+        .hero {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+            color: var(--white);
+            padding: 4rem 2rem;
+            text-align: center;
+        }
+
+        .hero-content {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .hero h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            line-height: 1.2;
+        }
+
+        .hero .tagline {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            opacity: 0.95;
+        }
+
+        .version-badge {
+            display: inline-block;
+            background: var(--secondary);
+            color: var(--text-dark);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-weight: 600;
+            margin: 1rem 0 2rem 0;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+
+        .hero .btn {
+            font-size: 1.25rem;
+            padding: 1rem 2rem;
+        }
+
+        /* Features Section */
+        .section {
+            padding: 4rem 2rem;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            color: var(--primary);
+            margin-bottom: 3rem;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .feature-card {
+            background: var(--white);
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px var(--shadow);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 15px var(--shadow);
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            color: var(--primary);
+        }
+
+        .feature-icon .material-symbols-outlined {
+            font-size: 3rem;
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 48;
+        }
+
+        .feature-card h3 {
+            color: var(--primary);
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+
+        .feature-card p {
+            color: var(--text-light);
+            line-height: 1.8;
+        }
+
+        .feature-new {
+            display: inline-block;
+            background: var(--accent);
+            color: var(--white);
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        /* Stats Section */
+        .stats-section {
+            background: var(--primary);
+            color: var(--white);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 2rem;
+            text-align: center;
+        }
+
+        .stat h3 {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat p {
+            font-size: 1.25rem;
+            opacity: 0.9;
+        }
+
+        /* Screenshots Section */
+        .screenshots-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+
+        .screenshot-card {
+            background: var(--white);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px var(--shadow);
+        }
+
+        .screenshot-card img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .screenshot-caption {
+            padding: 1rem;
+            text-align: center;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        /* CTA Section */
+        .cta-section {
+            background: linear-gradient(135deg, var(--secondary) 0%, var(--secondary-dark) 100%);
+            color: var(--text-dark);
+            text-align: center;
+        }
+
+        .cta-section h2 {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .cta-section p {
+            font-size: 1.25rem;
+            margin-bottom: 2rem;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* Footer */
+        .footer {
+            background: var(--text-dark);
+            color: var(--white);
+            padding: 3rem 2rem 1rem;
+        }
+
+        .footer-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2rem;
+            margin-bottom: 2rem;
+        }
+
+        .footer h4 {
+            margin-bottom: 1rem;
+            color: var(--secondary);
+        }
+
+        .footer ul {
+            list-style: none;
+        }
+
+        .footer ul li {
+            margin-bottom: 0.5rem;
+        }
+
+        .footer a {
+            color: var(--white);
+            text-decoration: none;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+
+        .footer a:hover {
+            opacity: 1;
+        }
+
+        .footer-bottom {
+            text-align: center;
+            padding-top: 2rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            opacity: 0.7;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .hero .tagline {
+                font-size: 1.25rem;
+            }
+
+            .section-title {
+                font-size: 2rem;
+            }
+
+            .nav-buttons {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+
+            .hero-buttons {
+                flex-direction: column;
+            }
+
+            .screenshots-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <nav class="nav-container">
+            <a href="#" class="logo">🎓 Classroom Token Hub</a>
+            <div class="nav-buttons">
+                <a href="#signin" class="btn btn-primary">Sign In</a>
+                <a href="#learn-more" class="btn btn-secondary">Learn More</a>
+            </div>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>Teach Financial Literacy Through Experience</h1>
+            <p class="tagline">Interactive banking simulation for modern classrooms</p>
+            <span class="version-badge">Version 1.7.0 Released</span>
+            <p>Major new features: Analytics Dashboard • Rent Itemization • Enhanced Mobile Navigation</p>
+            <div class="hero-buttons">
+                <a href="#signin" class="btn btn-primary">Get Started</a>
+                <a href="https://github.com/timwonderer/classroom-economy" class="btn btn-secondary" target="_blank">View on GitHub</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="section">
+        <div class="container">
+            <h2 class="section-title">Core Features</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon"><span class="material-symbols-outlined">insights</span></div>
+                    <h3>Analytics Dashboard<span class="feature-new">NEW</span></h3>
+                    <p>System health metrics with CWI-relative analysis, participation tracking, and actionable insights for economy optimization.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon"><span class="material-symbols-outlined">home</span></div>
+                    <h3>Rent Itemization<span class="feature-new">NEW</span></h3>
+                    <p>Break down what rent covers, offer store alternatives, and teach students about value bundling with transparent pricing.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon"><span class="material-symbols-outlined">schedule</span></div>
+                    <h3>Attendance Tracking</h3>
+                    <p>Automatic time logging with Start Work/Break Done system. Students earn tokens by participating in class.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon"><span class="material-symbols-outlined">payments</span></div>
+                    <h3>Automated Payroll</h3>
+                    <p>Configurable pay rates, schedules, rewards, and fines. Run payroll automatically or manually based on attendance.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon"><span class="material-symbols-outlined">storefront</span></div>
+                    <h3>Classroom Store</h3>
+                    <p>Virtual and physical items with bundles, expirations, collective goals, and redemption tracking.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon"><span class="material-symbols-outlined">account_balance</span></div>
+                    <h3>Banking Simulation</h3>
+                    <p>Checking and savings accounts with configurable interest rates, transfers, and complete transaction history.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon"><span class="material-symbols-outlined">shield</span></div>
+                    <h3>Insurance System</h3>
+                    <p>Teach risk management through optional insurance policies with claims, enrollments, and premium payments.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon"><span class="material-symbols-outlined">badge</span></div>
+                    <h3>Hall Pass Management</h3>
+                    <p>Time-limited passes with automatic tracking, approvals, and customizable settings per class.</p>
+                </div>
+
+                <div class="feature-card">
+                    <div class="feature-icon"><span class="material-symbols-outlined">phone_iphone</span></div>
+                    <h3>Progressive Web App<span class="feature-new">ENHANCED</span></h3>
+                    <p>Install as mobile app on iOS and Android. Enhanced hamburger menu navigation for seamless mobile experience.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="section stats-section">
+        <div class="container">
+            <h2 class="section-title">Built for Scale</h2>
+            <div class="stats-grid">
+                <div class="stat">
+                    <h3>41+</h3>
+                    <p>Database Models</p>
+                </div>
+                <div class="stat">
+                    <h3>100%</h3>
+                    <p>Multi-Tenancy Compliant</p>
+                </div>
+                <div class="stat">
+                    <h3>WCAG 2.1</h3>
+                    <p>Accessibility Standards</p>
+                </div>
+                <div class="stat">
+                    <h3>Open Source</h3>
+                    <p>Noncommercial Use</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Screenshots Section -->
+    <section class="section" id="learn-more">
+        <div class="container">
+            <h2 class="section-title">See It In Action</h2>
+            <div class="screenshots-grid">
+                <div class="screenshot-card">
+                    <img src="../static/images/student_dashboard.png" alt="Student Dashboard" loading="lazy">
+                    <div class="screenshot-caption">Student Dashboard</div>
+                </div>
+                <div class="screenshot-card">
+                    <img src="../static/images/student store view.png" alt="Store View" loading="lazy">
+                    <div class="screenshot-caption">Classroom Store</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Sign In Section -->
+    <section class="section" id="signin">
+        <div class="container">
+            <h2 class="section-title">Sign In to Your Account</h2>
+            <div class="features-grid" style="max-width: 800px; margin: 0 auto;">
+                <div class="feature-card" style="text-align: center;">
+                    <div class="feature-icon"><span class="material-symbols-outlined">school</span></div>
+                    <h3>Student Sign In</h3>
+                    <p>Access your account, check balances, shop the store, and manage your classroom economy.</p>
+                    <a href="/student/login" class="btn btn-primary" style="margin-top: 1rem;">Sign In as Student</a>
+                </div>
+
+                <div class="feature-card" style="text-align: center;">
+                    <div class="feature-icon"><span class="material-symbols-outlined">person</span></div>
+                    <h3>Teacher Sign In</h3>
+                    <p>Manage your classroom, run payroll, configure settings, and view analytics.</p>
+                    <a href="/admin/login" class="btn btn-primary" style="margin-top: 1rem;">Sign In as Teacher</a>
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 2rem;">
+                <p style="color: var(--text-light);">System administrators can <a href="/sysadmin/login" style="color: var(--primary);">sign in here</a></p>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="section cta-section">
+        <div class="container">
+            <h2>Ready to Transform Your Classroom?</h2>
+            <p>Free for educational and nonprofit use. Get started today and make financial literacy engaging for your students.</p>
+            <div class="hero-buttons">
+                <a href="https://github.com/timwonderer/classroom-economy" class="btn btn-primary" target="_blank">View Documentation</a>
+                <a href="https://github.com/timwonderer/classroom-economy/releases" class="btn btn-secondary" target="_blank">Download Latest Release</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div>
+                <h4>About</h4>
+                <ul>
+                    <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/PROJECT_HISTORY.md" target="_blank">Project History</a></li>
+                    <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/ATTRIBUTION.md" target="_blank">Attribution</a></li>
+                    <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/COMMERCIAL.md" target="_blank">Commercial Use Policy</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4>Documentation</h4>
+                <ul>
+                    <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/docs/user-guides/teacher_manual.md" target="_blank">Teacher Manual</a></li>
+                    <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/docs/user-guides/student_guide.md" target="_blank">Student Guide</a></li>
+                    <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/docs/technical-reference/architecture.md" target="_blank">Technical Reference</a></li>
+                    <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/docs/DEPLOYMENT.md" target="_blank">Deployment Guide</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4>Community</h4>
+                <ul>
+                    <li><a href="https://github.com/timwonderer/classroom-economy" target="_blank">GitHub Repository</a></li>
+                    <li><a href="https://github.com/timwonderer/classroom-economy/issues" target="_blank">Report an Issue</a></li>
+                    <li><a href="https://github.com/timwonderer/classroom-economy/discussions" target="_blank">Discussions</a></li>
+                    <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/CONTRIBUTING.md" target="_blank">Contributing</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4>Legal</h4>
+                <ul>
+                    <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/LICENSE" target="_blank">License (PolyForm NC 1.0.0)</a></li>
+                    <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/THIRD_PARTY_NOTICES.md" target="_blank">Third-Party Notices</a></li>
+                    <li><a href="/privacy" target="_blank">Privacy Policy</a></li>
+                    <li><a href="/terms" target="_blank">Terms of Service</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 Classroom Token Hub. Licensed under PolyForm Noncommercial 1.0.0</p>
+            <p>Version 1.7.0 • Last Updated: January 9, 2026</p>
+        </div>
+    </footer>
+
+    <!-- Smooth Scroll Script -->
+    <script>
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
