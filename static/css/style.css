@@ -917,6 +917,13 @@ body.maintenance-active .main-content {
         padding: 1rem !important;
     }
 
+    /* Reset student-content max-width on mobile to fill available space */
+    .student-content {
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
     /* Ensure page header doesn't overflow and doesn't overlap with hamburger menu */
     .page-header {
         flex-direction: column;
