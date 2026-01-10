@@ -1,6 +1,6 @@
 # Release Notes - Version 1.7.0
 
-**Release Date**: TBD (January 2026)  
+**Release Date**: January 9, 2026
 **Focus**: Analytics Dashboard, Rent Itemization, Mobile Navigation, and Documentation Organization
 
 ---
@@ -287,4 +287,4 @@ See [DEVELOPMENT.md](../../DEVELOPMENT.md) for the full roadmap.
 ---
 
 **Last Updated**: 2026-01-09
-**Release Status**: Draft (pending testing and final review)
+**Release Status**: Released
