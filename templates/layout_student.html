@@ -4,7 +4,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {% block page_icon %}school{% endblock %}
     {% set resolved_page_title = page_title or self.title() or "Student Portal" %}
     <title>{{ resolved_page_title }} - Classroom Token Hub</title>
     <meta name="csrf-token" content="{{ csrf_token() }}">
