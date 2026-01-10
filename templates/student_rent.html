@@ -142,9 +142,7 @@
                 {% endfor %}
             </ul>
             {% if rent_items|selectattr('is_available_in_store')|list|length > 0 %}
-            <div class="alert alert-info mt-2 mb-0">
-                <small><strong>Pro tip:</strong> By paying rent, you get all {{ rent_items|length }} items for ${{ "%.2f"|format(settings.rent_amount) }}, which is better value than buying them separately!</small>
-            </div>
+           
             {% endif %}
         </div>
         {% endif %}
@@ -164,10 +162,7 @@
         </div>
         {% else %}
         {% if status.is_preview_period and not status.is_paid %}
-        <div class="alert alert-success mb-3">
-            <h2 class="text-success"><span class="material-symbols-outlined bill-icon">receipt_long</span><strong>You have a new bill</strong></h2>
-            <br>You can now pay rent early! Due date: {{ due_date.strftime('%B %d, %Y') }}
-        </div>
+       
         {% endif %}
 
         {% if status.is_paid %}

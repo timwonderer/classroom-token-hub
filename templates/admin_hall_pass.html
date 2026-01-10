@@ -124,7 +124,7 @@
                 <div class="col-auto">
                     <span class="material-symbols-outlined text-primary" style="font-size: 1.5rem;">settings</span>
                 </div>
-                <div class="col-md-5">
+                <div class="col-md-4">
                     <div class="d-flex align-items-center">
                         <div class="form-check form-switch mb-0">
                             <input class="form-check-input" type="checkbox" id="queueEnabledSwitch" style="cursor: pointer; width: 2.5em; height: 1.25em;">
@@ -134,12 +134,18 @@
                         </div>
                     </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="d-flex align-items-center">
                         <label for="queueLimitInput" class="form-label mb-0 me-2 fw-bold" style="white-space: nowrap;">Limit:</label>
                         <input type="number" class="form-control form-control-sm" id="queueLimitInput" min="1" max="50" value="10" style="width: 70px;">
                         <span class="ms-2 text-muted small">students</span>
                     </div>
+                </div>
+                <div class="col-auto">
+                    <a href="{{ url_for('admin.hall_pass_setup') }}" class="btn btn-outline-primary btn-sm">
+                        <span class="material-symbols-outlined align-middle" style="font-size: 1.1rem;">tune</span>
+                        Configure Pass Types
+                    </a>
                 </div>
                 <div class="col-auto ms-auto">
                     <span id="settingsSavedIndicator" class="badge bg-success" style="display: none;">Saved!</span>

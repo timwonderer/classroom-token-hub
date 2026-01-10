@@ -954,6 +954,59 @@ def hall_pass_terminal_use():
     if log_entry.status != 'approved':
         return jsonify({"status": "error", "message": f"Pass is not approved. Current status: {log_entry.status}"}), 400
 
+    # Check simultaneous limit for this destination before allowing student to leave
+    # Get teacher_id from join_code
+    from app.models import TeacherBlock
+    teacher_block = TeacherBlock.query.filter_by(join_code=log_entry.join_code).first()
+    if teacher_block:
+        teacher_id = teacher_block.teacher_id
+
+        # Get settings for this teacher
+        settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+        if settings:
+            pass_types = settings.get_pass_types()
+
+            # Find configuration for this destination
+            pass_type_config = next((pt for pt in pass_types if pt['name'].lower() == log_entry.reason.lower()), None)
+
+            # Check if pass type is enabled
+            if pass_type_config and not pass_type_config.get('enabled', True):
+                return jsonify({
+                    "status": "error",
+                    "message": f"{log_entry.reason} pass type is currently disabled."
+                }), 403
+
+            # Check simultaneous limit
+            if pass_type_config and pass_type_config.get('simultaneous_limit') is not None:
+                # Get user's timezone for today's count
+                tz_name = 'America/Los_Angeles'  # TODO: This should be configurable per teacher/school
+                try:
+                    user_tz = pytz.timezone(tz_name)
+                except pytz.UnknownTimeZoneError:
+                    user_tz = pytz.timezone('America/Los_Angeles')
+
+                now_user_tz = datetime.now(user_tz)
+                today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
+                today_start_utc = today_start_user_tz.astimezone(pytz.utc).replace(tzinfo=None)
+
+                # Count currently out students for THIS destination from today (excluding this student)
+                currently_out = HallPassLog.query.filter(
+                    HallPassLog.status == 'left',
+                    HallPassLog.reason == log_entry.reason,
+                    HallPassLog.join_code == log_entry.join_code,
+                    HallPassLog.left_time >= today_start_utc,
+                    HallPassLog.id != log_entry.id  # Exclude current pass
+                ).count()
+
+                simultaneous_limit = pass_type_config['simultaneous_limit']
+
+                # Check if limit is reached
+                if currently_out >= simultaneous_limit:
+                    return jsonify({
+                        "status": "error",
+                        "message": f"{log_entry.reason} limit reached. {currently_out}/{simultaneous_limit} students are currently out. Please wait for someone to return."
+                    }), 403
+
     # Mark as left and create tap-out event
     now = datetime.now(timezone.utc)
     log_entry.status = 'left'
@@ -1346,6 +1399,136 @@ def hall_pass_history():
         return jsonify({"status": "error", "message": "Failed to fetch history"}), 500
 
 
+@api_bp.route('/hall-pass/setup', methods=['GET'])
+@admin_required
+def get_hall_pass_setup():
+    """Get teacher's hall pass configuration"""
+    teacher_id = session.get('admin_id')
+
+    # Get or create settings for this teacher
+    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+
+    if not settings:
+        # Return default configuration
+        return jsonify({
+            "status": "success",
+            "hall_pass_enabled": True,
+            "pass_types": HallPassSettings.get_default_pass_types()
+        })
+
+    # Return configured pass types with fallback to defaults
+    return jsonify({
+        "status": "success",
+        "hall_pass_enabled": settings.queue_enabled,
+        "pass_types": settings.get_pass_types()
+    })
+
+
+@api_bp.route('/hall-pass/setup', methods=['POST'])
+@admin_required
+def save_hall_pass_setup():
+    """Save teacher's hall pass configuration"""
+    teacher_id = session.get('admin_id')
+    data = request.get_json()
+
+    pass_types = data.get('pass_types', [])
+    hall_pass_enabled = data.get('hall_pass_enabled', True)
+
+    # Validate hall_pass_enabled
+    if not isinstance(hall_pass_enabled, bool):
+        return jsonify({"status": "error", "message": "hall_pass_enabled must be a boolean"}), 400
+
+    # Validate pass_types format
+    if not isinstance(pass_types, list):
+        return jsonify({"status": "error", "message": "pass_types must be a list"}), 400
+
+    for pt in pass_types:
+        if not isinstance(pt, dict):
+            return jsonify({"status": "error", "message": "Each pass type must be an object"}), 400
+        if 'name' not in pt:
+            return jsonify({"status": "error", "message": "Each pass type must have a name"}), 400
+        if not pt['name'].strip():
+            return jsonify({"status": "error", "message": "Pass type name cannot be empty"}), 400
+
+        # Validate enabled (defaults to True if not provided)
+        if 'enabled' not in pt:
+            pt['enabled'] = True
+        if not isinstance(pt['enabled'], bool):
+            return jsonify({"status": "error", "message": "enabled must be a boolean"}), 400
+
+        # Validate queue_limit and simultaneous_limit (can be None or positive integer)
+        for field in ['queue_limit', 'simultaneous_limit']:
+            if field in pt and pt[field] is not None:
+                try:
+                    val = int(pt[field])
+                    if val < 0:
+                        return jsonify({"status": "error", "message": f"{field} must be non-negative"}), 400
+                    pt[field] = val
+                except (ValueError, TypeError):
+                    return jsonify({"status": "error", "message": f"{field} must be a number or blank"}), 400
+
+    try:
+        # Get or create settings for this teacher
+        settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+
+        if not settings:
+            settings = HallPassSettings(
+                teacher_id=teacher_id,
+                block=None,
+                queue_enabled=hall_pass_enabled,
+                queue_limit=10,
+                pass_types=pass_types
+            )
+            db.session.add(settings)
+        else:
+            settings.queue_enabled = hall_pass_enabled
+            settings.pass_types = pass_types
+            settings.updated_at = datetime.now(timezone.utc)
+
+        db.session.commit()
+
+        return jsonify({
+            "status": "success",
+            "message": "Hall pass configuration saved successfully",
+            "hall_pass_enabled": settings.queue_enabled,
+            "pass_types": settings.get_pass_types()
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error saving hall pass setup: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": "Failed to save configuration"}), 500
+
+
+@api_bp.route('/hall-pass/available-types', methods=['GET'])
+@login_required
+def get_available_hall_pass_types():
+    """Get available pass types for a teacher (endpoint for authenticated student use)"""
+    teacher_id = request.args.get('teacher_id', type=int)
+
+    if not teacher_id:
+        return jsonify({"status": "error", "message": "teacher_id is required"}), 400
+
+    # Get settings for this teacher
+    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+
+    if not settings:
+        # Return defaults if not configured
+        return jsonify({
+            "status": "success",
+            "pass_types": HallPassSettings.get_default_pass_types()
+        })
+
+    # Return just the names for enabled pass types
+    pass_types = settings.get_pass_types()
+    enabled_pass_types = [{"name": pt["name"]} for pt in pass_types if pt.get("enabled", True)]
+
+    return jsonify({
+        "status": "success",
+        "pass_types": enabled_pass_types
+    })
+
+
 @api_bp.route('/attendance/history', methods=['GET'])
 @admin_required
 def attendance_history():
@@ -1609,22 +1792,25 @@ def handle_tap():
                 db.session.add(settings)
                 db.session.commit()
 
-            # Define restricted pass types (affected by queue system)
-            restricted_reasons = ['Restroom', 'Office', 'Locker']
-            emergency_reasons = ['Summon', 'Nurse']
+            # Get pass types configuration
+            pass_types = settings.get_pass_types()
 
-            # Check if this is a restricted pass type
-            is_restricted = reason in restricted_reasons
-            is_emergency = reason in emergency_reasons
+            # Find configuration for this specific destination/reason
+            pass_type_config = next((pt for pt in pass_types if pt['name'].lower() == reason.lower()), None)
 
-            # If queue is disabled, only allow emergency passes
-            if not settings.queue_enabled and is_restricted:
-                return jsonify({
-                    "error": "Queue system is currently disabled. Only Summon and Nurse passes are available."
-                }), 403
+            # If queue is disabled globally, check if we should block this request
+            # (we can still allow passes if they have unlimited limits for BOTH queue and simultaneous)
+            if not settings.queue_enabled:
+                # Allow only if this pass type has BOTH limits set to unlimited
+                if pass_type_config and (pass_type_config.get('queue_limit') is None and pass_type_config.get('simultaneous_limit') is None):
+                    pass  # Allow through
+                else:
+                    return jsonify({
+                        "error": "Queue system is currently disabled."
+                    }), 403
 
-            # If queue is enabled, check capacity for restricted passes
-            if settings.queue_enabled and is_restricted:
+            # Check per-destination queue limits
+            if pass_type_config and pass_type_config.get('queue_limit') is not None:
                 # Get user's timezone from session for today's count
                 tz_name = session.get('timezone', 'America/Los_Angeles')
                 try:
@@ -1636,24 +1822,29 @@ def handle_tap():
                 today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
                 today_start_utc = today_start_user_tz.astimezone(pytz.utc).replace(tzinfo=None)
 
-                # Count approved (waiting) passes from today
+                # Count approved (waiting) passes for THIS destination from today
                 queue_count = HallPassLog.query.filter(
                     HallPassLog.status == 'approved',
+                    HallPassLog.reason == reason,
+                    HallPassLog.join_code == join_code,
                     HallPassLog.decision_time >= today_start_utc
                 ).count()
 
-                # Count currently out students from today
+                # Count currently out students for THIS destination from today
                 out_count = HallPassLog.query.filter(
                     HallPassLog.status == 'left',
+                    HallPassLog.reason == reason,
+                    HallPassLog.join_code == join_code,
                     HallPassLog.left_time >= today_start_utc
                 ).count()
 
-                total_occupied = queue_count + out_count
+                total_in_queue = queue_count + out_count
+                queue_limit = pass_type_config['queue_limit']
 
-                # Check if queue is at capacity
-                if total_occupied >= settings.queue_limit:
+                # Check if queue is at capacity for this destination
+                if total_in_queue >= queue_limit:
                     return jsonify({
-                        "error": f"Queue is full ({total_occupied}/{settings.queue_limit}). Please wait for the queue to clear."
+                        "error": f"{reason} queue is full ({total_in_queue}/{queue_limit}). Please wait for someone to return."
                     }), 403
 
             # Check if hall pass is required (not for Office/Summons/Done for the day)

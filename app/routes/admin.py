@@ -933,6 +933,13 @@ def signup():
                 return jsonify(status="error", message=msg), 400
             flash(msg, "error")
             return redirect(url_for('admin.signup'))
+
+        # Validate ToS for initial signup
+        # Validate ToS for initial signup
+        if not is_totp_submission and request.form.get('tos_agreed') != 'true':
+            flash("You must agree to the Terms of Service and Privacy Policy.", "error")
+            return redirect(url_for('admin.signup'))
+
         # Step 1: Validate invite code
         current_app.logger.info(f"Validating invite code")
         code_row = db.session.execute(
@@ -1045,9 +1052,47 @@ def signup():
         dob_sum_str = str(dob_sum).encode()
         dob_sum_hash = hash_hmac(dob_sum_str, salt)
 
+        # Check ToS acknowledgement
+        tos_agreed = request.form.get('tos_agreed') == 'true'
+        if not tos_agreed:
+            # Should have been caught by frontend, but safety check
+            current_app.logger.warning("Admin signup: ToS not agreed")
+            msg = "You must agree to the Terms of Service and Privacy Policy."
+            if is_json:
+                return jsonify(status="error", message=msg), 400
+            flash(msg, "error")
+
+            # Show QR again for retry
+            totp_uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=username, issuer_name="Classroom Economy Admin")
+            img = qrcode.make(totp_uri)
+            buf = io.BytesIO()
+            img.save(buf, format='PNG')
+            buf.seek(0)
+            img_b64 = base64.b64encode(buf.read()).decode('utf-8')
+
+            # Populate form with data
+            totp_form = AdminTOTPConfirmForm()
+            totp_form.username.data = username
+            totp_form.invite_code.data = invite_code
+            totp_form.dob_sum.data = dob_input.strftime("%Y-%m-%d")
+            return render_template(
+                "admin_signup_totp.html",
+                form=totp_form,
+                qr_b64=img_b64,
+                totp_secret=totp_secret,
+                tos_agreed=False
+            )
+
         # Encrypt TOTP secret before storing
         encrypted_totp_secret = encrypt_totp(totp_secret)
-        new_admin = Admin(username=username, totp_secret=encrypted_totp_secret, dob_sum_hash=dob_sum_hash, salt=salt)
+        new_admin = Admin(
+            username=username,
+            totp_secret=encrypted_totp_secret,
+            dob_sum_hash=dob_sum_hash,
+            salt=salt,
+            tos_accepted=True,
+            tos_accepted_at=datetime.now(timezone.utc)
+        )
         db.session.add(new_admin)
         db.session.execute(
             text("UPDATE admin_invite_codes SET used = TRUE WHERE code = :code"),
@@ -4400,6 +4445,13 @@ def hall_pass():
         available_periods=periods,
         current_page="hall_pass"
     )
+
+
+@admin_bp.route('/hall-pass/setup')
+@admin_required
+def hall_pass_setup():
+    """Configure hall pass types, queue limits, and simultaneous limits."""
+    return render_template('hall_pass_setup.html')
 
 
 # -------------------- ECONOMY HEALTH --------------------
