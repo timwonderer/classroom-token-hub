@@ -9,6 +9,11 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Added
+- (No unreleased changes yet)
+
+## [1.7.0] - 2026-01-09
+
+### Added
 - **ToS Acknowledgment Modal** - Implemented a modal during admin sign-up that requires explicit acknowledgment of Terms of Service and Privacy Policy.
   - Modal blocks the sign-up process until the "I have read and agree" checkbox is checked.
   - `tos_accepted` status and timestamp are recorded in the `Admin` table.
@@ -729,4 +734,4 @@ When adding entries:
 - Keep entries concise but informative
 - Update the date when moving Unreleased to a version
 
-**Last Updated:** 2025-12-27
+**Last Updated:** 2026-01-09
