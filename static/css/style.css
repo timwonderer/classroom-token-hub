@@ -882,7 +882,7 @@ body.maintenance-active .main-content {
 }
 
 /* PWA Mobile Viewport Fix - prevents horizontal scroll when desktop template is served on mobile */
-@media (max-width: 991.98px) {
+@media (max-width: 767.98px) {
     html, body {
         width: 100%;
         max-width: 100%;
@@ -891,7 +891,7 @@ body.maintenance-active .main-content {
 
     /* Scale down icons on mobile for better fit */
     .material-symbols-outlined {
-        font-size: 20px !important;
+        font-size: 20px;
     }
 
     /* Force all containers to full width */
@@ -901,10 +901,10 @@ body.maintenance-active .main-content {
     .container-md,
     .container-lg,
     .container-xl {
-        max-width: 100% !important;
-        width: 100% !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        max-width: 100%;
+        width: 100%;
+        padding-left: 1rem;
+        padding-right: 1rem;
     }
 
     /* Slide-out sidebar on mobile instead of hiding */
@@ -932,59 +932,54 @@ body.maintenance-active .main-content {
     /* Reset main content to fill screen without sidebar margin */
     .main-content,
     .student-main {
-        margin-left: 0 !important;
-        margin-right: 0 !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        padding: 0 !important; /* Remove ALL padding */
-        box-sizing: border-box !important;
-        position: relative !important;
+        margin-left: 0;
+        margin-right: 0;
+        width: 100%;
+        max-width: 100%;
+        padding: 0; /* Remove ALL padding */
+        box-sizing: border-box;
+        position: relative;
     }
 
     /* Reset student-content max-width on mobile to fill available space */
     .student-content {
-        max-width: 100% !important;
-        margin: 0 !important;
-        padding: 1rem !important; /* Add padding here instead of parent */
-        width: 100% !important;
-        box-sizing: border-box !important;
+        max-width: 100%;
+        margin: 0;
+        padding: 1rem; /* Add padding here instead of parent */
+        width: 100%;
+        box-sizing: border-box;
     }
 
     /* Force all rows and columns to use full width */
     .student-content .row {
-        margin-left: 0 !important;
-        margin-right: 0 !important;
-        width: 100% !important;
+        margin-left: 0;
+        margin-right: 0;
+        width: 100%;
     }
 
     .student-content [class*="col-"] {
-        padding-left: 0.5rem !important;
-        padding-right: 0.5rem !important;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
     }
 
     /* Force cards to use full width */
     .student-content .card {
-        width: 100% !important;
-        max-width: 100% !important;
+        width: 100%;
+        max-width: 100%;
     }
 
     /* Ensure page header doesn't overflow and doesn't overlap with hamburger menu */
     .page-header {
         flex-direction: column;
         align-items: flex-start;
-        padding-left: 0; /* Remove padding - hamburger is floating */
+        padding-left: 3rem; /* Space for hamburger menu */
         margin-bottom: 1rem;
-        width: 100% !important;
+        width: 100%;
     }
 
     /* Hide eyebrow text on mobile - saves space */
     .page-header .eyebrow {
         display: none;
-    }
-
-    /* Add padding to page header to prevent hamburger menu overlap */
-    .page-header {
-        padding-left: 3rem !important; /* Space for hamburger menu */
     }
 
     /* Compact page title on mobile */
