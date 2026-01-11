@@ -38,6 +38,7 @@ from app.utils.demo_sessions import cleanup_demo_student_data
 from app.utils.ip_handler import get_real_ip
 from app.utils.claim_credentials import compute_primary_claim_hash, match_claim_hash
 from app.utils.name_utils import hash_last_name_parts
+from app.utils.overdraft import charge_overdraft_fee_if_needed, evaluate_overdraft_allowance
 from app.utils.help_content import HELP_ARTICLES
 from hash_utils import hash_hmac, hash_username, hash_username_lookup
 from attendance import get_all_block_statuses
@@ -1344,6 +1345,7 @@ def transfer():
 
         # CRITICAL FIX: Calculate balances using join_code scoping
         checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
+        banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
 
         if from_account == to_account:
             if is_json:
@@ -1356,9 +1358,22 @@ def transfer():
             flash("Amount must be greater than 0.", "transfer_error")
             return redirect(url_for("student.transfer"))
         elif from_account == 'checking' and amount > checking_balance:
+            fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
+                student,
+                banking_settings,
+                teacher_id=teacher_id,
+                join_code=join_code,
+                force=True
+            )
+            if fee_charged:
+                db.session.commit()
+
+            message = "Insufficient checking funds."
+            if fee_charged:
+                message += f" Overdraft fee of ${fee_amount:.2f} charged."
             if is_json:
-                return jsonify(status="error", message="Insufficient checking funds."), 400
-            flash("Insufficient checking funds.", "transfer_error")
+                return jsonify(status="error", message=message), 400
+            flash(message, "transfer_error")
             return redirect(url_for("student.transfer"))
         elif from_account == 'savings' and amount > savings_balance:
             if is_json:
@@ -1785,13 +1800,44 @@ def purchase_insurance(policy_id):
             return redirect(url_for('student.student_insurance'))
 
     # CRITICAL FIX v2: Check sufficient funds using join_code scoped balance
-    checking_balance = round(sum(
-        tx.amount for tx in student.transactions
-        if tx.account_type == 'checking' and not tx.is_void and tx.join_code == join_code
-    ), 2)
-    if checking_balance < policy.premium:
-        flash("Insufficient funds to purchase this insurance policy.", "danger")
+    checking_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
+    savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
+    banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    overdraft_shortfall = 0.0
+
+    allowed, shortfall, _, _ = evaluate_overdraft_allowance(
+        student,
+        policy.premium,
+        banking_settings,
+        teacher_id=teacher_id,
+        join_code=join_code
+    )
+    if not allowed:
+        fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
+            student,
+            banking_settings,
+            teacher_id=teacher_id,
+            join_code=join_code,
+            force=True
+        )
+        if fee_charged:
+            db.session.commit()
+
+        if banking_settings and banking_settings.overdraft_protection_enabled:
+            message = (f"Insufficient funds in both checking and savings. You need "
+                       f"${policy.premium:.2f} but have ${checking_balance + savings_balance:.2f}.")
+        else:
+            message = (f"Insufficient funds. You need ${policy.premium:.2f} but only "
+                       f"have ${checking_balance:.2f}.")
+
+        if fee_charged:
+            message += f" Overdraft fee of ${fee_amount:.2f} charged."
+
+        flash(message, "danger")
         return redirect(url_for('student.student_insurance'))
+
+    if shortfall > 0:
+        overdraft_shortfall = shortfall
 
     # Create enrollment
     enrollment = StudentInsurance(
@@ -1817,6 +1863,29 @@ def purchase_insurance(policy_id):
         description=f"Insurance premium: {policy.title}"
     )
     db.session.add(transaction)
+
+    # Handle overdraft protection transfer if savings covers a shortfall
+    if banking_settings and banking_settings.overdraft_protection_enabled and overdraft_shortfall > 0:
+        transfer_tx_withdraw = Transaction(
+            student_id=student.id,
+            teacher_id=teacher_id,
+            join_code=join_code,
+            amount=-overdraft_shortfall,
+            account_type='savings',
+            type='Withdrawal',
+            description='Overdraft protection transfer to checking'
+        )
+        transfer_tx_deposit = Transaction(
+            student_id=student.id,
+            teacher_id=teacher_id,
+            join_code=join_code,
+            amount=overdraft_shortfall,
+            account_type='checking',
+            type='Deposit',
+            description='Overdraft protection transfer from savings'
+        )
+        db.session.add(transfer_tx_withdraw)
+        db.session.add(transfer_tx_deposit)
 
     db.session.commit()
     flash(f"Successfully purchased {policy.title}! Coverage starts after {policy.waiting_period_days} day waiting period.", "success")
@@ -2171,86 +2240,21 @@ def shop():
 
 # -------------------- RENT --------------------
 
-def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, join_code=None):
+def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, join_code=None, force=False):
     """
     Check if student's checking balance is negative and charge overdraft fee if enabled.
     Returns (fee_charged, fee_amount) tuple.
+
+    Args:
+        force: Charge fee even if balance is non-negative (declined transaction).
     """
-    if not banking_settings or not banking_settings.overdraft_fee_enabled:
-        return False, 0.0
-
-    current_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
-
-    # Only charge if balance is negative
-    if current_balance >= 0:
-        return False, 0.0
-
-    fee_amount = 0.0
-
-    if banking_settings.overdraft_fee_type == 'flat':
-        fee_amount = banking_settings.overdraft_fee_flat_amount
-    elif banking_settings.overdraft_fee_type == 'progressive':
-        # Count how many overdraft fees charged this month
-        now = datetime.now(timezone.utc)
-        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-        fee_filters = [
-            Transaction.student_id == student.id,
-            Transaction.type == 'overdraft_fee',
-            Transaction.timestamp >= month_start
-        ]
-        if join_code:
-            fee_filters.append(Transaction.join_code == join_code)
-        elif teacher_id:
-            fee_filters.append(Transaction.teacher_id == teacher_id)
-
-        overdraft_fee_count = Transaction.query.filter(*fee_filters).count()
-
-        # Determine which tier to use (1st, 2nd, 3rd, or cap)
-        if overdraft_fee_count == 0:
-            fee_amount = banking_settings.overdraft_fee_progressive_1 or 0.0
-        elif overdraft_fee_count == 1:
-            fee_amount = banking_settings.overdraft_fee_progressive_2 or 0.0
-        elif overdraft_fee_count >= 2:
-            fee_amount = banking_settings.overdraft_fee_progressive_3 or 0.0
-
-        # Check if cap is exceeded
-        if banking_settings.overdraft_fee_progressive_cap:
-            total_filters = [
-                Transaction.student_id == student.id,
-                Transaction.type == 'overdraft_fee',
-                Transaction.timestamp >= month_start
-            ]
-            if join_code:
-                total_filters.append(Transaction.join_code == join_code)
-            elif teacher_id:
-                total_filters.append(Transaction.teacher_id == teacher_id)
-
-            total_fees_this_month = db.session.query(func.sum(Transaction.amount)).filter(
-                *total_filters
-            ).scalar() or 0.0
-
-            # total_fees_this_month is negative, so we negate it
-            if abs(total_fees_this_month) + fee_amount > banking_settings.overdraft_fee_progressive_cap:
-                # Don't charge more than the cap
-                fee_amount = max(0, banking_settings.overdraft_fee_progressive_cap - abs(total_fees_this_month))
-
-    if fee_amount > 0:
-        # Charge the fee
-        overdraft_fee_tx = Transaction(
-            student_id=student.id,
-            teacher_id=teacher_id,
-            join_code=join_code,
-            amount=-fee_amount,
-            account_type='checking',
-            type='overdraft_fee',
-            description=f'Overdraft fee (balance: ${current_balance:.2f})'
-        )
-        db.session.add(overdraft_fee_tx)
-        db.session.flush()  # Update the balance calculation
-        return True, fee_amount
-
-    return False, 0.0
+    return charge_overdraft_fee_if_needed(
+        student,
+        banking_settings,
+        teacher_id=teacher_id,
+        join_code=join_code,
+        force=force
+    )
 
 
 def _calculate_rent_deadlines(settings, reference_date=None):
@@ -2617,25 +2621,41 @@ def rent_pay(period):
     # Get banking settings for overdraft handling (reuse teacher_id from above)
     banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
 
-    # Check if student has enough funds for this payment
-    if checking_balance < payment_amount:
-        # Check if overdraft protection is enabled (savings can cover the difference)
+    # Check if student has enough funds for this payment using shared utility
+    overdraft_shortfall = 0.0
+    allowed, shortfall, _, _ = evaluate_overdraft_allowance(
+        student,
+        payment_amount,
+        banking_settings,
+        teacher_id=teacher_id,
+        join_code=join_code
+    )
+    if not allowed:
+        fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
+            student,
+            banking_settings,
+            teacher_id=teacher_id,
+            join_code=join_code,
+            force=True
+        )
+        if fee_charged:
+            db.session.commit()
+
         if banking_settings and banking_settings.overdraft_protection_enabled:
-            shortfall = payment_amount - checking_balance
-            if savings_balance >= shortfall:
-                # Allow transaction - overdraft protection will transfer from savings
-                pass
-            else:
-                flash(f"Insufficient funds in both checking and savings. You need ${payment_amount:.2f} but have ${checking_balance + savings_balance:.2f}.", "error")
-                return redirect(url_for('student.rent'))
-        # Check if overdraft fees are enabled (allows negative balance)
-        elif banking_settings and banking_settings.overdraft_fee_enabled:
-            # Allow transaction - will charge overdraft fee after transaction
-            pass
+            message = (f"Insufficient funds in both checking and savings. You need "
+                       f"${payment_amount:.2f} but have ${checking_balance + savings_balance:.2f}.")
         else:
-            # No overdraft options - reject transaction
-            flash(f"Insufficient funds. You need ${payment_amount:.2f} but only have ${checking_balance:.2f}.", "error")
-            return redirect(url_for('student.rent'))
+            message = (f"Insufficient funds. You need ${payment_amount:.2f} but only "
+                       f"have ${checking_balance:.2f}.")
+
+        if fee_charged:
+            message += f" Overdraft fee of ${fee_amount:.2f} charged."
+
+        flash(message, "error")
+        return redirect(url_for('student.rent'))
+
+    if shortfall > 0:
+        overdraft_shortfall = shortfall
 
     # FIX: Process payment with teacher_id
     # Deduct from checking account
@@ -2684,33 +2704,29 @@ def rent_pay(period):
 
     db.session.flush()  # Flush to update balances without committing yet
 
-    # Handle overdraft protection and fees
-    # Check if overdraft protection should transfer funds from savings
-    if banking_settings and banking_settings.overdraft_protection_enabled and projected_balance < 0:
-        shortfall = abs(projected_balance)
-        if savings_balance >= shortfall:
-            # CRITICAL FIX v2: Transfer from savings to checking with join_code
-            transfer_tx_withdraw = Transaction(
-                student_id=student.id,
-                teacher_id=teacher_id,
-                join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                amount=-shortfall,
-                account_type='savings',
-                type='Withdrawal',
-                description='Overdraft protection transfer to checking'
-            )
-            transfer_tx_deposit = Transaction(
-                student_id=student.id,
-                teacher_id=teacher_id,
-                join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                amount=shortfall,
-                account_type='checking',
-                type='Deposit',
-                description='Overdraft protection transfer from savings'
-            )
-            db.session.add(transfer_tx_withdraw)
-            db.session.add(transfer_tx_deposit)
-            db.session.flush()  # Flush to update balances
+    # Handle overdraft protection transfer if savings covers a shortfall
+    if banking_settings and banking_settings.overdraft_protection_enabled and overdraft_shortfall > 0:
+        transfer_tx_withdraw = Transaction(
+            student_id=student.id,
+            teacher_id=teacher_id,
+            join_code=join_code,  # CRITICAL: Add join_code for period isolation
+            amount=-overdraft_shortfall,
+            account_type='savings',
+            type='Withdrawal',
+            description='Overdraft protection transfer to checking'
+        )
+        transfer_tx_deposit = Transaction(
+            student_id=student.id,
+            teacher_id=teacher_id,
+            join_code=join_code,  # CRITICAL: Add join_code for period isolation
+            amount=overdraft_shortfall,
+            account_type='checking',
+            type='Deposit',
+            description='Overdraft protection transfer from savings'
+        )
+        db.session.add(transfer_tx_withdraw)
+        db.session.add(transfer_tx_deposit)
+        db.session.flush()  # Flush to update balances
 
     # Check if overdraft fee should be charged (after overdraft protection)
     fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=teacher_id, join_code=join_code)
