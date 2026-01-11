@@ -2621,37 +2621,41 @@ def rent_pay(period):
     # Get banking settings for overdraft handling (reuse teacher_id from above)
     banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
 
-    # Check if student has enough funds for this payment
-    if checking_balance < payment_amount:
-        shortfall = payment_amount - checking_balance
-        # Check if overdraft protection is enabled (savings can cover the difference)
-        if (banking_settings and banking_settings.overdraft_protection_enabled and
-                savings_balance >= shortfall):
-            # Allow transaction - overdraft protection will transfer from savings
-            pass
+    # Check if student has enough funds for this payment using shared utility
+    overdraft_shortfall = 0.0
+    allowed, shortfall, _, _ = evaluate_overdraft_allowance(
+        student,
+        payment_amount,
+        banking_settings,
+        teacher_id=teacher_id,
+        join_code=join_code
+    )
+    if not allowed:
+        fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
+            student,
+            banking_settings,
+            teacher_id=teacher_id,
+            join_code=join_code,
+            force=True
+        )
+        if fee_charged:
+            db.session.commit()
+
+        if banking_settings and banking_settings.overdraft_protection_enabled:
+            message = (f"Insufficient funds in both checking and savings. You need "
+                       f"${payment_amount:.2f} but have ${checking_balance + savings_balance:.2f}.")
         else:
-            fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
-                student,
-                banking_settings,
-                teacher_id=teacher_id,
-                join_code=join_code,
-                force=True
-            )
-            if fee_charged:
-                db.session.commit()
+            message = (f"Insufficient funds. You need ${payment_amount:.2f} but only "
+                       f"have ${checking_balance:.2f}.")
 
-            if banking_settings and banking_settings.overdraft_protection_enabled:
-                message = (f"Insufficient funds in both checking and savings. You need "
-                           f"${payment_amount:.2f} but have ${checking_balance + savings_balance:.2f}.")
-            else:
-                message = (f"Insufficient funds. You need ${payment_amount:.2f} but only "
-                           f"have ${checking_balance:.2f}.")
+        if fee_charged:
+            message += f" Overdraft fee of ${fee_amount:.2f} charged."
 
-            if fee_charged:
-                message += f" Overdraft fee of ${fee_amount:.2f} charged."
+        flash(message, "error")
+        return redirect(url_for('student.rent'))
 
-            flash(message, "error")
-            return redirect(url_for('student.rent'))
+    if shortfall > 0:
+        overdraft_shortfall = shortfall
 
     # FIX: Process payment with teacher_id
     # Deduct from checking account
@@ -2700,33 +2704,29 @@ def rent_pay(period):
 
     db.session.flush()  # Flush to update balances without committing yet
 
-    # Handle overdraft protection and fees
-    # Check if overdraft protection should transfer funds from savings
-    if banking_settings and banking_settings.overdraft_protection_enabled and projected_balance < 0:
-        shortfall = abs(projected_balance)
-        if savings_balance >= shortfall:
-            # CRITICAL FIX v2: Transfer from savings to checking with join_code
-            transfer_tx_withdraw = Transaction(
-                student_id=student.id,
-                teacher_id=teacher_id,
-                join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                amount=-shortfall,
-                account_type='savings',
-                type='Withdrawal',
-                description='Overdraft protection transfer to checking'
-            )
-            transfer_tx_deposit = Transaction(
-                student_id=student.id,
-                teacher_id=teacher_id,
-                join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                amount=shortfall,
-                account_type='checking',
-                type='Deposit',
-                description='Overdraft protection transfer from savings'
-            )
-            db.session.add(transfer_tx_withdraw)
-            db.session.add(transfer_tx_deposit)
-            db.session.flush()  # Flush to update balances
+    # Handle overdraft protection transfer if savings covers a shortfall
+    if banking_settings and banking_settings.overdraft_protection_enabled and overdraft_shortfall > 0:
+        transfer_tx_withdraw = Transaction(
+            student_id=student.id,
+            teacher_id=teacher_id,
+            join_code=join_code,  # CRITICAL: Add join_code for period isolation
+            amount=-overdraft_shortfall,
+            account_type='savings',
+            type='Withdrawal',
+            description='Overdraft protection transfer to checking'
+        )
+        transfer_tx_deposit = Transaction(
+            student_id=student.id,
+            teacher_id=teacher_id,
+            join_code=join_code,  # CRITICAL: Add join_code for period isolation
+            amount=overdraft_shortfall,
+            account_type='checking',
+            type='Deposit',
+            description='Overdraft protection transfer from savings'
+        )
+        db.session.add(transfer_tx_withdraw)
+        db.session.add(transfer_tx_deposit)
+        db.session.flush()  # Flush to update balances
 
     # Check if overdraft fee should be charged (after overdraft protection)
     fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=teacher_id, join_code=join_code)

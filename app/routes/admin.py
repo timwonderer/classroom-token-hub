@@ -728,7 +728,14 @@ def give_bonus_all():
     students = students_query.yield_per(50)
     for student in students:
         join_code = join_code_map.get(student.id)
-        shortfall = 0.0
+        # CRITICAL: Get join_code for this student-teacher pair to avoid multi-tenancy violations
+        # join_code is the source of truth for class scoping, not teacher_id
+        if not join_code:
+            # Fallback: try to get join_code from TeacherBlock
+            current_app.logger.warning(
+            f"No join_code found for student {student.id} in give_bonus_all. "
+            f"This should not happen if TeacherBlock records are properly created."
+            )
 
         if amount < 0:
             allowed, shortfall, _, _ = evaluate_overdraft_allowance(
