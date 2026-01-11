@@ -27,6 +27,7 @@ from app.auth import login_required, admin_required, get_logged_in_student, get_
 from app.routes.student import get_current_class_context, get_current_teacher_id, get_rent_settings_for_context
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
+from app.utils.overdraft import charge_overdraft_fee_if_needed
 
 # Import external modules
 from attendance import (
@@ -152,7 +153,7 @@ def get_tips(user_type):
 
 # -------------------- STORE API --------------------
 
-def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_code):
+def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_code, force=False):
     """
     Check if student's checking balance is negative and charge overdraft fee if enabled.
     Returns (fee_charged, fee_amount) tuple.
@@ -162,67 +163,15 @@ def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_
         banking_settings: BankingSettings object
         teacher_id: Teacher ID for multi-tenancy isolation
         join_code: Join code for multi-tenancy isolation
+        force: Charge fee even if balance is non-negative (declined transaction).
     """
-    if not banking_settings or not banking_settings.overdraft_fee_enabled:
-        return False, 0.0
-
-    # Only charge if balance is negative
-    if student.checking_balance >= 0:
-        return False, 0.0
-
-    fee_amount = 0.0
-
-    if banking_settings.overdraft_fee_type == 'flat':
-        fee_amount = banking_settings.overdraft_fee_flat_amount
-    elif banking_settings.overdraft_fee_type == 'progressive':
-        # Count how many overdraft fees charged this month
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc)
-        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-        overdraft_fee_count = Transaction.query.filter(
-            Transaction.student_id == student.id,
-            Transaction.type == 'overdraft_fee',
-            Transaction.timestamp >= month_start
-        ).count()
-
-        # Determine which tier to use (1st, 2nd, 3rd, or cap)
-        if overdraft_fee_count == 0:
-            fee_amount = banking_settings.overdraft_fee_progressive_1 or 0.0
-        elif overdraft_fee_count == 1:
-            fee_amount = banking_settings.overdraft_fee_progressive_2 or 0.0
-        elif overdraft_fee_count >= 2:
-            fee_amount = banking_settings.overdraft_fee_progressive_3 or 0.0
-
-        # Check if cap is exceeded
-        if banking_settings.overdraft_fee_progressive_cap:
-            total_fees_this_month = db.session.query(func.sum(Transaction.amount)).filter(
-                Transaction.student_id == student.id,
-                Transaction.type == 'overdraft_fee',
-                Transaction.timestamp >= month_start
-            ).scalar() or 0.0
-
-            # total_fees_this_month is negative, so we negate it
-            if abs(total_fees_this_month) + fee_amount > banking_settings.overdraft_fee_progressive_cap:
-                # Don't charge more than the cap
-                fee_amount = max(0, banking_settings.overdraft_fee_progressive_cap - abs(total_fees_this_month))
-
-    if fee_amount > 0:
-        # CRITICAL FIX: Add teacher_id and join_code to overdraft fee transaction
-        overdraft_fee_tx = Transaction(
-            student_id=student.id,
-            teacher_id=teacher_id,  # CRITICAL: Add teacher_id for multi-tenancy
-            join_code=join_code,  # CRITICAL: Add join_code for period isolation
-            amount=-fee_amount,
-            account_type='checking',
-            type='overdraft_fee',
-            description=f'Overdraft fee (balance: ${student.checking_balance:.2f})'
-        )
-        db.session.add(overdraft_fee_tx)
-        db.session.flush()  # Update the balance calculation
-        return True, fee_amount
-
-    return False, 0.0
+    return charge_overdraft_fee_if_needed(
+        student,
+        banking_settings,
+        teacher_id=teacher_id,
+        join_code=join_code,
+        force=force
+    )
 
 
 @api_bp.route('/purchase-item', methods=['POST'])
@@ -327,21 +276,35 @@ def purchase_item():
 
     # Check if student has sufficient funds
     if student.checking_balance < total_price:
+        shortfall = total_price - student.checking_balance
         # Check if overdraft protection is enabled (savings can cover the difference)
-        if banking_settings and banking_settings.overdraft_protection_enabled:
-            shortfall = total_price - student.checking_balance
-            if student.savings_balance >= shortfall:
-                # Allow transaction - overdraft protection will transfer from savings
-                pass
-            else:
-                return jsonify({"status": "error", "message": f"Insufficient funds in both checking and savings. You need ${total_price:.2f} total but have ${student.checking_balance + student.savings_balance:.2f}."}), 400
-        # Check if overdraft fees are enabled (allows negative balance)
-        elif banking_settings and banking_settings.overdraft_fee_enabled:
-            # Allow transaction - will charge overdraft fee after transaction
+        if (banking_settings and banking_settings.overdraft_protection_enabled and
+                student.savings_balance >= shortfall):
+            # Allow transaction - overdraft protection will transfer from savings
             pass
         else:
-            # No overdraft options - reject transaction
-            return jsonify({"status": "error", "message": f"Insufficient funds. You need ${total_price:.2f} but have ${student.checking_balance:.2f}."}), 400
+            fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
+                student,
+                banking_settings,
+                teacher_id,
+                join_code,
+                force=True
+            )
+            if fee_charged:
+                db.session.commit()
+
+            if banking_settings and banking_settings.overdraft_protection_enabled:
+                message = (f"Insufficient funds in both checking and savings. You need "
+                           f"${total_price:.2f} total but have "
+                           f"${student.checking_balance + student.savings_balance:.2f}.")
+            else:
+                message = (f"Insufficient funds. You need ${total_price:.2f} but have "
+                           f"${student.checking_balance:.2f}.")
+
+            if fee_charged:
+                message += f" Overdraft fee of ${fee_amount:.2f} charged."
+
+            return jsonify({"status": "error", "message": message}), 400
 
     if item.inventory is not None and item.inventory < quantity:
         return jsonify({"status": "error", "message": f"Insufficient stock. Only {item.inventory} available."}), 400
