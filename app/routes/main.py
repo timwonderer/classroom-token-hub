@@ -29,7 +29,7 @@ def home():
     - If not logged in -> Redirect to Marketing Site (classroomtokenhub.com)
     """
     # Check for user session and redirect accordingly
-    if session.get('is_system_admin'):
+    if session.get('is_system_admin') and session.get('sysadmin_id'):
         return redirect(url_for('sysadmin.dashboard'))
     elif session.get('is_admin'):
         return redirect(url_for('admin.dashboard'))
