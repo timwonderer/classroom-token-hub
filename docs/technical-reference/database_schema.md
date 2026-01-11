@@ -1,8 +1,12 @@
+---
+title: Database Schema Documentation
+category: technical-reference
+roles: [developer]
+---
+
 # Database Schema Documentation
 
 This document summarizes the database schema for Classroom Token Hub based on `app/models.py`. All timestamps are stored in UTC.
-
----
 
 ## Core Models
 
@@ -243,6 +247,92 @@ Key fields: `savings_apy`, `savings_monthly_rate`, `interest_calculation_type`, 
 
 ---
 
+## Analytics (v1.7.0+)
+
+### `analytics_snapshots`
+Precomputed analytics metrics cached by time window for fast dashboard loading.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `join_code` | String(20) | FK to teacher_blocks for multi-tenancy. |
+| `time_window` | String(10) | 'weekly' or 'monthly'. |
+| `snapshot_date` | DateTime | Date this snapshot represents. |
+| `participation_rate` | Float | % of students actively participating. |
+| `money_velocity` | Float | Average transactions per student. |
+| `cwi_deviation_pct` | Float | % of students significantly deviating from CWI. |
+| `budget_survival_rate` | Float | % of students who can afford basic expenses. |
+| `trend_participation` | String(20) | 'improving', 'stable', or 'worsening'. |
+| `trend_velocity` | String(20) | Velocity trend indicator. |
+| `trend_cwi_deviation` | String(20) | CWI deviation trend. |
+| `trend_survival` | String(20) | Survival rate trend. |
+| `computed_at` | DateTime | When this snapshot was computed. |
+
+**Purpose:** Enables 5-second dashboard load time by precomputing expensive metrics.
+
+### `analytics_events`
+Timeline of important economy events for annotation and correlation with metrics.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `join_code` | String(20) | FK for multi-tenancy scoping. |
+| `event_type` | String(50) | Type: 'wage_change', 'rent_change', 'inflation', 'bonus_payroll', 'store_event'. |
+| `event_date` | DateTime | When the event occurred. |
+| `description` | Text | Human-readable description. |
+| `old_value` | Float, nullable | Previous value (for changes). |
+| `new_value` | Float, nullable | New value (for changes). |
+| `created_at` | DateTime | Event recording timestamp. |
+
+**Purpose:** Helps teachers correlate metric changes with economy adjustments.
+
+### `analytics_alerts`
+Visual alerts shown on dashboard when metrics need attention.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `join_code` | String(20) | FK for multi-tenancy. |
+| `alert_type` | String(20) | Severity: 'critical', 'warning', 'info'. |
+| `metric_name` | String(50) | Which metric triggered this alert. |
+| `what_changed` | Text | Description of the change. |
+| `why_it_matters` | Text | Impact explanation. |
+| `suggested_actions` | Text | Concrete recommendations. |
+| `is_active` | Boolean | Whether alert is still relevant. |
+| `created_at` | DateTime | Alert creation time. |
+| `resolved_at` | DateTime, nullable | When alert was resolved/dismissed. |
+
+**Purpose:** Provides actionable guidance for economy optimization.
+
+---
+
+## Rent Itemization (v1.7.0+)
+
+### `rent_items`
+Itemized breakdown of what rent payment covers.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `join_code` | String(20) | FK to teacher_blocks for per-class configuration. |
+| `name` | String(100) | Item name (e.g., "Desk", "Locker"). |
+| `description` | Text, nullable | Explanation of what this item provides. |
+| `base_value` | Float | Dollar amount this contributes to rent. |
+| `display_order` | Integer | Sort order for student display. |
+| `purchase_available` | Boolean | Whether available as store alternative. |
+| `custom_price` | Float, nullable | À la carte store price (if available). |
+| `purchase_duration` | String(20) | 'per_use' or 'per_period'. |
+| `created_at` | DateTime | Creation timestamp. |
+| `updated_at` | DateTime | Last modification time. |
+
+**Store Integration:** When `purchase_available=True`, automatically creates/updates corresponding StoreItem with appropriate purchase limits based on `purchase_duration`.
+
+**Relationships:**
+- Automatically manages StoreItem sync
+- Used to calculate rent privilege badges
+
+---
+
 ## System & Support
 
 ### `admin_invite_codes`
@@ -277,3 +367,10 @@ Key fields: `student_id`, `created_at`, `expires_at`.
 - Prefer `student_teachers` for ownership; `students.teacher_id` is scheduled for removal once all data is migrated.
 - All monetary values are stored as floating point; rounding is handled in business logic.
 - Indices are defined on frequent lookup fields (e.g., join codes, student/teacher IDs, timestamps) to support pagination and scoped queries.
+- **v1.7.0** added analytics models (`analytics_snapshots`, `analytics_events`, `analytics_alerts`) for system health monitoring and rent itemization (`rent_items`) for transparent rent breakdown.
+- All new models properly scoped by `join_code` for multi-tenancy compliance.
+
+## Full Documentation
+
+For the complete documentation set, visit:
+https://github.com/timwonderer/classroom-economy/tree/main/docs

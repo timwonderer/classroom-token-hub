@@ -5,16 +5,19 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Set up SSH
-      uses: webfactory/ssh-agent@v0.9.0
+      uses: webfactory/ssh-agent@v0.9.1
       with:
         ssh-private-key: ${{ secrets.DO_DEPLOY_KEY }}
 
@@ -35,8 +38,11 @@ jobs:
         MAINT_CONTACT="${{ vars.MAINTENANCE_CONTACT || '' }}"
         TURNSTILE_SITE="${{ secrets.TURNSTILE_SITE_KEY || '' }}"
         TURNSTILE_SECRET="${{ secrets.TURNSTILE_SECRET_KEY || '' }}"
+        PASSWORDLESS_API_KEY="${{ secrets.PASSWORDLESS_API_KEY || '' }}"
+        PASSWORDLESS_API_PUBLIC="${{ secrets.PASSWORDLESS_API_PUBLIC || '' }}"
+        DIGITALOCEAN_ACCESS_TOKEN="${{ secrets.DIGITALOCEAN_ACCESS_TOKEN || '' }}"
 
-        SSH_ENV_VARS="MAINT_MODE=$(printf %q "$MAINT_MODE") MAINT_MESSAGE=$(printf %q "$MAINT_MESSAGE") MAINT_END=$(printf %q "$MAINT_END") MAINT_CONTACT=$(printf %q "$MAINT_CONTACT") TURNSTILE_SITE=$(printf %q "$TURNSTILE_SITE") TURNSTILE_SECRET=$(printf %q "$TURNSTILE_SECRET")"
+        SSH_ENV_VARS="MAINT_MODE=$(printf %q "$MAINT_MODE") MAINT_MESSAGE=$(printf %q "$MAINT_MESSAGE") MAINT_END=$(printf %q "$MAINT_END") MAINT_CONTACT=$(printf %q "$MAINT_CONTACT") TURNSTILE_SITE=$(printf %q "$TURNSTILE_SITE") TURNSTILE_SECRET=$(printf %q "$TURNSTILE_SECRET") PASSWORDLESS_API_KEY=$(printf %q "$PASSWORDLESS_API_KEY") PASSWORDLESS_API_PUBLIC=$(printf %q "$PASSWORDLESS_API_PUBLIC") DIGITALOCEAN_ACCESS_TOKEN=$(printf %q "$DIGITALOCEAN_ACCESS_TOKEN")"
 
         # Connect to the production server and deploy
         # SECURITY: Removed -o StrictHostKeyChecking=no (now uses known_hosts)
@@ -68,6 +74,9 @@ jobs:
           sed -i '/^MAINTENANCE_CONTACT=/d' .env 2>/dev/null || true
           sed -i '/^TURNSTILE_SITE_KEY=/d' .env 2>/dev/null || true
           sed -i '/^TURNSTILE_SECRET_KEY=/d' .env 2>/dev/null || true
+          sed -i '/^PASSWORDLESS_API_KEY=/d' .env 2>/dev/null || true
+          sed -i '/^PASSWORDLESS_API_PUBLIC=/d' .env 2>/dev/null || true
+          sed -i '/^DIGITALOCEAN_ACCESS_TOKEN=/d' .env 2>/dev/null || true
 
           # Add updated variables from GitHub
           echo "MAINTENANCE_MODE=${MAINT_MODE}" >> .env
@@ -83,6 +92,35 @@ jobs:
           if [ -n "${TURNSTILE_SECRET}" ]; then
             echo "TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET}" >> .env
             echo "✓ Turnstile secret key configured"
+          fi
+
+          # Add Passwordless.dev keys if provided
+          if [ -n "${PASSWORDLESS_API_KEY}" ]; then
+            echo "PASSWORDLESS_API_KEY=${PASSWORDLESS_API_KEY}" >> .env
+            echo "✓ Passwordless.dev API key configured (length: ${#PASSWORDLESS_API_KEY})"
+          fi
+          if [ -n "${PASSWORDLESS_API_PUBLIC}" ]; then
+            echo "PASSWORDLESS_API_PUBLIC=${PASSWORDLESS_API_PUBLIC}" >> .env
+            echo "✓ Passwordless.dev public key configured (length: ${#PASSWORDLESS_API_PUBLIC})"
+          fi
+
+          # Add DigitalOcean token if provided (for pydo scripts)
+          if [ -n "${DIGITALOCEAN_ACCESS_TOKEN}" ]; then
+            echo "DIGITALOCEAN_ACCESS_TOKEN=${DIGITALOCEAN_ACCESS_TOKEN}" >> .env
+            echo "✓ DigitalOcean access token configured (length: ${#DIGITALOCEAN_ACCESS_TOKEN})"
+          fi
+
+          # Verify .env file contains the keys
+          echo "Verifying .env file contents..."
+          if grep -q "^PASSWORDLESS_API_KEY=" .env; then
+            echo "✓ PASSWORDLESS_API_KEY found in .env"
+          else
+            echo "⚠ PASSWORDLESS_API_KEY not found in .env"
+          fi
+          if grep -q "^PASSWORDLESS_API_PUBLIC=" .env; then
+            echo "✓ PASSWORDLESS_API_PUBLIC found in .env"
+          else
+            echo "⚠ PASSWORDLESS_API_PUBLIC not found in .env"
           fi
 
           # SECURITY: Verify file permissions
@@ -106,10 +144,34 @@ jobs:
           flask db upgrade
 
 
+          echo 'Ensuring Gunicorn service has EnvironmentFile configured...'
+          # Check if EnvironmentFile is already in the service
+          if ! sudo grep -q "EnvironmentFile=/root/classroom-economy/.env" /etc/systemd/system/gunicorn.service 2>/dev/null; then
+            echo "⚠ Warning: Adding EnvironmentFile to gunicorn.service"
+            # Backup the service file
+            sudo cp /etc/systemd/system/gunicorn.service /etc/systemd/system/gunicorn.service.bak
+            # Add EnvironmentFile after [Service] section
+            sudo sed -i '/^\[Service\]/a EnvironmentFile=/root/classroom-economy/.env' /etc/systemd/system/gunicorn.service
+            sudo systemctl daemon-reload
+            echo "✓ EnvironmentFile added to gunicorn.service"
+          else
+            echo "✓ EnvironmentFile already configured"
+          fi
+
           echo 'Restarting Gunicorn...'
           sudo systemctl restart gunicorn
+
+          echo 'Verifying environment variables are loaded...'
+          # Check if gunicorn process has the environment variables
+          if sudo systemctl show gunicorn | grep -q "EnvironmentFile"; then
+            echo "✓ Gunicorn service has EnvironmentFile configured"
+          else
+            echo "⚠ Warning: EnvironmentFile not found in service configuration"
+          fi
+
+          # Verify the service file syntax
+          sudo systemctl cat gunicorn | grep -A 2 "EnvironmentFile" || echo "⚠ EnvironmentFile directive not found"
 
           echo 'Deployment completed successfully.'
 
         EOF
-

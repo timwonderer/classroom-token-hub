@@ -16,22 +16,22 @@
                     Account recover would require two pieces of unique information:</p>
                
                     <ul>
-                        <li>The sum of your date of birth <span class="text-danger">(something you know)</span></li>
+                        <li>Your date of birth <span class="text-danger">(something you know)</span></li>
                         <li>Your student usernames from the classes you teach <span class="text-danger">(something you have)</span> </li>
                     </ul>
                 
                     <p class="text-secondary-dark ">
-                    Because your account was created before this new feature, you would need to provide the sum of your date of birth to enable this recovery option.</p>
+                    Because your account was created before this new feature, you would need to provide your date of birth to enable this recovery option.</p>
                      <p class="text-success fw-medium">
-                    Your date of birth sum will be processed and stored securely. The processed value cannot be reversed to recover the original value.</p>
+                    Your date of birth will be processed and stored securely. The stored value cannot be reversed to recover the original date.</p>
 
                 <form method="POST" action="{{ url_for('admin.setup_recovery') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                     <div class="mb-4">
-                        <label for="dob_sum" class="form-label fw-medium">Date of Birth Sum</label>
-                        <input type="number" class="form-control form-control-lg" id="dob_sum" name="dob_sum" placeholder="e.g. 2028" required autofocus>
-                        <div class="form-text">Calculate: Month (1-12) + Day (1-31) + Year (4 digits)</div>
+                        <label for="dob" class="form-label fw-medium">Date of Birth</label>
+                        <input type="date" class="form-control form-control-lg" id="dob" name="dob_sum" required autofocus>
+                        <div class="form-text">Use the date picker to select your birth date.</div>
                     </div>
 
                     <div class="d-grid gap-2">

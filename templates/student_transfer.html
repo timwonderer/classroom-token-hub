@@ -251,6 +251,7 @@
                                     <th>Amount</th>
                                     <th>Description</th>
                                     <th>Status</th>
+                                    <th>Report</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -258,7 +259,7 @@
                                 <tr {% if tx.is_void %}class="table-secondary text-decoration-line-through"{% endif %}>
                                     <td>
                                         {% if tx.timestamp %}
-                                            <span class="local-timestamp" data-timestamp="{{ tx.timestamp.isoformat() }}Z"></span>
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
                                         {% else %}
                                             N/A
                                         {% endif %}
@@ -274,6 +275,14 @@
                                         {% else %}
                                             <span class="badge bg-success">Active</span>
                                         {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('student.report_transaction_issue', transaction_id=tx.id) }}"
+                                           class="btn btn-sm btn-link text-muted p-0"
+                                           title="Report an issue with this transaction"
+                                           data-bs-toggle="tooltip">
+                                            <span class="material-symbols-outlined fs-6">help</span>
+                                        </a>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -302,6 +311,7 @@
                                     <th>Amount</th>
                                     <th>Description</th>
                                     <th>Status</th>
+                                    <th>Report</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -309,7 +319,7 @@
                                 <tr {% if tx.is_void %}class="table-secondary text-decoration-line-through"{% endif %}>
                                     <td>
                                         {% if tx.timestamp %}
-                                            <span class="local-timestamp" data-timestamp="{{ tx.timestamp.isoformat() }}Z"></span>
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
                                         {% else %}
                                             N/A
                                         {% endif %}
@@ -325,6 +335,14 @@
                                         {% else %}
                                             <span class="badge bg-success">Active</span>
                                         {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('student.report_transaction_issue', transaction_id=tx.id) }}"
+                                           class="btn btn-sm btn-link text-muted p-0"
+                                           title="Report an issue with this transaction"
+                                           data-bs-toggle="tooltip">
+                                            <span class="material-symbols-outlined fs-6">help</span>
+                                        </a>
                                     </td>
                                 </tr>
                                 {% endfor %}
@@ -396,8 +414,21 @@
 
         const fromText = fromAccount.charAt(0).toUpperCase() + fromAccount.slice(1);
         const toText = toAccount.charAt(0).toUpperCase() + toAccount.slice(1);
-        document.getElementById("transfer-summary").innerHTML =
-            `Transfer <strong>$${amount}</strong> from <strong>${fromText}</strong> to <strong>${toText}</strong>`;
+        // Use textContent to prevent XSS - create structure manually
+        const summaryEl = document.getElementById("transfer-summary");
+        summaryEl.textContent = ''; // Clear existing content
+        summaryEl.appendChild(document.createTextNode('Transfer '));
+        const amountStrong = document.createElement('strong');
+        amountStrong.textContent = `$${amount}`;
+        summaryEl.appendChild(amountStrong);
+        summaryEl.appendChild(document.createTextNode(' from '));
+        const fromStrong = document.createElement('strong');
+        fromStrong.textContent = fromText;
+        summaryEl.appendChild(fromStrong);
+        summaryEl.appendChild(document.createTextNode(' to '));
+        const toStrong = document.createElement('strong');
+        toStrong.textContent = toText;
+        summaryEl.appendChild(toStrong);
 
         // Show modal
         const modal = new bootstrap.Modal(document.getElementById('passphraseModal'));

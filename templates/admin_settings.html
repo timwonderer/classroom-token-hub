@@ -1,16 +1,16 @@
 {% extends "layout_admin.html" %}
-{% set page_title = "Account Settings" %}
-{% block title %}Account Settings{% endblock %}
-{% block page_icon %}settings{% endblock %}
+{% set page_title = "Account Personalization" %}
+{% block title %}Account Personalization{% endblock %}
+{% block page_icon %}style{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-lg-8 offset-lg-2">
         <div class="card shadow-sm">
-            <div class="card-header" style="background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-blue) 100%); color: white;">
+            <div class="card-header bg-primary text-white" >
                 <h5 class="mb-0">
-                    <span class="material-symbols-outlined" style="vertical-align: middle;">person</span>
-                    Profile Settings
+                    <span class="material-symbols-outlined" style="vertical-align: middle;">display_settings</span>
+                    Display Settings
                 </h5>
             </div>
             <div class="card-body">
@@ -19,14 +19,14 @@
 
                     <!-- Display Name Section -->
                     <div class="mb-4">
-                        <h6 class="text-muted mb-3">
-                            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 18px;">badge</span>
+                        <h5 class="text-primary mb-3">
+                            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 25px;">badge</span>
                             Display Name
-                        </h6>
+                        </h5>
                         <div class="mb-3">
                             <label for="display_name" class="form-label">
-                                Your Display Name
-                                <small class="text-muted">(shown in navigation and to students)</small>
+                                This is how your name will appear to others
+                               
                             </label>
                             <input
                                 type="text"
@@ -37,7 +37,7 @@
                                 placeholder="{{ admin.username }}"
                                 maxlength="100">
                             <div class="form-text">
-                                Leave blank to use your username: <strong>{{ admin.username }}</strong>
+                                If you don't change this, it will remain: <strong>{{ admin.username }}</strong>
                             </div>
                         </div>
                     </div>
@@ -46,12 +46,12 @@
 
                     <!-- Class Labels Section -->
                     <div class="mb-4">
-                        <h6 class="text-muted mb-3">
-                            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 18px;">school</span>
+                        <h5 class="text-primary mb-3">
+                            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 25px;">school</span>
                             Class Labels
-                        </h6>
-                        <p class="text-muted small mb-3">
-                            Customize how your classes are displayed throughout the app. Leave blank to use the default block identifier.
+                        </h5>
+                        <p class="mb-3">
+                            This is how your class sections will appear to students
                         </p>
 
                         {% if blocks %}
@@ -61,7 +61,7 @@
                                 <div class="card border">
                                     <div class="card-body">
                                         <label for="class_label_{{ block_data.block }}" class="form-label">
-                                            <strong>Block {{ block_data.block }}</strong>
+                                            <strong>Block/Period {{ block_data.block }}</strong>
                                         </label>
                                         <input
                                             type="text"
@@ -72,7 +72,7 @@
                                             placeholder="e.g., Period 1, Honors Bio, AP Calc"
                                             maxlength="50">
                                         <div class="form-text">
-                                            Current: <strong>{{ block_data.class_label or block_data.block }}</strong>
+                                            This is what is being shown to students: <strong>{{ block_data.class_label or block_data.block }}</strong>
                                         </div>
                                     </div>
                                 </div>
@@ -91,10 +91,10 @@
 
                     <!-- Account Info (Read-only) -->
                     <div class="mb-4">
-                        <h6 class="text-muted mb-3">
-                            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 18px;">info</span>
+                        <h5 class="text-primary mb-3">
+                            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 25px;">info</span>
                             Account Information
-                        </h6>
+                        </h5>
                         <div class="row">
                             <div class="col-md-6 mb-2">
                                 <small class="text-muted">Username:</small>
@@ -119,8 +119,51 @@
                         </button>
                     </div>
                 </form>
+
+                <hr class="my-4">
+
+                <!-- Reset Getting Started Widget Section -->
+                <div class="mb-4">
+                    <h5 class="text-primary mb-3">
+                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 25px;">restart_alt</span>
+                        Getting Started Widget
+                    </h5>
+                    <p class="text-muted mb-3">
+                        Show the getting started widget again if you dismissed it or want to review setup tasks.
+                    </p>
+                    <button type="button" class="btn btn-outline-secondary" onclick="showGettingStartedWidget()">
+                        <span class="material-symbols-outlined" style="vertical-align: middle;">refresh</span>
+                        Show Getting Started Widget
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+function showGettingStartedWidget() {
+    // Call the un-dismiss endpoint to show the widget again
+    fetch('/admin/onboarding/undismiss-widget', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert('Getting started widget will appear when you return to the dashboard.');
+            window.location.href = '{{ url_for("admin.dashboard") }}';
+        } else {
+            alert('Error: ' + (data.message || 'Failed to show widget'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while showing the widget.');
+    });
+}
+</script>
 {% endblock %}

@@ -59,7 +59,7 @@ def migrate_legacy_students_command():
     ]
 
     if not legacy_students:
-        click.echo("✓ No legacy students found! All students are already migrated.")
+        click.echo("No legacy students found. All students are already migrated.")
         return
 
     student_word = "student" if len(legacy_students) == 1 else "students"
@@ -85,9 +85,9 @@ def migrate_legacy_students_command():
             )
             db.session.add(st)
             student_teacher_created += 1
-            click.echo(f"  ✓ Created StudentTeacher for {student.full_name} (ID: {student.id})")
+            click.echo(f"  Created StudentTeacher for {student.full_name} (ID: {student.id})")
         else:
-            click.echo(f"  ⊙ StudentTeacher already exists for {student.full_name}, skipping")
+            click.echo(f"  StudentTeacher already exists for {student.full_name}, skipping")
 
     click.echo(f"Created {student_teacher_created} StudentTeacher associations")
     click.echo()
@@ -144,7 +144,7 @@ def migrate_legacy_students_command():
         # Check if this teacher-block already has a join code
         if (teacher_id, block) in existing_join_codes_map:
             join_code = existing_join_codes_map[(teacher_id, block)]
-            click.echo(f"  → Reusing existing join code {join_code} for teacher {teacher_id}, block {block}")
+            click.echo(f"  Reusing existing join code {join_code} for teacher {teacher_id}, block {block}")
         else:
             # Generate new unique join code with bounded retries
             # Using 10x standard retry limit for migration scenarios
@@ -159,12 +159,12 @@ def migrate_legacy_students_command():
                     break
 
             if not join_code:
-                click.echo(f"  ✗ Failed to generate unique join code after {max_attempts} attempts", err=True)
+                click.echo(f"  Failed to generate unique join code after {max_attempts} attempts", err=True)
                 # Mark all students in this group as skipped
                 skipped_students.extend(students)
                 continue
 
-            click.echo(f"  → Generated new join code {join_code} for teacher {teacher_id}, block {block}")
+            click.echo(f"  Generated new join code {join_code} for teacher {teacher_id}, block {block}")
 
         join_codes_by_teacher_block[(teacher_id, block)] = join_code
 
@@ -172,7 +172,7 @@ def migrate_legacy_students_command():
         for student in students:
             # Check if TeacherBlock already exists using preloaded set
             if (teacher_id, block, student.id) in existing_seats:
-                click.echo(f"    ⊙ TeacherBlock already exists for {student.full_name}, skipping")
+                click.echo(f"    TeacherBlock already exists for {student.full_name}, skipping")
                 continue
 
             # Create new TeacherBlock entry using student's existing credentials
@@ -192,7 +192,7 @@ def migrate_legacy_students_command():
             )
             db.session.add(tb)
             teacher_blocks_created += 1
-            click.echo(f"    ✓ Created TeacherBlock for {student.full_name} (claimed)")
+            click.echo(f"    Created TeacherBlock for {student.full_name} (claimed)")
 
     click.echo(f"Created {teacher_blocks_created} TeacherBlock entries")
     click.echo()
@@ -201,7 +201,7 @@ def migrate_legacy_students_command():
     click.echo("Step 5: Committing changes to database...")
     try:
         db.session.commit()
-        click.echo("✓ All changes committed successfully!")
+        click.echo("All changes committed successfully.")
         click.echo()
 
         # Summary
@@ -222,7 +222,7 @@ def migrate_legacy_students_command():
                 click.echo(f"  Teacher {teacher_id}, Block {block}: {code}")
             click.echo()
 
-        click.echo("✓ Migration complete! All legacy students now use the new system.")
+        click.echo("Migration complete. All legacy students now use the new system.")
         click.echo()
 
         # Verification
@@ -247,15 +247,15 @@ def migrate_legacy_students_command():
             ]
 
         if still_legacy:
-            click.echo(f"⚠ Warning: {len(still_legacy)} students still need migration")
+            click.echo(f"Warning: {len(still_legacy)} students still need migration")
             for student in still_legacy:
                 click.echo(f"  - {student.full_name} (ID: {student.id})")
         else:
-            click.echo("✓ Verification passed! No remaining legacy students.")
+            click.echo("Verification passed. No remaining legacy students.")
 
     except Exception as e:
         db.session.rollback()
-        click.echo(f"\n✗ Error during commit: {str(e)}", err=True)
+        click.echo(f"\nError during commit: {str(e)}", err=True)
         import traceback
         traceback.print_exc()
         raise click.Abort()
@@ -298,7 +298,7 @@ def fix_missing_teacher_blocks_command():
     click.echo(f"Students without claimed TeacherBlock: {len(students_needing_fix)}")
 
     if not students_needing_fix:
-        click.echo("✓ No students need fixing! All students with completed setup have TeacherBlock entries.")
+        click.echo("No students need fixing. All students with completed setup have TeacherBlock entries.")
         return
 
     click.echo()
@@ -342,7 +342,7 @@ def fix_missing_teacher_blocks_command():
         student_teachers = student_teacher_map.get(student.id, [])
 
         if not student_teachers:
-            click.echo(f"⚠ Warning: Student {student.full_name} (ID: {student.id}) has no StudentTeacher associations")
+            click.echo(f"Warning: Student {student.full_name} (ID: {student.id}) has no StudentTeacher associations")
             continue
 
         # For each teacher association, we need to create a TeacherBlock
@@ -406,7 +406,7 @@ def fix_missing_teacher_blocks_command():
         # Check if this teacher-block already has a join code (from preloaded map)
         if (teacher_id, block) in existing_join_codes_map:
             join_code = existing_join_codes_map[(teacher_id, block)]
-            click.echo(f"  → Reusing existing join code {join_code} for teacher {teacher_id}, block {block}")
+            click.echo(f"  Reusing existing join code {join_code} for teacher {teacher_id}, block {block}")
         else:
             # Generate new unique join code with bounded retries
             join_code = None
@@ -425,11 +425,11 @@ def fix_missing_teacher_blocks_command():
                 timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
                 join_code = f"B{block_initial}{timestamp_suffix:04d}"
                 click.echo(
-                    f"  ⚠ Failed to generate unique join code after {MAX_JOIN_CODE_RETRIES} attempts. "
+                    f"  Failed to generate unique join code after {MAX_JOIN_CODE_RETRIES} attempts. "
                     f"Using fallback code {join_code} for teacher {teacher_id}, block {block}"
                 )
             else:
-                click.echo(f"  → Generated new join code {join_code} for teacher {teacher_id}, block {block}")
+                click.echo(f"  Generated new join code {join_code} for teacher {teacher_id}, block {block}")
 
         join_codes_by_teacher_block[(teacher_id, block)] = join_code
 
@@ -437,7 +437,7 @@ def fix_missing_teacher_blocks_command():
         for assoc_student, assoc_teacher_id, assoc_block in associations:
             # Verify student has required fields
             if not assoc_student.salt or not assoc_student.first_half_hash:
-                click.echo(f"    ⚠ Skipping {assoc_student.full_name} - missing salt or hash fields")
+                click.echo(f"    Skipping {assoc_student.full_name} - missing salt or hash fields")
                 continue
 
             # Create claimed TeacherBlock entry
@@ -458,7 +458,7 @@ def fix_missing_teacher_blocks_command():
             db.session.add(tb)
             teacher_blocks_created += 1
             click.echo(
-                f"    ✓ Created TeacherBlock for {assoc_student.full_name} "
+                f"    Created TeacherBlock for {assoc_student.full_name} "
                 f"(teacher {assoc_teacher_id}, block {assoc_block})"
             )
 
@@ -469,7 +469,7 @@ def fix_missing_teacher_blocks_command():
     click.echo("Step 5: Committing changes to database...")
     try:
         db.session.commit()
-        click.echo("✓ All changes committed successfully!")
+        click.echo("All changes committed successfully.")
         click.echo()
 
         # Summary
@@ -488,7 +488,7 @@ def fix_missing_teacher_blocks_command():
                 click.echo(f"  Teacher {teacher_id}, Block {block}: {code}")
             click.echo()
 
-        click.echo("✓ Fix complete! Teachers should now be able to see their rosters.")
+        click.echo("Fix complete. Teachers should now be able to see their rosters.")
         click.echo()
 
         # Verification - use batch query to avoid N+1 queries
@@ -506,16 +506,16 @@ def fix_missing_teacher_blocks_command():
         ]
 
         if students_still_missing:
-            click.echo(f"⚠ Warning: {len(students_still_missing)} students still missing TeacherBlock:")
+            click.echo(f"Warning: {len(students_still_missing)} students still missing TeacherBlock:")
             for student in students_still_missing[:10]:
                 click.echo(f"  - {student.full_name} (ID: {student.id})")
         else:
-            click.echo("✓ Verification passed! All students now have TeacherBlock entries.")
+            click.echo("Verification passed. All students now have TeacherBlock entries.")
         click.echo()
 
     except Exception as e:
         db.session.rollback()
-        click.echo(f"\n✗ Error during commit: {str(e)}", err=True)
+        click.echo(f"\nError during commit: {str(e)}", err=True)
         import traceback
         traceback.print_exc()
         raise click.Abort()
@@ -565,10 +565,10 @@ def normalize_claim_credentials_command():
         db.session.commit()
     except Exception as exc:
         db.session.rollback()
-        click.echo(f"✗ Failed to normalize claim credentials: {exc}", err=True)
+        click.echo(f"Failed to normalize claim credentials: {exc}", err=True)
         raise click.Abort()
 
-    click.echo(f"✓ Updated {updated} record(s) to use canonical claim hashes.")
+    click.echo(f"Updated {updated} record(s) to use canonical claim hashes.")
 
 
 def init_app(app):

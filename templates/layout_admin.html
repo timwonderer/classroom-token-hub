@@ -1,3 +1,4 @@
+{% import "macros/help.html" as help %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,7 +13,10 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="{{ static_url('manifest.json') }}">
-    <link rel="apple-touch-icon" href="{{ static_url('images/icon-192.png') }}">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="192x192" href="{{ static_url('images/icon-192.png') }}">
+    <link rel="apple-touch-icon" sizes="192x192" href="{{ static_url('images/icon-192.png') }}">
 
     <!-- Fonts - preconnect for faster loading -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -62,8 +66,16 @@
 
     <div id="flashToastContainer" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;"></div>
 
+    <!-- Mobile Menu Toggle Button -->
+    <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle navigation menu" aria-controls="sidebar" aria-expanded="false">
+        <span class="material-symbols-outlined">menu</span>
+    </button>
+
+    <!-- Sidebar Backdrop -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
+
     <!-- Sidebar -->
-    <aside class="sidebar d-flex flex-column">
+    <aside id="sidebar" class="sidebar d-flex flex-column" role="navigation" aria-label="Navigation menu" aria-hidden="true">
         <div class="sidebar-brand">
             
                 <div>
@@ -80,80 +92,208 @@
        
 
         <nav class="nav flex-column">
+            <!-- Dashboard Link (Always visible) -->
             <a href="{{ url_for('admin.dashboard') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'dashboard' %}active{% endif %}">
                 <span class="material-symbols-outlined">dashboard</span> Dashboard
             </a>
 
-            <div class="nav-group-label">Classroom</div>
-            <a href="{{ url_for('admin.students') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'students' %}active{% endif %}">
-                <span class="material-symbols-outlined">group</span> Students
-            </a>
-            <a href="{{ url_for('admin.attendance_log') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'attendance' %}active{% endif %}">
-                <span class="material-symbols-outlined">fact_check</span> Attendance
-            </a>
-            <a href="{{ url_for('admin.hall_pass') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'hall_pass' %}active{% endif %}">
-                <span class="material-symbols-outlined">confirmation_number</span> Hall Pass
+            {% set classroom_open = current_page in ['students', 'attendance', 'hall_pass', 'announcements', 'issues'] %}
+            {% set economy_open = current_page in ['economy_health', 'payroll', 'store', 'banking', 'analytics'] %}
+            {% set bills_open = current_page in ['rent', 'insurance'] %}
+            {% set settings_open = current_page in ['settings', 'passkey_settings', 'feature_settings', 'deletion_requests'] %}
+
+            <!-- Dropdown Navigation -->
+            <div class="d-flex flex-column gap-2 mt-2">
+                <!-- Classroom Section -->
+                <div class="dropdown">
+                    <button class="nav-accordion-btn dropdown-toggle w-100 d-flex align-items-center justify-content-between{% if classroom_open %} show{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="{{ 'true' if classroom_open else 'false' }}">
+                        <span class="d-flex align-items-center gap-2">
+                            <span class="material-symbols-outlined">school</span>
+                            Classroom
+                        </span>
+                    </button>
+                    <div class="dropdown-menu position-static w-100 p-0 bg-transparent border-0{% if classroom_open %} show{% endif %}">
+                        <a href="{{ url_for('admin.students') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'students' %}active{% endif %}">
+                            <span class="material-symbols-outlined">group</span> Students
+                        </a>
+                        <a href="{{ url_for('admin.attendance_log') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'attendance' %}active{% endif %}">
+                            <span class="material-symbols-outlined">fact_check</span> Attendance
+                        </a>
+                        <a href="{{ url_for('admin.hall_pass') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'hall_pass' %}active{% endif %}">
+                            <span class="material-symbols-outlined">confirmation_number</span> Hall Pass
+                        </a>
+                        <a href="{{ url_for('admin.announcements') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'announcements' %}active{% endif %}">
+                            <span class="material-symbols-outlined">campaign</span> Announcements
+                        </a>
+                        <a href="{{ url_for('admin.issues_queue') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'issues' %}active{% endif %}">
+                            <span class="material-symbols-outlined">flag</span> Student Issues
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Economy Section -->
+                <div class="dropdown">
+                    <button class="nav-accordion-btn dropdown-toggle w-100 d-flex align-items-center justify-content-between{% if economy_open %} show{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="{{ 'true' if economy_open else 'false' }}">
+                        <span class="d-flex align-items-center gap-2">
+                            <span class="material-symbols-outlined">account_balance</span>
+                            Economy
+                        </span>
+                    </button>
+                    <div class="dropdown-menu position-static w-100 p-0 bg-transparent border-0{% if economy_open %} show{% endif %}">
+                        <a href="{{ url_for('admin.economy_health') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'economy_health' %}active{% endif %}">
+                            <span class="material-symbols-outlined">monitor_heart</span> Economy Health
+                        </a>
+                        <a href="{{ url_for('admin.payroll') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'payroll' %}active{% endif %}">
+                            <span class="material-symbols-outlined">payments</span> Payroll
+                        </a>
+                        <a href="{{ url_for('admin.store_management') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'store' %}active{% endif %}">
+                            <span class="material-symbols-outlined">storefront</span> Store
+                        </a>
+                        <a href="{{ url_for('admin.banking') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'banking' %}active{% endif %}">
+                            <span class="material-symbols-outlined">account_balance</span> Banking
+                        </a>
+                        <a href="{{ url_for('analytics.dashboard') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'analytics' %}active{% endif %}">
+                            <span class="material-symbols-outlined">analytics</span> Analytics
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Bills Section -->
+                <div class="dropdown">
+                    <button class="nav-accordion-btn dropdown-toggle w-100 d-flex align-items-center justify-content-between{% if bills_open %} show{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="{{ 'true' if bills_open else 'false' }}">
+                        <span class="d-flex align-items-center gap-2">
+                            <span class="material-symbols-outlined">receipt</span>
+                            Bills
+                        </span>
+                    </button>
+                    <div class="dropdown-menu position-static w-100 p-0 bg-transparent border-0{% if bills_open %} show{% endif %}">
+                        <a href="{{ url_for('admin.rent_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'rent' %}active{% endif %}">
+                            <span class="material-symbols-outlined">home</span> Rent
+                        </a>
+                        <a href="{{ url_for('admin.insurance_management') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'insurance' %}active{% endif %}">
+                            <span class="material-symbols-outlined">shield</span> Insurance
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Settings Section -->
+                <div class="dropdown">
+                    <button class="nav-accordion-btn dropdown-toggle w-100 d-flex align-items-center justify-content-between{% if settings_open %} show{% endif %}" type="button" data-bs-toggle="dropdown" data-bs-display="static" aria-expanded="{{ 'true' if settings_open else 'false' }}">
+                        <span class="d-flex align-items-center gap-2">
+                            <span class="material-symbols-outlined">settings</span>
+                            Settings
+                        </span>
+                    </button>
+                    <div class="dropdown-menu position-static w-100 p-0 bg-transparent border-0{% if settings_open %} show{% endif %}">
+                        <a href="{{ url_for('admin.settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'settings' %}active{% endif %}">
+                            <span class="material-symbols-outlined">style</span> Personalization
+                        </a>
+                        <a href="{{ url_for('admin.passkey_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'passkey_settings' %}active{% endif %}">
+                            <span class="material-symbols-outlined">fingerprint</span> Passkey
+                        </a>
+                        <a href="{{ url_for('admin.feature_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'feature_settings' %}active{% endif %}">
+                            <span class="material-symbols-outlined">tune</span> Features
+                        </a>
+                        <a href="{{ url_for('admin.deletion_requests') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'deletion_requests' %}active{% endif %}">
+                            <span class="material-symbols-outlined">person_cancel</span> Account Deletion Requests
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Docs Home Link -->
+            <a href="{{ url_for('docs.index') }}" class="nav-link d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined">menu_book</span> Docs &amp; Help
             </a>
 
-            <div class="nav-group-label">Economy</div>
-            <a href="{{ url_for('admin.payroll') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'payroll' %}active{% endif %}">
-                <span class="material-symbols-outlined">payments</span> Payroll
-            </a>
-            <a href="{{ url_for('admin.economy_health') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'economy_health' %}active{% endif %}">
-                <span class="material-symbols-outlined">monitor_heart</span> CWI Balancing
-            </a>
-            <a href="{{ url_for('admin.store_management') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'store' %}active{% endif %}">
-                <span class="material-symbols-outlined">storefront</span> Store
-            </a>
-            <a href="{{ url_for('admin.banking') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'banking' %}active{% endif %}">
-                <span class="material-symbols-outlined">account_balance</span> Banking
-            </a>
-
-            <div class="nav-group-label">Bills</div>
-            <a href="{{ url_for('admin.rent_settings') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'rent' %}active{% endif %}">
-                <span class="material-symbols-outlined">home</span> Rent
-            </a>
-            <a href="{{ url_for('admin.insurance_management') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'insurance' %}active{% endif %}">
-                <span class="material-symbols-outlined">shield</span> Insurance
-            </a>
-
-            <div class="nav-group-label">System</div>
-            <a href="{{ url_for('admin.settings') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'settings' %}active{% endif %}">
-                <span class="material-symbols-outlined">settings</span> Settings
-            </a>
-            <a href="{{ url_for('admin.feature_settings') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'feature_settings' %}active{% endif %}">
-                <span class="material-symbols-outlined">tune</span> Features
-            </a>
-            <a href="{{ url_for('admin.deletion_requests') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'deletion_requests' %}active{% endif %}">
-                <span class="material-symbols-outlined">manage_accounts</span> Account
-            </a>
-            <a href="{{ url_for('admin.help_support') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'help' %}active{% endif %}">
-                <span class="material-symbols-outlined">help</span> Help &amp; Support
-            </a>
-            <a href="{{ url_for('main.switch_view', view='mobile', next=request.path) }}" class="nav-link d-flex align-items-center gap-2">
-                <span class="material-symbols-outlined">phone_iphone</span> Mobile Site
-            </a>
-            <a href="{{ url_for('admin.logout') }}" class="nav-link d-flex align-items-center gap-2 text-danger">
-                <span class="material-symbols-outlined">logout</span> Sign Out
-            </a>
+            <!-- Sign Out Button (Improved styling in next task) -->
+            <div class="mt-auto pt-3">
+                <a href="{{ url_for('admin.logout') }}" class="btn btn-danger w-100 d-flex align-items-center justify-content-center gap-2">
+                    <span class="material-symbols-outlined">logout</span> Sign Out
+                </a>
+            </div>
         </nav>
     </aside>
 
     <!-- Main Content -->
     <main id="main-content" class="main-content flex-grow-1">
+        {% set help_doc_map = {
+            'dashboard': 'diagnostics/teacher',
+            'students': 'diagnostics/teacher-students',
+            'attendance': 'diagnostics/teacher-attendance-payroll',
+            'payroll': 'diagnostics/teacher-attendance-payroll',
+            'payroll_history': 'diagnostics/teacher-attendance-payroll',
+            'economy_health': 'diagnostics/teacher-attendance-payroll',
+            'store': 'diagnostics/teacher-store',
+            'banking': 'diagnostics/teacher-transactions-banking',
+            'transactions': 'diagnostics/teacher-transactions-banking',
+            'rent': 'diagnostics/teacher-rent-insurance',
+            'insurance': 'diagnostics/teacher-rent-insurance',
+            'hall_pass': 'diagnostics/teacher-hall-pass',
+            'announcements': 'diagnostics/teacher-announcements-issues',
+            'issues': 'diagnostics/teacher-announcements-issues',
+            'help': 'diagnostics/teacher',
+            'onboarding': 'diagnostics/teacher-onboarding',
+            'settings': 'diagnostics/teacher-onboarding',
+            'feature_settings': 'diagnostics/teacher-onboarding',
+            'passkey_settings': 'diagnostics/teacher-login',
+            'deletion_requests': 'diagnostics/teacher-login',
+            'admin.dashboard': 'diagnostics/teacher',
+            'admin.students': 'diagnostics/teacher-students',
+            'admin.attendance_log': 'diagnostics/teacher-attendance-payroll',
+            'admin.payroll': 'diagnostics/teacher-attendance-payroll',
+            'admin.payroll_history': 'diagnostics/teacher-attendance-payroll',
+            'admin.economy_health': 'diagnostics/teacher-attendance-payroll',
+            'admin.store_management': 'diagnostics/teacher-store',
+            'admin.transactions': 'diagnostics/teacher-transactions-banking',
+            'admin.banking': 'diagnostics/teacher-transactions-banking',
+            'admin.rent_settings': 'diagnostics/teacher-rent-insurance',
+            'admin.insurance_management': 'diagnostics/teacher-rent-insurance',
+            'admin.hall_pass': 'diagnostics/teacher-hall-pass',
+            'admin.announcements': 'diagnostics/teacher-announcements-issues',
+            'admin.issues_queue': 'diagnostics/teacher-announcements-issues',
+            'admin.settings': 'diagnostics/teacher-onboarding',
+            'admin.feature_settings': 'diagnostics/teacher-onboarding',
+            'admin.onboarding': 'diagnostics/teacher-onboarding',
+            'admin.passkey_settings': 'diagnostics/teacher-login',
+            'admin.help_support': 'diagnostics/teacher',
+            'admin.deletion_requests': 'diagnostics/teacher-login',
+            'admin.setup_recovery': 'diagnostics/teacher-login',
+            'admin.claim_students': 'diagnostics/teacher-students',
+            'admin.backfill_join_codes': 'diagnostics/teacher-students',
+            'admin.view_issue': 'diagnostics/teacher-announcements-issues',
+            'admin.announcement_form': 'diagnostics/teacher-announcements-issues'
+        } %}
+        {% set help_doc_key = current_page or request.endpoint %}
+        {% set help_doc_path = help_doc_map.get(help_doc_key) %}
+        {% if not help_doc_path and request.endpoint %}
+            {% set help_doc_path = help_doc_map.get(request.endpoint) %}
+        {% endif %}
+        {% set custom_full_guide = custom_full_guide|default(false) %}
         <div class="page-header">
             <div>
                 <div class="eyebrow">Classroom Token Hub</div>
                 <h1 class="d-flex align-items-center gap-2 mb-1">
-                    <span class="material-symbols-outlined">{% block page_icon %}dashboard{% endblock %}</span>
+                    <span class="material-symbols-outlined" style="font-size:2rem">{% block page_icon %}dashboard{% endblock %}</span>
                     {{ self.page_title() }}
                 </h1>
                 <div class="meta" id="current-time"></div>
             </div>
             <div class="page-header-actions">
-                <a href="{{ url_for('admin.help_support') }}" class="btn btn-white d-none d-md-inline-flex align-items-center gap-2">
-                    <span class="material-symbols-outlined">help</span> Help
-                </a>
+                {% if help_doc_path %}
+                    <span class="d-none d-md-inline-flex">
+                        {{ help.help_link(help_doc_path, text="Guide", tooltip="View guide") }}
+                    </span>
+                {% endif %}
+                {% block page_header_actions %}
+                {% endblock %}
+                {% if not custom_full_guide %}
+                    {% set doc_url = url_for('docs.view_doc', doc_path=help_doc_path) if help_doc_path else url_for('docs.index') %}
+                    <a href="{{ doc_url }}" class="btn btn-outline-primary d-flex align-items-center gap-2" target="_blank" rel="noopener">
+                        <span class="material-symbols-outlined" aria-hidden="true">menu_book</span> <span>Full Guide</span>
+                    </a>
+                {% endif %}
             </div>
         </div>
 
@@ -250,7 +390,11 @@
             });
         }
     </script>
+    <script src="{{ static_url('js/mobile-sidebar-toggle.js') }}"></script>
     <!-- TODO: Re-enable View as Student once demo sessions are stable -->
     {% block extra_scripts %}{% endblock %}
+
+    <!-- Getting Started Widget (for new teachers) -->
+    {% include 'components/getting_started_widget.html' %}
 </body>
 </html>

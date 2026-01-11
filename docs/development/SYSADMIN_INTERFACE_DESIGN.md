@@ -4,15 +4,15 @@
 The System Admin interface is the super-user control panel for the Classroom Token Hub. It provides complete visibility and control over all aspects of the system.
 
 ## Current Capabilities (Implemented)
-- ✅ Generate admin invite codes
-- ✅ View invite code status
-- ✅ View system admins list
-- ✅ View system logs (file-based)
-- ✅ View error logs (database)
-- ✅ Test error pages
-- ✅ TOTP-based authentication
-- ✅ **Manage teachers (admins)** - View list, delete with cascade
-- ✅ **Track admin timestamps** - Signup date, last login
+-  Generate admin invite codes
+-  View invite code status
+-  View system admins list
+-  View system logs (file-based)
+-  View error logs (database)
+-  Test error pages
+-  TOTP-based authentication
+-  **Manage teachers (admins)** - View list, delete with cascade
+-  **Track admin timestamps** - Signup date, last login
 
 ## Design Philosophy
 
@@ -31,17 +31,17 @@ The System Admin interface is the super-user control panel for the Classroom Tok
 
 ### 1. User Management
 
-#### A. Admin (Teacher) Management ✅ IMPLEMENTED
+#### A. Admin (Teacher) Management  IMPLEMENTED
 **Route:** `/sysadmin/admins`
 
 **Features (Implemented):**
-- ✅ View all admin accounts with details:
+-  View all admin accounts with details:
   - Username
   - Signup date (created_at)
   - Last login timestamp
   - Number of students (currently shows total, will be per-teacher after multi-tenancy)
 
-- ✅ **Delete Admin Account:**
+-  **Delete Admin Account:**
   - Confirmation modal with clear warnings
   - **Simplified approach:** Deleting admin always deletes all their students
   - Shows student count and impact before deletion
@@ -195,133 +195,133 @@ The simplified delete approach (always delete students with teacher) is intentio
 ### Main Dashboard Structure
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  System Admin Dashboard                          [Logout]    │
-├─────────────────────────────────────────────────────────────┤
-│                                                               │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │  Admin   │  │ Students │  │  Errors  │  │  Stats   │   │
-│  │  Mgmt    │  │   Mgmt   │  │   Logs   │  │Dashboard │   │
-│  │   👥     │  │    👨‍🎓    │  │    ⚠️     │  │    📊    │   │
-│  │  5 admins│  │120 stud. │  │  12 err. │  │  Live    │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-│                                                               │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  Quick Actions                                       │   │
-│  │  • Generate Invite Code                             │   │
-│  │  • Create System Admin                              │   │
-│  │  • View Audit Log                                   │   │
-│  │  • Test Error Pages                                 │   │
-│  │  • Database Backup                                  │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                               │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  Recent Activity                                     │   │
-│  │  • Admin "teacher1" logged in (2 min ago)           │   │
-│  │  • Payroll run by "teacher2" (1 hour ago)           │   │
-│  │  • Student deleted by sysadmin (3 hours ago)        │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                               │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  System Health                                       │   │
-│  │  Database: ●  Healthy (2.3 GB)                      │   │
-│  │  Errors:   ●  12 in last 24h                        │   │
-│  │  Uptime:   ●  15 days 3 hours                       │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
+
+  System Admin Dashboard                          [Logout]    
+
+                                                               
+           
+    Admin      Students     Errors      Stats      
+    Mgmt         Mgmt        Logs     Dashboard    
+                                            
+    5 admins  120 stud.     12 err.     Live       
+           
+                                                               
+     
+    Quick Actions                                          
+    • Generate Invite Code                                
+    • Create System Admin                                 
+    • View Audit Log                                      
+    • Test Error Pages                                    
+    • Database Backup                                     
+     
+                                                               
+     
+    Recent Activity                                        
+    • Admin "teacher1" logged in (2 min ago)              
+    • Payroll run by "teacher2" (1 hour ago)              
+    • Student deleted by sysadmin (3 hours ago)           
+     
+                                                               
+     
+    System Health                                          
+    Database:   Healthy (2.3 GB)                         
+    Errors:     12 in last 24h                           
+    Uptime:     15 days 3 hours                          
+     
+
 ```
 
 ### Admin Management Page
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Admin (Teacher) Management                  [Back]          │
-├─────────────────────────────────────────────────────────────┤
-│  [Search...]  [Filter: All ▼]  [+ Create Admin]             │
-├─────────────────────────────────────────────────────────────┤
-│  Username   │ Students │ Created    │ Last Login │ Actions  │
-├─────────────┼──────────┼────────────┼────────────┼──────────┤
-│  teacher1   │   45     │ 2024-01-15 │ 2 hrs ago  │ [View]   │
-│             │          │            │            │ [Delete] │
-├─────────────┼──────────┼────────────┼────────────┼──────────┤
-│  teacher2   │   38     │ 2024-02-20 │ 1 day ago  │ [View]   │
-│             │          │            │            │ [Delete] │
-└─────────────────────────────────────────────────────────────┘
+
+  Admin (Teacher) Management                  [Back]          
+
+  [Search...]  [Filter: All ]  [+ Create Admin]             
+
+  Username    Students  Created     Last Login  Actions  
+
+  teacher1      45      2024-01-15  2 hrs ago   [View]   
+                                                [Delete] 
+
+  teacher2      38      2024-02-20  1 day ago   [View]   
+                                                [Delete] 
+
 ```
 
 ### Delete Admin Modal
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  ⚠️  Delete Admin: teacher1                                 │
-├─────────────────────────────────────────────────────────────┤
-│  This admin has:                                             │
-│  • 45 students                                              │
-│  • 1,234 transactions                                       │
-│  • Last login: 2 hours ago                                  │
-│                                                               │
-│  What should happen to their students?                      │
-│  ⚪ Reassign to another teacher: [Select ▼]                 │
-│  ⚪ Delete all students and their data (CANNOT BE UNDONE)   │
-│  ⚪ Leave students orphaned (requires cleanup later)        │
-│                                                               │
-│  ☑️ I understand this action is permanent                   │
-│                                                               │
-│  [Cancel]  [Delete Admin]                                   │
-└─────────────────────────────────────────────────────────────┘
+
+    Delete Admin: teacher1                                 
+
+  This admin has:                                             
+  • 45 students                                              
+  • 1,234 transactions                                       
+  • Last login: 2 hours ago                                  
+                                                               
+  What should happen to their students?                      
+   Reassign to another teacher: [Select ]                 
+   Delete all students and their data (CANNOT BE UNDONE)   
+   Leave students orphaned (requires cleanup later)        
+                                                               
+   I understand this action is permanent                   
+                                                               
+  [Cancel]  [Delete Admin]                                   
+
 ```
 
 ### Student Management Page
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  Student Management                          [Back]          │
-├─────────────────────────────────────────────────────────────┤
-│  [Search...]  [Teacher: All ▼]  [Status: All ▼]             │
-│  [Export CSV]  [Bulk Actions ▼]                             │
-├─────────────────────────────────────────────────────────────┤
-│  Name    │ Teacher   │ Balance │ Last Login │ Actions       │
-├──────────┼───────────┼─────────┼────────────┼───────────────┤
-│  Alice   │ teacher1  │  $45.50 │ 1 hour ago │ [View] [Del]  │
-│  Bob     │ teacher1  │  $23.00 │ 2 days ago │ [View] [Del]  │
-│  Charlie │ teacher2  │  $67.25 │ 30 min ago │ [View] [Del]  │
-└─────────────────────────────────────────────────────────────┘
+
+  Student Management                          [Back]          
+
+  [Search...]  [Teacher: All ]  [Status: All ]             
+  [Export CSV]  [Bulk Actions ]                             
+
+  Name     Teacher    Balance  Last Login  Actions       
+
+  Alice    teacher1    $45.50  1 hour ago  [View] [Del]  
+  Bob      teacher1    $23.00  2 days ago  [View] [Del]  
+  Charlie  teacher2    $67.25  30 min ago  [View] [Del]  
+
 ```
 
 ## Navigation Structure
 
 ```
 System Admin Dashboard
-├── Dashboard (Home)
-├── User Management
-│   ├── Admins (Teachers)
-│   │   ├── View All
-│   │   ├── Create New
-│   │   └── Invite Codes
-│   ├── Students
-│   │   ├── View All
-│   │   ├── Search
-│   │   └── Bulk Operations
-│   └── System Admins
-│       ├── View All
-│       └── Create New
-├── Monitoring
-│   ├── Error Logs (Database)
-│   ├── System Logs (File)
-│   ├── Audit Log
-│   └── Statistics Dashboard
-├── Testing & Tools
-│   ├── Test Error Pages
-│   ├── Database Cleanup
-│   └── Data Export
-├── System Configuration
-│   ├── Global Settings
-│   ├── Feature Flags
-│   └── Security Settings
-└── Maintenance
-    ├── Database Backup
-    ├── Data Archival
-    └── Health Check
+ Dashboard (Home)
+ User Management
+    Admins (Teachers)
+       View All
+       Create New
+       Invite Codes
+    Students
+       View All
+       Search
+       Bulk Operations
+    System Admins
+        View All
+        Create New
+ Monitoring
+    Error Logs (Database)
+    System Logs (File)
+    Audit Log
+    Statistics Dashboard
+ Testing & Tools
+    Test Error Pages
+    Database Cleanup
+    Data Export
+ System Configuration
+    Global Settings
+    Feature Flags
+    Security Settings
+ Maintenance
+     Database Backup
+     Data Archival
+     Health Check
 ```
 
 ## Color Scheme
@@ -345,7 +345,7 @@ System Admin Dashboard
 
 ## Implementation Priority
 
-### Phase 1 (Completed) ✅
+### Phase 1 (Completed) 
 - [x] Error testing and monitoring
 - [x] Error logs database viewer
 - [x] Admin (teacher) management page
@@ -386,8 +386,8 @@ System Admin Dashboard
 
 ## Success Metrics
 
-- ✅ Sysadmin can perform all user management tasks
-- ✅ No accidental data loss (confirmations work)
-- ✅ All actions are logged for audit
-- ✅ Interface is intuitive and requires no training
-- ✅ Performance remains good with large datasets
+-  Sysadmin can perform all user management tasks
+-  No accidental data loss (confirmations work)
+-  All actions are logged for audit
+-  Interface is intuitive and requires no training
+-  Performance remains good with large datasets

@@ -10,13 +10,17 @@ on:
   # Also allow manual trigger
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write  # For commenting on PRs
+
 jobs:
   check-migration-heads:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0  # Full history needed for migration checks
 
@@ -26,7 +30,7 @@ jobs:
         python-version: '3.11'
 
     - name: Cache pip dependencies
-      uses: actions/cache@v3
+      uses: actions/cache@v5
       with:
         path: ~/.cache/pip
         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
@@ -126,7 +130,7 @@ jobs:
 
     - name: Comment on PR (if check fails)
       if: failure()
-      uses: actions/github-script@v6
+      uses: actions/github-script@v8
       with:
         script: |
           github.rest.issues.createComment({

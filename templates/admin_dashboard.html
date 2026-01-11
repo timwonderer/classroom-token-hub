@@ -3,12 +3,24 @@
 {% block page_title %}Teacher Dashboard{% endblock %}
 
 {% block content %}
+<!-- Personalized Greeting -->
+<div class="mb-4 text-center">
+    <p class="p fw-bold text-primary mb-1 dashboard-greeting" id="dashboard-greeting">
+        <span class="fw-light">Hi,</span> {{ current_admin.get_display_name() }} <a href="{{ url_for('admin.settings') }}" class="text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Click here to change your display name">
+            <span class="material-symbols-outlined align-top fs-6 dashboard-greeting-info">info</span>
+        </a>
+    </p>
+    
+        
+ 
+</div>
+
 {% if show_recovery_setup %}
 <div class="alert alert-warning border-0 shadow-sm mb-4 d-flex align-items-center" role="alert">
     <span class="material-symbols-outlined me-3 fs-3">warning</span>
     <div>
         <h5 class="alert-heading fw-bold mb-1">Action Required: Setup Account Recovery</h5>
-        <p class="mb-0">Your account recovery details are missing or outdated. Please update your Date of Birth Sum to enable student-assisted recovery.</p>
+        <p class="mb-0">Your account recovery details are missing or outdated. Please update your date of birth to enable student-assisted recovery.</p>
     </div>
     <a href="{{ url_for('admin.setup_recovery') }}" class="btn btn-warning text-dark fw-medium ms-auto text-nowrap">Setup Now</a>
 </div>
@@ -27,8 +39,6 @@
 </div>
 {% endif %}
 
-<h1 class="visually-hidden">Admin Panel</h1>
-
 <div class="row g-4 mb-4">
     <!-- Key Metrics -->
     <div class="col-12 col-md-6 col-lg-3">
@@ -38,7 +48,7 @@
                     <div class="icon-circle bg-white bg-opacity-25 text-white me-3">
                         <span class="material-symbols-outlined">group</span>
                     </div>
-                    <span class="text-white text-opacity-75 fw-medium">Students</span>
+                    <span class="text-white text-opacity-75 fw-medium">Active Students</span>
                 </div>
                 <h2 class="display-6 text-white fw-bold mb-0">{{ total_students }}</h2>
             </div>
@@ -52,7 +62,11 @@
                     <div class="icon-circle bg-success bg-opacity-10 text-success me-3">
                         <span class="material-symbols-outlined">savings</span>
                     </div>
-                    <span class="text-secondary fw-medium">Total Economy</span>
+                    <span class="text-secondary fw-medium">Total Economy Value</span>
+                    <subtitle>
+                        <a href="#" class="text-secondary ms-2" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Sum of all student account balances">
+                            <span class="material-symbols-outlined align-top fs-6">info</span>
+                        </a>
                 </div>
                 <h2 class="display-6 fw-bold mb-0 text-dark">${{ "{:,.0f}".format(total_balance) }}</h2>
             </div>
@@ -95,7 +109,7 @@
                     </div>
                     <span class="text-secondary fw-medium">Next Payroll</span>
                 </div>
-                <h5 class="fw-bold mb-1 text-dark local-timestamp" data-format="MMM D" data-timestamp="{{ next_payroll_date.isoformat() }}">
+                <h5 class="fw-bold mb-1 text-dark local-timestamp" data-format="MMM D" data-timestamp="{{ format_utc_iso(next_payroll_date) }}">
                     {{ next_payroll_date.strftime('%b %d') }}
                 </h5>
                 <div class="text-secondary small">Est: ${{ "{:,.0f}".format(total_payroll_estimate) }}</div>
@@ -231,7 +245,7 @@
                                 <small class="text-muted"><i class="bi bi-signpost me-1"></i>{{ pass.reason }}</small>
                                 <br>
                                 <small class="text-muted">
-                                    <span class="local-timestamp" data-timestamp="{{ pass.request_time.isoformat() }}Z"></span>
+                                    <span class="local-timestamp" data-timestamp="{{ format_utc_iso(pass.request_time) }}"></span>
                                 </small>
                             </div>
                             <div>
@@ -265,7 +279,7 @@
                                 {% endif %}
                                 <br>
                                 <small class="text-muted">
-                                    <span class="local-timestamp" data-timestamp="{{ claim.filed_date.isoformat() }}Z"></span>
+                                    <span class="local-timestamp" data-timestamp="{{ format_utc_iso(claim.filed_date) }}"></span>
                                 </small>
                             </div>
                             <div>
@@ -321,7 +335,7 @@
                                                 <div class="fw-medium text-dark">
                                                     {{ student.full_name if student else 'Unknown' }}
                                                 </div>
-                                                <div class="small text-secondary local-timestamp" data-timestamp="{{ tx.timestamp.isoformat() }}">
+                                                <div class="small text-secondary local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}">
                                                     {{ tx.timestamp.strftime('%H:%M') }}
                                                 </div>
                                             </div>
@@ -342,7 +356,7 @@
                     </div>
                 {% else %}
                     <div class="text-center py-5">
-                        <img src="{{ static_url('images/empty-state.svg') }}" alt="No activity" width="120" class="opacity-50 mb-3">
+                        <span class="material-symbols-outlined">unknown_document</span>
                         <p class="text-secondary">No recent activity found.</p>
                     </div>
                 {% endif %}
@@ -371,7 +385,7 @@
                             <div class="flex-grow-1">
                                 <div class="d-flex justify-content-between">
                                     <span class="fw-medium text-dark">{{ log.student_name }}</span>
-                                    <span class="small text-secondary local-timestamp" data-timestamp="{{ log.timestamp.isoformat() }}">
+                                    <span class="small text-secondary local-timestamp" data-timestamp="{{ format_utc_iso(log.timestamp) }}">
                                         {{ log.timestamp.strftime('%H:%M') }}
                                     </span>
                                 </div>
@@ -398,6 +412,8 @@
 
 {% block extra_scripts %}
 <script>
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
     document.getElementById('enforceLimitsBtn').addEventListener('click', async function() {
         const btn = this;
         const originalContent = btn.innerHTML;

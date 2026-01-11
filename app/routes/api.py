@@ -10,6 +10,7 @@ import string
 import re
 import pytz
 from datetime import datetime, timedelta, timezone
+from dateutil.relativedelta import relativedelta
 
 from flask import Blueprint, request, jsonify, session, current_app
 from sqlalchemy import func, or_
@@ -23,9 +24,10 @@ from app.models import (
     StudentTeacher, TeacherBlock, StudentBlock
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
-from app.routes.student import get_current_teacher_id
+from app.routes.student import get_current_class_context, get_current_teacher_id, get_rent_settings_for_context
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
+from app.utils.overdraft import charge_overdraft_fee_if_needed
 
 # Import external modules
 from attendance import (
@@ -38,6 +40,70 @@ from payroll import get_pay_rate_for_block
 
 # Create blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')
+
+
+# -------------------- Rent Helpers --------------------
+
+def _ensure_aware(dt):
+    """Ensure datetime is timezone-aware in UTC."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _get_period_delta(rent_setting):
+    """Return the timedelta/relativedelta for a rent setting."""
+    if rent_setting.frequency_type == 'daily':
+        return timedelta(days=1)
+    if rent_setting.frequency_type == 'weekly':
+        return timedelta(weeks=1)
+    if rent_setting.frequency_type == 'monthly':
+        return relativedelta(months=1)
+    if rent_setting.frequency_type == 'custom':
+        unit = rent_setting.custom_frequency_unit or 'days'
+        value = rent_setting.custom_frequency_value or 1
+        if unit == 'days':
+            return timedelta(days=value)
+        if unit == 'weeks':
+            return timedelta(weeks=value)
+        if unit == 'months':
+            return relativedelta(months=value)
+    return timedelta(days=30)
+
+
+def _add_period(dt, delta):
+    """Add a timedelta or relativedelta to dt."""
+    if isinstance(delta, relativedelta):
+        return dt + delta
+    return dt + delta
+
+
+def _calculate_due_dates(rent_setting, now):
+    """
+    Calculate the current and next due dates for a rent setting based on the provided time.
+    Returns (current_due, next_due). If first due date is not set, returns (None, None).
+    """
+    first_due = _ensure_aware(rent_setting.first_rent_due_date)
+    if not first_due:
+        return (None, None)
+
+    delta = _get_period_delta(rent_setting)
+
+    # If before the first due date, the first due date is both current and next marker
+    if now < first_due:
+        return (first_due, _add_period(first_due, delta))
+
+    current_due = first_due
+    next_due = _add_period(first_due, delta)
+
+    # Advance until next_due is after now
+    while next_due and next_due <= now:
+        current_due = next_due
+        next_due = _add_period(next_due, delta)
+
+    return (current_due, next_due)
 
 
 # -------------------- TIPS API --------------------
@@ -87,7 +153,7 @@ def get_tips(user_type):
 
 # -------------------- STORE API --------------------
 
-def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_code):
+def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_code, force=False):
     """
     Check if student's checking balance is negative and charge overdraft fee if enabled.
     Returns (fee_charged, fee_amount) tuple.
@@ -97,67 +163,15 @@ def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id, join_
         banking_settings: BankingSettings object
         teacher_id: Teacher ID for multi-tenancy isolation
         join_code: Join code for multi-tenancy isolation
+        force: Charge fee even if balance is non-negative (declined transaction).
     """
-    if not banking_settings or not banking_settings.overdraft_fee_enabled:
-        return False, 0.0
-
-    # Only charge if balance is negative
-    if student.checking_balance >= 0:
-        return False, 0.0
-
-    fee_amount = 0.0
-
-    if banking_settings.overdraft_fee_type == 'flat':
-        fee_amount = banking_settings.overdraft_fee_flat_amount
-    elif banking_settings.overdraft_fee_type == 'progressive':
-        # Count how many overdraft fees charged this month
-        from datetime import datetime, timezone
-        now = datetime.now(timezone.utc)
-        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-        overdraft_fee_count = Transaction.query.filter(
-            Transaction.student_id == student.id,
-            Transaction.type == 'overdraft_fee',
-            Transaction.timestamp >= month_start
-        ).count()
-
-        # Determine which tier to use (1st, 2nd, 3rd, or cap)
-        if overdraft_fee_count == 0:
-            fee_amount = banking_settings.overdraft_fee_progressive_1 or 0.0
-        elif overdraft_fee_count == 1:
-            fee_amount = banking_settings.overdraft_fee_progressive_2 or 0.0
-        elif overdraft_fee_count >= 2:
-            fee_amount = banking_settings.overdraft_fee_progressive_3 or 0.0
-
-        # Check if cap is exceeded
-        if banking_settings.overdraft_fee_progressive_cap:
-            total_fees_this_month = db.session.query(func.sum(Transaction.amount)).filter(
-                Transaction.student_id == student.id,
-                Transaction.type == 'overdraft_fee',
-                Transaction.timestamp >= month_start
-            ).scalar() or 0.0
-
-            # total_fees_this_month is negative, so we negate it
-            if abs(total_fees_this_month) + fee_amount > banking_settings.overdraft_fee_progressive_cap:
-                # Don't charge more than the cap
-                fee_amount = max(0, banking_settings.overdraft_fee_progressive_cap - abs(total_fees_this_month))
-
-    if fee_amount > 0:
-        # CRITICAL FIX: Add teacher_id and join_code to overdraft fee transaction
-        overdraft_fee_tx = Transaction(
-            student_id=student.id,
-            teacher_id=teacher_id,  # CRITICAL: Add teacher_id for multi-tenancy
-            join_code=join_code,  # CRITICAL: Add join_code for period isolation
-            amount=-fee_amount,
-            account_type='checking',
-            type='overdraft_fee',
-            description=f'Overdraft fee (balance: ${student.checking_balance:.2f})'
-        )
-        db.session.add(overdraft_fee_tx)
-        db.session.flush()  # Update the balance calculation
-        return True, fee_amount
-
-    return False, 0.0
+    return charge_overdraft_fee_if_needed(
+        student,
+        banking_settings,
+        teacher_id=teacher_id,
+        join_code=join_code,
+        force=force
+    )
 
 
 @api_bp.route('/purchase-item', methods=['POST'])
@@ -195,6 +209,57 @@ def purchase_item():
     if not item or not item.is_active:
         return jsonify({"status": "error", "message": "This item is not available."}), 404
 
+    # Check rent late restrictions
+    from app.models import RentSettings, RentPayment, RentItem
+    from datetime import datetime, timedelta
+
+    rent_settings = get_rent_settings_for_context(context)
+    if rent_settings and rent_settings.is_enabled and rent_settings.prevent_purchase_when_late:
+        # Check if student is late on rent
+        now = datetime.now(timezone.utc)
+        current_month = now.month
+        current_year = now.year
+
+        current_due, next_due = _calculate_due_dates(rent_settings, now)
+
+        if current_due:
+            grace_end_date = current_due + timedelta(days=rent_settings.grace_period_days)
+
+            # Check if past grace period
+            if now > grace_end_date:
+                # Check if rent is paid for current period
+                current_block = context.get('block', '').strip().upper()
+                total_paid = db.session.query(db.func.sum(RentPayment.amount_paid)).filter(
+                    RentPayment.student_id == student.id,
+                    RentPayment.period == current_block,
+                    RentPayment.period_month == current_month,
+                    RentPayment.period_year == current_year,
+                    db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                ).scalar() or 0
+
+                # Student is late if they haven't paid full rent
+                if total_paid < rent_settings.rent_amount:
+                    # Check if itemization is enabled
+                    rent_items = RentItem.query.filter_by(rent_setting_id=rent_settings.id).all()
+
+                    if rent_items:
+                        # Itemization is enabled: check if this item is a rent item
+                        rent_item_store_ids = [ri.store_item_id for ri in rent_items if ri.store_item_id]
+
+                        if item.id not in rent_item_store_ids:
+                            # This item is NOT part of rent - block purchase
+                            return jsonify({
+                                "status": "error",
+                                "message": "You are late on rent. You can only purchase items covered by rent until you pay your rent."
+                            }), 403
+                        # If item IS part of rent, allow purchase (they can buy à la carte)
+                    else:
+                        # No itemization: block ALL purchases
+                        return jsonify({
+                            "status": "error",
+                            "message": "You cannot make purchases while late on rent. Please pay your rent first."
+                        }), 403
+
     # Calculate price (with bulk discount if applicable)
     unit_price = item.price
     if (item.bulk_discount_enabled and
@@ -211,21 +276,35 @@ def purchase_item():
 
     # Check if student has sufficient funds
     if student.checking_balance < total_price:
+        shortfall = total_price - student.checking_balance
         # Check if overdraft protection is enabled (savings can cover the difference)
-        if banking_settings and banking_settings.overdraft_protection_enabled:
-            shortfall = total_price - student.checking_balance
-            if student.savings_balance >= shortfall:
-                # Allow transaction - overdraft protection will transfer from savings
-                pass
-            else:
-                return jsonify({"status": "error", "message": f"Insufficient funds in both checking and savings. You need ${total_price:.2f} total but have ${student.checking_balance + student.savings_balance:.2f}."}), 400
-        # Check if overdraft fees are enabled (allows negative balance)
-        elif banking_settings and banking_settings.overdraft_fee_enabled:
-            # Allow transaction - will charge overdraft fee after transaction
+        if (banking_settings and banking_settings.overdraft_protection_enabled and
+                student.savings_balance >= shortfall):
+            # Allow transaction - overdraft protection will transfer from savings
             pass
         else:
-            # No overdraft options - reject transaction
-            return jsonify({"status": "error", "message": f"Insufficient funds. You need ${total_price:.2f} but have ${student.checking_balance:.2f}."}), 400
+            fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
+                student,
+                banking_settings,
+                teacher_id,
+                join_code,
+                force=True
+            )
+            if fee_charged:
+                db.session.commit()
+
+            if banking_settings and banking_settings.overdraft_protection_enabled:
+                message = (f"Insufficient funds in both checking and savings. You need "
+                           f"${total_price:.2f} total but have "
+                           f"${student.checking_balance + student.savings_balance:.2f}.")
+            else:
+                message = (f"Insufficient funds. You need ${total_price:.2f} but have "
+                           f"${student.checking_balance:.2f}.")
+
+            if fee_charged:
+                message += f" Overdraft fee of ${fee_amount:.2f} charged."
+
+            return jsonify({"status": "error", "message": message}), 400
 
     if item.inventory is not None and item.inventory < quantity:
         return jsonify({"status": "error", "message": f"Insufficient stock. Only {item.inventory} available."}), 400
@@ -325,7 +404,30 @@ def purchase_item():
         # --- Standard Item Logic ---
         # Create the student's item(s)
         expiry_date = None
-        if item.item_type == 'delayed' and item.auto_expiry_days:
+
+        # Check if this is a rent item with "per_period" duration
+        from app.models import RentItem, RentSettings
+        rent_item = RentItem.query.filter_by(store_item_id=item.id).first()
+        if rent_item and rent_item.purchase_duration == 'per_period':
+            # Calculate NEXT rent due date and set as expiry
+            rent_setting = RentSettings.query.get(rent_item.rent_setting_id)
+            if rent_setting and rent_setting.is_enabled:
+                now = datetime.now(timezone.utc)
+
+                if rent_setting.first_rent_due_date:
+                    current_due, next_due = _calculate_due_dates(rent_setting, now)
+
+                    if current_due and next_due:
+                        # Align expiry to the next scheduled due date
+                        expiry_date = next_due
+                else:
+                    # No first_rent_due_date set, use simple calculation from now
+                    # This is a fallback for backwards compatibility
+                    delta = _get_period_delta(rent_setting)
+                    expiry_date = _add_period(now, delta)
+
+        # Fall back to standard auto_expiry for delayed items
+        if expiry_date is None and item.item_type == 'delayed' and item.auto_expiry_days:
             expiry_date = datetime.now(timezone.utc) + timedelta(days=item.auto_expiry_days)
 
         student_item_status = 'purchased'
@@ -815,6 +917,59 @@ def hall_pass_terminal_use():
     if log_entry.status != 'approved':
         return jsonify({"status": "error", "message": f"Pass is not approved. Current status: {log_entry.status}"}), 400
 
+    # Check simultaneous limit for this destination before allowing student to leave
+    # Get teacher_id from join_code
+    from app.models import TeacherBlock
+    teacher_block = TeacherBlock.query.filter_by(join_code=log_entry.join_code).first()
+    if teacher_block:
+        teacher_id = teacher_block.teacher_id
+
+        # Get settings for this teacher
+        settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+        if settings:
+            pass_types = settings.get_pass_types()
+
+            # Find configuration for this destination
+            pass_type_config = next((pt for pt in pass_types if pt['name'].lower() == log_entry.reason.lower()), None)
+
+            # Check if pass type is enabled
+            if pass_type_config and not pass_type_config.get('enabled', True):
+                return jsonify({
+                    "status": "error",
+                    "message": f"{log_entry.reason} pass type is currently disabled."
+                }), 403
+
+            # Check simultaneous limit
+            if pass_type_config and pass_type_config.get('simultaneous_limit') is not None:
+                # Get user's timezone for today's count
+                tz_name = 'America/Los_Angeles'  # TODO: This should be configurable per teacher/school
+                try:
+                    user_tz = pytz.timezone(tz_name)
+                except pytz.UnknownTimeZoneError:
+                    user_tz = pytz.timezone('America/Los_Angeles')
+
+                now_user_tz = datetime.now(user_tz)
+                today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
+                today_start_utc = today_start_user_tz.astimezone(pytz.utc).replace(tzinfo=None)
+
+                # Count currently out students for THIS destination from today (excluding this student)
+                currently_out = HallPassLog.query.filter(
+                    HallPassLog.status == 'left',
+                    HallPassLog.reason == log_entry.reason,
+                    HallPassLog.join_code == log_entry.join_code,
+                    HallPassLog.left_time >= today_start_utc,
+                    HallPassLog.id != log_entry.id  # Exclude current pass
+                ).count()
+
+                simultaneous_limit = pass_type_config['simultaneous_limit']
+
+                # Check if limit is reached
+                if currently_out >= simultaneous_limit:
+                    return jsonify({
+                        "status": "error",
+                        "message": f"{log_entry.reason} limit reached. {currently_out}/{simultaneous_limit} students are currently out. Please wait for someone to return."
+                    }), 403
+
     # Mark as left and create tap-out event
     now = datetime.now(timezone.utc)
     log_entry.status = 'left'
@@ -1047,9 +1202,20 @@ def get_hall_pass_queue():
 @admin_required
 def hall_pass_settings():
     """Get or update hall pass settings (admin only)"""
-    settings = HallPassSettings.query.first()
+    # CRITICAL: Scope by teacher_id for multi-tenancy
+    teacher_id = session.get('admin_id')
+    if not teacher_id:
+        return jsonify({"status": "error", "message": "Admin ID not found in session"}), 401
+
+    # Query settings scoped to this teacher (block=None means global default for teacher)
+    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
     if not settings:
-        settings = HallPassSettings(queue_enabled=True, queue_limit=10)
+        settings = HallPassSettings(
+            teacher_id=teacher_id,
+            block=None,
+            queue_enabled=True,
+            queue_limit=10
+        )
         db.session.add(settings)
         db.session.commit()
 
@@ -1194,6 +1360,136 @@ def hall_pass_history():
     except Exception as e:
         current_app.logger.error(f"Error fetching hall pass history: {e}")
         return jsonify({"status": "error", "message": "Failed to fetch history"}), 500
+
+
+@api_bp.route('/hall-pass/setup', methods=['GET'])
+@admin_required
+def get_hall_pass_setup():
+    """Get teacher's hall pass configuration"""
+    teacher_id = session.get('admin_id')
+
+    # Get or create settings for this teacher
+    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+
+    if not settings:
+        # Return default configuration
+        return jsonify({
+            "status": "success",
+            "hall_pass_enabled": True,
+            "pass_types": HallPassSettings.get_default_pass_types()
+        })
+
+    # Return configured pass types with fallback to defaults
+    return jsonify({
+        "status": "success",
+        "hall_pass_enabled": settings.queue_enabled,
+        "pass_types": settings.get_pass_types()
+    })
+
+
+@api_bp.route('/hall-pass/setup', methods=['POST'])
+@admin_required
+def save_hall_pass_setup():
+    """Save teacher's hall pass configuration"""
+    teacher_id = session.get('admin_id')
+    data = request.get_json()
+
+    pass_types = data.get('pass_types', [])
+    hall_pass_enabled = data.get('hall_pass_enabled', True)
+
+    # Validate hall_pass_enabled
+    if not isinstance(hall_pass_enabled, bool):
+        return jsonify({"status": "error", "message": "hall_pass_enabled must be a boolean"}), 400
+
+    # Validate pass_types format
+    if not isinstance(pass_types, list):
+        return jsonify({"status": "error", "message": "pass_types must be a list"}), 400
+
+    for pt in pass_types:
+        if not isinstance(pt, dict):
+            return jsonify({"status": "error", "message": "Each pass type must be an object"}), 400
+        if 'name' not in pt:
+            return jsonify({"status": "error", "message": "Each pass type must have a name"}), 400
+        if not pt['name'].strip():
+            return jsonify({"status": "error", "message": "Pass type name cannot be empty"}), 400
+
+        # Validate enabled (defaults to True if not provided)
+        if 'enabled' not in pt:
+            pt['enabled'] = True
+        if not isinstance(pt['enabled'], bool):
+            return jsonify({"status": "error", "message": "enabled must be a boolean"}), 400
+
+        # Validate queue_limit and simultaneous_limit (can be None or positive integer)
+        for field in ['queue_limit', 'simultaneous_limit']:
+            if field in pt and pt[field] is not None:
+                try:
+                    val = int(pt[field])
+                    if val < 0:
+                        return jsonify({"status": "error", "message": f"{field} must be non-negative"}), 400
+                    pt[field] = val
+                except (ValueError, TypeError):
+                    return jsonify({"status": "error", "message": f"{field} must be a number or blank"}), 400
+
+    try:
+        # Get or create settings for this teacher
+        settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+
+        if not settings:
+            settings = HallPassSettings(
+                teacher_id=teacher_id,
+                block=None,
+                queue_enabled=hall_pass_enabled,
+                queue_limit=10,
+                pass_types=pass_types
+            )
+            db.session.add(settings)
+        else:
+            settings.queue_enabled = hall_pass_enabled
+            settings.pass_types = pass_types
+            settings.updated_at = datetime.now(timezone.utc)
+
+        db.session.commit()
+
+        return jsonify({
+            "status": "success",
+            "message": "Hall pass configuration saved successfully",
+            "hall_pass_enabled": settings.queue_enabled,
+            "pass_types": settings.get_pass_types()
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error saving hall pass setup: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": "Failed to save configuration"}), 500
+
+
+@api_bp.route('/hall-pass/available-types', methods=['GET'])
+@login_required
+def get_available_hall_pass_types():
+    """Get available pass types for a teacher (endpoint for authenticated student use)"""
+    teacher_id = request.args.get('teacher_id', type=int)
+
+    if not teacher_id:
+        return jsonify({"status": "error", "message": "teacher_id is required"}), 400
+
+    # Get settings for this teacher
+    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+
+    if not settings:
+        # Return defaults if not configured
+        return jsonify({
+            "status": "success",
+            "pass_types": HallPassSettings.get_default_pass_types()
+        })
+
+    # Return just the names for enabled pass types
+    pass_types = settings.get_pass_types()
+    enabled_pass_types = [{"name": pt["name"]} for pt in pass_types if pt.get("enabled", True)]
+
+    return jsonify({
+        "status": "success",
+        "pass_types": enabled_pass_types
+    })
 
 
 @api_bp.route('/attendance/history', methods=['GET'])
@@ -1438,28 +1734,46 @@ def handle_tap():
         else:
             # All other reasons go through the hall pass approval flow
             # Check hall pass settings and queue limits
-            settings = HallPassSettings.query.first()
+
+            # CRITICAL: Get teacher_id from join_code for multi-tenancy scoping
+            from app.models import TeacherBlock
+            teacher_block = TeacherBlock.query.filter_by(join_code=join_code).first()
+            if not teacher_block:
+                return jsonify({"error": "Unable to resolve teacher for this class period."}), 400
+
+            teacher_id = teacher_block.teacher_id
+
+            # Query settings scoped to this teacher (block=None means global default)
+            settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
             if not settings:
-                settings = HallPassSettings(queue_enabled=True, queue_limit=10)
+                settings = HallPassSettings(
+                    teacher_id=teacher_id,
+                    block=None,
+                    queue_enabled=True,
+                    queue_limit=10
+                )
                 db.session.add(settings)
                 db.session.commit()
 
-            # Define restricted pass types (affected by queue system)
-            restricted_reasons = ['Restroom', 'Office', 'Locker']
-            emergency_reasons = ['Summon', 'Nurse']
+            # Get pass types configuration
+            pass_types = settings.get_pass_types()
 
-            # Check if this is a restricted pass type
-            is_restricted = reason in restricted_reasons
-            is_emergency = reason in emergency_reasons
+            # Find configuration for this specific destination/reason
+            pass_type_config = next((pt for pt in pass_types if pt['name'].lower() == reason.lower()), None)
 
-            # If queue is disabled, only allow emergency passes
-            if not settings.queue_enabled and is_restricted:
-                return jsonify({
-                    "error": "Queue system is currently disabled. Only Summon and Nurse passes are available."
-                }), 403
+            # If queue is disabled globally, check if we should block this request
+            # (we can still allow passes if they have unlimited limits for BOTH queue and simultaneous)
+            if not settings.queue_enabled:
+                # Allow only if this pass type has BOTH limits set to unlimited
+                if pass_type_config and (pass_type_config.get('queue_limit') is None and pass_type_config.get('simultaneous_limit') is None):
+                    pass  # Allow through
+                else:
+                    return jsonify({
+                        "error": "Queue system is currently disabled."
+                    }), 403
 
-            # If queue is enabled, check capacity for restricted passes
-            if settings.queue_enabled and is_restricted:
+            # Check per-destination queue limits
+            if pass_type_config and pass_type_config.get('queue_limit') is not None:
                 # Get user's timezone from session for today's count
                 tz_name = session.get('timezone', 'America/Los_Angeles')
                 try:
@@ -1471,24 +1785,29 @@ def handle_tap():
                 today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
                 today_start_utc = today_start_user_tz.astimezone(pytz.utc).replace(tzinfo=None)
 
-                # Count approved (waiting) passes from today
+                # Count approved (waiting) passes for THIS destination from today
                 queue_count = HallPassLog.query.filter(
                     HallPassLog.status == 'approved',
+                    HallPassLog.reason == reason,
+                    HallPassLog.join_code == join_code,
                     HallPassLog.decision_time >= today_start_utc
                 ).count()
 
-                # Count currently out students from today
+                # Count currently out students for THIS destination from today
                 out_count = HallPassLog.query.filter(
                     HallPassLog.status == 'left',
+                    HallPassLog.reason == reason,
+                    HallPassLog.join_code == join_code,
                     HallPassLog.left_time >= today_start_utc
                 ).count()
 
-                total_occupied = queue_count + out_count
+                total_in_queue = queue_count + out_count
+                queue_limit = pass_type_config['queue_limit']
 
-                # Check if queue is at capacity
-                if total_occupied >= settings.queue_limit:
+                # Check if queue is at capacity for this destination
+                if total_in_queue >= queue_limit:
                     return jsonify({
-                        "error": f"Queue is full ({total_occupied}/{settings.queue_limit}). Please wait for the queue to clear."
+                        "error": f"{reason} queue is full ({total_in_queue}/{queue_limit}). Please wait for someone to return."
                     }), 403
 
             # Check if hall pass is required (not for Office/Summons/Done for the day)
@@ -2003,7 +2322,7 @@ def set_timezone():
     now = datetime.now(timezone.utc)
 
     # Check Admin Session
-    if session.get('is_admin'):
+    if session.get('is_admin') and session.get('admin_id'):
         last_activity = session.get('last_activity')
         if last_activity:
             try:
@@ -2019,7 +2338,23 @@ def set_timezone():
              is_authenticated = True
              session['last_activity'] = now.isoformat()
 
-    # Check Student Session (if not already authenticated as admin)
+    # Check System Admin Session (if not already authenticated)
+    if not is_authenticated and session.get('is_system_admin') and session.get('sysadmin_id'):
+        last_activity = session.get('last_activity')
+        if last_activity:
+            try:
+                last_activity_dt = datetime.fromisoformat(last_activity)
+                if (now - last_activity_dt) < timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+                    is_authenticated = True
+                    session['last_activity'] = now.isoformat()
+            except ValueError:
+                pass
+        else:
+            # If no last_activity but sysadmin_id is set, treat as active
+            is_authenticated = True
+            session['last_activity'] = now.isoformat()
+
+    # Check Student Session (if not already authenticated as admin or sysadmin)
     if not is_authenticated and 'student_id' in session:
         login_time_str = session.get('login_time')
         if login_time_str:

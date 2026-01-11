@@ -1,3 +1,7 @@
+---
+searchable: false
+---
+
 # Deprecated Code Patterns - Technical Debt
 
 **Last Updated:** 2025-12-04

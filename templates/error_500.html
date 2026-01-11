@@ -8,7 +8,8 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
         * {
@@ -18,8 +19,8 @@
         }
 
         body {
-            font-family: 'Noto Sans', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', sans-serif;
+            background: var(--surface);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -29,15 +30,15 @@
 
         .error-container {
             background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+
+            box-shadow: 0 10px 10px rgba(0, 0, 0, 0.3);
             max-width: 900px;
             width: 100%;
             overflow: hidden;
         }
 
         .error-header {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            background: var(--primary);
             color: white;
             padding: 2rem;
             text-align: center;
@@ -45,8 +46,9 @@
 
         .error-header h1 {
             font-size: 4rem;
-            font-weight: 700;
+            font-weight:400;
             margin: 0;
+            color:white;
         }
 
         .error-header p {
@@ -64,7 +66,7 @@
             border-left: 4px solid #f5576c;
             padding: 1rem;
             margin-bottom: 1.5rem;
-            border-radius: 4px;
+
         }
 
         .error-message h5 {
@@ -73,10 +75,9 @@
         }
 
         .error-message code {
-            background: #e9ecef;
             padding: 0.2rem 0.4rem;
-            border-radius: 3px;
-            color: #495057;
+            color: #343434ff;
+            font-family: 'Google Sans Code', monospace;
         }
 
         .log-section {
@@ -87,7 +88,7 @@
             background: #1e1e1e;
             color: #d4d4d4;
             padding: 1rem;
-            border-radius: 8px;
+
             max-height: 400px;
             overflow-y: auto;
             font-family: 'Courier New', monospace;
@@ -128,6 +129,7 @@
             gap: 1rem;
             margin-top: 1.5rem;
             flex-wrap: wrap;
+            justify-content: center;
         }
 
         .btn-primary-custom {
@@ -149,12 +151,12 @@
         }
 
         .error-id {
-            background: #e9ecef;
+         
             padding: 0.5rem 1rem;
-            border-radius: 6px;
+
             margin-top: 1rem;
             font-size: 0.9rem;
-            color: #495057;
+         
         }
 
         @media (max-width: 768px) {
@@ -181,64 +183,41 @@
 <body>
     <div class="error-container">
         <div class="error-header">
+            <span class="material-symbols-outlined mb-2" style="font-size:3rem; vertical-align: middle;">error</span>
             <h1>500</h1>
-            <p>Oops! Something went wrong</p>
+            <p style="font-size:2rem">Internal Server Error</p>
         </div>
 
         <div class="error-body">
             <div class="alert alert-warning" role="alert">
-                <strong>We're sorry!</strong> The application encountered an unexpected error. This issue has been automatically logged and will be reviewed.
+                <strong>That was unexpected!</strong> Something went wrong when processing your last action. It could be due to a bug in our codes, a sudden glitch on our servers, or an unexpected input you provided. You may try again and see if the problem persists.
             </div>
 
             {% if error_id %}
-            <div class="error-id">
-                <strong>Error ID:</strong> {{ error_id }}
+            <div class="error-id alert alert-info mb-0">
+                This error has been automatically logged with <strong>Error ID {{ error_id }}</strong>. Our support team will address this issue as soon as possible. You don't need do anything at this time.
             </div>
             {% endif %}
 
-            {% if error_type and error_message %}
-            <div class="error-message">
-                <h5>{{ error_type }}</h5>
-                <code>{{ error_message }}</code>
-            </div>
-            {% endif %}
+           
 
             <div class="log-section">
                 <div class="log-header">
-                    <h5>Recent Log Output (Last 50 Lines)</h5>
-                    <button class="btn-copy" onclick="copyLogs()">Copy Logs</button>
+                    <h5> Most Recent Stack Trace (Last 50 Lines)</h5>
+                    <button class="btn-copy bg-primary text-white" onclick="copyLogs()">Copy Logs</button>
                 </div>
-                <div class="log-output" id="logOutput">{{ log_output or '[No log output available]' }}</div>
+                <div class="log-output mb-2" id="logOutput">{{ log_output or '[No log output available]' }}</div>
+                <p>If you wish to file a support ticket, please copy this log output and include it in your support ticket.</p>
             </div>
-
             <div class="actions">
-                <a href="/" class="btn-primary-custom">Go to Home</a>
-                <a href="javascript:history.back()" class="btn-primary-custom">Go Back</a>
-                <a href="/student/help-support" class="btn-primary-custom" style="background: linear-gradient(135deg, #f5576c 0%, #f093fb 100%);">
-                    🐛 Report This Error
+                <a href="/" class="btn bg-primary text-white">Return to Login Page</a>
+                <a href="javascript:history.back()" class="btn bg-primary text-white">Go Back to Last Page</a>
+                <a href="https://status.classroomtokenhub.com" target="_blank" rel="noopener noreferrer" class="btn bg-secondary text-white">
+                    Check System Status <span class="material-symbols-outlined" style="vertical-align: middle;">open_in_new</span>
                 </a>
-                {% if support_email %}
-                <a href="mailto:{{ support_email }}?subject=Error Report - ID {{ error_id }}&body=Error ID: {{ error_id }}%0D%0AError Type: {{ error_type }}%0D%0AError Message: {{ error_message }}%0D%0A%0D%0ALog Output:%0D%0A{{ log_output | urlencode }}"
-                   class="btn-primary-custom">Email Support</a>
-                {% endif %}
-                {% if status_page_url %}
-                <a href="{{ status_page_url }}" target="_blank" rel="noopener noreferrer" class="btn-primary-custom" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
-                    📊 Check System Status
-                </a>
-                {% endif %}
             </div>
 
-            <div class="mt-4">
-                <p class="text-muted" style="font-size: 0.9rem;">
-                    If this problem persists, please contact support at
-                    <a href="mailto:{{ support_email }}">{{ support_email }}</a>
-                    and include the Error ID above.
-                    {% if status_page_url %}
-                    <br>
-                    You can also check our <a href="{{ status_page_url }}" target="_blank" rel="noopener noreferrer">system status page</a> for real-time updates.
-                    {% endif %}
-                </p>
-            </div>
+            
         </div>
     </div>
 

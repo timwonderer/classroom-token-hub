@@ -103,7 +103,7 @@
                                     <td>
                                         <small>
                                             {% if teacher.last_login %}
-                                                <span class="local-timestamp" data-timestamp="{{ teacher.last_login.isoformat() }}Z"></span>
+                                                <span class="local-timestamp" data-timestamp="{{ format_utc_iso(teacher.last_login) }}"></span>
                                             {% else %}
                                                 Never
                                             {% endif %}

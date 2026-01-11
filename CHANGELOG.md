@@ -8,7 +8,404 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Added
+- (No unreleased changes yet)
+
+## [1.7.0] - 2026-01-09
+
+### Added
+- **ToS Acknowledgment Modal** - Implemented a modal during admin sign-up that requires explicit acknowledgment of Terms of Service and Privacy Policy.
+  - Modal blocks the sign-up process until the "I have read and agree" checkbox is checked.
+  - `tos_accepted` status and timestamp are recorded in the `Admin` table.
+  - Ensures compliance with legal requirements for teacher account creation.
+
+### Fixed
+- **Analytics Events Value Display** - Show zero-value economy changes in the analytics events timeline by checking for `None` instead of falsy values.
+- **EasyMDE Form Submission** - Fixed issue where forms with EasyMDE markdown editors could not be submitted due to hidden required fields
+  - EasyMDE markdown editor hides the underlying textarea, causing browser validation to fail on required fields
+  - Removed HTML `required` attribute from hidden textareas after editor initialization
+  - Server-side validation via `DataRequired()` still enforces required fields
+  - Applied fix to insurance claim form (`student_file_claim.html`) and issue submission form (`student_submit_issue.html`)
+  - Resolves console error: "An invalid form control with name='[field]' is not focusable"
+
+### Added
+- **Analytics Dashboard (Phase 1-3)** - System health observability dashboard per analytics specification
+  - Three new database models: `AnalyticsSnapshot`, `AnalyticsEvent`, `AnalyticsAlert`
+  - Analytics computation engine with CWI-relative metrics (no absolute balances/rankings)
+  - System health metrics: participation rate, money velocity, CWI deviation bands, budget survival pass rate
+  - Trend analysis: tracks improving/stable/worsening patterns across periods
+  - Visual alerts with explanations (what changed, why it matters, suggested actions)
+  - Event annotation system for rent changes, wage changes, inflation events
+  - Metrics precomputed and cached by time window for 5-second readability
+  - Weekly and monthly time window views
+  - All metrics properly scoped by `join_code` for multi-tenancy compliance
+  - Dashboard route at `/admin/analytics`
+  - API endpoints for snapshot data and alerts
+  - Comprehensive test coverage for analytics engine
+  - Database migration: `a7b8c9d0e1f2_add_analytics_models`
+  - Per spec: no student names in default views, no leaderboards, no comparative rankings
+  - Design principle: "Something is drifting — and I know what lever to pull"
+- **Mobile Navigation Enhancement** - Full navigation menu now accessible on mobile devices and PWA
+  - Added floating hamburger menu button that appears on mobile (<768px)
+  - Sidebar slides in from left with smooth animation and backdrop overlay
+  - Help buttons now visible as icon-only on mobile screens
+  - Contextual help links show icon on mobile, hiding text to save space
+  - Same template works for desktop, mobile, and PWA - no separate mobile templates needed
+  - Sidebar automatically closes when clicking navigation links or backdrop
+  - Resolves PWA limitation where full navigation menu was previously inaccessible
+- **Rent Itemization Feature** - Teachers can now specify what rent pays for and offer items as store alternatives (MVP)
+  - New `RentItem` model to track itemized rent components (e.g., Desk, Chair, Locker)
+  - Teachers can add/remove/reorder rent items in Rent Settings page
+  - Optional store integration: mark items as "Available in Store" with custom pricing
+  - Automated sync: items marked for store availability automatically create/update StoreItem records
+  - StoreItem created with `limit_per_student=1` to enforce single-purchase behavior
+  - Store items inherit block visibility from rent settings
+  - Student rent view displays itemized breakdown showing what rent includes
+  - Students see store price comparison for items available separately
+  - Pro tip message encourages rent payment by showing total value comparison
+  - Manual pricing (teacher sets store price manually - automatic pricing calculator coming in future release)
+  - Database migration: `6feaa660d6c3_add_rent_item_table`
+- **Enhanced Purchase Restrictions** - "Prevent Purchase When Late" toggle now has dynamic behavior based on itemization
+  - When rent itemization is disabled: blocks ALL store purchases when student is late on rent (original behavior)
+  - When rent itemization is enabled: students late on rent can ONLY purchase items covered by rent (at à la carte prices), all other store items blocked
+  - Creates strong incentive structure: pay rent to get everything, or buy individual rent items at higher prices while missing out on other store items
+  - UI dynamically updates toggle label and description based on itemization status
+  - JavaScript updates label when items are added/removed dynamically
+  - Implemented in `/api/purchase-item` endpoint with proper rent late detection and item validation
+- **Purchase Duration Options for Rent Items** - Teachers can now choose how long individually-purchased rent items last
+  - New `purchase_duration` field on RentItem model: 'per_use' or 'per_period'
+  - **Per Use**: Student must buy each time they want to use it (unlimited purchases allowed)
+  - **Per Rent Period**: Student buys once and can use until next rent is due (limit 1, expires when rent comes due)
+  - Radio button selector in rent itemization UI with clear explanations
+  - Store items automatically configured with appropriate purchase limits based on duration type
+  - Purchase API calculates expiration dates for "per_period" items based on rent frequency settings
+  - Automated expiration when next rent payment is due
+  - Database migration: `h7i8j9k0l1m2_add_purchase_duration_to_rent_items`
+- **Rent Privilege Badges** - Visual indicators on student detail page showing active rent privileges
+  - Displays all "per_period" rent items that students currently have access to
+  - **Green badges**: Privileges covered by paid rent (automatic for rent-paying students)
+  - **Blue badges**: Privileges purchased individually (shows "(Purchased)" label)
+  - Badges only show for non-expired privileges
+  - Rent-paying students automatically receive all per-period privilege badges
+  - Teachers can quickly see which students have which privileges at a glance
+  - Hover over badges to see item descriptions
+
+## [1.6.0] - 2026-01-01
+
+### Added
+- **Documentation Organization** - Improved repository structure and documentation consistency
+  - Consolidated duplicate script files into scripts/ directory
+  - Standardized file paths and references across documentation
+  - Removed obsolete root-level duplicates
+  - Improved navigation and file organization
+
+### Fixed
+- **Getting Started Widget** - Fixed onboarding widget state persistence issues
+  - Widget state now persists to database instead of browser localStorage
+  - Widget dismissal and task completion now sync across logins and devices
+  - Skipped tasks are now properly marked as complete in the widget
+  - Added `widget_tasks_completed`, `widget_dismissed`, and `widget_dismissed_at` fields to `TeacherOnboarding` model
+  - Updated `/admin/onboarding/status` endpoint to check both actual setup AND manually skipped tasks
+  - Added `/admin/onboarding/dismiss-widget` endpoint to persist widget dismissal
+  - Widget state is per-teacher (not per-block) for consistent onboarding experience
+- **Multi-Tenancy Violation** - Fixed critical bug where `HallPassSettings` records were created without `teacher_id`, violating NOT NULL constraint and breaking multi-tenancy isolation
+  - Fixed `/api/hall-pass/settings` endpoint to scope settings by `teacher_id` from session
+  - Fixed hall pass creation in `/tap` endpoint to retrieve `teacher_id` from `join_code` via `TeacherBlock` lookup
+  - All `HallPassSettings` queries now properly scoped by `teacher_id` and `block`
+- **Content Security Policy** - Restored `'unsafe-eval'` directive to `script-src` CSP policy as it is required by passwordless.dev library's minified build (uses `new Function()` internally)
+- **Passkey Authentication** - Fixed environment variables not loading by specifying explicit path to `.env` file in `load_dotenv()` call - ensures environment is loaded regardless of gunicorn working directory
+- **Passkey Authentication** - Fixed token destructuring in `signinWithDiscoverable()` to properly handle error responses from passwordless.dev SDK
+- **Deployment** - Added verification steps to confirm environment variables are properly written to `.env` and loaded by systemd service
+- **File Organization** - Fixed inconsistent paths for student upload template and script references
+
+### Changed
+- Consolidated duplicate scripts into scripts/ directory (seed_dummy_students.py, create_admin.py, etc.)
+- Removed duplicate nginx configuration file from root
+- Updated documentation to reference correct file paths
+
+### Documentation
+- Improved repository organization and file structure
+- Updated path references throughout documentation
+- Removed obsolete duplicate files
+
+## [1.5.0] - 2025-12-29
+
+### Added
+- **Attendance Issue Reporting** - Students can now report issues with specific attendance/tap events (clock in/out records) directly from the Work & Pay page
+  - New route `/help-support/tap-event/<id>/report` for reporting attendance record issues
+  - Report buttons added to all tap event tables in Work & Pay > Attendance Record tab
+  - Uses same issue resolution workflow as transaction reporting
+  - Students can report up to 20 most recent tap events per block
+- **Issue Resolution & Escalation System** - Structured, teacher-mediated issue handling system
+  - **Student Features**:
+    - New Help & Support interface with 3 tabs: Knowledge Base, Report an Issue, My Issues
+    - Submit general issues (clock-in problems, features not working, balance incorrect, etc.)
+    - Report transaction-specific issues directly from transaction history
+    - Help icons next to each transaction in Recent Activity for quick issue reporting
+    - Character-limited submissions (1000 chars) to encourage concise reporting
+    - Automatic context capture: balances, transaction history, system metadata
+    - Status badges (Submitted, Teacher Review, Resolved, Elevated, Developer Review) - no messaging
+    - View all submitted issues with status tracking
+  - **Teacher Features**:
+    - Issue review queue with pending/resolved/escalated tabs
+    - Detailed issue view showing student explanation, context, and transaction details
+    - Resolution actions:
+      - Reverse/void transactions directly from issue interface
+      - Manual adjustment (teacher handles offline)
+      - Deny issue with required explanation
+    - Escalate to developer with:
+      - Required escalation reason
+      - Diagnostic notes for investigation
+      - Optional class name sharing checkbox (default: opaque reference only)
+      - **"Student may receive reward"** checkbox for legitimate bug reports
+    - Complete status history and resolution action audit trail
+  - **Technical Implementation**:
+    - 4 new database models: `Issue`, `IssueCategory`, `IssueStatusHistory`, `IssueResolutionAction`
+    - Default categories: 6 transaction types + 6 general issue types
+    - Opaque student references for sysadmin privacy (non-reversible hashes)
+    - Multi-tenancy scoping by `join_code` for proper class isolation
+    - Context snapshots preserve ledger state at time of submission
+    - Complete audit trail with timestamps and attribution
+    - Immutable student submissions after creation
+  - **Design Principles**:
+    - No direct student-to-sysadmin communication
+    - Teachers are first-line decision makers
+    - Evidence-based issue tracking (tied to concrete transactions/records)
+    - Data minimization for sysadmin review
+    - Status badges only (non-communicative design)
+  - Routes:
+    - Student: `/student/help-support`, `/student/help-support/submit-issue`, `/student/help-support/transaction/<id>/report`
+    - Teacher: `/admin/issues`, `/admin/issues/<id>`, `/admin/issues/<id>/resolve`, `/admin/issues/<id>/escalate`
+
+### Changed
+- Improved `flask create-sysadmin` command to display TOTP secret and QR code during account creation
+  - Shows scannable QR code in terminal for easy authenticator app setup
+  - Displays plaintext secret for manual entry backup
+  - Auto-clears terminal after user confirmation for security
+  - Secret remains encrypted in database after initial display
+- Issue resolution UI refresh and workflow refinements
+- Issue management and reporting refactor
+- Standardized UTC timestamp formatting
+
+### Fixed
+- **Store Item Creation** - Fixed critical bug where tier, collective_goal_type, collective_goal_target, and redemption_prompt fields were not being saved when creating new store items
+  - Added `tier` field assignment to store creation route (app/routes/admin.py:3047)
+  - Added `collective_goal_type` and `collective_goal_target` field assignments for collective goal items (app/routes/admin.py:3063-3064)
+  - Added `redemption_prompt` field assignment for delayed-use items (app/routes/admin.py:3066)
+  - These fields were already present in the form (forms.py) and model (models.py), but were not being passed to the StoreItem constructor
+  - Edit functionality uses `populate_obj` rather than manually assigning these fields, so this bug specifically affected the creation route
+- **Transaction Issue Reporting** - Added report buttons to all transaction tables in Banking/Finances page (Checking and Savings tabs), allowing students to report issues on any visible transaction (up to 50 most recent), not just the 5 shown on dashboard
+- **Issue Resolution Display** - Fixed `developer_resolved` status showing as "Escalated" instead of "Resolved by Developer" in teacher view
+- **Issue Context Snapshot** - Fixed incorrect balance calculation in context_snapshot by using Student model's `get_checking_balance()` and `get_savings_balance()` methods instead of non-existent `get_balances()` function
+- **Passkey Authentication** - Fixed missing username parameter in passkey authentication start request causing 500 error
+- **Passkey Registration** - Fixed credential ID extraction from passwordless.dev SDK response by using correct destructuring pattern `{ token, error }`
+- **Content Security Policy** - Added `https://static.cloudflareinsights.com` to `connect-src` directive to allow Cloudflare analytics
+- **Content Security Policy** - Added `worker-src 'self' blob:` directive to allow Web Workers used by passwordless.dev library
+- Fixed `time.tzset()` Windows compatibility issue in wsgi.py - now only calls tzset() on Unix-like systems
+- Fixed admin signup crash when using SQLite - handles datetime fields stored as strings
+- System Admin announcements form `ValueError` by adding a custom `coerce` for the `target_teacher` field
+
 ### Security
+- Enhanced privacy protection in issue resolution system through opaque student references
+- Teacher-controlled data disclosure to sysadmins (optional class name sharing)
+- **Content Security Policy** - Removed unnecessary `'unsafe-eval'` directive from `script-src` to strengthen XSS protection (passwordless.dev library does not require dynamic code execution)
+
+### Documentation
+- Reorganized documentation structure for improved navigation
+- **Developer Documentation Updates** - Updated development tracking documentation to reflect current status
+  - Updated `docs/development/DEVELOPMENT.md` to reflect v1.6.0 status (was showing 1.4.0)
+  - Added v1.5.0 and v1.6.0 release summaries to Recent Releases section
+  - Updated target version from 1.5.0 to 1.7.0
+  - Updated `IMPLEMENTATION_PROGRESS.md` to mark sysadmin routes and templates as completed (were incorrectly marked as pending)
+  - Added detailed test coverage priorities and recommendations
+  - Updated Next Steps with current implementation status (85% complete)
+  - Added specific guidance for remaining work (tests, user docs, technical docs)
+- **Comprehensive Documentation Accuracy Fixes** - Corrected 10 inaccuracies found in user-facing documentation
+  - **Store Items (docs/features/store/creating-items.md)**:
+    - Fixed tier system documentation to reflect actual implementation (Basic/Standard/Premium/Luxury based on % of CWI, not Tier 1/2/3 with dollar amounts)
+    - Corrected default state - items are created as active by default, not inactive
+    - Removed non-existent image upload feature documentation
+    - Removed non-existent daily purchase limit documentation
+    - Updated terminology to match code (Immediate Use/Delayed Use instead of Virtual/Physical)
+    - Added missing "Collective Goal" item type to documentation with full explanation
+    - Corrected purchase limits documentation to reflect actual behavior (concurrent ownership, not daily limits)
+    - Updated scenario examples to use correct field names and remove daily limits
+    - Removed confusing "if available" language for collective goals (feature is fully available)
+    - Removed misleading "Use images" tip from Tips for Success section (feature doesn't exist)
+    - Fixed contradictory troubleshooting text about daily limits (clarified to use inventory and per-student limits)
+  - **Payroll (docs/features/payroll/running-payroll.md)**:
+    - Removed non-existent automatic payroll feature documentation (entire section)
+    - Added guidance for manual payroll scheduling and consistency
+    - Clarified that break time IS paid (system does not exclude breaks from hours worked)
+    - Added Q&A explaining how to handle unpaid breaks if desired
+    - Updated all automatic payroll references to reflect manual-only operation
+  - **Banking (docs/features/banking/transferring-money.md)**:
+    - Removed non-existent transfer limits documentation (daily limits, min/max transfer amounts)
+    - Simplified to only document actual rules (no negative balances)
+
+### Dependencies
+- Bump `requests` from 2.32.4 to 2.32.5
+- Bump `markdown` from 3.7 to 3.10
+- Bump `webfactory/ssh-agent` from 0.9.0 to 0.9.1
+
+## [1.4.0] - 2025-12-27
+
+### Added
+- **Announcement System** - Teachers can create and manage announcements for their class periods
+  - Display announcements on student dashboards with dismiss capability
+  - Filter announcements by class period
+  - Toggle announcement visibility (active/inactive)
+  - Create, edit, and delete announcements with rich formatting
+  - System admins can create global announcements visible across all classes
+  - Announcements link added to admin navigation under Classroom section
+- **UI/UX Improvements** - Comprehensive redesign of dashboard and navigation interfaces
+  - **Personalized Greetings**:
+    - Teacher dashboard displays centered "Hi, [Display Name]" greeting with info icon tooltip linking to settings
+    - Student dashboard shows dynamic time-based greeting with first name
+    - Mid-day greetings randomize between friendly options: "Howdy", "Good day to you", "Good to see you again", "Great timing", "Let us get started"
+    - Morning (5am-12pm): "Good morning"
+    - Afternoon (12pm-5pm): Random friendly greeting
+    - Evening (5pm-5am): "Good evening"
+  - **Enhanced Student Dashboard**:
+    - Removed redundant left navigation sidebar for cleaner layout
+    - Added side-by-side account balance cards for Checking and Savings accounts
+    - Light gray card backgrounds for better visibility
+    - Savings account displays projected monthly interest when balance > 0
+    - Encouragement message when savings balance is $0 to promote saving habits
+    - Fully responsive design (side-by-side on desktop, stacked on mobile)
+  - **Accordion-Style Admin Navigation**:
+    - Reorganized sidebar navigation into collapsible accordion categories
+    - Categories: Classroom, Economy, Bills, Settings
+    - Bootstrap accordion ensures only one section open at a time for cleaner interface
+    - Consolidated Settings section: Personalization, Passkey, Features, Help & Support
+    - Removed non-functional "Mobile Site" link from navigation
+    - Custom CSS styling for dark sidebar theme with smooth transitions
+  - **Improved Sign Out Button**: Enhanced contrast with red filled button and white text
+  - **Streamlined Authentication Flow**:
+    - Login forms present two authentication method buttons upfront
+    - "Use my authenticator" button reveals TOTP field with Back button
+    - "Use my passkey" button triggers WebAuthn flow with automatic fallback to TOTP on failure
+    - Applied to both admin and system admin login pages
+    - Cleaner, more intuitive authentication experience with proper error handling
+
+### Changed
+- **Dependency Updates** - Updated key dependencies for security and stability
+  - Updated `click` from 8.1.8 to 8.3.1
+  - Updated `beautifulsoup4` from 4.13.4 to 4.14.3
+  - Updated `requests` from 2.32.3 to 2.32.4
+
+### Security
+- **CodeQL Security Alerts Remediation** - Addressed 62 security alerts identified by CodeQL scanning (#737)
+  - **Clear-text Logging of Sensitive Information**:
+    - Remove TOTP secret printing from `create_admin.py`, `wsgi.py`, and seed scripts
+    - TOTP secrets now encrypted in database with secure access only
+    - Prevents TOTP secrets from appearing in logs, console output, or command history
+  - **DOM XSS Vulnerabilities**:
+    - Fixed `innerHTML` usage in `templates/student_transfer.html`
+    - Fixed `innerHTML` usage in `static/js/attendance.js`
+    - Replaced with safe DOM manipulation using `createElement` and `textContent`
+    - Prevents XSS attacks via user-controlled data
+  - **GitHub Actions Workflow Permissions**:
+    - Added explicit permissions to `toggle-maintenance.yml`, `check-migrations.yml`, and `deploy.yml`
+    - Follows principle of least privilege for workflow security
+    - Reduces workflow attack surface
+  - **Documentation**: Added `docs/archive/SECURITY_FIXES_SUMMARY.md` with complete analysis of all 62 alerts
+  - **Summary**: Fixed 23+ real security issues, suppressed 2 false positives, reviewed 37 false positives (already mitigated)
+- **Enhanced Open Redirect Protection** - Improved URL validation in student class enrollment redirects
+  - Upgraded `_is_safe_url()` function to use same-origin validation
+  - Now uses `urljoin()` to resolve relative URLs against application's base URL
+  - Validates that redirect targets match the application's scheme and domain
+  - Prevents protocol-relative URLs and external redirects
+  - Added explicit security annotations (`# nosec`) with justification at all redirect points
+  - Addresses all 9 CodeQL security scanner findings for URL redirection vulnerabilities
+  - Affects student add-class flow redirect handling (`app/routes/student.py:710-877`)
+
+### Fixed
+- **Teacher Invite Code Validation** - Fixed critical bugs preventing teacher signup with invite codes (#738)
+  - **Whitespace Handling**: Strip whitespace from invite codes during creation and validation
+  - **Timezone Comparison Error**: Fixed TypeError when comparing invite code expiration dates (timezone-aware vs timezone-naive datetimes)
+  - **TOTP Form Validation**: Properly handle TOTP confirmation form submission separate from initial signup form
+  - **Form Field Population**: Use AdminTOTPConfirmForm for TOTP submissions instead of AdminSignupForm
+  - **Date String Handling**: Pass date string instead of integer for dob_sum field in TOTP confirmation
+  - Added comprehensive debug logging for invite code creation and validation
+  - Added cleanup script (`cleanup_invite_codes.py`) for existing codes with whitespace
+  - Ensures consistency between invite code creation and validation across system admin and CLI tools
+- **TOTP Setup UI** - Updated TOTP setup page to match new brand theme
+  - Replaced hardcoded colors with CSS variables (--primary, --secondary, etc.)
+  - Updated gradient and logo to match refreshed brand
+  - Added pattern background to match signup page design
+  - Improved button hover states for consistency
+- **Onboarding Templates** - Updated color scheme and text for better consistency with new brand theme
+- **Admin Dashboard**: Removed duplicate greeting that was appearing in both page header and content section
+- **Student Dashboard**: Improved account balance cards with clearer styling using light backgrounds instead of semi-transparent overlays for better readability
+- **Mobile Responsiveness**: Enhanced responsive behavior with proper Bootstrap column classes (col-12 col-md-6)
+- **Grafana Access Issue** - Fixed "connection refused" error when accessing Grafana from system admin dashboard
+  - **Root Cause**: Nginx `proxy_pass` had trailing slash that stripped URL path, causing infinite redirects
+  - **Dual-Layer Solution** for maximum reliability:
+    - **Flask Proxy (Fallback)**: Added `/sysadmin/grafana` route that proxies to Grafana service
+      - Works immediately without Nginx configuration changes
+      - Maintains system admin authentication via `@system_admin_required`
+      - Configurable via `GRAFANA_URL` environment variable (defaults to `http://localhost:3000`)
+      - Rate-limit exempt for smooth dashboard operation
+      - Graceful error handling with user-friendly messages
+      - Added `requests==2.32.3` dependency
+    - **Nginx Fix (Production)**: Corrected configuration provided in `nginx-grafana-fix.conf`
+      - Remove trailing slash from `proxy_pass http://127.0.0.1:3000/` → `proxy_pass http://127.0.0.1:3000`
+      - Nginx intercepts requests before Flask (faster performance)
+      - Auto-fallback to Flask proxy if Nginx not configured
+  - See `GRAFANA_FIX_GUIDE.md` for detailed implementation guide
+
+## [1.3.0] - 2025-12-25
+
+### Added
+- **Passwordless Authentication for Teachers** - Implemented WebAuthn/FIDO2 passkey authentication for teacher admins
+  - Supports hardware security keys (YubiKey, Google Titan Key, etc.)
+  - Supports platform authenticators (Touch ID, Face ID, Windows Hello)
+  - Supports synced passkeys across devices
+  - Phishing-resistant authentication (domain-bound credentials)
+  - New `/admin/passkey/settings` page for passkey management
+  - Backend routes for passkey registration and authentication
+  - Database model `AdminCredential` for storing passkey metadata
+  - TOTP authentication remains available as backup option
+  - Full CSRF protection and rate limiting on all passkey endpoints
+  - Passkey settings link added to teacher navigation sidebar
+- **Passwordless Authentication for System Admins** - Implemented WebAuthn/FIDO2 passkey authentication using passwordless.dev
+  - Supports hardware security keys (YubiKey, Google Titan Key, etc.)
+  - Supports platform authenticators (Touch ID, Face ID, Windows Hello)
+  - Supports synced passkeys across devices
+  - Phishing-resistant authentication (domain-bound credentials)
+  - New `/sysadmin/passkey/settings` page for passkey management
+  - Backend routes for passkey registration and authentication
+  - Frontend integration with passwordless.dev JavaScript SDK
+  - Database model `SystemAdminCredential` for storing passkey metadata
+  - TOTP authentication remains available alongside passkeys
+  - Self-hosted ready: Infrastructure supports future migration to py-webauthn library
+  - Requires environment variables: `PASSWORDLESS_API_KEY`, `PASSWORDLESS_API_PUBLIC`
+  - Full CSRF protection and rate limiting on all passkey endpoints
+  - Tracks credential usage timestamps for security auditing
+  - Uses official Bitwarden Passwordless SDK (`passwordless==2.0.0`) for type-safe API interactions
+- **Security Remediation Tools and Documentation** - Complete implementation guides and fixed workflow files
+  - Step-by-step remediation guide: `docs/security/SECURITY_REMEDIATION_GUIDE.md`
+  - Fixed workflow files with SSH host key verification: `.github/workflows/*.FIXED`
+  - Automated SSH security setup script: `scripts/setup-ssh-security.sh`
+  - Includes fixes for: SSH MITM vulnerability, secrets management hardening, dependency updates
+  - Ready-to-use workflow files with improved security posture
+
+### Security
+- **Encrypted TOTP Secrets at Rest** - TOTP 2FA secrets now encrypted in database using Fernet (AES-128-CBC)
+  - Added `encrypt_totp()` and `decrypt_totp()` helper functions in `app/utils/encryption.py`
+  - All new admin/system admin accounts store encrypted TOTP secrets (base64-encoded)
+  - Backward compatible: `decrypt_totp()` handles both encrypted and legacy plaintext secrets transparently
+  - **MIGRATION REQUIRED**: Column length expanded from VARCHAR(32) to VARCHAR(200) - See `docs/archive/MIGRATION_TOTP_ENCRYPTION.md`
+  - Defense in depth: Database compromise alone no longer sufficient to generate valid 2FA codes
+  - **Note:** Still requires `ENCRYPTION_KEY` security - future migration to AWS Secrets Manager/Vault recommended
+  - Files changed: `app/utils/encryption.py`, `app/models.py`, `app/routes/admin.py`, `app/routes/system_admin.py`, `wsgi.py`, `create_admin.py`
+- **Removed Sensitive Information from Application Logs** - Eliminated logging of usernames, hashes, and PII
+  - Removed username logging from student login, admin login, admin signup, and admin recovery flows
+  - Removed partial hash logging from student authentication
+  - Removed student name and DOB sum logging from bulk upload process
+  - Impact: Prevents accidental exposure of PII in development logs, log files, or screenshots
+  - Note: Production deployments should configure `LOG_LEVEL=WARNING` or higher to minimize log output
 - **CRITICAL: Fixed PromptPwnd AI Prompt Injection Vulnerability** - Disabled vulnerable `summary.yml` GitHub Actions workflow
   - Workflow used AI inference (`actions/ai-inference@v1`) with untrusted user input from issue titles/bodies
   - Attack vector: Any user could create an issue with malicious prompt injection to leak `GITHUB_TOKEN` or manipulate workflows
@@ -23,14 +420,6 @@ and this project follows semantic versioning principles.
   - Strengths: Excellent CSRF protection, SQL injection prevention, XSS mitigation, PII encryption, multi-tenancy isolation
   - Recommendations: Enable SSH host key verification, update cryptography package, improve secrets management
   - Documentation: See `docs/security/COMPREHENSIVE_ATTACK_SURFACE_AUDIT_2025.md` for complete report
-
-### Added
-- **Security Remediation Tools and Documentation** - Complete implementation guides and fixed workflow files
-  - Step-by-step remediation guide: `docs/security/SECURITY_REMEDIATION_GUIDE.md`
-  - Fixed workflow files with SSH host key verification: `.github/workflows/*.FIXED`
-  - Automated SSH security setup script: `scripts/setup-ssh-security.sh`
-  - Includes fixes for: SSH MITM vulnerability, secrets management hardening, dependency updates
-  - Ready-to-use workflow files with improved security posture
 
 ## [1.2.1] - 2025-12-21
 
@@ -244,7 +633,7 @@ The project is ready for version 1.0 release. All critical blockers have been re
 
 ### Previous Changes
 - Continued repository organization and documentation cleanup
-- Moved `UPTIMEROBOT_SETUP.md` to `docs/operations/` for better organization
+- Moved `PULSETIC_SETUP.md` to `docs/operations/` for better organization
 - Moved additional PR-specific reports to `docs/archive/pr-reports/`
 - Updated `docs/operations/README.md` with comprehensive guide listings
 - Added migration to align `rent_settings` schema with application model by including the `block` column
@@ -345,4 +734,4 @@ When adding entries:
 - Keep entries concise but informative
 - Update the date when moving Unreleased to a version
 
-**Last Updated:** 2025-12-18
+**Last Updated:** 2026-01-09

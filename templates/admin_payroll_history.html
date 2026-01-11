@@ -44,7 +44,7 @@
                 <tr>
                     <td>
                       {% if entry.timestamp %}
-                        <span class="local-timestamp" data-timestamp="{{ entry.timestamp.isoformat() }}Z"></span>
+                        <span class="local-timestamp" data-timestamp="{{ format_utc_iso(entry.timestamp) }}"></span>
                       {% else %}
                         —
                       {% endif %}

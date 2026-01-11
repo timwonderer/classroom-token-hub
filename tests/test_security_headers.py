@@ -11,8 +11,8 @@ def test_csp_header(client):
     # Check for new directives
     # connect-src should contain cdn.jsdelivr.net
     assert "connect-src" in csp
-    assert "https://cdn.jsdelivr.net" in csp
+    assert "https://cdn.jsdelivr.net" in csp  # lgtm[py/incomplete-url-substring-sanitization] False positive: testing CSP header validation, not sanitizing user input
 
     # script-src should contain static.cloudflareinsights.com
     assert "script-src" in csp
-    assert "https://static.cloudflareinsights.com" in csp
+    assert "https://static.cloudflareinsights.com" in csp  # lgtm[py/incomplete-url-substring-sanitization] False positive: testing CSP header validation, not sanitizing user input

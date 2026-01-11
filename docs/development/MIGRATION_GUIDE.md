@@ -1,6 +1,6 @@
-# 🔧 Database Migration Guide - Branch Consolidation
+#  Database Migration Guide - Branch Consolidation
 
-## ⚠️ CRITICAL: Branched Migration History Issue (RESOLVED)
+##  CRITICAL: Branched Migration History Issue (RESOLVED)
 
 ### What Was The Problem?
 
@@ -9,20 +9,20 @@ Meanwhile, staging continued with its own migrations, creating TWO independent m
 
 ```
 d0ecd9d002b4 (common ancestor)
-    ├──→ f5a1e3e4d7c8 (hall pass) ← Feature branch
-    └──→ 2118b1d00805 → ... → 8a4ca17f506f ← Staging branch
+    → f5a1e3e4d7c8 (hall pass) ← Feature branch
+    → 2118b1d00805 → ... → 8a4ca17f506f ← Staging branch
 ```
 
 This is called "multiple heads" in Alembic and will cause `flask db upgrade` to fail.
 
-### ✅ Solution Applied
+###  Solution Applied
 
 I created a **merge migration** (`merge_001`) that:
 - Has BOTH branch heads as parents: `('8a4ca17f506f', 'f5a1e3e4d7c8')`
 - Intelligently applies hall pass changes (rename `passes_left` → `hall_passes`, create `hall_pass_logs` table)
 - Checks if changes already exist before applying (idempotent)
 
-## 📋 Migration Steps for Different Environments
+##  Migration Steps for Different Environments
 
 ### For Production/Staging Database (Currently at 8a4ca17f506f):
 
@@ -66,7 +66,7 @@ flask db upgrade head
 
 All migrations will apply in order, no issues.
 
-## 🔍 Verifying Migrations
+##  Verifying Migrations
 
 After upgrading, verify:
 
@@ -82,7 +82,7 @@ SELECT * FROM alembic_version;
 -- Should show: merge_001
 ```
 
-## 📊 What Changed in the Database?
+##  What Changed in the Database?
 
 ### Students Table:
 - **Renamed column**: `passes_left` → `hall_passes` (data preserved)
@@ -103,7 +103,7 @@ CREATE TABLE hall_pass_logs (
 );
 ```
 
-## 🚨 Common Issues & Solutions
+##  Common Issues & Solutions
 
 ### Issue: "Multiple heads detected"
 **Solution**: You're using old code. Pull the latest with the merge migration.
@@ -121,7 +121,7 @@ flask db current
 sqlite3 your_database.db ".schema students"
 ```
 
-## 📝 Migration Chain (Final State)
+##  Migration Chain (Final State)
 
 ```
 02f217d8b08e (initial)
@@ -131,15 +131,15 @@ sqlite3 your_database.db ".schema students"
 283d887e9b15 (remove second_factor)
     ↓
 d0ecd9d002b4
-    ├──→ f5a1e3e4d7c8 (hall pass models)
-    │       ↓
-    │   [MERGE] ← merge_001
-    │       ↑
-    └──→ 2118b1d00805 → 2b5e304b912b → 5343a19b72e6
+    → f5a1e3e4d7c8 (hall pass models)
+           ↓
+       [MERGE] ← merge_001
+           ↑
+    → 2118b1d00805 → 2b5e304b912b → 5343a19b72e6
             → 8f4a660d5082 → 9e7a8d4f5c6b → d1b3c4d5e6f7 → 8a4ca17f506f
 ```
 
-## ✅ Pre-Deployment Checklist
+##  Pre-Deployment Checklist
 
 Before merging to staging:
 - [ ] Review the merge migration code
@@ -153,7 +153,7 @@ Before merging staging to main:
 - [ ] Check that hall pass features work correctly
 - [ ] Verify no data loss in students.hall_passes (should equal old passes_left values)
 
-## 🔄 Rollback Plan
+##  Rollback Plan
 
 If something goes wrong:
 
@@ -167,7 +167,7 @@ flask db downgrade 8a4ca17f506f
 # - Restore to staging state before merge
 ```
 
-## 📞 Need Help?
+##  Need Help?
 
 Common commands:
 ```bash

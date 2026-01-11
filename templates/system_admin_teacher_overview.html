@@ -97,7 +97,8 @@
                                                     {% else %}
                                                         <li>
                                                             <button type="button" class="dropdown-item disabled" disabled title="No authorization for this period">
-                                                                {{ period|upper }} ({{ count }} students) 🔒
+                                                                {{ period|upper }} ({{ count }} students)
+                                                                <span class="material-symbols-outlined align-middle ms-1" style="font-size: 16px;" aria-hidden="true">lock</span>
                                                             </button>
                                                         </li>
                                                     {% endif %}

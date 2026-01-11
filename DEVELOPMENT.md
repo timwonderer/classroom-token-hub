@@ -1,8 +1,8 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2025-12-21
-**Current Version:** 1.2.1
-**Target:** 1.3.0 Feature Release
+**Last Updated:** 2026-01-09
+**Current Version:** 1.7.0
+**Target:** 1.8.0 Future Enhancements
 
 ---
 
@@ -22,6 +22,71 @@
 ---
 
 ## Recent Releases
+
+### ✅ Version 1.7.0 - January 9, 2026
+
+**Major feature release focused on system health analytics, flexible rent options, and mobile accessibility:**
+
+#### 🎯 Key Accomplishments
+- ✅ **Analytics Dashboard** - System health observability with CWI-relative metrics
+- ✅ **Rent Itemization** - Teachers can specify what rent pays for with store alternatives
+- ✅ **Mobile Navigation** - Full navigation menu accessible on mobile and PWA
+- ✅ **Rent Privilege Badges** - Visual indicators for active rent privileges
+- ✅ **Purchase Duration Options** - Per-use vs per-period choices for rent items
+- ✅ **Enhanced Purchase Restrictions** - Dynamic behavior based on rent itemization
+- ✅ **ToS Acknowledgment** - Compliance modal during admin signup
+- ✅ **Issue Resolution Improvements** - EasyMDE form fixes and zero-value event display
+
+See [RELEASE_NOTES_v1.7.0.md](docs/archive/releases/RELEASE_NOTES_v1.7.0.md) for full details.
+
+### ✅ Version 1.6.0 - January 1, 2026
+
+**Repository organization and stability release:**
+
+#### 🎯 Key Accomplishments
+- ✅ **Repository Organization** - Consolidated duplicate files and improved documentation structure
+- ✅ **Multi-Tenancy Fixes** - Fixed critical HallPassSettings violations
+- ✅ **Passkey Authentication Fixes** - Improved environment variable loading and error handling
+- ✅ **Documentation Updates** - Standardized file paths and references
+
+See [RELEASE_NOTES_v1.6.0.md](docs/archive/releases/RELEASE_NOTES_v1.6.0.md) for full details.
+
+### ✅ Version 1.5.0 - December 29, 2025
+
+**Issue reporting and resolution system:**
+
+#### 🎯 Key Accomplishments
+- ✅ **Issue Resolution System** - Structured, teacher-mediated issue handling
+- ✅ **Attendance Issue Reporting** - Students can report issues with tap events
+- ✅ **Security Hardening** - Comprehensive attack surface audit and remediation
+- ✅ **Time Handling** - Standardized UTC timestamp formatting
+
+See [RELEASE_NOTES_v1.5.0.md](docs/archive/releases/RELEASE_NOTES_v1.5.0.md) for full details.
+
+### ✅ Version 1.4.0 - December 27, 2025
+
+**Major feature release focused on classroom communication and UI/UX enhancements:**
+
+#### 🎯 Key Accomplishments
+- ✅ **Announcement System** - Teachers can create and manage announcements for class periods
+- ✅ **UI/UX Redesign** - Personalized greetings, enhanced dashboards, accordion navigation
+- ✅ **Enhanced Security** - Fixed open redirect vulnerabilities and Grafana access issues
+- ✅ **Streamlined Authentication** - Improved login flow with better error handling
+- ✅ **Student Dashboard Improvements** - Side-by-side account cards with projected interest
+
+See [RELEASE_NOTES_v1.4.0.md](docs/archive/releases/RELEASE_NOTES_v1.4.0.md) for full details.
+
+### ✅ Version 1.3.0 - December 25, 2025
+
+**Major security-focused release with passwordless authentication:**
+
+#### 🎯 Key Accomplishments
+- ✅ **Passwordless Authentication** - WebAuthn/FIDO2 passkey support for teachers and system admins
+- ✅ **Encrypted TOTP Secrets** - TOTP 2FA secrets now encrypted at rest using Fernet
+- ✅ **Security Audit** - Comprehensive attack surface security audit completed
+- ✅ **Service Worker Fixes** - Resolved persistent browser console errors
+
+See [RELEASE_NOTES_v1.3.0.md](docs/archive/releases/RELEASE_NOTES_v1.3.0.md) for full details.
 
 ### ✅ Version 1.2.0 - December 18, 2025
 
@@ -151,27 +216,20 @@ See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for
 
 ### Planned Features (Future Releases)
 
-#### 1. In-App Communication & Announcements (v1.5+)
-**Status:** Documented, not yet implemented
-**Documentation:** `docs/development/SYSADMIN_INTERFACE_DESIGN.md` (Section 6)
+#### 1. In-App Communication & Announcements ✅ **COMPLETED in v1.4.0**
+**Status:** Implemented and released
+**Documentation:** See release notes for v1.4.0
 
-**Features:**
-- **System-wide announcements** - Broadcast messages to all users
-- **Maintenance notifications** - Automated alerts for scheduled maintenance
-- **Emergency alerts** - Critical system messages with priority display
-- **Message to all teachers** - Admin communication tool
-- **Message to all students** - Class-wide or system-wide student messaging
+**Implemented Features:**
+- **Teacher announcements** - Create and manage announcements for class periods
+- **System-wide announcements** - System admin can broadcast to all users
+- **Display on dashboards** - Students see announcements with dismiss capability
+- **Period filtering** - Announcements scoped by class period
+- **Visibility toggle** - Active/inactive announcement management
 
-**Route:** `/sysadmin/announcements` (System Admin)
-
-**Use Cases:**
-- Notify all users of upcoming maintenance
-- Emergency closure announcements
-- System-wide policy updates
-- Teacher communication for multi-school deployments
-
-**Estimated Effort:** 4-6 weeks
-**Priority:** Medium (useful for multi-school deployments)
+**Routes Implemented:**
+- Teacher: `/admin/announcements` (list, create, edit, delete)
+- System Admin: `/sysadmin/announcements` (global announcements)
 
 #### 2. Teacher Self-Serve Account Recovery (Future)
 **Status:** Documented, deferred due to security complexity
@@ -196,7 +254,7 @@ See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for
 
 **Recommendation:** Defer until v1.5+ and prioritize sysadmin-assisted TOTP reset as the primary recovery path.
 
-#### 3. Custom Condition Builder (v1.5+)
+#### 1. Custom Condition Builder (v1.7+)
 **Status:** Research completed, deferred to future release
 
 **Description:** Drag-and-drop visual rule builder for custom conditional logic in rent, insurance, store, payroll, and banking features.
@@ -212,7 +270,40 @@ See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for
 
 **Estimated Effort:** 12-18 weeks for full implementation
 
-#### 4. Jobs Feature (v1.5+)
+#### 3. Collective Goals Store Items (Partially Complete)
+**Status:** Database and partial UI implemented, needs completion
+**Implementation Date:** November 2025 (migration o2p3q4r5s6t7)
+
+**Description:** Store items that require collective class participation, teaching teamwork and group achievement.
+
+**Two Collective Goal Types:**
+
+1. **Fixed** - Requires a specific number of purchases (e.g., "10 students must purchase")
+2. **Whole Class** - Requires all enrolled students to purchase
+
+**Currently Implemented:**
+- Database model: `StoreItem.collective_goal_type` and `StoreItem.collective_goal_target` columns
+- Migration: `o2p3q4r5s6t7_add_collective_goal_settings.py`
+- Forms: `StoreItemForm` includes collective goal fields with validation
+- API logic: `/api/store/purchase` handles collective item purchases with threshold checking
+- Student UI: `student_shop.html` displays collective goal progress
+
+**Needs Completion:**
+- Teacher UI for creating/editing collective goal items in store management
+- Visual progress indicators on teacher dashboard
+- Notification system when collective goals are met
+- Redemption workflow for collective items
+- Documentation in user guides
+
+**Use Cases:**
+- "Class Pizza Party" - Requires all students to contribute
+- "Outdoor Learning Day" - Needs 20 students to purchase
+- Team building and collaborative financial goals
+
+**Estimated Effort to Complete:** 2-3 weeks
+**Priority:** Medium (feature is functional but needs polish and documentation)
+
+#### 4. Jobs Feature (v1.7+)
 **Status:** Partially implemented, then removed; awaiting completion
 **Git History:** Started in commit `0800640`, removed in commit `a04b574` (2025-12-10)
 
@@ -525,10 +616,10 @@ Version 1.0 has been successfully released with the following criteria met:
 5. Continue "Admin Experience Polish" initiatives
 
 **Recent Releases:**
-- **v1.1.0** (2024-12-13) - Analytics dashboard, savings projections, UI redesign
-- **v1.0.0** (2024-11-29) - Initial stable release
+- **v1.7.0** (2026-01-09) - Analytics, Rent Itemization, Mobile Navigation
+- **v1.6.0** (2026-01-01) - Repository Organization
+- **v1.5.0** (2025-12-29) - Issue Resolution System
 
 ---
-
-**Last Updated:** 2024-12-13
+**Last Updated:** 2026-01-10
 **Maintained by:** Project maintainers and contributors

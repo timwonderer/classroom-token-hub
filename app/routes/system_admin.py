@@ -11,28 +11,35 @@ import secrets
 import io
 import base64
 import qrcode
+import requests
 from datetime import datetime, timedelta, timezone
 
-from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app, jsonify
+from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app, jsonify, Response
 from sqlalchemy import delete, or_, case
 from werkzeug.exceptions import BadRequest, Unauthorized, Forbidden, NotFound, ServiceUnavailable
 import pyotp
 
 from app.extensions import db, limiter
 from app.models import (
-    SystemAdmin, Admin, Student, AdminInviteCode, ErrorLog,
+    SystemAdmin, SystemAdminCredential, Admin, Student, AdminInviteCode, ErrorLog,
     Transaction, TapEvent, HallPassLog, StudentItem, RentPayment,
     StudentInsurance, InsuranceClaim, StudentTeacher, DeletionRequest,
     DeletionRequestType, DeletionRequestStatus, TeacherBlock, StudentBlock, UserReport,
     FeatureSettings, TeacherOnboarding, RentSettings, BankingSettings,
     DemoStudent, HallPassSettings, PayrollFine, PayrollReward,
-    PayrollSettings, StoreItem
+    PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory
 )
 from app.auth import system_admin_required, SESSION_TIMEOUT_MINUTES
 from forms import SystemAdminLoginForm, SystemAdminInviteForm
 
 # Import utility functions
-from app.utils.helpers import is_safe_url
+from app.utils.helpers import is_safe_url, format_utc_iso
+from app.utils.encryption import encrypt_totp, decrypt_totp
+from app.utils.passwordless_client import (
+    create_register_token,
+    verify_signin_token,
+    get_public_api_key
+)
 
 # Create blueprint
 sysadmin_bp = Blueprint('sysadmin', __name__, url_prefix='/sysadmin')
@@ -139,7 +146,7 @@ def _tail_log_lines(file_path: str, max_lines: int = 200, chunk_size: int = 8192
 # -------------------- AUTHENTICATION --------------------
 
 @sysadmin_bp.route('/auth-check', methods=['GET'])
-@limiter.limit("100 per minute")
+@limiter.exempt
 def auth_check():
     """Internal auth probe for Nginx `auth_request`.
 
@@ -182,7 +189,9 @@ def login():
         totp_code = form.totp_code.data.strip()
         admin = SystemAdmin.query.filter_by(username=username).first()
         if admin:
-            totp = pyotp.TOTP(admin.totp_secret)
+            # Decrypt TOTP secret (handles both encrypted and legacy plaintext)
+            decrypted_secret = decrypt_totp(admin.totp_secret)
+            totp = pyotp.TOTP(decrypted_secret)
             if totp.verify(totp_code, valid_window=1):
                 session["is_system_admin"] = True
                 session["sysadmin_id"] = admin.id
@@ -208,6 +217,240 @@ def logout():
     # Intentionally DO NOT remove maintenance_global_bypass so admin can test other roles.
     flash("Logged out.")
     return redirect(url_for("sysadmin.login"))
+
+
+# -------------------- PASSKEY AUTHENTICATION (Official SDK Implementation) --------------------
+
+@sysadmin_bp.route('/passkey/register/start', methods=['POST'])
+@system_admin_required
+@limiter.limit("10 per minute")
+def passkey_register_start():
+    """
+    Start passkey registration - Generate registration token.
+
+    Official SDK Pattern: Create RegisterToken and get token from passwordless.dev
+    """
+    try:
+        sysadmin_id = session.get("sysadmin_id")
+        admin = SystemAdmin.query.get_or_404(sysadmin_id)
+
+        # Generate registration token using official SDK
+        user_id = f"sysadmin_{admin.id}"
+        username = admin.username
+        displayname = f"System Admin: {admin.username}"
+
+        token = create_register_token(user_id, username, displayname)
+
+        return jsonify({
+            "token": token,
+            "apiKey": get_public_api_key()
+        }), 200
+
+    except ValueError as e:
+        current_app.logger.error(f"Passwordless.dev configuration error: {e}")
+        return jsonify({"error": "Passkey service not configured"}), 503
+    except Exception as e:
+        current_app.logger.error(f"Error starting passkey registration: {e}")
+        return jsonify({"error": "Failed to start registration"}), 500
+
+
+@sysadmin_bp.route('/passkey/register/finish', methods=['POST'])
+@system_admin_required
+@limiter.limit("10 per minute")
+def passkey_register_finish():
+    """
+    Finish passkey registration - Save credential metadata.
+
+    After frontend completes WebAuthn ceremony, store credential metadata.
+    """
+    try:
+        sysadmin_id = session.get("sysadmin_id")
+        data = request.get_json()
+
+        # No token is required in the payload for registration finish; nothing to check here.
+
+        # Note: Credential is stored on passwordless.dev servers
+        # We just track that registration occurred for UX purposes
+        authenticator_name = data.get('authenticatorName', 'Unnamed Passkey')
+
+        # Save credential metadata (credential_id is optional, stored on passwordless.dev)
+        credential = SystemAdminCredential(
+            sysadmin_id=sysadmin_id,  # Correct column name is sysadmin_id, not system_admin_id
+            credential_id=None,  # Not needed - stored on passwordless.dev servers
+            authenticator_name=authenticator_name
+        )
+
+        db.session.add(credential)
+        db.session.commit()
+
+        flash("Passkey registered successfully!", "success")
+        return jsonify({"success": True}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error finishing passkey registration: {e}")
+        return jsonify({"error": "Failed to register passkey"}), 500
+
+
+@sysadmin_bp.route('/passkey/auth/start', methods=['POST'])
+@limiter.limit("20 per minute")
+def passkey_auth_start():
+    """
+    Start passkey authentication - Return public API key.
+
+    Official SDK Pattern: Frontend needs public API key to initiate signin
+    """
+    try:
+        data = request.get_json()
+
+        if not data or 'username' not in data:
+            return jsonify({"error": "Missing username"}), 400
+
+        username = data['username'].strip()
+
+        # Verify user exists
+        admin = SystemAdmin.query.filter_by(username=username).first()
+        if not admin:
+            return jsonify({"error": "Invalid credentials"}), 401
+
+        # Check if user has passkeys
+        has_passkeys = SystemAdminCredential.query.filter_by(sysadmin_id=admin.id).first() is not None
+        if not has_passkeys:
+            return jsonify({"error": "Invalid credentials"}), 401
+
+        return jsonify({
+            "apiKey": get_public_api_key()
+        }), 200
+
+    except ValueError as e:
+        current_app.logger.error(f"Passwordless.dev configuration error: {e}")
+        return jsonify({"error": "Passkey service not configured"}), 503
+    except Exception as e:
+        current_app.logger.error(f"Error starting passkey authentication: {e}")
+        return jsonify({"error": "Authentication failed"}), 500
+
+
+@sysadmin_bp.route('/passkey/auth/finish', methods=['POST'])
+@limiter.limit("20 per minute")
+def passkey_auth_finish():
+    """
+    Finish passkey authentication - Verify token and create session.
+
+    Official SDK Pattern: Verify signin token and create authenticated session
+    """
+    try:
+        data = request.get_json()
+
+        if not data or 'token' not in data:
+            return jsonify({"error": "Missing token"}), 400
+
+        # Verify token using official SDK
+        verified_user = verify_signin_token(data['token'])
+
+        # Extract sysadmin ID from user_id (format: "sysadmin_{id}")
+        user_id = verified_user.user_id
+        if not user_id or not user_id.startswith('sysadmin_'):
+            return jsonify({"error": "Invalid user ID"}), 401
+
+        try:
+            sysadmin_id = int(user_id.replace('sysadmin_', ''))
+        except ValueError:
+            current_app.logger.error(f"Invalid userId format: {user_id}")
+            return jsonify({"error": "Invalid user ID format"}), 401
+
+        # Verify system admin exists
+        admin = SystemAdmin.query.get(sysadmin_id)
+        if not admin:
+            return jsonify({"error": "Admin not found"}), 401
+
+        # Update credential last_used timestamp
+        now = datetime.now(timezone.utc)
+        credential_id = verified_user.credential_id
+        if credential_id:
+            credential = SystemAdminCredential.query.filter_by(credential_id=credential_id).first()
+            if credential:
+                credential.last_used = now
+
+        db.session.commit()
+
+        # Create session
+        session["is_system_admin"] = True
+        session["sysadmin_id"] = admin.id
+        session['last_activity'] = now.isoformat()
+        session['maintenance_global_bypass'] = True
+
+        # Determine redirect URL
+        next_url = request.args.get("next")
+        if not is_safe_url(next_url):
+            redirect_url = url_for("sysadmin.dashboard")
+        else:
+            redirect_url = next_url or url_for("sysadmin.dashboard")
+
+        return jsonify({
+            "success": True,
+            "redirect": redirect_url
+        }), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error finishing passkey authentication: {e}")
+        return jsonify({"error": "Authentication failed"}), 401
+
+
+@sysadmin_bp.route('/passkey/list', methods=['GET'])
+@system_admin_required
+def passkey_list():
+    """List all passkeys for current system admin."""
+    try:
+        sysadmin_id = session.get("sysadmin_id")
+        credentials = SystemAdminCredential.query.filter_by(sysadmin_id=sysadmin_id).order_by(SystemAdminCredential.created_at.desc()).all()
+
+        return jsonify([{
+            "id": cred.id,
+            "name": cred.authenticator_name or "Unnamed Passkey",
+            "created_at": cred.created_at.isoformat() if cred.created_at else None,
+            "last_used": cred.last_used.isoformat() if cred.last_used else None
+        } for cred in credentials]), 200
+
+    except Exception as e:
+        current_app.logger.error(f"Error listing passkeys: {e}")
+        return jsonify({"error": "Failed to list passkeys"}), 500
+
+
+@sysadmin_bp.route('/passkey/<int:credential_id>/delete', methods=['POST'])
+@system_admin_required
+@limiter.limit("10 per minute")
+def passkey_delete(credential_id):
+    """Delete a passkey."""
+    try:
+        sysadmin_id = session.get("sysadmin_id")
+        credential = SystemAdminCredential.query.filter_by(id=credential_id, sysadmin_id=sysadmin_id).first()
+
+        if not credential:
+            return jsonify({"error": "Passkey not found"}), 404
+
+        db.session.delete(credential)
+        db.session.commit()
+
+        flash("Passkey deleted successfully.", "success")
+        return jsonify({"success": True}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting passkey: {e}")
+        return jsonify({"error": "Failed to delete passkey"}), 500
+
+
+@sysadmin_bp.route('/passkey/settings')
+@system_admin_required
+def passkey_settings():
+    """Passkey management page."""
+    sysadmin_id = session.get("sysadmin_id")
+    admin = SystemAdmin.query.get_or_404(sysadmin_id)
+    credentials = SystemAdminCredential.query.filter_by(sysadmin_id=sysadmin_id).order_by(SystemAdminCredential.created_at.desc()).all()
+
+    return render_template("system_admin_passkey_settings.html",
+                         admin=admin,
+                         credentials=credentials)
 
 
 # -------------------- DASHBOARD --------------------
@@ -497,7 +740,7 @@ def reset_teacher_totp(admin_id):
     try:
         # Generate new secret
         new_secret = pyotp.random_base32()
-        admin.totp_secret = new_secret
+        admin.totp_secret = encrypt_totp(new_secret)  # Encrypt before storing
         db.session.commit()
 
         # Generate QR code
@@ -511,8 +754,6 @@ def reset_teacher_totp(admin_id):
         img.save(buf, format='PNG')
         buf.seek(0)
         qr_b64 = base64.b64encode(buf.read()).decode('utf-8')
-
-        current_app.logger.info(f"System Admin reset TOTP for teacher {admin.username}")
 
         return jsonify({
             "status": "success",
@@ -612,13 +853,15 @@ def manage_teachers():
     # Handle invite code form submission
     form = SystemAdminInviteForm()
     if form.validate_on_submit():
-        code = form.code.data or secrets.token_urlsafe(8)
+        code = (form.code.data.strip() if form.code.data else None) or secrets.token_urlsafe(8)
+        current_app.logger.info(f"Creating invite code: {repr(code)} (length: {len(code)})")
         expiry_days = request.form.get('expiry_days', 30, type=int)
         expires_at = datetime.now(timezone.utc) + timedelta(days=expiry_days)
         invite = AdminInviteCode(code=code, expires_at=expires_at)
         db.session.add(invite)
         db.session.commit()
-        flash(f"✅ Invite code '{code}' created successfully.", "success")
+        current_app.logger.info(f"Invite code created in database: {repr(invite.code)} (id: {invite.id})")
+        flash(f"Invite code '{code}' created successfully.", "success")
         return redirect(url_for("sysadmin.manage_teachers") + "#invite-codes")
 
     # Get all invite codes
@@ -788,12 +1031,12 @@ def delete_period(admin_id, period):
     """
     # Validate period parameter
     if not period or len(period) > 10:
-        flash("❌ Invalid period parameter", "error")
+        flash("Invalid period parameter", "error")
         return redirect(url_for('sysadmin.teacher_overview'))
     
     # Sanitize period to prevent SQL injection (allow only alphanumeric, spaces, hyphens, underscores)
     if not re.match(r'^[a-zA-Z0-9\s\-_]+$', period):
-        flash("❌ Invalid period format", "error")
+        flash("Invalid period format", "error")
         return redirect(url_for('sysadmin.teacher_overview'))
     
     admin = Admin.query.get_or_404(admin_id)
@@ -803,7 +1046,7 @@ def delete_period(admin_id, period):
     
     if not authorized:
         flash(
-            f"❌ Unauthorized: Cannot delete period '{period}' for teacher '{admin.username}'. "
+            f"Unauthorized: Cannot delete period '{period}' for teacher '{admin.username}'. "
             f"Teacher must request deletion or be inactive for 6+ months.",
             "error"
         )
@@ -877,7 +1120,7 @@ def delete_period(admin_id, period):
         db.session.commit()
 
         flash(
-            f"✅ Period '{period}' deleted for teacher '{admin.username}'. "
+            f"Period '{period}' deleted for teacher '{admin.username}'. "
             f"Removed {removed_count} student links. Students maintain access to other classes.",
             "success"
         )
@@ -885,7 +1128,7 @@ def delete_period(admin_id, period):
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception(f"Error deleting period {period} for teacher {admin_id}")
-        flash(f"❌ Error deleting period: {str(e)}", "error")
+        flash(f"Error deleting period: {str(e)}", "error")
 
     return redirect(url_for('sysadmin.teacher_overview'))
 
@@ -909,7 +1152,7 @@ def delete_teacher(admin_id):
     
     if not authorized:
         flash(
-            f"❌ Unauthorized: Cannot delete teacher '{admin.username}'. "
+            f"Unauthorized: Cannot delete teacher '{admin.username}'. "
             f"Teacher must request deletion or be inactive for 6+ months.",
             "error"
         )
@@ -983,7 +1226,7 @@ def delete_teacher(admin_id):
         db.session.commit()
 
         flash(
-            f"✅ Teacher '{admin_username}' deleted. Updated {student_count} student ownership records. "
+            f"Teacher '{admin_username}' deleted. Updated {student_count} student ownership records. "
             f"Students maintain access unless they have no other teachers.",
             "success",
         )
@@ -991,7 +1234,7 @@ def delete_teacher(admin_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.exception(f"Error deleting teacher {admin_id}")
-        flash(f"❌ Error deleting teacher: {str(e)}", "error")
+        flash(f"Error deleting teacher: {str(e)}", "error")
 
     return redirect(url_for('sysadmin.teacher_overview'))
 
@@ -1172,5 +1415,463 @@ def send_reward_to_reporter(report_id):
         db.session.rollback()
         current_app.logger.error(f"Error sending reward for report {report_id}: {str(e)}")
         flash("Error sending reward. Please try again.", "error")
-    
+
     return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
+
+
+@sysadmin_bp.route('/grafana/auth-check', methods=['GET'])
+@limiter.exempt
+def grafana_auth_check():
+    """
+    Auth check endpoint for nginx auth_request.
+
+    Returns 200 with X-Auth-User header if authenticated, 401 if not.
+    Exempt from rate limiting to prevent blocking Grafana's multiple auth checks per page.
+    """
+    from flask import Response
+    from datetime import datetime, timedelta, timezone
+    from app.auth import SESSION_TIMEOUT_MINUTES
+    from app.models import SystemAdmin
+
+    # Check if user is logged in as system admin
+    if not session.get("is_system_admin") or not session.get("sysadmin_id"):
+        return Response('Unauthorized', 401)
+
+    # Check session timeout
+    last_activity_str = session.get("last_activity")
+    if last_activity_str:
+        last_activity = datetime.fromisoformat(last_activity_str)
+        if last_activity.tzinfo is None:
+            last_activity = last_activity.replace(tzinfo=timezone.utc)
+        if (datetime.now(timezone.utc) - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+            session.clear()
+            return Response('Unauthorized: Session expired', 401)
+
+    # Update activity to keep session alive
+    session["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    # Verify the sysadmin still exists
+    sysadmin = SystemAdmin.query.get(session.get('sysadmin_id'))
+    if not sysadmin:
+        # Admin was deleted but session still exists
+        session.clear()
+        return Response('Unauthorized', 401)
+
+    # Sanitize username for header (prevent response splitting)
+    username = sysadmin.username.replace('\n', '').replace('\r', '') if sysadmin.username else ''
+
+    response = Response('OK', 200)
+    response.headers['X-Auth-User'] = username
+    return response
+
+
+@sysadmin_bp.route('/grafana', methods=['GET'], defaults={'path': ''})
+@sysadmin_bp.route('/grafana/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
+@system_admin_required
+@limiter.exempt
+def grafana_proxy(path):
+    """
+    Proxy requests to Grafana dashboard.
+
+    This route forwards all requests to the Grafana service running on localhost:3000
+    (or configured GRAFANA_URL) while maintaining system admin authentication.
+
+    The route is exempt from rate limiting to allow smooth dashboard operation.
+    """
+    # Validate the requested Grafana path to prevent proxying to arbitrary URLs
+    # Disallow absolute or protocol-relative URLs and restrict to known Grafana prefixes.
+    normalized_path = path or ''
+    if normalized_path.startswith(('http://', 'https://', '//')):
+        current_app.logger.warning(f"Rejected unsafe Grafana proxy path: {normalized_path}")
+        raise BadRequest("Invalid Grafana path.")
+
+    allowed_prefixes = (
+        '',                 # root
+        'd/',               # dashboard URLs
+        'dashboard/',       # legacy dashboard URLs
+        'dashboards/',      # dashboards listing
+        'api/',             # Grafana API
+        'public/',          # public assets
+        'avatar/',          # user avatars
+        'static/',          # static content
+        'login',            # login page
+        'logout',           # logout
+    )
+    if normalized_path and not normalized_path.startswith(allowed_prefixes):
+        current_app.logger.warning(f"Rejected disallowed Grafana proxy path: {normalized_path}")
+        raise BadRequest("Invalid Grafana path.")
+
+    # Get Grafana URL from environment or use default
+    grafana_url = os.getenv('GRAFANA_URL', 'http://localhost:3000')
+
+    # Build the target URL
+    target_url = f"{grafana_url}/{normalized_path}"
+    if request.query_string:
+        target_url = f"{target_url}?{request.query_string.decode('utf-8')}"
+
+    try:
+        # Forward the request to Grafana
+        headers = {key: value for key, value in request.headers if key.lower() not in ['host', 'connection']}
+
+        # Add the authenticated user header for Grafana
+        # Fetch admin to get username (Grafana auth proxy expects username, not ID)
+        admin = SystemAdmin.query.get(session.get('sysadmin_id'))
+        if not admin:
+            # Stale session - admin was deleted
+            flash("Authentication failed: user not found.", "error")
+            return redirect(url_for('sysadmin.dashboard'))
+        headers['X-WEBAUTH-USER'] = admin.username
+
+        # Make the request to Grafana
+        resp = requests.request(
+            method=request.method,
+            url=target_url,
+            headers=headers,
+            data=request.get_data(),
+            cookies=request.cookies,
+            allow_redirects=False,
+            timeout=30,
+            stream=True
+        )
+
+        # Create streaming response
+        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
+        response_headers = [(name, value) for name, value in resp.raw.headers.items()
+                           if name.lower() not in excluded_headers]
+
+        response = Response(resp.iter_content(chunk_size=8192), resp.status_code, response_headers)
+        return response
+
+    except requests.exceptions.ConnectionError:
+        current_app.logger.error(f"Failed to connect to Grafana at {grafana_url}")
+        flash("Grafana service is not available. Please contact the system administrator.", "error")
+        return redirect(url_for('sysadmin.dashboard'))
+    except requests.exceptions.Timeout:
+        current_app.logger.error(f"Timeout connecting to Grafana at {grafana_url}")
+        flash("Grafana service timed out. Please try again later.", "error")
+        return redirect(url_for('sysadmin.dashboard'))
+    except Exception as e:
+        current_app.logger.error(f"Error proxying request to Grafana: {str(e)}")
+        flash("An error occurred while accessing Grafana.", "error")
+        return redirect(url_for('sysadmin.dashboard'))
+
+
+# -------------------- SYSTEM ADMIN ANNOUNCEMENTS --------------------
+
+@sysadmin_bp.route('/announcements')
+@system_admin_required
+def announcements():
+    """
+    System admin announcement management.
+
+    View and manage system-wide announcements.
+    System admins cannot see teacher-created class announcements.
+    """
+    from app.models import Announcement
+
+    # Get only system admin announcements (not teacher announcements)
+    announcements_list = Announcement.query.filter(
+        Announcement.system_admin_id != None
+    ).order_by(Announcement.created_at.desc()).all()
+
+    # Get list of teachers for display
+    teachers_dict = {admin.id: admin for admin in Admin.query.all()}
+
+    # Attach audience info to each announcement
+    for announcement in announcements_list:
+        if announcement.audience_type == 'teacher_all_classes' and announcement.target_teacher_id:
+            teacher = teachers_dict.get(announcement.target_teacher_id)
+            announcement.audience_display = f"All classes of {teacher.get_display_name() if teacher else 'Unknown Teacher'}"
+        else:
+            announcement.audience_display = announcement.get_audience_label()
+
+    return render_template(
+        'sysadmin_announcements.html',
+        announcements=announcements_list
+    )
+
+
+@sysadmin_bp.route('/announcements/create', methods=['GET', 'POST'])
+@system_admin_required
+def announcement_create():
+    """Create a new system-wide announcement."""
+    from forms import SystemAdminAnnouncementForm
+    from app.models import Announcement
+
+    sysadmin_id = session.get('sysadmin_id')
+
+    form = SystemAdminAnnouncementForm()
+
+    # Populate teacher choices
+    teachers = Admin.query.order_by(Admin.username).all()
+    form.target_teacher.choices = [('', '-- Select Teacher --')] + [
+        (teacher.id, f"{teacher.get_display_name()} ({teacher.username})")
+        for teacher in teachers
+    ]
+
+    if form.validate_on_submit():
+        try:
+            # Validate target_teacher requirement
+            if form.audience_type.data == 'teacher_all_classes':
+                if not form.target_teacher.data:
+                    flash('Please select a target teacher for "All Classes of Specific Teacher" audience.', 'danger')
+                    return render_template('sysadmin_announcement_form.html', form=form, action='Create')
+
+            announcement = Announcement(
+                system_admin_id=sysadmin_id,
+                audience_type=form.audience_type.data,
+                target_teacher_id=form.target_teacher.data if form.audience_type.data == 'teacher_all_classes' else None,
+                title=form.title.data,
+                message=form.message.data,
+                priority=form.priority.data,
+                is_active=form.is_active.data,
+                expires_at=form.expires_at.data
+            )
+            db.session.add(announcement)
+            db.session.commit()
+
+            flash(f'System announcement "{announcement.title}" created successfully!', 'success')
+            return redirect(url_for('sysadmin.announcements'))
+
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error creating system announcement: {e}")
+            flash('An error occurred while creating the announcement.', 'danger')
+
+    return render_template('sysadmin_announcement_form.html', form=form, action='Create')
+
+
+@sysadmin_bp.route('/announcements/edit/<int:announcement_id>', methods=['GET', 'POST'])
+@system_admin_required
+def announcement_edit(announcement_id):
+    """Edit an existing system announcement."""
+    from forms import SystemAdminAnnouncementForm
+    from app.models import Announcement
+
+    sysadmin_id = session.get('sysadmin_id')
+
+    # Get announcement and verify it's a system admin announcement
+    announcement = Announcement.query.filter_by(id=announcement_id).first()
+
+    if not announcement or not announcement.is_system_admin_announcement():
+        flash('Announcement not found or access denied.', 'danger')
+        return redirect(url_for('sysadmin.announcements'))
+
+    form = SystemAdminAnnouncementForm(obj=announcement)
+
+    # Populate teacher choices
+    teachers = Admin.query.order_by(Admin.username).all()
+    form.target_teacher.choices = [('', '-- Select Teacher --')] + [
+        (teacher.id, f"{teacher.get_display_name()} ({teacher.username})")
+        for teacher in teachers
+    ]
+
+    if form.validate_on_submit():
+        try:
+            # Validate target_teacher requirement
+            if form.audience_type.data == 'teacher_all_classes':
+                if not form.target_teacher.data:
+                    flash('Please select a target teacher for "All Classes of Specific Teacher" audience.', 'danger')
+                    return render_template('sysadmin_announcement_form.html', form=form, announcement=announcement, action='Edit')
+
+            announcement.audience_type = form.audience_type.data
+            announcement.target_teacher_id = form.target_teacher.data if form.audience_type.data == 'teacher_all_classes' else None
+            announcement.title = form.title.data
+            announcement.message = form.message.data
+            announcement.priority = form.priority.data
+            announcement.is_active = form.is_active.data
+            announcement.expires_at = form.expires_at.data
+            announcement.updated_at = datetime.now(timezone.utc)
+
+            db.session.commit()
+
+            flash(f'System announcement "{announcement.title}" updated successfully!', 'success')
+            return redirect(url_for('sysadmin.announcements'))
+
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error updating system announcement: {e}")
+            flash('An error occurred while updating the announcement.', 'danger')
+
+    return render_template('sysadmin_announcement_form.html', form=form, announcement=announcement, action='Edit')
+
+
+@sysadmin_bp.route('/announcements/delete/<int:announcement_id>', methods=['POST'])
+@system_admin_required
+def announcement_delete(announcement_id):
+    """Delete a system announcement."""
+    from app.models import Announcement
+
+    # Get announcement and verify it's a system admin announcement
+    announcement = Announcement.query.filter_by(id=announcement_id).first()
+
+    if not announcement or not announcement.is_system_admin_announcement():
+        flash('Announcement not found or access denied.', 'danger')
+        return redirect(url_for('sysadmin.announcements'))
+
+    try:
+        title = announcement.title
+        db.session.delete(announcement)
+        db.session.commit()
+
+        flash(f'System announcement "{title}" deleted successfully!', 'success')
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting system announcement: {e}")
+        flash('An error occurred while deleting the announcement.', 'danger')
+
+    return redirect(url_for('sysadmin.announcements'))
+
+
+@sysadmin_bp.route('/announcements/toggle/<int:announcement_id>', methods=['POST'])
+@system_admin_required
+def announcement_toggle(announcement_id):
+    """Toggle system announcement active status."""
+    from app.models import Announcement
+
+    # Get announcement and verify it's a system admin announcement
+    announcement = Announcement.query.filter_by(id=announcement_id).first()
+
+    if not announcement or not announcement.is_system_admin_announcement():
+        return jsonify({'status': 'error', 'message': 'Announcement not found'}), 404
+
+    try:
+        announcement.is_active = not announcement.is_active
+        announcement.updated_at = datetime.now(timezone.utc)
+        db.session.commit()
+
+        return jsonify({
+            'status': 'success',
+            'is_active': announcement.is_active,
+            'message': f'Announcement {"activated" if announcement.is_active else "deactivated"}'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error toggling system announcement: {e}")
+        return jsonify({'status': 'error', 'message': 'An internal error occurred while updating the announcement.'}), 500
+
+
+# ================== ESCALATED ISSUES ==================
+
+@sysadmin_bp.route('/issues')
+@system_admin_required
+def escalated_issues():
+    """
+    System admin view of all escalated issues from teachers.
+    Shows issues that have been escalated for developer/sysadmin review.
+    """
+    # Get all escalated issues (elevated, developer_review, developer_resolved)
+    issues = Issue.query.filter(
+        Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
+    ).order_by(Issue.escalated_at.desc()).all()
+
+    # Separate by status
+    pending_issues = [i for i in issues if i.status == 'elevated']
+    in_review_issues = [i for i in issues if i.status == 'developer_review']
+    resolved_issues = [i for i in issues if i.status == 'developer_resolved']
+
+    return render_template('sysadmin_escalated_issues.html',
+                         current_page='issues',
+                         page_title='Escalated Issues',
+                         pending_issues=pending_issues,
+                         in_review_issues=in_review_issues,
+                         resolved_issues=resolved_issues,
+                         format_utc_iso=format_utc_iso)
+
+
+@sysadmin_bp.route('/issues/<int:issue_id>')
+@system_admin_required
+def view_escalated_issue(issue_id):
+    """View detailed information about a specific escalated issue."""
+    # Get the issue and verify it's escalated
+    issue = Issue.query.filter(
+        Issue.id == issue_id,
+        Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
+    ).first_or_404()
+
+    # Get status history
+    history = IssueStatusHistory.query.filter_by(
+        issue_id=issue.id
+    ).order_by(IssueStatusHistory.changed_at.desc()).all()
+
+    return render_template('sysadmin_view_escalated_issue.html',
+                         current_page='issues',
+                         page_title=f'Issue #{issue.id}',
+                         issue=issue,
+                         history=history,
+                         format_utc_iso=format_utc_iso)
+
+
+@sysadmin_bp.route('/issues/<int:issue_id>/start-review', methods=['POST'])
+@system_admin_required
+def start_review_escalated_issue(issue_id):
+    """Mark an escalated issue as being reviewed by sysadmin."""
+    issue = Issue.query.filter(
+        Issue.id == issue_id,
+        Issue.status == 'elevated'
+    ).first_or_404()
+
+    try:
+        issue.status = 'developer_review'
+
+        # Record status change
+        from app.utils.issue_helpers import record_status_change
+        record_status_change(issue, 'elevated', 'developer_review', 'sysadmin', session.get('sysadmin_id'))
+
+        db.session.commit()
+        flash("Issue marked as being reviewed.", "success")
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error starting review for issue {issue_id}: {e}")
+        flash("An error occurred while starting the review.", "error")
+
+    return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+
+
+@sysadmin_bp.route('/issues/<int:issue_id>/resolve', methods=['POST'])
+@system_admin_required
+def resolve_escalated_issue(issue_id):
+    """Mark an escalated issue as resolved by sysadmin."""
+    issue = Issue.query.filter(
+        Issue.id == issue_id,
+        Issue.status.in_(['elevated', 'developer_review'])
+    ).first_or_404()
+
+    resolution_note = request.form.get('resolution_note', '').strip()
+    eligible_for_reward = request.form.get('eligible_for_reward') == 'on'
+    reward_amount = request.form.get('reward_amount', '').strip()
+
+    try:
+        old_status = issue.status
+        issue.status = 'developer_resolved'
+        issue.sysadmin_resolved_at = datetime.now(timezone.utc)
+        issue.sysadmin_notes = resolution_note
+        issue.sysadmin_id = session.get('sysadmin_id')
+        issue.eligible_for_reward = eligible_for_reward
+
+        # Set reward amount if eligible
+        if eligible_for_reward and reward_amount:
+            try:
+                issue.reward_amount = float(reward_amount)
+            except ValueError:
+                flash("Invalid reward amount. Please enter a valid number.", "error")
+                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+        else:
+            issue.reward_amount = None
+
+        # Record status change
+        from app.utils.issue_helpers import record_status_change
+        record_status_change(issue, old_status, 'developer_resolved', 'sysadmin', session.get('sysadmin_id'))
+
+        db.session.commit()
+        flash("Issue has been marked as resolved.", "success")
+
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error resolving escalated issue {issue_id}: {e}")
+        flash("An error occurred while resolving the issue.", "error")
+
+    return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))

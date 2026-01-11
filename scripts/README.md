@@ -2,12 +2,41 @@
 
 This directory contains utility scripts for development, operations, and maintenance of the Classroom Token Hub application.
 
+## Account & Admin Utilities
+
+#### `create_admin.py`
+Creates teacher or system admin accounts.
+
+**Usage:**
+```bash
+python scripts/create_admin.py admin <username>
+python scripts/create_admin.py sysadmin <username>
+```
+
+#### `manage_invites.py`
+Create, list, or expire admin invite codes.
+
+**Usage:**
+```bash
+python scripts/manage_invites.py --help
+```
+
+#### `cleanup_invite_codes.py`
+Normalizes existing invite codes by trimming whitespace.
+
+**Usage:**
+```bash
+python scripts/cleanup_invite_codes.py
+```
+
 ## Operational Scripts
 
 ### Firewall Management
 
 #### `setup-firewall-complete.sh`
-Automated DigitalOcean firewall setup with Cloudflare and UptimeRobot IP ranges. Creates or updates firewall rules to allow traffic only from Cloudflare's proxy and UptimeRobot monitoring.
+Automated DigitalOcean firewall setup with Cloudflare and Pulsetic IP ranges using the official DigitalOcean `pydo` client. Creates or updates firewall rules to allow traffic only from Cloudflare's proxy and Pulsetic monitoring.
+
+**Note:** DigitalOcean firewalls allow up to 50 inbound rules. Cloudflare + Pulsetic often exceed this limit. Use separate firewalls when needed.
 
 **Usage:**
 ```bash
@@ -18,14 +47,28 @@ Automated DigitalOcean firewall setup with Cloudflare and UptimeRobot IP ranges.
 ./scripts/setup-firewall-complete.sh update <firewall-id>
 ```
 
-**Prerequisites:** `doctl` and `jq` installed and authenticated
+**Prerequisites:** `python3`, `pydo` (`pip install pydo`), and a DigitalOcean token via `DIGITALOCEAN_ACCESS_TOKEN` or doctl config.
 
-#### `add-uptimerobot-to-firewall.sh`
-Adds only UptimeRobot monitoring IPs to an existing firewall. Use this if you already have Cloudflare configured.
+#### `setup-pulsetic-firewall.sh`
+Creates or updates a Pulsetic-only firewall (port 443) using the official DigitalOcean `pydo` client. Use alongside a separate Cloudflare firewall.
 
 **Usage:**
 ```bash
-./scripts/add-uptimerobot-to-firewall.sh <firewall-id>
+# Create new firewall
+./scripts/setup-pulsetic-firewall.sh create <droplet-id>
+
+# Update existing firewall
+./scripts/setup-pulsetic-firewall.sh update <firewall-id>
+```
+
+**Prerequisites:** `python3`, `pydo` (`pip install pydo`), and a DigitalOcean token via `DIGITALOCEAN_ACCESS_TOKEN` or doctl config.
+
+#### `add-pulsetic-to-firewall.sh`
+Adds only Pulsetic monitoring IPs to an existing firewall using `pydo`. Use this if you already have Cloudflare configured.
+
+**Usage:**
+```bash
+./scripts/add-pulsetic-to-firewall.sh <firewall-id>
 ```
 
 #### `create-github-actions-firewall.py`
@@ -39,7 +82,8 @@ python3 scripts/create-github-actions-firewall.py <droplet-id>
 **Note:** Multiple firewalls can be applied to one droplet. This creates a dedicated firewall for GitHub Actions, keeping your main firewall clean.
 
 #### `firewall-ips.json`
-Reference file containing all Cloudflare and UptimeRobot IP ranges in JSON format. Use for manual setup or custom automation.
+Reference file containing all Cloudflare and Pulsetic IP ranges in JSON format. Use for manual setup or custom automation.
+
 
 **Documentation:** [DigitalOcean & Cloudflare Setup Guide](../docs/operations/DIGITALOCEAN_CLOUDFLARE_SETUP.md)
 
@@ -148,6 +192,46 @@ python scripts/debug_student_state.py
 
 ## Development Scripts
 
+### `setup_jules.sh`
+Bootstrap helper for local development environments.
+
+**Usage:**
+```bash
+bash scripts/setup_jules.sh
+```
+
+### `seed_dummy_students.py`
+Seeds the database with sample students for development and demos.
+
+**Usage:**
+```bash
+python scripts/seed_dummy_students.py
+```
+
+### `check_syntax.py`
+Validates Python syntax across migration files.
+
+**Usage:**
+```bash
+python scripts/check_syntax.py
+```
+
+### `generate_revision_id.py`
+Generates a unique Alembic-style migration revision ID.
+
+**Usage:**
+```bash
+python scripts/generate_revision_id.py
+```
+
+### `add_join_code_column.py`
+SQLite-only helper to add `join_code` to `student_blocks`.
+
+**Usage:**
+```bash
+python scripts/add_join_code_column.py
+```
+
 ### `setup-hooks.sh`
 Installs git hooks for migration safety checks. **Run this after cloning the repository!**
 
@@ -217,7 +301,7 @@ When adding new scripts to this directory:
 ## Related Documentation
 
 - **[Operations Guides](../docs/operations/)** - Operational procedures using these scripts
-- **[Contributing Guide](../CONTRIBUTING.md)** - Development workflow and git hooks
+- **[Contributing Guide](../.github/CONTRIBUTING.md)** - Development workflow and git hooks
 - **[Deployment Guide](../docs/DEPLOYMENT.md)** - Production deployment procedures
 
 ---

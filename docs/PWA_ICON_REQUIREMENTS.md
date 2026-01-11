@@ -1,8 +1,10 @@
-# PWA Icon Requirements
+# PWA Documentation
 
 ## Overview
 
-The Progressive Web App implementation requires PNG icon files for proper installation on mobile devices. While the manifest references these icons, they need to be generated from the existing brand logo.
+The Progressive Web App (PWA) implementation provides a native app-like experience on mobile devices with full offline support, mobile navigation, and installation capability.
+
+**Version:** 1.7.0+ includes enhanced mobile navigation with hamburger menu.
 
 ## Required Icons
 
@@ -83,12 +85,121 @@ After generating icons:
 
 ## Current Status
 
-- ✅ **icon-192.png**: Generated and available in `static/images/`
-- ✅ **icon-512.png**: Generated and available in `static/images/`
-- ✅ **brand-logo.svg**: Available and ready for conversion
+-  **icon-192.png**: Generated and available in `static/images/`
+-  **icon-512.png**: Generated and available in `static/images/`
+-  **brand-logo.svg**: Available and ready for conversion
 
 ## References
 
 - [PWA Icon Requirements](https://web.dev/add-manifest/#icons)
 - [Maskable Icons](https://web.dev/maskable-icon/)
 - [PWA Builder Icon Generator](https://www.pwabuilder.com/imageGenerator)
+
+---
+
+## Mobile Navigation (v1.7.0+)
+
+### Overview
+
+Version 1.7.0 introduces a floating hamburger menu for seamless navigation on mobile devices and PWA installations.
+
+### Features
+
+**Hamburger Menu:**
+- Floating button appears on screens <768px width
+- Slides in from left with smooth animation
+- Backdrop overlay for clear focus
+- Auto-closes on navigation or backdrop click
+
+**Responsive Help Buttons:**
+- Icon-only display on mobile to save space
+- Full navigation menu accessible
+- No separate mobile templates needed
+
+**PWA Compatibility:**
+- Resolves previous limitation where navigation was inaccessible in PWA mode
+- Consistent experience across desktop, mobile browser, and installed PWA
+- Full feature parity across all platforms
+
+### User Experience
+
+**On Desktop:**
+- Standard sidebar navigation (always visible)
+- Help buttons with text labels
+- Traditional layout
+
+**On Mobile Browser:**
+- Hamburger menu button (top-left or floating)
+- Tap to reveal full navigation
+- Swipe or click backdrop to dismiss
+- Icon-only help buttons
+
+**In Installed PWA:**
+- Same hamburger menu as mobile browser
+- Native app-like feel
+- Smooth animations
+- Full navigation access
+
+### Technical Implementation
+
+**CSS Media Queries:**
+```css
+@media (max-width: 768px) {
+    .hamburger-menu {
+        display: block;
+    }
+    .sidebar {
+        transform: translateX(-100%);
+    }
+    .sidebar.active {
+        transform: translateX(0);
+    }
+}
+```
+
+**JavaScript:**
+- Toggle sidebar visibility
+- Handle backdrop clicks
+- Auto-close on navigation
+- Touch-friendly interactions
+
+**No Additional Templates:**
+- Same templates work for all platforms
+- Responsive design handles layout
+- Progressive enhancement approach
+
+### Testing Mobile Navigation
+
+**On Mobile Device:**
+1. Visit site on phone/tablet
+2. Look for hamburger menu button
+3. Tap to open navigation
+4. Verify all menu items accessible
+5. Test backdrop dismissal
+
+**In PWA:**
+1. Install app from mobile browser
+2. Open installed app
+3. Verify hamburger menu present
+4. Test navigation functionality
+5. Confirm smooth animations
+
+### Troubleshooting
+
+**Menu Not Appearing:**
+- Check screen width (should be <768px)
+- Verify JavaScript loaded
+- Check browser console for errors
+
+**Menu Won't Close:**
+- Ensure backdrop click handler working
+- Check for JavaScript conflicts
+- Try clicking backdrop multiple times
+
+**Icons Not Showing:**
+- Verify Material Symbols font loaded
+- Check icon font preload in HTML
+- Review Content Security Policy settings
+
+---
+

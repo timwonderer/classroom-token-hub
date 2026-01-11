@@ -1,9 +1,34 @@
 {% extends "layout_student.html" %}
-{% set page_title = "Dashboard" %}
+{% import "macros/help.html" as help %}
 {% set current_page = "dashboard" %}
-{% block title %}Dashboard{% endblock %}
+{% block title %}Student Dashboard{% endblock %}
 {% block page_icon %}dashboard{% endblock %}
 {% block content %}
+
+<!-- Personalized Time-Based Greeting -->
+<div class="mb-4">
+    <h2 class="h3 fw-bold text-primary mb-0 text-center" id="dashboard-greeting">
+        <span id="greeting-text" style="font-weight:300">Good day</span>, {{ student.first_name }}!
+    </h2>
+</div>
+
+<script>
+// Set time-based greeting
+(function() {
+    const hour = new Date().getHours();
+    let greeting = 'Good day';
+    const midDayGreeting = ['Howdy', 'Good day to you', 'Good to see you again', 'Great timing', 'Let us get started'];
+    if (hour >= 5 && hour < 12) {
+        greeting = 'Good morning';
+    } else if (hour >= 12 && hour < 17) {
+        greeting = midDayGreeting[Math.floor(Math.random() * midDayGreeting.length)];
+    } else if (hour >= 17 || hour < 5) {
+        greeting = 'Good evening';
+    }
+
+    document.getElementById('greeting-text').textContent = greeting;
+})();
+</script>
 <!-- Toast Container for Notifications -->
 <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1050;"></div>
 
@@ -48,12 +73,35 @@
 </div>
 {% endif %}
 
+<!-- Announcements Section -->
+{% if announcements %}
+    {% for announcement in announcements %}
+    <div class="alert {{ announcement.get_priority_class() }} d-flex align-items-start mb-3 border-0 shadow-sm" role="alert">
+        <span class="material-symbols-outlined me-3 fs-4">{{ announcement.get_priority_icon() }}</span>
+        <div class="flex-grow-1">
+            <h6 class="alert-heading fw-bold mb-2">{{ announcement.title }}</h6>
+            <p class="mb-1">{{ announcement.message|nl2br|safe }}</p>
+            {% if announcement.expires_at %}
+            <small class="text-muted d-block mt-2">
+                <span class="material-symbols-outlined fs-6 align-text-bottom">schedule</span>
+                Expires {{ announcement.expires_at.strftime('%b %d, %Y') }}
+            </small>
+            {% endif %}
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+{% endif %}
+
 <!-- Weekly Analytics Card -->
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body p-4">
-        <div class="d-flex align-items-center mb-3">
-            <span class="material-symbols-outlined text-primary me-2">analytics</span>
-            <h5 class="fw-bold mb-0">Weekly Stats</h5>
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <div class="d-flex align-items-center">
+                <span class="material-symbols-outlined text-primary me-2">analytics</span>
+                <h5 class="fw-bold mb-0">Weekly Stats</h5>
+            </div>
+            {{ help.help_icon("diagnostics/student-attendance", "Learn about earning tokens") }}
         </div>
         <div class="row g-3">
             <div class="col-6 col-md-3">
@@ -95,9 +143,10 @@
 <div class="card border-0 shadow-sm mb-4">
     <div class="card-body p-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <div class="d-flex align-items-center">
+            <div class="d-flex align-items-center gap-2">
                 <span class="material-symbols-outlined text-primary me-2">schedule</span>
                 <h5 class="fw-bold mb-0">Attendance</h5>
+                {{ help.help_icon("diagnostics/student-attendance", "Learn how attendance tracking works") }}
             </div>
             <div class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3">
                 {{ student.hall_passes }} Passes Left
@@ -145,80 +194,66 @@
 </div>
 {% endif %}
 
-<!-- Main Content Layout -->
-<div class="row">
-    <!-- Left Navigation Sidebar -->
-    <div class="col-md-3 mb-4">
-        <div class="card border-0 shadow-sm sticky-top" style="top: 1rem;">
-            <div class="card-body p-3">
-                <h6 class="text-muted text-uppercase small fw-bold mb-3 px-2">Navigation</h6>
-                <div class="list-group list-group-flush">
-                    <a href="{{ url_for('student.transfer') }}" class="list-group-item list-group-item-action border-0 rounded mb-2 d-flex align-items-center">
-                        <span class="material-symbols-outlined me-2 text-primary">account_balance_wallet</span>
-                        <div>
-                            <div class="fw-semibold">Accounts</div>
-                            <small class="text-muted">Checking & Savings</small>
-                        </div>
+<!-- Account Balances Overview -->
+<div class="row g-3 mb-4">
+    <!-- Checking Account -->
+    <div class="col-12 col-md-6">
+        <div class="card border-0 shadow-sm bg-light">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined text-primary me-2 fs-3">account_balance_wallet</span>
+                        <h5 class="fw-bold mb-0 text-dark">Checking Account</h5>
+                        {{ help.help_icon("diagnostics/student-money", "Learn about checking and savings") }}
+                    </div>
+                </div>
+                <div class="display-6 fw-bold text-primary mb-3">${{ "%.2f"|format(checking_balance) }}</div>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('student.transfer') }}" class="btn btn-primary btn-sm">
+                        <span class="material-symbols-outlined align-bottom fs-6 me-1">swap_horiz</span> Transfer
                     </a>
-                    <a href="{{ url_for('student.shop') }}" class="list-group-item list-group-item-action border-0 rounded mb-2 d-flex align-items-center">
-                        <span class="material-symbols-outlined me-2 text-success">storefront</span>
-                        <div>
-                            <div class="fw-semibold">Store</div>
-                            <small class="text-muted">Buy items</small>
-                        </div>
-                    </a>
-                    <a href="{{ url_for('student.payroll') }}" class="list-group-item list-group-item-action border-0 rounded mb-2 d-flex align-items-center">
-                        <span class="material-symbols-outlined me-2 text-info">payments</span>
-                        <div>
-                            <div class="fw-semibold">Work & Pay</div>
-                            <small class="text-muted">Payslips & earnings</small>
-                        </div>
-                    </a>
-                    <a href="{{ url_for('student.rent') }}" class="list-group-item list-group-item-action border-0 rounded mb-2 d-flex align-items-center">
-                        <span class="material-symbols-outlined me-2 text-warning">receipt</span>
-                        <div>
-                            <div class="fw-semibold">Bills</div>
-                            <small class="text-muted">Rent & insurance</small>
-                        </div>
-                    </a>
-                    <a href="{{ url_for('student.student_insurance') }}" class="list-group-item list-group-item-action border-0 rounded d-flex align-items-center">
-                        <span class="material-symbols-outlined me-2 text-danger">shield</span>
-                        <div>
-                            <div class="fw-semibold">Insurance</div>
-                            <small class="text-muted">Get protected</small>
-                        </div>
+                    <a href="{{ url_for('student.payroll') }}" class="btn btn-outline-primary btn-sm">
+                        View Payslips
                     </a>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Main Content Area -->
-    <div class="col-md-9">
-        <!-- Balance Overview -->
-        <div class="balance-card mb-4">
-            <div class="row align-items-center">
-                <div class="col-7">
-                    <div class="text-white-50 small text-uppercase mb-1" style="letter-spacing: 1px;">Current Balance</div>
-                    <div class="display-4 fw-bold mb-0">${{ "%.2f"|format(checking_balance) }}</div>
-                </div>
-                <div class="col-5 text-end">
-                    <div class="bg-white bg-opacity-10 rounded-3 p-3 d-inline-block text-start" style="min-width: 120px;">
-                        <div class="text-white-50 small mb-1">Savings</div>
-                        <div class="h4 fw-bold mb-0 text-white">${{ "%.2f"|format(savings_balance) }}</div>
+    <!-- Savings Account -->
+    <div class="col-12 col-md-6">
+        <div class="card border-0 shadow-sm bg-light">
+            <div class="card-body p-4">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="material-symbols-outlined text-success me-2 fs-3">savings</span>
+                        <h5 class="fw-bold mb-0 text-dark">Savings Account</h5>
+                        {{ help.help_icon("diagnostics/student-money", "Learn about interest and savings") }}
                     </div>
                 </div>
-            </div>
-
-            <div class="mt-4 pt-3 border-top border-white border-opacity-10 d-flex gap-2">
-                <a href="{{ url_for('student.transfer') }}" class="btn btn-light rounded-pill px-4 fw-bold" style="color: var(--primary);">
-                    <span class="material-symbols-outlined align-bottom fs-5 me-1">swap_horiz</span> Transfer
+                {% if savings_balance > 0 %}
+                <div class="display-6 fw-bold text-success mb-2">${{ "%.2f"|format(savings_balance) }}</div>
+                <div class="small text-muted mb-3">
+                    <span class="material-symbols-outlined align-bottom fs-6">trending_up</span>
+                    Projected Interest: +${{ "%.2f"|format(forecast_interest) }}/month
+                </div>
+                <a href="{{ url_for('student.transfer') }}" class="btn btn-success btn-sm">
+                    <span class="material-symbols-outlined align-bottom fs-6 me-1">add</span> Add to Savings
                 </a>
-                <a href="{{ url_for('student.payroll') }}" class="btn btn-outline-light rounded-pill px-4">
-                    Payslips
+                {% else %}
+                <div class="display-6 fw-bold text-muted mb-2">$0.00</div>
+                <div class="alert alert-warning border-warning py-2 px-3 mb-3 small d-flex align-items-start">
+                    <span class="material-symbols-outlined fs-6 me-2">info</span>
+                    <span>You're missing out on interest! Transfer money from Checking to Savings to start earning.</span>
+                </div>
+                <a href="{{ url_for('student.transfer') }}" class="btn btn-success btn-sm">
+                    <span class="material-symbols-outlined align-bottom fs-6 me-1">add</span> Start Saving
                 </a>
+                {% endif %}
             </div>
         </div>
+    </div>
+</div>
 
 <!-- Recent Transactions -->
 <div class="d-flex justify-content-between align-items-center mb-3 px-1">
@@ -241,13 +276,22 @@
                             </div>
                             <div>
                                 <div class="fw-semibold text-dark">{{ t.description }}</div>
-                                <div class="small text-muted local-timestamp" data-timestamp="{{ t.timestamp.isoformat() }}">
+                                <div class="small text-muted local-timestamp" data-timestamp="{{ format_utc_iso(t.timestamp) }}">
                                     {{ t.timestamp.strftime('%b %d') }}
                                 </div>
                             </div>
                         </div>
-                        <div class="fw-bold {{ 'text-success' if t.amount > 0 else 'text-danger' }}">
-                            {{ '+' if t.amount > 0 else '' }}{{ "%.2f"|format(t.amount) }}
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="fw-bold {{ 'text-success' if t.amount > 0 else 'text-danger' }}">
+                                {{ '+' if t.amount > 0 else '' }}{{ "%.2f"|format(t.amount) }}
+                            </div>
+                            <!-- Report Issue Icon -->
+                            <a href="{{ url_for('student.report_transaction_issue', transaction_id=t.id) }}"
+                               class="btn btn-sm btn-link text-muted p-0"
+                               title="Report an issue with this transaction"
+                               data-bs-toggle="tooltip">
+                                <span class="material-symbols-outlined fs-6">help</span>
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -259,8 +303,6 @@
                 No recent transactions
             </div>
         {% endif %}
-    </div>
-</div>
     </div>
 </div>
 
@@ -279,12 +321,7 @@
                         <label class="form-label small fw-bold text-uppercase text-secondary">Reason</label>
                         <select class="form-select form-select-lg" id="hallPassReason">
                             <option value="" selected disabled>Select a reason...</option>
-                            <option value="Bathroom">Bathroom</option>
-                            <option value="Water">Water</option>
-                            <option value="Nurse">Nurse</option>
-                            <option value="Office">Office</option>
-                            <option value="Other">Other</option>
-                            <option value="Done for the day">Done for the Day</option>
+                            <!-- Options will be loaded dynamically from teacher's configuration -->
                         </select>
                     </div>
                     <div class="mb-3">
@@ -305,6 +342,50 @@
 {% block extra_scripts %}
 <script>
     const TEACHER_ID = {{ teacher_id }};
+
+    // Load available pass types from teacher configuration
+    function loadPassTypes() {
+        fetch(`/api/hall-pass/available-types?teacher_id=${TEACHER_ID}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const select = document.getElementById('hallPassReason');
+                    // Clear existing options except the first (placeholder)
+                    while (select.options.length > 1) {
+                        select.remove(1);
+                    }
+
+                    // Add pass types from configuration
+                    data.pass_types.forEach(pt => {
+                        const option = document.createElement('option');
+                        option.value = pt.name;
+                        option.textContent = pt.name;
+                        select.appendChild(option);
+                    });
+
+                    // Add "Done for the day" option at the end
+                    const doneOption = document.createElement('option');
+                    doneOption.value = 'Done for the day';
+                    doneOption.textContent = 'Done for the Day';
+                    select.appendChild(doneOption);
+                }
+            })
+            .catch(error => {
+                console.error('Error loading pass types:', error);
+                // Fallback to default options if API fails (matches model defaults)
+                const select = document.getElementById('hallPassReason');
+                const defaults = ['Bathroom', 'Water Fountain', 'Office', 'Nurse', 'Counselor', 'Done for the day'];
+                defaults.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    select.appendChild(option);
+                });
+            });
+    }
+
+    // Load pass types when page loads
+    document.addEventListener('DOMContentLoaded', loadPassTypes);
 </script>
 <script src="{{ static_url('js/attendance.js') }}"></script>
 {% endblock %}

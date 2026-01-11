@@ -48,8 +48,8 @@
         <div class="card stat-card shadow-sm h-100">
             <div class="card-body text-center">
                 <div class="stat-label mb-2">Checking Balance</div>
-                <div class="stat-value {% if student.checking_balance < 0 %}negative-balance{% else %}positive-balance{% endif %}">
-                    ${{ "%.2f"|format(student.checking_balance) }}
+                <div class="stat-value {% if scoped_checking_balance < 0 %}negative-balance{% else %}positive-balance{% endif %}">
+                    ${{ "%.2f"|format(scoped_checking_balance) }}
                 </div>
             </div>
         </div>
@@ -59,7 +59,7 @@
             <div class="card-body text-center">
                 <div class="stat-label mb-2">Savings Balance</div>
                 <div class="stat-value positive-balance">
-                    ${{ "%.2f"|format(student.savings_balance) }}
+                    ${{ "%.2f"|format(scoped_savings_balance) }}
                 </div>
             </div>
         </div>
@@ -69,7 +69,7 @@
             <div class="card-body text-center">
                 <div class="stat-label mb-2">Total Earnings</div>
                 <div class="stat-value text-success">
-                    ${{ "%.2f"|format(student.total_earnings) }}
+                    ${{ "%.2f"|format(scoped_total_earnings) }}
                 </div>
             </div>
         </div>
@@ -85,6 +85,32 @@
         </div>
     </div>
 </div>
+
+<!-- Rent Privileges Badges -->
+{% if rent_privileges and rent_privileges|length > 0 %}
+<div class="alert alert-light border mb-4">
+    <h6 class="mb-3">
+        <i class="bi bi-award me-2"></i>Active Rent Privileges
+        <small class="text-muted">(Per Rent Period Items)</small>
+    </h6>
+    <div class="d-flex flex-wrap gap-2">
+        {% for privilege in rent_privileges %}
+        <span class="badge bg-{% if privilege.source == 'rent' %}success{% else %}info{% endif %} px-3 py-2" style="font-size: 0.9rem;" {% if privilege.description %}title="{{ privilege.description }}"{% endif %}>
+            <i class="bi bi-{% if privilege.source == 'rent' %}check-circle{% else %}cart-check{% endif %} me-1"></i>
+            {{ privilege.name }}
+            {% if privilege.source == 'purchased' %}
+            <small class="opacity-75">(Purchased)</small>
+            {% endif %}
+        </span>
+        {% endfor %}
+    </div>
+    <small class="text-muted d-block mt-2">
+        <i class="bi bi-info-circle me-1"></i>
+        <strong class="text-success">Green badges</strong> = Covered by rent payment |
+        <strong class="text-info">Blue badges</strong> = Purchased individually (valid until next rent due)
+    </small>
+</div>
+{% endif %}
 
 <!-- Main Content Tabs -->
 <ul class="nav nav-tabs mb-4" id="studentDetailTabs" role="tablist">
@@ -201,7 +227,7 @@
                                     <td class="fw-bold">Last Activity:</td>
                                     <td>
                                         {% if latest_tap_event.timestamp %}
-                                            <span class="local-timestamp" data-timestamp="{{ latest_tap_event.timestamp.isoformat() }}Z"></span>
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(latest_tap_event.timestamp) }}"></span>
                                         {% else %}
                                             <span class="text-muted">N/A</span>
                                         {% endif %}
@@ -264,7 +290,7 @@
                                 <tr {% if tx.is_void %}class="table-secondary text-decoration-line-through"{% endif %}>
                                     <td>
                                         {% if tx.timestamp %}
-                                            <span class="local-timestamp" data-timestamp="{{ tx.timestamp.isoformat() }}Z"></span>
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
                                         {% else %}
                                             <span class="text-muted">N/A</span>
                                         {% endif %}
@@ -333,7 +359,7 @@
                                     </td>
                                     <td>
                                         {% if s_item.purchase_date %}
-                                            <span class="local-timestamp" data-timestamp="{{ s_item.purchase_date.isoformat() }}Z"></span>
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(s_item.purchase_date) }}"></span>
                                         {% else %}
                                             <span class="text-muted">N/A</span>
                                         {% endif %}
@@ -448,7 +474,7 @@
                                 <tr>
                                     <td>
                                         {% if tap.timestamp %}
-                                            <span class="local-timestamp" data-timestamp="{{ tap.timestamp.isoformat() }}Z"></span>
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(tap.timestamp) }}"></span>
                                         {% else %}
                                             <span class="text-muted">N/A</span>
                                         {% endif %}
@@ -501,7 +527,7 @@
                                 <td class="fw-bold">Last Payment:</td>
                                 <td>
                                     {% if student.rent_last_paid %}
-                                        <span class="local-timestamp" data-timestamp="{{ student.rent_last_paid.isoformat() }}Z"></span>
+                                        <span class="local-timestamp" data-timestamp="{{ format_utc_iso(student.rent_last_paid) }}"></span>
                                     {% else %}
                                         <span class="text-muted">Never</span>
                                     {% endif %}
@@ -538,7 +564,7 @@
             <div class="card-body">
                 <div class="row mb-4">
                     <div class="col-md-4 text-center">
-                        <h3 class="text-success">${{ "%.2f"|format(student.total_earnings) }}</h3>
+                        <h3 class="text-success">${{ "%.2f"|format(scoped_total_earnings) }}</h3>
                         <p class="text-muted">Total Earnings</p>
                     </div>
                     <div class="col-md-4 text-center">
@@ -569,7 +595,7 @@
                                 <tr>
                                     <td>
                                         {% if tx.timestamp %}
-                                            <span class="local-timestamp" data-timestamp="{{ tx.timestamp.isoformat() }}Z"></span>
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
                                         {% else %}
                                             <span class="text-muted">N/A</span>
                                         {% endif %}
@@ -660,9 +686,9 @@
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <label for="edit_dob_sum" class="form-label fw-bold">DOB Sum (Optional)</label>
-                                <input type="number" class="form-control" id="edit_dob_sum" name="dob_sum" value="{{ student.dob_sum }}">
-                                <div class="form-text">Sum of DOB components (MM + DD + YYYY). Leave blank to keep unchanged.</div>
+                                <label for="edit_dob" class="form-label fw-bold">Date of Birth (Optional)</label>
+                                <input type="date" class="form-control" id="edit_dob" name="dob_sum">
+                                <div class="form-text">Leave blank to keep unchanged.</div>
                             </div>
                         </div>
                     </div>
@@ -708,7 +734,7 @@
                                 </div>
                             </div>
                             <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" style="display:none;">
-                                <small><i class="bi bi-exclamation-triangle me-2"></i>Student will need to re-claim their account using their name and DOB.</small>
+                                <small><i class="bi bi-exclamation-triangle me-2"></i>Student will need to re-claim their account using their name and date of birth.</small>
                             </div>
                         </div>
                     </div>

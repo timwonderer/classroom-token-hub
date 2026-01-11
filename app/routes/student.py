@@ -31,13 +31,14 @@ from forms import (
 )
 
 # Import utility functions
-from app.utils.helpers import generate_anonymous_code, is_safe_url, render_template_with_fallback as render_template
+from app.utils.helpers import generate_anonymous_code, is_safe_url, format_utc_iso, render_template_with_fallback as render_template
 from app.utils.constants import THEME_PROMPTS
 from app.utils.turnstile import verify_turnstile_token
 from app.utils.demo_sessions import cleanup_demo_student_data
 from app.utils.ip_handler import get_real_ip
 from app.utils.claim_credentials import compute_primary_claim_hash, match_claim_hash
 from app.utils.name_utils import hash_last_name_parts
+from app.utils.overdraft import charge_overdraft_fee_if_needed, evaluate_overdraft_allowance
 from app.utils.help_content import HELP_ARTICLES
 from hash_utils import hash_hmac, hash_username, hash_username_lookup
 from attendance import get_all_block_statuses
@@ -45,6 +46,16 @@ from payroll import get_pay_rate_for_block
 
 # Create blueprint
 student_bp = Blueprint('student', __name__, url_prefix='/student')
+
+# -------------------- DATETIME HELPERS --------------------
+
+def normalize_to_utc(dt):
+    """Ensure datetime objects are timezone-aware in UTC for safe comparisons."""
+    if not dt:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 # -------------------- PERIOD SELECTION HELPERS --------------------
@@ -105,6 +116,27 @@ def get_current_class_context():
     }
 
 
+def get_rent_settings_for_context(context):
+    """Return rent settings scoped to the current class context."""
+    if not context:
+        return None
+
+    teacher_id = context.get('teacher_id')
+    if not teacher_id:
+        return None
+
+    current_block = (context.get('block') or '').strip().upper()
+    if current_block:
+        settings = RentSettings.query.filter_by(
+            teacher_id=teacher_id,
+            block=current_block
+        ).first()
+        if settings:
+            return settings
+
+    return RentSettings.query.filter_by(teacher_id=teacher_id).first()
+
+
 def get_current_teacher_id():
     """DEPRECATED: Get teacher_id from current class context.
 
@@ -140,16 +172,15 @@ def get_feature_settings_for_student():
         # Return defaults if no student logged in
         return FeatureSettings.get_defaults()
 
-    teacher_id = get_current_teacher_id()
+    context = get_current_class_context()
+    if not context:
+        return FeatureSettings.get_defaults()
+
+    teacher_id = context.get('teacher_id')
     if not teacher_id:
         return FeatureSettings.get_defaults()
 
-    # Get the student's current block/period
-    current_block = session.get('current_period')
-    if not current_block and student.block:
-        # Default to first block, handling empty strings after split
-        blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
-        current_block = blocks[0] if blocks else None
+    current_block = (context.get('block') or '').strip().upper() or None
 
     # Try block-specific settings first
     if current_block:
@@ -183,6 +214,11 @@ def is_feature_enabled(feature_name):
     Returns:
         bool: True if feature is enabled, False otherwise
     """
+    if feature_name == 'rent':
+        rent_settings = get_rent_settings_for_context(get_current_class_context())
+        if rent_settings:
+            return bool(rent_settings.is_enabled)
+
     settings = get_feature_settings_for_student()
     feature_key = f"{feature_name}_enabled"
     return settings.get(feature_key, True)  # Default to enabled
@@ -454,7 +490,7 @@ def claim_account():
         join_code = format_join_code(form.join_code.data)
         first_initial = form.first_initial.data.strip().upper()
         last_name = form.last_name.data.strip()
-        dob_input = form.dob_sum.data
+        dob_input = form.dob.data
 
         try:
             if isinstance(dob_input, str):
@@ -709,19 +745,34 @@ def add_class():
 
     def _is_safe_url(target):
         """
-        Returns True if the target is a local URL (preventing open redirect).
+        Returns True if the target is a same-origin URL (preventing open redirect).
+
+        Uses same-origin validation to ensure redirect targets are internal to this
+        application. This prevents open redirect vulnerabilities where attackers could
+        redirect users to malicious external sites.
+
+        Args:
+            target: The URL to validate
+
+        Returns:
+            bool: True if the URL is safe (same origin), False otherwise
         """
-        from urllib.parse import urlparse
+        from urllib.parse import urlparse, urljoin
+
         if not target:
             return False
+
+        # Normalize backslashes to prevent Windows path tricks
         target = target.replace("\\", "")
-        parsed = urlparse(target)
-        # Only allow relative URLs with no scheme and no netloc, nor starting with double slashes
-        if parsed.scheme or parsed.netloc:
-            return False
-        if target.startswith('//'):  # Prevent protocol-relative URLs
-            return False
-        return True
+
+        # Resolve relative URLs against the current application's base URL
+        # This converts relative paths like "dashboard" to full URLs
+        target_url = urlparse(urljoin(request.host_url, target))
+        ref_url = urlparse(request.host_url)
+
+        # Only allow same-origin URLs (same scheme and domain)
+        # This prevents redirects to external sites or protocol-relative URLs
+        return target_url.scheme == ref_url.scheme and target_url.netloc == ref_url.netloc
 
     def _get_return_target(default_endpoint='student.dashboard'):
         """
@@ -748,7 +799,7 @@ def add_class():
         join_code = format_join_code(form.join_code.data)
         first_initial = form.first_initial.data.strip().upper()
         last_name = form.last_name.data.strip()
-        dob_input = form.dob_sum.data
+        dob_input = form.dob.data
 
         # Parse DOB and calculate sum
         try:
@@ -758,21 +809,21 @@ def add_class():
             dob_sum = dob_input.month + dob_input.day + dob_input.year
         except (ValueError, AttributeError, TypeError):
             flash("Invalid date of birth. Please enter a valid date.", "danger")
-            return redirect(_get_return_target())
+            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
         # Verify the credentials match the logged-in student
         if first_initial != student.first_name[:1].upper():
             flash("The first initial doesn't match your account. Please check and try again.", "danger")
-            return redirect(_get_return_target())
+            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
         if dob_sum != student.dob_sum:
-            flash("The DOB sum doesn't match your account. Please check and try again.", "danger")
-            return redirect(_get_return_target())
+            flash("The date of birth doesn't match your account. Please check and try again.", "danger")
+            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
         # Verify last name matches using the same fuzzy matching logic
         if not verify_last_name_parts(last_name, student.last_name_hash_by_part, student.salt):
             flash("The last name doesn't match your account. Please check and try again.", "danger")
-            return redirect(_get_return_target())
+            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
         # Find all unclaimed seats with this join code
         unclaimed_seats = TeacherBlock.query.filter_by(
@@ -782,7 +833,7 @@ def add_class():
 
         if not unclaimed_seats:
             flash("Invalid join code or all seats already claimed. Check with your teacher.", "danger")
-            return redirect(_get_return_target())
+            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
         # Try to find a matching seat for this student
         matched_seat = None
@@ -813,7 +864,7 @@ def add_class():
 
         if not matched_seat:
             flash("No matching seat found for your account. Please verify your join code and credentials.", "danger")
-            return redirect(_get_return_target())
+            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
         # Check if student is already linked to this teacher
         existing_link = StudentTeacher.query.filter_by(
@@ -823,7 +874,7 @@ def add_class():
 
         if existing_link:
             flash("You are already enrolled in this teacher's class.", "warning")
-            return redirect(_get_return_target())
+            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
         # Normalize claim hash to canonical pattern
         canonical_claim_hash = compute_primary_claim_hash(first_initial, dob_sum, matched_seat.salt)
@@ -854,12 +905,12 @@ def add_class():
         try:
             db.session.commit()
             flash(f"Successfully added to Block {new_block}! You can now access this class from your dashboard.", "success")
-            return redirect(_get_return_target())
+            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Error adding class for student {student.id}: {str(e)}")
             flash("An error occurred while adding the class. Please try again or contact your teacher.", "danger")
-            return redirect(_get_return_target())
+            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
     return render_template('student_add_class.html', form=form)
 
@@ -964,7 +1015,7 @@ def dashboard():
     active_insurance = student.get_active_insurance(teacher_id)
 
     rent_status = None
-    rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    rent_settings = get_rent_settings_for_context(context)
     if rent_settings and rent_settings.is_enabled and student.is_rent_enabled:
         now = datetime.now()
         due_date, grace_end_date = _calculate_rent_deadlines(rent_settings, now)
@@ -973,16 +1024,13 @@ def dashboard():
         if rent_settings.bill_preview_enabled and rent_settings.bill_preview_days:
             preview_start_date = due_date - timedelta(days=rent_settings.bill_preview_days)
 
-        rent_is_active = True
+        rent_is_active = False
         is_preview_period = False
-        if rent_settings.first_rent_due_date and now < rent_settings.first_rent_due_date:
-            if preview_start_date and now >= preview_start_date:
-                rent_is_active = True
-                is_preview_period = True
-            else:
-                rent_is_active = False
-        elif preview_start_date and preview_start_date <= now < due_date:
-            is_preview_period = True
+        if preview_start_date and now >= preview_start_date:
+            rent_is_active = True
+            is_preview_period = now < due_date
+        elif now >= due_date:
+            rent_is_active = True
 
         rent_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
         current_month = now.month
@@ -1028,7 +1076,7 @@ def dashboard():
     tz = pytz.timezone('America/Los_Angeles')
     local_now = datetime.now(tz)
     # --- DASHBOARD DEBUG LOGGING ---
-    current_app.logger.info(f"📊 DASHBOARD DEBUG: Student {student.id} - Block states:")
+    current_app.logger.info(f"DASHBOARD DEBUG: Student {student.id} - Block states:")
     for blk, blk_state in period_states.items():
         active = blk_state.get("active")
         done = blk_state.get("done")
@@ -1123,6 +1171,29 @@ def dashboard():
         if tx.amount < 0 and _occurred_after(tx.timestamp, month_start) and not tx.is_void
     ))
 
+    # Get active announcements for this student
+    # Include: class-specific, system-wide, all students, and teacher's all classes
+    from app.models import Announcement
+    from sqlalchemy import or_
+
+    announcements = Announcement.query.filter(
+        Announcement.is_active.is_(True),
+        or_(
+            Announcement.expires_at.is_(None),
+            Announcement.expires_at > datetime.now(timezone.utc)
+        ),
+        or_(
+            # Class-specific announcements
+            Announcement.join_code == join_code,
+            # System-wide announcements
+            Announcement.audience_type == 'system_wide',
+            # All students announcements
+            Announcement.audience_type == 'all_students',
+            # Teacher's all classes announcements
+            (Announcement.audience_type == 'teacher_all_classes') & (Announcement.target_teacher_id == teacher_id)
+        )
+    ).order_by(Announcement.created_at.desc()).all()
+
     return render_template(
         'student_dashboard.html',
         student=student,
@@ -1156,6 +1227,7 @@ def dashboard():
         earnings_this_month=round(earnings_this_month, 2),
         spending_this_week=round(spending_this_week, 2),
         spending_this_month=round(spending_this_month, 2),
+        announcements=announcements,
     )
 
 
@@ -1273,6 +1345,7 @@ def transfer():
 
         # CRITICAL FIX: Calculate balances using join_code scoping
         checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
+        banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
 
         if from_account == to_account:
             if is_json:
@@ -1285,9 +1358,22 @@ def transfer():
             flash("Amount must be greater than 0.", "transfer_error")
             return redirect(url_for("student.transfer"))
         elif from_account == 'checking' and amount > checking_balance:
+            fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
+                student,
+                banking_settings,
+                teacher_id=teacher_id,
+                join_code=join_code,
+                force=True
+            )
+            if fee_charged:
+                db.session.commit()
+
+            message = "Insufficient checking funds."
+            if fee_charged:
+                message += f" Overdraft fee of ${fee_amount:.2f} charged."
             if is_json:
-                return jsonify(status="error", message="Insufficient checking funds."), 400
-            flash("Insufficient checking funds.", "transfer_error")
+                return jsonify(status="error", message=message), 400
+            flash(message, "transfer_error")
             return redirect(url_for("student.transfer"))
         elif from_account == 'savings' and amount > savings_balance:
             if is_json:
@@ -1528,6 +1614,14 @@ def apply_savings_interest(student, annual_rate=0.045):
 @login_required
 def insurance_marketplace():
     """Insurance marketplace - browse and manage policies."""
+    def normalize_to_utc(dt):
+        """Ensure datetime objects are timezone-aware in UTC for safe comparisons."""
+        if not dt:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+
     # Check if insurance feature is enabled
     if not is_feature_enabled('insurance'):
         flash("The insurance feature is currently disabled for your class.", "warning")
@@ -1542,6 +1636,7 @@ def insurance_marketplace():
         return redirect(url_for('student.dashboard'))
 
     teacher_id = context['teacher_id']
+    now_utc = datetime.now(timezone.utc)
 
     # FIX: Get student's active policies scoped to current class only
     my_policies = StudentInsurance.query.join(
@@ -1583,7 +1678,8 @@ def insurance_marketplace():
             ).order_by(StudentInsurance.cancel_date.desc()).first()
 
             if cancelled and cancelled.cancel_date:
-                days_since_cancel = (datetime.now(timezone.utc) - cancelled.cancel_date).days
+                cancel_dt = normalize_to_utc(cancelled.cancel_date)
+                days_since_cancel = (now_utc - cancel_dt).days
                 if days_since_cancel < policy.repurchase_wait_days:
                     can_purchase[policy.id] = False
                     repurchase_blocks[policy.id] = policy.repurchase_wait_days - days_since_cancel
@@ -1617,6 +1713,9 @@ def insurance_marketplace():
     # Check which tier the student has already selected from
     enrolled_tiers = set()
     for enrollment in my_policies:
+        # Normalize dates for safe comparisons in templates
+        enrollment.coverage_start_date = normalize_to_utc(enrollment.coverage_start_date)
+        enrollment.cancel_date = normalize_to_utc(enrollment.cancel_date)
         if enrollment.policy.tier_category_id:
             enrolled_tiers.add(enrollment.policy.tier_category_id)
 
@@ -1629,7 +1728,7 @@ def insurance_marketplace():
                           can_purchase=can_purchase,
                           repurchase_blocks=repurchase_blocks,
                           my_claims=my_claims,
-                          now=datetime.now(timezone.utc))
+                          now=now_utc)
 
 
 @student_bp.route('/insurance/purchase/<int:policy_id>', methods=['POST'])
@@ -1701,13 +1800,44 @@ def purchase_insurance(policy_id):
             return redirect(url_for('student.student_insurance'))
 
     # CRITICAL FIX v2: Check sufficient funds using join_code scoped balance
-    checking_balance = round(sum(
-        tx.amount for tx in student.transactions
-        if tx.account_type == 'checking' and not tx.is_void and tx.join_code == join_code
-    ), 2)
-    if checking_balance < policy.premium:
-        flash("Insufficient funds to purchase this insurance policy.", "danger")
+    checking_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
+    savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
+    banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    overdraft_shortfall = 0.0
+
+    allowed, shortfall, _, _ = evaluate_overdraft_allowance(
+        student,
+        policy.premium,
+        banking_settings,
+        teacher_id=teacher_id,
+        join_code=join_code
+    )
+    if not allowed:
+        fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
+            student,
+            banking_settings,
+            teacher_id=teacher_id,
+            join_code=join_code,
+            force=True
+        )
+        if fee_charged:
+            db.session.commit()
+
+        if banking_settings and banking_settings.overdraft_protection_enabled:
+            message = (f"Insufficient funds in both checking and savings. You need "
+                       f"${policy.premium:.2f} but have ${checking_balance + savings_balance:.2f}.")
+        else:
+            message = (f"Insufficient funds. You need ${policy.premium:.2f} but only "
+                       f"have ${checking_balance:.2f}.")
+
+        if fee_charged:
+            message += f" Overdraft fee of ${fee_amount:.2f} charged."
+
+        flash(message, "danger")
         return redirect(url_for('student.student_insurance'))
+
+    if shortfall > 0:
+        overdraft_shortfall = shortfall
 
     # Create enrollment
     enrollment = StudentInsurance(
@@ -1733,6 +1863,29 @@ def purchase_insurance(policy_id):
         description=f"Insurance premium: {policy.title}"
     )
     db.session.add(transaction)
+
+    # Handle overdraft protection transfer if savings covers a shortfall
+    if banking_settings and banking_settings.overdraft_protection_enabled and overdraft_shortfall > 0:
+        transfer_tx_withdraw = Transaction(
+            student_id=student.id,
+            teacher_id=teacher_id,
+            join_code=join_code,
+            amount=-overdraft_shortfall,
+            account_type='savings',
+            type='Withdrawal',
+            description='Overdraft protection transfer to checking'
+        )
+        transfer_tx_deposit = Transaction(
+            student_id=student.id,
+            teacher_id=teacher_id,
+            join_code=join_code,
+            amount=overdraft_shortfall,
+            account_type='checking',
+            type='Deposit',
+            description='Overdraft protection transfer from savings'
+        )
+        db.session.add(transfer_tx_withdraw)
+        db.session.add(transfer_tx_deposit)
 
     db.session.commit()
     flash(f"Successfully purchased {policy.title}! Coverage starts after {policy.waiting_period_days} day waiting period.", "success")
@@ -1806,9 +1959,15 @@ def file_claim(policy_id):
         period_end = next_month.replace(day=1) - timedelta(seconds=1)
         return period_start, period_end
 
+    # Normalize coverage dates for safe comparisons
+    enrollment.coverage_start_date = normalize_to_utc(enrollment.coverage_start_date)
+    enrollment.cancel_date = normalize_to_utc(enrollment.cancel_date)
+    now_utc = datetime.now(timezone.utc)
+
     # Check if coverage has started
-    if not enrollment.coverage_start_date or enrollment.coverage_start_date > datetime.now(timezone.utc):
-        errors.append(f"Coverage has not started yet. Please wait until {enrollment.coverage_start_date.strftime('%B %d, %Y') if enrollment.coverage_start_date else 'coverage starts'}.")
+    if not enrollment.coverage_start_date or enrollment.coverage_start_date > now_utc:
+        wait_until = enrollment.coverage_start_date.strftime('%B %d, %Y') if enrollment.coverage_start_date else 'coverage starts'
+        errors.append(f"Coverage has not started yet. Please wait until {wait_until}.")
 
     # Check if payment is current
     if not enrollment.payment_current:
@@ -1845,7 +2004,7 @@ def file_claim(policy_id):
         claimed_tx_subq = db.session.query(InsuranceClaim.transaction_id).filter(
             InsuranceClaim.transaction_id.isnot(None)
         )
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=policy.claim_time_limit_days)
+        cutoff_date = now_utc - timedelta(days=policy.claim_time_limit_days)
         tx_query = (
             Transaction.query
             .filter(Transaction.student_id == student.id)
@@ -1904,14 +2063,14 @@ def file_claim(policy_id):
                 flash("This transaction already has a claim. Each transaction can only be claimed once.", "danger")
                 return redirect(url_for('student.file_claim', policy_id=policy_id))
 
-            incident_date_value = selected_transaction.timestamp
+            incident_date_value = normalize_to_utc(selected_transaction.timestamp)
             claim_amount_value = abs(selected_transaction.amount)
             transaction_id_value = selected_transaction.id
 
-            days_since_incident = (datetime.now(timezone.utc) - incident_date_value).days
+            days_since_incident = (now_utc - incident_date_value).days
         else:
-            incident_date_value = datetime.combine(form.incident_date.data, datetime.min.time())
-            days_since_incident = (datetime.now(timezone.utc) - incident_date_value).days
+            incident_date_value = normalize_to_utc(datetime.combine(form.incident_date.data, datetime.min.time()))
+            days_since_incident = (now_utc - incident_date_value).days
 
         if policy.claim_type == 'non_monetary':
             if not form.claim_item.data:
@@ -1997,12 +2156,17 @@ def view_policy(enrollment_id):
         InsuranceClaim.filed_date.desc()
     ).all()
 
+    # Normalize dates for safe comparisons in template
+    enrollment.coverage_start_date = normalize_to_utc(enrollment.coverage_start_date)
+    enrollment.cancel_date = normalize_to_utc(enrollment.cancel_date)
+    now_utc = datetime.now(timezone.utc)
+
     return render_template('student_view_policy.html',
                           student=student,
                           enrollment=enrollment,
                           policy=enrollment.policy,
                           claims=claims,
-                          now=datetime.now(timezone.utc))
+                          now=now_utc)
 
 
 # -------------------- SHOPPING --------------------
@@ -2041,91 +2205,56 @@ def shop():
         StoreItem.teacher_id == teacher_id  # FIX: Only current class items
     ).order_by(StudentItem.purchase_date.desc()).all()
 
-    return render_template('student_shop.html', student=student, items=items, student_items=student_items)
+    # Check if student has paid rent this month and get per-period rent item IDs
+    from app.models import RentSettings, RentPayment, RentItem
+    join_code = context.get('join_code')
+    current_block = context.get('block')
+    has_paid_rent = False
+    per_period_rent_item_ids = set()
+
+    if teacher_id and join_code and current_block:
+        rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
+        if rent_settings and rent_settings.is_enabled:
+            now = datetime.now(timezone.utc)
+            has_paid_rent = RentPayment.query.filter(
+                RentPayment.student_id == student.id,
+                RentPayment.period == current_block,
+                RentPayment.period_month == now.month,
+                RentPayment.period_year == now.year,
+                db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+            ).first() is not None
+
+            # Get all per-period rent items
+            per_period_items = RentItem.query.filter_by(
+                rent_setting_id=rent_settings.id,
+                purchase_duration='per_period',
+                is_available_in_store=True
+            ).all()
+
+            # Collect store item IDs
+            per_period_rent_item_ids = {item.store_item_id for item in per_period_items if item.store_item_id}
+
+    return render_template('student_shop.html', student=student, items=items, student_items=student_items,
+                         has_paid_rent=has_paid_rent, per_period_rent_item_ids=per_period_rent_item_ids)
 
 
 # -------------------- RENT --------------------
 
-def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, join_code=None):
+def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, join_code=None, force=False):
     """
     Check if student's checking balance is negative and charge overdraft fee if enabled.
     Returns (fee_charged, fee_amount) tuple.
+
+    Args:
+        force: Charge fee even if balance is non-negative (declined transaction).
     """
-    if not banking_settings or not banking_settings.overdraft_fee_enabled:
-        return False, 0.0
-
-    current_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
-
-    # Only charge if balance is negative
-    if current_balance >= 0:
-        return False, 0.0
-
-    fee_amount = 0.0
-
-    if banking_settings.overdraft_fee_type == 'flat':
-        fee_amount = banking_settings.overdraft_fee_flat_amount
-    elif banking_settings.overdraft_fee_type == 'progressive':
-        # Count how many overdraft fees charged this month
-        now = datetime.now(timezone.utc)
-        month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-
-        fee_filters = [
-            Transaction.student_id == student.id,
-            Transaction.type == 'overdraft_fee',
-            Transaction.timestamp >= month_start
-        ]
-        if join_code:
-            fee_filters.append(Transaction.join_code == join_code)
-        elif teacher_id:
-            fee_filters.append(Transaction.teacher_id == teacher_id)
-
-        overdraft_fee_count = Transaction.query.filter(*fee_filters).count()
-
-        # Determine which tier to use (1st, 2nd, 3rd, or cap)
-        if overdraft_fee_count == 0:
-            fee_amount = banking_settings.overdraft_fee_progressive_1 or 0.0
-        elif overdraft_fee_count == 1:
-            fee_amount = banking_settings.overdraft_fee_progressive_2 or 0.0
-        elif overdraft_fee_count >= 2:
-            fee_amount = banking_settings.overdraft_fee_progressive_3 or 0.0
-
-        # Check if cap is exceeded
-        if banking_settings.overdraft_fee_progressive_cap:
-            total_filters = [
-                Transaction.student_id == student.id,
-                Transaction.type == 'overdraft_fee',
-                Transaction.timestamp >= month_start
-            ]
-            if join_code:
-                total_filters.append(Transaction.join_code == join_code)
-            elif teacher_id:
-                total_filters.append(Transaction.teacher_id == teacher_id)
-
-            total_fees_this_month = db.session.query(func.sum(Transaction.amount)).filter(
-                *total_filters
-            ).scalar() or 0.0
-
-            # total_fees_this_month is negative, so we negate it
-            if abs(total_fees_this_month) + fee_amount > banking_settings.overdraft_fee_progressive_cap:
-                # Don't charge more than the cap
-                fee_amount = max(0, banking_settings.overdraft_fee_progressive_cap - abs(total_fees_this_month))
-
-    if fee_amount > 0:
-        # Charge the fee
-        overdraft_fee_tx = Transaction(
-            student_id=student.id,
-            teacher_id=teacher_id,
-            join_code=join_code,
-            amount=-fee_amount,
-            account_type='checking',
-            type='overdraft_fee',
-            description=f'Overdraft fee (balance: ${current_balance:.2f})'
-        )
-        db.session.add(overdraft_fee_tx)
-        db.session.flush()  # Update the balance calculation
-        return True, fee_amount
-
-    return False, 0.0
+    return charge_overdraft_fee_if_needed(
+        student,
+        banking_settings,
+        teacher_id=teacher_id,
+        join_code=join_code,
+        force=force
+    )
 
 
 def _calculate_rent_deadlines(settings, reference_date=None):
@@ -2237,7 +2366,7 @@ def rent():
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').strip().upper()
-    settings = RentSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
         flash("Rent system is currently disabled.", "info")
@@ -2262,17 +2391,13 @@ def rent():
         preview_start_date = due_date - timedelta(days=settings.bill_preview_days)
 
     # Check if rent is active (due date has arrived or preview period has started)
-    rent_is_active = True
+    rent_is_active = False
     is_preview_period = False
-    if settings.first_rent_due_date and now < settings.first_rent_due_date:
-        # Check if we're in preview period before first due date
-        if preview_start_date and now >= preview_start_date:
-            rent_is_active = True
-            is_preview_period = True
-        else:
-            rent_is_active = False
-    elif preview_start_date and now >= preview_start_date and now < due_date:
-        is_preview_period = True
+    if preview_start_date and now >= preview_start_date:
+        rent_is_active = True
+        is_preview_period = now < due_date
+    elif now >= due_date:
+        rent_is_active = True
     current_month = now.month
     current_year = now.year
 
@@ -2337,6 +2462,17 @@ def rent():
         RentPayment.payment_date.desc()
     ).limit(24).all()  # Increased to show more history with multiple periods
 
+    # Get rent items for this setting to show what rent includes
+    from app.models import RentItem
+    rent_items = []
+    if settings:
+        rent_items = RentItem.query.filter_by(rent_setting_id=settings.id).order_by(RentItem.order_index).all()
+
+    # Calculate days until rent is due for dynamic display
+    days_until_due = None
+    if due_date:
+        days_until_due = (due_date - now).days
+
     return render_template('student_rent.html',
                           student=student,
                           settings=settings,
@@ -2349,7 +2485,9 @@ def rent():
                           due_date=due_date,
                           grace_end_date=grace_end_date,
                           preview_start_date=preview_start_date,
-                          payment_history=payment_history)
+                          payment_history=payment_history,
+                          rent_items=rent_items,
+                          days_until_due=days_until_due)
 
 
 @student_bp.route('/rent/pay/<period>', methods=['POST'])
@@ -2365,7 +2503,7 @@ def rent_pay(period):
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').upper()
-    settings = RentSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
         flash("Rent system is currently disabled.", "error")
@@ -2390,12 +2528,20 @@ def rent_pay(period):
     if settings.bill_preview_enabled and settings.bill_preview_days:
         preview_start_date = due_date - timedelta(days=settings.bill_preview_days)
 
-    # Check if rent is even due yet (if first_rent_due_date is in the future and not in preview period)
-    if settings.first_rent_due_date and now < settings.first_rent_due_date:
-        # Allow payment if we're in the preview period
-        if not (preview_start_date and now >= preview_start_date):
-            flash(f"Rent is not due yet. First payment due on {settings.first_rent_due_date.strftime('%B %d, %Y')}.", "info")
-            return redirect(url_for('student.rent'))
+    rent_is_active = False
+    if preview_start_date and now >= preview_start_date:
+        rent_is_active = True
+    elif now >= due_date:
+        rent_is_active = True
+
+    if not rent_is_active:
+        if preview_start_date:
+            available_date = preview_start_date
+            message = f"Rent is not due yet. You can start paying on {available_date.strftime('%B %d, %Y')}."
+        else:
+            message = f"Rent is not due yet. Payment opens on {due_date.strftime('%B %d, %Y')}."
+        flash(message, "info")
+        return redirect(url_for('student.rent'))
 
     current_month = now.month
     current_year = now.year
@@ -2475,25 +2621,41 @@ def rent_pay(period):
     # Get banking settings for overdraft handling (reuse teacher_id from above)
     banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
 
-    # Check if student has enough funds for this payment
-    if checking_balance < payment_amount:
-        # Check if overdraft protection is enabled (savings can cover the difference)
+    # Check if student has enough funds for this payment using shared utility
+    overdraft_shortfall = 0.0
+    allowed, shortfall, _, _ = evaluate_overdraft_allowance(
+        student,
+        payment_amount,
+        banking_settings,
+        teacher_id=teacher_id,
+        join_code=join_code
+    )
+    if not allowed:
+        fee_charged, fee_amount = _charge_overdraft_fee_if_needed(
+            student,
+            banking_settings,
+            teacher_id=teacher_id,
+            join_code=join_code,
+            force=True
+        )
+        if fee_charged:
+            db.session.commit()
+
         if banking_settings and banking_settings.overdraft_protection_enabled:
-            shortfall = payment_amount - checking_balance
-            if savings_balance >= shortfall:
-                # Allow transaction - overdraft protection will transfer from savings
-                pass
-            else:
-                flash(f"Insufficient funds in both checking and savings. You need ${payment_amount:.2f} but have ${checking_balance + savings_balance:.2f}.", "error")
-                return redirect(url_for('student.rent'))
-        # Check if overdraft fees are enabled (allows negative balance)
-        elif banking_settings and banking_settings.overdraft_fee_enabled:
-            # Allow transaction - will charge overdraft fee after transaction
-            pass
+            message = (f"Insufficient funds in both checking and savings. You need "
+                       f"${payment_amount:.2f} but have ${checking_balance + savings_balance:.2f}.")
         else:
-            # No overdraft options - reject transaction
-            flash(f"Insufficient funds. You need ${payment_amount:.2f} but only have ${checking_balance:.2f}.", "error")
-            return redirect(url_for('student.rent'))
+            message = (f"Insufficient funds. You need ${payment_amount:.2f} but only "
+                       f"have ${checking_balance:.2f}.")
+
+        if fee_charged:
+            message += f" Overdraft fee of ${fee_amount:.2f} charged."
+
+        flash(message, "error")
+        return redirect(url_for('student.rent'))
+
+    if shortfall > 0:
+        overdraft_shortfall = shortfall
 
     # FIX: Process payment with teacher_id
     # Deduct from checking account
@@ -2542,33 +2704,29 @@ def rent_pay(period):
 
     db.session.flush()  # Flush to update balances without committing yet
 
-    # Handle overdraft protection and fees
-    # Check if overdraft protection should transfer funds from savings
-    if banking_settings and banking_settings.overdraft_protection_enabled and projected_balance < 0:
-        shortfall = abs(projected_balance)
-        if savings_balance >= shortfall:
-            # CRITICAL FIX v2: Transfer from savings to checking with join_code
-            transfer_tx_withdraw = Transaction(
-                student_id=student.id,
-                teacher_id=teacher_id,
-                join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                amount=-shortfall,
-                account_type='savings',
-                type='Withdrawal',
-                description='Overdraft protection transfer to checking'
-            )
-            transfer_tx_deposit = Transaction(
-                student_id=student.id,
-                teacher_id=teacher_id,
-                join_code=join_code,  # CRITICAL: Add join_code for period isolation
-                amount=shortfall,
-                account_type='checking',
-                type='Deposit',
-                description='Overdraft protection transfer from savings'
-            )
-            db.session.add(transfer_tx_withdraw)
-            db.session.add(transfer_tx_deposit)
-            db.session.flush()  # Flush to update balances
+    # Handle overdraft protection transfer if savings covers a shortfall
+    if banking_settings and banking_settings.overdraft_protection_enabled and overdraft_shortfall > 0:
+        transfer_tx_withdraw = Transaction(
+            student_id=student.id,
+            teacher_id=teacher_id,
+            join_code=join_code,  # CRITICAL: Add join_code for period isolation
+            amount=-overdraft_shortfall,
+            account_type='savings',
+            type='Withdrawal',
+            description='Overdraft protection transfer to checking'
+        )
+        transfer_tx_deposit = Transaction(
+            student_id=student.id,
+            teacher_id=teacher_id,
+            join_code=join_code,  # CRITICAL: Add join_code for period isolation
+            amount=overdraft_shortfall,
+            account_type='checking',
+            type='Deposit',
+            description='Overdraft protection transfer from savings'
+        )
+        db.session.add(transfer_tx_withdraw)
+        db.session.add(transfer_tx_deposit)
+        db.session.flush()  # Flush to update balances
 
     # Check if overdraft fee should be charged (after overdraft protection)
     fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=teacher_id, join_code=join_code)
@@ -2614,19 +2772,13 @@ def login():
         username = form.username.data.strip()
         pin = form.pin.data.strip()
         
-        current_app.logger.info(f"🔍 LOGIN ATTEMPT - Username: {username}, PIN length: {len(pin)}")
-        
+        # Lookup student by username
         lookup_hash = hash_username_lookup(username)
         student = Student.query.filter_by(username_lookup_hash=lookup_hash).first()
-
-        current_app.logger.info(f"🔍 Lookup hash: {lookup_hash[:16]}... | Student found: {student is not None}")
-        if student:
-            current_app.logger.info(f"🔍 Student ID: {student.id} | Has PIN hash: {student.pin_hash is not None}")
 
         try:
             # Fallback for legacy accounts without deterministic lookup hashes
             if not student:
-                current_app.logger.info(f"🔍 No student found via lookup_hash, trying legacy fallback...")
                 legacy_students_missing_lookup_hash = Student.query.filter(
                     Student.username_lookup_hash.is_(None),
                     Student.username_hash.isnot(None),
@@ -2638,17 +2790,14 @@ def login():
                         candidate_hash = hash_username(username, s.salt)
                         if candidate_hash == s.username_hash:
                             student = s
-                            current_app.logger.info(f"🔍 Found via legacy lookup! Student ID: {s.id}")
                             break
 
             # Validate PIN
             pin_valid = False
             if student:
                 pin_valid = check_password_hash(student.pin_hash or '', pin)
-                current_app.logger.info(f"🔍 PIN check result: {pin_valid}")
-            
+
             if not student or not pin_valid:
-                current_app.logger.warning(f"❌ LOGIN FAILED - Student found: {student is not None}, PIN valid: {pin_valid if student else 'N/A'}")
                 if is_json:
                     return jsonify(status="error", message="Invalid credentials"), 401
                 flash("Invalid credentials", "error")
@@ -2657,17 +2806,14 @@ def login():
             if not student.username_lookup_hash:
                 student.username_lookup_hash = lookup_hash
                 db.session.commit()
-                current_app.logger.info(f"✅ Updated username_lookup_hash for student {student.id}")
-                
+
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error during student login authentication: {str(e)}")
+            current_app.logger.error("Error during student login authentication")
             if is_json:
                 return jsonify(status="error", message="An error occurred during login. Please try again."), 500
             flash("An error occurred during login. Please try again.", "error")
             return redirect(url_for('student.login'))
-
-        current_app.logger.info(f"✅ LOGIN SUCCESS - Student {student.id} ({username})")
 
         # --- Set session timeout ---
         # Clear old student-specific session keys without wiping the CSRF token
@@ -2896,68 +3042,152 @@ def setup_complete():
     return render_template('student_setup_complete.html', student_name=student.first_name)
 
 
-# -------------------- HELP AND SUPPORT --------------------
+# -------------------- HELP AND SUPPORT - ISSUE RESOLUTION SYSTEM --------------------
 
-@student_bp.route('/help-support', methods=['GET', 'POST'])
+@student_bp.route('/help-support', methods=['GET'])
 @login_required
 def help_support():
-    """Help and Support page with bug reporting, suggestions, and documentation."""
+    """Redirect to the student help and support documentation."""
+    return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
+    from app.utils.issue_categories import init_default_categories
+
     student = get_logged_in_student()
+    class_context = get_current_class_context()
 
-    if request.method == 'POST':
-        # Handle bug report submission
-        report_type = request.form.get('report_type', 'bug')
-        error_code = request.form.get('error_code', '')
-        title = request.form.get('title', '').strip()
-        description = request.form.get('description', '').strip()
-        steps_to_reproduce = request.form.get('steps_to_reproduce', '').strip()
-        expected_behavior = request.form.get('expected_behavior', '').strip()
-        page_url = request.form.get('page_url', '').strip()
+    if not class_context:
+        flash("Please select a class first.", "warning")
+        return redirect(url_for('student.dashboard'))
 
-        # Validation
-        if not title or not description:
-            flash("Please provide both a title and description for your report.", "error")
-            return redirect(url_for('student.help_support'))
+    # Initialize default categories if they don't exist
+    init_default_categories()
 
-        # Generate anonymous code derived from a secret to prevent reversal by admins
-        anonymous_code = generate_anonymous_code(f"student:{student.id}")
+    # Get student's issues for current class (last 20)
+    my_issues = Issue.query.filter_by(
+        student_id=student.id,
+        join_code=class_context['join_code']
+    ).order_by(Issue.submitted_at.desc()).limit(20).all()
 
-        # Create report
-        try:
-            report = UserReport(
-                anonymous_code=anonymous_code,
-                user_type='student',
-                report_type=report_type,
-                error_code=error_code if error_code else None,
-                title=title,
-                description=description,
-                steps_to_reproduce=steps_to_reproduce if steps_to_reproduce else None,
-                expected_behavior=expected_behavior if expected_behavior else None,
-                page_url=page_url if page_url else None,
-                ip_address=get_real_ip(),
-                user_agent=request.headers.get('User-Agent'),
-                _student_id=student.id,  # Hidden from sysadmin, used only for rewards
-                status='new'
-            )
-            db.session.add(report)
-            db.session.commit()
-
-            flash("Thank you for your report! If it's a legitimate bug, you may receive a reward.", "success")
-            return redirect(url_for('student.help_support'))
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error submitting report: {str(e)}")
-            flash("An error occurred while submitting your report. Please try again.", "error")
-            return redirect(url_for('student.help_support'))
-
-    # Get student's previous reports (last 10)
-    my_reports = UserReport.query.filter_by(_student_id=student.id).order_by(UserReport.submitted_at.desc()).limit(10).all()
-
-    return render_template('student_help_support.html',
+    return render_template('student_help_support_new.html',
                          current_page='help',
                          page_title='Help & Support',
-                         my_reports=my_reports,
-                         help_content=HELP_ARTICLES['student'])
+                         my_issues=my_issues,
+                         help_content=HELP_ARTICLES['student'],
+                         format_utc_iso=format_utc_iso)
+
+
+@student_bp.route('/help-support/submit-issue', methods=['GET', 'POST'])
+@login_required
+def submit_general_issue():
+    @student_bp.route('/help-support/transaction/<int:transaction_id>/report', methods=['GET', 'POST'])
+    @login_required
+    def report_transaction_issue(transaction_id):
+        """Redirect to the student help and support documentation."""
+        return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
+    return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
+    from app.utils.issue_categories import get_active_categories
+    from app.utils.issue_helpers import create_issue
+    from forms import StudentIssueSubmissionForm
+
+    student = get_logged_in_student()
+    class_context = get_current_class_context()
+
+    if not class_context:
+        flash("Please select a class first.", "warning")
+        return redirect(url_for('student.dashboard'))
+
+    form = StudentIssueSubmissionForm()
+
+    # Populate category choices
+    form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('general')
+
+    if form.validate_on_submit():
+        try:
+            issue = create_issue(
+                student=student,
+                teacher_id=class_context['teacher_id'],
+                join_code=class_context['join_code'],
+                category_id=form.category_id.data,
+                explanation=form.explanation.data,
+                expected_outcome=form.expected_outcome.data
+            )
+
+            flash("Your issue has been submitted. Your teacher will review it soon.", "success")
+            return redirect(url_for('student.help_support'))
+
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error submitting issue: {str(e)}")
+            flash("An error occurred while submitting your issue. Please try again.", "error")
+
+    return render_template('student_submit_issue.html',
+                         current_page='help',
+                         page_title='Report an Issue',
+                         form=form,
+                         issue_type='general')
+
+
+@student_bp.route('/help-support/transaction/<int:transaction_id>/report', methods=['GET', 'POST'])
+@login_required
+def report_transaction_issue(transaction_id):
+    """Redirects to the student help and support documentation."""
+    return redirect(url_for('docs.view_doc', doc_path='diagnostics/student-support'))
+
+
+@student_bp.route('/help-support/tap-event/<int:tap_event_id>/report', methods=['GET', 'POST'])
+@login_required
+def report_tap_event_issue(tap_event_id):
+    """Report an issue with a specific tap event (clock in/out record)."""
+    from app.utils.issue_categories import get_active_categories
+    from app.utils.issue_helpers import create_issue
+    from forms import StudentIssueSubmissionForm
+
+    student = get_logged_in_student()
+    class_context = get_current_class_context()
+
+    if not class_context:
+        flash("Please select a class first.", "warning")
+        return redirect(url_for('student.dashboard'))
+
+    # Get the tap event and verify it belongs to this student and class
+    tap_event = TapEvent.query.filter_by(
+        id=tap_event_id,
+        student_id=student.id,
+        join_code=class_context['join_code']
+    ).first_or_404()
+
+    form = StudentIssueSubmissionForm()
+
+    # Populate category choices with general categories (includes "Clock In/Out Not Working")
+    form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('general')
+
+    if form.validate_on_submit():
+        try:
+            issue = create_issue(
+                student=student,
+                teacher_id=class_context['teacher_id'],
+                join_code=class_context['join_code'],
+                category_id=form.category_id.data,
+                explanation=form.explanation.data,
+                expected_outcome=form.expected_outcome.data,
+                related_transaction_id=None,  # No transaction for tap events
+                related_record_type='tap_event',
+                related_record_id=tap_event_id
+            )
+
+            flash("Your attendance issue has been submitted. Your teacher will review it soon.", "success")
+            return redirect(url_for('student.help_support'))
+
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Error submitting tap event issue: {str(e)}")
+            flash("An error occurred while submitting your issue. Please try again.", "error")
+
+    return render_template('student_submit_issue.html',
+                         current_page='help',
+                         page_title='Report Attendance Issue',
+                         form=form,
+                         issue_type='attendance',
+                         tap_event=tap_event)
 
 
 # ================== TEACHER ACCOUNT RECOVERY ==================
@@ -3006,7 +3236,7 @@ def verify_recovery(code_id):
 
         # Verify passphrase
         if not student.passphrase_hash or not check_password_hash(student.passphrase_hash, passphrase):
-            current_app.logger.warning(f"🛑 Recovery verification failed: incorrect passphrase for student {student.id}")
+            current_app.logger.warning(f"Recovery verification failed: incorrect passphrase for student {student.id}")
             flash("Incorrect passphrase. Please try again.", "error")
             return render_template('student_verify_recovery.html',
                                  recovery_code=recovery_code,
@@ -3020,7 +3250,7 @@ def verify_recovery(code_id):
         recovery_code.verified_at = datetime.now(timezone.utc)
         db.session.commit()
 
-        current_app.logger.info(f"🔐 Student {student.id} verified recovery request {recovery_code.recovery_request_id}")
+        current_app.logger.info(f"Student {student.id} verified recovery request {recovery_code.recovery_request_id}")
 
         return render_template('student_verify_recovery.html',
                              recovery_code=recovery_code,

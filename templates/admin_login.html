@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Teacher Login - Classroom Token Hub</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
@@ -130,12 +131,15 @@
                 {% endif %}
             {% endwith %}
 
+            <div id="loginError" class="alert alert-danger border-0 shadow-sm mb-4 d-none" role="alert"></div>
+
             <form method="POST" id="loginForm">
                 {{ form.hidden_tag() }}
-                <div class="mb-3">
+                <div class="mb-4">
                     <label class="form-label">Username</label>
-                    {{ form.username(class="form-control form-control-lg", placeholder="Enter your username") }}
+                    {{ form.username(class="form-control form-control-lg", placeholder="Enter your username", id="usernameField") }}
                 </div>
+
                 <div class="mb-4">
                     <label class="form-label">Authenticator Code</label>
                     {{ form.totp_code(class="form-control form-control-lg", inputmode="numeric", pattern="[0-9]*", maxlength="6", placeholder="Enter 6-digit code") }}
@@ -147,7 +151,13 @@
                 </div>
                 {% endif %}
 
-                {{ form.submit(class="btn btn-primary w-100 btn-lg mb-4") }}
+                <div class="d-grid gap-2 mb-4">
+                    {{ form.submit(class="btn btn-primary btn-lg") }}
+                    <button type="button" id="usePasskeyBtn" class="btn btn-outline-primary btn-lg">
+                        <span class="material-symbols-outlined align-middle me-2" style="font-size: 1.5rem;">fingerprint</span>
+                        Sign in with Passkey
+                    </button>
+                </div>
 
                 <div class="text-center d-grid gap-2">
                     <a href="{{ url_for('admin.recover') }}" class="text-decoration-none small text-secondary">I need to recover my teacher account</a>
@@ -199,6 +209,20 @@
                 tipTextId: 'tipText',
                 minimumDisplayTime: 2500,
                 rotationInterval: 4000
+            });
+        });
+    </script>
+
+    <!-- Passwordless.dev SDK (Official UMD build) -->
+    <script src="https://cdn.passwordless.dev/dist/1.1.0/umd/passwordless.umd.min.js" crossorigin="anonymous"></script>
+    <script src="{{ static_url('js/passkey.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            setupPasskeySignin({
+                buttonId: 'usePasskeyBtn',
+                usernameFieldId: 'usernameField',
+                startUrl: '{{ url_for("admin.passkey_auth_start") }}',
+                finishUrl: '{{ url_for("admin.passkey_auth_finish") }}'
             });
         });
     </script>

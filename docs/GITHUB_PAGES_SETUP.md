@@ -122,7 +122,7 @@ Find the `features-grid` section and modify the feature cards. Each card follows
 
 ```html
 <div class="feature-card">
-    <div class="feature-icon">🎯</div>
+    <div class="feature-icon"></div>
     <h3>Feature Title</h3>
     <p>Feature description goes here.</p>
 </div>
