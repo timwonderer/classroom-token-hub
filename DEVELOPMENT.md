@@ -616,10 +616,11 @@ Version 1.0 has been successfully released with the following criteria met:
 5. Continue "Admin Experience Polish" initiatives
 
 **Recent Releases:**
-- **v1.1.0** (2024-12-13) - Analytics dashboard, savings projections, UI redesign
-- **v1.0.0** (2024-11-29) - Initial stable release
+- **v1.7.0** (2026-01-09) - Analytics, Rent Itemization, Mobile Navigation
+- **v1.6.0** (2026-01-01) - Repository Organization
+- **v1.5.0** (2025-12-29) - Issue Resolution System
 
 ---
 
-**Last Updated:** 2026-01-09
+**Last Updated:** 2026-01-10
 **Maintained by:** Project maintainers and contributors

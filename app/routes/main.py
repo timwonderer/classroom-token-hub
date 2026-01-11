@@ -21,8 +21,29 @@ main_bp = Blueprint('main', __name__)
 
 @main_bp.route('/')
 def home():
-    """Redirect to student login page."""
-    return redirect(url_for('student.login'))
+    """
+    Smart root route:
+    - If logged in as student -> Student Dashboard
+    - If logged in as admin -> Admin Dashboard
+    - If logged in as sysadmin -> Sysadmin Dashboard
+    - If not logged in -> Redirect to Marketing Site (classroomtokenhub.com)
+    """
+    # Check for System Admin session
+    if session.get('is_system_admin'):
+        return redirect(url_for('sysadmin.dashboard'))
+
+    # Check for Teacher Admin session
+    if session.get('is_admin'):
+        return redirect(url_for('admin.dashboard'))
+
+    # Check for Student session
+    if session.get('student_id'):
+        return redirect(url_for('student.dashboard'))
+
+    # Default: Redirect to marketing site
+    # Use environment variable or default to the canonical domain
+    marketing_url = current_app.config.get('MARKETING_SITE_URL', 'https://classroomtokenhub.com')
+    return redirect(marketing_url)
 
 
 @main_bp.route('/health')
