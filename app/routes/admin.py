@@ -59,6 +59,7 @@ from app.utils.ip_handler import get_real_ip
 from app.utils.name_utils import hash_last_name_parts, verify_last_name_parts
 from app.utils.help_content import HELP_ARTICLES
 from app.utils.encryption import encrypt_totp, decrypt_totp
+from app.utils.overdraft import charge_overdraft_fee_if_needed, evaluate_overdraft_allowance
 from app.utils.passwordless_client import (
     create_register_token,
     verify_signin_token,
@@ -718,10 +719,44 @@ def give_bonus_all():
     )
     join_code_map = {student_id: join_code for student_id, join_code in teacher_blocks}
 
+    banking_settings = BankingSettings.query.filter_by(teacher_id=current_admin_id).first()
+    applied_count = 0
+    declined_count = 0
+    fee_count = 0
+
     # Stream students in batches to reduce memory usage
     students = students_query.yield_per(50)
     for student in students:
         join_code = join_code_map.get(student.id)
+        # CRITICAL: Get join_code for this student-teacher pair to avoid multi-tenancy violations
+        # join_code is the source of truth for class scoping, not teacher_id
+        if not join_code:
+            # Fallback: try to get join_code from TeacherBlock
+            current_app.logger.warning(
+            f"No join_code found for student {student.id} in give_bonus_all. "
+            f"This should not happen if TeacherBlock records are properly created."
+            )
+
+        if amount < 0:
+            allowed, shortfall, _, _ = evaluate_overdraft_allowance(
+                student,
+                abs(amount),
+                banking_settings,
+                teacher_id=current_admin_id,
+                join_code=join_code
+            )
+            if not allowed:
+                fee_charged, _ = charge_overdraft_fee_if_needed(
+                    student,
+                    banking_settings,
+                    teacher_id=current_admin_id,
+                    join_code=join_code,
+                    force=True
+                )
+                if fee_charged:
+                    fee_count += 1
+                declined_count += 1
+                continue
 
         tx = Transaction(
             student_id=student.id,
@@ -733,9 +768,37 @@ def give_bonus_all():
             account_type='checking'
         )
         db.session.add(tx)
+        applied_count += 1
+
+        if amount < 0 and shortfall > 0:
+            transfer_tx_withdraw = Transaction(
+                student_id=student.id,
+                teacher_id=current_admin_id,
+                join_code=join_code,
+                amount=-shortfall,
+                account_type='savings',
+                type='Withdrawal',
+                description='Overdraft protection transfer to checking'
+            )
+            transfer_tx_deposit = Transaction(
+                student_id=student.id,
+                teacher_id=current_admin_id,
+                join_code=join_code,
+                amount=shortfall,
+                account_type='checking',
+                type='Deposit',
+                description='Overdraft protection transfer from savings'
+            )
+            db.session.add(transfer_tx_withdraw)
+            db.session.add(transfer_tx_deposit)
 
     db.session.commit()
-    flash("Bonus/Payroll posted successfully!")
+    message = f"Bonus/Payroll posted to {applied_count} student(s)!"
+    if declined_count:
+        message += f" {declined_count} declined for insufficient funds."
+    if fee_count:
+        message += f" Overdraft fee charged for {fee_count}."
+    flash(message, "warning" if declined_count else "success")
     return redirect(url_for('admin.dashboard'))
 
 
@@ -5517,8 +5580,11 @@ def payroll_apply_fine(fine_id):
 
         # Get current admin ID for teacher_id
         current_admin_id = session.get('admin_id')
+        banking_settings = BankingSettings.query.filter_by(teacher_id=current_admin_id).first()
 
-        count = 0
+        applied_count = 0
+        declined_count = 0
+        fee_count = 0
         for student_id in student_ids:
             student = _get_student_or_404(int(student_id))
             if student:
@@ -5531,6 +5597,26 @@ def payroll_apply_fine(fine_id):
 
                 join_code = teacher_block.join_code if teacher_block else None
 
+                allowed, shortfall, _, _ = evaluate_overdraft_allowance(
+                    student,
+                    abs(fine.amount),
+                    banking_settings,
+                    teacher_id=current_admin_id,
+                    join_code=join_code
+                )
+                if not allowed:
+                    fee_charged, _ = charge_overdraft_fee_if_needed(
+                        student,
+                        banking_settings,
+                        teacher_id=current_admin_id,
+                        join_code=join_code,
+                        force=True
+                    )
+                    if fee_charged:
+                        fee_count += 1
+                    declined_count += 1
+                    continue
+
                 transaction = Transaction(
                     student_id=student.id,
                     teacher_id=current_admin_id,  # CRITICAL: Add teacher_id for multi-tenancy
@@ -5542,10 +5628,37 @@ def payroll_apply_fine(fine_id):
                     timestamp=datetime.now(timezone.utc)
                 )
                 db.session.add(transaction)
-                count += 1
+                applied_count += 1
+
+                if shortfall > 0:
+                    transfer_tx_withdraw = Transaction(
+                        student_id=student.id,
+                        teacher_id=current_admin_id,
+                        join_code=join_code,
+                        amount=-shortfall,
+                        account_type='savings',
+                        type='Withdrawal',
+                        description='Overdraft protection transfer to checking'
+                    )
+                    transfer_tx_deposit = Transaction(
+                        student_id=student.id,
+                        teacher_id=current_admin_id,
+                        join_code=join_code,
+                        amount=shortfall,
+                        account_type='checking',
+                        type='Deposit',
+                        description='Overdraft protection transfer from savings'
+                    )
+                    db.session.add(transfer_tx_withdraw)
+                    db.session.add(transfer_tx_deposit)
 
         db.session.commit()
-        return jsonify({'success': True, 'message': f'Fine "{fine.name}" applied to {count} student(s)!'})
+        message = f'Fine "{fine.name}" applied to {applied_count} student(s)!'
+        if declined_count:
+            message += f" {declined_count} declined for insufficient funds."
+        if fee_count:
+            message += f" Overdraft fee charged for {fee_count}."
+        return jsonify({'success': True, 'message': message})
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error applying fine: {e}")
@@ -5572,9 +5685,12 @@ def payroll_manual_payment():
 
             # Get current admin ID for teacher_id
             current_admin_id = session.get('admin_id')
+            banking_settings = BankingSettings.query.filter_by(teacher_id=current_admin_id).first()
 
             # Create transactions for each selected student
-            count = 0
+            applied_count = 0
+            declined_count = 0
+            fee_count = 0
             for student_id in student_ids:
                 student = _get_student_or_404(int(student_id))
                 if student:
@@ -5587,6 +5703,28 @@ def payroll_manual_payment():
 
                     join_code = teacher_block.join_code if teacher_block else None
 
+                    shortfall = 0.0
+                    if account_type == 'checking' and amount < 0:
+                        allowed, shortfall, _, _ = evaluate_overdraft_allowance(
+                            student,
+                            abs(amount),
+                            banking_settings,
+                            teacher_id=current_admin_id,
+                            join_code=join_code
+                        )
+                        if not allowed:
+                            fee_charged, _ = charge_overdraft_fee_if_needed(
+                                student,
+                                banking_settings,
+                                teacher_id=current_admin_id,
+                                join_code=join_code,
+                                force=True
+                            )
+                            if fee_charged:
+                                fee_count += 1
+                            declined_count += 1
+                            continue
+
                     transaction = Transaction(
                         student_id=student.id,
                         teacher_id=current_admin_id,  # CRITICAL: Add teacher_id for multi-tenancy
@@ -5598,10 +5736,37 @@ def payroll_manual_payment():
                         timestamp=datetime.now(timezone.utc)
                     )
                     db.session.add(transaction)
-                    count += 1
+                    applied_count += 1
+
+                    if account_type == 'checking' and amount < 0 and shortfall > 0:
+                        transfer_tx_withdraw = Transaction(
+                            student_id=student.id,
+                            teacher_id=current_admin_id,
+                            join_code=join_code,
+                            amount=-shortfall,
+                            account_type='savings',
+                            type='Withdrawal',
+                            description='Overdraft protection transfer to checking'
+                        )
+                        transfer_tx_deposit = Transaction(
+                            student_id=student.id,
+                            teacher_id=current_admin_id,
+                            join_code=join_code,
+                            amount=shortfall,
+                            account_type='checking',
+                            type='Deposit',
+                            description='Overdraft protection transfer from savings'
+                        )
+                        db.session.add(transfer_tx_withdraw)
+                        db.session.add(transfer_tx_deposit)
 
             db.session.commit()
-            flash(f'Manual payment of ${amount:.2f} sent to {count} student(s)!', 'success')
+            message = f'Manual payment of ${amount:.2f} sent to {applied_count} student(s)!'
+            if declined_count:
+                message += f" {declined_count} declined for insufficient funds."
+            if fee_count:
+                message += f" Overdraft fee charged for {fee_count}."
+            flash(message, 'warning' if declined_count else 'success')
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Error sending manual payments: {e}")
