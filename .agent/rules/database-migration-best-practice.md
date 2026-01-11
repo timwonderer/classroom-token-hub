@@ -1,6 +1,8 @@
 ---
-description: Procedure to follow when changes requires database migration 
+trigger: always_on
 ---
+
+# Database migration best practice
 
 **CRITICAL:** This project uses Alembic for database migrations. Following these rules prevents data loss, schema conflicts, and deployment failures.
 
