@@ -4,20 +4,22 @@
 {% block title %}Rent Management{% endblock %}
 {% block page_icon %}home{% endblock %}
 {% block page_header_actions %}
-  <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#rentGuide" aria-controls="rentGuide">
-    <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
-  </button>
+<button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
+  data-bs-target="#rentGuide" aria-controls="rentGuide">
+  <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
+</button>
 {% endblock %}
 
 {% block extra_styles %}
 <style>
-    .grayed-out {
-        opacity: 0.5;
-        pointer-events: none;
-    }
-    .warning-banner {
-        border-left: 4px solid #ffc107;
-    }
+  .grayed-out {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .warning-banner {
+    border-left: 4px solid #ffc107;
+  }
 </style>
 {% endblock %}
 
@@ -37,12 +39,14 @@
     <div class="accordion mt-4 mb-4" id="rentGuideAccordion">
       <div class="accordion-item">
         <h2 class="accordion-header" id="rentGuideHeadingEnable">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#rentGuideEnable" aria-expanded="false" aria-controls="rentGuideEnable">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
+            data-bs-target="#rentGuideEnable" aria-expanded="false" aria-controls="rentGuideEnable">
             <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">toggle_on</span>
             <strong>Enable Rent</strong>
           </button>
         </h2>
-        <div id="rentGuideEnable" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingEnable" data-bs-parent="#rentGuideAccordion">
+        <div id="rentGuideEnable" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingEnable"
+          data-bs-parent="#rentGuideAccordion">
           <div class="accordion-body">
             <p>Use the Settings tab to turn rent on, set frequency, and define the rent amount.</p>
             <div class="alert alert-warning mb-0">
@@ -53,21 +57,27 @@
       </div>
       <div class="accordion-item">
         <h2 class="accordion-header" id="rentGuideHeadingSettings">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#rentGuideSettings" aria-expanded="false" aria-controls="rentGuideSettings">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
+            data-bs-target="#rentGuideSettings" aria-expanded="false" aria-controls="rentGuideSettings">
             <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
             <strong>Settings Breakdown</strong>
           </button>
         </h2>
-        <div id="rentGuideSettings" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingSettings" data-bs-parent="#rentGuideAccordion">
+        <div id="rentGuideSettings" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingSettings"
+          data-bs-parent="#rentGuideAccordion">
           <div class="accordion-body">
             <ul class="mb-0">
-              <li><strong>Class selector:</strong> update settings per class section.</li>
+              <li><strong>Class/Block selector:</strong> switch between blocks to configure rent independently (e.g.,
+                enable for Period 1, disable for Period 2).</li>
               <li><strong>Rent amount:</strong> the base charge students owe each rent period.</li>
-              <li><strong>Frequency:</strong> daily, weekly, monthly, or custom intervals; controls how often rent posts.</li>
-              <li><strong>First due date / due day:</strong> sets the first billing date or the day of month rent is due.</li>
+              <li><strong>Frequency:</strong> daily, weekly, monthly, or custom intervals; controls how often rent
+                posts.</li>
+              <li><strong>First due date / due day:</strong> sets the first billing date or the day of month rent is
+                due.</li>
               <li><strong>Grace period:</strong> days after the due date before late penalties apply.</li>
               <li><strong>Late penalty:</strong> amount charged when rent is late; can apply once or recur.</li>
-              <li><strong>Recurring penalty frequency:</strong> how often the late fee repeats (when recurring is enabled).</li>
+              <li><strong>Recurring penalty frequency:</strong> how often the late fee repeats (when recurring is
+                enabled).</li>
               <li><strong>Bill preview:</strong> shows upcoming rent to students a set number of days early.</li>
               <li><strong>Incremental payments:</strong> allows partial payments instead of a single full payment.</li>
               <li><strong>Block purchases when late:</strong> prevents store purchases if rent is overdue.</li>
@@ -80,12 +90,14 @@
       </div>
       <div class="accordion-item">
         <h2 class="accordion-header" id="rentGuideHeadingOverview">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#rentGuideOverview" aria-expanded="false" aria-controls="rentGuideOverview">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
+            data-bs-target="#rentGuideOverview" aria-expanded="false" aria-controls="rentGuideOverview">
             <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">insights</span>
             <strong>Review Overview</strong>
           </button>
         </h2>
-        <div id="rentGuideOverview" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingOverview" data-bs-parent="#rentGuideAccordion">
+        <div id="rentGuideOverview" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingOverview"
+          data-bs-parent="#rentGuideAccordion">
           <div class="accordion-body">
             <p>Check paid vs. unpaid totals to understand how rent is impacting the class.</p>
           </div>
@@ -93,12 +105,15 @@
       </div>
       <div class="accordion-item">
         <h2 class="accordion-header" id="rentGuideHeadingWaivers">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#rentGuideWaivers" aria-expanded="false" aria-controls="rentGuideWaivers">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">event_busy</span>
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
+            data-bs-target="#rentGuideWaivers" aria-expanded="false" aria-controls="rentGuideWaivers">
+            <span class="material-symbols-outlined me-2"
+              style="font-size:25pt; vertical-align:middle;">event_busy</span>
             <strong>Manage Waivers</strong>
           </button>
         </h2>
-        <div id="rentGuideWaivers" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingWaivers" data-bs-parent="#rentGuideAccordion">
+        <div id="rentGuideWaivers" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingWaivers"
+          data-bs-parent="#rentGuideAccordion">
           <div class="accordion-body">
             <p>Add waivers for special cases or missed periods in the Waivers tab.</p>
           </div>
@@ -106,12 +121,14 @@
       </div>
       <div class="accordion-item">
         <h2 class="accordion-header" id="rentGuideHeadingBalance">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#rentGuideBalance" aria-expanded="false" aria-controls="rentGuideBalance">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
+            data-bs-target="#rentGuideBalance" aria-expanded="false" aria-controls="rentGuideBalance">
             <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">balance</span>
             <strong>Balance Against CWI</strong>
           </button>
         </h2>
-        <div id="rentGuideBalance" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingBalance" data-bs-parent="#rentGuideAccordion">
+        <div id="rentGuideBalance" class="accordion-collapse collapse mt-2" aria-labelledby="rentGuideHeadingBalance"
+          data-bs-parent="#rentGuideAccordion">
           <div class="accordion-body">
             <p>Use Economy Health to check whether rent aligns to student earnings.</p>
           </div>
@@ -124,7 +141,8 @@
 <!-- Nav Tabs -->
 <ul class="nav nav-tabs mb-4" id="rentTabs" role="tablist">
   <li class="nav-item" role="presentation">
-    <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
+    <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button"
+      role="tab">
       <i class="bi bi-grid me-1"></i>Overview
     </button>
   </li>
@@ -158,7 +176,7 @@
         <div class="card shadow">
           <div class="card-body text-center">
             <div class="mb-2 text-muted">Paid This Month</div>
-            <h2 class="text-success">{% if rent_active_for_period %}{{ paid_this_month }}{% else %}0{% endif %}</h2>
+            <h2 class="text-success">{% if rent_active_for_period %}{{ total_students - unpaid_students|length }}{% else %}0{% endif %}</h2>
           </div>
         </div>
       </div>
@@ -166,7 +184,7 @@
         <div class="card shadow">
           <div class="card-body text-center">
             <div class="mb-2 text-muted">Unpaid This Month</div>
-            <h2 class="text-danger">{% if rent_active_for_period %}{{ total_students - paid_this_month }}{% else %}0{% endif %}</h2>
+            <h2 class="text-danger">{% if rent_active_for_period %}{{ unpaid_students|length }}{% else %}0{% endif %}</h2>
           </div>
         </div>
       </div>
@@ -178,7 +196,8 @@
         <i class="bi bi-power fs-1 me-3"></i>
         <div>
           <h4 class="mb-1">Rent System is Currently Disabled</h4>
-          <p class="mb-0">The rent feature is turned off. Students cannot see or interact with rent-related features.</p>
+          <p class="mb-0">The rent feature is turned off. Students cannot see or interact with rent-related features.
+          </p>
         </div>
       </div>
       <hr>
@@ -199,158 +218,165 @@
 
     <!-- Current Settings Summary -->
     <div class="card shadow">
-      <div class="card-header {% if settings.is_enabled %}bg-primary text-white{% else %}bg-secondary text-white{% endif %}">
+      <div
+        class="card-header {% if settings.is_enabled %}bg-primary text-white{% else %}bg-secondary text-white{% endif %}">
         <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Current Rent Configuration</h5>
       </div>
       <div class="card-body">
         {% if settings.is_enabled %}
-          <div class="row">
-            <div class="col-md-6">
-              <h6 class="text-muted">Rent Amount</h6>
-              <p class="h4">${{ "%.2f"|format(settings.rent_amount) }}
-                <small class="text-muted">
-                  {% if settings.frequency_type == 'daily' %}per day
-                  {% elif settings.frequency_type == 'weekly' %}per week
-                  {% elif settings.frequency_type == 'monthly' %}per month
-                  {% elif settings.frequency_type == 'custom' %}every {{ settings.custom_frequency_value }} {{ settings.custom_frequency_unit }}
-                  {% endif %}
-                </small>
-              </p>
-            </div>
-            <div class="col-md-6">
-              <h6 class="text-muted">Late Penalty</h6>
-              <p class="h4">${{ "%.2f"|format(settings.late_penalty_amount) }}
-                <small class="text-muted">
-                  {% if settings.late_penalty_type == 'once' %}once per period
-                  {% else %}every {{ settings.late_penalty_frequency_days }} days
-                  {% endif %}
-                </small>
-              </p>
-            </div>
-            <div class="col-md-6">
-              <h6 class="text-muted">Grace Period</h6>
-              <p class="h4">{{ settings.grace_period_days }} days</p>
-            </div>
-            <div class="col-md-6">
-              <h6 class="text-muted">First Due Date</h6>
-              <p class="h4">
-                {% if settings.first_rent_due_date %}
-                  {{ settings.first_rent_due_date.strftime('%B %d, %Y') }}
-                {% else %}
-                  Day {{ settings.due_day_of_month }} of each month
+        <div class="row">
+          <div class="col-md-6">
+            <h6 class="text-muted">Rent Amount</h6>
+            <p class="h4">${{ "%.2f"|format(settings.rent_amount) }}
+              <small class="text-muted">
+                {% if settings.frequency_type == 'daily' %}per day
+                {% elif settings.frequency_type == 'weekly' %}per week
+                {% elif settings.frequency_type == 'monthly' %}per month
+                {% elif settings.frequency_type == 'custom' %}every {{ settings.custom_frequency_value }} {{
+                settings.custom_frequency_unit }}
                 {% endif %}
-              </p>
+              </small>
+            </p>
+          </div>
+          <div class="col-md-6">
+            <h6 class="text-muted">Late Penalty</h6>
+            <p class="h4">${{ "%.2f"|format(settings.late_penalty_amount) }}
+              <small class="text-muted">
+                {% if settings.late_penalty_type == 'once' %}once per period
+                {% else %}every {{ settings.late_penalty_frequency_days }} days
+                {% endif %}
+              </small>
+            </p>
+          </div>
+          <div class="col-md-6">
+            <h6 class="text-muted">Grace Period</h6>
+            <p class="h4">{{ settings.grace_period_days }} days</p>
+          </div>
+          <div class="col-md-6">
+            <h6 class="text-muted">First Due Date</h6>
+            <p class="h4">
+              {% if settings.first_rent_due_date %}
+              {{ settings.first_rent_due_date.strftime('%B %d, %Y') }}
+              {% else %}
+              Day {{ settings.due_day_of_month }} of each month
+              {% endif %}
+            </p>
+          </div>
+        </div>
+        <hr>
+        <div class="row">
+          <div class="col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" disabled {% if settings.bill_preview_enabled %}checked{%
+                endif %}>
+              <label class="form-check-label">
+                Bill Preview <small class="text-muted">({{ settings.bill_preview_days }} days before)</small>
+              </label>
             </div>
           </div>
-          <hr>
-          <div class="row">
-            <div class="col-md-4">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" disabled {% if settings.bill_preview_enabled %}checked{% endif %}>
-                <label class="form-check-label">
-                  Bill Preview <small class="text-muted">({{ settings.bill_preview_days }} days before)</small>
-                </label>
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" disabled {% if settings.allow_incremental_payment %}checked{% endif %}>
-                <label class="form-check-label">
-                  Incremental Payment
-                </label>
-              </div>
-            </div>
-            <div class="col-md-4">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" disabled {% if settings.prevent_purchase_when_late %}checked{% endif %}>
-                <label class="form-check-label">
-                  Prevent Purchase When Late
-                </label>
-              </div>
+          <div class="col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" disabled {% if settings.allow_incremental_payment
+                %}checked{% endif %}>
+              <label class="form-check-label">
+                Incremental Payment
+              </label>
             </div>
           </div>
+          <div class="col-md-4">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" disabled {% if settings.prevent_purchase_when_late
+                %}checked{% endif %}>
+              <label class="form-check-label">
+                Prevent Purchase When Late
+              </label>
+            </div>
+          </div>
+        </div>
         {% else %}
-          <div class="alert alert-warning mb-0">
-            <i class="bi bi-exclamation-triangle me-2"></i>Rent system is currently <strong>disabled</strong>. Enable it in the Settings tab to activate rent collection.
-          </div>
+        <div class="alert alert-warning mb-0">
+          <i class="bi bi-exclamation-triangle me-2"></i>Rent system is currently <strong>disabled</strong>. Enable it
+          in the Settings tab to activate rent collection.
+        </div>
         {% endif %}
       </div>
     </div>
 
     <!-- Unpaid Students Section -->
     {% if settings.is_enabled %}
-        {% if not rent_active_for_period %}
-        <div class="card shadow mt-4">
-            <div class="card-header bg-secondary text-white">
-                <h5 class="mb-0"><i class="bi bi-hourglass me-2"></i>No Rent Due</h5>
-            </div>
-            <div class="card-body">
-                <p class="mb-0">Rent is not yet due for this period (based on First Due Date setting).</p>
-            </div>
+    {% if not rent_active_for_period %}
+    <div class="card shadow mt-4">
+      <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0"><i class="bi bi-hourglass me-2"></i>No Rent Due</h5>
+      </div>
+      <div class="card-body">
+        <p class="mb-0">Rent is not yet due for this period (based on First Due Date setting).</p>
+      </div>
+    </div>
+    {% elif unpaid_students|length > 0 %}
+    <div class="card shadow mt-4">
+      <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Students with Unpaid Rent ({{
+          unpaid_students|length }})</h5>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-striped table-hover mb-0">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Period</th>
+                <th>Paid</th>
+                <th>Due</th>
+                <th>Remaining</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in unpaid_students %}
+              <tr>
+                <td>
+                  <a href="{{ url_for('admin.student_detail', student_id=item.student.id) }}">
+                    {{ item.student.first_name }} {{ item.student.last_name }}
+                  </a>
+                </td>
+                <td><span class="badge bg-info">{{ item.period }}</span></td>
+                <td>${{ "%.2f"|format(item.total_paid) }}</td>
+                <td>${{ "%.2f"|format(item.total_due) }}</td>
+                <td class="fw-bold">${{ "%.2f"|format(item.remaining) }}</td>
+                <td>
+                  {% if item.is_late %}
+                  <span class="badge bg-danger">OVERDUE</span>
+                  {% elif item.total_paid > 0 %}
+                  <span class="badge bg-warning text-dark">PARTIAL</span>
+                  {% else %}
+                  <span class="badge bg-secondary">UNPAID</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
-        {% elif unpaid_students|length > 0 %}
-        <div class="card shadow mt-4">
-          <div class="card-header bg-warning text-dark">
-            <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Students with Unpaid Rent ({{ unpaid_students|length }})</h5>
-          </div>
-          <div class="card-body">
-            <div class="table-responsive">
-              <table class="table table-striped table-hover mb-0">
-                <thead>
-                  <tr>
-                    <th>Student</th>
-                    <th>Period</th>
-                    <th>Paid</th>
-                    <th>Due</th>
-                    <th>Remaining</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for item in unpaid_students %}
-                  <tr>
-                    <td>
-                      <a href="{{ url_for('admin.student_detail', student_id=item.student.id) }}">
-                        {{ item.student.first_name }} {{ item.student.last_name }}
-                      </a>
-                    </td>
-                    <td><span class="badge bg-info">{{ item.period }}</span></td>
-                    <td>${{ "%.2f"|format(item.total_paid) }}</td>
-                    <td>${{ "%.2f"|format(item.total_due) }}</td>
-                    <td class="fw-bold">${{ "%.2f"|format(item.remaining) }}</td>
-                    <td>
-                      {% if item.is_late %}
-                        <span class="badge bg-danger">OVERDUE</span>
-                      {% elif item.total_paid > 0 %}
-                        <span class="badge bg-warning text-dark">PARTIAL</span>
-                      {% else %}
-                        <span class="badge bg-secondary">UNPAID</span>
-                      {% endif %}
-                    </td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-        {% else %}
-        <div class="card shadow mt-4">
-          <div class="card-header bg-success text-white">
-            <h5 class="mb-0"><i class="bi bi-check-circle me-2"></i>All Rent Paid</h5>
-          </div>
-          <div class="card-body">
-            <p class="mb-0">All students with rent enabled have paid their rent for this period. Great job!</p>
-          </div>
-        </div>
-        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <div class="card shadow mt-4">
+      <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="bi bi-check-circle me-2"></i>All Rent Paid</h5>
+      </div>
+      <div class="card-body">
+        <p class="mb-0">All students with rent enabled have paid their rent for this period. Great job!</p>
+      </div>
+    </div>
+    {% endif %}
     {% endif %}
   </div>
 
   <!-- SETTINGS TAB -->
   <div class="tab-pane fade" id="settings" role="tabpanel">
     <form method="POST" id="rentSettingsForm">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
       <input type="hidden" name="settings_block" value="{{ settings_block }}">
       <input type="hidden" name="apply_to_all" id="apply_to_all_input" value="false">
 
@@ -360,11 +386,12 @@
           <span class="material-symbols-outlined" style="font-size: 2rem;">school</span>
           <div>
             <h6 class="mb-1 fw-bold">Configuring Rent Settings For:</h6>
-            <select class="form-select form-select-sm" id="settings_block_selector" style="width: auto; min-width: 200px;">
+            <select class="form-select form-select-sm" id="settings_block_selector"
+              style="width: auto; min-width: 200px;">
               {% for block in teacher_blocks %}
-                <option value="{{ block }}" {% if block == settings_block %}selected{% endif %}>
-                  {{ class_labels_by_block.get(block, block) }}
-                </option>
+              <option value="{{ block }}" {% if block==settings_block %}selected{% endif %}>
+                {{ class_labels_by_block.get(block, block) }}
+              </option>
               {% endfor %}
             </select>
           </div>
@@ -384,14 +411,14 @@
         </div>
         <div class="card-body">
           <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="is_enabled"
-                   name="is_enabled" {% if settings.is_enabled %}checked{% endif %}
-                   onchange="toggleRentSettings()">
+            <input class="form-check-input" type="checkbox" id="is_enabled" name="is_enabled" {% if settings.is_enabled
+              %}checked{% endif %} onchange="toggleRentSettings()">
             <label class="form-check-label" for="is_enabled">
               <strong>Enable Rent System</strong>
             </label>
           </div>
-          <small class="text-muted">When disabled, all rent-related features will be hidden from students and no rent will be collected.</small>
+          <small class="text-muted">When disabled, all rent-related features will be hidden from students and no rent
+            will be collected.</small>
         </div>
       </div>
 
@@ -407,323 +434,361 @@
 
         <div class="accordion mb-4" id="rentSettingsAccordion">
 
-            <!-- Amount & Frequency -->
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="headingAmount">
-                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAmount" aria-expanded="true" aria-controls="collapseAmount">
-                        <i class="bi bi-currency-dollar me-2"></i><strong>Rent Amount & Frequency</strong>
-                        <span class="badge bg-info ms-2 d-none" id="customFrequencyBadge">Custom</span>
-                    </button>
-                </h2>
-                <div id="collapseAmount" class="accordion-collapse collapse show" aria-labelledby="headingAmount" data-bs-parent="#rentSettingsAccordion">
-                    <div class="accordion-body">
-                        <!-- Economy Balance Check -->
-                        <div id="cwi-info" class="mb-3"></div>
+          <!-- Amount & Frequency -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingAmount">
+              <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAmount"
+                aria-expanded="true" aria-controls="collapseAmount">
+                <i class="bi bi-currency-dollar me-2"></i><strong>Rent Amount & Frequency</strong>
+                <span class="badge bg-info ms-2 d-none" id="customFrequencyBadge">Custom</span>
+              </button>
+            </h2>
+            <div id="collapseAmount" class="accordion-collapse collapse show" aria-labelledby="headingAmount"
+              data-bs-parent="#rentSettingsAccordion">
+              <div class="accordion-body">
+                <!-- Economy Balance Check -->
+                <div id="cwi-info" class="mb-3"></div>
 
-                        <div class="row">
-                          <div class="col-md-6 mb-3">
-                            <label for="rent_amount" class="form-label fw-bold">Rent Amount ($)</label>
-                            <input type="number" step="0.01" min="0" class="form-control"
-                                   id="rent_amount" name="rent_amount"
-                                   value="{{ settings.rent_amount }}"
-                                   data-economy-validate="rent"
-                                   required>
-                            <small class="text-muted">How much students pay per rent period</small>
-                          </div>
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label for="rent_amount" class="form-label fw-bold">Rent Amount ($)</label>
+                    <input type="number" step="0.01" min="0" class="form-control" id="rent_amount" name="rent_amount"
+                      value="{{ settings.rent_amount }}" data-economy-validate="rent" required>
+                    <small class="text-muted">How much students pay per rent period</small>
+                  </div>
 
-                          <div class="col-md-6 mb-3">
-                            <label for="frequency_type" class="form-label fw-bold">Payment Frequency</label>
-                            <select class="form-select" id="frequency_type" name="frequency_type"
-                                    onchange="toggleCustomFrequency()" required>
-                              <option value="daily" {% if settings.frequency_type == 'daily' %}selected{% endif %}>Per Day</option>
-                              <option value="weekly" {% if settings.frequency_type == 'weekly' %}selected{% endif %}>Per Week</option>
-                              <option value="monthly" {% if settings.frequency_type == 'monthly' %}selected{% endif %}>Per Month (30 days)</option>
-                              <option value="custom" {% if settings.frequency_type == 'custom' %}selected{% endif %}>Custom</option>
-                            </select>
-                            <small class="text-muted">How often rent is due</small>
-                          </div>
-                        </div>
-
-                        <!-- Custom Frequency Fields -->
-                        <div id="customFrequencyFields" style="display: {% if settings.frequency_type == 'custom' %}block{% else %}none{% endif %};">
-                          <div class="row">
-                            <div class="col-md-6 mb-3">
-                              <label for="custom_frequency_value" class="form-label fw-bold">Custom Period Value</label>
-                              <input type="number" min="1" class="form-control"
-                                     id="custom_frequency_value" name="custom_frequency_value"
-                                     value="{{ settings.custom_frequency_value or 1 }}">
-                              <small class="text-muted">Number of time units</small>
-                            </div>
-
-                            <div class="col-md-6 mb-3">
-                              <label for="custom_frequency_unit" class="form-label fw-bold">Custom Period Unit</label>
-                              <select class="form-select" id="custom_frequency_unit" name="custom_frequency_unit">
-                                <option value="days" {% if settings.custom_frequency_unit == 'days' %}selected{% endif %}>Days</option>
-                                <option value="weeks" {% if settings.custom_frequency_unit == 'weeks' %}selected{% endif %}>Weeks</option>
-                                <option value="months" {% if settings.custom_frequency_unit == 'months' %}selected{% endif %}>Months</option>
-                              </select>
-                              <small class="text-muted">Time unit for the period</small>
-                            </div>
-                          </div>
-                        </div>
-
-                        <!-- Economy Balance Warnings -->
-                        <div id="economy-warnings"></div>
-                    </div>
+                  <div class="col-md-6 mb-3">
+                    <label for="frequency_type" class="form-label fw-bold">Payment Frequency</label>
+                    <select class="form-select" id="frequency_type" name="frequency_type"
+                      onchange="toggleCustomFrequency()" required>
+                      <option value="daily" {% if settings.frequency_type=='daily' %}selected{% endif %}>Per Day
+                      </option>
+                      <option value="weekly" {% if settings.frequency_type=='weekly' %}selected{% endif %}>Per Week
+                      </option>
+                      <option value="monthly" {% if settings.frequency_type=='monthly' %}selected{% endif %}>Per Month
+                        (30 days)</option>
+                      <option value="custom" {% if settings.frequency_type=='custom' %}selected{% endif %}>Custom
+                      </option>
+                    </select>
+                    <small class="text-muted">How often rent is due</small>
+                  </div>
                 </div>
-            </div>
 
-            <!-- Due Date Settings -->
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="headingDueDate">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDueDate" aria-expanded="false" aria-controls="collapseDueDate">
-                        <i class="bi bi-calendar-event me-2"></i><strong>Due Date Settings</strong>
-                        <span class="badge bg-success ms-2 d-none" id="dueDateBadge">Active</span>
-                    </button>
-                </h2>
-                <div id="collapseDueDate" class="accordion-collapse collapse" aria-labelledby="headingDueDate" data-bs-parent="#rentSettingsAccordion">
-                    <div class="accordion-body">
-                        <div class="row">
-                          <div class="col-md-6 mb-3">
-                            <label for="first_rent_due_date" class="form-label fw-bold">First Rent Due Date</label>
-                            <input type="date" class="form-control"
-                                   id="first_rent_due_date" name="first_rent_due_date"
-                                   value="{{ settings.first_rent_due_date.strftime('%Y-%m-%d') if settings.first_rent_due_date else '' }}">
-                            <small class="text-muted">When the first rent payment is due (subsequent payments calculated from this)</small>
-                          </div>
-
-                          <div class="col-md-6 mb-3">
-                            <label for="due_day_of_month" class="form-label fw-bold">Due Day of Month <span class="text-muted">(for monthly frequency)</span></label>
-                            <input type="number" min="1" max="31" class="form-control"
-                                   id="due_day_of_month" name="due_day_of_month"
-                                   value="{{ settings.due_day_of_month }}">
-                            <small class="text-muted">Day of month rent is due (1-31, only used for monthly frequency)</small>
-                          </div>
-                        </div>
+                <!-- Custom Frequency Fields -->
+                <div id="customFrequencyFields"
+                  style="display: {% if settings.frequency_type == 'custom' %}block{% else %}none{% endif %};">
+                  <div class="row">
+                    <div class="col-md-6 mb-3">
+                      <label for="custom_frequency_value" class="form-label fw-bold">Custom Period Value</label>
+                      <input type="number" min="1" class="form-control" id="custom_frequency_value"
+                        name="custom_frequency_value" value="{{ settings.custom_frequency_value or 1 }}">
+                      <small class="text-muted">Number of time units</small>
                     </div>
-                </div>
-            </div>
 
-            <!-- Grace Period & Late Penalties -->
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="headingPenalties">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePenalties" aria-expanded="false" aria-controls="collapsePenalties">
-                        <i class="bi bi-exclamation-triangle me-2"></i><strong>Grace Period & Late Penalties</strong>
-                        <span class="badge bg-warning text-dark ms-2 d-none" id="penaltiesBadge">Active</span>
-                    </button>
-                </h2>
-                <div id="collapsePenalties" class="accordion-collapse collapse" aria-labelledby="headingPenalties" data-bs-parent="#rentSettingsAccordion">
-                    <div class="accordion-body">
-                        <div class="row">
-                          <div class="col-md-6 mb-3">
-                            <label for="grace_period_days" class="form-label fw-bold">Grace Period (Days)</label>
-                            <input type="number" min="0" max="365" class="form-control"
-                                   id="grace_period_days" name="grace_period_days"
-                                   value="{{ settings.grace_period_days }}" required>
-                            <small class="text-muted">Days after due date before late penalty applies</small>
-                          </div>
-
-                          <div class="col-md-6 mb-3">
-                            <label for="late_penalty_amount" class="form-label fw-bold">Late Penalty Amount ($)</label>
-                            <input type="number" step="0.01" min="0" class="form-control"
-                                   id="late_penalty_amount" name="late_penalty_amount"
-                                   value="{{ settings.late_penalty_amount }}" required>
-                            <small class="text-muted">Fee charged for late payments</small>
-                          </div>
-                        </div>
-
-                        <div class="row">
-                          <div class="col-md-6 mb-3">
-                            <label for="late_penalty_type" class="form-label fw-bold">Penalty Application</label>
-                            <select class="form-select" id="late_penalty_type" name="late_penalty_type"
-                                    onchange="toggleRecurringPenalty()" required>
-                              <option value="once" {% if settings.late_penalty_type == 'once' %}selected{% endif %}>Apply Once Per Rent Period</option>
-                              <option value="recurring" {% if settings.late_penalty_type == 'recurring' %}selected{% endif %}>Apply Recurring</option>
-                            </select>
-                            <small class="text-muted">How often late penalties are applied</small>
-                          </div>
-
-                          <div class="col-md-6 mb-3" id="recurringPenaltyField" style="display: {% if settings.late_penalty_type == 'recurring' %}block{% else %}none{% endif %};">
-                            <label for="late_penalty_frequency_days" class="form-label fw-bold">Recurring Every (Days)</label>
-                            <input type="number" min="1" class="form-control"
-                                   id="late_penalty_frequency_days" name="late_penalty_frequency_days"
-                                   value="{{ settings.late_penalty_frequency_days or 7 }}">
-                            <small class="text-muted">Days between recurring penalty charges</small>
-                          </div>
-                        </div>
+                    <div class="col-md-6 mb-3">
+                      <label for="custom_frequency_unit" class="form-label fw-bold">Custom Period Unit</label>
+                      <select class="form-select" id="custom_frequency_unit" name="custom_frequency_unit">
+                        <option value="days" {% if settings.custom_frequency_unit=='days' %}selected{% endif %}>Days
+                        </option>
+                        <option value="weeks" {% if settings.custom_frequency_unit=='weeks' %}selected{% endif %}>Weeks
+                        </option>
+                        <option value="months" {% if settings.custom_frequency_unit=='months' %}selected{% endif %}>
+                          Months</option>
+                      </select>
+                      <small class="text-muted">Time unit for the period</small>
                     </div>
+                  </div>
                 </div>
+
+                <!-- Economy Balance Warnings -->
+                <div id="economy-warnings"></div>
+              </div>
             </div>
+          </div>
 
-            <!-- Student Payment Options -->
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="headingOptions">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOptions" aria-expanded="false" aria-controls="collapseOptions">
-                        <i class="bi bi-person-check me-2"></i><strong>Student Payment Options</strong>
-                        <span class="badge bg-primary ms-2 d-none" id="paymentOptionsBadge">Active</span>
-                    </button>
-                </h2>
-                <div id="collapseOptions" class="accordion-collapse collapse" aria-labelledby="headingOptions" data-bs-parent="#rentSettingsAccordion">
-                    <div class="accordion-body">
-                        <div class="row">
-                          <div class="col-md-6 mb-3">
-                            <div class="form-check form-switch">
-                              <input class="form-check-input" type="checkbox" id="bill_preview_enabled"
-                                     name="bill_preview_enabled" {% if settings.bill_preview_enabled %}checked{% endif %}
-                                     onchange="toggleBillPreview()">
-                              <label class="form-check-label fw-bold" for="bill_preview_enabled">
-                                Enable Bill Preview
-                              </label>
-                            </div>
-                            <small class="text-muted d-block mb-2">Students can see incoming bills before due date</small>
+          <!-- Due Date Settings -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingDueDate">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseDueDate" aria-expanded="false" aria-controls="collapseDueDate">
+                <i class="bi bi-calendar-event me-2"></i><strong>Due Date Settings</strong>
+                <span class="badge bg-success ms-2 d-none" id="dueDateBadge">Active</span>
+              </button>
+            </h2>
+            <div id="collapseDueDate" class="accordion-collapse collapse" aria-labelledby="headingDueDate"
+              data-bs-parent="#rentSettingsAccordion">
+              <div class="accordion-body">
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label for="first_rent_due_date" class="form-label fw-bold">First Rent Due Date</label>
+                    <input type="date" class="form-control" id="first_rent_due_date" name="first_rent_due_date"
+                      value="{{ settings.first_rent_due_date.strftime('%Y-%m-%d') if settings.first_rent_due_date else '' }}">
+                    <small class="text-muted">When the first rent payment is due (subsequent payments calculated from
+                      this)</small>
+                  </div>
 
-                            <div id="billPreviewDaysField" style="display: {% if settings.bill_preview_enabled %}block{% else %}none{% endif %};">
-                              <label for="bill_preview_days" class="form-label">Preview Days Before Due</label>
-                              <input type="number" min="1" max="365" class="form-control"
-                                     id="bill_preview_days" name="bill_preview_days"
-                                     value="{{ settings.bill_preview_days }}">
-                              <small class="text-muted">How many days before due date students can see the bill</small>
-                            </div>
-                          </div>
+                  <div class="col-md-6 mb-3">
+                    <label for="due_day_of_month" class="form-label fw-bold">Due Day of Month <span
+                        class="text-muted">(for monthly frequency)</span></label>
+                    <input type="number" min="1" max="31" class="form-control" id="due_day_of_month"
+                      name="due_day_of_month" value="{{ settings.due_day_of_month }}">
+                    <small class="text-muted">Day of month rent is due (1-31, only used for monthly frequency)</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-                          <div class="col-md-6 mb-3">
-                            <div class="form-check form-switch">
-                              <input class="form-check-input" type="checkbox" id="allow_incremental_payment"
-                                     name="allow_incremental_payment" {% if settings.allow_incremental_payment %}checked{% endif %}>
-                              <label class="form-check-label fw-bold" for="allow_incremental_payment">
-                                Allow Incremental Payment
-                              </label>
-                            </div>
-                            <small class="text-muted d-block">Students can pay partial rent throughout the period before due date</small>
-                          </div>
+          <!-- Grace Period & Late Penalties -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingPenalties">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapsePenalties" aria-expanded="false" aria-controls="collapsePenalties">
+                <i class="bi bi-exclamation-triangle me-2"></i><strong>Grace Period & Late Penalties</strong>
+                <span class="badge bg-warning text-dark ms-2 d-none" id="penaltiesBadge">Active</span>
+              </button>
+            </h2>
+            <div id="collapsePenalties" class="accordion-collapse collapse" aria-labelledby="headingPenalties"
+              data-bs-parent="#rentSettingsAccordion">
+              <div class="accordion-body">
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label for="grace_period_days" class="form-label fw-bold">Grace Period (Days)</label>
+                    <input type="number" min="0" max="365" class="form-control" id="grace_period_days"
+                      name="grace_period_days" value="{{ settings.grace_period_days }}" required>
+                    <small class="text-muted">Days after due date before late penalty applies</small>
+                  </div>
 
-                          <div class="col-md-6 mb-3">
-                            <div class="form-check form-switch">
-                              <input class="form-check-input" type="checkbox" id="prevent_purchase_when_late"
-                                     name="prevent_purchase_when_late" {% if settings.prevent_purchase_when_late %}checked{% endif %}>
-                              <label class="form-check-label fw-bold" for="prevent_purchase_when_late" id="prevent_purchase_label">
-                                <span id="prevent_purchase_label_text">
-                                  {% if rent_items|length > 0 %}Prevent Purchase of Items Not Part of Rent{% else %}Prevent Purchase/Redemption When Late{% endif %}
-                                </span>
-                              </label>
-                            </div>
-                            <small class="text-muted d-block" id="prevent_purchase_description">
-                              {% if rent_items|length > 0 %}
-                                When late on rent, students can only purchase items covered by rent (at à la carte prices), blocking all other store items
-                              {% else %}
-                                Block all store purchases and item redemptions if student is late on rent
-                              {% endif %}
-                            </small>
-                          </div>
-                        </div>
+                  <div class="col-md-6 mb-3">
+                    <label for="late_penalty_amount" class="form-label fw-bold">Late Penalty Amount ($)</label>
+                    <input type="number" step="0.01" min="0" class="form-control" id="late_penalty_amount"
+                      name="late_penalty_amount" value="{{ settings.late_penalty_amount }}" required>
+                    <small class="text-muted">Fee charged for late payments</small>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <label for="late_penalty_type" class="form-label fw-bold">Penalty Application</label>
+                    <select class="form-select" id="late_penalty_type" name="late_penalty_type"
+                      onchange="toggleRecurringPenalty()" required>
+                      <option value="once" {% if settings.late_penalty_type=='once' %}selected{% endif %}>Apply Once Per
+                        Rent Period</option>
+                      <option value="recurring" {% if settings.late_penalty_type=='recurring' %}selected{% endif %}>
+                        Apply Recurring</option>
+                    </select>
+                    <small class="text-muted">How often late penalties are applied</small>
+                  </div>
+
+                  <div class="col-md-6 mb-3" id="recurringPenaltyField"
+                    style="display: {% if settings.late_penalty_type == 'recurring' %}block{% else %}none{% endif %};">
+                    <label for="late_penalty_frequency_days" class="form-label fw-bold">Recurring Every (Days)</label>
+                    <input type="number" min="1" class="form-control" id="late_penalty_frequency_days"
+                      name="late_penalty_frequency_days" value="{{ settings.late_penalty_frequency_days or 7 }}">
+                    <small class="text-muted">Days between recurring penalty charges</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Student Payment Options -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingOptions">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseOptions" aria-expanded="false" aria-controls="collapseOptions">
+                <i class="bi bi-person-check me-2"></i><strong>Student Payment Options</strong>
+                <span class="badge bg-primary ms-2 d-none" id="paymentOptionsBadge">Active</span>
+              </button>
+            </h2>
+            <div id="collapseOptions" class="accordion-collapse collapse" aria-labelledby="headingOptions"
+              data-bs-parent="#rentSettingsAccordion">
+              <div class="accordion-body">
+                <div class="row">
+                  <div class="col-md-6 mb-3">
+                    <div class="form-check form-switch">
+                      <input class="form-check-input" type="checkbox" id="bill_preview_enabled"
+                        name="bill_preview_enabled" {% if settings.bill_preview_enabled %}checked{% endif %}
+                        onchange="toggleBillPreview()">
+                      <label class="form-check-label fw-bold" for="bill_preview_enabled">
+                        Enable Bill Preview
+                      </label>
                     </div>
+                    <small class="text-muted d-block mb-2">Students can see incoming bills before due date</small>
+
+                    <div id="billPreviewDaysField"
+                      style="display: {% if settings.bill_preview_enabled %}block{% else %}none{% endif %};">
+                      <label for="bill_preview_days" class="form-label">Preview Days Before Due</label>
+                      <input type="number" min="1" max="365" class="form-control" id="bill_preview_days"
+                        name="bill_preview_days" value="{{ settings.bill_preview_days }}">
+                      <small class="text-muted">How many days before due date students can see the bill</small>
+                    </div>
+                  </div>
+
+                  <div class="col-md-6 mb-3">
+                    <div class="form-check form-switch">
+                      <input class="form-check-input" type="checkbox" id="allow_incremental_payment"
+                        name="allow_incremental_payment" {% if settings.allow_incremental_payment %}checked{% endif %}>
+                      <label class="form-check-label fw-bold" for="allow_incremental_payment">
+                        Allow Incremental Payment
+                      </label>
+                    </div>
+                    <small class="text-muted d-block">Students can pay partial rent throughout the period before due
+                      date</small>
+                  </div>
+
+                  <div class="col-md-6 mb-3">
+                    <div class="form-check form-switch">
+                      <input class="form-check-input" type="checkbox" id="prevent_purchase_when_late"
+                        name="prevent_purchase_when_late" {% if settings.prevent_purchase_when_late %}checked{% endif
+                        %}>
+                      <label class="form-check-label fw-bold" for="prevent_purchase_when_late"
+                        id="prevent_purchase_label">
+                        <span id="prevent_purchase_label_text">
+                          {% if rent_items|length > 0 %}Prevent Purchase of Items Not Part of Rent{% else %}Prevent
+                          Purchase/Redemption When Late{% endif %}
+                        </span>
+                      </label>
+                    </div>
+                    <small class="text-muted d-block" id="prevent_purchase_description">
+                      {% if rent_items|length > 0 %}
+                      When late on rent, students can only purchase items covered by rent (at à la carte prices),
+                      blocking all other store items
+                      {% else %}
+                      Block all store purchases and item redemptions if student is late on rent
+                      {% endif %}
+                    </small>
+                  </div>
                 </div>
+              </div>
             </div>
+          </div>
 
-            <!-- Rent Itemization -->
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="headingItemization">
-                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseItemization" aria-expanded="false" aria-controls="collapseItemization">
-                        <i class="bi bi-list-check me-2"></i><strong>Rent Itemization (Optional)</strong>
-                        <span class="badge bg-info ms-2">{% if rent_items|length > 0 %}{{ rent_items|length }} items{% else %}Not configured{% endif %}</span>
-                    </button>
-                </h2>
-                <div id="collapseItemization" class="accordion-collapse collapse" aria-labelledby="headingItemization" data-bs-parent="#rentSettingsAccordion">
-                    <div class="accordion-body">
-                        <div class="alert alert-info">
-                            <i class="bi bi-info-circle me-2"></i>
-                            <strong>What is Rent Itemization?</strong><br>
-                            Specify what rent pays for (e.g., "Desk", "Chair", "Locker"). Optionally, you can make these items available in the store as single-purchase alternatives. This creates an incentive for students to pay rent instead of buying à la carte.
-                        </div>
+          <!-- Rent Itemization -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingItemization">
+              <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseItemization" aria-expanded="false" aria-controls="collapseItemization">
+                <i class="bi bi-list-check me-2"></i><strong>Rent Itemization (Optional)</strong>
+                <span class="badge bg-info ms-2">{% if rent_items|length > 0 %}{{ rent_items|length }} items{% else
+                  %}Not configured{% endif %}</span>
+              </button>
+            </h2>
+            <div id="collapseItemization" class="accordion-collapse collapse" aria-labelledby="headingItemization"
+              data-bs-parent="#rentSettingsAccordion">
+              <div class="accordion-body">
+                <div class="alert alert-info">
+                  <i class="bi bi-info-circle me-2"></i>
+                  <strong>What is Rent Itemization?</strong><br>
+                  Specify what rent pays for (e.g., "Desk", "Chair", "Locker"). Optionally, you can make these items
+                  available in the store as single-purchase alternatives. This creates an incentive for students to pay
+                  rent instead of buying à la carte.
+                </div>
 
-                        <div id="rentItemsContainer">
-                            {% if rent_items|length == 0 %}
-                            <div class="text-center text-muted py-4" id="noItemsPlaceholder">
-                                <i class="bi bi-inbox fs-1"></i>
-                                <p class="mb-0">No rent items configured yet. Click "Add Item" to get started.</p>
-                            </div>
-                            {% else %}
-                            {% for item in rent_items %}
-                            <div class="card mb-3 rent-item-card" data-item-index="{{ loop.index0 }}">
-                                <div class="card-body">
-                                    <div class="d-flex justify-content-between align-items-center mb-3">
-                                        <h6 class="mb-0"><i class="bi bi-grip-vertical me-2"></i>Item #{{ loop.index }}</h6>
-                                        <button type="button" class="btn btn-sm btn-danger" onclick="removeRentItem(this)">
-                                            <i class="bi bi-trash"></i> Remove
-                                        </button>
-                                    </div>
-
-                                    <input type="hidden" name="rent_item_id_{{ loop.index0 }}" value="{{ item.id }}">
-
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label fw-bold">Item Name <span class="text-danger">*</span></label>
-                                            <input type="text" class="form-control" name="rent_item_name_{{ loop.index0 }}" value="{{ item.name }}" placeholder="e.g., Desk, Chair, Locker" required>
-                                        </div>
-
-                                        <div class="col-md-6 mb-3">
-                                            <label class="form-label fw-bold">Description (Optional)</label>
-                                            <input type="text" class="form-control" name="rent_item_description_{{ loop.index0 }}" value="{{ item.description or '' }}" placeholder="Optional description">
-                                        </div>
-                                    </div>
-
-                                    <div class="row">
-                                        <div class="col-md-6 mb-3">
-                                            <div class="form-check form-switch">
-                                                <input class="form-check-input" type="checkbox" name="rent_item_store_available_{{ loop.index0 }}" id="store_available_{{ loop.index0 }}" {% if item.is_available_in_store %}checked{% endif %} onchange="toggleStorePrice({{ loop.index0 }})">
-                                                <label class="form-check-label fw-bold" for="store_available_{{ loop.index0 }}">
-                                                    Available in Store (single purchase)
-                                                </label>
-                                            </div>
-                                            <small class="text-muted">Allow students to buy this item separately in the store</small>
-                                        </div>
-
-                                        <div class="col-md-6 mb-3 store-price-field" id="store_price_field_{{ loop.index0 }}" style="{% if not item.is_available_in_store %}display: none;{% endif %}">
-                                            <label class="form-label fw-bold">Store Price ($) <span class="text-danger">*</span></label>
-                                            <input type="number" step="0.01" min="0" class="form-control" name="rent_item_store_price_{{ loop.index0 }}" value="{{ item.store_price or '' }}" placeholder="Price if purchased separately">
-                                            <small class="text-muted">Set higher than rent value to incentivize rent payment</small>
-                                        </div>
-                                    </div>
-
-                                    <div class="row store-price-field" id="store_duration_field_{{ loop.index0 }}" style="{% if not item.is_available_in_store %}display: none;{% endif %}">
-                                        <div class="col-md-12 mb-3">
-                                            <label class="form-label fw-bold">Purchase Duration</label>
-                                            <div class="btn-group w-100" role="group">
-                                                <input type="radio" class="btn-check" name="rent_item_purchase_duration_{{ loop.index0 }}" id="duration_per_use_{{ loop.index0 }}" value="per_use" {% if not item.purchase_duration or item.purchase_duration == 'per_use' %}checked{% endif %}>
-                                                <label class="btn btn-outline-primary" for="duration_per_use_{{ loop.index0 }}">
-                                                    <i class="bi bi-arrow-repeat me-1"></i> Per Use
-                                                </label>
-
-                                                <input type="radio" class="btn-check" name="rent_item_purchase_duration_{{ loop.index0 }}" id="duration_per_period_{{ loop.index0 }}" value="per_period" {% if item.purchase_duration == 'per_period' %}checked{% endif %}>
-                                                <label class="btn btn-outline-success" for="duration_per_period_{{ loop.index0 }}">
-                                                    <i class="bi bi-calendar-check me-1"></i> Per Rent Period
-                                                </label>
-                                            </div>
-                                            <small class="text-muted d-block mt-2">
-                                                <strong>Per Use:</strong> Student must buy each time they want to use it (unlimited purchases)<br>
-                                                <strong>Per Rent Period:</strong> Student buys once and can use until next rent is due (expires when rent comes due)
-                                            </small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                            {% endif %}
-                        </div>
-
-                        <button type="button" class="btn btn-success mt-2" onclick="addRentItem()">
-                            <i class="bi bi-plus-circle me-2"></i>Add Rent Item
+                <div id="rentItemsContainer">
+                  {% if rent_items|length == 0 %}
+                  <div class="text-center text-muted py-4" id="noItemsPlaceholder">
+                    <i class="bi bi-inbox fs-1"></i>
+                    <p class="mb-0">No rent items configured yet. Click "Add Item" to get started.</p>
+                  </div>
+                  {% else %}
+                  {% for item in rent_items %}
+                  <div class="card mb-3 rent-item-card" data-item-index="{{ loop.index0 }}">
+                    <div class="card-body">
+                      <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="mb-0"><i class="bi bi-grip-vertical me-2"></i>Item #{{ loop.index }}</h6>
+                        <button type="button" class="btn btn-sm btn-danger" onclick="removeRentItem(this)">
+                          <i class="bi bi-trash"></i> Remove
                         </button>
+                      </div>
 
-                        {% if rent_items|length > 0 %}
-                        <div class="alert alert-warning mt-3">
-                            <i class="bi bi-exclamation-triangle me-2"></i>
-                            <strong>Note:</strong> Items marked as "Available in Store" will be automatically added to your class store when you save. If you uncheck this option, the store item will be deactivated.
+                      <input type="hidden" name="rent_item_id_{{ loop.index0 }}" value="{{ item.id }}">
+
+                      <div class="row">
+                        <div class="col-md-6 mb-3">
+                          <label class="form-label fw-bold">Item Name <span class="text-danger">*</span></label>
+                          <input type="text" class="form-control" name="rent_item_name_{{ loop.index0 }}"
+                            value="{{ item.name }}" placeholder="e.g., Desk, Chair, Locker" required>
                         </div>
-                        {% endif %}
+
+                        <div class="col-md-6 mb-3">
+                          <label class="form-label fw-bold">Description (Optional)</label>
+                          <input type="text" class="form-control" name="rent_item_description_{{ loop.index0 }}"
+                            value="{{ item.description or '' }}" placeholder="Optional description">
+                        </div>
+                      </div>
+
+                      <div class="row">
+                        <div class="col-md-6 mb-3">
+                          <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox"
+                              name="rent_item_store_available_{{ loop.index0 }}" id="store_available_{{ loop.index0 }}"
+                              {% if item.is_available_in_store %}checked{% endif %}
+                              onchange="toggleStorePrice({{ loop.index0 }})">
+                            <label class="form-check-label fw-bold" for="store_available_{{ loop.index0 }}">
+                              Available in Store (single purchase)
+                            </label>
+                          </div>
+                          <small class="text-muted">Allow students to buy this item separately in the store</small>
+                        </div>
+
+                        <div class="col-md-6 mb-3 store-price-field" id="store_price_field_{{ loop.index0 }}"
+                          style="{% if not item.is_available_in_store %}display: none;{% endif %}">
+                          <label class="form-label fw-bold">Store Price ($) <span class="text-danger">*</span></label>
+                          <input type="number" step="0.01" min="0" class="form-control"
+                            name="rent_item_store_price_{{ loop.index0 }}" value="{{ item.store_price or '' }}"
+                            placeholder="Price if purchased separately">
+                          <small class="text-muted">Set higher than rent value to incentivize rent payment</small>
+                        </div>
+                      </div>
+
+                      <div class="row store-price-field" id="store_duration_field_{{ loop.index0 }}"
+                        style="{% if not item.is_available_in_store %}display: none;{% endif %}">
+                        <div class="col-md-12 mb-3">
+                          <label class="form-label fw-bold">Purchase Duration</label>
+                          <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="rent_item_purchase_duration_{{ loop.index0 }}"
+                              id="duration_per_use_{{ loop.index0 }}" value="per_use" {% if not item.purchase_duration
+                              or item.purchase_duration=='per_use' %}checked{% endif %}>
+                            <label class="btn btn-outline-primary" for="duration_per_use_{{ loop.index0 }}">
+                              <i class="bi bi-arrow-repeat me-1"></i> Per Use
+                            </label>
+
+                            <input type="radio" class="btn-check" name="rent_item_purchase_duration_{{ loop.index0 }}"
+                              id="duration_per_period_{{ loop.index0 }}" value="per_period" {% if
+                              item.purchase_duration=='per_period' %}checked{% endif %}>
+                            <label class="btn btn-outline-success" for="duration_per_period_{{ loop.index0 }}">
+                              <i class="bi bi-calendar-check me-1"></i> Per Rent Period
+                            </label>
+                          </div>
+                          <small class="text-muted d-block mt-2">
+                            <strong>Per Use:</strong> Student must buy each time they want to use it (unlimited
+                            purchases)<br>
+                            <strong>Per Rent Period:</strong> Student buys once and can use until next rent is due
+                            (expires when rent comes due)
+                          </small>
+                        </div>
+                      </div>
                     </div>
+                  </div>
+                  {% endfor %}
+                  {% endif %}
                 </div>
+
+                <button type="button" class="btn btn-success mt-2" onclick="addRentItem()">
+                  <i class="bi bi-plus-circle me-2"></i>Add Rent Item
+                </button>
+
+                {% if rent_items|length > 0 %}
+                <div class="alert alert-warning mt-3">
+                  <i class="bi bi-exclamation-triangle me-2"></i>
+                  <strong>Note:</strong> Items marked as "Available in Store" will be automatically added to your class
+                  store when you save. If you uncheck this option, the store item will be deactivated.
+                </div>
+                {% endif %}
+              </div>
             </div>
+          </div>
 
         </div>
 
@@ -747,13 +812,13 @@
           </div>
           <div class="card-body">
             <form method="POST" action="{{ url_for('admin.add_rent_waiver') }}">
-              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
 
               <div class="mb-3">
                 <label class="form-label fw-bold">Select Students</label>
                 <select class="form-select" id="waiver_student_ids" name="student_ids" multiple size="8" required>
                   {% for student in all_students %}
-                    <option value="{{ student.id }}">{{ student.full_name }} (Block {{ student.block }})</option>
+                  <option value="{{ student.id }}">{{ student.full_name }} (Block {{ student.block }})</option>
                   {% endfor %}
                 </select>
                 <small class="text-muted">Hold Ctrl/Cmd to select multiple students</small>
@@ -761,8 +826,8 @@
 
               <div class="mb-3">
                 <label for="periods_count" class="form-label fw-bold">Number of Periods to Waive</label>
-                <input type="number" class="form-control" id="periods_count" name="periods_count"
-                       min="1" value="1" required>
+                <input type="number" class="form-control" id="periods_count" name="periods_count" min="1" value="1"
+                  required>
                 <small class="text-muted">How many rent periods to skip</small>
               </div>
 
@@ -788,41 +853,44 @@
           </div>
           <div class="card-body">
             {% if active_waivers %}
-              <div class="table-responsive">
-                <table class="table table-striped table-hover">
-                  <thead>
-                    <tr>
-                      <th>Student</th>
-                      <th>Periods</th>
-                      <th>Valid Until</th>
-                      <th>Reason</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for waiver in active_waivers %}
-                    <tr>
-                      <td>{{ waiver.student.full_name }}</td>
-                      <td>{{ waiver.periods_count }}</td>
-                      <td>
-                        <span class="local-timestamp" data-timestamp="{{ format_utc_iso(waiver.waiver_end_date) }}"></span>
-                      </td>
-                      <td>{{ waiver.reason or '-' }}</td>
-                      <td>
-                        <form method="POST" action="{{ url_for('admin.remove_rent_waiver', waiver_id=waiver.id) }}" style="display: inline;">
-                          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                          <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Remove this waiver?')">
-                            <i class="bi bi-trash"></i>
-                          </button>
-                        </form>
-                      </td>
-                    </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
+            <div class="table-responsive">
+              <table class="table table-striped table-hover">
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th>Periods</th>
+                    <th>Valid Until</th>
+                    <th>Reason</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for waiver in active_waivers %}
+                  <tr>
+                    <td>{{ waiver.student.full_name }}</td>
+                    <td>{{ waiver.periods_count }}</td>
+                    <td>
+                      <span class="local-timestamp"
+                        data-timestamp="{{ format_utc_iso(waiver.waiver_end_date) }}"></span>
+                    </td>
+                    <td>{{ waiver.reason or '-' }}</td>
+                    <td>
+                      <form method="POST" action="{{ url_for('admin.remove_rent_waiver', waiver_id=waiver.id) }}"
+                        style="display: inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+                        <button type="submit" class="btn btn-sm btn-danger"
+                          onclick="return confirm('Remove this waiver?')">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
             {% else %}
-              <p class="text-muted text-center mb-0">No active rent waivers</p>
+            <p class="text-muted text-center mb-0">No active rent waivers</p>
             {% endif %}
           </div>
         </div>
@@ -832,133 +900,133 @@
 </div>
 
 <script>
-function toggleRentSettings() {
-  const isEnabled = document.getElementById('is_enabled').checked;
-  const container = document.getElementById('rentSettingsContainer');
-  if (isEnabled) {
-    container.classList.remove('grayed-out');
-  } else {
-    container.classList.add('grayed-out');
-  }
-}
-
-function toggleCustomFrequency() {
-  const frequencyType = document.getElementById('frequency_type').value;
-  const customFields = document.getElementById('customFrequencyFields');
-  customFields.style.display = (frequencyType === 'custom') ? 'block' : 'none';
-}
-
-function toggleRecurringPenalty() {
-  const penaltyType = document.getElementById('late_penalty_type').value;
-  const recurringField = document.getElementById('recurringPenaltyField');
-  recurringField.style.display = (penaltyType === 'recurring') ? 'block' : 'none';
-}
-
-function toggleBillPreview() {
-  const isEnabled = document.getElementById('bill_preview_enabled').checked;
-  const daysField = document.getElementById('billPreviewDaysField');
-  daysField.style.display = isEnabled ? 'block' : 'none';
-}
-
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', function() {
-  toggleRentSettings();
-  toggleCustomFrequency();
-  toggleRecurringPenalty();
-  toggleBillPreview();
-
-  function toggleBadge(badgeId, isActive) {
-    const badge = document.getElementById(badgeId);
-    if (!badge) return;
-    badge.classList.toggle('d-none', !isActive);
+  function toggleRentSettings() {
+    const isEnabled = document.getElementById('is_enabled').checked;
+    const container = document.getElementById('rentSettingsContainer');
+    if (isEnabled) {
+      container.classList.remove('grayed-out');
+    } else {
+      container.classList.add('grayed-out');
+    }
   }
 
-  function updateAccordionsBadges() {
-    const frequencyType = document.getElementById('frequency_type');
-    toggleBadge('customFrequencyBadge', frequencyType && frequencyType.value === 'custom');
-
-    const firstRentDueDate = document.getElementById('first_rent_due_date');
-    toggleBadge('dueDateBadge', Boolean(firstRentDueDate && firstRentDueDate.value));
-
-    const gracePeriod = document.getElementById('grace_period_days');
-    const latePenaltyAmount = document.getElementById('late_penalty_amount');
-    const penaltyType = document.getElementById('late_penalty_type');
-    const recurringDays = document.getElementById('late_penalty_frequency_days');
-
-    const penaltyActive = (gracePeriod && Number(gracePeriod.value || 0) > 0) ||
-      (latePenaltyAmount && Number(latePenaltyAmount.value || 0) > 0) ||
-      (penaltyType && penaltyType.value === 'recurring' && recurringDays && Number(recurringDays.value || 0) > 0);
-    toggleBadge('penaltiesBadge', penaltyActive);
-
-    const billPreviewEnabled = document.getElementById('bill_preview_enabled');
-    const allowIncrementalPayment = document.getElementById('allow_incremental_payment');
-    const preventPurchaseWhenLate = document.getElementById('prevent_purchase_when_late');
-
-    const paymentOptionsActive = (billPreviewEnabled && billPreviewEnabled.checked) ||
-      (allowIncrementalPayment && allowIncrementalPayment.checked) ||
-      (preventPurchaseWhenLate && preventPurchaseWhenLate.checked);
-    toggleBadge('paymentOptionsBadge', paymentOptionsActive);
+  function toggleCustomFrequency() {
+    const frequencyType = document.getElementById('frequency_type').value;
+    const customFields = document.getElementById('customFrequencyFields');
+    customFields.style.display = (frequencyType === 'custom') ? 'block' : 'none';
   }
 
-  const badgeFields = [
-    'frequency_type',
-    'custom_frequency_value',
-    'custom_frequency_unit',
-    'first_rent_due_date',
-    'due_day_of_month',
-    'grace_period_days',
-    'late_penalty_amount',
-    'late_penalty_type',
-    'late_penalty_frequency_days',
-    'bill_preview_enabled',
-    'bill_preview_days',
-    'allow_incremental_payment',
-    'prevent_purchase_when_late'
-  ];
+  function toggleRecurringPenalty() {
+    const penaltyType = document.getElementById('late_penalty_type').value;
+    const recurringField = document.getElementById('recurringPenaltyField');
+    recurringField.style.display = (penaltyType === 'recurring') ? 'block' : 'none';
+  }
 
-  badgeFields.forEach(id => {
-    const field = document.getElementById(id);
-    if (!field) return;
-    const eventType = field.type === 'checkbox' || field.tagName === 'SELECT' ? 'change' : 'input';
-    field.addEventListener(eventType, updateAccordionsBadges);
+  function toggleBillPreview() {
+    const isEnabled = document.getElementById('bill_preview_enabled').checked;
+    const daysField = document.getElementById('billPreviewDaysField');
+    daysField.style.display = isEnabled ? 'block' : 'none';
+  }
+
+  // Initialize on page load
+  document.addEventListener('DOMContentLoaded', function () {
+    toggleRentSettings();
+    toggleCustomFrequency();
+    toggleRecurringPenalty();
+    toggleBillPreview();
+
+    function toggleBadge(badgeId, isActive) {
+      const badge = document.getElementById(badgeId);
+      if (!badge) return;
+      badge.classList.toggle('d-none', !isActive);
+    }
+
+    function updateAccordionsBadges() {
+      const frequencyType = document.getElementById('frequency_type');
+      toggleBadge('customFrequencyBadge', frequencyType && frequencyType.value === 'custom');
+
+      const firstRentDueDate = document.getElementById('first_rent_due_date');
+      toggleBadge('dueDateBadge', Boolean(firstRentDueDate && firstRentDueDate.value));
+
+      const gracePeriod = document.getElementById('grace_period_days');
+      const latePenaltyAmount = document.getElementById('late_penalty_amount');
+      const penaltyType = document.getElementById('late_penalty_type');
+      const recurringDays = document.getElementById('late_penalty_frequency_days');
+
+      const penaltyActive = (gracePeriod && Number(gracePeriod.value || 0) > 0) ||
+        (latePenaltyAmount && Number(latePenaltyAmount.value || 0) > 0) ||
+        (penaltyType && penaltyType.value === 'recurring' && recurringDays && Number(recurringDays.value || 0) > 0);
+      toggleBadge('penaltiesBadge', penaltyActive);
+
+      const billPreviewEnabled = document.getElementById('bill_preview_enabled');
+      const allowIncrementalPayment = document.getElementById('allow_incremental_payment');
+      const preventPurchaseWhenLate = document.getElementById('prevent_purchase_when_late');
+
+      const paymentOptionsActive = (billPreviewEnabled && billPreviewEnabled.checked) ||
+        (allowIncrementalPayment && allowIncrementalPayment.checked) ||
+        (preventPurchaseWhenLate && preventPurchaseWhenLate.checked);
+      toggleBadge('paymentOptionsBadge', paymentOptionsActive);
+    }
+
+    const badgeFields = [
+      'frequency_type',
+      'custom_frequency_value',
+      'custom_frequency_unit',
+      'first_rent_due_date',
+      'due_day_of_month',
+      'grace_period_days',
+      'late_penalty_amount',
+      'late_penalty_type',
+      'late_penalty_frequency_days',
+      'bill_preview_enabled',
+      'bill_preview_days',
+      'allow_incremental_payment',
+      'prevent_purchase_when_late'
+    ];
+
+    badgeFields.forEach(id => {
+      const field = document.getElementById(id);
+      if (!field) return;
+      const eventType = field.type === 'checkbox' || field.tagName === 'SELECT' ? 'change' : 'input';
+      field.addEventListener(eventType, updateAccordionsBadges);
+    });
+
+    updateAccordionsBadges();
+
+    // Initialize Economy Balance Checker
+    if (typeof EconomyBalanceChecker !== 'undefined') {
+      const economyChecker = new EconomyBalanceChecker({
+        warningsContainer: '#economy-warnings',
+        expectedWeeklyHours: {{ (payroll_settings.expected_weekly_hours if payroll_settings and payroll_settings.expected_weekly_hours is not none else 5.0) | float }}
+    });
+
+  // Display CWI info if payroll is configured
+  const currentBlock = '{{ settings_block }}';
+  economyChecker.analyzeEconomy(null, currentBlock).then(analysis => {
+    economyChecker.displayCWIInfo(analysis, '#cwi-info');
+  }).catch(err => {
+    console.log('Payroll not configured yet, skipping CWI display');
   });
 
-  updateAccordionsBadges();
+  // Re-validate rent when frequency changes
+  const rentAmountInput = document.getElementById('rent_amount');
+  if (rentAmountInput) {
+    const fieldsToWatch = [
+      { id: 'frequency_type', event: 'change' },
+      { id: 'custom_frequency_value', event: 'input' },
+      { id: 'custom_frequency_unit', event: 'change' }
+    ];
 
-  // Initialize Economy Balance Checker
-  if (typeof EconomyBalanceChecker !== 'undefined') {
-    const economyChecker = new EconomyBalanceChecker({
-      warningsContainer: '#economy-warnings',
-      expectedWeeklyHours: {{ (payroll_settings.expected_weekly_hours if payroll_settings and payroll_settings.expected_weekly_hours is not none else 5.0) | float }}
+    fieldsToWatch.forEach(field => {
+      const inputElement = document.getElementById(field.id);
+      if (inputElement) {
+        inputElement.addEventListener(field.event, function () {
+          // Trigger validation on rent amount
+          rentAmountInput.dispatchEvent(new Event('input'));
+        });
+      }
     });
-
-    // Display CWI info if payroll is configured
-    const currentBlock = '{{ settings_block }}';
-    economyChecker.analyzeEconomy(null, currentBlock).then(analysis => {
-      economyChecker.displayCWIInfo(analysis, '#cwi-info');
-    }).catch(err => {
-      console.log('Payroll not configured yet, skipping CWI display');
-    });
-
-    // Re-validate rent when frequency changes
-    const rentAmountInput = document.getElementById('rent_amount');
-    if (rentAmountInput) {
-      const fieldsToWatch = [
-        { id: 'frequency_type', event: 'change' },
-        { id: 'custom_frequency_value', event: 'input' },
-        { id: 'custom_frequency_unit', event: 'change' }
-      ];
-
-      fieldsToWatch.forEach(field => {
-        const inputElement = document.getElementById(field.id);
-        if (inputElement) {
-          inputElement.addEventListener(field.event, function() {
-            // Trigger validation on rent amount
-            rentAmountInput.dispatchEvent(new Event('input'));
-          });
-        }
-      });
-    }
+  }
   }
 
   // -------------------- CLASS SELECTOR & APPLY TO ALL --------------------
@@ -968,7 +1036,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Handle class selector change - reload page with new settings_block
   if (settingsBlockSelector) {
-    settingsBlockSelector.addEventListener('change', function() {
+    settingsBlockSelector.addEventListener('change', function () {
       const selectedBlock = this.value;
       const url = new URL(window.location.href);
       url.searchParams.set('settings_block', selectedBlock);
@@ -978,7 +1046,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Handle apply to all checkbox
   if (applyToAllCheckbox && applyToAllInput) {
-    applyToAllCheckbox.addEventListener('change', function() {
+    applyToAllCheckbox.addEventListener('change', function () {
       applyToAllInput.value = this.checked ? 'true' : 'false';
 
       // Disable class selector when apply to all is checked
@@ -989,9 +1057,9 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   // -------------------- RENT ITEMIZATION FUNCTIONS --------------------
-  let rentItemCounter = {{ rent_items|length }};
+  let rentItemCounter = {{ rent_items| length }};
 
-  window.addRentItem = function() {
+  window.addRentItem = function () {
     const container = document.getElementById('rentItemsContainer');
     const placeholder = document.getElementById('noItemsPlaceholder');
 
@@ -1075,7 +1143,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePreventPurchaseLabel();
   };
 
-  window.removeRentItem = function(button) {
+  window.removeRentItem = function (button) {
     const card = button.closest('.rent-item-card');
     card.remove();
 
@@ -1096,7 +1164,7 @@ document.addEventListener('DOMContentLoaded', function() {
     updatePreventPurchaseLabel();
   };
 
-  window.toggleStorePrice = function(index) {
+  window.toggleStorePrice = function (index) {
     const checkbox = document.getElementById(`store_available_${index}`);
     const priceField = document.getElementById(`store_price_field_${index}`);
     const durationField = document.getElementById(`store_duration_field_${index}`);
