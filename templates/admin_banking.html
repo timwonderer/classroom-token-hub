@@ -4,9 +4,10 @@
 {% block title %}Banking Management{% endblock %}
 {% block page_icon %}account_balance{% endblock %}
 {% block page_header_actions %}
-  <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#bankingGuide" aria-controls="bankingGuide">
-    <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
-  </button>
+<button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
+  data-bs-target="#bankingGuide" aria-controls="bankingGuide">
+  <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
+</button>
 {% endblock %}
 {% block content %}
 
@@ -20,12 +21,14 @@
     <div class="accordion mt-4 mb-4" id="bankingGuideAccordion">
       <div class="accordion-item">
         <h2 class="accordion-header" id="bankingGuideHeadingOverview">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#bankingGuideOverview" aria-expanded="false" aria-controls="bankingGuideOverview">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
+            data-bs-target="#bankingGuideOverview" aria-expanded="false" aria-controls="bankingGuideOverview">
             <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">grid_view</span>
             <strong>Overview Stats</strong>
           </button>
         </h2>
-        <div id="bankingGuideOverview" class="accordion-collapse collapse mt-2" aria-labelledby="bankingGuideHeadingOverview" data-bs-parent="#bankingGuideAccordion">
+        <div id="bankingGuideOverview" class="accordion-collapse collapse mt-2"
+          aria-labelledby="bankingGuideHeadingOverview" data-bs-parent="#bankingGuideAccordion">
           <div class="accordion-body">
             <p class="mb-2"><strong>What you'll see:</strong></p>
             <ul class="mb-3">
@@ -34,21 +37,26 @@
               <li><strong>Total Deposits</strong> — Combined checking + savings across all students</li>
               <li><strong>Students w/ Savings</strong> — How many students are actively saving</li>
             </ul>
-            <p class="mb-3"><strong>Example:</strong> 20 students with $10 in checking and $5 in savings equals $300 in total deposits.</p>
+            <p class="mb-3"><strong>Example:</strong> 20 students with $10 in checking and $5 in savings equals $300 in
+              total deposits.</p>
             <div class="alert alert-info mb-0">
-              <strong><i class="bi bi-lightbulb-fill me-1"></i>Teaching Tip:</strong> Encourage at least 30% of students to use savings accounts. This teaches delayed gratification and financial planning!
+              <strong><i class="bi bi-lightbulb-fill me-1"></i>Teaching Tip:</strong> Encourage at least 30% of students
+              to use savings accounts. This teaches delayed gratification and financial planning!
             </div>
           </div>
         </div>
       </div>
       <div class="accordion-item">
         <h2 class="accordion-header" id="bankingGuideHeadingTransactions">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#bankingGuideTransactions" aria-expanded="false" aria-controls="bankingGuideTransactions">
-            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">receipt_long</span>
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
+            data-bs-target="#bankingGuideTransactions" aria-expanded="false" aria-controls="bankingGuideTransactions">
+            <span class="material-symbols-outlined me-2"
+              style="font-size:25pt; vertical-align:middle;">receipt_long</span>
             <strong>Transactions</strong>
           </button>
         </h2>
-        <div id="bankingGuideTransactions" class="accordion-collapse collapse mt-2" aria-labelledby="bankingGuideHeadingTransactions" data-bs-parent="#bankingGuideAccordion">
+        <div id="bankingGuideTransactions" class="accordion-collapse collapse mt-2"
+          aria-labelledby="bankingGuideHeadingTransactions" data-bs-parent="#bankingGuideAccordion">
           <div class="accordion-body">
             <p>Use the Transactions tab to review deposits, withdrawals, transfers, and fees for each student.</p>
             <ul class="mb-0">
@@ -60,12 +68,14 @@
       </div>
       <div class="accordion-item">
         <h2 class="accordion-header" id="bankingGuideHeadingSettings">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#bankingGuideSettings" aria-expanded="false" aria-controls="bankingGuideSettings">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
+            data-bs-target="#bankingGuideSettings" aria-expanded="false" aria-controls="bankingGuideSettings">
             <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">settings</span>
             <strong>Banking Settings</strong>
           </button>
         </h2>
-        <div id="bankingGuideSettings" class="accordion-collapse collapse mt-2" aria-labelledby="bankingGuideHeadingSettings" data-bs-parent="#bankingGuideAccordion">
+        <div id="bankingGuideSettings" class="accordion-collapse collapse mt-2"
+          aria-labelledby="bankingGuideHeadingSettings" data-bs-parent="#bankingGuideAccordion">
           <div class="accordion-body">
             <p>Configure savings interest, payout schedules, and overdraft rules in the Settings tab.</p>
             <p class="mb-0">Rate changes affect future payouts only and will not re-calculate past interest.</p>
@@ -77,36 +87,47 @@
       </div>
       <div class="accordion-item">
         <h2 class="accordion-header" id="bankingGuideHeadingBreakdown">
-          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#bankingGuideBreakdown" aria-expanded="false" aria-controls="bankingGuideBreakdown">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
+            data-bs-target="#bankingGuideBreakdown" aria-expanded="false" aria-controls="bankingGuideBreakdown">
             <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
             <strong>Settings Breakdown</strong>
           </button>
         </h2>
-        <div id="bankingGuideBreakdown" class="accordion-collapse collapse mt-2" aria-labelledby="bankingGuideHeadingBreakdown" data-bs-parent="#bankingGuideAccordion">
+        <div id="bankingGuideBreakdown" class="accordion-collapse collapse mt-2"
+          aria-labelledby="bankingGuideHeadingBreakdown" data-bs-parent="#bankingGuideAccordion">
           <div class="accordion-body">
             <p class="mb-2"><strong><i class="bi bi-gear-fill me-1"></i>Basic Settings:</strong></p>
             <ul class="mb-3">
-              <li><strong>Savings APY:</strong> Annual percentage yield (e.g., 5% APY means about $0.42 earned per $100 saved monthly)</li>
-              <li><strong>Interest schedule:</strong> How often students earn interest
+              <li><strong>Class/Block selector:</strong> Configure settings independently for each class period.</li>
+              <li><strong>Savings APY:</strong> Annual percentage yield (e.g., 5% APY means about $0.42 earned per $100
+                saved monthly)</li>
+              <li><strong>Interest Type:</strong>
                 <ul class="small mt-1">
-                  <li><em>Weekly:</em> Frequent rewards, ideal for younger students</li>
-                  <li><em>Monthly:</em> Mirrors real banking, better for older students</li>
+                  <li><em>Simple:</em> Interest calculated only on principal (easier to understand).</li>
+                  <li><em>Compound:</em> Interest calculated on principal + accumulated interest (faster growth).</li>
                 </ul>
+              </li>
+              <li><strong>Interest schedule:</strong> How often interest is calculated and paid (Weekly, Monthly, etc.)
               </li>
             </ul>
 
             <p class="mb-2"><strong><i class="bi bi-sliders me-1"></i>Advanced Settings:</strong></p>
             <ul class="mb-3">
-              <li><strong>Overdraft protection:</strong> When enabled, savings automatically covers checking shortfalls (recommended for beginners)</li>
-              <li><strong>Overdraft fees:</strong> When protection is off, charge a fee if balance goes negative to reinforce consequences</li>
+              <li><strong>Overdraft protection:</strong> When enabled, savings automatically covers checking shortfalls
+                (recommended for beginners)</li>
+              <li><strong>Overdraft fees:</strong> When protection is off, charge a fee if balance goes negative to
+                reinforce consequences</li>
             </ul>
 
             <div class="alert alert-warning mt-3 mb-3">
-              <strong><i class="bi bi-exclamation-triangle-fill me-1"></i>Side effects:</strong> Rate changes only affect future interest, not past payments. Interest schedule changes take effect on the next scheduled run.
+              <strong><i class="bi bi-exclamation-triangle-fill me-1"></i>Side effects:</strong> Rate changes only
+              affect future interest, not past payments. Interest schedule changes take effect on the next scheduled
+              run.
             </div>
 
             <div class="alert alert-info mb-0">
-              <strong><i class="bi bi-lightbulb-fill me-1"></i>Recommended Setup:</strong> Start with 5% APY, weekly payouts, and overdraft protection enabled. Adjust based on student engagement.
+              <strong><i class="bi bi-lightbulb-fill me-1"></i>Recommended Setup:</strong> Start with 5% APY, weekly
+              payouts, and overdraft protection enabled. Adjust based on student engagement.
             </div>
           </div>
         </div>
@@ -118,12 +139,14 @@
 <!-- Nav Tabs -->
 <ul class="nav nav-tabs mb-4" id="bankingTabs" role="tablist">
   <li class="nav-item" role="presentation">
-    <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
+    <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button"
+      role="tab">
       <i class="bi bi-grid me-1"></i>Overview
     </button>
   </li>
   <li class="nav-item" role="presentation">
-    <button class="nav-link" id="transactions-tab" data-bs-toggle="tab" data-bs-target="#transactions" type="button" role="tab">
+    <button class="nav-link" id="transactions-tab" data-bs-toggle="tab" data-bs-target="#transactions" type="button"
+      role="tab">
       <i class="bi bi-receipt me-1"></i>Transactions
     </button>
   </li>
@@ -175,32 +198,35 @@
           </div>
           <div class="card-body">
             {% if settings %}
-              <ul class="list-unstyled mb-0">
-                <li class="mb-2">
-                  <strong>Savings APY:</strong> {{ "%.2f"|format(settings.savings_apy) }}%
-                </li>
-                <li class="mb-2">
-                  <strong>Monthly Rate:</strong> {{ "%.2f"|format(settings.savings_monthly_rate) }}%
-                </li>
-                <li class="mb-2">
-                  <strong>Interest Schedule:</strong> {{ settings.interest_schedule_type|title }}
-                  {% if settings.interest_schedule_type == 'monthly' %}({{ settings.interest_schedule_cycle_days }} days){% endif %}
-                </li>
-                <li class="mb-2">
-                  <strong>Overdraft Protection:</strong>
-                  <span class="badge bg-{% if settings.overdraft_protection_enabled %}success{% else %}secondary{% endif %}">
-                    {% if settings.overdraft_protection_enabled %}Enabled{% else %}Disabled{% endif %}
-                  </span>
-                </li>
-                <li class="mb-0">
-                  <strong>Overdraft Fees:</strong>
-                  <span class="badge bg-{% if settings.overdraft_fee_enabled %}danger{% else %}secondary{% endif %}">
-                    {% if settings.overdraft_fee_enabled %}Enabled ({{ settings.overdraft_fee_type|title }}){% else %}Disabled{% endif %}
-                  </span>
-                </li>
-              </ul>
+            <ul class="list-unstyled mb-0">
+              <li class="mb-2">
+                <strong>Savings APY:</strong> {{ "%.2f"|format(settings.savings_apy) }}%
+              </li>
+              <li class="mb-2">
+                <strong>Monthly Rate:</strong> {{ "%.2f"|format(settings.savings_monthly_rate) }}%
+              </li>
+              <li class="mb-2">
+                <strong>Interest Schedule:</strong> {{ settings.interest_schedule_type|title }}
+                {% if settings.interest_schedule_type == 'monthly' %}({{ settings.interest_schedule_cycle_days }}
+                days){% endif %}
+              </li>
+              <li class="mb-2">
+                <strong>Overdraft Protection:</strong>
+                <span
+                  class="badge bg-{% if settings.overdraft_protection_enabled %}success{% else %}secondary{% endif %}">
+                  {% if settings.overdraft_protection_enabled %}Enabled{% else %}Disabled{% endif %}
+                </span>
+              </li>
+              <li class="mb-0">
+                <strong>Overdraft Fees:</strong>
+                <span class="badge bg-{% if settings.overdraft_fee_enabled %}danger{% else %}secondary{% endif %}">
+                  {% if settings.overdraft_fee_enabled %}Enabled ({{ settings.overdraft_fee_type|title }}){% else
+                  %}Disabled{% endif %}
+                </span>
+              </li>
+            </ul>
             {% else %}
-              <p class="text-muted mb-0">No banking settings configured yet. Go to the Settings tab to configure.</p>
+            <p class="text-muted mb-0">No banking settings configured yet. Go to the Settings tab to configure.</p>
             {% endif %}
           </div>
         </div>
@@ -214,61 +240,62 @@
       </div>
       <div class="card-body">
         {% if transactions %}
-          <div class="table-responsive">
-            <table class="table table-striped table-hover">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Student</th>
-                  <th>Class</th>
-                  <th>Type</th>
-                  <th>Account</th>
-                  <th>Amount</th>
-                  <th>Description</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for tx in transactions[:10] %}
-                <tr>
-                  <td>
-                    {% if tx.timestamp %}
-                      <span class="local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
-                    {% else %}
-                      N/A
-                    {% endif %}
-                  </td>
-                  <td>
-                    <a href="{{ url_for('admin.student_detail', student_id=tx.student_id) }}">
-                      {{ tx.student_name }}
-                    </a>
-                  </td>
-                  <td>{{ class_labels_by_block.get(tx.student_block, tx.student_block) if tx.student_block else 'N/A' }}</td>
-                  <td>
-                    {% if tx.type %}
-                      <span class="badge bg-secondary">{{ tx.type|title }}</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    <span class="badge bg-{% if tx.account_type == 'checking' %}primary{% else %}success{% endif %}">
-                      {{ tx.account_type|title }}
-                    </span>
-                  </td>
-                  <td class="{% if tx.amount > 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
-                    ${{ "%.2f"|format(tx.amount) }}
-                  </td>
-                  <td>{{ tx.description or '—' }}</td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-          <div class="text-center mt-3">
-            <button class="btn btn-outline-primary" onclick="document.getElementById('transactions-tab').click()">
-              View All Transactions
-            </button>
-          </div>
+        <div class="table-responsive">
+          <table class="table table-striped table-hover">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Student</th>
+                <th>Class</th>
+                <th>Type</th>
+                <th>Account</th>
+                <th>Amount</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for tx in transactions[:10] %}
+              <tr>
+                <td>
+                  {% if tx.timestamp %}
+                  <span class="local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
+                  {% else %}
+                  N/A
+                  {% endif %}
+                </td>
+                <td>
+                  <a href="{{ url_for('admin.student_detail', student_id=tx.student_id) }}">
+                    {{ tx.student_name }}
+                  </a>
+                </td>
+                <td>{{ class_labels_by_block.get(tx.student_block, tx.student_block) if tx.student_block else 'N/A' }}
+                </td>
+                <td>
+                  {% if tx.type %}
+                  <span class="badge bg-secondary">{{ tx.type|title }}</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <span class="badge bg-{% if tx.account_type == 'checking' %}primary{% else %}success{% endif %}">
+                    {{ tx.account_type|title }}
+                  </span>
+                </td>
+                <td class="{% if tx.amount > 0 %}text-success{% else %}text-danger{% endif %} fw-bold">
+                  ${{ "%.2f"|format(tx.amount) }}
+                </td>
+                <td>{{ tx.description or '—' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <div class="text-center mt-3">
+          <button class="btn btn-outline-primary" onclick="document.getElementById('transactions-tab').click()">
+            View All Transactions
+          </button>
+        </div>
         {% else %}
-          <p class="text-muted">No recent transactions found.</p>
+        <p class="text-muted">No recent transactions found.</p>
         {% endif %}
       </div>
     </div>
@@ -289,7 +316,8 @@
               <select name="block" id="block" class="form-select form-select-sm">
                 <option value="">All</option>
                 {% for block in blocks %}
-                  <option value="{{ block }}" {% if request.args.get('block') == block %}selected{% endif %}>{{ class_labels_by_block.get(block, block) }}</option>
+                <option value="{{ block }}" {% if request.args.get('block')==block %}selected{% endif %}>{{
+                  class_labels_by_block.get(block, block) }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -297,8 +325,10 @@
               <label for="account" class="form-label fw-bold">Account:</label>
               <select name="account" id="account" class="form-select form-select-sm">
                 <option value="">All</option>
-                <option value="checking" {% if request.args.get('account') == 'checking' %}selected{% endif %}>Checking</option>
-                <option value="savings" {% if request.args.get('account') == 'savings' %}selected{% endif %}>Savings</option>
+                <option value="checking" {% if request.args.get('account')=='checking' %}selected{% endif %}>Checking
+                </option>
+                <option value="savings" {% if request.args.get('account')=='savings' %}selected{% endif %}>Savings
+                </option>
               </select>
             </div>
             <div class="col-md-2">
@@ -306,21 +336,25 @@
               <select name="type" id="type" class="form-select form-select-sm">
                 <option value="">All</option>
                 {% for tx_type in transaction_types %}
-                  <option value="{{ tx_type }}" {% if request.args.get('type') == tx_type %}selected{% endif %}>{{ tx_type|title }}</option>
+                <option value="{{ tx_type }}" {% if request.args.get('type')==tx_type %}selected{% endif %}>{{
+                  tx_type|title }}</option>
                 {% endfor %}
               </select>
             </div>
             <div class="col-md-2">
               <label for="start_date" class="form-label fw-bold">From:</label>
-              <input type="date" name="start_date" id="start_date" class="form-control form-control-sm" value="{{ request.args.get('start_date', '') }}">
+              <input type="date" name="start_date" id="start_date" class="form-control form-control-sm"
+                value="{{ request.args.get('start_date', '') }}">
             </div>
             <div class="col-md-2">
               <label for="end_date" class="form-label fw-bold">To:</label>
-              <input type="date" name="end_date" id="end_date" class="form-control form-control-sm" value="{{ request.args.get('end_date', '') }}">
+              <input type="date" name="end_date" id="end_date" class="form-control form-control-sm"
+                value="{{ request.args.get('end_date', '') }}">
             </div>
             <div class="col-md-2">
               <label for="student" class="form-label fw-bold">Student:</label>
-              <input type="text" name="student" id="student" class="form-control form-control-sm" placeholder="Name..." value="{{ request.args.get('student', '') }}">
+              <input type="text" name="student" id="student" class="form-control form-control-sm" placeholder="Name..."
+                value="{{ request.args.get('student', '') }}">
             </div>
           </div>
           <div class="row mt-3">
@@ -355,51 +389,55 @@
             </thead>
             <tbody>
               {% if transactions %}
-                {% for tx in transactions %}
-                <tr class="{% if tx.is_void %}table-secondary text-muted{% endif %}">
-                  <td>
-                    {% if tx.timestamp %}
-                      <span class="local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
-                    {% else %}
-                      N/A
-                    {% endif %}
-                  </td>
-                  <td>
-                    <a href="{{ url_for('admin.student_detail', student_id=tx.student_id) }}">
-                      {{ tx.student_name }}
-                    </a>
-                  </td>
-                  <td>{{ class_labels_by_block.get(tx.student_block, tx.student_block) if tx.student_block else 'N/A' }}</td>
-                  <td>
-                    {% if tx.type %}
-                      <span class="badge bg-secondary">{{ tx.type|title }}</span>
-                    {% endif %}
-                  </td>
-                  <td>
-                    <span class="badge bg-{% if tx.account_type == 'checking' %}primary{% else %}success{% endif %}">
-                      {{ tx.account_type|title }}
-                    </span>
-                  </td>
-                  <td class="{% if tx.amount > 0 %}text-success{% else %}text-danger{% endif %} fw-bold text-end">
-                    ${{ "%.2f"|format(tx.amount) }}
-                    {% if tx.is_void %}
-                      <span class="badge bg-secondary ms-1">VOID</span>
-                    {% endif %}
-                  </td>
-                  <td>{{ tx.description or '—' }}</td>
-                  <td>
-                    {% if not tx.is_void %}
-                      <button class="btn btn-sm btn-outline-danger" onclick="voidTransaction({{ tx.id }})" title="Void transaction">
-                        <i class="bi bi-x-circle"></i>
-                      </button>
-                    {% else %}
-                      <span class="text-muted small">Voided</span>
-                    {% endif %}
-                  </td>
-                </tr>
-                {% endfor %}
+              {% for tx in transactions %}
+              <tr class="{% if tx.is_void %}table-secondary text-muted{% endif %}">
+                <td>
+                  {% if tx.timestamp %}
+                  <span class="local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
+                  {% else %}
+                  N/A
+                  {% endif %}
+                </td>
+                <td>
+                  <a href="{{ url_for('admin.student_detail', student_id=tx.student_id) }}">
+                    {{ tx.student_name }}
+                  </a>
+                </td>
+                <td>{{ class_labels_by_block.get(tx.student_block, tx.student_block) if tx.student_block else 'N/A' }}
+                </td>
+                <td>
+                  {% if tx.type %}
+                  <span class="badge bg-secondary">{{ tx.type|title }}</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <span class="badge bg-{% if tx.account_type == 'checking' %}primary{% else %}success{% endif %}">
+                    {{ tx.account_type|title }}
+                  </span>
+                </td>
+                <td class="{% if tx.amount > 0 %}text-success{% else %}text-danger{% endif %} fw-bold text-end">
+                  ${{ "%.2f"|format(tx.amount) }}
+                  {% if tx.is_void %}
+                  <span class="badge bg-secondary ms-1">VOID</span>
+                  {% endif %}
+                </td>
+                <td>{{ tx.description or '—' }}</td>
+                <td>
+                  {% if not tx.is_void %}
+                  <button class="btn btn-sm btn-outline-danger" onclick="voidTransaction({{ tx.id }})"
+                    title="Void transaction">
+                    <i class="bi bi-x-circle"></i>
+                  </button>
+                  {% else %}
+                  <span class="text-muted small">Voided</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
               {% else %}
-                <tr><td colspan="8" class="text-center text-muted">No transactions found.</td></tr>
+              <tr>
+                <td colspan="8" class="text-center text-muted">No transactions found.</td>
+              </tr>
               {% endif %}
             </tbody>
           </table>
@@ -411,7 +449,8 @@
           <ul class="pagination pagination-sm justify-content-center mt-3">
             <!-- Previous Button -->
             <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-              <a class="page-link" href="{{ url_for('admin.banking', page=page-1, student=request.args.get('student', ''), block=request.args.get('block', ''), account=request.args.get('account', ''), type=request.args.get('type', ''), start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', '')) }}">Previous</a>
+              <a class="page-link"
+                href="{{ url_for('admin.banking', page=page-1, student=request.args.get('student', ''), block=request.args.get('block', ''), account=request.args.get('account', ''), type=request.args.get('type', ''), start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', '')) }}">Previous</a>
             </li>
 
             <!-- Page Numbers -->
@@ -419,33 +458,38 @@
             {% set end_page = [total_pages, page + 2]|min %}
 
             {% if start_page > 1 %}
-              <li class="page-item">
-                <a class="page-link" href="{{ url_for('admin.banking', page=1, student=request.args.get('student', ''), block=request.args.get('block', ''), account=request.args.get('account', ''), type=request.args.get('type', ''), start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', '')) }}">1</a>
-              </li>
-              {% if start_page > 2 %}
-                <li class="page-item disabled"><span class="page-link">...</span></li>
-              {% endif %}
+            <li class="page-item">
+              <a class="page-link"
+                href="{{ url_for('admin.banking', page=1, student=request.args.get('student', ''), block=request.args.get('block', ''), account=request.args.get('account', ''), type=request.args.get('type', ''), start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', '')) }}">1</a>
+            </li>
+            {% if start_page > 2 %}
+            <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% endif %}
             {% endif %}
 
             {% for p in range(start_page, end_page + 1) %}
-              <li class="page-item {% if p == page %}active{% endif %}">
-                <a class="page-link" href="{{ url_for('admin.banking', page=p, student=request.args.get('student', ''), block=request.args.get('block', ''), account=request.args.get('account', ''), type=request.args.get('type', ''), start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', '')) }}">{{ p }}</a>
-              </li>
+            <li class="page-item {% if p == page %}active{% endif %}">
+              <a class="page-link"
+                href="{{ url_for('admin.banking', page=p, student=request.args.get('student', ''), block=request.args.get('block', ''), account=request.args.get('account', ''), type=request.args.get('type', ''), start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', '')) }}">{{
+                p }}</a>
+            </li>
             {% endfor %}
 
-            {% if end_page < total_pages %}
-              {% if end_page < total_pages - 1 %}
-                <li class="page-item disabled"><span class="page-link">...</span></li>
+            {% if end_page < total_pages %} {% if end_page < total_pages - 1 %} <li class="page-item disabled"><span
+                class="page-link">...</span></li>
               {% endif %}
               <li class="page-item">
-                <a class="page-link" href="{{ url_for('admin.banking', page=total_pages, student=request.args.get('student', ''), block=request.args.get('block', ''), account=request.args.get('account', ''), type=request.args.get('type', ''), start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', '')) }}">{{ total_pages }}</a>
+                <a class="page-link"
+                  href="{{ url_for('admin.banking', page=total_pages, student=request.args.get('student', ''), block=request.args.get('block', ''), account=request.args.get('account', ''), type=request.args.get('type', ''), start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', '')) }}">{{
+                  total_pages }}</a>
               </li>
-            {% endif %}
+              {% endif %}
 
-            <!-- Next Button -->
-            <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-              <a class="page-link" href="{{ url_for('admin.banking', page=page+1, student=request.args.get('student', ''), block=request.args.get('block', ''), account=request.args.get('account', ''), type=request.args.get('type', ''), start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', '')) }}">Next</a>
-            </li>
+              <!-- Next Button -->
+              <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                <a class="page-link"
+                  href="{{ url_for('admin.banking', page=page+1, student=request.args.get('student', ''), block=request.args.get('block', ''), account=request.args.get('account', ''), type=request.args.get('type', ''), start_date=request.args.get('start_date', ''), end_date=request.args.get('end_date', '')) }}">Next</a>
+              </li>
           </ul>
         </nav>
         {% endif %}
@@ -466,11 +510,12 @@
           <span class="material-symbols-outlined" style="font-size: 2rem;">school</span>
           <div>
             <h6 class="mb-1 fw-bold">Configuring Banking Settings For:</h6>
-            <select class="form-select form-select-sm" id="settings_block_selector" style="width: auto; min-width: 200px;">
+            <select class="form-select form-select-sm" id="settings_block_selector"
+              style="width: auto; min-width: 200px;">
               {% for block in teacher_blocks %}
-                <option value="{{ block }}" {% if block == settings_block %}selected{% endif %}>
-                  {{ class_labels_by_block.get(block, block) }}
-                </option>
+              <option value="{{ block }}" {% if block==settings_block %}selected{% endif %}>
+                {{ class_labels_by_block.get(block, block) }}
+              </option>
               {% endfor %}
             </select>
           </div>
@@ -495,12 +540,16 @@
               <div class="mb-4">
                 <label class="form-label fw-bold">Choose how you want to set the interest rate:</label>
                 <div class="btn-group w-100" role="group" aria-label="Interest rate input mode">
-                  <input type="radio" class="btn-check" name="rate_input_mode" id="mode_apy" value="apy" {% if not settings or settings.savings_apy >= settings.savings_monthly_rate or form.rate_input_mode.data == 'apy' %}checked{% endif %}>
+                  <input type="radio" class="btn-check" name="rate_input_mode" id="mode_apy" value="apy" {% if not
+                    settings or settings.savings_apy>= settings.savings_monthly_rate or form.rate_input_mode.data ==
+                  'apy' %}checked{% endif %}>
                   <label class="btn btn-outline-primary" for="mode_apy">
                     <i class="bi bi-calendar-year me-1"></i>Annual Rate (APY)
                   </label>
 
-                  <input type="radio" class="btn-check" name="rate_input_mode" id="mode_monthly" value="monthly" {% if settings and settings.savings_monthly_rate > settings.savings_apy and form.rate_input_mode.data != 'apy' %}checked{% endif %}>
+                  <input type="radio" class="btn-check" name="rate_input_mode" id="mode_monthly" value="monthly" {% if
+                    settings and settings.savings_monthly_rate> settings.savings_apy and form.rate_input_mode.data !=
+                  'apy' %}checked{% endif %}>
                   <label class="btn btn-outline-primary" for="mode_monthly">
                     <i class="bi bi-calendar-month me-1"></i>Monthly Rate
                   </label>
@@ -511,7 +560,8 @@
               <div class="mb-3" id="apyInputSection">
                 <label for="savings_apy" class="form-label fw-bold">Annual Percentage Yield (APY %)</label>
                 <div class="input-group">
-                  <input type="number" step="0.01" class="form-control" name="savings_apy" id="savings_apy" placeholder="5.0" value="{{ form.savings_apy.data or 0 }}">
+                  <input type="number" step="0.01" class="form-control" name="savings_apy" id="savings_apy"
+                    placeholder="5.0" value="{{ form.savings_apy.data or 0 }}">
                   <span class="input-group-text">%</span>
                 </div>
                 <small class="text-muted">Annual Percentage Yield for savings accounts</small>
@@ -527,7 +577,8 @@
               <div class="mb-3" id="monthlyInputSection" style="display: none;">
                 <label for="savings_monthly_rate" class="form-label fw-bold">Monthly Interest Rate (%)</label>
                 <div class="input-group">
-                  <input type="number" step="0.0001" class="form-control" name="savings_monthly_rate" id="savings_monthly_rate" placeholder="0.42" value="{{ form.savings_monthly_rate.data or 0 }}">
+                  <input type="number" step="0.0001" class="form-control" name="savings_monthly_rate"
+                    id="savings_monthly_rate" placeholder="0.42" value="{{ form.savings_monthly_rate.data or 0 }}">
                   <span class="input-group-text">%</span>
                 </div>
                 <small class="text-muted">Monthly interest rate</small>
@@ -549,7 +600,7 @@
 
               <hr>
 
-              
+
 
               <div class="mb-3">
                 {{ form.interest_calculation_type.label(class="form-label fw-bold") }}
@@ -568,7 +619,7 @@
 
               <hr>
 
-             
+
 
               <div class="mb-3">
                 {{ form.interest_schedule_type.label(class="form-label fw-bold") }}
@@ -616,14 +667,16 @@
                 </div>
               </div>
 
-              <div id="feeSettings" style="{% if not settings or not settings.overdraft_fee_enabled %}display:none;{% endif %}">
+              <div id="feeSettings"
+                style="{% if not settings or not settings.overdraft_fee_enabled %}display:none;{% endif %}">
                 <div class="mb-3">
                   {{ form.overdraft_fee_type.label(class="form-label fw-bold") }}
                   {{ form.overdraft_fee_type(class="form-select", id="feeTypeSelect") }}
                 </div>
 
                 <!-- Flat Fee Settings -->
-                <div id="flatFeeSettings" style="{% if settings and settings.overdraft_fee_type == 'progressive' %}display:none;{% endif %}">
+                <div id="flatFeeSettings"
+                  style="{% if settings and settings.overdraft_fee_type == 'progressive' %}display:none;{% endif %}">
                   <div class="mb-3">
                     {{ form.overdraft_fee_flat_amount.label(class="form-label fw-bold") }}
                     <div class="input-group">
@@ -635,7 +688,8 @@
                 </div>
 
                 <!-- Progressive Fee Settings -->
-                <div id="progressiveFeeSettings" style="{% if not settings or settings.overdraft_fee_type != 'progressive' %}display:none;{% endif %}">
+                <div id="progressiveFeeSettings"
+                  style="{% if not settings or settings.overdraft_fee_type != 'progressive' %}display:none;{% endif %}">
                   <div class="mb-3">
                     {{ form.overdraft_fee_progressive_1.label(class="form-label fw-bold") }}
                     <div class="input-group">
@@ -685,104 +739,105 @@
 
 <!-- JavaScript -->
 <script>
-// Timestamp conversion handled by timezone-utils.js
-document.addEventListener("DOMContentLoaded", () => {
+  // Timestamp conversion handled by timezone-utils.js
+  document.addEventListener("DOMContentLoaded", () => {
 
     // -------------------- INTEREST RATE CALCULATIONS --------------------
-    const avgSavingsBalance = {{ average_savings_balance|default(0) }};
-    const totalSavings = {{ total_savings|default(0) }};
+    const avgSavingsBalance = {{ average_savings_balance|default (0)
+  }};
+  const totalSavings = {{ total_savings|default (0) }};
 
-    // Toggle between APY and Monthly input modes
-    const modeAPY = document.getElementById('mode_apy');
-    const modeMonthly = document.getElementById('mode_monthly');
-    const apyInputSection = document.getElementById('apyInputSection');
-    const monthlyInputSection = document.getElementById('monthlyInputSection');
-    const apyInput = document.getElementById('savings_apy');
-    const monthlyInput = document.getElementById('savings_monthly_rate');
+  // Toggle between APY and Monthly input modes
+  const modeAPY = document.getElementById('mode_apy');
+  const modeMonthly = document.getElementById('mode_monthly');
+  const apyInputSection = document.getElementById('apyInputSection');
+  const monthlyInputSection = document.getElementById('monthlyInputSection');
+  const apyInput = document.getElementById('savings_apy');
+  const monthlyInput = document.getElementById('savings_monthly_rate');
 
-    function toggleInputMode() {
-        if (modeAPY.checked) {
-            apyInputSection.style.display = 'block';
-            monthlyInputSection.style.display = 'none';
-            // Disable monthly input to prevent validation errors on hidden field
-            monthlyInput.disabled = true;
-            apyInput.disabled = false;
-        } else {
-            apyInputSection.style.display = 'none';
-            monthlyInputSection.style.display = 'block';
-            // Disable APY input to prevent validation errors on hidden field
-            apyInput.disabled = true;
-            monthlyInput.disabled = false;
-        }
-        updateInterestPreview();
+  function toggleInputMode() {
+    if (modeAPY.checked) {
+      apyInputSection.style.display = 'block';
+      monthlyInputSection.style.display = 'none';
+      // Disable monthly input to prevent validation errors on hidden field
+      monthlyInput.disabled = true;
+      apyInput.disabled = false;
+    } else {
+      apyInputSection.style.display = 'none';
+      monthlyInputSection.style.display = 'block';
+      // Disable APY input to prevent validation errors on hidden field
+      apyInput.disabled = true;
+      monthlyInput.disabled = false;
+    }
+    updateInterestPreview();
+  }
+
+  // APY to Monthly Rate: monthly = (1 + APY/100)^(1/12) - 1
+  function apyToMonthly(apy) {
+    if (!apy || apy <= 0) return 0;
+    const monthly = (Math.pow(1 + apy / 100, 1 / 12) - 1) * 100;
+    return monthly;
+  }
+
+  // Monthly Rate to APY: APY = (1 + monthly/100)^12 - 1
+  function monthlyToAPY(monthly) {
+    if (!monthly || monthly <= 0) return 0;
+    const apy = (Math.pow(1 + monthly / 100, 12) - 1) * 100;
+    return apy;
+  }
+
+  // Update calculations when APY changes
+  apyInput.addEventListener('input', function () {
+    const apy = parseFloat(this.value) || 0;
+    const monthly = apyToMonthly(apy);
+
+    document.getElementById('calculatedMonthlyFromAPY').textContent = monthly.toFixed(4);
+    document.getElementById('apyToMonthlyHint').style.display = apy > 0 ? 'block' : 'none';
+
+    // Update the monthly rate field with calculated value
+    monthlyInput.value = monthly.toFixed(6);
+
+    updateInterestPreview();
+  });
+
+  // Update calculations when Monthly Rate changes
+  monthlyInput.addEventListener('input', function () {
+    const monthly = parseFloat(this.value) || 0;
+    const apy = monthlyToAPY(monthly);
+
+    document.getElementById('calculatedAPYFromMonthly').textContent = apy.toFixed(4);
+    document.getElementById('monthlyToAPYHint').style.display = monthly > 0 ? 'block' : 'none';
+
+    // Update the APY field with calculated value
+    apyInput.value = apy.toFixed(6);
+
+    updateInterestPreview();
+  });
+
+  // Update interest preview
+  function updateInterestPreview() {
+    const previewContent = document.getElementById('previewContent');
+    let monthlyRate = 0;
+    let apyRate = 0;
+
+    if (modeAPY.checked) {
+      apyRate = parseFloat(apyInput.value) || 0;
+      monthlyRate = apyToMonthly(apyRate);
+    } else {
+      monthlyRate = parseFloat(monthlyInput.value) || 0;
+      apyRate = monthlyToAPY(monthlyRate);
     }
 
-    // APY to Monthly Rate: monthly = (1 + APY/100)^(1/12) - 1
-    function apyToMonthly(apy) {
-        if (!apy || apy <= 0) return 0;
-        const monthly = (Math.pow(1 + apy / 100, 1 / 12) - 1) * 100;
-        return monthly;
+    if (monthlyRate <= 0 || avgSavingsBalance <= 0) {
+      previewContent.innerHTML = '<small class="text-muted">Enter an interest rate to see estimated payouts</small>';
+      return;
     }
 
-    // Monthly Rate to APY: APY = (1 + monthly/100)^12 - 1
-    function monthlyToAPY(monthly) {
-        if (!monthly || monthly <= 0) return 0;
-        const apy = (Math.pow(1 + monthly / 100, 12) - 1) * 100;
-        return apy;
-    }
+    const monthlyInterestPerStudent = avgSavingsBalance * (monthlyRate / 100);
+    const weeklyInterestPerStudent = monthlyInterestPerStudent / 4.33; // Approximate weeks per month
+    const totalMonthlyInterest = totalSavings * (monthlyRate / 100);
 
-    // Update calculations when APY changes
-    apyInput.addEventListener('input', function() {
-        const apy = parseFloat(this.value) || 0;
-        const monthly = apyToMonthly(apy);
-
-        document.getElementById('calculatedMonthlyFromAPY').textContent = monthly.toFixed(4);
-        document.getElementById('apyToMonthlyHint').style.display = apy > 0 ? 'block' : 'none';
-
-        // Update the monthly rate field with calculated value
-        monthlyInput.value = monthly.toFixed(6);
-
-        updateInterestPreview();
-    });
-
-    // Update calculations when Monthly Rate changes
-    monthlyInput.addEventListener('input', function() {
-        const monthly = parseFloat(this.value) || 0;
-        const apy = monthlyToAPY(monthly);
-
-        document.getElementById('calculatedAPYFromMonthly').textContent = apy.toFixed(4);
-        document.getElementById('monthlyToAPYHint').style.display = monthly > 0 ? 'block' : 'none';
-
-        // Update the APY field with calculated value
-        apyInput.value = apy.toFixed(6);
-
-        updateInterestPreview();
-    });
-
-    // Update interest preview
-    function updateInterestPreview() {
-        const previewContent = document.getElementById('previewContent');
-        let monthlyRate = 0;
-        let apyRate = 0;
-
-        if (modeAPY.checked) {
-            apyRate = parseFloat(apyInput.value) || 0;
-            monthlyRate = apyToMonthly(apyRate);
-        } else {
-            monthlyRate = parseFloat(monthlyInput.value) || 0;
-            apyRate = monthlyToAPY(monthlyRate);
-        }
-
-        if (monthlyRate <= 0 || avgSavingsBalance <= 0) {
-            previewContent.innerHTML = '<small class="text-muted">Enter an interest rate to see estimated payouts</small>';
-            return;
-        }
-
-        const monthlyInterestPerStudent = avgSavingsBalance * (monthlyRate / 100);
-        const weeklyInterestPerStudent = monthlyInterestPerStudent / 4.33; // Approximate weeks per month
-        const totalMonthlyInterest = totalSavings * (monthlyRate / 100);
-
-        previewContent.innerHTML = `
+    previewContent.innerHTML = `
             <div class="row text-center">
                 <div class="col-6">
                     <strong>Average Student</strong><br>
@@ -801,149 +856,149 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
             </div>
         `;
-    }
+  }
 
-    // Mode toggle listeners
-    modeAPY.addEventListener('change', toggleInputMode);
-    modeMonthly.addEventListener('change', toggleInputMode);
+  // Mode toggle listeners
+  modeAPY.addEventListener('change', toggleInputMode);
+  modeMonthly.addEventListener('change', toggleInputMode);
 
-    // Initialize
-    toggleInputMode();
+  // Initialize
+  toggleInputMode();
 
-    // If there are existing values, trigger calculation
-    if (parseFloat(apyInput.value) > 0) {
-        apyInput.dispatchEvent(new Event('input'));
-    } else if (parseFloat(monthlyInput.value) > 0) {
-        monthlyInput.dispatchEvent(new Event('input'));
-    }
+  // If there are existing values, trigger calculation
+  if (parseFloat(apyInput.value) > 0) {
+    apyInput.dispatchEvent(new Event('input'));
+  } else if (parseFloat(monthlyInput.value) > 0) {
+    monthlyInput.dispatchEvent(new Event('input'));
+  }
 
-    // Re-enable all fields before form submission to ensure values are sent
-    const bankingForm = document.getElementById('bankingSettingsForm');
-    if (bankingForm) {
-        bankingForm.addEventListener('submit', function(e) {
-            // Temporarily enable both fields so their values are submitted
-            apyInput.disabled = false;
-            monthlyInput.disabled = false;
-        });
-    }
+  // Re-enable all fields before form submission to ensure values are sent
+  const bankingForm = document.getElementById('bankingSettingsForm');
+  if (bankingForm) {
+    bankingForm.addEventListener('submit', function (e) {
+      // Temporarily enable both fields so their values are submitted
+      apyInput.disabled = false;
+      monthlyInput.disabled = false;
+    });
+  }
 
-    // Overdraft Fee Toggle
-    const overdraftFeeToggle = document.getElementById('overdraftFeeToggle');
-    const feeSettings = document.getElementById('feeSettings');
+  // Overdraft Fee Toggle
+  const overdraftFeeToggle = document.getElementById('overdraftFeeToggle');
+  const feeSettings = document.getElementById('feeSettings');
 
-    if (overdraftFeeToggle) {
-        overdraftFeeToggle.addEventListener('change', function() {
-            feeSettings.style.display = this.checked ? 'block' : 'none';
-        });
-    }
+  if (overdraftFeeToggle) {
+    overdraftFeeToggle.addEventListener('change', function () {
+      feeSettings.style.display = this.checked ? 'block' : 'none';
+    });
+  }
 
-    // Fee Type Toggle
-    const feeTypeSelect = document.getElementById('feeTypeSelect');
-    const flatFeeSettings = document.getElementById('flatFeeSettings');
-    const progressiveFeeSettings = document.getElementById('progressiveFeeSettings');
+  // Fee Type Toggle
+  const feeTypeSelect = document.getElementById('feeTypeSelect');
+  const flatFeeSettings = document.getElementById('flatFeeSettings');
+  const progressiveFeeSettings = document.getElementById('progressiveFeeSettings');
 
-    if (feeTypeSelect) {
-        feeTypeSelect.addEventListener('change', function() {
-            if (this.value === 'flat') {
-                flatFeeSettings.style.display = 'block';
-                progressiveFeeSettings.style.display = 'none';
-            } else {
-                flatFeeSettings.style.display = 'none';
-                progressiveFeeSettings.style.display = 'block';
-            }
-        });
-    }
-
-    // Interest Schedule Type Toggle
-    const scheduleType = document.getElementById('interest_schedule_type');
-    const cycleDaysField = document.getElementById('cycleDaysField');
-
-    if (scheduleType) {
-        scheduleType.addEventListener('change', function() {
-            cycleDaysField.style.display = this.value === 'monthly' ? 'block' : 'none';
-        });
-
-        // Initialize visibility
-        cycleDaysField.style.display = scheduleType.value === 'monthly' ? 'block' : 'none';
-    }
-
-    // Interest Calculation Type Toggle
-    const calculationType = document.getElementById('interest_calculation_type');
-    const compoundFrequencyField = document.getElementById('compoundFrequencyField');
-
-    if (calculationType) {
-        calculationType.addEventListener('change', function() {
-            compoundFrequencyField.style.display = this.value === 'compound' ? 'block' : 'none';
-        });
-
-        // Initialize visibility
-        compoundFrequencyField.style.display = calculationType.value === 'compound' ? 'block' : 'none';
-    }
-
-    // -------------------- CLASS SELECTOR & APPLY TO ALL --------------------
-    const settingsBlockSelector = document.getElementById('settings_block_selector');
-    const applyToAllCheckbox = document.getElementById('apply_to_all_checkbox');
-    const applyToAllInput = document.getElementById('apply_to_all_input');
-
-    // Handle class selector change - reload page with new settings_block
-    if (settingsBlockSelector) {
-        settingsBlockSelector.addEventListener('change', function() {
-            const selectedBlock = this.value;
-            const url = new URL(window.location.href);
-            url.searchParams.set('settings_block', selectedBlock);
-            window.location.href = url.toString();
-        });
-    }
-
-    // Handle apply to all checkbox
-    if (applyToAllCheckbox && applyToAllInput) {
-        applyToAllCheckbox.addEventListener('change', function() {
-            applyToAllInput.value = this.checked ? 'true' : 'false';
-
-            // Disable class selector when apply to all is checked
-            if (settingsBlockSelector) {
-                settingsBlockSelector.disabled = this.checked;
-            }
-        });
-    }
-});
-
-// Void Transaction
-async function voidTransaction(transactionId) {
-  if (!confirm('Are you sure you want to void this transaction? This cannot be undone.')) return;
-
-  const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-
-  try {
-    const resp = await fetch(`/admin/void-transaction/${transactionId}`, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': csrfToken,
-        'Content-Type': 'application/json',
-        'X-Requested-With': 'XMLHttpRequest'
+  if (feeTypeSelect) {
+    feeTypeSelect.addEventListener('change', function () {
+      if (this.value === 'flat') {
+        flatFeeSettings.style.display = 'block';
+        progressiveFeeSettings.style.display = 'none';
+      } else {
+        flatFeeSettings.style.display = 'none';
+        progressiveFeeSettings.style.display = 'block';
       }
     });
+  }
 
-    const data = await resp.json();
-    if (data.status === 'success') {
-      showToast('Transaction voided successfully', 'success');
-      setTimeout(() => location.reload(), 1000);
-    } else {
-      showToast(data.message || 'Failed to void transaction', 'error');
+  // Interest Schedule Type Toggle
+  const scheduleType = document.getElementById('interest_schedule_type');
+  const cycleDaysField = document.getElementById('cycleDaysField');
+
+  if (scheduleType) {
+    scheduleType.addEventListener('change', function () {
+      cycleDaysField.style.display = this.value === 'monthly' ? 'block' : 'none';
+    });
+
+    // Initialize visibility
+    cycleDaysField.style.display = scheduleType.value === 'monthly' ? 'block' : 'none';
+  }
+
+  // Interest Calculation Type Toggle
+  const calculationType = document.getElementById('interest_calculation_type');
+  const compoundFrequencyField = document.getElementById('compoundFrequencyField');
+
+  if (calculationType) {
+    calculationType.addEventListener('change', function () {
+      compoundFrequencyField.style.display = this.value === 'compound' ? 'block' : 'none';
+    });
+
+    // Initialize visibility
+    compoundFrequencyField.style.display = calculationType.value === 'compound' ? 'block' : 'none';
+  }
+
+  // -------------------- CLASS SELECTOR & APPLY TO ALL --------------------
+  const settingsBlockSelector = document.getElementById('settings_block_selector');
+  const applyToAllCheckbox = document.getElementById('apply_to_all_checkbox');
+  const applyToAllInput = document.getElementById('apply_to_all_input');
+
+  // Handle class selector change - reload page with new settings_block
+  if (settingsBlockSelector) {
+    settingsBlockSelector.addEventListener('change', function () {
+      const selectedBlock = this.value;
+      const url = new URL(window.location.href);
+      url.searchParams.set('settings_block', selectedBlock);
+      window.location.href = url.toString();
+    });
+  }
+
+  // Handle apply to all checkbox
+  if (applyToAllCheckbox && applyToAllInput) {
+    applyToAllCheckbox.addEventListener('change', function () {
+      applyToAllInput.value = this.checked ? 'true' : 'false';
+
+      // Disable class selector when apply to all is checked
+      if (settingsBlockSelector) {
+        settingsBlockSelector.disabled = this.checked;
+      }
+    });
+  }
+});
+
+  // Void Transaction
+  async function voidTransaction(transactionId) {
+    if (!confirm('Are you sure you want to void this transaction? This cannot be undone.')) return;
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    try {
+      const resp = await fetch(`/admin/void-transaction/${transactionId}`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrfToken,
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        }
+      });
+
+      const data = await resp.json();
+      if (data.status === 'success') {
+        showToast('Transaction voided successfully', 'success');
+        setTimeout(() => location.reload(), 1000);
+      } else {
+        showToast(data.message || 'Failed to void transaction', 'error');
+      }
+    } catch (err) {
+      showToast('Error voiding transaction', 'error');
     }
-  } catch (err) {
-    showToast('Error voiding transaction', 'error');
   }
-}
 
-// Toast notification helper
-function showToast(message, type) {
-  if (window.toast) {
-    window.toast(message, type);
-  } else {
-    alert(message);
+  // Toast notification helper
+  function showToast(message, type) {
+    if (window.toast) {
+      window.toast(message, type);
+    } else {
+      alert(message);
+    }
   }
-}
 </script>
 
 {% endblock %}

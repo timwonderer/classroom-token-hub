@@ -8,8 +8,26 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
-### Added
-- (No unreleased changes yet)
+### Fixed
+- **Rent Calculation Accuracy** - Improved rent amount calculations for monthly display (#839)
+  - Fixed daily rent calculation to use actual days in month (via `monthrange`) instead of approximating 30 days
+  - Added support for 'custom' frequency type in rent calculation logic
+  - Fixed timezone inconsistency by using timezone-aware `datetime.now(timezone.utc)` consistently
+  - Added null checks for `grace_period_days` and `due_day_of_month` fields to prevent TypeError
+  - Refactored duplicated late payment check logic into single code path
+  - Optimized payments query using subquery instead of list comprehension for better performance
+- **Rent Statistics Display** - Fixed incorrect student counts in rent overview cards (#839)
+  - "Paid This Month" now correctly shows count of students who paid (not payment count)
+  - "Unpaid This Month" now correctly shows count of students with outstanding balances
+  - Both statistics use accurate `unpaid_students` calculation instead of payment count
+- **Rent Period Display** - Fixed misleading "Period" column in unpaid students list (#839)
+  - Now shows billing period (e.g., "January 2026") instead of class block/period
+
+### Changed
+- **Rent Calculation Helper** - Extracted rent amount calculation into reusable helper function (#839)
+  - Created `_calculate_base_rent_amount()` helper to avoid code duplication
+  - Used in both payroll warning calculation and unpaid students calculation
+  - Follows DRY principle for better maintainability
 
 ## [1.7.0] - 2026-01-09
 

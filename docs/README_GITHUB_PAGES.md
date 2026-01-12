@@ -90,10 +90,7 @@ docs/
 ├── diagnostics/                # Troubleshooting guides
 ├── user-guides/                # Teacher and student manuals
 ├── technical-reference/        # Architecture, database, API
-├── operations/                 # Deployment and maintenance
-├── security/                   # Security audits
-├── development/                # Development guides
-└── archive/                    # Historical documents
+└── operations/                 # Deployment and updates
 ```
 
 ---

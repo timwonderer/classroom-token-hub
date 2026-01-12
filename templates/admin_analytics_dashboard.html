@@ -8,56 +8,68 @@
   <div class="d-flex align-items-center gap-2">
     <label class="small text-muted mb-0" for="classDropdownButton">Class</label>
     <div class="dropdown">
-    <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" id="classDropdownButton" data-bs-toggle="dropdown" aria-expanded="false">
-      {% set selected_class = namespace(found=False) %}
-      {% for class_option in available_classes %}
+      <button class="btn btn-outline-primary btn-sm dropdown-toggle" type="button" id="classDropdownButton"
+        data-bs-toggle="dropdown" aria-expanded="false">
+        {% set selected_class = namespace(found=False) %}
+        {% for class_option in available_classes %}
         {% if class_option.join_code == join_code %}
-          {{ class_option.label }} ({{ class_option.block }})
-          {% set selected_class.found = True %}
-        {% endif %}
-      {% endfor %}
-      {% if not selected_class.found %}Select Class{% endif %}
-    </button>
-    <ul class="dropdown-menu" aria-labelledby="classDropdownButton">
-      {% for class_option in available_classes %}
-      <li><a class="dropdown-item {% if class_option.join_code == join_code %}active{% endif %}" href="{{ url_for('analytics.dashboard', window=window_type, join_code=class_option.join_code) }}">
         {{ class_option.label }} ({{ class_option.block }})
-      </a></li>
-      {% endfor %}
-    </ul>
+        {% set selected_class.found = True %}
+        {% endif %}
+        {% endfor %}
+        {% if not selected_class.found %}Select Class{% endif %}
+      </button>
+      <ul class="dropdown-menu" aria-labelledby="classDropdownButton">
+        {% for class_option in available_classes %}
+        <li><a class="dropdown-item {% if class_option.join_code == join_code %}active{% endif %}"
+            href="{{ url_for('analytics.dashboard', window=window_type, join_code=class_option.join_code) }}">
+            {{ class_option.label }} ({{ class_option.block }})
+          </a></li>
+        {% endfor %}
+      </ul>
     </div>
   </div>
   {% endif %}
-  
+
   <div class="btn-group" role="group">
-    <a href="{{ url_for('analytics.dashboard', window='week', join_code=join_code) }}" class="btn {% if window_type == 'week' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+    <a href="{{ url_for('analytics.dashboard', window='week', join_code=join_code) }}"
+      class="btn {% if window_type == 'week' %}btn-primary{% else %}btn-outline-primary{% endif %}">
       Week
     </a>
-    <a href="{{ url_for('analytics.dashboard', window='month', join_code=join_code) }}" class="btn {% if window_type == 'month' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+    <a href="{{ url_for('analytics.dashboard', window='month', join_code=join_code) }}"
+      class="btn {% if window_type == 'month' %}btn-primary{% else %}btn-outline-primary{% endif %}">
       Month
     </a>
   </div>
+</div>
+
+<button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
+  data-bs-target="#analyticsGuide" aria-controls="analyticsGuide">
+  <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
+</button>
 </div>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
   <!-- Per spec section 13: "Something is drifting — and I know what lever to pull." -->
-  
+
   {% if not snapshot %}
   <div class="alert alert-info">
     <i class="bi bi-info-circle me-2"></i>
     <strong>No analytics data available yet.</strong> Analytics will appear once students start participating.
   </div>
   {% else %}
-  
+
   <!-- System Health Metrics Section (Always Visible per spec 4.1) -->
   <div class="row mb-1">
     <div class="col-12">
       <h2 class="mb-3">
-               Classroom Macroeconomics Indicators
+        Classroom Macroeconomics Indicators
         <br>
-        <small class="text-muted" style="font-size:1.5rem"> {% if window_type == 'week' %}Week{% elif window_type == 'month' %}Month{% else %}Period{% endif %} of {{ window_start|format_datetime('%b %d') }} to {{ window_end|format_datetime('%b %d, %Y') }}</small>
+        <small class="text-muted" style="font-size:1.5rem"> {% if window_type == 'week' %}Week{% elif window_type ==
+          'month' %}Month{% else %}Period{% endif %} of {{ window_start|format_datetime('%b %d') }} to {{
+          window_end|format_datetime('%b %d, %Y') }}</small>
       </h2>
     </div>
   </div>
@@ -81,15 +93,15 @@
   </div>
   {% set alert_lookup = namespace(participation=None, velocity=None, cwi=None, budget=None) %}
   {% for alert in alerts %}
-    {% if alert.alert_key == 'participation_low' %}
-      {% set alert_lookup.participation = alert %}
-    {% elif alert.alert_key == 'velocity_drop' %}
-      {% set alert_lookup.velocity = alert %}
-    {% elif alert.alert_key == 'cwi_deviation' %}
-      {% set alert_lookup.cwi = alert %}
-    {% elif alert.alert_key == 'budget_survival_low' %}
-      {% set alert_lookup.budget = alert %}
-    {% endif %}
+  {% if alert.alert_key == 'participation_low' %}
+  {% set alert_lookup.participation = alert %}
+  {% elif alert.alert_key == 'velocity_drop' %}
+  {% set alert_lookup.velocity = alert %}
+  {% elif alert.alert_key == 'cwi_deviation' %}
+  {% set alert_lookup.cwi = alert %}
+  {% elif alert.alert_key == 'budget_survival_low' %}
+  {% set alert_lookup.budget = alert %}
+  {% endif %}
   {% endfor %}
 
   <div class="row mb-4">
@@ -113,24 +125,30 @@
                     <div>
                       <div class="fw-semibold">
                         Participation Rate
-                        <span class="ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Share of enrolled students with any activity (transactions or attendance) during this window.">
+                        <span class="ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Share of enrolled students with any activity (transactions or attendance) during this window.">
                           <i class="bi bi-info-circle"></i>
                         </span>
                       </div>
                       <div class="d-flex align-items-baseline gap-2">
-                        <span class="fs-5 {% if snapshot.participation_rate >= 70 %}text-success{% elif snapshot.participation_rate >= 50 %}text-warning{% else %}text-danger{% endif %}">
+                        <span
+                          class="fs-5 {% if snapshot.participation_rate >= 70 %}text-success{% elif snapshot.participation_rate >= 50 %}text-warning{% else %}text-danger{% endif %}">
                           {{ "%.1f"|format(snapshot.participation_rate) }}%
                         </span>
-                        <span class="small text-muted">{{ snapshot.active_students }} of {{ snapshot.total_students }} active</span>
+                        <span class="small text-muted">{{ snapshot.active_students }} of {{ snapshot.total_students }}
+                          active</span>
                       </div>
                       {% if snapshot.participation_trend %}
                       <div class="small mt-1">
                         {% if snapshot.participation_trend == 'increasing' %}
-                        <span class="badge bg-success-subtle text-success"><i class="bi bi-arrow-up"></i> Increasing</span>
+                        <span class="badge bg-success-subtle text-success"><i class="bi bi-arrow-up"></i>
+                          Increasing</span>
                         {% elif snapshot.participation_trend == 'decreasing' %}
-                        <span class="badge bg-danger-subtle text-danger"><i class="bi bi-arrow-down"></i> Decreasing</span>
+                        <span class="badge bg-danger-subtle text-danger"><i class="bi bi-arrow-down"></i>
+                          Decreasing</span>
                         {% else %}
-                        <span class="badge bg-secondary-subtle text-secondary"><i class="bi bi-arrow-right"></i> Stable</span>
+                        <span class="badge bg-secondary-subtle text-secondary"><i class="bi bi-arrow-right"></i>
+                          Stable</span>
                         {% endif %}
                       </div>
                       {% endif %}
@@ -139,38 +157,40 @@
                 </td>
                 <td class="small text-muted">
                   {% if alert_lookup.participation %}
-                    {{ alert_lookup.participation.why_it_matters | e }}
+                  {{ alert_lookup.participation.why_it_matters | e }}
                   {% else %}
-                    Participation reflects whether students are engaging with the system during this window.
+                  Participation reflects whether students are engaging with the system during this window.
                   {% endif %}
                 </td>
                 <td>
                   {% if alert_lookup.participation %}
-                    <span class="badge {% if alert_lookup.participation.severity == 'critical' %}bg-danger-subtle text-danger{% elif alert_lookup.participation.severity == 'warning' %}bg-warning-subtle text-warning{% else %}bg-info-subtle text-info{% endif %}">
-                      {{ alert_lookup.participation.severity|capitalize }}
-                    </span>
-                    <div class="small mt-1">{{ alert_lookup.participation.what_changed | e }}</div>
-                    {% if not alert_lookup.participation.acknowledged_at %}
-                    <form action="{{ url_for('analytics.acknowledge_alert', alert_id=alert_lookup.participation.id) }}" method="POST" class="mt-2">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <button type="submit" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-check"></i> Acknowledge
-                      </button>
-                    </form>
-                    {% else %}
-                    <div class="small text-muted mt-2">Acknowledged</div>
-                    {% endif %}
+                  <span
+                    class="badge {% if alert_lookup.participation.severity == 'critical' %}bg-danger-subtle text-danger{% elif alert_lookup.participation.severity == 'warning' %}bg-warning-subtle text-warning{% else %}bg-info-subtle text-info{% endif %}">
+                    {{ alert_lookup.participation.severity|capitalize }}
+                  </span>
+                  <div class="small mt-1">{{ alert_lookup.participation.what_changed | e }}</div>
+                  {% if not alert_lookup.participation.acknowledged_at %}
+                  <form action="{{ url_for('analytics.acknowledge_alert', alert_id=alert_lookup.participation.id) }}"
+                    method="POST" class="mt-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                      <i class="bi bi-check"></i> Acknowledge
+                    </button>
+                  </form>
                   {% else %}
-                    <span class="badge bg-success-subtle text-success">Normal</span>
+                  <div class="small text-muted mt-2">Acknowledged</div>
+                  {% endif %}
+                  {% else %}
+                  <span class="badge bg-success-subtle text-success">Normal</span>
                   {% endif %}
                 </td>
                 <td class="small">
                   {% if alert_lookup.participation and alert_lookup.participation.suggested_action %}
-                    {{ alert_lookup.participation.suggested_action | e }}
+                  {{ alert_lookup.participation.suggested_action | e }}
                   {% elif alert_lookup.participation %}
-                    Review recent routines and remove barriers to participation.
+                  Review recent routines and remove barriers to participation.
                   {% else %}
-                    Keep monitoring participation trends.
+                  Keep monitoring participation trends.
                   {% endif %}
                 </td>
               </tr>
@@ -181,7 +201,8 @@
                     <div>
                       <div class="fw-semibold">
                         Money Velocity
-                        <span class="ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Average number of transactions per student per day in this window.">
+                        <span class="ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Average number of transactions per student per day in this window.">
                           <i class="bi bi-info-circle"></i>
                         </span>
                       </div>
@@ -192,11 +213,14 @@
                       {% if snapshot.velocity_trend %}
                       <div class="small mt-1">
                         {% if snapshot.velocity_trend == 'increasing' %}
-                        <span class="badge bg-success-subtle text-success"><i class="bi bi-arrow-up"></i> Increasing</span>
+                        <span class="badge bg-success-subtle text-success"><i class="bi bi-arrow-up"></i>
+                          Increasing</span>
                         {% elif snapshot.velocity_trend == 'decreasing' %}
-                        <span class="badge bg-warning-subtle text-warning"><i class="bi bi-arrow-down"></i> Decreasing</span>
+                        <span class="badge bg-warning-subtle text-warning"><i class="bi bi-arrow-down"></i>
+                          Decreasing</span>
                         {% else %}
-                        <span class="badge bg-secondary-subtle text-secondary"><i class="bi bi-arrow-right"></i> Stable</span>
+                        <span class="badge bg-secondary-subtle text-secondary"><i class="bi bi-arrow-right"></i>
+                          Stable</span>
                         {% endif %}
                       </div>
                       {% endif %}
@@ -205,38 +229,40 @@
                 </td>
                 <td class="small text-muted">
                   {% if alert_lookup.velocity %}
-                    {{ alert_lookup.velocity.why_it_matters | e }}
+                  {{ alert_lookup.velocity.why_it_matters | e }}
                   {% else %}
-                    Velocity shows how actively money is circulating through the economy.
+                  Velocity shows how actively money is circulating through the economy.
                   {% endif %}
                 </td>
                 <td>
                   {% if alert_lookup.velocity %}
-                    <span class="badge {% if alert_lookup.velocity.severity == 'critical' %}bg-danger-subtle text-danger{% elif alert_lookup.velocity.severity == 'warning' %}bg-warning-subtle text-warning{% else %}bg-info-subtle text-info{% endif %}">
-                      {{ alert_lookup.velocity.severity|capitalize }}
-                    </span>
-                    <div class="small mt-1">{{ alert_lookup.velocity.what_changed | e }}</div>
-                    {% if not alert_lookup.velocity.acknowledged_at %}
-                    <form action="{{ url_for('analytics.acknowledge_alert', alert_id=alert_lookup.velocity.id) }}" method="POST" class="mt-2">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <button type="submit" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-check"></i> Acknowledge
-                      </button>
-                    </form>
-                    {% else %}
-                    <div class="small text-muted mt-2">Acknowledged</div>
-                    {% endif %}
+                  <span
+                    class="badge {% if alert_lookup.velocity.severity == 'critical' %}bg-danger-subtle text-danger{% elif alert_lookup.velocity.severity == 'warning' %}bg-warning-subtle text-warning{% else %}bg-info-subtle text-info{% endif %}">
+                    {{ alert_lookup.velocity.severity|capitalize }}
+                  </span>
+                  <div class="small mt-1">{{ alert_lookup.velocity.what_changed | e }}</div>
+                  {% if not alert_lookup.velocity.acknowledged_at %}
+                  <form action="{{ url_for('analytics.acknowledge_alert', alert_id=alert_lookup.velocity.id) }}"
+                    method="POST" class="mt-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                      <i class="bi bi-check"></i> Acknowledge
+                    </button>
+                  </form>
                   {% else %}
-                    <span class="badge bg-success-subtle text-success">Normal</span>
+                  <div class="small text-muted mt-2">Acknowledged</div>
+                  {% endif %}
+                  {% else %}
+                  <span class="badge bg-success-subtle text-success">Normal</span>
                   {% endif %}
                 </td>
                 <td class="small">
                   {% if alert_lookup.velocity and alert_lookup.velocity.suggested_action %}
-                    {{ alert_lookup.velocity.suggested_action | e }}
+                  {{ alert_lookup.velocity.suggested_action | e }}
                   {% elif alert_lookup.velocity %}
-                    Add reasons to spend or refresh store inventory.
+                  Add reasons to spend or refresh store inventory.
                   {% else %}
-                    Keep an eye on activity levels.
+                  Keep an eye on activity levels.
                   {% endif %}
                 </td>
               </tr>
@@ -247,12 +273,14 @@
                     <div>
                       <div class="fw-semibold">
                         On-Track Students
-                        <span class="ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Share of students within ±20% of expected CWI earnings for this window.">
+                        <span class="ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Share of students within ±20% of expected CWI earnings for this window.">
                           <i class="bi bi-info-circle"></i>
                         </span>
                       </div>
                       <div class="d-flex align-items-baseline gap-2">
-                        <span class="fs-5 {% if snapshot.cwi_deviation_within_20pct >= 80 %}text-success{% elif snapshot.cwi_deviation_within_20pct >= 60 %}text-warning{% else %}text-danger{% endif %}">
+                        <span
+                          class="fs-5 {% if snapshot.cwi_deviation_within_20pct >= 80 %}text-success{% elif snapshot.cwi_deviation_within_20pct >= 60 %}text-warning{% else %}text-danger{% endif %}">
                           {{ "%.1f"|format(snapshot.cwi_deviation_within_20pct) }}%
                         </span>
                         <span class="small text-muted">within ±20% of CWI</span>
@@ -260,11 +288,14 @@
                       {% if snapshot.balance_trend %}
                       <div class="small mt-1">
                         {% if snapshot.balance_trend == 'increasing' %}
-                        <span class="badge bg-success-subtle text-success"><i class="bi bi-arrow-up"></i> Improving</span>
+                        <span class="badge bg-success-subtle text-success"><i class="bi bi-arrow-up"></i>
+                          Improving</span>
                         {% elif snapshot.balance_trend == 'decreasing' %}
-                        <span class="badge bg-danger-subtle text-danger"><i class="bi bi-arrow-down"></i> Worsening</span>
+                        <span class="badge bg-danger-subtle text-danger"><i class="bi bi-arrow-down"></i>
+                          Worsening</span>
                         {% else %}
-                        <span class="badge bg-secondary-subtle text-secondary"><i class="bi bi-arrow-right"></i> Stable</span>
+                        <span class="badge bg-secondary-subtle text-secondary"><i class="bi bi-arrow-right"></i>
+                          Stable</span>
                         {% endif %}
                       </div>
                       {% endif %}
@@ -273,38 +304,40 @@
                 </td>
                 <td class="small text-muted">
                   {% if alert_lookup.cwi %}
-                    {{ alert_lookup.cwi.why_it_matters | e }}
+                  {{ alert_lookup.cwi.why_it_matters | e }}
                   {% else %}
-                    Shows whether earnings align with expectations based on CWI.
+                  Shows whether earnings align with expectations based on CWI.
                   {% endif %}
                 </td>
                 <td>
                   {% if alert_lookup.cwi %}
-                    <span class="badge {% if alert_lookup.cwi.severity == 'critical' %}bg-danger-subtle text-danger{% elif alert_lookup.cwi.severity == 'warning' %}bg-warning-subtle text-warning{% else %}bg-info-subtle text-info{% endif %}">
-                      {{ alert_lookup.cwi.severity|capitalize }}
-                    </span>
-                    <div class="small mt-1">{{ alert_lookup.cwi.what_changed | e }}</div>
-                    {% if not alert_lookup.cwi.acknowledged_at %}
-                    <form action="{{ url_for('analytics.acknowledge_alert', alert_id=alert_lookup.cwi.id) }}" method="POST" class="mt-2">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <button type="submit" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-check"></i> Acknowledge
-                      </button>
-                    </form>
-                    {% else %}
-                    <div class="small text-muted mt-2">Acknowledged</div>
-                    {% endif %}
+                  <span
+                    class="badge {% if alert_lookup.cwi.severity == 'critical' %}bg-danger-subtle text-danger{% elif alert_lookup.cwi.severity == 'warning' %}bg-warning-subtle text-warning{% else %}bg-info-subtle text-info{% endif %}">
+                    {{ alert_lookup.cwi.severity|capitalize }}
+                  </span>
+                  <div class="small mt-1">{{ alert_lookup.cwi.what_changed | e }}</div>
+                  {% if not alert_lookup.cwi.acknowledged_at %}
+                  <form action="{{ url_for('analytics.acknowledge_alert', alert_id=alert_lookup.cwi.id) }}"
+                    method="POST" class="mt-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                      <i class="bi bi-check"></i> Acknowledge
+                    </button>
+                  </form>
                   {% else %}
-                    <span class="badge bg-success-subtle text-success">Normal</span>
+                  <div class="small text-muted mt-2">Acknowledged</div>
+                  {% endif %}
+                  {% else %}
+                  <span class="badge bg-success-subtle text-success">Normal</span>
                   {% endif %}
                 </td>
                 <td class="small">
                   {% if alert_lookup.cwi and alert_lookup.cwi.suggested_action %}
-                    {{ alert_lookup.cwi.suggested_action | e }}
+                  {{ alert_lookup.cwi.suggested_action | e }}
                   {% elif alert_lookup.cwi %}
-                    Review wage and expense settings for alignment.
+                  Review wage and expense settings for alignment.
                   {% else %}
-                    Continue monitoring earnings alignment.
+                  Continue monitoring earnings alignment.
                   {% endif %}
                 </td>
               </tr>
@@ -315,12 +348,14 @@
                     <div>
                       <div class="fw-semibold">
                         Budget Survival
-                        <span class="ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Share of students who can save at least 10% of weekly income.">
+                        <span class="ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
+                          data-bs-title="Share of students who can save at least 10% of weekly income.">
                           <i class="bi bi-info-circle"></i>
                         </span>
                       </div>
                       <div class="d-flex align-items-baseline gap-2">
-                        <span class="fs-5 {% if snapshot.budget_survival_pass_rate >= 80 %}text-success{% elif snapshot.budget_survival_pass_rate >= 60 %}text-warning{% else %}text-danger{% endif %}">
+                        <span
+                          class="fs-5 {% if snapshot.budget_survival_pass_rate >= 80 %}text-success{% elif snapshot.budget_survival_pass_rate >= 60 %}text-warning{% else %}text-danger{% endif %}">
                           {{ "%.1f"|format(snapshot.budget_survival_pass_rate) }}%
                         </span>
                         <span class="small text-muted">students saving 10%+</span>
@@ -330,38 +365,40 @@
                 </td>
                 <td class="small text-muted">
                   {% if alert_lookup.budget %}
-                    {{ alert_lookup.budget.why_it_matters | e }}
+                  {{ alert_lookup.budget.why_it_matters | e }}
                   {% else %}
-                    Indicates whether students can cover expenses while still saving.
+                  Indicates whether students can cover expenses while still saving.
                   {% endif %}
                 </td>
                 <td>
                   {% if alert_lookup.budget %}
-                    <span class="badge {% if alert_lookup.budget.severity == 'critical' %}bg-danger-subtle text-danger{% elif alert_lookup.budget.severity == 'warning' %}bg-warning-subtle text-warning{% else %}bg-info-subtle text-info{% endif %}">
-                      {{ alert_lookup.budget.severity|capitalize }}
-                    </span>
-                    <div class="small mt-1">{{ alert_lookup.budget.what_changed | e }}</div>
-                    {% if not alert_lookup.budget.acknowledged_at %}
-                    <form action="{{ url_for('analytics.acknowledge_alert', alert_id=alert_lookup.budget.id) }}" method="POST" class="mt-2">
-                      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                      <button type="submit" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-check"></i> Acknowledge
-                      </button>
-                    </form>
-                    {% else %}
-                    <div class="small text-muted mt-2">Acknowledged</div>
-                    {% endif %}
+                  <span
+                    class="badge {% if alert_lookup.budget.severity == 'critical' %}bg-danger-subtle text-danger{% elif alert_lookup.budget.severity == 'warning' %}bg-warning-subtle text-warning{% else %}bg-info-subtle text-info{% endif %}">
+                    {{ alert_lookup.budget.severity|capitalize }}
+                  </span>
+                  <div class="small mt-1">{{ alert_lookup.budget.what_changed | e }}</div>
+                  {% if not alert_lookup.budget.acknowledged_at %}
+                  <form action="{{ url_for('analytics.acknowledge_alert', alert_id=alert_lookup.budget.id) }}"
+                    method="POST" class="mt-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-sm btn-outline-secondary">
+                      <i class="bi bi-check"></i> Acknowledge
+                    </button>
+                  </form>
                   {% else %}
-                    <span class="badge bg-success-subtle text-success">Normal</span>
+                  <div class="small text-muted mt-2">Acknowledged</div>
+                  {% endif %}
+                  {% else %}
+                  <span class="badge bg-success-subtle text-success">Normal</span>
                   {% endif %}
                 </td>
                 <td class="small">
                   {% if alert_lookup.budget and alert_lookup.budget.suggested_action %}
-                    {{ alert_lookup.budget.suggested_action | e }}
+                  {{ alert_lookup.budget.suggested_action | e }}
                   {% elif alert_lookup.budget %}
-                    Rebalance rent and expenses so saving remains possible.
+                  Rebalance rent and expenses so saving remains possible.
                   {% else %}
-                    Keep budgets steady and review periodically.
+                  Keep budgets steady and review periodically.
                   {% endif %}
                 </td>
               </tr>
@@ -371,11 +408,11 @@
       </div>
     </div>
   </div>
-  
+
   <!-- CWI Context (Per spec: all monetary metrics must be CWI-relative) -->
- 
-  
-  
+
+
+
   <!-- Recent Events (Per spec 5.2: Provide context annotations) -->
   {% if events %}
   <div class="row mb-4">
@@ -412,18 +449,147 @@
     </div>
   </div>
   {% endif %}
-  
+
   {% endif %}
+  {% endif %}
+
+  <!-- Offcanvas Help Guide -->
+  <div class="offcanvas offcanvas-end" tabindex="-1" id="analyticsGuide" aria-labelledby="analyticsGuideLabel">
+    <div class="offcanvas-header">
+      <h5 class="offcanvas-title" id="analyticsGuideLabel">How to: Analytics</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body">
+      <div>
+        <p>The Analytics Dashboard is your "check engine light" for the economy. It helps you see if things are running
+          smoothly without grading or ranking students.</p>
+
+        <div class="accordion mt-4 mb-4" id="analyticsHelpAccordion">
+
+          <!-- System Health -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingHealth">
+              <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseHealth" aria-expanded="false" aria-controls="collapseHealth">
+                <span class="material-symbols-outlined me-2"
+                  style="font-size:25pt; vertical-align:middle;">monitor_heart</span>
+                <strong>System Health</strong>
+              </button>
+            </h2>
+            <div id="collapseHealth" class="accordion-collapse collapse mt-2" aria-labelledby="headingHealth"
+              data-bs-parent="#analyticsHelpAccordion">
+              <div class="accordion-body">
+                <p>These metrics represent the heartbeat of your economy:</p>
+                <ul>
+                  <li><strong>Participation Rate:</strong> Are students logging in and doing things? <span
+                      class="badge bg-success-subtle text-success">Active</span> is good!</li>
+                  <li><strong>Money Velocity:</strong> Are transactions happening? Low velocity means money is stagnant
+                    (hoarding or nothing to buy).</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Economy Balance -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingBalance">
+              <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseBalance" aria-expanded="false" aria-controls="collapseBalance">
+                <span class="material-symbols-outlined me-2"
+                  style="font-size:25pt; vertical-align:middle;">balance</span>
+                <strong>Economy Balance</strong>
+              </button>
+            </h2>
+            <div id="collapseBalance" class="accordion-collapse collapse mt-2" aria-labelledby="headingBalance"
+              data-bs-parent="#analyticsHelpAccordion">
+              <div class="accordion-body">
+                <p>All values are relative to your <strong>Class Wealth Index (CWI)</strong>:</p>
+                <ul>
+                  <li><strong>On-Track Students:</strong> Shows how many students are earning close to what you
+                    designed.</li>
+                  <li><strong>Budget Survival:</strong> Can students pay rent/insurance and still save 10%? If this is
+                    low, rent might be too high.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Interpreting Alerts -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingAlerts">
+              <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseAlerts" aria-expanded="false" aria-controls="collapseAlerts">
+                <span class="material-symbols-outlined me-2"
+                  style="font-size:25pt; vertical-align:middle;">warning</span>
+                <strong>Interpreting Alerts</strong>
+              </button>
+            </h2>
+            <div id="collapseAlerts" class="accordion-collapse collapse mt-2" aria-labelledby="headingAlerts"
+              data-bs-parent="#analyticsHelpAccordion">
+              <div class="accordion-body">
+                <ul class="list-unstyled">
+                  <li class="mb-2"><span class="badge bg-success-subtle text-success">Green</span>
+                    <strong>Healthy:</strong> Everything is working as designed.</li>
+                  <li class="mb-2"><span class="badge bg-warning-subtle text-warning">Yellow</span>
+                    <strong>Warning:</strong> Something is drifting (e.g., velocity slowing down). Check it out soon.
+                  </li>
+                  <li><span class="badge bg-danger-subtle text-danger">Red</span> <strong>Critical:</strong> Immediate
+                    action needed (e.g., most students can't afford rent).</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Taking Action -->
+          <div class="accordion-item">
+            <h2 class="accordion-header" id="headingAction">
+              <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse"
+                data-bs-target="#collapseAction" aria-expanded="false" aria-controls="collapseAction">
+                <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">build</span>
+                <strong>Taking Action</strong>
+              </button>
+            </h2>
+            <div id="collapseAction" class="accordion-collapse collapse mt-2" aria-labelledby="headingAction"
+              data-bs-parent="#analyticsHelpAccordion">
+              <div class="accordion-body">
+                <p>Knowing what "lever to pull" is key:</p>
+                <ul>
+                  <li><strong>Too many poor students?</strong> Lower rent, raise wages, or add bonus jobs.</li>
+                  <li><strong>Too much hoarding?</strong> Add fun store items or limited-time sales.</li>
+                  <li><strong>Low participation?</strong> Remind students about payroll or upcoming store openings.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="mt-4 pt-3 border-top">
+          <div class="d-grid gap-2">
+            <a href="{{ url_for('docs.view_doc', doc_path='features/analytics/interpreting-analytics') }}"
+              class="btn btn-primary" target="_blank" rel="noopener">
+              <span class="material-symbols-outlined" style="vertical-align: middle;">menu_book</span>
+              Full Analytics Guide
+            </a>
+          </div>
+          <p class="text-muted small mt-3 mb-0 text-center">
+            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1rem;">info</span>
+            Guide opens in a new tab
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <style>
-.fs-1 {
-  font-size: 3rem !important;
-}
-.card {
-  transition: transform 0.2s ease;
-}
+  .fs-1 {
+    font-size: 3rem !important;
+  }
 
+  .card {
+    transition: transform 0.2s ease;
+  }
 </style>
 <script>
   document.addEventListener('DOMContentLoaded', () => {
