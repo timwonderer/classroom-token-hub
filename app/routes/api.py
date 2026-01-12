@@ -2226,8 +2226,10 @@ def check_and_auto_tapout_if_limit_reached(student):
             seat = TeacherBlock.query.filter_by(student_id=student.id, block=block_original, is_claimed=True).first()
             if seat:
                 teacher_id = seat.teacher_id
-            elif student.teacher_id:
-                teacher_id = student.teacher_id
+            else:
+                # Fallback: get first teacher from StudentTeacher table
+                first_link = StudentTeacher.query.filter_by(student_id=student.id).first()
+                teacher_id = first_link.admin_id if first_link else None
 
             # Get daily limit for this period (use original case for settings lookup)
             daily_limit = get_daily_limit_seconds(block_original, teacher_id=teacher_id)

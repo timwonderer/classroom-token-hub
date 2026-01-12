@@ -1290,15 +1290,10 @@ def send_reward_to_reporter(report_id):
         flash("Student not found. Cannot send reward.", "error")
         return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
     
-    # Get student's primary teacher for the transaction
-    # Try to get from teacher_id first, otherwise from student_teachers
-    teacher_id = student.teacher_id
-    if not teacher_id:
-        # Get first associated teacher
-        first_link = StudentTeacher.query.filter_by(student_id=student.id).first()
-        if first_link:
-            teacher_id = first_link.admin_id
-    
+    # Get student's primary teacher for the transaction from StudentTeacher table
+    first_link = StudentTeacher.query.filter_by(student_id=student.id).first()
+    teacher_id = first_link.admin_id if first_link else None
+
     if not teacher_id:
         flash("Cannot determine student's teacher. Reward not sent.", "error")
         return redirect(url_for('sysadmin.view_user_report', report_id=report_id))

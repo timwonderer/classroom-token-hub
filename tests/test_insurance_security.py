@@ -74,7 +74,6 @@ def _build_claim(enrollment, policy, student_id, transaction):
 def test_duplicate_transaction_claim_blocked(client, test_student, admin_user):
     from app.models import StudentTeacher
 
-    test_student.teacher_id = admin_user.id
     # Create StudentTeacher association for proper scoping
     st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
     db.session.add(st)
@@ -101,7 +100,6 @@ def test_duplicate_transaction_claim_blocked(client, test_student, admin_user):
 def test_voided_transaction_cannot_be_approved(client, test_student, admin_user):
     from app.models import StudentTeacher
 
-    test_student.teacher_id = admin_user.id
     # Create StudentTeacher association for proper scoping
     st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
     db.session.add(st)
