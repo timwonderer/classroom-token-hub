@@ -48,31 +48,7 @@ sysadmin_bp = Blueprint('sysadmin', __name__, url_prefix='/sysadmin')
 INACTIVITY_THRESHOLD_DAYS = 180  # Number of days of inactivity before allowing deletion without request
 
 
-def _get_teacher_student_count(teacher_id: int) -> int:
-    """
-    Get the count of students associated with a specific teacher.
-    
-    Counts students that are either:
-    1. Linked via student_teachers table (many-to-many relationship), OR
-    2. Have teacher_id set (legacy primary ownership during migration)
-    
-    Uses UNION to avoid double-counting students that appear in both.
-    Optimized to count in database without loading student IDs.
-    """
-    # Get student IDs from student_teachers links
-    linked_ids = db.session.query(StudentTeacher.student_id).filter(
-        StudentTeacher.admin_id == teacher_id
-    ).distinct()
-    
-    # Get student IDs from legacy teacher_id column
-    legacy_ids = db.session.query(Student.id).filter(
-        Student.teacher_id == teacher_id
-    ).distinct()
-    
-    # Union the two queries and count - database does the work
-    count = linked_ids.union(legacy_ids).count()
-    
-    return count
+
 
 
 def _check_deletion_authorization(admin, request_type=None, period=None):
@@ -710,8 +686,7 @@ def manage_admins():
 
     for admin in admins:
         # Count students associated with this specific teacher
-        # Uses both student_teachers links and legacy teacher_id for accuracy
-        student_count = _get_teacher_student_count(admin.id)
+        student_count = admin.get_student_count()
 
         admin_data.append({
             'id': admin.id,
@@ -901,17 +876,8 @@ def teacher_overview():
     inactivity_threshold = datetime.now(timezone.utc) - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
 
     # Batch query: Get all teacher-student relationships in one query
-    # Build two queries: one for direct teacher_id, one for StudentTeacher.admin_id
-    # Then UNION them to handle both sources correctly without double-counting
-    direct_students_q = db.session.query(
-        Student.teacher_id.label('teacher_id'),
-        Student.id.label('student_id'),
-        Student.block.label('block')
-    ).filter(
-        Student.teacher_id.in_([t.id for t in teachers])
-    )
-
-    indirect_students_q = db.session.query(
+    # Uses StudentTeacher table only (Multi-Teacher Hardening)
+    teacher_students = db.session.query(
         StudentTeacher.admin_id.label('teacher_id'),
         Student.id.label('student_id'),
         Student.block.label('block')
@@ -919,9 +885,7 @@ def teacher_overview():
         Student, Student.id == StudentTeacher.student_id
     ).filter(
         StudentTeacher.admin_id.in_([t.id for t in teachers])
-    )
-
-    teacher_students = direct_students_q.union(indirect_students_q).subquery()
+    ).subquery()
 
     # Get total student counts per teacher in a single query
     teacher_student_count_rows = db.session.query(
@@ -1054,8 +1018,8 @@ def delete_period(admin_id, period):
 
     try:
         # Get students in this period linked to this teacher
-        # Must check BOTH student_teachers join table AND legacy teacher_id column
-        students_via_link = db.session.query(Student).join(
+        # Uses StudentTeacher table only (Multi-Teacher Hardening)
+        students_in_period = db.session.query(Student).join(
             StudentTeacher,
             Student.id == StudentTeacher.student_id
         ).filter(
@@ -1063,40 +1027,18 @@ def delete_period(admin_id, period):
             Student.block == period
         ).all()
 
-        # Also get students linked via legacy teacher_id column
-        students_via_legacy = Student.query.filter(
-            Student.teacher_id == admin.id,
-            Student.block == period
-        ).all()
-
-        # Combine both sets (use dict to deduplicate by student ID)
-        all_students = {s.id: s for s in students_via_link + students_via_legacy}
-        students_in_period = list(all_students.values())
-
         removed_count = 0
         for student in students_in_period:
-            # If this was the primary teacher, reassign to another linked teacher BEFORE deleting
-            if student.teacher_id == admin.id:
-                fallback = StudentTeacher.query.filter(
-                    StudentTeacher.student_id == student.id,
-                    StudentTeacher.admin_id != admin.id
-                ).order_by(StudentTeacher.created_at.asc()).first()
-                student.teacher_id = fallback.admin_id if fallback else None
-
-            # Remove the teacher-student link after reassignment
+            # Remove the teacher-student link
             # Only remove the StudentTeacher link if the student is not taught by this teacher in any other period
-            other_periods = Student.query.filter(
-                Student.id == student.id,
-                Student.teacher_id == admin.id,
-                Student.block != period
-            ).count()
             other_links = StudentTeacher.query.filter(
                 StudentTeacher.student_id == student.id,
                 StudentTeacher.admin_id == admin.id
             ).join(Student, Student.id == StudentTeacher.student_id).filter(
                 Student.block != period
             ).count()
-            if other_periods == 0 and other_links == 0:
+            
+            if other_links == 0:
                 StudentTeacher.query.filter_by(
                     student_id=student.id,
                     admin_id=admin.id
@@ -1159,30 +1101,18 @@ def delete_teacher(admin_id):
         return redirect(url_for('sysadmin.teacher_overview'))
 
     try:
-        linked_student_ids = (
-            db.session.query(StudentTeacher.student_id)
+        # Get all students linked to this teacher via StudentTeacher table
+        affected_students = (
+            db.session.query(Student)
+            .join(StudentTeacher, Student.id == StudentTeacher.student_id)
             .filter(StudentTeacher.admin_id == admin.id)
-            .subquery()
+            .all()
         )
-
-        affected_students = Student.query.filter(
-            or_(Student.teacher_id == admin.id, Student.id.in_(linked_student_ids))
-        ).all()
         student_count = len(affected_students)
 
         for student in affected_students:
             # Remove the teacher-student link
             StudentTeacher.query.filter_by(student_id=student.id, admin_id=admin.id).delete()
-
-            # If this was the primary teacher, reassign to another linked teacher
-            if student.teacher_id == admin.id:
-                fallback = (
-                    StudentTeacher.query
-                    .filter(StudentTeacher.student_id == student.id)
-                    .order_by(StudentTeacher.created_at.asc())
-                    .first()
-                )
-                student.teacher_id = fallback.admin_id if fallback else None
 
         # Delete all deletion requests for this teacher to prevent NOT NULL violations.
         # Explicit deletion needed because SQLAlchemy flush might try to nullify the FK

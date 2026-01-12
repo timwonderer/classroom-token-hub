@@ -21,7 +21,9 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 dotenv_path = project_root / '.env'
 # Force-load .env so CLI commands pick up required settings even if env vars are absent
-load_dotenv(dotenv_path=dotenv_path, override=True)
+# BUT skip if FLASK_ENV is already 'testing' (set by conftest.py or CI) to avoid overwriting test config
+if os.environ.get("FLASK_ENV") != "testing":
+    load_dotenv(dotenv_path=dotenv_path, override=True)
 
 # Validate required environment variables
 required_env_vars = ["SECRET_KEY", "DATABASE_URL", "FLASK_ENV", "ENCRYPTION_KEY", "PEPPER_KEY"]

@@ -162,10 +162,21 @@ def calculate_payroll(students, last_payroll_time, teacher_id=None):
             # Pass teacher_id to ensure correct settings are used
             rate_per_second = get_pay_rate_for_block(block_original, teacher_id=teacher_id)
 
+            # CRITICAL FIX: Resolve join_code to scope attendance to this specific teacher's class
+            # This prevents paying for attendance in another teacher's class with same block name
+            from attendance import get_join_code_for_student_period
+            join_code = get_join_code_for_student_period(student.id, block_original, teacher_id)
+
+            # HARDENING: If no join_code found, SKIP.
+            # We strictly enforce that payroll only runs for valid TeacherBlock seats.
+            if not join_code:
+                continue
+
             total_seconds = calculate_unpaid_attendance_seconds(
                 student.id,
                 block_upper,
                 payroll_anchor,
+                join_code=join_code
             )
 
             if total_seconds > 0:

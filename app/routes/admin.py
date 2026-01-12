@@ -273,7 +273,7 @@ def _get_students_needing_transaction_backfill(teacher_id):
     
     These are orphaned transactions that need to be associated with a join_code
     for proper class isolation. This is CRITICAL because join_code is the source
-    of truth for class scoping, not teacher_id.
+    of truth for class scoping, and StudentTeacher is the source for auth, not teacher_id.
     
     Args:
         teacher_id: The teacher's admin ID
@@ -867,13 +867,9 @@ def backfill_transactions():
                     for tx in transactions_to_update:
                         # Set join_code (critical for scoping)
                         tx.join_code = join_code
-                        # Also set teacher_id if not already set
-                        if not tx.teacher_id:
-                            tx.teacher_id = current_admin_id
                     
-                    # 2. Update student's primary teacher_id if not set
-                    if not student.teacher_id:
-                        student.teacher_id = current_admin_id
+                    # 2. Update student's primary teacher_id if not set (LEGACY: REMOVED)
+                    # StudentTeacher and join_code are now the sole sources of truth.
                     
                     # 3. Ensure StudentTeacher association exists
                     _link_student_to_admin(student, current_admin_id)
@@ -1226,16 +1222,24 @@ def recover():
             return render_template("admin_recover.html", form=form)
 
         # Find common teacher for all students
-        teacher_ids = set()
+        common_teacher_ids = None
         for username, student in students_by_username.items():
-            if student.teacher_id:
-                teacher_ids.add(student.teacher_id)
+            # Get all teachers for this student
+            student_teacher_ids = set(
+                link.admin_id for link in StudentTeacher.query.filter_by(student_id=student.id).all()
+            )
+            if common_teacher_ids is None:
+                common_teacher_ids = student_teacher_ids
+            else:
+                common_teacher_ids &= student_teacher_ids
+        
+        teacher_ids = common_teacher_ids if common_teacher_ids else set()
 
         if len(teacher_ids) != 1:
             flash("The provided students do not all belong to the same teacher.", "error")
             return render_template("admin_recover.html", form=form)
 
-        teacher_id = teacher_ids.pop()
+        teacher_id = list(teacher_ids)[0]
         teacher = Admin.query.get(teacher_id)
 
         if not teacher or not teacher.dob_sum_hash:
@@ -2199,39 +2203,9 @@ def edit_student():
     # Try to get student from scoped query first
     student = get_student_for_admin(student_id)
 
-    # If not found in scoped query, check if it's a legacy student (has teacher_id but no StudentTeacher record)
     if not student:
-        student = Student.query.get(student_id)
-        if student and student.teacher_id == current_admin_id:
-            # This is a legacy student - create StudentTeacher association to upgrade them
-            existing_st = StudentTeacher.query.filter_by(
-                student_id=student.id,
-                admin_id=current_admin_id
-            ).first()
-
-            if not existing_st:
-                db.session.add(StudentTeacher(
-                    student_id=student.id,
-                    admin_id=current_admin_id
-                ))
-                db.session.flush()
-        else:
-            # Not accessible by this admin
-            abort(404)
-    else:
-        # Student found in scoped query, but check if we need to create StudentTeacher for legacy data
-        if student.teacher_id == current_admin_id:
-            existing_st = StudentTeacher.query.filter_by(
-                student_id=student.id,
-                admin_id=current_admin_id
-            ).first()
-
-            if not existing_st:
-                db.session.add(StudentTeacher(
-                    student_id=student.id,
-                    admin_id=current_admin_id
-                ))
-                db.session.flush()
+        # Not accessible by this admin
+        abort(404)
 
     # Get form data
     new_first_name = request.form.get('first_name', '').strip()
