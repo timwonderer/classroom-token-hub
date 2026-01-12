@@ -46,4 +46,4 @@ Rent settings can be customized for each class block. Use the **Class Selector**
 
 ## Troubleshooting
 - **Rent not charging?** Check the "Next Due Date" in settings to ensure it's in the future.
-- **Students can't pay?** Ensure they have enough funds in their Checking account,/or use the "Waivers" tab to excuse a payment.
+- **Students can't pay?** Ensure they have enough funds in their Checking account, or use the "Waivers" tab to excuse a payment.
