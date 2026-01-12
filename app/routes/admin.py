@@ -17,6 +17,7 @@ import secrets
 import qrcode
 import hashlib
 from calendar import monthrange
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 from flask import (
@@ -3360,6 +3361,57 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
     db.session.commit()
 
 
+def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, current_month: int) -> float:
+    """
+    Normalize the configured rent amount to a monthly view based on frequency type.
+
+    For 'daily', we use the actual number of days in the current month for accuracy.
+    For 'weekly', we approximate 4 weeks per month.
+    For 'custom', we scale based on the custom frequency configuration.
+    For all other types, we use the configured amount as-is.
+
+    Args:
+        rent_settings: RentSettings object with frequency configuration
+        current_year: Year to calculate for (used for accurate day count)
+        current_month: Month to calculate for (used for accurate day count)
+
+    Returns:
+        Base rent amount normalized to monthly view
+    """
+    base_amount = rent_settings.rent_amount
+
+    if rent_settings.frequency_type == 'daily':
+        # Use actual number of days in the month for accuracy
+        days_in_month = monthrange(current_year, current_month)[1]
+        return rent_settings.rent_amount * days_in_month
+
+    if rent_settings.frequency_type == 'weekly':
+        # Approximation: 4 weeks per month
+        return rent_settings.rent_amount * 4
+
+    if rent_settings.frequency_type == 'custom':
+        # Approximate a monthly amount based on custom frequency configuration
+        unit = getattr(rent_settings, 'custom_frequency_unit', None)
+        value = getattr(rent_settings, 'custom_frequency_value', None)
+        try:
+            if value and value > 0:
+                if unit == 'day':
+                    # Every N days -> scale to days per month
+                    days_in_month = monthrange(current_year, current_month)[1]
+                    return rent_settings.rent_amount * (days_in_month / float(value))
+                elif unit == 'week':
+                    # Every N weeks -> scale to ~4 weeks per month
+                    return rent_settings.rent_amount * (4.0 / float(value))
+                elif unit == 'month':
+                    # Every N months -> monthly share of that amount
+                    return rent_settings.rent_amount / float(value)
+        except (TypeError, ValueError, ZeroDivisionError):
+            # If anything goes wrong, fall back to the base amount
+            pass
+
+    return base_amount
+
+
 @admin_bp.route('/rent-settings', methods=['GET', 'POST'])
 @admin_required
 def rent_settings():
@@ -3593,6 +3645,93 @@ def rent_settings():
         from app.models import RentItem
         rent_items = RentItem.query.filter_by(rent_setting_id=settings.id).order_by(RentItem.order_index).all()
 
+    # Calculate rent active status and unpaid students
+    rent_active_for_period = False
+    unpaid_students = []
+
+    if settings and settings.is_enabled:
+        # 1. Determine if rent is active for this period
+        now_local = datetime.now(timezone.utc)  # Use timezone-aware datetime for consistent date comparison
+
+        # Check if we've passed the first due date (or if it's not set, assume active if enabled)
+        if settings.first_rent_due_date:
+            # If first due date is in the future (next month etc), rent is NOT active yet
+            # We compare entire date to be safe, but mostly care about month/year
+            if now_local.date() >= settings.first_rent_due_date.date():
+                rent_active_for_period = True
+
+            # Special check: If due date is this month but in future, is it "active"?
+            # Usually yes, it's just "not due yet" but we should show status.
+            # BUT user requirement says: "if rent is not enabled until next month... show No rent due"
+            # So strict future check on start date is good.
+        else:
+            # No start date set - valid state? Assume active if enabled.
+            rent_active_for_period = True
+
+    # 2. Calculate unpaid students if active
+    if rent_active_for_period:
+        # Fetch all rent-enabled students for this admin
+        rent_enabled_students = _scoped_students().filter_by(is_rent_enabled=True).order_by(Student.first_name).all()
+
+        # Build a subquery of rent-enabled student IDs for efficient filtering
+        rent_enabled_student_ids_subq = (
+            _scoped_students()
+            .filter_by(is_rent_enabled=True)
+            .with_entities(Student.id)
+            .subquery()
+        )
+
+        # Fetch all payments for this period
+        period_payments = (
+            RentPayment.query
+            .filter(RentPayment.student_id.in_(rent_enabled_student_ids_subq))
+            .filter_by(period_month=current_month, period_year=current_year)
+            .all()
+        )
+
+        # Map student_id -> total_paid using defaultdict for efficiency
+        payments_map = defaultdict(float)
+        for p in period_payments:
+            payments_map[p.student_id] += p.amount_paid
+
+        # Use helper function to calculate base rent amount
+        base_rent_amount = _calculate_base_rent_amount(settings, current_year, current_month)
+
+        # Build unpaid list
+        for student in rent_enabled_students:
+            paid = payments_map.get(student.id, 0.0)
+            if paid < base_rent_amount - 0.01:  # Float tolerance
+                # Calculate status - determine due date first, then check if late
+                is_late = False
+
+                # Determine due day; if not set, fall back to last day of month
+                if settings.due_day_of_month is None:
+                    _, due_day = monthrange(current_year, current_month)
+                else:
+                    due_day = settings.due_day_of_month
+
+                try:
+                    due_date = datetime(current_year, current_month, due_day)
+                except ValueError:
+                    # Handle short months (e.g. Feb 30)
+                    # Fallback to last day of month
+                    _, last_day = monthrange(current_year, current_month)
+                    due_date = datetime(current_year, current_month, last_day)
+
+                # Check if payment is late (grace_period_days might be None)
+                grace_days = settings.grace_period_days or 0
+                if now_local > due_date + timedelta(days=grace_days):
+                    is_late = True
+
+                unpaid_students.append({
+                    'student': student,
+                    'period': f"{datetime(current_year, current_month, 1).strftime('%B')} {current_year}",  # Rent billing period
+                    'total_paid': paid,
+                    'total_due': base_rent_amount,
+                    'remaining': base_rent_amount - paid,
+                    'is_late': is_late
+                })
+
     return render_template('admin_rent_settings.html',
                           settings=settings,
                           total_students=total_students,
@@ -3604,7 +3743,9 @@ def rent_settings():
                           settings_block=settings_block,
                           teacher_blocks=teacher_blocks,
                           class_labels_by_block=class_labels_by_block,
-                          rent_items=rent_items)
+                          rent_items=rent_items,
+                          unpaid_students=unpaid_students,
+                          rent_active_for_period=rent_active_for_period)
 
 
 @admin_bp.route('/rent-waiver/add', methods=['POST'])
