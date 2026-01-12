@@ -22,7 +22,7 @@ def enforce_daily_limits_job():
     logger.info("Starting scheduled auto tap-out enforcement job")
 
     try:
-        students = Student.query.all()
+        students = Student.query.yield_per(100)
         checked_count = 0
         tapped_out_count = 0
 
@@ -59,17 +59,17 @@ def enforce_daily_limits_job():
                         student_id=student.id
                     ).order_by(TapEvent.timestamp.desc()).first()
 
-                    if latest_after and latest_after.id != latest_before.id:
+                    if latest_after and (latest_before is None or latest_after.id != latest_before.id):
                         if latest_after.status == "inactive":
                             tapped_out_count += 1
                             logger.info(f"Auto-tapped out student {student.id} ({student.full_name})")
 
+                # Commit after successfully processing this student so previous students' work is preserved
+                db.session.commit()
             except Exception as e:
                 db.session.rollback()
                 logger.error(f"Error checking student {student.id}: {e}", exc_info=True)
                 continue
-
-        db.session.commit()
         logger.info(f"Auto tap-out job completed. Checked {checked_count} active students, tapped out {tapped_out_count}")
 
     except Exception as e:
