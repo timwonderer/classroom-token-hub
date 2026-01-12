@@ -22,7 +22,8 @@ project_root = Path(__file__).parent.parent
 dotenv_path = project_root / '.env'
 # Force-load .env so CLI commands pick up required settings even if env vars are absent
 # BUT skip if FLASK_ENV is already 'testing' (set by conftest.py or CI) to avoid overwriting test config
-if os.environ.get("FLASK_ENV") != "testing":
+# Also skip in CI environments to prevent unexpected behavior in automated testing
+if os.environ.get("FLASK_ENV") != "testing" and not os.environ.get("CI"):
     load_dotenv(dotenv_path=dotenv_path, override=True)
 
 # Validate required environment variables

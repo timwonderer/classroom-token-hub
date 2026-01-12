@@ -76,10 +76,13 @@ def test_calculate_payroll(client):
     assert payroll_summary[student.id] == expected_payroll
 
     # Test case with no attendance
+    # NOTE: student2 intentionally has no StudentTeacher link and no TeacherBlock
+    # to verify proper skipping behavior in calculate_payroll. Students without
+    # these associations should be skipped during payroll processing.
     student2 = Student(first_name="Test2", last_initial="S", block="B", salt=b'salt2', has_completed_setup=True)
     db.session.add(student2)
     db.session.commit()
-    # Need to link student2 to avoid skipping? 
+    # Need to link student2 to avoid skipping?
     # Actually if student2 has NO attendance, payroll is 0 anyway or empty dict.
     # But if no TeacherBlock, it is skipped even before checking attendance.
     # We want to verify that student2 is NOT in summary.

@@ -1,9 +1,8 @@
 
-import pytest
 import uuid
 from datetime import datetime, timedelta, timezone
 from app import db
-from app.models import Admin, Student, StudentTeacher, TapEvent, TeacherBlock, PayrollSettings
+from app.models import Admin, Student, StudentTeacher, TapEvent, TeacherBlock
 from attendance import get_all_block_statuses
 
 def test_attendance_status_isolation(client):
@@ -21,9 +20,8 @@ def test_attendance_status_isolation(client):
     student = Student(
         first_name="Shared",
         last_initial="S",
-        block="PERIOD 1", 
-        salt=b'salt',
-        teacher_id=None
+        block="PERIOD 1",
+        salt=b'salt'
     )
     db.session.add(student)
     db.session.commit()
@@ -64,15 +62,19 @@ def test_attendance_status_isolation(client):
     # 6. Check Status via Global View (No Join Code)
     # This is where we expect potential ambiguity/leak if code iterates string blocks
     global_status = get_all_block_statuses(student, join_code=None)
-    
-    # If logic iterates unique blocks, "PERIOD 1" appears once.
-    # It probably takes the latest event for "PERIOD 1" regardless of join_code?
-    # If so, it will say Active. 
-    # But which class is it?
-    # Ideally, if student has conflicting blocks, global view is problematic.
-    # But let's see what happens.
+
+    # Without join_code scoping, the function iterates student.block string which
+    # contains "PERIOD 1, PERIOD 1" (duplicated block names). The dict key is the
+    # block name, so collisions occur.
     assert "PERIOD 1" in global_status
-    # If leak exists, this will be True.
-    # If we fixed get_all_block_statuses to use claimed_seats, it might return multiple? 
-    # But dict key is block name. collision happens in dict keys.
-    pass 
+
+    # The global view (no join_code) will show the status from the latest event
+    # for "PERIOD 1" across ALL classes, which can be misleading. In this case,
+    # since we only have one tap event (JC1), it will show active=True.
+    # However, this is inherently ambiguous when a student has multiple classes
+    # with the same block name - we can't tell WHICH class the status is for.
+    assert global_status["PERIOD 1"]["active"] is True
+
+    # NOTE: The global view is problematic for multi-teacher scenarios with
+    # duplicate block names. The scoped views (passing join_code) are the
+    # recommended approach for accuracy. 

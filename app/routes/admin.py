@@ -867,11 +867,9 @@ def backfill_transactions():
                     for tx in transactions_to_update:
                         # Set join_code (critical for scoping)
                         tx.join_code = join_code
-                    
-                    # 2. Update student's primary teacher_id if not set (LEGACY: REMOVED)
+
+                    # 2. Ensure StudentTeacher association exists
                     # StudentTeacher and join_code are now the sole sources of truth.
-                    
-                    # 3. Ensure StudentTeacher association exists
                     _link_student_to_admin(student, current_admin_id)
                     
                     current_app.logger.info(
@@ -1222,17 +1220,22 @@ def recover():
             return render_template("admin_recover.html", form=form)
 
         # Find common teacher for all students
+        # Optimize by fetching all StudentTeacher links in a single query to avoid N+1
+        student_ids = [s.id for s in students_by_username.values()]
+        links = StudentTeacher.query.filter(StudentTeacher.student_id.in_(student_ids)).all()
+
+        teachers_by_student = {}
+        for link in links:
+            teachers_by_student.setdefault(link.student_id, set()).add(link.admin_id)
+
         common_teacher_ids = None
-        for username, student in students_by_username.items():
-            # Get all teachers for this student
-            student_teacher_ids = set(
-                link.admin_id for link in StudentTeacher.query.filter_by(student_id=student.id).all()
-            )
+        for student_id in student_ids:
+            student_teacher_ids = teachers_by_student.get(student_id, set())
             if common_teacher_ids is None:
                 common_teacher_ids = student_teacher_ids
             else:
                 common_teacher_ids &= student_teacher_ids
-        
+
         teacher_ids = common_teacher_ids if common_teacher_ids else set()
 
         if len(teacher_ids) != 1:

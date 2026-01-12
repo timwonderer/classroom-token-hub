@@ -1,12 +1,9 @@
 
-import pytest
-import pyotp
 import uuid
 from datetime import datetime, timedelta, timezone
 from app import db
 from app.models import Admin, Student, StudentTeacher, TapEvent, PayrollSettings, TeacherBlock
 from payroll import calculate_payroll
-from hash_utils import get_random_salt
 
 
 def test_shared_student_diff_teacher_diff_period(client):
@@ -123,6 +120,9 @@ def test_same_teacher_same_block_diff_context(client):
     # But wait, if student is in TWO classes, `student.block` should technically be "PERIOD 1, PERIOD 1"?
     # The system updates `student.block` string on join. It appends.
     # Let's simulate that:
+    # NOTE: This mirrors the current production behavior where `student.block` is a
+    # comma-separated list that may contain duplicate block names when a student joins
+    # two classes with identical period names. If that behavior changes, update this test.
     student.block = "PERIOD 1, PERIOD 1"
     db.session.commit()
 

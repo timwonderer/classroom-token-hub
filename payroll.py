@@ -4,6 +4,7 @@ from app.extensions import db
 from app.models import TapEvent, Student, Transaction, PayrollSettings
 from datetime import datetime, timezone
 from attendance import calculate_unpaid_attendance_seconds, get_last_payroll_time, _as_utc
+from app.utils.attendance_helpers import get_join_code_for_student_period
 from flask import has_request_context, session
 
 
@@ -164,7 +165,6 @@ def calculate_payroll(students, last_payroll_time, teacher_id=None):
 
             # CRITICAL FIX: Resolve join_code to scope attendance to this specific teacher's class
             # This prevents paying for attendance in another teacher's class with same block name
-            from attendance import get_join_code_for_student_period
             join_code = get_join_code_for_student_period(student.id, block_original, teacher_id)
 
             # HARDENING: If no join_code found, SKIP.
