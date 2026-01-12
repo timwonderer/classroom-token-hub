@@ -1967,7 +1967,11 @@ def students():
                 unclaimed_seats_by_block[block_name] = 0
 
             # Track unclaimed seats (excluding legacy placeholders and seats already linked to a student)
-            if not tb.is_claimed and tb.first_name != LEGACY_PLACEHOLDER_FIRST_NAME and tb.student_id is None:
+            if (
+                not tb.is_claimed
+                and tb.first_name != LEGACY_PLACEHOLDER_FIRST_NAME
+                and tb.student_id is None
+            ):
                 unclaimed_seats_list_by_block[block_name].append(tb)
                 unclaimed_seats_by_block[block_name] += 1
 
