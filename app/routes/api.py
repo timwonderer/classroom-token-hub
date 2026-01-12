@@ -2163,7 +2163,7 @@ def update_student_block_settings():
     })
 
 
-def check_and_auto_tapout_if_limit_reached(student):
+def check_and_auto_tapout_if_limit_reached(student, commit=True):
     """
     Checks if an active student has reached their daily limit and auto-taps them out.
     This function should be called periodically (e.g., during status checks).
@@ -2283,12 +2283,13 @@ def check_and_auto_tapout_if_limit_reached(student):
                     )
                     db.session.add(tap_out_event)
 
-    # Commit all auto-tap-outs at once
-    try:
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Failed to auto-tap-out student {student.id}: {e}")
+    if commit:
+        # Commit all auto-tap-outs at once
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Failed to auto-tap-out student {student.id}: {e}")
 
 
 @api_bp.route('/student-status', methods=['GET'])
