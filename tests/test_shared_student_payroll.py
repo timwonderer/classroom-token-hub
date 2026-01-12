@@ -119,7 +119,8 @@ def test_same_teacher_same_block_diff_context(client):
     # If student.block is "PERIOD 1", it runs ONCE.
     # But wait, if student is in TWO classes, `student.block` should technically be "PERIOD 1, PERIOD 1"?
     # The system updates `student.block` string on join. It appends.
-    # Let's simulate that:
+    # Let's simulate that: this mirrors the current production behavior where `student.block` is a
+    # comma-separated list that may contain duplicate block names; if that behavior changes, update this test.
     # NOTE: This mirrors the current production behavior where `student.block` is a
     # comma-separated list that may contain duplicate block names when a student joins
     # two classes with identical period names. If that behavior changes, update this test.
