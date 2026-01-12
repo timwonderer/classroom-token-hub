@@ -3593,6 +3593,87 @@ def rent_settings():
         from app.models import RentItem
         rent_items = RentItem.query.filter_by(rent_setting_id=settings.id).order_by(RentItem.order_index).all()
 
+    # Calculate rent active status and unpaid students
+    rent_active_for_period = False
+    unpaid_students = []
+    
+    if settings and settings.is_enabled:
+        # 1. Determine if rent is active for this period
+        now_local = datetime.now() # Use server local time for simpler date comparison basic logic
+        
+        # Check if we've passed the first due date (or if it's not set, assume active if enabled)
+        if settings.first_rent_due_date:
+            # If first due date is in the future (next month etc), rent is NOT active yet
+            # We compare entire date to be safe, but mostly care about month/year
+            if now_local.date() >= settings.first_rent_due_date.date():
+                rent_active_for_period = True
+            
+            # Special check: If due date is this month but in future, is it "active"?
+            # Usually yes, it's just "not due yet" but we should show status.
+            # BUT user requirement says: "if rent is not enabled until next month... show No rent due"
+            # So strict future check on start date is good.
+        else:
+            # No start date set - valid state? Assume active if enabled.
+            rent_active_for_period = True
+            
+    # 2. Calculate unpaid students if active
+    if rent_active_for_period:
+        # Fetch all rent-enabled students for this admin
+        # Use simple dictionary based approach to minimize queries vs just re-querying
+        rent_enabled_students = _scoped_students().filter_by(is_rent_enabled=True).order_by(Student.first_name).all()
+        
+        # Fetch all payments for this period
+        period_payments = (
+            RentPayment.query
+            .filter(RentPayment.student_id.in_([s.id for s in rent_enabled_students]))
+            .filter_by(period_month=current_month, period_year=current_year)
+            .all()
+        )
+        
+        # Map student_id -> total_paid
+        payments_map = {}
+        for p in period_payments:
+            if p.student_id not in payments_map:
+                payments_map[p.student_id] = 0.0
+            payments_map[p.student_id] += p.amount_paid
+            
+        # Determine rent amount (simplified for list display)
+        # Ideally we know the exact amount due per student, but using settings base amount is standard for this list
+        base_rent_amount = settings.rent_amount
+        if settings.frequency_type == 'daily':
+            base_rent_amount = settings.rent_amount * 30 # Rough estimate for monthly view
+        elif settings.frequency_type == 'weekly':
+            base_rent_amount = settings.rent_amount * 4
+            
+        # Build unpaid list
+        for student in rent_enabled_students:
+            paid = payments_map.get(student.id, 0.0)
+            if paid < base_rent_amount - 0.01: # Float tolerance
+                # Calculate status
+                is_late = False
+                # If today > due date + grace period
+                # Calculate specific due date for this month
+                try:
+                    due_date = datetime(current_year, current_month, settings.due_day_of_month)
+                    if now_local > due_date + timedelta(days=settings.grace_period_days):
+                        is_late = True
+                except ValueError:
+                    # Handle short months (e.g. Feb 30)
+                    # Fallback to last day of month
+                    _, last_day = monthrange(current_year, current_month)
+                    due_date = datetime(current_year, current_month, last_day)
+                    if now_local > due_date + timedelta(days=settings.grace_period_days):
+                        is_late = True
+                
+                unpaid_students.append({
+                    'student': student,
+                    'period': student.block, # Class period
+                    'total_paid': paid,
+                    'total_due': base_rent_amount,
+                    'remaining': base_rent_amount - paid,
+                    'is_late': is_late
+                })
+
     return render_template('admin_rent_settings.html',
                           settings=settings,
                           total_students=total_students,
@@ -3604,7 +3685,9 @@ def rent_settings():
                           settings_block=settings_block,
                           teacher_blocks=teacher_blocks,
                           class_labels_by_block=class_labels_by_block,
-                          rent_items=rent_items)
+                          rent_items=rent_items,
+                          unpaid_students=unpaid_students,
+                          rent_active_for_period=rent_active_for_period)
 
 
 @admin_bp.route('/rent-waiver/add', methods=['POST'])
