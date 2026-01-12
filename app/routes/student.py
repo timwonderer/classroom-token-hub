@@ -2234,13 +2234,13 @@ def shop():
             # Collect store item IDs
             per_period_rent_item_ids = {item.store_item_id for item in per_period_items if item.store_item_id}
 
-    # Calculate class size for collective goals (students in same block for current class)
-    from app.models import StudentBlock
+    # Calculate class size for collective goals (count claimed seats in this class)
+    from app.models import TeacherBlock
     class_size = 0
-    if join_code and current_block:
-        class_size = StudentBlock.query.filter_by(
+    if join_code:
+        class_size = TeacherBlock.query.filter_by(
             join_code=join_code,
-            is_active=True
+            is_claimed=True
         ).count()
 
     return render_template('student_shop.html', student=student, items=items, student_items=student_items,
