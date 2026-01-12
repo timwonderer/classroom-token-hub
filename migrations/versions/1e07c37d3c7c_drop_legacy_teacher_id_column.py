@@ -7,7 +7,6 @@ Create Date: 2026-01-12 02:12:39.979694
 """
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.engine.reflection import Inspector
 
 
 # revision identifiers, used by Alembic.
