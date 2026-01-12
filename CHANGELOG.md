@@ -22,6 +22,7 @@ and this project follows semantic versioning principles.
   - Both statistics use accurate `unpaid_students` calculation instead of payment count
 - **Rent Period Display** - Fixed misleading "Period" column in unpaid students list (#839)
   - Now shows billing period (e.g., "January 2026") instead of class block/period
+- **Hall Pass Queue Scoping** - Removed deprecated `students.teacher_id` filtering to prevent hall pass queue errors.
 
 ### Changed
 - **Rent Calculation Helper** - Extracted rent amount calculation into reusable helper function (#839)
