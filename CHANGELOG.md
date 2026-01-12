@@ -9,6 +9,8 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Fixed
+- **Student Creation Without Deprecated teacher_id** - Removed deprecated `teacher_id` assignment when creating new students to prevent `TypeError: 'teacher_id' is an invalid keyword argument for Student`.
+- **Scheduled Auto Tap-Out Transactions** - Avoided committing inside the scheduled auto tap-out loop to prevent closed-transaction errors during background checks.
 - **Student Claim DOB Field** - Aligned the claim-account form field name with the templates to prevent 500 errors on /student/claim-account.
 - **Student Transfer Banking Settings Import** - Removed a local import shadowing `BankingSettings` to prevent UnboundLocalError on /student/transfer.
 - **Rent Calculation Accuracy** - Improved rent amount calculations for monthly display (#839)
