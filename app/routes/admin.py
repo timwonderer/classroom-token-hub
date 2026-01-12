@@ -1223,6 +1223,8 @@ def recover():
         # Optimize by fetching all StudentTeacher links in a single query to avoid N+1
         student_ids = [s.id for s in students_by_username.values()]
         links = StudentTeacher.query.filter(StudentTeacher.student_id.in_(student_ids)).all()
+        student_ids = [s.id for s in students_by_username.values()]
+        links = StudentTeacher.query.filter(StudentTeacher.student_id.in_(student_ids)).all()
 
         teachers_by_student = {}
         for link in links:
