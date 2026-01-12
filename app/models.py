@@ -184,11 +184,7 @@ class Student(db.Model):
     last_name_hash_by_part = db.Column(db.JSON, nullable=True)
 
     # Ownership / tenancy
-    # DEPRECATED: teacher_id will be removed in future migration
-    # Students are now linked to teachers via student_teachers table only
-    # This column kept temporarily for backwards compatibility during migration
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
-    teacher = db.relationship('Admin', backref=db.backref('students', lazy='dynamic'))
+    # Students are linked to teachers via student_teachers table (many-to-many)
 
     # Teachers associated with this student (many-to-many)
     teachers = db.relationship(
@@ -1301,6 +1297,13 @@ class Admin(db.Model):
     def get_display_name(self):
         """Return display_name if set, otherwise fall back to username"""
         return self.display_name if self.display_name else self.username
+
+    def get_student_count(self):
+        """Return count of unique students linked to this teacher via StudentTeacher."""
+        # StudentTeacher is defined earlier in this file
+        return db.session.query(StudentTeacher.student_id).filter(
+            StudentTeacher.admin_id == self.id
+        ).distinct().count()
 
 
 class AdminCredential(db.Model):

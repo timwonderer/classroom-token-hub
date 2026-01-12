@@ -1,5 +1,10 @@
 """
 Flask CLI commands for database operations and migrations.
+
+WARNING: These migration commands reference the deprecated Student.teacher_id column.
+They are designed to run BEFORE migration 1e07c37d3c7c (which drops teacher_id).
+After that migration is applied, these commands will fail with AttributeError.
+These are pre-migration utility tools only.
 """
 
 import click
