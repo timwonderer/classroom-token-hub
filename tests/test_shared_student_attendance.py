@@ -1,6 +1,6 @@
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from app import db
 from app.models import Admin, Student, StudentTeacher, TapEvent, TeacherBlock
 from attendance import get_all_block_statuses
