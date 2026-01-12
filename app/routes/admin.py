@@ -496,12 +496,19 @@ def auto_tapout_all_over_limit():
 
                 # If student is active, run the auto-tapout check
                 if latest_event and latest_event.status == "active":
-                    check_and_auto_tapout_if_limit_reached(student)
+                    check_and_auto_tapout_if_limit_reached(student, commit=False)
                     tapped_out_count += 1
                     break  # Only need to run once per student
         except Exception as e:
             current_app.logger.error("Error checking auto-tapout for student", exc_info=True)
             continue
+            
+    # Commit any auto-tapouts found
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to commit auto-tapouts: {e}")
 
     return tapped_out_count
 

@@ -44,7 +44,6 @@ def _create_student_with_student_block(first_name: str, teacher: Admin, block: s
         salt=salt,
         first_half_hash=first_half_hash,
         dob_sum=2025,
-        teacher_id=teacher.id,
     )
     db.session.add(student)
     db.session.flush()
@@ -185,7 +184,6 @@ def test_bulk_delete_legacy_unclaimed_removes_student_blocks(client):
         salt=salt,
         first_half_hash=first_half_hash,
         dob_sum=2025,
-        teacher_id=teacher.id,
         username_hash=None,  # Legacy unclaimed - no username_hash
     )
     db.session.add(student)

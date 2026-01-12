@@ -39,7 +39,6 @@ def _create_legacy_student(first_name: str, teacher: Admin, block: str = "A") ->
         salt=salt,
         username_hash=hash_username(first_name.lower(), salt),
         pin_hash="pin",
-        teacher_id=teacher.id,
     )
     db.session.add(student)
     db.session.flush()

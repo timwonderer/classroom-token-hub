@@ -53,7 +53,7 @@ def enforce_daily_limits_job():
                             student_id=student.id
                         ).order_by(TapEvent.timestamp.desc()).first()
 
-                        check_and_auto_tapout_if_limit_reached(student)
+                        check_and_auto_tapout_if_limit_reached(student, commit=False)
 
                         # Check if a new tap-out event was created
                         latest_after = TapEvent.query.filter_by(
