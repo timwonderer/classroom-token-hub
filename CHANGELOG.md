@@ -9,6 +9,8 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Fixed
+- **Student Claim DOB Field** - Aligned the claim-account form field name with the templates to prevent 500 errors on /student/claim-account.
+- **Student Transfer Banking Settings Import** - Removed a local import shadowing `BankingSettings` to prevent UnboundLocalError on /student/transfer.
 - **Rent Calculation Accuracy** - Improved rent amount calculations for monthly display (#839)
   - Fixed daily rent calculation to use actual days in month (via `monthrange`) instead of approximating 30 days
   - Added support for 'custom' frequency type in rent calculation logic
