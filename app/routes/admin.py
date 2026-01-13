@@ -3664,15 +3664,16 @@ def rent_settings():
 
         # Check if we've passed the first due date (or if it's not set, assume active if enabled)
         if settings.first_rent_due_date:
-            # If first due date is in the future (next month etc), rent is NOT active yet
-            # We compare entire date to be safe, but mostly care about month/year
-            if now_local.date() >= settings.first_rent_due_date.date():
-                rent_active_for_period = True
+            due_date = settings.first_rent_due_date.date()
+            today = now_local.date()
 
-            # Special check: If due date is this month but in future, is it "active"?
-            # Usually yes, it's just "not due yet" but we should show status.
-            # BUT user requirement says: "if rent is not enabled until next month... show No rent due"
-            # So strict future check on start date is good.
+            # Rent is active if:
+            # 1. The due date has already passed, OR
+            # 2. The due date is in the current month (even if not yet reached)
+            # This ensures students can see their rent obligations before the due date
+            if today >= due_date or (due_date.year == today.year and due_date.month == today.month):
+                rent_active_for_period = True
+            # If due date is in a future month, rent is NOT active yet
         else:
             # No start date set - valid state? Assume active if enabled.
             rent_active_for_period = True
@@ -3741,6 +3742,34 @@ def rent_settings():
                     'is_late': is_late
                 })
 
+    # Determine period label based on frequency type
+    period_label = "Month"  # Default
+    if settings and settings.is_enabled:
+        if settings.frequency_type == 'daily':
+            period_label = "Day"
+        elif settings.frequency_type == 'weekly':
+            period_label = "Week"
+        elif settings.frequency_type == 'monthly':
+            period_label = "Month"
+        elif settings.frequency_type == 'custom':
+            # For custom, use the unit specified
+            unit = settings.custom_frequency_unit
+            if unit == 'days':
+                if settings.custom_frequency_value == 1:
+                    period_label = "Day"
+                else:
+                    period_label = f"{settings.custom_frequency_value} Days"
+            elif unit == 'weeks':
+                if settings.custom_frequency_value == 1:
+                    period_label = "Week"
+                else:
+                    period_label = f"{settings.custom_frequency_value} Weeks"
+            elif unit == 'months':
+                if settings.custom_frequency_value == 1:
+                    period_label = "Month"
+                else:
+                    period_label = f"{settings.custom_frequency_value} Months"
+
     return render_template('admin_rent_settings.html',
                           settings=settings,
                           total_students=total_students,
@@ -3754,7 +3783,8 @@ def rent_settings():
                           class_labels_by_block=class_labels_by_block,
                           rent_items=rent_items,
                           unpaid_students=unpaid_students,
-                          rent_active_for_period=rent_active_for_period)
+                          rent_active_for_period=rent_active_for_period,
+                          period_label=period_label)
 
 
 @admin_bp.route('/rent-waiver/add', methods=['POST'])
