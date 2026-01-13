@@ -29,8 +29,7 @@ def admin_with_students(client):
         salt=salt,
         username_hash=hash_username('teststudent', salt),
         pin_hash=generate_password_hash('1234'),
-        has_completed_setup=True,
-        teacher_id=admin.id  # Primary ownership
+        has_completed_setup=True
     )
     db.session.add(student)
     db.session.flush()
@@ -149,8 +148,7 @@ def test_attendance_history_tenant_scoping(client):
         salt=salt1,
         username_hash=hash_username('student1', salt1),
         pin_hash=generate_password_hash('1234'),
-        has_completed_setup=True,
-        teacher_id=admin1.id
+        has_completed_setup=True
     )
     
     # Create student for admin2
@@ -162,8 +160,7 @@ def test_attendance_history_tenant_scoping(client):
         salt=salt2,
         username_hash=hash_username('student2', salt2),
         pin_hash=generate_password_hash('1234'),
-        has_completed_setup=True,
-        teacher_id=admin2.id
+        has_completed_setup=True
     )
     db.session.add_all([student1, student2])
     db.session.flush()

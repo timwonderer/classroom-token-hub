@@ -39,7 +39,6 @@ def create_student(teacher, username="student1", block="A"):
         last_initial="S",
         block=block,
         passphrase_hash=passphrase_hash,
-        teacher_id=teacher.id,
         has_completed_setup=True
     )
     db.session.add(student)
@@ -63,7 +62,7 @@ def test_teacher_recovery_full_flow(client, app):
     # Initiate
     response = client.post('/admin/recover', data={
         'student_usernames': 's1, s2, s3',
-        'dob_sum': '2028'
+        'dob_sum': '2008-10-10'  # Sums to 2028 (10+10+2008)
     }, follow_redirects=False)
 
     assert response.status_code == 302
@@ -127,7 +126,7 @@ def test_recovery_fails_missing_period(client, app):
     # Initiate with ONLY s1
     response = client.post('/admin/recover', data={
         'student_usernames': 's1',
-        'dob_sum': '2028'
+        'dob_sum': '2008-10-10'  # Sums to 2028 (10+10+2008)
     }, follow_redirects=True)
 
     assert b"must select at least one student from each of your active periods" in response.data
@@ -139,7 +138,7 @@ def test_recovery_fails_wrong_dob_sum(client, app):
 
     response = client.post('/admin/recover', data={
         'student_usernames': 's1',
-        'dob_sum': '1999'
+        'dob_sum': '1980-01-01'  # Sums to 1982, expected 2028
     }, follow_redirects=True)
 
     assert b"Unable to verify your identity" in response.data
@@ -152,7 +151,7 @@ def test_username_lookup_works(client, app):
 
     response = client.post('/admin/recover', data={
         'student_usernames': 'UserWithCaps',
-        'dob_sum': '2028'
+        'dob_sum': '2008-10-10'  # Sums to 2028 (10+10+2008)
     }, follow_redirects=True)
 
     # Should NOT say "No matching students found"
@@ -177,7 +176,7 @@ def test_setup_recovery_flow(client, app):
     assert b"Setup Account Recovery" in response.data
 
     # Post to setup
-    response = client.post('/admin/setup-recovery', data={'dob_sum': '2030'}, follow_redirects=True)
+    response = client.post('/admin/setup-recovery', data={'dob_sum': '2010-10-10'}, follow_redirects=True)
     assert response.status_code == 200
     assert b"Recovery setup complete" in response.data
 

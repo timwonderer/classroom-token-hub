@@ -37,6 +37,13 @@ def setup_student_with_legacy_transactions(client):
     db.session.add(student)
     db.session.commit()
 
+    # Link student to teacher
+    from app.models import StudentTeacher
+    st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+    db.session.add(st)
+    db.session.commit()
+
+
     join_code = "MATH1A"
     
     # Create TeacherBlock entry (claimed seat)

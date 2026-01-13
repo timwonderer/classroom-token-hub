@@ -47,7 +47,6 @@ def _create_student(first_name: str, primary_teacher: Admin = None, linked_teach
         salt=salt,
         username_hash=hash_username(first_name.lower(), salt),
         pin_hash="pin",
-        teacher_id=primary_teacher.id if primary_teacher else None,
     )
     db.session.add(student)
     db.session.flush()
@@ -143,7 +142,6 @@ def test_sysadmin_counts_students_with_only_links(client):
         salt=salt,
         username_hash=hash_username("noowner", salt),
         pin_hash="pin",
-        teacher_id=None,  # No primary owner
     )
     db.session.add(student)
     db.session.flush()

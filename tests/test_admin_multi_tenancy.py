@@ -34,7 +34,6 @@ def multi_teacher_data(client):
             salt=salt,
             first_half_hash=f"hash_t1_{i}",  # Unique hash for each student
             dob_sum=2025 + i,  # Unique DOB sum
-            teacher_id=teacher1.id,
         )
         db.session.add(student)
         db.session.flush()
@@ -55,7 +54,6 @@ def multi_teacher_data(client):
             salt=salt,
             first_half_hash=f"hash_t2_{i}",  # Unique hash for each student
             dob_sum=2030 + i,  # Unique DOB sum
-            teacher_id=teacher2.id,
         )
         db.session.add(student)
         db.session.flush()
@@ -160,7 +158,6 @@ def test_students_with_null_teacher_id_not_visible_to_teachers(client):
         salt=salt,
         first_half_hash="hash_orphan",
         dob_sum=2099,
-        teacher_id=None,  # NULL teacher_id
     )
     db.session.add(orphaned_student)
     db.session.commit()
@@ -215,7 +212,6 @@ def test_system_admin_flag_not_set_accidentally(client):
             salt=salt,
             first_half_hash=f"hash_t2_sys_{i}",
             dob_sum=3000 + i,
-            teacher_id=teacher2.id,
         )
         db.session.add(student)
         db.session.flush()
@@ -285,7 +281,6 @@ def test_orphaned_students_from_deleted_teacher(client):
             salt=salt,
             first_half_hash=f"hash_old_{i}",
             dob_sum=4000 + i,
-            teacher_id=teacher1_id,
         )
         db.session.add(student)
         db.session.flush()
@@ -337,7 +332,6 @@ def test_orphaned_students_from_deleted_teacher(client):
                 salt=salt,
                 first_half_hash=f"hash_old_orphaned_{i}",
                 dob_sum=4000 + i,
-                teacher_id=teacher1_id, # Point to the reused ID
             )
             db.session.add(student)
         db.session.commit()
@@ -355,70 +349,4 @@ def test_orphaned_students_from_deleted_teacher(client):
             f"Security Fix: New teacher with reused ID should see 0 orphaned students, but saw {len(students)}."
 
 
-def test_students_with_mismatched_teacher_id_not_visible(client):
-    """
-    Test that students with teacher_id set but no StudentTeacher record are NOT visible.
-    
-    This tests the scenario where a student has teacher_id pointing to another teacher
-    but there's no corresponding StudentTeacher association. This could happen if:
-    1. The migration didn't run properly
-    2. Data was manually inserted
-    3. There's a bug in student creation
-    """
-    # Create two teachers
-    teacher1 = Admin(username="teacher1", totp_secret="SECRET1")
-    teacher2 = Admin(username="teacher2", totp_secret="SECRET2")
-    db.session.add(teacher1)
-    db.session.add(teacher2)
-    db.session.flush()
-    
-    # Create a student with teacher_id=teacher1 but NO StudentTeacher record
-    salt = get_random_salt()
-    mismatched_student = Student(
-        first_name="MismatchedStudent",
-        last_initial="M",
-        block="M",
-        salt=salt,
-        first_half_hash="hash_mismatch",
-        dob_sum=2098,
-        teacher_id=teacher1.id,  # Points to teacher1
-    )
-    db.session.add(mismatched_student)
-    db.session.commit()
-    
-    # Verify the student exists and has teacher_id set (use ID since first_name is encrypted)
-    student_in_db = Student.query.filter_by(id=mismatched_student.id).first()
-    assert student_in_db is not None
-    assert student_in_db.teacher_id == teacher1.id
-    
-    # Verify there's NO StudentTeacher record
-    st_record = StudentTeacher.query.filter_by(student_id=student_in_db.id).first()
-    assert st_record is None, "There should be no StudentTeacher record for this test"
-    
-    # Test 1: Teacher1 should NOT see the student (after our security fix)
-    # BEFORE FIX: Student would be visible via teacher_id filter
-    # AFTER FIX: Student is only visible if there's a StudentTeacher record
-    with client.application.test_request_context():
-        from flask import session
-        session['is_admin'] = True
-        session['admin_id'] = teacher1.id
-        
-        students = get_admin_student_query().all()
-        student_names = [s.first_name for s in students]
-        
-        # SECURITY FIX: This student should NOT be visible without a StudentTeacher record
-        assert "MismatchedStudent" not in student_names, \
-            f"Student without StudentTeacher record should NOT be visible to teacher1 (security fix)"
-    
-    # Test 2: Teacher2 should NOT see the student
-    with client.application.test_request_context():
-        from flask import session
-        session['is_admin'] = True
-        session['admin_id'] = teacher2.id
-        
-        students = get_admin_student_query().all()
-        student_names = [s.first_name for s in students]
-        
-        # This student should NOT be visible to teacher2
-        assert "MismatchedStudent" not in student_names, \
-            f"Student with teacher_id={teacher1.id} should NOT be visible to teacher2, but was found"
+

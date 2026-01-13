@@ -42,10 +42,16 @@ def setup_multi_class_student(client):
         block="A",
         salt=salt,
         username_hash=hash_username("multiclass_s", salt),
-        pin_hash="fake-hash",
-        teacher_id=teacher1.id
+        pin_hash="fake-hash"
     )
     db.session.add(student)
+    db.session.commit()
+
+    # Link student to teachers
+    from app.models import StudentTeacher
+    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher1.id))
+    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher2.id))
+    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher3.id))
     db.session.commit()
 
     # Create claimed seats for the student in multiple classes
@@ -112,10 +118,14 @@ def setup_single_class_student(client):
         block="D",
         salt=salt,
         username_hash=hash_username("singleclass_x", salt),
-        pin_hash="fake-hash",
-        teacher_id=teacher.id
+        pin_hash="fake-hash"
     )
     db.session.add(student)
+    db.session.commit()
+
+    # Link student to teacher
+    from app.models import StudentTeacher
+    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
     db.session.commit()
 
     seat = TeacherBlock(
