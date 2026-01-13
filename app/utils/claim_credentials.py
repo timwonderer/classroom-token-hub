@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Optional, Tuple
 
-from hash_utils import hash_hmac
+from app.hash_utils import hash_hmac
 
 
 def _normalize_initial(value: Optional[str]) -> str:

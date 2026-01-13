@@ -5,7 +5,7 @@ import pytest
 from datetime import datetime, timezone
 from app import app, db
 from app.models import Admin, Student, TapEvent, StudentTeacher
-from hash_utils import hash_username, get_random_salt
+from app.hash_utils import hash_username, get_random_salt
 
 
 @pytest.fixture

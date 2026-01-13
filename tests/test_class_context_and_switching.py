@@ -12,7 +12,7 @@ import pytest
 from flask import session
 from app.models import Student, Admin, TeacherBlock
 from app.extensions import db
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 def _get_inject_class_context_processor(client):

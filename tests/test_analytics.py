@@ -15,7 +15,7 @@ from app.models import (
     Transaction, PayrollSettings, AnalyticsAlert, DemoStudent
 )
 from app.utils.analytics_engine import AnalyticsEngine
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 @pytest.fixture

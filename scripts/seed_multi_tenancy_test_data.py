@@ -31,7 +31,7 @@ from app.models import (
     PayrollSettings, RentSettings
 )
 from app.utils.join_code import generate_join_code
-from hash_utils import get_random_salt, hash_username, hash_username_lookup
+from app.hash_utils import get_random_salt, hash_username, hash_username_lookup
 from app.utils.claim_credentials import compute_primary_claim_hash
 from app.utils.name_utils import hash_last_name_parts
 from werkzeug.security import generate_password_hash

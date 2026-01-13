@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 
 from app import db
 from app.models import Admin, Student, StudentTeacher, TeacherBlock
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 def _create_admin(username: str) -> tuple[Admin, str]:

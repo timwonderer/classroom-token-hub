@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from app import db
 from app.models import Admin, TeacherBlock
-from hash_utils import get_random_salt, hash_hmac
+from app.hash_utils import get_random_salt, hash_hmac
 
 
 def _create_admin(username: str) -> tuple[Admin, str]:
@@ -117,7 +117,7 @@ def test_delete_pending_student_wrong_teacher(client):
 def test_delete_pending_student_already_claimed(client):
     """Cannot delete a TeacherBlock that has already been claimed."""
     from app.models import Student
-    from hash_utils import hash_username
+    from app.hash_utils import hash_username
 
     teacher, secret = _create_admin("teacher-pending3")
 
@@ -256,7 +256,7 @@ def test_bulk_delete_pending_students_by_block(client):
 def test_bulk_delete_skips_claimed_students(client):
     """Bulk delete by IDs should skip any claimed TeacherBlocks."""
     from app.models import Student
-    from hash_utils import hash_username
+    from app.hash_utils import hash_username
 
     teacher, secret = _create_admin("teacher-pending6")
 
@@ -327,7 +327,7 @@ def test_bulk_delete_skips_claimed_students(client):
 def test_bulk_delete_by_block_only_deletes_unclaimed(client):
     """Bulk delete by block should only delete unclaimed TeacherBlocks."""
     from app.models import Student
-    from hash_utils import hash_username
+    from app.hash_utils import hash_username
 
     teacher, secret = _create_admin("teacher-pending7")
 
