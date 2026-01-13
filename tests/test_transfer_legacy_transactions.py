@@ -1,3 +1,7 @@
+import pytest
+
+pytestmark = [pytest.mark.critical, pytest.mark.regression]
+
 """
 Test for student transfer functionality with legacy transactions.
 

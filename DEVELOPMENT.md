@@ -461,6 +461,17 @@ When ready to finalize multi-teacher model:
 - **Queries:** Use scoped helpers for tenant-aware access
 - **Timestamps:** Use `datetime.now(timezone.utc)` (not deprecated `utcnow()`)
 - **Session Access:** Use `db.session.get(Model, id)` (not deprecated `Model.query.get()`)
+- **Schema Changes:** See **[Migration Best Practices](docs/development/MIGRATION_BEST_PRACTICES.md)** for the mandatory "Expand and Contract" workflow.
+
+### Safe Schema Evolution (Constraint & Column Removal)
+**CRITICAL:** Adopt the **Expand and Contract** pattern. Attempting to delete Code + DB in the same release is PROHIBITED.
+1.  **Release 1 (Expand):** App supports new schema; old schema remains and is ignored.
+2.  **Release 2 (Contract Code):** Remove attribute from Model. Database column stays. Hidden dependencies will crash loudly but are reversible.
+3.  **Release 3 (Contract DB):** Migration drops the column.
+
+### Testing Policy for Refactors
+- **No Mechanical Fixes:** If a test breaks due to a signature change (e.g., removing `teacher_id` from constructor), you must review the **entire test logic**. Simply removing the argument is forbidden.
+- **Workflow Coverage:** Critical flows (Claims, Transfers, Admin Ops) require integration tests before schema changes.
 
 ### Security Guidelines
 - Keep PII minimal (prefer non-PII identifiers, encrypted first names)
@@ -468,6 +479,7 @@ When ready to finalize multi-teacher model:
 - Use CSRF protection on all forms
 - Encrypt sensitive data at rest
 - Avoid adding debug print statements to production code
+
 
 ### Testing Requirements
 - Run `pytest -q` before committing

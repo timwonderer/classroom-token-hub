@@ -1,3 +1,7 @@
+import pytest
+
+pytestmark = [pytest.mark.critical, pytest.mark.regression]
+
 """
 Test that students can claim accounts in legacy classes using join code.
 
