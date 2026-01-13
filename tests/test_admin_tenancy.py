@@ -23,7 +23,6 @@ def _create_student(first_name: str, teacher: Admin) -> Student:
         salt=salt,
         username_hash=hash_username(first_name.lower(), salt),
         pin_hash="pin",
-        teacher_id=teacher.id,
     )
     db.session.add(student)
     db.session.flush()

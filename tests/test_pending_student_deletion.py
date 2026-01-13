@@ -129,11 +129,16 @@ def test_delete_pending_student_already_claimed(client):
         block="D",
         salt=student_salt,
         username_hash=hash_username("eve", student_salt),
-        pin_hash="fake-hash",
-        teacher_id=teacher.id
+        pin_hash="fake-hash"
     )
     db.session.add(student)
     db.session.flush()  # Get the student ID
+    
+    # Link student to teacher
+    from app.models import StudentTeacher
+    st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+    db.session.add(st)
+
 
     # Create a claimed TeacherBlock (simulate a student having claimed it)
     salt = get_random_salt()
@@ -266,11 +271,16 @@ def test_bulk_delete_skips_claimed_students(client):
         block="H",
         salt=student_salt,
         username_hash=hash_username("nate", student_salt),
-        pin_hash="fake-hash",
-        teacher_id=teacher.id
+        pin_hash="fake-hash"
     )
     db.session.add(student)
     db.session.flush()
+
+    # Link student to teacher
+    from app.models import StudentTeacher
+    st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+    db.session.add(st)
+
 
     # Create a claimed TeacherBlock
     salt = get_random_salt()
@@ -333,11 +343,16 @@ def test_bulk_delete_by_block_only_deletes_unclaimed(client):
         block="I",
         salt=student_salt,
         username_hash=hash_username("quinn", student_salt),
-        pin_hash="fake-hash",
-        teacher_id=teacher.id
+        pin_hash="fake-hash"
     )
     db.session.add(student)
     db.session.flush()
+
+    # Link student to teacher
+    from app.models import StudentTeacher
+    st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+    db.session.add(st)
+
 
     # Create a claimed TeacherBlock in same block
     salt = get_random_salt()

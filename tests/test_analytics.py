@@ -56,8 +56,7 @@ def setup_analytics_test(client):
             block=block,
             salt=salt,
             username_hash=hash_username(f"student{i}", salt),
-            pin_hash="fake-hash",
-            teacher_id=admin.id
+            pin_hash="fake-hash"
         )
         db.session.add(student)
         db.session.flush()
@@ -373,8 +372,7 @@ def test_block_resolution_falls_back_to_student_block(client, setup_analytics_te
         block="C",
         salt=legacy_salt,
         username_hash=hash_username("legacyuser", legacy_salt),
-        pin_hash="fake-hash",
-        teacher_id=admin.id
+        pin_hash="fake-hash"
     )
     db.session.add(legacy_student)
     db.session.flush()
@@ -400,8 +398,7 @@ def test_enrolled_students_include_null_join_code_with_matching_block(client, se
         block=block,
         salt=null_salt,
         username_hash=hash_username("nulluser", null_salt),
-        pin_hash="fake-hash",
-        teacher_id=admin.id
+        pin_hash="fake-hash"
     )
     db.session.add(null_student)
     db.session.flush()

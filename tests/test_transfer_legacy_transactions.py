@@ -32,11 +32,17 @@ def setup_student_with_legacy_transactions(client):
         block="Period1",
         salt=salt,
         username_hash=hash_username("alice_a", salt),
-        passphrase_hash=generate_password_hash("alice_pass"),
-        teacher_id=teacher.id
+        passphrase_hash=generate_password_hash("alice_pass")
     )
     db.session.add(student)
     db.session.commit()
+
+    # Link student to teacher
+    from app.models import StudentTeacher
+    st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+    db.session.add(st)
+    db.session.commit()
+
 
     join_code = "MATH1A"
     

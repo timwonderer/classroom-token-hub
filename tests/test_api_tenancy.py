@@ -38,7 +38,6 @@ def _create_student(first_name: str, primary_teacher: Admin = None, linked_teach
         salt=salt,
         username_hash=hash_username(first_name.lower(), salt),
         pin_hash="pin",
-        teacher_id=primary_teacher.id if primary_teacher else None,
     )
     db.session.add(student)
     db.session.flush()

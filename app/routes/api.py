@@ -2164,22 +2164,20 @@ def update_student_block_settings():
 
 
 def check_and_auto_tapout_if_limit_reached(student, commit=True):
+def check_and_auto_tapout_if_limit_reached(student, commit=True):
     """
     Checks if an active student has reached their daily limit and auto-taps them out.
     This function should be called periodically (e.g., during status checks).
     Daily limits reset at midnight Pacific time.
+    
+    Args:
+        student: Student model instance
+        commit: Whether to commit the transaction immediately (default: True).
+                Set to False if calling in a loop to batch commits.
     """
     import pytz
     from payroll import get_daily_limit_seconds
     from attendance import calculate_period_attendance_utc_range
-
-    # Helper function to ensure UTC timezone-aware datetime
-    def _as_utc(dt):
-        if dt is None:
-            return None
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
 
     # Helper function to ensure UTC timezone-aware datetime
     def _as_utc(dt):
@@ -2283,8 +2281,8 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                     )
                     db.session.add(tap_out_event)
 
+    # Commit all auto-tap-outs at once if requested
     if commit:
-        # Commit all auto-tap-outs at once
         try:
             db.session.commit()
         except Exception as e:

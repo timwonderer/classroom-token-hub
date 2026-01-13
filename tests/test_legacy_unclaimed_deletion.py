@@ -40,7 +40,6 @@ def _create_legacy_unclaimed_student(first_name: str, teacher: Admin, block: str
         first_half_hash=first_half_hash,
         dob_sum=2025,
         username_hash=None,  # Legacy - no username yet
-        teacher_id=teacher.id  # Legacy field
     )
     db.session.add(student)
     db.session.commit()
@@ -66,8 +65,7 @@ def _create_claimed_student(first_name: str, username: str, teacher: Admin, bloc
         salt=salt,
         first_half_hash=first_half_hash,
         dob_sum=2025,
-        username_hash=username_hash,
-        teacher_id=teacher.id
+        username_hash=username_hash
     )
     db.session.add(student)
     db.session.commit()

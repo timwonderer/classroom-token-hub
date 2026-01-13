@@ -31,8 +31,7 @@ def admin_with_students(client):
             block="A",
             salt=salt,
             username_hash=hash_username(f"student{i}", salt),
-            pin_hash="fake-hash",
-            teacher_id=admin.id
+            pin_hash="fake-hash"
         )
         db.session.add(student)
         db.session.flush()

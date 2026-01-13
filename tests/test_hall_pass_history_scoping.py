@@ -37,8 +37,7 @@ def setup_multi_teacher_hall_pass_history(client):
         last_initial="A",
         block="A",
         salt=salt1,
-        username_hash=hash_username("alice_a", salt1),
-        teacher_id=teacher1.id
+        username_hash=hash_username("alice_a", salt1)
     )
     
     salt2 = get_random_salt()
@@ -47,8 +46,7 @@ def setup_multi_teacher_hall_pass_history(client):
         last_initial="B",
         block="B",
         salt=salt2,
-        username_hash=hash_username("bob_b", salt2),
-        teacher_id=teacher1.id
+        username_hash=hash_username("bob_b", salt2)
     )
 
     # Create students for teacher2
@@ -58,8 +56,7 @@ def setup_multi_teacher_hall_pass_history(client):
         last_initial="C",
         block="C",
         salt=salt3,
-        username_hash=hash_username("charlie_c", salt3),
-        teacher_id=teacher2.id
+        username_hash=hash_username("charlie_c", salt3)
     )
     
     salt4 = get_random_salt()
@@ -68,8 +65,7 @@ def setup_multi_teacher_hall_pass_history(client):
         last_initial="D",
         block="D",
         salt=salt4,
-        username_hash=hash_username("diana_d", salt4),
-        teacher_id=teacher2.id
+        username_hash=hash_username("diana_d", salt4)
     )
 
     db.session.add_all([student1, student2, student3, student4])

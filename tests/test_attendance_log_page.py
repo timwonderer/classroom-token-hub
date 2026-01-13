@@ -42,8 +42,7 @@ def admin_with_data(client):
         first_name='Test',
         last_initial='T',
         pin_hash='hashed_pin',
-        block='PERIOD1,PERIOD2',
-        teacher_id=admin.id
+        block='PERIOD1,PERIOD2'
     )
     salt2 = get_random_salt()
     student2 = Student(
@@ -52,8 +51,7 @@ def admin_with_data(client):
         first_name='Student',
         last_initial='S',
         pin_hash='hashed_pin',
-        block='PERIOD3',
-        teacher_id=admin.id
+        block='PERIOD3'
     )
     db.session.add_all([student1, student2])
     db.session.flush()
@@ -164,8 +162,7 @@ def test_attendance_log_tenant_scoping(client):
         first_name='Student1',
         last_initial='S',
         pin_hash='hash1',
-        block='ADMIN1PERIOD',
-        teacher_id=admin1.id
+        block='ADMIN1PERIOD'
     )
     salt2 = get_random_salt()
     student2 = Student(
@@ -174,8 +171,7 @@ def test_attendance_log_tenant_scoping(client):
         first_name='Student2',
         last_initial='S',
         pin_hash='hash2',
-        block='ADMIN2PERIOD',
-        teacher_id=admin2.id
+        block='ADMIN2PERIOD'
     )
     db.session.add_all([student1, student2])
     db.session.flush()
