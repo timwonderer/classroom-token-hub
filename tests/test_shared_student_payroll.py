@@ -3,7 +3,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from app import db
 from app.models import Admin, Student, StudentTeacher, TapEvent, PayrollSettings, TeacherBlock
-from payroll import calculate_payroll
+from app.payroll import calculate_payroll
 
 
 def test_shared_student_diff_teacher_diff_period(client):

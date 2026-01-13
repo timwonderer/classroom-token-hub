@@ -1,6 +1,6 @@
 from app import db, Student
 from werkzeug.security import generate_password_hash
-from hash_utils import hash_username, get_random_salt
+from app.hash_utils import hash_username, get_random_salt
 from bs4 import BeautifulSoup
 import json
 

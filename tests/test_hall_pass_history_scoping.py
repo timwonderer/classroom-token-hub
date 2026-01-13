@@ -11,7 +11,7 @@ from app.models import (
     Student, Admin, HallPassLog, StudentTeacher
 )
 from app.extensions import db
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 @pytest.fixture

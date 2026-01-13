@@ -4,7 +4,7 @@ import bcrypt
 from datetime import datetime, timezone, timedelta
 from app.models import Admin, Student, RecoveryRequest, StudentRecoveryCode, StudentTeacher
 from app.extensions import db
-from hash_utils import hash_username_lookup, get_random_salt, hash_hmac, hash_username
+from app.hash_utils import hash_username_lookup, get_random_salt, hash_hmac, hash_username
 
 # Helper to create teacher
 def create_teacher(username="teacher1", dob_sum=2028):

@@ -1,7 +1,7 @@
 import pytest
 from app import db, Student
 from werkzeug.security import generate_password_hash
-from hash_utils import hash_username, get_random_salt
+from app.hash_utils import hash_username, get_random_salt
 
 def test_student_login_next_redirect(client):
     salt = get_random_salt()

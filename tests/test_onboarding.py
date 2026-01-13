@@ -1,4 +1,6 @@
 import pytest
+
+pytestmark = [pytest.mark.critical, pytest.mark.regression]
 import os
 from cryptography.fernet import Fernet
 

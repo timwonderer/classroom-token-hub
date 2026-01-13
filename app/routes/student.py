@@ -25,7 +25,7 @@ from app.models import (
     BankingSettings, UserReport, FeatureSettings
 )
 from app.auth import admin_required, login_required, get_logged_in_student, SESSION_TIMEOUT_MINUTES
-from forms import (
+from app.forms import (
     StudentClaimAccountForm, StudentCreateUsernameForm, StudentPinPassphraseForm,
     StudentLoginForm, InsuranceClaimForm, StudentCompleteProfileForm
 )
@@ -40,9 +40,9 @@ from app.utils.claim_credentials import compute_primary_claim_hash, match_claim_
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed, evaluate_overdraft_allowance
 from app.utils.help_content import HELP_ARTICLES
-from hash_utils import hash_hmac, hash_username, hash_username_lookup
-from attendance import get_all_block_statuses
-from payroll import get_pay_rate_for_block
+from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
+from app.attendance import get_all_block_statuses
+from app.payroll import get_pay_rate_for_block
 
 # Create blueprint
 student_bp = Blueprint('student', __name__, url_prefix='/student')

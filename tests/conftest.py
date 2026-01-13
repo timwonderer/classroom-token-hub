@@ -97,7 +97,7 @@ def client_with_fk():
 
 @pytest.fixture
 def test_student():
-    from hash_utils import hash_username, get_random_salt
+    from app.hash_utils import hash_username, get_random_salt
     salt = get_random_salt()
     stu = Student(
         first_name="Test",

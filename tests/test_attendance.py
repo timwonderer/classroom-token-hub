@@ -1,6 +1,6 @@
 import pytest
 from app import app, db, Student, TapEvent, Transaction
-from attendance import (
+from app.attendance import (
     get_last_payroll_time,
     calculate_unpaid_attendance_seconds,
     calculate_period_attendance,

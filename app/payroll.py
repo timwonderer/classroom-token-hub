@@ -3,7 +3,7 @@ from functools import wraps
 from app.extensions import db
 from app.models import TapEvent, Student, Transaction, PayrollSettings
 from datetime import datetime, timezone
-from attendance import calculate_unpaid_attendance_seconds, get_last_payroll_time, _as_utc
+from app.attendance import calculate_unpaid_attendance_seconds, get_last_payroll_time, _as_utc
 from app.utils.attendance_helpers import get_join_code_for_student_period
 from flask import has_request_context, session
 
