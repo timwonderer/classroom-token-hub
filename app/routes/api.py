@@ -2161,7 +2161,6 @@ def update_student_block_settings():
 
 
 def check_and_auto_tapout_if_limit_reached(student, commit=True):
-def check_and_auto_tapout_if_limit_reached(student, commit=True):
     """
     Checks if an active student has reached their daily limit and auto-taps them out.
     This function should be called periodically (e.g., during status checks).
