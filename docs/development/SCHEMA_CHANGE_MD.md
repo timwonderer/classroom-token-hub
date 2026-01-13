@@ -6,7 +6,7 @@ This document defines the **Schema Change Gate** — a mandatory checklist that 
 This gate is **PR‑blocking by design**. A schema-affecting PR that does not explicitly pass this gate **MUST NOT** be merged.
 
 This checklist derives its authority from:
-- [Schema Contraction & Destructive Migration Policy](./Schema_Contraction_and_Destructive_Migration_Policy.md)
+- [Schema Contraction & Destructive Migration Policy](./SCHEMA_CONTRACTION_AND_DESTRUCTIVE_MIGRATION_POLICY.md)
 
 ---
 

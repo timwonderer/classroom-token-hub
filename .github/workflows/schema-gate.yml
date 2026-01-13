@@ -94,10 +94,10 @@ jobs:
       - name: Audit Deprecated Symbols
         run: |
           echo "🔍 Scanning for deprecated symbol usage in application code..."
-          
+
           # Fix 3: Require deprecated_symbols.txt to exist
-          if [ ! -f deprecated_symbols.txt ]; then
-            echo "❌ Missing mandatory file: deprecated_symbols.txt"
+          if [ ! -f docs/development/DEPRECATED_SYMBOLS.txt ]; then
+            echo "❌ Missing mandatory file: docs/development/DEPRECATED_SYMBOLS.txt"
             echo "   Please create this file (it can be empty if no symbols are deprecated)."
             exit 1
           fi
@@ -107,12 +107,12 @@ jobs:
           while IFS= read -r symbol; do
             # Skip empty lines or comments
             [[ -z "$symbol" || "$symbol" =~ ^# ]] && continue
-            
+
             if grep -r "$symbol" app/ templates/ scripts/ --include="*.py" --include="*.html" --include="*.sh"; then
               echo "❌ Found usage of deprecated symbol '$symbol' in codebase."
               has_errors=1
             fi
-          done < deprecated_symbols.txt
+          done < docs/development/DEPRECATED_SYMBOLS.txt
 
           if [ $has_errors -eq 1 ]; then
             exit 1
