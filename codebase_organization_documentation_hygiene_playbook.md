@@ -282,7 +282,8 @@ Archived docs:
 
 A file may be deleted only if:
 
--
+- [ ] TODO: Define deletion criteria here.
+
 
 Commit message:
 
