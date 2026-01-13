@@ -21,7 +21,7 @@ from app.extensions import db, limiter
 from app.models import (
     Student, StoreItem, StudentItem, Transaction, TapEvent,
     HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
-    StudentTeacher, TeacherBlock, StudentBlock
+    StudentTeacher, TeacherBlock, StudentBlock, DemoStudent
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
 from app.routes.student import get_current_class_context, get_current_teacher_id, get_rent_settings_for_context
@@ -1135,20 +1135,19 @@ def get_hall_pass_queue():
     today_start_utc = today_start_user_tz.astimezone(pytz.utc).replace(tzinfo=None)
 
     # Build subquery for students belonging to this teacher
-    # Include both primary ownership (teacher_id) and shared access (student_teachers)
+    # Use StudentTeacher table as the source of truth for associations.
     shared_student_ids = (
         StudentTeacher.query.with_entities(StudentTeacher.student_id)
         .filter(StudentTeacher.admin_id == teacher_id)
         .subquery()
     )
     
+    demo_student_ids = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
     student_ids_subquery = (
         Student.query.with_entities(Student.id)
         .filter(
-            or_(
-                Student.teacher_id == teacher_id,
-                Student.id.in_(shared_student_ids)
-            )
+            Student.id.in_(shared_student_ids),
+            ~Student.id.in_(demo_student_ids)
         )
         .subquery()
     )
@@ -2164,7 +2163,7 @@ def update_student_block_settings():
     })
 
 
-def check_and_auto_tapout_if_limit_reached(student):
+def check_and_auto_tapout_if_limit_reached(student, commit=True):
     """
     Checks if an active student has reached their daily limit and auto-taps them out.
     This function should be called periodically (e.g., during status checks).
@@ -2284,12 +2283,13 @@ def check_and_auto_tapout_if_limit_reached(student):
                     )
                     db.session.add(tap_out_event)
 
-    # Commit all auto-tap-outs at once
-    try:
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Failed to auto-tap-out student {student.id}: {e}")
+    if commit:
+        # Commit all auto-tap-outs at once
+        try:
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Failed to auto-tap-out student {student.id}: {e}")
 
 
 @api_bp.route('/student-status', methods=['GET'])

@@ -9,6 +9,10 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Fixed
+- **Student Creation Without Deprecated teacher_id** - Removed deprecated `teacher_id` assignment when creating new students to prevent `TypeError: 'teacher_id' is an invalid keyword argument for Student`.
+- **Scheduled Auto Tap-Out Transactions** - Avoided committing inside the scheduled auto tap-out loop to prevent closed-transaction errors during background checks.
+- **Student Claim DOB Field** - Aligned the claim-account form field name with the templates to prevent 500 errors on /student/claim-account.
+- **Student Transfer Banking Settings Import** - Removed a local import shadowing `BankingSettings` to prevent UnboundLocalError on /student/transfer.
 - **Rent Calculation Accuracy** - Improved rent amount calculations for monthly display (#839)
   - Fixed daily rent calculation to use actual days in month (via `monthrange`) instead of approximating 30 days
   - Added support for 'custom' frequency type in rent calculation logic
@@ -22,6 +26,7 @@ and this project follows semantic versioning principles.
   - Both statistics use accurate `unpaid_students` calculation instead of payment count
 - **Rent Period Display** - Fixed misleading "Period" column in unpaid students list (#839)
   - Now shows billing period (e.g., "January 2026") instead of class block/period
+- **Hall Pass Queue Scoping** - Removed deprecated `students.teacher_id` filtering to prevent hall pass queue errors.
 
 ### Changed
 - **Rent Calculation Helper** - Extracted rent amount calculation into reusable helper function (#839)
