@@ -35,48 +35,14 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 - **[Economy Specification](technical-reference/ECONOMY_SPECIFICATION.md)** - Developer-only ratios and balancing rules.
 - **[Timezone Handling](technical-reference/TIMEZONE_HANDLING.md)** - UTC storage and conversion patterns.
 
-### Development
-- **[Development Priorities](development/DEVELOPMENT.md)** - Current priorities, roadmap, and active tasks.
-- **[Economy Balance Checker](development/ECONOMY_BALANCE_CHECKER.md)** - CWI implementation guide and API reference.
-- **[Deprecated Code Patterns](development/DEPRECATED_CODE_PATTERNS.md)** - Code modernization tracking.
-- **[System Admin Interface](development/SYSADMIN_INTERFACE_DESIGN.md)** - Sysadmin flows and UX principles.
-- **[Migration Guide](development/MIGRATION_GUIDE.md)** - Alembic tips and conflict resolution.
-- **[Jules Setup](development/JULES_SETUP.md)** - Development environment setup.
-- **[Seeding Instructions](development/SEEDING_INSTRUCTIONS.md)** - Test data seeding procedures.
-- **[Testing Summary](development/TESTING_SUMMARY.md)** - Test coverage and validation results.
-- **[Migration Status](development/MIGRATION_STATUS_REPORT.md)** - Database migration status tracking.
-
-### Project & Planning
-- **[Project History](../PROJECT_HISTORY.md)** - Philosophy, evolution, and milestone context (root-level canonical version).
-- **[Implementation Progress](archive/IMPLEMENTATION_PROGRESS.md)** - Historic feature-by-feature delivery tracking (archived).
-
 ### Deployment & Operations
 - **[Deployment Guide](Deployment_Guide.md)** - Environment variables, CI/CD references, and production checklist.
 - **[Operations README](operations/README.md)** - Cleanup, demo session hygiene, and PII audit procedures.
 - **[Multi-Tenancy Fix Deployment](operations/MULTI_TENANCY_FIX_DEPLOYMENT.md)** - Deployment procedures for multi-tenancy fixes.
-- **[Changelog](../CHANGELOG.md)** - Notable changes and release notes (root-level canonical version).
+- **[Changelog](../CHANGELOG.md)** - Notable changes and release notes.
 
-### Security
-- **[Security Audit 2025](operations/SECURITY_AUDIT_2025.md)** - Comprehensive security audit findings.
-- **[Multi-Tenancy Audit](security/MULTI_TENANCY_AUDIT.md)** - Multi-tenancy security analysis.
-- **[Critical Same-Teacher Leak](security/CRITICAL_SAME_TEACHER_LEAK.md)** - Resolved data isolation fix.
-- **[Validation Report](security/VALIDATION_REPORT.md)** - Input/output validation audit.
-- **[Access & Secrets Report](security/ACCESS_AND_SECRETS_REPORT.md)** - Access control and secrets review.
-- **[Source Code Vulnerability Report](security/SOURCE_CODE_VULNERABILITY_REPORT.md)** - Code security analysis.
-- **[Network Vulnerability Report](security/NETWORK_VULNERABILITY_REPORT.md)** - Network security assessment.
-
-### Archive & Releases
-- **[Release Notes v1.7.0](archive/releases/RELEASE_NOTES_v1.7.0.md)** - Analytics Dashboard, Rent Itemization, Mobile Navigation (Draft - January 2026)
-- **[Release Notes v1.6.0](archive/releases/RELEASE_NOTES_v1.6.0.md)** - Repository Organization and Stability (January 1, 2026)
-- **[Release Notes v1.5.0](archive/releases/RELEASE_NOTES_v1.5.0.md)** - Issue Resolution & Escalation System (December 29, 2025)
-- **[Release Notes v1.4.0](archive/releases/RELEASE_NOTES_v1.4.0.md)** - Announcement system, UI/UX enhancements, security fixes (Dec 27, 2025)
-- **[Release Notes v1.3.0](archive/releases/RELEASE_NOTES_v1.3.0.md)** - Passwordless authentication, encrypted TOTP, security audit (Dec 25, 2025)
-- **[Release Notes v1.2.1](archive/releases/RELEASE_NOTES_v1.2.1.md)** - Migration hardening, join code audits (Dec 21, 2025)
-- **[Release Notes v1.2.0](archive/releases/RELEASE_NOTES_v1.2.0.md)** - Progressive Web App, accessibility (Dec 18, 2025)
-- **[Release Notes v1.1.1](archive/releases/RELEASE_NOTES_v1.1.1.md)** - Stability patch (Dec 15, 2025)
-- **[Release Notes v1.1.0](archive/releases/RELEASE_NOTES_v1.1.0.md)** - Dashboard analytics and UI redesign (Dec 13, 2024)
-- **[Release Notes v1.0.0](archive/releases/RELEASE_NOTES_v1.0.md)** - First stable release (Nov 29, 2024)
-- **[Archived Fix Reports](archive/README.md)** - Historical bug fix and feature implementation summaries.
+### Releases
+- **[Changelog](../CHANGELOG.md)** - All release notes and version history are maintained in the main changelog.
 
 ---
 

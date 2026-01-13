@@ -49,9 +49,11 @@ That's it! Tokens are automatically distributed to student checking accounts.
 
 Visit **Payroll** → **Settings** to verify:
 - **Pay Rate**: How much students earn per hour
-- **Block-Specific Rates** (Advanced): Different pay for different periods
+- **Block-Specific Rates**: Different pay for different periods (configured via class selector in Settings)
 
-> **Note:** Payroll is always run manually. There is no automatic payroll feature. Set a reminder to run payroll on your chosen schedule.
+> **Note:** The "Projected Pay" students see on their dashboard automatically uses these settings. If you change the rate, their projection updates immediately to match.
+
+> **Important:** Payroll is always run manually. There is no automatic payroll feature. Set a reminder to run payroll on your chosen schedule.
 
 ## How Payroll Works
 

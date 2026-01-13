@@ -490,7 +490,7 @@ def claim_account():
         join_code = format_join_code(form.join_code.data)
         first_initial = form.first_initial.data.strip().upper()
         last_name = form.last_name.data.strip()
-        dob_input = form.dob.data
+        dob_input = form.dob_sum.data
 
         try:
             if isinstance(dob_input, str):
@@ -618,7 +618,6 @@ def claim_account():
             dob_sum=matched_seat.dob_sum,
             last_name_hash_by_part=matched_seat.last_name_hash_by_part,
             has_completed_setup=False,
-            teacher_id=None,  # DEPRECATED - no longer used
         )
         db.session.add(new_student)
         db.session.flush()  # Get student ID
@@ -799,7 +798,7 @@ def add_class():
         join_code = format_join_code(form.join_code.data)
         first_initial = form.first_initial.data.strip().upper()
         last_name = form.last_name.data.strip()
-        dob_input = form.dob.data
+        dob_input = form.dob_sum.data
 
         # Parse DOB and calculate sum
         try:
@@ -1435,7 +1434,6 @@ def transfer():
     savings_transactions = [t for t in transactions if t.account_type == 'savings']
 
     # Get banking settings for interest rate display
-    from app.models import BankingSettings
     settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
     annual_rate = settings.savings_apy / 100 if settings else 0.045
     calculation_type = settings.interest_calculation_type if settings else 'simple'

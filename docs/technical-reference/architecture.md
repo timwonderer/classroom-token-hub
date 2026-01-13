@@ -89,7 +89,6 @@ classroom-economy/
 ## Multi-Tenancy and Scoping Rules
 
 - `join_code` is the primary scoping key for all student-facing data.
-- `teacher_id` is secondary and used for compatibility with legacy records.
 - Helper functions in student routes select the active class context.
 - When querying or writing financial data, include `join_code` whenever possible.
 
@@ -111,9 +110,7 @@ classroom-economy/
 - Database schema: `docs/technical-reference/database_schema.md`
 - API reference: `docs/technical-reference/api_reference.md`
 - Timezone handling: `docs/technical-reference/TIMEZONE_HANDLING.md`
-- Economy spec: `docs/technical-reference/ECONOMY_SPECIFICATION.md`
 - Diagnostics for user-visible behavior: `docs/diagnostics/student.md`, `docs/diagnostics/teacher.md`
-- Development practices: `docs/development/DEVELOPMENT.md`
 
 ## Full Documentation
 

@@ -24,7 +24,6 @@ Stores student records and credentials.
 | `second_half_hash` | String(64) | Secondary hash for backward compatibility. |
 | `username_hash` | String(64) | Hash of generated username. |
 | `last_name_hash_by_part` | JSON | Hashes for each last-name segment (fuzzy matching). |
-| `teacher_id` | Integer (nullable) | **Deprecated** legacy primary owner reference. |
 | `pin_hash` / `passphrase_hash` | Text | Credential hashes. |
 | `hall_passes` | Integer | Remaining hall passes. |
 | `is_rent_enabled` | Boolean | Whether rent billing is enabled. |
@@ -105,7 +104,7 @@ Ledger entries for checking/savings accounts, scoped by join code (class economy
 |---|---|---|
 | `id` | Integer | Primary key. |
 | `student_id` | Integer | FK to `students.id`. |
-| `teacher_id` | Integer (nullable) | FK to `admins.id` indicating which teacher created the transaction (legacy scope). |
+| `teacher_id` | Integer (nullable) | FK to `admins.id`. Legacy field kept for backward compatibility; replaced by `join_code` for scoping. |
 | `join_code` | String(20), nullable | Source of truth for class/period isolation. Indexed for performance. |
 | `amount` | Float | Positive/negative amount. |
 | `timestamp` | DateTime | Transaction timestamp. |
