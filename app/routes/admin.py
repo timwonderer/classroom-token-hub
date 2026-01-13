@@ -2916,7 +2916,6 @@ def add_individual_student():
             dob_sum=dob_sum,
             last_name_hash_by_part=last_name_parts,
             has_completed_setup=False,
-            teacher_id=current_admin_id,
         )
 
         db.session.add(new_student)
@@ -3069,7 +3068,6 @@ def add_manual_student():
             hall_passes=hall_passes,
             is_rent_enabled=rent_enabled,
             has_completed_setup=setup_complete,
-            teacher_id=session.get("admin_id"),
         )
 
         # Set username if provided

@@ -618,7 +618,6 @@ def claim_account():
             dob_sum=matched_seat.dob_sum,
             last_name_hash_by_part=matched_seat.last_name_hash_by_part,
             has_completed_setup=False,
-            teacher_id=None,  # DEPRECATED - no longer used
         )
         db.session.add(new_student)
         db.session.flush()  # Get student ID
