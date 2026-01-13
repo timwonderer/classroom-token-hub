@@ -39,7 +39,6 @@ def _create_legacy_student(first_name: str, teacher: Admin, block: str = "A") ->
         salt=salt,
         username_hash=hash_username(first_name.lower(), salt),
         pin_hash="pin",
-        teacher_id=teacher.id,
     )
     db.session.add(student)
     db.session.flush()
@@ -288,7 +287,6 @@ def test_students_page_normalizes_legacy_claim_hashes(client):
         first_half_hash=legacy_student_hash,
         dob_sum=2035,
         has_completed_setup=False,
-        teacher_id=teacher.id,
     )
     db.session.add_all([seat, student])
     db.session.flush()

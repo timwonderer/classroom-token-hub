@@ -779,10 +779,6 @@ def delete_admin(admin_id):
                 StudentTeacher.admin_id == admin.id,
                 StudentTeacher.student_id.in_(shared_student_ids),
             ).delete(synchronize_session=False)
-            Student.query.filter(
-                Student.id.in_(shared_student_ids),
-                Student.teacher_id == admin.id,
-            ).update({Student.teacher_id: None}, synchronize_session=False)
 
         if exclusive_student_ids:
             Transaction.query.filter(Transaction.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)

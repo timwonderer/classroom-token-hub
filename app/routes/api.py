@@ -822,10 +822,7 @@ def get_active_hall_passes():
         student_ids_subquery = (
             Student.query.with_entities(Student.id)
             .filter(
-                or_(
-                    Student.teacher_id == teacher_id,
-                    Student.id.in_(shared_student_ids)
-                )
+                Student.id.in_(shared_student_ids)
             )
             .subquery()
         )

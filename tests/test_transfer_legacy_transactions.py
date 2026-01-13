@@ -33,7 +33,6 @@ def setup_student_with_legacy_transactions(client):
         salt=salt,
         username_hash=hash_username("alice_a", salt),
         passphrase_hash=generate_password_hash("alice_pass"),
-        teacher_id=teacher.id
     )
     db.session.add(student)
     db.session.commit()
