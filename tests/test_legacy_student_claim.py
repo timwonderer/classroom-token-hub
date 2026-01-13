@@ -122,7 +122,7 @@ def test_new_student_can_claim_in_legacy_class(client):
             "join_code": join_code,
             "first_initial": "N",
             "last_name": "Smith",
-            "dob_sum": "2025",
+            "dob_sum": "2023-01-01",
         },
         follow_redirects=False,
     )
@@ -235,7 +235,7 @@ def test_claim_succeeds_when_seat_uses_last_initial_hash(client):
             "join_code": join_code,
             "first_initial": "B",
             "last_name": last_name,
-            "dob_sum": "2030",
+            "dob_sum": "2023-01-06",
         },
         follow_redirects=False,
     )
@@ -287,7 +287,6 @@ def test_students_page_normalizes_legacy_claim_hashes(client):
         first_half_hash=legacy_student_hash,
         dob_sum=2035,
         has_completed_setup=False,
-        teacher_id=teacher.id,
     )
     db.session.add_all([seat, student])
     db.session.flush()

@@ -822,10 +822,7 @@ def get_active_hall_passes():
         student_ids_subquery = (
             Student.query.with_entities(Student.id)
             .filter(
-                or_(
-                    Student.teacher_id == teacher_id,
-                    Student.id.in_(shared_student_ids)
-                )
+                Student.id.in_(shared_student_ids)
             )
             .subquery()
         )
@@ -2163,7 +2160,6 @@ def update_student_block_settings():
     })
 
 
-def check_and_auto_tapout_if_limit_reached(student, commit=True):
 def check_and_auto_tapout_if_limit_reached(student, commit=True):
     """
     Checks if an active student has reached their daily limit and auto-taps them out.

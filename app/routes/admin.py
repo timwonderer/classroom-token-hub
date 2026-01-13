@@ -6939,17 +6939,10 @@ def deletion_requests():
     ).order_by(DeletionRequest.resolved_at.desc()).limit(10).all()
 
     # Get teacher's periods for the dropdown (from both student_teachers and legacy teacher_id)
-    periods_via_link = db.session.query(Student.block).join(
+    # Get teacher's periods for the dropdown (from student_teachers)
+    periods = db.session.query(Student.block).join(
         StudentTeacher, Student.id == StudentTeacher.student_id
-    ).filter(StudentTeacher.admin_id == admin_id).distinct()
-
-    # Get periods from legacy teacher_id
-    periods_via_legacy = db.session.query(Student.block).filter(
-        Student.teacher_id == admin_id
-    ).distinct()
-
-    # Union both queries
-    periods = periods_via_link.union(periods_via_legacy).all()
+    ).filter(StudentTeacher.admin_id == admin_id).distinct().all()
     periods = [p[0] for p in periods]
 
     return render_template(
