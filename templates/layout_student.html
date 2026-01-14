@@ -126,7 +126,7 @@
             <a href="{{ url_for('student.add_class') }}" class="{% if request.endpoint == 'student.add_class' %}active{% endif %}">
                 <span class="material-symbols-outlined">group_add</span> Add Class
             </a>
-            <a href="{{ url_for('student.help_support') }}" class="{% if request.endpoint in ['student.help_support', 'student.submit_general_issue'] %}active{% endif %}">
+            <a href="{{ url_for('student.help_support') }}" class="{% if request.endpoint in ['student.help_support', 'student.submit_general_issue', 'student.report_transaction_issue', 'student.report_tap_event_issue'] %}active{% endif %}">
                 <span class="material-symbols-outlined">support_agent</span> Help &amp; Support
             </a>
             <a href="{{ url_for('student.logout') }}">
