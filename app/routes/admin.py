@@ -42,7 +42,7 @@ from app.models import (
     DemoStudent, Announcement, AdminCredential
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
-from forms import (
+from app.forms import (
     AdminLoginForm, AdminSignupForm, AdminTOTPConfirmForm, AdminRecoveryForm, AdminResetCredentialsForm, StoreItemForm,
     InsurancePolicyForm, AdminClaimProcessForm, PayrollSettingsForm,
     PayrollRewardForm, PayrollFineForm, ManualPaymentForm, BankingSettingsForm
@@ -66,9 +66,9 @@ from app.utils.passwordless_client import (
     verify_signin_token,
     get_public_api_key
 )
-from hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
-from payroll import calculate_payroll
-from attendance import get_last_payroll_time, calculate_unpaid_attendance_seconds, get_join_code_for_student_period
+from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
+from app.payroll import calculate_payroll
+from app.attendance import get_last_payroll_time, calculate_unpaid_attendance_seconds, get_join_code_for_student_period
 import time
 
 # Timezone

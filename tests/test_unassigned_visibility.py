@@ -1,7 +1,7 @@
 import pytest
 from app import db
 from app.models import Admin, Student, StudentTeacher
-from hash_utils import get_random_salt
+from app.hash_utils import get_random_salt
 import pyotp
 from flask import session
 from app.auth import get_admin_student_query

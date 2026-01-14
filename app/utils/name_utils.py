@@ -8,7 +8,7 @@ Handles cases where different teachers enter the same student's name differently
 """
 
 import re
-from hash_utils import hash_hmac
+from app.hash_utils import hash_hmac
 
 
 def split_last_name_parts(last_name):

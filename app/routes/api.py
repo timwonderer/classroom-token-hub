@@ -30,13 +30,13 @@ from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
 
 # Import external modules
-from attendance import (
+from app.attendance import (
     get_last_payroll_time,
     calculate_unpaid_attendance_seconds,
     get_all_block_statuses,
     get_join_code_for_student_period
 )
-from payroll import get_pay_rate_for_block
+from app.payroll import get_pay_rate_for_block
 
 # Create blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')

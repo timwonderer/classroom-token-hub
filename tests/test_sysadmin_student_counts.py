@@ -9,7 +9,7 @@ import pyotp
 
 from app import app, db
 from app.models import Admin, Student, StudentTeacher, SystemAdmin
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 def _create_sysadmin(username: str = "sysadmin"):

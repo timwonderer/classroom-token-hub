@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import pytest
 from app.models import Admin, Student, TeacherBlock, RentSettings, TeacherOnboarding, InsurancePolicy
 from app.extensions import db
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 import os
 
 def test_admin_dashboard_rendering(client):
