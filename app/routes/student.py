@@ -894,8 +894,25 @@ def add_class():
         ).first()
 
         if existing_link:
-            flash("You are already enrolled in this teacher's class.", "warning")
-            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
+            # Check if this link is for the *same block*
+            # If so, they truly are already in this specific class
+            # However, our goal is to allow adding *new* blocks from same/diff teacher
+            # The real check we want is: "Is student already in THIS block?"
+            
+            # The matched_seat knows which block it is for.
+            # We should check if the student is already associated with this specific seat? 
+            # OR simply allow the logic to proceed and just ensure we don't duplicate the StudentTeacher link.
+            
+            # Use a more specific check: Is the student ALREADY in this specific block for this teacher?
+            current_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
+            new_block_check = matched_seat.block.strip().upper()
+            
+            if new_block_check in current_blocks and existing_link:
+                 flash(f"You are already enrolled in Block {new_block_check}.", "warning")
+                 return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
+            
+            # If they have a link but NOT for this block, we proceed (to add the new block)
+
 
         # Normalize claim hash to canonical pattern
         canonical_claim_hash = compute_primary_claim_hash(first_initial, dob_sum, matched_seat.salt)
@@ -908,12 +925,13 @@ def add_class():
         matched_seat.is_claimed = True
         matched_seat.claimed_at = datetime.now(timezone.utc)
 
-        # Create StudentTeacher link
-        link = StudentTeacher(
-            student_id=student.id,
-            admin_id=matched_seat.teacher_id
-        )
-        db.session.add(link)
+        # Create StudentTeacher link if it doesn't exist
+        if not existing_link:
+            link = StudentTeacher(
+                student_id=student.id,
+                admin_id=matched_seat.teacher_id
+            )
+            db.session.add(link)
 
         # Update student's block to include the new block if not already there
         current_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
@@ -3156,7 +3174,7 @@ def report_transaction_issue(transaction_id):
     """Report an issue with a specific transaction."""
     from app.utils.issue_categories import get_active_categories
     from app.utils.issue_helpers import create_issue
-    from app.forms import StudentIssueSubmissionForm
+    from app.forms import StudentIssueSubmissionForm, TransactionIssueSubmissionForm
 
     student = get_logged_in_student()
     class_context = get_current_class_context()
