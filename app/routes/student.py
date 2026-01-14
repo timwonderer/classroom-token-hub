@@ -3150,7 +3150,7 @@ def report_transaction_issue(transaction_id):
         join_code=class_context['join_code']
     ).first_or_404()
 
-    form = StudentIssueSubmissionForm()
+    form = TransactionIssueSubmissionForm()
 
     # Populate category choices with general categories
     form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('transaction')
