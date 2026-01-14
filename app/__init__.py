@@ -559,13 +559,23 @@ def create_app():
         if request.path.startswith('/static/'):
             return response
 
+        # Public embeddable pages (hall pass displays for classroom use)
+        # These pages are public, read-only, and safe to embed in LMS/other sites
+        embeddable_paths = [
+            '/hall-pass/terminal',
+            '/hall-pass/verification',
+            '/hall-pass/queue'
+        ]
+        is_embeddable = request.path in embeddable_paths
+
         # HTTPS Enforcement (HSTS)
         # Forces browsers to use HTTPS for 1 year, including subdomains
         response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
 
         # Clickjacking Protection
-        # Allows framing only from same origin (prevents iframe attacks)
-        response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+        # Allow framing for public embeddable pages, restrict for everything else
+        if not is_embeddable:
+            response.headers['X-Frame-Options'] = 'SAMEORIGIN'
 
         # MIME Sniffing Protection
         # Prevents browsers from interpreting files as a different MIME type
@@ -602,6 +612,13 @@ def create_app():
             "base-uri 'self'",
             "form-action 'self'",
         ]
+
+        # Allow embedding for public hall pass display pages
+        if is_embeddable:
+            csp_directives.append("frame-ancestors *")
+        else:
+            csp_directives.append("frame-ancestors 'self'")
+
         response.headers['Content-Security-Policy'] = "; ".join(csp_directives)
 
         # Permissions Policy (formerly Feature-Policy)
