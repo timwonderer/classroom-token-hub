@@ -3671,7 +3671,6 @@ def rent_settings():
             elif settings.custom_frequency_unit == 'months':
                 rent_per_month = settings.rent_amount / settings.custom_frequency_value
 
-        # Estimate monthly payroll (assuming average 20 work days, 6 hours per day)
         # Using simple mode settings if available
         pay_per_minute = payroll_settings.pay_rate
         estimated_monthly_payroll = pay_per_minute * 60 * 6 * 20  # 6 hours/day * 20 days
@@ -3761,7 +3760,7 @@ def rent_settings():
 
                 # Check if payment is late (grace_period_days might be None)
                 grace_days = settings.grace_period_days or 0
-                if now_local > due_date + timedelta(days=grace_days):
+                if now > due_date + timedelta(days=grace_days):
                     is_late = True
 
                 unpaid_students.append({
