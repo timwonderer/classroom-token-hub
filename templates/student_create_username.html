@@ -212,7 +212,7 @@
 
                     <div class="form-group">
                         {{ form.write_in_word.label(class="form-label") }}
-                        {{ form.write_in_word(class="form-control", placeholder="Enter your chosen word here") }}
+                        {{ form.write_in_word(class="form-control", placeholder="Enter your chosen word here", autocomplete="off") }}
                         {% for error in form.write_in_word.errors %}
                             <div class="text-danger small">{{ error }}</div>
                         {% endfor %}

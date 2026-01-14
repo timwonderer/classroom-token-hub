@@ -139,7 +139,7 @@
 
                 <div class="mb-3">
                     <label for="join_code" class="form-label">Join Code</label>
-                    {{ form.join_code(class="form-control", placeholder="Example: ABC123") }}
+                    {{ form.join_code(class="form-control", autocomplete="off", placeholder="Example: ABC123") }}
                     
                     {% for error in form.join_code.errors %}
                         <div class="text-danger small">{{ error }}</div>
@@ -148,7 +148,7 @@
 
                 <div class="mb-3">
                     <label for="first_initial" class="form-label">First Initial</label>
-                    {{ form.first_initial(class="form-control", placeholder="Example: J", maxlength="1") }}
+                    {{ form.first_initial(class="form-control", autocomplete="off", placeholder="Example: J", maxlength="1") }}
                     {% for error in form.first_initial.errors %}
                         <div class="text-danger small">{{ error }}</div>
                     {% endfor %}
@@ -156,7 +156,7 @@
 
                 <div class="mb-3">
                     <label for="last_name" class="form-label">Last Name</label>
-                    {{ form.last_name(class="form-control", placeholder="Example: Smith") }}
+                    {{ form.last_name(class="form-control", autocomplete="off", placeholder="Example: Smith") }}
                     {% for error in form.last_name.errors %}
                         <div class="text-danger small">{{ error }}</div>
                     {% endfor %}
