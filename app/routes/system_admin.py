@@ -1516,7 +1516,7 @@ def announcements():
 @system_admin_required
 def announcement_create():
     """Create a new system-wide announcement."""
-    from forms import SystemAdminAnnouncementForm
+    from app.forms import SystemAdminAnnouncementForm
     from app.models import Announcement
 
     sysadmin_id = session.get('sysadmin_id')
@@ -1566,7 +1566,7 @@ def announcement_create():
 @system_admin_required
 def announcement_edit(announcement_id):
     """Edit an existing system announcement."""
-    from forms import SystemAdminAnnouncementForm
+    from app.forms import SystemAdminAnnouncementForm
     from app.models import Announcement
 
     sysadmin_id = session.get('sysadmin_id')
