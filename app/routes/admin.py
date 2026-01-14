@@ -3499,88 +3499,119 @@ def rent_settings():
 
         db.session.commit()
 
-        # Handle rent items (only for the current settings_block, not apply_to_all)
-        if not apply_to_all and settings:
-            from app.models import RentItem
-            # Process rent items from form
-            # Collect all rent item indices from form keys
-            rent_item_indices = set()
-            for key in request.form.keys():
-                if key.startswith('rent_item_name_'):
-                    idx = key.split('_')[-1]
-                    rent_item_indices.add(idx)
+        # Handle rent items (for all blocks in blocks_to_update)
+        # Parse rent items from form once
+        rent_item_indices = set()
+        for key in request.form.keys():
+            if key.startswith('rent_item_name_'):
+                idx = key.split('_')[-1]
+                rent_item_indices.add(idx)
 
-            # Get existing rent items for this setting
-            existing_items = {str(item.id): item for item in settings.rent_items.all()}
-            processed_item_ids = set()
-
-            # Process each rent item from the form
-            for idx in sorted(rent_item_indices):
-                item_id = request.form.get(f'rent_item_id_{idx}')
-                name = request.form.get(f'rent_item_name_{idx}', '').strip()
-
-                # Skip empty items
-                if not name:
-                    continue
-
-                description = request.form.get(f'rent_item_description_{idx}', '').strip()
-                is_available = request.form.get(f'rent_item_store_available_{idx}') == 'on'
-                store_price_str = request.form.get(f'rent_item_store_price_{idx}', '').strip()
-                store_price = None
-                if is_available:
-                    if not store_price_str:
-                        flash('Store price is required for rent items that are available in the store.', 'error')
-                        is_available = False
-                    else:
-                        try:
-                            store_price = float(store_price_str)
-                            if store_price <= 0:
-                                flash('Store price must be a positive value for rent items that are available in the store.', 'error')
-                                is_available = False
-                                store_price = None
-                        except ValueError:
-                            flash('Store price must be a valid number for rent items that are available in the store.', 'error')
-                            is_available = False
-                            store_price = None
-                purchase_duration = request.form.get(f'rent_item_purchase_duration_{idx}', 'per_use')
-
-                if item_id and item_id in existing_items:
-                    # Update existing item
-                    item = existing_items[item_id]
-                    item.name = name
-                    item.description = description if description else None
-                    item.order_index = int(idx)
-                    item.is_available_in_store = is_available
-                    item.store_price = store_price
-                    item.purchase_duration = purchase_duration
-                    processed_item_ids.add(item_id)
+        parsed_items = []
+        for idx in sorted(rent_item_indices):
+            name = request.form.get(f'rent_item_name_{idx}', '').strip()
+            if not name:
+                continue
+            
+            item_data = {
+                'id': request.form.get(f'rent_item_id_{idx}'),
+                'name': name,
+                'description': request.form.get(f'rent_item_description_{idx}', '').strip(),
+                'is_available': request.form.get(f'rent_item_store_available_{idx}') == 'on',
+                'store_price_str': request.form.get(f'rent_item_store_price_{idx}', '').strip(),
+                'purchase_duration': request.form.get(f'rent_item_purchase_duration_{idx}', 'per_use'),
+                'order_index': int(idx)
+            }
+            
+            # Validation logic reuse
+            store_price = None
+            if item_data['is_available']:
+                if not item_data['store_price_str']:
+                    flash(f"Store price is required for '{name}' which is available in the store.", 'error')
+                    item_data['is_available'] = False
                 else:
-                    # Create new item
-                    item = RentItem(
-                        rent_setting_id=settings.id,
-                        name=name,
-                        description=description if description else None,
-                        order_index=int(idx),
-                        is_available_in_store=is_available,
-                        store_price=store_price,
-                        purchase_duration=purchase_duration
-                    )
-                    db.session.add(item)
+                    try:
+                        store_price = float(item_data['store_price_str'])
+                        if store_price <= 0:
+                            flash(f"Store price must be positive for '{name}'.", 'error')
+                            item_data['is_available'] = False
+                            store_price = None
+                    except ValueError:
+                        flash(f"Invalid store price for '{name}'.", 'error')
+                        item_data['is_available'] = False
+                        store_price = None
+            
+            item_data['store_price'] = store_price
+            parsed_items.append(item_data)
 
-            # Delete items that were removed
-            for item_id, item in existing_items.items():
-                if item_id not in processed_item_ids:
+        from app.models import RentItem
+        
+        # Apply parsed items to each block
+        for block in blocks_to_update:
+            # Re-fetch settings for this block to ensure we have the object attached to session
+            block_settings = RentSettings.query.filter_by(teacher_id=admin_id, block=block).first()
+            if not block_settings:
+                continue
+
+            existing_items = block_settings.rent_items.all()
+            existing_map = {}
+            
+            # For the original block, we map by ID to preserve precise identity
+            # For other blocks, we map by Name to attempt to sync updates across classes
+            if block == settings_block:
+                existing_map = {str(item.id): item for item in existing_items}
+            else:
+                existing_map = {item.name: item for item in existing_items}
+            
+            processed_items = set()
+
+            for item_data in parsed_items:
+                target_item = None
+                
+                # Try to find matching existing item
+                if block == settings_block:
+                    target_item = existing_map.get(item_data['id'])
+                else:
+                    target_item = existing_map.get(item_data['name'])
+                
+                if target_item:
+                    # Update existing
+                    target_item.name = item_data['name']
+                    target_item.description = item_data['description'] if item_data['description'] else None
+                    target_item.order_index = item_data['order_index']
+                    target_item.is_available_in_store = item_data['is_available']
+                    target_item.store_price = item_data['store_price']
+                    target_item.purchase_duration = item_data['purchase_duration']
+                    processed_items.add(target_item)
+                else:
+                    # Create new
+                    new_item = RentItem(
+                        rent_setting_id=block_settings.id,
+                        name=item_data['name'],
+                        description=item_data['description'] if item_data['description'] else None,
+                        order_index=item_data['order_index'],
+                        is_available_in_store=item_data['is_available'],
+                        store_price=item_data['store_price'],
+                        purchase_duration=item_data['purchase_duration']
+                    )
+                    db.session.add(new_item)
+                    # No need to add to processed_items as it's new
+            
+            # Delete items that were not in the form (and thus not processed)
+            for item in existing_items:
+                if item not in processed_items:
                     # If this item had a linked store item, deactivate it
                     if item.store_item_id:
                         store_item = StoreItem.query.get(item.store_item_id)
                         if store_item:
                             store_item.is_active = False
                     db.session.delete(item)
-
+            
             db.session.commit()
+            
+            # Sync to store
+            _sync_rent_items_to_store(block_settings, admin_id, block)
 
-            # Sync rent items with store items
-            _sync_rent_items_to_store(settings, admin_id, settings_block)
         if apply_to_all:
             flash(f"Rent settings applied to all {len(blocks_to_update)} classes!", "success")
         else:
@@ -3640,7 +3671,6 @@ def rent_settings():
             elif settings.custom_frequency_unit == 'months':
                 rent_per_month = settings.rent_amount / settings.custom_frequency_value
 
-        # Estimate monthly payroll (assuming average 20 work days, 6 hours per day)
         # Using simple mode settings if available
         pay_per_minute = payroll_settings.pay_rate
         estimated_monthly_payroll = pay_per_minute * 60 * 6 * 20  # 6 hours/day * 20 days
@@ -3664,15 +3694,16 @@ def rent_settings():
 
         # Check if we've passed the first due date (or if it's not set, assume active if enabled)
         if settings.first_rent_due_date:
-            # If first due date is in the future (next month etc), rent is NOT active yet
-            # We compare entire date to be safe, but mostly care about month/year
-            if now_local.date() >= settings.first_rent_due_date.date():
-                rent_active_for_period = True
+            due_date = settings.first_rent_due_date.date()
+            today = now_local.date()
 
-            # Special check: If due date is this month but in future, is it "active"?
-            # Usually yes, it's just "not due yet" but we should show status.
-            # BUT user requirement says: "if rent is not enabled until next month... show No rent due"
-            # So strict future check on start date is good.
+            # Rent is active if:
+            # 1. The due date has already passed, OR
+            # 2. The due date is in the current month (even if not yet reached)
+            # This ensures students can see their rent obligations before the due date
+            if today >= due_date or (due_date.year == today.year and due_date.month == today.month):
+                rent_active_for_period = True
+            # If due date is in a future month, rent is NOT active yet
         else:
             # No start date set - valid state? Assume active if enabled.
             rent_active_for_period = True
@@ -3729,7 +3760,7 @@ def rent_settings():
 
                 # Check if payment is late (grace_period_days might be None)
                 grace_days = settings.grace_period_days or 0
-                if now_local > due_date + timedelta(days=grace_days):
+                if now > due_date + timedelta(days=grace_days):
                     is_late = True
 
                 unpaid_students.append({
@@ -3740,6 +3771,34 @@ def rent_settings():
                     'remaining': base_rent_amount - paid,
                     'is_late': is_late
                 })
+
+    # Determine period label based on frequency type
+    period_label = "Month"  # Default
+    if settings and settings.is_enabled:
+        if settings.frequency_type == 'daily':
+            period_label = "Day"
+        elif settings.frequency_type == 'weekly':
+            period_label = "Week"
+        elif settings.frequency_type == 'monthly':
+            period_label = "Month"
+        elif settings.frequency_type == 'custom':
+            # For custom, use the unit specified
+            unit = settings.custom_frequency_unit
+            if unit == 'days':
+                if settings.custom_frequency_value == 1:
+                    period_label = "Day"
+                else:
+                    period_label = f"{settings.custom_frequency_value} Days"
+            elif unit == 'weeks':
+                if settings.custom_frequency_value == 1:
+                    period_label = "Week"
+                else:
+                    period_label = f"{settings.custom_frequency_value} Weeks"
+            elif unit == 'months':
+                if settings.custom_frequency_value == 1:
+                    period_label = "Month"
+                else:
+                    period_label = f"{settings.custom_frequency_value} Months"
 
     return render_template('admin_rent_settings.html',
                           settings=settings,
@@ -3754,7 +3813,8 @@ def rent_settings():
                           class_labels_by_block=class_labels_by_block,
                           rent_items=rent_items,
                           unpaid_students=unpaid_students,
-                          rent_active_for_period=rent_active_for_period)
+                          rent_active_for_period=rent_active_for_period,
+                          period_label=period_label)
 
 
 @admin_bp.route('/rent-waiver/add', methods=['POST'])

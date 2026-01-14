@@ -175,7 +175,7 @@
       <div class="col-lg-4 mb-4">
         <div class="card shadow">
           <div class="card-body text-center">
-            <div class="mb-2 text-muted">Paid This Month</div>
+            <div class="mb-2 text-muted">Paid This {{ period_label }}</div>
             <h2 class="text-success">{% if rent_active_for_period %}{{ total_students - unpaid_students|length }}{% else %}0{% endif %}</h2>
           </div>
         </div>
@@ -183,7 +183,7 @@
       <div class="col-lg-4 mb-4">
         <div class="card shadow">
           <div class="card-body text-center">
-            <div class="mb-2 text-muted">Unpaid This Month</div>
+            <div class="mb-2 text-muted">Unpaid This {{ period_label }}</div>
             <h2 class="text-danger">{% if rent_active_for_period %}{{ unpaid_students|length }}{% else %}0{% endif %}</h2>
           </div>
         </div>
