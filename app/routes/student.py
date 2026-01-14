@@ -3190,7 +3190,7 @@ def report_tap_event_issue(tap_event_id):
     """Report an issue with a specific tap event (clock in/out record)."""
     from app.utils.issue_categories import get_active_categories
     from app.utils.issue_helpers import create_issue
-    from forms import StudentIssueSubmissionForm
+    from app.forms import StudentIssueSubmissionForm
 
     student = get_logged_in_student()
     class_context = get_current_class_context()
@@ -3213,7 +3213,7 @@ def report_tap_event_issue(tap_event_id):
 
     if form.validate_on_submit():
         try:
-            issue = create_issue(
+            create_issue(
                 student=student,
                 teacher_id=class_context['teacher_id'],
                 join_code=class_context['join_code'],
