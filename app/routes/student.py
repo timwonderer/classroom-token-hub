@@ -3153,7 +3153,7 @@ def report_transaction_issue(transaction_id):
     form = StudentIssueSubmissionForm()
 
     # Populate category choices with general categories
-    form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('general')
+    form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('transaction')
 
     if form.validate_on_submit():
         try:
