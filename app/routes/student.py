@@ -508,6 +508,9 @@ def claim_account():
         ).all()
 
         if not unclaimed_seats:
+            current_app.logger.warning(
+                f"Claim attempt failed: No unclaimed seats for join_code={join_code}"
+            )
             flash("Invalid join code or all seats already claimed. Check with your teacher.", "claim")
             return redirect(url_for('student.claim_account'))
 
@@ -515,6 +518,8 @@ def claim_account():
         from app.utils.name_utils import verify_last_name_parts
 
         matched_seat = None
+        match_attempts = []  # Track why each seat didn't match
+
         for seat in unclaimed_seats:
             credential_matches, matched_primary, canonical_hash = match_claim_hash(
                 seat.first_half_hash,
@@ -531,13 +536,30 @@ def claim_account():
                 seat.salt
             )
 
-            if credential_matches and last_name_matches and seat.dob_sum == dob_sum:
+            # Track match details for debugging
+            dob_sum_matches = seat.dob_sum == dob_sum
+            match_attempts.append({
+                'seat_id': seat.id,
+                'credential_matches': credential_matches,
+                'last_name_matches': last_name_matches,
+                'dob_sum_matches': dob_sum_matches,
+                'seat_dob_sum': seat.dob_sum,
+                'provided_dob_sum': dob_sum
+            })
+
+            if credential_matches and last_name_matches and dob_sum_matches:
                 if canonical_hash and not matched_primary:
                     seat.first_half_hash = canonical_hash
                 matched_seat = seat
                 break
 
         if not matched_seat:
+            # Log detailed match failure information
+            current_app.logger.warning(
+                f"Claim attempt failed for join_code={join_code}, "
+                f"first_initial={first_initial}, last_initial derived from input. "
+                f"Attempted {len(match_attempts)} seat(s). Match details: {match_attempts}"
+            )
             flash("No matching account found. Please check your join code and credentials.", "claim")
             return redirect(url_for('student.claim_account'))
 

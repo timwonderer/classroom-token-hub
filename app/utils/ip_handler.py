@@ -179,7 +179,34 @@ def validate_cloudflare_request():
     Usage:
         Use this in middleware or views that require Cloudflare proxy.
         Only necessary if you want to enforce Cloudflare-only access.
+
+    Note:
+        This handles the case where the app is behind a local reverse proxy
+        (nginx, etc.) by checking the X-Forwarded-For or X-Real-IP headers
+        when request.remote_addr is localhost.
     """
+    # Check if request is coming from local proxy
+    if request.remote_addr in ('127.0.0.1', 'localhost', '::1'):
+        # Behind local proxy - check the upstream proxy IP
+        # X-Real-IP is set by nginx and contains the immediate upstream IP
+        upstream_ip = request.headers.get('X-Real-IP')
+
+        if not upstream_ip:
+            # Fallback to X-Forwarded-For (rightmost entry is the immediate proxy)
+            forwarded_for = request.headers.get('X-Forwarded-For')
+            if forwarded_for:
+                # X-Forwarded-For format: "client, proxy1, proxy2"
+                # The rightmost IP is the immediate upstream proxy
+                ips = [ip.strip() for ip in forwarded_for.split(',')]
+                upstream_ip = ips[-1] if ips else None
+
+        if upstream_ip:
+            return is_cloudflare_ip(upstream_ip)
+
+        # No proxy headers found - can't validate
+        return False
+
+    # Direct connection - check request.remote_addr
     return is_cloudflare_ip(request.remote_addr)
 
 
