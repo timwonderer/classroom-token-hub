@@ -561,8 +561,8 @@ def create_app():
 
         # Public embeddable pages (hall pass displays for classroom use)
         # These pages are public, read-only, and safe to embed in LMS/other sites
+        # NOTE: /hall-pass/terminal is NOT embeddable as it performs state-changing actions
         embeddable_paths = [
-            '/hall-pass/terminal',
             '/hall-pass/verification',
             '/hall-pass/queue'
         ]
