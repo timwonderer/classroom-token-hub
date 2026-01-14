@@ -557,7 +557,7 @@ def claim_account():
             # Log detailed match failure information
             current_app.logger.warning(
                 f"Claim attempt failed for join_code={join_code}, "
-                f"first_initial={first_initial}, last_initial derived from input. "
+                f"first_initial={first_initial}, with last_name from input. "
                 f"Attempted {len(match_attempts)} seat(s). Match details: {match_attempts}"
             )
             flash("No matching account found. Please check your join code and credentials.", "claim")
