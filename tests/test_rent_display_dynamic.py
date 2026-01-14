@@ -14,7 +14,7 @@ from werkzeug.security import generate_password_hash
 
 from app import db
 from app.models import Admin, Student, TeacherBlock, RentSettings, RentItem
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 @pytest.fixture

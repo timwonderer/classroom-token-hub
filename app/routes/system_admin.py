@@ -30,7 +30,7 @@ from app.models import (
     PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory
 )
 from app.auth import system_admin_required, SESSION_TIMEOUT_MINUTES
-from forms import SystemAdminLoginForm, SystemAdminInviteForm
+from app.forms import SystemAdminLoginForm, SystemAdminInviteForm
 
 # Import utility functions
 from app.utils.helpers import is_safe_url, format_utc_iso

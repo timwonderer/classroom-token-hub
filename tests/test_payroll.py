@@ -1,6 +1,6 @@
 import pytest
 from app import app, db, Student, TapEvent, Transaction
-from payroll import calculate_payroll
+from app.payroll import calculate_payroll
 from datetime import datetime, timedelta, timezone
 
 @pytest.fixture

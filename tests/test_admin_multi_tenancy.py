@@ -11,7 +11,7 @@ from app import app as flask_app
 from app.models import Admin, Student, StudentTeacher
 from app.extensions import db
 from app.auth import get_admin_student_query
-from hash_utils import get_random_salt
+from app.hash_utils import get_random_salt
 
 
 @pytest.fixture
