@@ -3751,12 +3751,12 @@ def rent_settings():
                     due_day = settings.due_day_of_month
 
                 try:
-                    due_date = datetime(current_year, current_month, due_day)
+                    due_date = datetime(current_year, current_month, due_day, tzinfo=timezone.utc)
                 except ValueError:
                     # Handle short months (e.g. Feb 30)
                     # Fallback to last day of month
                     _, last_day = monthrange(current_year, current_month)
-                    due_date = datetime(current_year, current_month, last_day)
+                    due_date = datetime(current_year, current_month, last_day, tzinfo=timezone.utc)
 
                 # Check if payment is late (grace_period_days might be None)
                 grace_days = settings.grace_period_days or 0
