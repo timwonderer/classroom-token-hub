@@ -33,6 +33,12 @@ and this project follows semantic versioning principles.
   - Created `_calculate_base_rent_amount()` helper to avoid code duplication
   - Used in both payroll warning calculation and unpaid students calculation
   - Follows DRY principle for better maintainability
+- **CSP Headers for Public Hall Pass Pages** - Modified Content Security Policy to allow embedding for read-only hall pass display pages
+  - `/hall-pass/verification` and `/hall-pass/queue` can now be embedded in external sites (e.g., Schoology, Canvas)
+  - These pages are public, read-only displays with no state-changing actions
+  - `/hall-pass/terminal` remains protected (not embeddable) as it performs state-changing check-in/check-out actions
+  - Removed `X-Frame-Options` header for embeddable pages and added `frame-ancestors *` to CSP
+  - All other pages remain protected with `X-Frame-Options: SAMEORIGIN` and `frame-ancestors 'self'`
 
 ## [1.7.0] - 2026-01-09
 
