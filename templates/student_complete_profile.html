@@ -26,15 +26,15 @@
                         
                         <div class="mb-3">
                             <label for="first_name" class="form-label">First Name <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="first_name" name="first_name" 
-                                   value="{{ form.first_name.data or student.first_name }}" required maxlength="50">
+                            <input type="text" class="form-control" id="first_name" name="first_name"
+                                   value="{{ form.first_name.data or student.first_name }}" required maxlength="50" autocomplete="off">
                             <small class="form-text text-muted">This can be edited if needed.</small>
                         </div>
 
                         <div class="mb-3">
                             <label for="last_name" class="form-label">Full Last Name <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="last_name" name="last_name" 
-                                   value="{{ form.last_name.data or '' }}" required maxlength="100" placeholder="Smith">
+                            <input type="text" class="form-control" id="last_name" name="last_name"
+                                   value="{{ form.last_name.data or '' }}" required maxlength="100" placeholder="Smith" autocomplete="off">
                             <small class="form-text text-muted">Enter your complete last name.</small>
                         </div>
 
@@ -44,7 +44,7 @@
                         <div class="row">
                             <div class="col-md-5 mb-3">
                                 <label for="dob_month" class="form-label">Month <span class="text-danger">*</span></label>
-                                <select class="form-select" id="dob_month" name="dob_month" required>
+                                <select class="form-select" id="dob_month" name="dob_month" required autocomplete="off">
                                     <option value="">Select Month</option>
                                     <option value="01">January</option>
                                     <option value="02">February</option>
@@ -62,13 +62,13 @@
                             </div>
                             <div class="col-md-3 mb-3">
                                 <label for="dob_day" class="form-label">Day <span class="text-danger">*</span></label>
-                                <input type="number" class="form-control" id="dob_day" name="dob_day" 
-                                       value="{{ form.dob_day.data or '' }}" min="1" max="31" required placeholder="15">
+                                <input type="number" class="form-control" id="dob_day" name="dob_day"
+                                       value="{{ form.dob_day.data or '' }}" min="1" max="31" required placeholder="15" autocomplete="off">
                             </div>
                             <div class="col-md-4 mb-3">
                                 <label for="dob_year" class="form-label">Year <span class="text-danger">*</span></label>
-                                <input type="number" class="form-control" id="dob_year" name="dob_year" 
-                                       value="{{ form.dob_year.data or '' }}" min="1900" max="{{ max_birth_year or 2020 }}" required placeholder="2010">
+                                <input type="number" class="form-control" id="dob_year" name="dob_year"
+                                       value="{{ form.dob_year.data or '' }}" min="1900" max="{{ max_birth_year or 2020 }}" required placeholder="2010" autocomplete="off">
                             </div>
                         </div>
 
