@@ -3088,7 +3088,7 @@ def submit_general_issue():
     """Submit a general issue or help request."""
     from app.utils.issue_categories import get_active_categories
     from app.utils.issue_helpers import create_issue
-    from forms import StudentIssueSubmissionForm
+    from app.forms import StudentIssueSubmissionForm
 
     student = get_logged_in_student()
     class_context = get_current_class_context()
@@ -3134,7 +3134,7 @@ def report_transaction_issue(transaction_id):
     """Report an issue with a specific transaction."""
     from app.utils.issue_categories import get_active_categories
     from app.utils.issue_helpers import create_issue
-    from forms import StudentIssueSubmissionForm
+    from app.forms import StudentIssueSubmissionForm
 
     student = get_logged_in_student()
     class_context = get_current_class_context()
@@ -3157,7 +3157,7 @@ def report_transaction_issue(transaction_id):
 
     if form.validate_on_submit():
         try:
-            issue = create_issue(
+            create_issue(
                 student=student,
                 teacher_id=class_context['teacher_id'],
                 join_code=class_context['join_code'],
@@ -3165,8 +3165,7 @@ def report_transaction_issue(transaction_id):
                 explanation=form.explanation.data,
                 expected_outcome=form.expected_outcome.data,
                 related_transaction_id=transaction_id,
-                related_record_type='transaction',
-                related_record_id=transaction_id
+                related_record_type='transaction'
             )
 
             flash("Your transaction issue has been submitted. Your teacher will review it soon.", "success")
@@ -3191,7 +3190,7 @@ def report_tap_event_issue(tap_event_id):
     """Report an issue with a specific tap event (clock in/out record)."""
     from app.utils.issue_categories import get_active_categories
     from app.utils.issue_helpers import create_issue
-    from forms import StudentIssueSubmissionForm
+    from app.forms import StudentIssueSubmissionForm
 
     student = get_logged_in_student()
     class_context = get_current_class_context()
@@ -3214,7 +3213,7 @@ def report_tap_event_issue(tap_event_id):
 
     if form.validate_on_submit():
         try:
-            issue = create_issue(
+            create_issue(
                 student=student,
                 teacher_id=class_context['teacher_id'],
                 join_code=class_context['join_code'],
