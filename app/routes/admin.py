@@ -7414,7 +7414,7 @@ def announcements():
 @admin_required
 def announcement_create():
     """Create a new announcement for selected class periods."""
-    from forms import AnnouncementForm
+    from app.forms import AnnouncementForm
     from app.models import Announcement
 
     admin_id = session.get('admin_id')
@@ -7489,7 +7489,7 @@ def announcement_create():
 @admin_required
 def announcement_edit(announcement_id):
     """Edit an existing announcement."""
-    from forms import AnnouncementForm
+    from app.forms import AnnouncementForm
     from app.models import Announcement
 
     admin_id = session.get('admin_id')

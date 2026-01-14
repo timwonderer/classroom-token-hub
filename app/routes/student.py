@@ -758,7 +758,7 @@ def add_class():
     """
     from app.models import TeacherBlock, StudentTeacher
     from app.utils.join_code import format_join_code
-    from forms import StudentAddClassForm
+    from app.forms import StudentAddClassForm
     from app.utils.name_utils import verify_last_name_parts
 
     student = get_logged_in_student()
