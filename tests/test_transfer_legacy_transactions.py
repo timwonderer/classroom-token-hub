@@ -1,3 +1,7 @@
+import pytest
+
+pytestmark = [pytest.mark.critical, pytest.mark.regression]
+
 """
 Test for student transfer functionality with legacy transactions.
 
@@ -10,7 +14,7 @@ from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
 from app.models import Student, Admin, Transaction, TeacherBlock
 from app.extensions import db
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 @pytest.fixture

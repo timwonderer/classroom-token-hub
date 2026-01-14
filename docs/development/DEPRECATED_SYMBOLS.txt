@@ -1,0 +1,5 @@
+# Deprecated symbols (machine-enforced)
+# One symbol per line. Literal strings only.
+# CI fails if any of these appear in app/ code.
+
+teacher_id

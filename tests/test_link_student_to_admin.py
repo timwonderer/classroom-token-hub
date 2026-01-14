@@ -4,7 +4,7 @@ from app import db
 from app.models import Admin, Student, StudentTeacher, TeacherBlock
 from app.routes.admin import _link_student_to_admin
 from app.utils.join_code import generate_join_code
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 def _create_admin(username: str = "teacher") -> Admin:
