@@ -6256,7 +6256,7 @@ def enforce_daily_limits():
     """
     from app.routes.api import check_and_auto_tapout_if_limit_reached
     import pytz
-    from payroll import get_daily_limit_seconds
+    from app.payroll import get_daily_limit_seconds
 
     students = _scoped_students().all()
     tapped_out = []

@@ -22,7 +22,9 @@ def enforce_daily_limits_job():
     logger.info("Starting scheduled auto tap-out enforcement job")
 
     try:
-        students = Student.query.yield_per(100)
+        # Load all students into memory first to avoid named cursor issues
+        # yield_per() creates a server-side cursor that gets invalidated by commit()
+        students = Student.query.all()
         checked_count = 0
         tapped_out_count = 0
 

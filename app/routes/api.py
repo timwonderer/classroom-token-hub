@@ -1899,8 +1899,8 @@ def handle_tap():
 
         # Check daily limit when Starting Work
         if normalized_action == "start_work":
-            from payroll import get_daily_limit_seconds
-            from attendance import calculate_period_attendance_utc_range
+            from app.payroll import get_daily_limit_seconds
+            from app.attendance import calculate_period_attendance_utc_range
 
             daily_limit = get_daily_limit_seconds(period)
             if daily_limit:
@@ -2172,8 +2172,8 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                 Set to False if calling in a loop to batch commits.
     """
     import pytz
-    from payroll import get_daily_limit_seconds
-    from attendance import calculate_period_attendance_utc_range
+    from app.payroll import get_daily_limit_seconds
+    from app.attendance import calculate_period_attendance_utc_range
 
     # Helper function to ensure UTC timezone-aware datetime
     def _as_utc(dt):
