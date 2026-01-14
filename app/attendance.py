@@ -219,7 +219,7 @@ def get_all_block_statuses(student, join_code=None):
     from app.models import TapEvent, HallPassLog, TeacherBlock
     from sqlalchemy import func
     from datetime import datetime, timezone
-    from payroll import get_pay_rate_for_block
+    from app.payroll import get_pay_rate_for_block
 
     today = datetime.now(timezone.utc).date()
     if join_code:
