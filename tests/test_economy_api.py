@@ -1,3 +1,7 @@
+import pytest
+
+pytestmark = [pytest.mark.critical, pytest.mark.regression]
+
 """
 Tests for Economy API endpoints.
 

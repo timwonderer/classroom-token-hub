@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from app import db
 from app.models import Admin, TeacherBlock
-from hash_utils import get_random_salt, hash_hmac
+from app.hash_utils import get_random_salt, hash_hmac
 
 
 def _create_admin(username: str) -> tuple[Admin, str]:
@@ -117,7 +117,7 @@ def test_delete_pending_student_wrong_teacher(client):
 def test_delete_pending_student_already_claimed(client):
     """Cannot delete a TeacherBlock that has already been claimed."""
     from app.models import Student
-    from hash_utils import hash_username
+    from app.hash_utils import hash_username
 
     teacher, secret = _create_admin("teacher-pending3")
 
@@ -129,11 +129,16 @@ def test_delete_pending_student_already_claimed(client):
         block="D",
         salt=student_salt,
         username_hash=hash_username("eve", student_salt),
-        pin_hash="fake-hash",
-        teacher_id=teacher.id
+        pin_hash="fake-hash"
     )
     db.session.add(student)
     db.session.flush()  # Get the student ID
+    
+    # Link student to teacher
+    from app.models import StudentTeacher
+    st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+    db.session.add(st)
+
 
     # Create a claimed TeacherBlock (simulate a student having claimed it)
     salt = get_random_salt()
@@ -251,7 +256,7 @@ def test_bulk_delete_pending_students_by_block(client):
 def test_bulk_delete_skips_claimed_students(client):
     """Bulk delete by IDs should skip any claimed TeacherBlocks."""
     from app.models import Student
-    from hash_utils import hash_username
+    from app.hash_utils import hash_username
 
     teacher, secret = _create_admin("teacher-pending6")
 
@@ -266,11 +271,16 @@ def test_bulk_delete_skips_claimed_students(client):
         block="H",
         salt=student_salt,
         username_hash=hash_username("nate", student_salt),
-        pin_hash="fake-hash",
-        teacher_id=teacher.id
+        pin_hash="fake-hash"
     )
     db.session.add(student)
     db.session.flush()
+
+    # Link student to teacher
+    from app.models import StudentTeacher
+    st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+    db.session.add(st)
+
 
     # Create a claimed TeacherBlock
     salt = get_random_salt()
@@ -317,7 +327,7 @@ def test_bulk_delete_skips_claimed_students(client):
 def test_bulk_delete_by_block_only_deletes_unclaimed(client):
     """Bulk delete by block should only delete unclaimed TeacherBlocks."""
     from app.models import Student
-    from hash_utils import hash_username
+    from app.hash_utils import hash_username
 
     teacher, secret = _create_admin("teacher-pending7")
 
@@ -333,11 +343,16 @@ def test_bulk_delete_by_block_only_deletes_unclaimed(client):
         block="I",
         salt=student_salt,
         username_hash=hash_username("quinn", student_salt),
-        pin_hash="fake-hash",
-        teacher_id=teacher.id
+        pin_hash="fake-hash"
     )
     db.session.add(student)
     db.session.flush()
+
+    # Link student to teacher
+    from app.models import StudentTeacher
+    st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+    db.session.add(st)
+
 
     # Create a claimed TeacherBlock in same block
     salt = get_random_salt()

@@ -14,7 +14,7 @@ from werkzeug.security import generate_password_hash
 
 from app import db
 from app.models import Admin, Student, TeacherBlock, RentSettings, RentItem
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 @pytest.fixture
@@ -31,11 +31,17 @@ def setup_rent_with_items(client):
         block="A",
         salt=salt,
         username_hash=hash_username("teststudent", salt),
-        pin_hash=generate_password_hash("1234"),
-        teacher_id=teacher.id
+        pin_hash=generate_password_hash("1234")
     )
     db.session.add(student)
     db.session.commit()
+
+    # Link student to teacher
+    from app.models import StudentTeacher
+    st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+    db.session.add(st)
+    db.session.commit()
+
 
     seat = TeacherBlock(
         teacher_id=teacher.id,

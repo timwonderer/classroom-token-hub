@@ -3,7 +3,7 @@
 from app.extensions import db
 from app.models import Student
 from werkzeug.security import generate_password_hash
-from hash_utils import hash_username, get_random_salt
+from app.hash_utils import hash_username, get_random_salt
 
 # Replace with your pepper management if needed
 PEPPER = b'static-pepper-for-dev'  # Replace with your actual pepper fetch if required

@@ -7,7 +7,7 @@ import pytest
 from datetime import datetime, timezone
 from app import db
 from app.models import Admin, Student, StudentTeacher
-from hash_utils import hash_username, get_random_salt
+from app.hash_utils import hash_username, get_random_salt
 
 
 @pytest.fixture
@@ -31,8 +31,7 @@ def admin_with_students(client):
             block="A",
             salt=salt,
             username_hash=hash_username(f"student{i}", salt),
-            pin_hash="fake-hash",
-            teacher_id=admin.id
+            pin_hash="fake-hash"
         )
         db.session.add(student)
         db.session.flush()

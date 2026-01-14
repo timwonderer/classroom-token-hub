@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from app import db
 from app.models import Admin, Student, StudentTeacher, TeacherBlock, SystemAdmin
-from hash_utils import get_random_salt, hash_hmac
+from app.hash_utils import get_random_salt, hash_hmac
 
 
 def _create_admin(username: str) -> tuple[Admin, str]:
@@ -44,7 +44,6 @@ def _create_student_with_teacher_block(first_name: str, teacher: Admin, block: s
         salt=salt,
         first_half_hash=first_half_hash,
         dob_sum=2025,
-        teacher_id=teacher.id,
     )
     db.session.add(student)
     db.session.flush()

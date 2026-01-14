@@ -4,7 +4,7 @@ import pyotp
 import uuid
 from app import db
 from app.models import Admin, Student, StudentTeacher
-from hash_utils import get_random_salt
+from app.hash_utils import get_random_salt
 
 def test_student_count_relies_only_on_link_table(client):
     """

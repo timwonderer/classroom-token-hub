@@ -30,7 +30,7 @@ from app.models import (
     PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory
 )
 from app.auth import system_admin_required, SESSION_TIMEOUT_MINUTES
-from forms import SystemAdminLoginForm, SystemAdminInviteForm
+from app.forms import SystemAdminLoginForm, SystemAdminInviteForm
 
 # Import utility functions
 from app.utils.helpers import is_safe_url, format_utc_iso
@@ -779,10 +779,6 @@ def delete_admin(admin_id):
                 StudentTeacher.admin_id == admin.id,
                 StudentTeacher.student_id.in_(shared_student_ids),
             ).delete(synchronize_session=False)
-            Student.query.filter(
-                Student.id.in_(shared_student_ids),
-                Student.teacher_id == admin.id,
-            ).update({Student.teacher_id: None}, synchronize_session=False)
 
         if exclusive_student_ids:
             Transaction.query.filter(Transaction.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)

@@ -1,6 +1,6 @@
 from app import db, Student
 from werkzeug.security import generate_password_hash
-from hash_utils import hash_username, get_random_salt
+from app.hash_utils import hash_username, get_random_salt
 from bs4 import BeautifulSoup
 import json
 
@@ -52,7 +52,6 @@ def test_dynamic_blocks_and_tap_flow(client):
         salt=salt,
         username_hash=hash_username(username, salt),
         pin_hash=generate_password_hash("0000"),
-        teacher_id=teacher.id
     )
     db.session.add(stu)
     db.session.flush()
@@ -112,7 +111,6 @@ def test_invalid_period_and_action(client):
         salt=salt,
         username_hash=hash_username(username, salt),
         pin_hash=generate_password_hash("0000"),
-        teacher_id=teacher.id
     )
     db.session.add(stu)
 
@@ -151,7 +149,6 @@ def test_server_state_json(client):
         salt=salt,
         username_hash=hash_username(username, salt),
         pin_hash=generate_password_hash("0000"),
-        teacher_id=teacher.id
     )
     db.session.add(stu)
     db.session.flush()
@@ -216,9 +213,15 @@ def test_auto_tapout_skips_when_join_code_missing(client, caplog):
         salt=salt,
         username_hash=hash_username(username, salt),
         pin_hash=generate_password_hash("0000"),
-        teacher_id=teacher.id
     )
     db.session.add(stu)
+    db.session.flush()
+    
+    # Link to teacher
+    from app.models import StudentTeacher
+    st = StudentTeacher(student_id=stu.id, admin_id=teacher.id)
+    db.session.add(st)
+    
     db.session.commit()
 
     # 2. Create a legacy TapEvent without join_code (simulating old data)

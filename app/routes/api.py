@@ -30,13 +30,13 @@ from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
 
 # Import external modules
-from attendance import (
+from app.attendance import (
     get_last_payroll_time,
     calculate_unpaid_attendance_seconds,
     get_all_block_statuses,
     get_join_code_for_student_period
 )
-from payroll import get_pay_rate_for_block
+from app.payroll import get_pay_rate_for_block
 
 # Create blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api')
@@ -822,10 +822,7 @@ def get_active_hall_passes():
         student_ids_subquery = (
             Student.query.with_entities(Student.id)
             .filter(
-                or_(
-                    Student.teacher_id == teacher_id,
-                    Student.id.in_(shared_student_ids)
-                )
+                Student.id.in_(shared_student_ids)
             )
             .subquery()
         )
@@ -2168,18 +2165,15 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
     Checks if an active student has reached their daily limit and auto-taps them out.
     This function should be called periodically (e.g., during status checks).
     Daily limits reset at midnight Pacific time.
+    
+    Args:
+        student: Student model instance
+        commit: Whether to commit the transaction immediately (default: True).
+                Set to False if calling in a loop to batch commits.
     """
     import pytz
     from payroll import get_daily_limit_seconds
     from attendance import calculate_period_attendance_utc_range
-
-    # Helper function to ensure UTC timezone-aware datetime
-    def _as_utc(dt):
-        if dt is None:
-            return None
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
 
     # Helper function to ensure UTC timezone-aware datetime
     def _as_utc(dt):
@@ -2283,8 +2277,8 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                     )
                     db.session.add(tap_out_event)
 
+    # Commit all auto-tap-outs at once if requested
     if commit:
-        # Commit all auto-tap-outs at once
         try:
             db.session.commit()
         except Exception as e:

@@ -5,7 +5,7 @@ from werkzeug.security import generate_password_hash
 
 from app.models import Admin, Student, TeacherBlock, RentSettings
 from app.extensions import db
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 def test_dashboard_handles_rent_with_multi_block_student(client):
@@ -22,8 +22,7 @@ def test_dashboard_handles_rent_with_multi_block_student(client):
         block="A,B",
         salt=salt,
         username_hash=hash_username("rent_student", salt),
-        pin_hash=generate_password_hash("0000"),
-        teacher_id=teacher.id
+        pin_hash=generate_password_hash("0000")
     )
     db.session.add(student)
     db.session.commit()

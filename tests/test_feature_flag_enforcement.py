@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
 from app.models import Student, Admin, Transaction, TeacherBlock, FeatureSettings
 from app.extensions import db
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 @pytest.fixture
@@ -32,10 +32,14 @@ def setup_student_with_disabled_banking(client):
         block="Period1",
         salt=salt,
         username_hash=hash_username("bob_b", salt),
-        passphrase_hash=generate_password_hash("bob_pass"),
-        teacher_id=teacher.id
+        passphrase_hash=generate_password_hash("bob_pass")
     )
     db.session.add(student)
+    db.session.flush()
+    
+    # Link student to teacher
+    from app.models import StudentTeacher
+    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
     db.session.commit()
 
     join_code = "MATH1B"
@@ -196,10 +200,14 @@ def setup_student_with_enabled_banking(client):
         block="Period2",
         salt=salt,
         username_hash=hash_username("carol_c", salt),
-        passphrase_hash=generate_password_hash("carol_pass"),
-        teacher_id=teacher.id
+        passphrase_hash=generate_password_hash("carol_pass")
     )
     db.session.add(student)
+    db.session.flush()
+
+    # Link student to teacher
+    from app.models import StudentTeacher
+    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
     db.session.commit()
 
     join_code = "MATH2C"

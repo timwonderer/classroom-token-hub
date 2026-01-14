@@ -42,7 +42,7 @@ from app.models import (
     DemoStudent, Announcement, AdminCredential
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
-from forms import (
+from app.forms import (
     AdminLoginForm, AdminSignupForm, AdminTOTPConfirmForm, AdminRecoveryForm, AdminResetCredentialsForm, StoreItemForm,
     InsurancePolicyForm, AdminClaimProcessForm, PayrollSettingsForm,
     PayrollRewardForm, PayrollFineForm, ManualPaymentForm, BankingSettingsForm
@@ -66,9 +66,9 @@ from app.utils.passwordless_client import (
     verify_signin_token,
     get_public_api_key
 )
-from hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
-from payroll import calculate_payroll
-from attendance import get_last_payroll_time, calculate_unpaid_attendance_seconds, get_join_code_for_student_period
+from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
+from app.payroll import calculate_payroll
+from app.attendance import get_last_payroll_time, calculate_unpaid_attendance_seconds, get_join_code_for_student_period
 import time
 
 # Timezone
@@ -496,12 +496,19 @@ def auto_tapout_all_over_limit():
 
                 # If student is active, run the auto-tapout check
                 if latest_event and latest_event.status == "active":
-                    check_and_auto_tapout_if_limit_reached(student)
+                    check_and_auto_tapout_if_limit_reached(student, commit=False)
                     tapped_out_count += 1
                     break  # Only need to run once per student
         except Exception as e:
             current_app.logger.error("Error checking auto-tapout for student", exc_info=True)
             continue
+            
+    # Commit any auto-tapouts found
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Failed to commit auto-tapouts: {e}")
 
     return tapped_out_count
 
@@ -6932,17 +6939,10 @@ def deletion_requests():
     ).order_by(DeletionRequest.resolved_at.desc()).limit(10).all()
 
     # Get teacher's periods for the dropdown (from both student_teachers and legacy teacher_id)
-    periods_via_link = db.session.query(Student.block).join(
+    # Get teacher's periods for the dropdown (from student_teachers)
+    periods = db.session.query(Student.block).join(
         StudentTeacher, Student.id == StudentTeacher.student_id
-    ).filter(StudentTeacher.admin_id == admin_id).distinct()
-
-    # Get periods from legacy teacher_id
-    periods_via_legacy = db.session.query(Student.block).filter(
-        Student.teacher_id == admin_id
-    ).distinct()
-
-    # Union both queries
-    periods = periods_via_link.union(periods_via_legacy).all()
+    ).filter(StudentTeacher.admin_id == admin_id).distinct().all()
     periods = [p[0] for p in periods]
 
     return render_template(

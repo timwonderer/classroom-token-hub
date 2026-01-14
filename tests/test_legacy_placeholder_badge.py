@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 
 from app import db
 from app.models import Admin, Student, StudentTeacher, TeacherBlock
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 def _create_admin(username: str) -> tuple[Admin, str]:
@@ -38,7 +38,6 @@ def _create_legacy_student(first_name: str, teacher: Admin, block: str = "A") ->
         salt=salt,
         username_hash=hash_username(first_name.lower(), salt),
         pin_hash="pin",
-        teacher_id=teacher.id,
     )
     db.session.add(student)
     db.session.flush()
@@ -115,7 +114,7 @@ def test_real_unclaimed_seats_still_counted(client):
     This ensures our fix doesn't break the normal case where teachers upload rosters
     and those TeacherBlock entries should appear as unclaimed seats.
     """
-    from hash_utils import hash_hmac
+    from app.hash_utils import hash_hmac
     
     teacher, secret = _create_admin("teacher-with-roster")
     
@@ -166,7 +165,7 @@ def test_mixed_legacy_and_unclaimed_seats(client):
     
     Only the real unclaimed seats should be counted.
     """
-    from hash_utils import hash_hmac
+    from app.hash_utils import hash_hmac
     
     teacher, secret = _create_admin("teacher-mixed-class")
     

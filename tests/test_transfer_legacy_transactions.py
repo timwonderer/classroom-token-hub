@@ -1,3 +1,7 @@
+import pytest
+
+pytestmark = [pytest.mark.critical, pytest.mark.regression]
+
 """
 Test for student transfer functionality with legacy transactions.
 
@@ -10,7 +14,7 @@ from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
 from app.models import Student, Admin, Transaction, TeacherBlock
 from app.extensions import db
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 @pytest.fixture
@@ -33,10 +37,16 @@ def setup_student_with_legacy_transactions(client):
         salt=salt,
         username_hash=hash_username("alice_a", salt),
         passphrase_hash=generate_password_hash("alice_pass"),
-        teacher_id=teacher.id
     )
     db.session.add(student)
     db.session.commit()
+
+    # Link student to teacher
+    from app.models import StudentTeacher
+    st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+    db.session.add(st)
+    db.session.commit()
+
 
     join_code = "MATH1A"
     
