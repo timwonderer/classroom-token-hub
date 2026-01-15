@@ -16,7 +16,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'abc123def456'
-down_revision = 'x1y2z3a4b5c6'
+down_revision = '1e07c37d3c7c'
 branch_labels = None
 depends_on = None
 
@@ -71,7 +71,7 @@ def upgrade():
         with op.batch_alter_table('rent_payment', schema=None) as batch_op:
             batch_op.alter_column('amount_paid',
                                   existing_type=sa.Float(),
-                                  type_=sa.Numeric(12, scale=2),
+                                  type_=sa.Numeric(precision=12, scale=2),
                                   existing_nullable=False)
         print("   ✓ Converted rent_payment.amount_paid to Numeric(12, 2)")
     else:
@@ -83,7 +83,7 @@ def upgrade():
         with op.batch_alter_table('rent_settings', schema=None) as batch_op:
             batch_op.alter_column('rent_amount',
                                   existing_type=sa.Float(),
-                                  type_=sa.Numeric(12, scale=2),
+                                  type_=sa.Numeric(precision=12, scale=2),
                                   existing_nullable=False)
         print("   ✓ Converted rent_settings.rent_amount to Numeric(12, 2)")
     else:
@@ -95,7 +95,7 @@ def upgrade():
         with op.batch_alter_table('rent_settings', schema=None) as batch_op:
             batch_op.alter_column('late_penalty_amount',
                                   existing_type=sa.Float(),
-                                  type_=sa.Numeric(12, scale=2),
+                                  type_=sa.Numeric(precision=12, scale=2),
                                   existing_nullable=False)
         print("   ✓ Converted rent_settings.late_penalty_amount to Numeric(12, 2)")
     else:
@@ -108,7 +108,6 @@ def upgrade():
         ('overdraft_fee_progressive_2', True),
         ('overdraft_fee_progressive_3', True),
         ('overdraft_fee_progressive_cap', True),
-        ('min_balance_for_interest', True),
     ]
 
     for col_name, is_nullable in banking_columns:
@@ -117,41 +116,38 @@ def upgrade():
             with op.batch_alter_table('banking_settings', schema=None) as batch_op:
                 batch_op.alter_column(col_name,
                                       existing_type=sa.Float(),
-                                      type_=sa.Numeric(12, scale=2),
+                                      type_=sa.Numeric(precision=12, scale=2),
                                       existing_nullable=is_nullable)
             print(f"   ✓ Converted banking_settings.{col_name} to Numeric(12, 2)")
         else:
             print(f"   ⚠ banking_settings.{col_name} already Numeric or not Float, skipping...")
 
     # Interest rates - use Numeric(8, 6) for rates like 0.045 (4.5%)
-    column_type = get_column_type('banking_settings', 'savings_apy')
-    if column_type and is_float_type(column_type):
-        with op.batch_alter_table('banking_settings', schema=None) as batch_op:
-            batch_op.alter_column('savings_apy',
-                                  existing_type=sa.Float(),
-                                  type_=sa.Numeric(precision=8, scale=6),
-                                  existing_nullable=True)
-        print("   ✓ Converted banking_settings.savings_apy to Numeric(8, 6)")
-    else:
-        print("   ⚠ banking_settings.savings_apy already Numeric or not Float, skipping...")
-
-    # PayrollSettings table
-    payroll_columns = [
-        ('pay_rate', False),
-        ('overtime_pay_rate', True),
-    ]
-
-    for col_name, is_nullable in payroll_columns:
-        column_type = get_column_type('payroll_settings', col_name)
+    interest_rate_columns = ['savings_apy', 'savings_monthly_rate']
+    for col_name in interest_rate_columns:
+        column_type = get_column_type('banking_settings', col_name)
         if column_type and is_float_type(column_type):
-            with op.batch_alter_table('payroll_settings', schema=None) as batch_op:
+            with op.batch_alter_table('banking_settings', schema=None) as batch_op:
                 batch_op.alter_column(col_name,
                                       existing_type=sa.Float(),
-                                      type_=sa.Numeric(12, scale=2),
-                                      existing_nullable=is_nullable)
-            print(f"   ✓ Converted payroll_settings.{col_name} to Numeric(12, 2)")
+                                      type_=sa.Numeric(precision=8, scale=6),
+                                      existing_nullable=True)
+            print(f"   ✓ Converted banking_settings.{col_name} to Numeric(8, 6)")
         else:
-            print(f"   ⚠ payroll_settings.{col_name} already Numeric or not Float, skipping...")
+            print(f"   ⚠ banking_settings.{col_name} already Numeric or not Float, skipping...")
+
+    # PayrollSettings table - only pay_rate is a currency amount
+    # (overtime_multiplier and bonus_rate are multipliers, not currency, so stay Float)
+    column_type = get_column_type('payroll_settings', 'pay_rate')
+    if column_type and is_float_type(column_type):
+        with op.batch_alter_table('payroll_settings', schema=None) as batch_op:
+            batch_op.alter_column('pay_rate',
+                                  existing_type=sa.Float(),
+                                  type_=sa.Numeric(precision=12, scale=2),
+                                  existing_nullable=False)
+        print("   ✓ Converted payroll_settings.pay_rate to Numeric(12, 2)")
+    else:
+        print("   ⚠ payroll_settings.pay_rate already Numeric or not Float, skipping...")
 
     # PayrollReward table
     column_type = get_column_type('payroll_rewards', 'amount')
@@ -159,7 +155,7 @@ def upgrade():
         with op.batch_alter_table('payroll_rewards', schema=None) as batch_op:
             batch_op.alter_column('amount',
                                   existing_type=sa.Float(),
-                                  type_=sa.Numeric(12, scale=2),
+                                  type_=sa.Numeric(precision=12, scale=2),
                                   existing_nullable=False)
         print("   ✓ Converted payroll_rewards.amount to Numeric(12, 2)")
     else:
@@ -171,7 +167,7 @@ def upgrade():
         with op.batch_alter_table('payroll_fines', schema=None) as batch_op:
             batch_op.alter_column('amount',
                                   existing_type=sa.Float(),
-                                  type_=sa.Numeric(12, scale=2),
+                                  type_=sa.Numeric(precision=12, scale=2),
                                   existing_nullable=False)
         print("   ✓ Converted payroll_fines.amount to Numeric(12, 2)")
     else:
@@ -183,7 +179,7 @@ def upgrade():
         with op.batch_alter_table('store_items', schema=None) as batch_op:
             batch_op.alter_column('price',
                                   existing_type=sa.Float(),
-                                  type_=sa.Numeric(12, scale=2),
+                                  type_=sa.Numeric(precision=12, scale=2),
                                   existing_nullable=False)
         print("   ✓ Converted store_items.price to Numeric(12, 2)")
     else:
@@ -203,7 +199,7 @@ def upgrade():
             with op.batch_alter_table('insurance_policies', schema=None) as batch_op:
                 batch_op.alter_column(col_name,
                                       existing_type=sa.Float(),
-                                      type_=sa.Numeric(12, scale=2),
+                                      type_=sa.Numeric(precision=12, scale=2),
                                       existing_nullable=is_nullable)
             print(f"   ✓ Converted insurance_policies.{col_name} to Numeric(12, 2)")
         else:
@@ -215,7 +211,7 @@ def upgrade():
         with op.batch_alter_table('insurance_policies', schema=None) as batch_op:
             batch_op.alter_column('bundle_discount_percent',
                                   existing_type=sa.Float(),
-                                  type_=sa.Numeric(5, scale=2),
+                                  type_=sa.Numeric(precision=5, scale=2),
                                   existing_nullable=False)
         print("   ✓ Converted insurance_policies.bundle_discount_percent to Numeric(5, 2)")
     else:
@@ -233,7 +229,7 @@ def upgrade():
             with op.batch_alter_table('insurance_claims', schema=None) as batch_op:
                 batch_op.alter_column(col_name,
                                       existing_type=sa.Float(),
-                                      type_=sa.Numeric(12, scale=2),
+                                      type_=sa.Numeric(precision=12, scale=2),
                                       existing_nullable=is_nullable)
             print(f"   ✓ Converted insurance_claims.{col_name} to Numeric(12, 2)")
         else:
@@ -251,7 +247,7 @@ def upgrade():
             with op.batch_alter_table('demo_students', schema=None) as batch_op:
                 batch_op.alter_column(col_name,
                                       existing_type=sa.Float(),
-                                      type_=sa.Numeric(12, scale=2),
+                                      type_=sa.Numeric(precision=12, scale=2),
                                       existing_nullable=is_nullable)
             print(f"   ✓ Converted demo_students.{col_name} to Numeric(12, 2)")
         else:
@@ -287,14 +283,172 @@ def downgrade():
     if column_type and is_numeric_type(column_type):
         with op.batch_alter_table('rent_payment', schema=None) as batch_op:
             batch_op.alter_column('amount_paid',
-                                  existing_type=sa.Numeric(12, scale=2),
+                                  existing_type=sa.Numeric(precision=12, scale=2),
                                   type_=sa.Float(),
                                   existing_nullable=False)
         print("   ✗ Reverted rent_payment.amount_paid to Float")
     else:
         print("   ⚠ rent_payment.amount_paid already Float or not Numeric, skipping...")
 
-    # Continue with all other columns...
-    # (Abbreviated for brevity - same pattern for all other columns)
+    # RentSettings table - rent_amount
+    column_type = get_column_type('rent_settings', 'rent_amount')
+    if column_type and is_numeric_type(column_type):
+        with op.batch_alter_table('rent_settings', schema=None) as batch_op:
+            batch_op.alter_column('rent_amount',
+                                  existing_type=sa.Numeric(precision=12, scale=2),
+                                  type_=sa.Float(),
+                                  existing_nullable=False)
+        print("   ✗ Reverted rent_settings.rent_amount to Float")
+    else:
+        print("   ⚠ rent_settings.rent_amount already Float or not Numeric, skipping...")
+
+    # RentSettings table - late_penalty_amount
+    column_type = get_column_type('rent_settings', 'late_penalty_amount')
+    if column_type and is_numeric_type(column_type):
+        with op.batch_alter_table('rent_settings', schema=None) as batch_op:
+            batch_op.alter_column('late_penalty_amount',
+                                  existing_type=sa.Numeric(precision=12, scale=2),
+                                  type_=sa.Float(),
+                                  existing_nullable=False)
+        print("   ✗ Reverted rent_settings.late_penalty_amount to Float")
+    else:
+        print("   ⚠ rent_settings.late_penalty_amount already Float or not Numeric, skipping...")
+
+    # BankingSettings table - multiple columns
+    banking_columns = [
+        'overdraft_fee_flat_amount',
+        'overdraft_fee_progressive_1',
+        'overdraft_fee_progressive_2',
+        'overdraft_fee_progressive_3',
+        'overdraft_fee_progressive_cap',
+    ]
+
+    for col_name in banking_columns:
+        column_type = get_column_type('banking_settings', col_name)
+        if column_type and is_numeric_type(column_type):
+            with op.batch_alter_table('banking_settings', schema=None) as batch_op:
+                batch_op.alter_column(col_name,
+                                      existing_type=sa.Numeric(precision=12, scale=2),
+                                      type_=sa.Float(),
+                                      existing_nullable=True)
+            print(f"   ✗ Reverted banking_settings.{col_name} to Float")
+        else:
+            print(f"   ⚠ banking_settings.{col_name} already Float or not Numeric, skipping...")
+
+    # Interest rates
+    interest_rate_columns = ['savings_apy', 'savings_monthly_rate']
+    for col_name in interest_rate_columns:
+        column_type = get_column_type('banking_settings', col_name)
+        if column_type and is_numeric_type(column_type):
+            with op.batch_alter_table('banking_settings', schema=None) as batch_op:
+                batch_op.alter_column(col_name,
+                                      existing_type=sa.Numeric(precision=8, scale=6),
+                                      type_=sa.Float(),
+                                      existing_nullable=True)
+            print(f"   ✗ Reverted banking_settings.{col_name} to Float")
+        else:
+            print(f"   ⚠ banking_settings.{col_name} already Float or not Numeric, skipping...")
+
+    # PayrollSettings table - pay_rate
+    column_type = get_column_type('payroll_settings', 'pay_rate')
+    if column_type and is_numeric_type(column_type):
+        with op.batch_alter_table('payroll_settings', schema=None) as batch_op:
+            batch_op.alter_column('pay_rate',
+                                  existing_type=sa.Numeric(precision=12, scale=2),
+                                  type_=sa.Float(),
+                                  existing_nullable=False)
+        print("   ✗ Reverted payroll_settings.pay_rate to Float")
+    else:
+        print("   ⚠ payroll_settings.pay_rate already Float or not Numeric, skipping...")
+
+    # PayrollReward table
+    column_type = get_column_type('payroll_rewards', 'amount')
+    if column_type and is_numeric_type(column_type):
+        with op.batch_alter_table('payroll_rewards', schema=None) as batch_op:
+            batch_op.alter_column('amount',
+                                  existing_type=sa.Numeric(precision=12, scale=2),
+                                  type_=sa.Float(),
+                                  existing_nullable=False)
+        print("   ✗ Reverted payroll_rewards.amount to Float")
+    else:
+        print("   ⚠ payroll_rewards.amount already Float or not Numeric, skipping...")
+
+    # PayrollFine table
+    column_type = get_column_type('payroll_fines', 'amount')
+    if column_type and is_numeric_type(column_type):
+        with op.batch_alter_table('payroll_fines', schema=None) as batch_op:
+            batch_op.alter_column('amount',
+                                  existing_type=sa.Numeric(precision=12, scale=2),
+                                  type_=sa.Float(),
+                                  existing_nullable=False)
+        print("   ✗ Reverted payroll_fines.amount to Float")
+    else:
+        print("   ⚠ payroll_fines.amount already Float or not Numeric, skipping...")
+
+    # StoreItem table
+    column_type = get_column_type('store_items', 'price')
+    if column_type and is_numeric_type(column_type):
+        with op.batch_alter_table('store_items', schema=None) as batch_op:
+            batch_op.alter_column('price',
+                                  existing_type=sa.Numeric(precision=12, scale=2),
+                                  type_=sa.Float(),
+                                  existing_nullable=False)
+        print("   ✗ Reverted store_items.price to Float")
+    else:
+        print("   ⚠ store_items.price already Float or not Numeric, skipping...")
+
+    # InsurancePolicy table
+    insurance_policy_columns = ['premium', 'max_claim_amount', 'max_payout_per_period', 'bundle_discount_amount']
+    for col_name in insurance_policy_columns:
+        column_type = get_column_type('insurance_policies', col_name)
+        if column_type and is_numeric_type(column_type):
+            with op.batch_alter_table('insurance_policies', schema=None) as batch_op:
+                batch_op.alter_column(col_name,
+                                      existing_type=sa.Numeric(precision=12, scale=2),
+                                      type_=sa.Float(),
+                                      existing_nullable=(col_name != 'premium' and col_name != 'bundle_discount_amount'))
+            print(f"   ✗ Reverted insurance_policies.{col_name} to Float")
+        else:
+            print(f"   ⚠ insurance_policies.{col_name} already Float or not Numeric, skipping...")
+
+    # InsurancePolicy - bundle_discount_percent
+    column_type = get_column_type('insurance_policies', 'bundle_discount_percent')
+    if column_type and is_numeric_type(column_type):
+        with op.batch_alter_table('insurance_policies', schema=None) as batch_op:
+            batch_op.alter_column('bundle_discount_percent',
+                                  existing_type=sa.Numeric(precision=5, scale=2),
+                                  type_=sa.Float(),
+                                  existing_nullable=False)
+        print("   ✗ Reverted insurance_policies.bundle_discount_percent to Float")
+    else:
+        print("   ⚠ insurance_policies.bundle_discount_percent already Float or not Numeric, skipping...")
+
+    # InsuranceClaim table
+    insurance_claim_columns = ['claim_amount', 'approved_amount']
+    for col_name in insurance_claim_columns:
+        column_type = get_column_type('insurance_claims', col_name)
+        if column_type and is_numeric_type(column_type):
+            with op.batch_alter_table('insurance_claims', schema=None) as batch_op:
+                batch_op.alter_column(col_name,
+                                      existing_type=sa.Numeric(precision=12, scale=2),
+                                      type_=sa.Float(),
+                                      existing_nullable=True)
+            print(f"   ✗ Reverted insurance_claims.{col_name} to Float")
+        else:
+            print(f"   ⚠ insurance_claims.{col_name} already Float or not Numeric, skipping...")
+
+    # DemoStudent table
+    demo_columns = ['config_checking_balance', 'config_savings_balance']
+    for col_name in demo_columns:
+        column_type = get_column_type('demo_students', col_name)
+        if column_type and is_numeric_type(column_type):
+            with op.batch_alter_table('demo_students', schema=None) as batch_op:
+                batch_op.alter_column(col_name,
+                                      existing_type=sa.Numeric(precision=12, scale=2),
+                                      type_=sa.Float(),
+                                      existing_nullable=True)
+            print(f"   ✗ Reverted demo_students.{col_name} to Float")
+        else:
+            print(f"   ⚠ demo_students.{col_name} already Float or not Numeric, skipping...")
 
     print(" ✗ Numeric → Float reversion complete (precision issues may occur)\n")

@@ -7,7 +7,7 @@ These tests verify that the fixes for floating-point rounding bugs work correctl
 """
 import pytest
 from decimal import Decimal
-from datetime import datetime, timedelta
+from datetime import datetime
 from app.models import (
     Admin, Student, Transaction, StudentBlock, TeacherBlock,
     RentSettings, RentPayment, BankingSettings, _quantize_currency
@@ -28,9 +28,10 @@ class TestDecimalPrecision:
         assert _quantize_currency(None) == Decimal('0.00')
         assert _quantize_currency(Decimal('50.50')) == Decimal('50.50')
 
-        # Test rounding
-        assert _quantize_currency(10.125) == Decimal('10.12')  # Rounds down
-        assert _quantize_currency(10.126) == Decimal('10.13')  # Rounds up
+        # Test rounding (ROUND_HALF_EVEN - banker's rounding)
+        assert _quantize_currency(10.125) == Decimal('10.12')  # Rounds to even (2)
+        assert _quantize_currency(10.135) == Decimal('10.14')  # Rounds to even (4)
+        assert _quantize_currency(10.126) == Decimal('10.13')  # Rounds up (not halfway)
 
     def test_transfer_to_zero_no_overdraft_fee(self, app):
         """

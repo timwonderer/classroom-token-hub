@@ -6,7 +6,7 @@ Times are stored as UTC in the database.
 """
 
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 import enum
 
 from app.extensions import db
@@ -34,8 +34,8 @@ def _quantize_currency(value):
     if value is None:
         return Decimal('0.00')
     if isinstance(value, Decimal):
-        return value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
-    return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        return value.quantize(Decimal('0.01'))
+    return Decimal(str(value)).quantize(Decimal('0.01'))
 
 
 
@@ -1040,7 +1040,7 @@ class InsuranceClaim(db.Model):
 
     incident_date = db.Column(db.DateTime, nullable=False)  # When incident occurred
     filed_date = db.Column(db.DateTime, default=_utc_now)
-    description = db.Column(db.Text, nullable=True)
+    description = db.Column(db.Text, nullable=False)
     claim_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)  # For monetary claims: requested amount
     claim_item = db.Column(db.Text, nullable=True)  # For non-monetary claims: what they're claiming
     comments = db.Column(db.Text, nullable=True)  # Optional comments from student
@@ -1509,8 +1509,8 @@ class BankingSettings(db.Model):
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Interest settings for savings
-    savings_apy = db.Column(db.Float, default=0.0)  # Annual Percentage Yield (e.g., 5.0 for 5%)
-    savings_monthly_rate = db.Column(db.Float, default=0.0)  # Monthly rate (calculated or custom)
+    savings_apy = db.Column(db.Numeric(precision=8, scale=6), default=0.0)  # Annual Percentage Yield (e.g., 5.0 for 5%)
+    savings_monthly_rate = db.Column(db.Numeric(precision=8, scale=6), default=0.0)  # Monthly rate (calculated or custom)
     interest_calculation_type = db.Column(db.String(20), default='simple')  # 'simple' or 'compound'
     compound_frequency = db.Column(db.String(20), default='monthly')  # 'daily', 'weekly', 'monthly'
 
