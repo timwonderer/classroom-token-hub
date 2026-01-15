@@ -897,72 +897,6 @@ def lookup_hall_pass(pass_number):
     })
 
 
-def _get_default_timezone():
-    """Return the configured default timezone or fall back to Pacific Time."""
-    tz_name = current_app.config.get('DEFAULT_TIMEZONE', 'America/Los_Angeles')
-    try:
-        return pytz.timezone(tz_name)
-    except pytz.UnknownTimeZoneError:
-        current_app.logger.warning(
-            "Invalid DEFAULT_TIMEZONE '%s' configured; falling back to America/Los_Angeles.",
-            tz_name
-        )
-        return pytz.timezone('America/Los_Angeles')
-
-
-def _check_simultaneous_pass_limit(log_entry):
-    """Validate destination settings and simultaneous pass limits."""
-    teacher_block = TeacherBlock.query.filter_by(join_code=log_entry.join_code).first()
-    if not teacher_block:
-        return None
-
-    settings = HallPassSettings.query.filter_by(teacher_id=teacher_block.teacher_id, block=None).first()
-    if not settings:
-        return None
-
-    pass_types = settings.get_pass_types()
-
-    # Find configuration for this destination
-    pass_type_config = next((pt for pt in pass_types if pt['name'].lower() == log_entry.reason.lower()), None)
-
-    # Check if pass type is enabled
-    if pass_type_config and not pass_type_config.get('enabled', True):
-        return jsonify({
-            "status": "error",
-            "message": f"{log_entry.reason} pass type is currently disabled."
-        }), 403
-
-    # Check simultaneous limit
-    if pass_type_config and pass_type_config.get('simultaneous_limit') is not None:
-        user_tz = _get_default_timezone()
-        now_user_tz = datetime.now(user_tz)
-        today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
-        today_start_utc = today_start_user_tz.astimezone(pytz.utc).replace(tzinfo=None)
-
-        # Count currently out students for THIS destination from today (excluding this student)
-        currently_out = HallPassLog.query.filter(
-            HallPassLog.status == 'left',
-            HallPassLog.reason == log_entry.reason,
-            HallPassLog.join_code == log_entry.join_code,
-            HallPassLog.left_time >= today_start_utc,
-            HallPassLog.id != log_entry.id  # Exclude current pass
-        ).count()
-
-        simultaneous_limit = pass_type_config['simultaneous_limit']
-
-        # Check if limit is reached
-        if currently_out >= simultaneous_limit:
-            return jsonify({
-                "status": "error",
-                "message": (
-                    f"{log_entry.reason} limit reached. {currently_out}/{simultaneous_limit} students are "
-                    "currently out. Please wait for someone to return."
-                )
-            }), 403
-
-    return None
-
-
 @api_bp.route('/hall-pass/terminal/use', methods=['POST'])
 def hall_pass_terminal_use():
     """Mark a hall pass as 'left' when student scans at terminal"""
@@ -980,9 +914,58 @@ def hall_pass_terminal_use():
     if log_entry.status != 'approved':
         return jsonify({"status": "error", "message": f"Pass is not approved. Current status: {log_entry.status}"}), 400
 
-    limit_response = _check_simultaneous_pass_limit(log_entry)
-    if limit_response:
-        return limit_response
+    # Check simultaneous limit for this destination before allowing student to leave
+    # Get teacher_id from join_code
+    from app.models import TeacherBlock
+    teacher_block = TeacherBlock.query.filter_by(join_code=log_entry.join_code).first()
+    if teacher_block:
+        teacher_id = teacher_block.teacher_id
+
+        # Get settings for this teacher
+        settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+        if settings:
+            pass_types = settings.get_pass_types()
+
+            # Find configuration for this destination
+            pass_type_config = next((pt for pt in pass_types if pt['name'].lower() == log_entry.reason.lower()), None)
+
+            # Check if pass type is enabled
+            if pass_type_config and not pass_type_config.get('enabled', True):
+                return jsonify({
+                    "status": "error",
+                    "message": f"{log_entry.reason} pass type is currently disabled."
+                }), 403
+
+            # Check simultaneous limit
+            if pass_type_config and pass_type_config.get('simultaneous_limit') is not None:
+                # Get user's timezone for today's count
+                tz_name = 'America/Los_Angeles'  # TODO: This should be configurable per teacher/school
+                try:
+                    user_tz = pytz.timezone(tz_name)
+                except pytz.UnknownTimeZoneError:
+                    user_tz = pytz.timezone('America/Los_Angeles')
+
+                now_user_tz = datetime.now(user_tz)
+                today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
+                today_start_utc = today_start_user_tz.astimezone(pytz.utc).replace(tzinfo=None)
+
+                # Count currently out students for THIS destination from today (excluding this student)
+                currently_out = HallPassLog.query.filter(
+                    HallPassLog.status == 'left',
+                    HallPassLog.reason == log_entry.reason,
+                    HallPassLog.join_code == log_entry.join_code,
+                    HallPassLog.left_time >= today_start_utc,
+                    HallPassLog.id != log_entry.id  # Exclude current pass
+                ).count()
+
+                simultaneous_limit = pass_type_config['simultaneous_limit']
+
+                # Check if limit is reached
+                if currently_out >= simultaneous_limit:
+                    return jsonify({
+                        "status": "error",
+                        "message": f"{log_entry.reason} limit reached. {currently_out}/{simultaneous_limit} students are currently out. Please wait for someone to return."
+                    }), 403
 
     # Mark as left and create tap-out event
     now = datetime.now(timezone.utc)
@@ -1104,9 +1087,58 @@ def checkout_hall_pass():
     if log_entry.status != 'approved':
         return jsonify({"status": "error", "message": f"Pass is not approved. Current status: {log_entry.status}"}), 400
     
-    limit_response = _check_simultaneous_pass_limit(log_entry)
-    if limit_response:
-        return limit_response
+    # Check simultaneous limit for this destination before allowing student to leave
+    # Get teacher_id from join_code
+    from app.models import TeacherBlock
+    teacher_block = TeacherBlock.query.filter_by(join_code=log_entry.join_code).first()
+    if teacher_block:
+        teacher_id = teacher_block.teacher_id
+        
+        # Get settings for this teacher
+        settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+        if settings:
+            pass_types = settings.get_pass_types()
+            
+            # Find configuration for this destination
+            pass_type_config = next((pt for pt in pass_types if pt['name'].lower() == log_entry.reason.lower()), None)
+            
+            # Check if pass type is enabled
+            if pass_type_config and not pass_type_config.get('enabled', True):
+                return jsonify({
+                    "status": "error",
+                    "message": f"{log_entry.reason} pass type is currently disabled."
+                }), 403
+            
+            # Check simultaneous limit
+            if pass_type_config and pass_type_config.get('simultaneous_limit') is not None:
+                # Get user's timezone for today's count
+                tz_name = 'America/Los_Angeles'  # TODO: This should be configurable per teacher/school
+                try:
+                    user_tz = pytz.timezone(tz_name)
+                except pytz.UnknownTimeZoneError:
+                    user_tz = pytz.timezone('America/Los_Angeles')
+                
+                now_user_tz = datetime.now(user_tz)
+                today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
+                today_start_utc = today_start_user_tz.astimezone(pytz.utc).replace(tzinfo=None)
+                
+                # Count currently out students for THIS destination from today (excluding this student)
+                currently_out = HallPassLog.query.filter(
+                    HallPassLog.status == 'left',
+                    HallPassLog.reason == log_entry.reason,
+                    HallPassLog.join_code == log_entry.join_code,
+                    HallPassLog.left_time >= today_start_utc,
+                    HallPassLog.id != log_entry.id  # Exclude current pass
+                ).count()
+                
+                simultaneous_limit = pass_type_config['simultaneous_limit']
+                
+                # Check if limit is reached
+                if currently_out >= simultaneous_limit:
+                    return jsonify({
+                        "status": "error",
+                        "message": f"{log_entry.reason} limit reached. {currently_out}/{simultaneous_limit} students are currently out. Please wait for someone to return."
+                    }), 403
     
     # Mark as left and create tap-out event
     now = datetime.now(timezone.utc)

@@ -346,21 +346,6 @@ function updateHallPassOverlay(period, hallPass) {
   }
 }
 
-function refreshUi(period, refreshQueue = false) {
-  fetch("/api/student-status")
-    .then(r => r.json())
-    .then(statusData => {
-      if (statusData.status === 'ok' && statusData.periods && statusData.periods[period]) {
-        const periodData = statusData.periods[period];
-        updateBlockUI(period, periodData.active, periodData.duration, periodData.projected_pay, periodData.hall_pass);
-      }
-    });
-
-  if (refreshQueue) {
-    updateQueueStatus();
-  }
-}
-
 function cancelHallPass(passId, period) {
   if (!confirm('Are you sure you want to cancel this hall pass request?')) {
     return;
@@ -377,7 +362,15 @@ function cancelHallPass(passId, period) {
     .then(data => {
       if (data.status === 'success') {
         createToast('Hall pass request cancelled.');
-        refreshUi(period);
+        // Refresh status immediately
+        fetch("/api/student-status")
+          .then(r => r.json())
+          .then(statusData => {
+            if (statusData.status === 'ok' && statusData.periods && statusData.periods[period]) {
+              const periodData = statusData.periods[period];
+              updateBlockUI(period, periodData.active, periodData.duration, periodData.projected_pay, periodData.hall_pass);
+            }
+          });
       } else {
         createToast(data.message || 'Failed to cancel request.', true);
       }
@@ -405,7 +398,17 @@ function checkOutHallPass(passId, period) {
     .then(data => {
       if (data.status === 'success') {
         createToast(`Checked out for ${data.destination}. Have a safe trip!`);
-        refreshUi(period, true);
+        // Refresh status immediately
+        fetch("/api/student-status")
+          .then(r => r.json())
+          .then(statusData => {
+            if (statusData.status === 'ok' && statusData.periods && statusData.periods[period]) {
+              const periodData = statusData.periods[period];
+              updateBlockUI(period, periodData.active, periodData.duration, periodData.projected_pay, periodData.hall_pass);
+            }
+          });
+        // Also refresh queue status
+        updateQueueStatus();
       } else {
         createToast(data.message || 'Failed to check out.', true);
       }
@@ -433,7 +436,17 @@ function checkInHallPass(passId, period) {
     .then(data => {
       if (data.status === 'success') {
         createToast('Welcome back! You have been checked in.');
-        refreshUi(period, true);
+        // Refresh status immediately
+        fetch("/api/student-status")
+          .then(r => r.json())
+          .then(statusData => {
+            if (statusData.status === 'ok' && statusData.periods && statusData.periods[period]) {
+              const periodData = statusData.periods[period];
+              updateBlockUI(period, periodData.active, periodData.duration, periodData.projected_pay, periodData.hall_pass);
+            }
+          });
+        // Also refresh queue status
+        updateQueueStatus();
       } else {
         createToast(data.message || 'Failed to check in.', true);
       }

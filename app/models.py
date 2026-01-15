@@ -37,12 +37,12 @@ def _quantize_currency(value):
         if isinstance(value, Decimal):
             if not value.is_finite():
                 return Decimal('0.00')
-            quantized = value.quantize(Decimal('0.01'))
+            return value.quantize(Decimal('0.01'))
         else:
             quantized = Decimal(str(value)).quantize(Decimal('0.01'))
-        if not quantized.is_finite():
-            return Decimal('0.00')
-        return quantized
+            if not quantized.is_finite():
+                return Decimal('0.00')
+            return quantized
     except (InvalidOperation, ValueError, TypeError):
         # Handle NaN, Infinity, or unparseable values
         return Decimal('0.00')
