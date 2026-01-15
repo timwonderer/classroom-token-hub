@@ -41,12 +41,11 @@ def _create_legacy_unclaimed_student(first_name: str, teacher: Admin, block: str
         first_half_hash=first_half_hash,
         dob_sum=2025,
         username_hash=None,  # Legacy - no username yet
-        teacher_id=teacher.id
     )
     db.session.add(student)
-    db.session.commit()
+    db.session.flush()
     
-    # Create StudentTeacher association
+    # Create StudentTeacher association (replaces deprecated teacher_id)
     db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
     db.session.commit()
     
