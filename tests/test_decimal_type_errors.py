@@ -361,3 +361,10 @@ class TestDecimalTypeErrors:
         assert _quantize_currency(0) == Decimal('0.00')
         assert _quantize_currency(Decimal('0')) == Decimal('0.00')
 
+        # Invalid inputs should be handled by the try-except block
+        assert _quantize_currency(float('nan')) == Decimal('0.00')
+        assert _quantize_currency(float('inf')) == Decimal('0.00')
+        assert _quantize_currency('not a number') == Decimal('0.00')
+        assert _quantize_currency(Decimal('NaN')) == Decimal('0.00')
+        assert _quantize_currency(Decimal('Infinity')) == Decimal('0.00')
+        assert _quantize_currency(Decimal('-Infinity')) == Decimal('0.00')
