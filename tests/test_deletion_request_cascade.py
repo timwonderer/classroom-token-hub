@@ -45,12 +45,11 @@ def _create_student(first_name: str, teacher: Admin, block: str = "A") -> Studen
         salt=salt,
         first_half_hash=first_half_hash,
         dob_sum=2025,
-        teacher_id=teacher.id,
     )
     db.session.add(student)
     db.session.flush()
     
-    # Create StudentTeacher link
+    # Create StudentTeacher link (replaces deprecated teacher_id)
     db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
     db.session.commit()
     

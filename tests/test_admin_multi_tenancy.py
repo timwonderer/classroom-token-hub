@@ -260,8 +260,11 @@ def test_orphaned_students_from_deleted_teacher(client):
     """
     CRITICAL BUG TEST: Test that students from a deleted teacher are not visible to a new teacher with the same ID.
     
-    This test verifies that even if students remain "orphaned" (pointing to a deleted teacher ID),
+    This test verifies that even if students remain "orphaned" (no StudentTeacher links),
     a new teacher who reuses that ID cannot see them unless they are explicitly linked via StudentTeacher.
+    
+    NOTE: The legacy Student.teacher_id column has been dropped. Students are now linked ONLY
+    via the StudentTeacher table. This test verifies the new architecture correctly isolates students.
     """
     # Simulate the historical scenario
     
@@ -272,6 +275,7 @@ def test_orphaned_students_from_deleted_teacher(client):
     teacher1_id = teacher1.id
     
     # Create 5 students for teacher1
+    student_ids = []
     for i in range(5):
         salt = get_random_salt()
         student = Student(
@@ -284,8 +288,9 @@ def test_orphaned_students_from_deleted_teacher(client):
         )
         db.session.add(student)
         db.session.flush()
+        student_ids.append(student.id)
         
-        # Create StudentTeacher association
+        # Create StudentTeacher association (the ONLY way to link students to teachers)
         db.session.add(StudentTeacher(
             student_id=student.id,
             admin_id=teacher1_id
@@ -318,11 +323,11 @@ def test_orphaned_students_from_deleted_teacher(client):
     teacher2_reloaded = Admin.query.filter_by(username="teacher2").first()
     assert teacher2_reloaded.id == teacher1_id, "Teacher2 should have same ID as deleted teacher1"
 
-    # Check if students were cascaded (SQLite behavior) or if they persist.
-    # If they are missing, we recreate them to simulate the "orphaned" state where teacher_id matches but no link exists.
-    orphaned_students = Student.query.filter_by(teacher_id=teacher1_id).all()
+    # Verify orphaned students still exist in the database (they're just not linked to anyone)
+    orphaned_students = Student.query.filter(Student.id.in_(student_ids)).all()
+    # Note: If CASCADE deleted the students, we recreate them to simulate orphaned state
     if len(orphaned_students) == 0:
-        # SQLite cascaded them, so we recreate them
+        # SQLite cascaded them, so we recreate them without any teacher links
         for i in range(5):
             salt = get_random_salt()
             student = Student(
@@ -344,7 +349,8 @@ def test_orphaned_students_from_deleted_teacher(client):
         
         students = get_admin_student_query().all()
         
-        # FIX: Teacher2 should NOT see orphaned students because we now use StudentTeacher
+        # FIX: Teacher2 should NOT see orphaned students because we now use ONLY StudentTeacher
+        # Since there are no StudentTeacher links for teacher2 (ID reuse), they see 0 students
         assert len(students) == 0, \
             f"Security Fix: New teacher with reused ID should see 0 orphaned students, but saw {len(students)}."
 

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 import pytest
-from app.models import Admin, Student, TeacherBlock, RentSettings, TeacherOnboarding, InsurancePolicy
+from app.models import Admin, Student, StudentTeacher, TeacherBlock, RentSettings, TeacherOnboarding, InsurancePolicy
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 import os
@@ -77,9 +77,11 @@ def test_student_dashboard_rendering(client):
         block="A",
         salt=salt,
         username_hash=hash_username("render_student", salt),
-        teacher_id=teacher.id
     )
     db.session.add(student)
+    db.session.flush()
+    # Create StudentTeacher link instead of deprecated teacher_id
+    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
     db.session.commit()
 
     seat = TeacherBlock(
