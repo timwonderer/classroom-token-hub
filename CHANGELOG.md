@@ -9,6 +9,11 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Fixed
+- **Decimal.InvalidOperation in get_total_earnings** - Fixed crash when calculating student earnings with NULL transaction amounts
+  - Added null check (`tx.amount is not None`) before comparison in `get_total_earnings()` method
+  - Prevents `decimal.InvalidOperation` error on `/admin/students` page when database has corrupted transaction data
+  - Handles edge case where historical data migrations or database inconsistencies result in NULL amounts
+  - Fix applied to all three code paths (join_code, teacher_id, and no parameters)
 - **CRITICAL: Floating-Point Rounding Errors in Financial Calculations** - Converted all financial amounts from Float to Decimal for exact precision
   - **Bug 1**: Transfers that zeroed out checking accounts incorrectly triggered $35 overdraft fees due to -0.00 balance representation
   - **Bug 2**: Partial rent payments left unpayable tiny balances (e.g., $0.0000001) due to float precision errors
