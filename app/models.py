@@ -367,7 +367,7 @@ class Student(db.Model):
             return float(round(sum(
                 (tx.amount for tx in self.transactions
                 if (tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id))
-                and tx.amount > 0 and not tx.is_void
+                and tx.amount is not None and tx.amount > 0 and not tx.is_void
                 and not (tx.description or "").startswith("Transfer")),
                 Decimal('0.00')
             ), 2))
@@ -376,7 +376,7 @@ class Student(db.Model):
             # This will show aggregated earnings across all periods with same teacher
             return float(round(sum(
                 (tx.amount for tx in self.transactions
-                if tx.teacher_id == teacher_id and tx.amount > 0 and not tx.is_void
+                if tx.teacher_id == teacher_id and tx.amount is not None and tx.amount > 0 and not tx.is_void
                 and not (tx.description or "").startswith("Transfer")),
                 Decimal('0.00')
             ), 2))
@@ -384,7 +384,7 @@ class Student(db.Model):
             # No scope provided - return total across all classes
             return float(round(sum(
                 (tx.amount for tx in self.transactions
-                if tx.amount > 0 and not tx.is_void
+                if tx.amount is not None and tx.amount > 0 and not tx.is_void
                 and not (tx.description or "").startswith("Transfer")),
                 Decimal('0.00')
             ), 2))
