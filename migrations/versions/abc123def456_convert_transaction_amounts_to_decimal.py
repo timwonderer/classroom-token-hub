@@ -12,6 +12,7 @@ The fix: Convert Float columns to NUMERIC(12, 2) for exact decimal representatio
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.exc import NoSuchTableError
 
 
 # revision identifiers, used by Alembic.
@@ -25,7 +26,11 @@ def get_column_type(table_name, column_name):
     """Get the current type of a column."""
     conn = op.get_bind()
     inspector = sa.inspect(conn)
-    columns = {col['name']: col['type'] for col in inspector.get_columns(table_name)}
+    try:
+        columns = {col['name']: col['type'] for col in inspector.get_columns(table_name)}
+    except NoSuchTableError:
+        print(f"   ⚠ {table_name} table missing, skipping...")
+        return None
     return columns.get(column_name)
 
 
