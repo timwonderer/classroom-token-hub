@@ -46,7 +46,6 @@ class TestDecimalPrecision:
             # Create teacher with overdraft fees enabled
             teacher = Admin(
                 username='teacher_overdraft_test',
-                passphrase_hash='test_hash',
                 totp_secret='test_secret'
             )
             db.session.add(teacher)
@@ -179,7 +178,6 @@ class TestDecimalPrecision:
             # Create teacher
             teacher = Admin(
                 username='teacher_rent_test',
-                passphrase_hash='test_hash',
                 totp_secret='test_secret'
             )
             db.session.add(teacher)
@@ -328,7 +326,6 @@ class TestDecimalPrecision:
             # Create teacher
             teacher = Admin(
                 username='teacher_zero_test',
-                passphrase_hash='test_hash',
                 totp_secret='test_secret'
             )
             db.session.add(teacher)
@@ -418,7 +415,6 @@ class TestDecimalPrecision:
             # Create teacher
             teacher = Admin(
                 username='teacher_negative_test',
-                passphrase_hash='test_hash',
                 totp_secret='test_secret'
             )
             db.session.add(teacher)
