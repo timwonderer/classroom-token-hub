@@ -11,6 +11,7 @@ import secrets
 import re
 from calendar import monthrange
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app
 from sqlalchemy import or_, func, select, and_
@@ -239,17 +240,19 @@ def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: in
     Returns:
         tuple[float, float]: (checking_balance, savings_balance) as rounded floats
     """
-    checking_balance = round(sum(
-        tx.amount for tx in student.transactions
+    checking_balance = float(round(sum(
+        (tx.amount for tx in student.transactions
         if tx.account_type == 'checking' and not tx.is_void and
-        (tx.join_code == join_code or (tx.join_code is None and tx.teacher_id == teacher_id))
-    ), 2)
+        (tx.join_code == join_code or (tx.join_code is None and tx.teacher_id == teacher_id))),
+        Decimal('0.00')
+    ), 2))
     
-    savings_balance = round(sum(
-        tx.amount for tx in student.transactions
+    savings_balance = float(round(sum(
+        (tx.amount for tx in student.transactions
         if tx.account_type == 'savings' and not tx.is_void and
-        (tx.join_code == join_code or (tx.join_code is None and tx.teacher_id == teacher_id))
-    ), 2)
+        (tx.join_code == join_code or (tx.join_code is None and tx.teacher_id == teacher_id))),
+        Decimal('0.00')
+    ), 2))
     
     return checking_balance, savings_balance
 
@@ -995,14 +998,16 @@ def dashboard():
 
     # CRITICAL FIX: Calculate balances using join_code scoping
     # Sum only transactions for THIS specific class (join_code)
-    checking_balance = round(sum(
-        tx.amount for tx in student.transactions
-        if tx.account_type == 'checking' and not tx.is_void and tx.join_code == join_code
-    ), 2)
-    savings_balance = round(sum(
-        tx.amount for tx in student.transactions
-        if tx.account_type == 'savings' and not tx.is_void and tx.join_code == join_code
-    ), 2)
+    checking_balance = float(round(sum(
+        (tx.amount for tx in student.transactions
+        if tx.account_type == 'checking' and not tx.is_void and tx.join_code == join_code),
+        Decimal('0.00')
+    ), 2))
+    savings_balance = float(round(sum(
+        (tx.amount for tx in student.transactions
+        if tx.account_type == 'savings' and not tx.is_void and tx.join_code == join_code),
+        Decimal('0.00')
+    ), 2))
     forecast_interest = round(savings_balance * (0.045 / 12), 2)
 
     # FIX: Only show tap in/out status for CURRENT class, not all classes
@@ -1192,22 +1197,26 @@ def dashboard():
 
     # Earnings this week/month
     earnings_this_week = sum(
-        tx.amount for tx in transactions
-        if tx.amount > 0 and _occurred_after(tx.timestamp, week_start) and not tx.is_void
+        (tx.amount for tx in transactions
+        if tx.amount > 0 and _occurred_after(tx.timestamp, week_start) and not tx.is_void),
+        Decimal('0.00')
     )
     earnings_this_month = sum(
-        tx.amount for tx in transactions
-        if tx.amount > 0 and _occurred_after(tx.timestamp, month_start) and not tx.is_void
+        (tx.amount for tx in transactions
+        if tx.amount > 0 and _occurred_after(tx.timestamp, month_start) and not tx.is_void),
+        Decimal('0.00')
     )
 
     # Spending this week/month
     spending_this_week = abs(sum(
-        tx.amount for tx in transactions
-        if tx.amount < 0 and _occurred_after(tx.timestamp, week_start) and not tx.is_void
+        (tx.amount for tx in transactions
+        if tx.amount < 0 and _occurred_after(tx.timestamp, week_start) and not tx.is_void),
+        Decimal('0.00')
     ))
     spending_this_month = abs(sum(
-        tx.amount for tx in transactions
-        if tx.amount < 0 and _occurred_after(tx.timestamp, month_start) and not tx.is_void
+        (tx.amount for tx in transactions
+        if tx.amount < 0 and _occurred_after(tx.timestamp, month_start) and not tx.is_void),
+        Decimal('0.00')
     ))
 
     # Get active announcements for this student
