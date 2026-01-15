@@ -129,10 +129,11 @@ jobs:
           FLASK_ENV: testing
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
 
-          # 🔐 Secrets injected from GitHub
-          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-          PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+
+          # Testing-only secrets — DO NOT reuse in production
+          ENCRYPTION_KEY: 7f0e9c3b6a2d1e8f4c9a0d3e7b5a2f6c9e1d4a8b3f2c0e7a6d5b9c4e1f8a
+          PEPPER_KEY: 9d2c6e1a8f5b0c7e4d3a2f9b6e1d8c0a5f7b9e4c6a3d2f8e0b5a1c9
+          SECRET_KEY: 2b7f9e1a5c4d8f6e0a3b9d2c7e5f1a8c4e6d9b0f2a7c5e1d3b9
         run: |
           echo "🔄 Starting Migration Rehearsal..."
 
@@ -159,9 +160,9 @@ jobs:
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
 
           # 🔐 Secrets injected from GitHub
-          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
-          PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
-          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          ENCRYPTION_KEY: 7f0e9c3b6a2d1e8f4c9a0d3e7b5a2f6c9e1d4a8b3f2c0e7a6d5b9c4e1f8a
+          PEPPER_KEY: 9d2c6e1a8f5b0c7e4d3a2f9b6e1d8c0a5f7b9e4c6a3d2f8e0b5a1c9
+          SECRET_KEY: 2b7f9e1a5c4d8f6e0a3b9d2c7e5f1a8c4e6d9b0f2a7c5e1d3b9
         run: |
           echo "🔥 Running Smoke Tests on Critical Workflows..."
           pytest -v -m "critical or regression"
