@@ -3,6 +3,9 @@ from app import app, db, Student, TapEvent, Transaction
 from app.payroll import calculate_payroll
 from datetime import datetime, timedelta, timezone
 
+# Tolerance for floating point comparisons
+FLOAT_TOLERANCE = 0.0001
+
 @pytest.fixture
 def client():
     app.config['TESTING'] = True
@@ -12,6 +15,16 @@ def client():
             db.create_all()
             yield client
             db.drop_all()
+
+
+@pytest.fixture
+def test_teacher(client):
+    """Fixture to create a test teacher for payroll tests."""
+    from app.models import Admin
+    teacher = Admin(username="test_teacher", totp_secret="s")
+    db.session.add(teacher)
+    db.session.commit()
+    return teacher
 
 def test_calculate_payroll(client):
     from app.models import Admin, TeacherBlock, Student
@@ -101,37 +114,26 @@ def test_calculate_payroll(client):
     assert post_manual_summary == {}
 
 
-def test_get_pay_rate_for_block_default(client):
+def test_get_pay_rate_for_block_default(test_teacher):
     """Test that get_pay_rate_for_block returns default rate when no settings exist."""
     from app.payroll import get_pay_rate_for_block, DEFAULT_PAY_RATE_PER_SECOND
-    from app.models import Admin
-    
-    # Create a teacher
-    teacher = Admin(username="test_teacher", totp_secret="s")
-    db.session.add(teacher)
-    db.session.commit()
     
     # Get pay rate when no settings exist - should return default
-    rate = get_pay_rate_for_block("A", teacher_id=teacher.id)
+    rate = get_pay_rate_for_block("A", teacher_id=test_teacher.id)
     assert rate == DEFAULT_PAY_RATE_PER_SECOND
     assert isinstance(rate, float)
 
 
-def test_get_pay_rate_for_block_block_specific(client):
+def test_get_pay_rate_for_block_block_specific(test_teacher):
     """Test that block-specific settings return correct float values."""
     from app.payroll import get_pay_rate_for_block
-    from app.models import Admin, PayrollSettings
+    from app.models import PayrollSettings
     from decimal import Decimal
-    
-    # Create a teacher
-    teacher = Admin(username="test_teacher", totp_secret="s")
-    db.session.add(teacher)
-    db.session.commit()
     
     # Create block-specific payroll settings
     # pay_rate is stored in database as $ per minute
     block_setting = PayrollSettings(
-        teacher_id=teacher.id,
+        teacher_id=test_teacher.id,
         block="A",
         pay_rate=Decimal("0.50"),  # $0.50 per minute
         is_active=True
@@ -140,28 +142,23 @@ def test_get_pay_rate_for_block_block_specific(client):
     db.session.commit()
     
     # Get pay rate for the block - should convert to per-second rate
-    rate = get_pay_rate_for_block("A", teacher_id=teacher.id)
+    rate = get_pay_rate_for_block("A", teacher_id=test_teacher.id)
     
     # Expected: 0.50 / 60.0 = 0.008333...
     expected_rate = 0.50 / 60.0
-    assert abs(rate - expected_rate) < 0.0001
+    assert abs(rate - expected_rate) < FLOAT_TOLERANCE
     assert isinstance(rate, float)
 
 
-def test_get_pay_rate_for_block_global_fallback(client):
+def test_get_pay_rate_for_block_global_fallback(test_teacher):
     """Test that global settings fallback works correctly."""
     from app.payroll import get_pay_rate_for_block
-    from app.models import Admin, PayrollSettings
+    from app.models import PayrollSettings
     from decimal import Decimal
-    
-    # Create a teacher
-    teacher = Admin(username="test_teacher", totp_secret="s")
-    db.session.add(teacher)
-    db.session.commit()
     
     # Create global payroll settings (block=None)
     global_setting = PayrollSettings(
-        teacher_id=teacher.id,
+        teacher_id=test_teacher.id,
         block=None,  # Global setting
         pay_rate=Decimal("0.30"),  # $0.30 per minute
         is_active=True
@@ -171,7 +168,7 @@ def test_get_pay_rate_for_block_global_fallback(client):
     
     # Get pay rate for a block that doesn't have specific settings
     # Should fall back to global settings
-    rate = get_pay_rate_for_block("B", teacher_id=teacher.id)
+    rate = get_pay_rate_for_block("B", teacher_id=test_teacher.id)
     
     # Expected: 0.30 / 60.0 = 0.005
     expected_rate = 0.30 / 60.0
@@ -179,20 +176,15 @@ def test_get_pay_rate_for_block_global_fallback(client):
     assert isinstance(rate, float)
 
 
-def test_get_pay_rate_for_block_precedence(client):
+def test_get_pay_rate_for_block_precedence(test_teacher):
     """Test that block-specific settings take precedence over global settings."""
     from app.payroll import get_pay_rate_for_block
-    from app.models import Admin, PayrollSettings
+    from app.models import PayrollSettings
     from decimal import Decimal
-    
-    # Create a teacher
-    teacher = Admin(username="test_teacher", totp_secret="s")
-    db.session.add(teacher)
-    db.session.commit()
     
     # Create global setting
     global_setting = PayrollSettings(
-        teacher_id=teacher.id,
+        teacher_id=test_teacher.id,
         block=None,
         pay_rate=Decimal("0.25"),  # $0.25 per minute
         is_active=True
@@ -200,7 +192,7 @@ def test_get_pay_rate_for_block_precedence(client):
     
     # Create block-specific setting (should take precedence)
     block_setting = PayrollSettings(
-        teacher_id=teacher.id,
+        teacher_id=test_teacher.id,
         block="A",
         pay_rate=Decimal("0.75"),  # $0.75 per minute
         is_active=True
@@ -210,28 +202,23 @@ def test_get_pay_rate_for_block_precedence(client):
     db.session.commit()
     
     # Block A should use block-specific rate
-    rate_a = get_pay_rate_for_block("A", teacher_id=teacher.id)
+    rate_a = get_pay_rate_for_block("A", teacher_id=test_teacher.id)
     assert rate_a == 0.75 / 60.0
     
     # Block B should fall back to global rate
-    rate_b = get_pay_rate_for_block("B", teacher_id=teacher.id)
+    rate_b = get_pay_rate_for_block("B", teacher_id=test_teacher.id)
     assert rate_b == 0.25 / 60.0
 
 
-def test_get_pay_rate_for_block_per_minute_to_per_second_conversion(client):
+def test_get_pay_rate_for_block_per_minute_to_per_second_conversion(test_teacher):
     """Test that per-minute to per-second conversion is accurate."""
     from app.payroll import get_pay_rate_for_block
-    from app.models import Admin, PayrollSettings
+    from app.models import PayrollSettings
     from decimal import Decimal
-    
-    # Create a teacher
-    teacher = Admin(username="test_teacher", totp_secret="s")
-    db.session.add(teacher)
-    db.session.commit()
     
     # Create setting with exact value that's easy to verify
     setting = PayrollSettings(
-        teacher_id=teacher.id,
+        teacher_id=test_teacher.id,
         block="A",
         pay_rate=Decimal("1.20"),  # $1.20 per minute
         is_active=True
@@ -240,28 +227,23 @@ def test_get_pay_rate_for_block_per_minute_to_per_second_conversion(client):
     db.session.commit()
     
     # Get pay rate
-    rate = get_pay_rate_for_block("A", teacher_id=teacher.id)
+    rate = get_pay_rate_for_block("A", teacher_id=test_teacher.id)
     
     # Expected: 1.20 / 60.0 = 0.02
     assert rate == 0.02
     assert isinstance(rate, float)
 
 
-def test_get_pay_rate_for_block_json_serialization(client):
+def test_get_pay_rate_for_block_json_serialization(test_teacher):
     """Test that the returned value works properly with JSON serialization."""
     import json
     from app.payroll import get_pay_rate_for_block
-    from app.models import Admin, PayrollSettings
+    from app.models import PayrollSettings
     from decimal import Decimal
-    
-    # Create a teacher
-    teacher = Admin(username="test_teacher", totp_secret="s")
-    db.session.add(teacher)
-    db.session.commit()
     
     # Create setting
     setting = PayrollSettings(
-        teacher_id=teacher.id,
+        teacher_id=test_teacher.id,
         block="A",
         pay_rate=Decimal("0.45"),
         is_active=True
@@ -270,7 +252,7 @@ def test_get_pay_rate_for_block_json_serialization(client):
     db.session.commit()
     
     # Get pay rate
-    rate = get_pay_rate_for_block("A", teacher_id=teacher.id)
+    rate = get_pay_rate_for_block("A", teacher_id=test_teacher.id)
     
     # Should be serializable to JSON without errors
     data = {"pay_rate": rate}
@@ -279,23 +261,18 @@ def test_get_pay_rate_for_block_json_serialization(client):
     
     # Deserialize and verify
     deserialized = json.loads(json_str)
-    assert abs(deserialized["pay_rate"] - (0.45 / 60.0)) < 0.0001
+    assert abs(deserialized["pay_rate"] - (0.45 / 60.0)) < FLOAT_TOLERANCE
 
 
-def test_get_pay_rate_for_block_inactive_settings_ignored(client):
+def test_get_pay_rate_for_block_inactive_settings_ignored(test_teacher):
     """Test that inactive settings are ignored."""
     from app.payroll import get_pay_rate_for_block, DEFAULT_PAY_RATE_PER_SECOND
-    from app.models import Admin, PayrollSettings
+    from app.models import PayrollSettings
     from decimal import Decimal
-    
-    # Create a teacher
-    teacher = Admin(username="test_teacher", totp_secret="s")
-    db.session.add(teacher)
-    db.session.commit()
     
     # Create an inactive setting
     inactive_setting = PayrollSettings(
-        teacher_id=teacher.id,
+        teacher_id=test_teacher.id,
         block="A",
         pay_rate=Decimal("0.99"),
         is_active=False  # Inactive
@@ -304,7 +281,7 @@ def test_get_pay_rate_for_block_inactive_settings_ignored(client):
     db.session.commit()
     
     # Should fall back to default rate since the setting is inactive
-    rate = get_pay_rate_for_block("A", teacher_id=teacher.id)
+    rate = get_pay_rate_for_block("A", teacher_id=test_teacher.id)
     assert rate == DEFAULT_PAY_RATE_PER_SECOND
 
 
