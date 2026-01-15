@@ -325,9 +325,14 @@ def test_orphaned_students_from_deleted_teacher(client):
 
     # Verify orphaned students still exist in the database (they're just not linked to anyone)
     orphaned_students = Student.query.filter(Student.id.in_(student_ids)).all()
-    # Note: If CASCADE deleted the students, we recreate them to simulate orphaned state
+    
+    # SQLite behavior note: In production (PostgreSQL), students may persist after their
+    # associated teacher is deleted. In SQLite (test environment), CASCADE behavior may
+    # delete them automatically. We recreate orphaned students to simulate the real-world
+    # scenario where students become "orphaned" - they exist in the database but have no
+    # active StudentTeacher links. This tests that teachers CANNOT see students simply
+    # because the teacher's ID happens to match a previously-used ID.
     if len(orphaned_students) == 0:
-        # SQLite cascaded them, so we recreate them without any teacher links
         for i in range(5):
             salt = get_random_salt()
             student = Student(
