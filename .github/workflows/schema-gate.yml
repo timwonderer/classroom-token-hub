@@ -125,27 +125,27 @@ jobs:
       # -----------------------------------------------------------
       - name: Rehearse Migration (Upgrade & Downgrade)
         env:
-          # Fix 1: Make Flask context explicit
           FLASK_APP: app
           FLASK_ENV: testing
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
+
+          # 🔐 Secrets injected from GitHub
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: |
           echo "🔄 Starting Migration Rehearsal..."
-          
-          # Reset DB
+
           flask db upgrade
           echo "✅ Upgrade Successful"
-          
-          # Fix 2: Check for IRREVERSIBLE marker
+
           if grep -q "IRREVERSIBLE" migrations/versions/*.py; then
              echo "⚠️ Irreversible migration declared; skipping downgrade."
           else
-             # Downgrade (Check reversibility)
              flask db downgrade -1
              echo "✅ Downgrade Successful"
           fi
-          
-          # Re-upgrade to ensure final state is consistent
+
           flask db upgrade
           echo "✅ Re-Upgrade Successful"
 
@@ -157,11 +157,14 @@ jobs:
           FLASK_APP: app
           FLASK_ENV: testing
           DATABASE_URL: postgresql://user:password@localhost:5432/classroom_test_db
+
+          # 🔐 Secrets injected from GitHub
+          ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+          PEPPER_KEY: ${{ secrets.PEPPER_KEY }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
         run: |
           echo "🔥 Running Smoke Tests on Critical Workflows..."
-          # Fix 4: Use markers instead of hardcoded paths
           pytest -v -m "critical or regression"
-
       # -----------------------------------------------------------
       # 5. Notify Requirements (Requirement 4.1)
       # -----------------------------------------------------------
