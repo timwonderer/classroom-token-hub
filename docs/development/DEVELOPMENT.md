@@ -123,6 +123,7 @@ Notes:
 - Queries: use scoped helpers for tenant-aware access
 - Timestamps: use datetime.now(timezone.utc) instead of utcnow()
 - Session access: use db.session.get(Model, id)
+- Currency helpers: guard against non-finite Decimal values (NaN/Infinity) and normalize to 0.00
 
 ### Security guidelines
 - Keep PII minimal (prefer non-PII identifiers)
