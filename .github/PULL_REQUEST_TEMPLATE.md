@@ -1,3 +1,14 @@
+## Schema Change Gate Classification (required for schema changes)
+
+<!--
+Required if this PR modifies app/models.py, app/models/**, or migrations/versions/**.
+Select exactly one classification for schema-affecting changes.
+-->
+
+- [ ] **EXPAND** – Additive, backward-compatible (no removals)
+- [ ] **CONTRACT (CODE ONLY)** – Model attribute removal, DB schema unchanged
+- [ ] **CONTRACT (DATABASE)** – Destructive migration only
+
 ## Description
 
 <!-- Provide a brief description of the changes in this PR -->
