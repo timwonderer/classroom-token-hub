@@ -106,7 +106,7 @@ Ledger entries for checking/savings accounts, scoped by join code (class economy
 | `student_id` | Integer | FK to `students.id`. |
 | `teacher_id` | Integer (nullable) | FK to `admins.id`. Legacy field kept for backward compatibility; replaced by `join_code` for scoping. |
 | `join_code` | String(20), nullable | Source of truth for class/period isolation. Indexed for performance. |
-| `amount` | Float | Positive/negative amount. |
+| `amount` | Numeric(12, 2) | Positive/negative amount. **Changed from Float to Numeric for exact decimal precision** (fixes -0.00 overdraft fee bug and rent payment rounding errors). |
 | `timestamp` | DateTime | Transaction timestamp. |
 | `account_type` | String(20) | `checking` or `savings`. |
 | `description` | String(255) | Description. |

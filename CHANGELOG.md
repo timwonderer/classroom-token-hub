@@ -9,6 +9,15 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Fixed
+- **CRITICAL: Floating-Point Rounding Errors in Financial Calculations** - Converted all financial amounts from Float to Decimal for exact precision
+  - **Bug 1**: Transfers that zeroed out checking accounts incorrectly triggered $35 overdraft fees due to -0.00 balance representation
+  - **Bug 2**: Partial rent payments left unpayable tiny balances (e.g., $0.0000001) due to float precision errors
+  - **Fix**: Changed `Transaction.amount` from `Float` to `Numeric(12, 2)` in database for exact decimal representation
+  - **Fix**: Updated all financial models (RentSettings, BankingSettings, PayrollSettings, StoreItem, InsurancePolicy, etc.) to use Numeric
+  - **Fix**: Updated balance calculation methods to use Python's `Decimal` type instead of `float`
+  - **Fix**: Added near-zero balance normalization (|balance| < $0.01 → $0.00) to prevent false overdraft fees
+  - **Migration**: Created migration to convert all Float columns to Numeric(12, 2) without data loss
+  - **Testing**: Added comprehensive test suite for edge cases (zero transfers, partial payments, near-zero balances)
 - **Student Creation Without Deprecated teacher_id** - Removed deprecated `teacher_id` assignment when creating new students to prevent `TypeError: 'teacher_id' is an invalid keyword argument for Student`.
 - **Scheduled Auto Tap-Out Transactions** - Avoided committing inside the scheduled auto tap-out loop to prevent closed-transaction errors during background checks.
 - **Student Claim DOB Field** - Aligned the claim-account form field name with the templates to prevent 500 errors on /student/claim-account.

@@ -6,6 +6,7 @@ Times are stored as UTC in the database.
 """
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
 import enum
 
 from app.extensions import db
@@ -15,6 +16,26 @@ from app.utils.encryption import PIIEncryptedType
 def _utc_now():
     """Helper function for timezone-aware datetime defaults in SQLAlchemy models."""
     return datetime.now(timezone.utc)
+
+
+def _quantize_currency(value):
+    """
+    Convert a value to Decimal and quantize to 2 decimal places for currency.
+
+    This ensures exact decimal representation and fixes floating-point errors
+    like -0.00 overdraft fees and unpayable rent balances.
+
+    Args:
+        value: A Decimal, float, int, or numeric value
+
+    Returns:
+        Decimal: The value quantized to 2 decimal places (e.g., 123.45)
+    """
+    if value is None:
+        return Decimal('0.00')
+    if isinstance(value, Decimal):
+        return value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    return Decimal(str(value)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
 
 
 
@@ -219,11 +240,13 @@ class Student(db.Model):
 
     @property
     def checking_balance(self):
-        return round(sum(tx.amount for tx in self.transactions if tx.account_type == 'checking' and not tx.is_void), 2)
+        total = sum((_quantize_currency(tx.amount) for tx in self.transactions if tx.account_type == 'checking' and not tx.is_void), Decimal('0.00'))
+        return _quantize_currency(total)
 
     @property
     def savings_balance(self):
-        return round(sum(tx.amount for tx in self.transactions if tx.account_type == 'savings' and not tx.is_void), 2)
+        total = sum((_quantize_currency(tx.amount) for tx in self.transactions if tx.account_type == 'savings' and not tx.is_void), Decimal('0.00'))
+        return _quantize_currency(total)
 
     def get_active_insurance(self, teacher_id):
         """Return the active insurance enrollment scoped to a teacher, if any."""
@@ -250,30 +273,36 @@ class Student(db.Model):
             join_code: The unique class identifier for period-level isolation
 
         Returns:
-            float: The checking balance rounded to 2 decimal places
+            Decimal: The checking balance quantized to 2 decimal places
         """
         if join_code:
             # Proper scoping by join_code (period-level isolation)
             # Include legacy transactions with NULL join_code but matching teacher_id
-            return round(sum(
-                tx.amount for tx in self.transactions
+            total = sum(
+                (_quantize_currency(tx.amount) for tx in self.transactions
                 if tx.account_type == 'checking' and not tx.is_void and (
                     tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id)
-                )
-            ), 2)
+                )),
+                Decimal('0.00')
+            )
+            return _quantize_currency(total)
         elif teacher_id:
             # DEPRECATED: Only use this for backward compatibility during migration
             # This will show aggregated balance across all periods with same teacher
-            return round(sum(
-                tx.amount for tx in self.transactions
-                if tx.account_type == 'checking' and not tx.is_void and tx.teacher_id == teacher_id
-            ), 2)
+            total = sum(
+                (_quantize_currency(tx.amount) for tx in self.transactions
+                if tx.account_type == 'checking' and not tx.is_void and tx.teacher_id == teacher_id),
+                Decimal('0.00')
+            )
+            return _quantize_currency(total)
         else:
             # No scope provided - return total across all classes
-            return round(sum(
-                tx.amount for tx in self.transactions
-                if tx.account_type == 'checking' and not tx.is_void
-            ), 2)
+            total = sum(
+                (_quantize_currency(tx.amount) for tx in self.transactions
+                if tx.account_type == 'checking' and not tx.is_void),
+                Decimal('0.00')
+            )
+            return _quantize_currency(total)
 
     def get_savings_balance(self, teacher_id=None, join_code=None):
         """
@@ -287,30 +316,36 @@ class Student(db.Model):
             join_code: The unique class identifier for period-level isolation
 
         Returns:
-            float: The savings balance rounded to 2 decimal places
+            Decimal: The savings balance quantized to 2 decimal places
         """
         if join_code:
             # Proper scoping by join_code (period-level isolation)
             # Include legacy transactions with NULL join_code but matching teacher_id
-            return round(sum(
-                tx.amount for tx in self.transactions
+            total = sum(
+                (_quantize_currency(tx.amount) for tx in self.transactions
                 if tx.account_type == 'savings' and not tx.is_void and (
                     tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id)
-                )
-            ), 2)
+                )),
+                Decimal('0.00')
+            )
+            return _quantize_currency(total)
         elif teacher_id:
             # DEPRECATED: Only use this for backward compatibility during migration
             # This will show aggregated balance across all periods with same teacher
-            return round(sum(
-                tx.amount for tx in self.transactions
-                if tx.account_type == 'savings' and not tx.is_void and tx.teacher_id == teacher_id
-            ), 2)
+            total = sum(
+                (_quantize_currency(tx.amount) for tx in self.transactions
+                if tx.account_type == 'savings' and not tx.is_void and tx.teacher_id == teacher_id),
+                Decimal('0.00')
+            )
+            return _quantize_currency(total)
         else:
             # No scope provided - return total across all classes
-            return round(sum(
-                tx.amount for tx in self.transactions
-                if tx.account_type == 'savings' and not tx.is_void
-            ), 2)
+            total = sum(
+                (_quantize_currency(tx.amount) for tx in self.transactions
+                if tx.account_type == 'savings' and not tx.is_void),
+                Decimal('0.00')
+            )
+            return _quantize_currency(total)
 
     def get_total_earnings(self, teacher_id=None, join_code=None):
         """
@@ -523,7 +558,9 @@ class Transaction(db.Model):
     # Student in both periods should see separate balances/transactions
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
-    amount = db.Column(db.Float, nullable=False)
+    # CRITICAL: Use Numeric for exact decimal representation to avoid floating-point errors
+    # Float causes bugs: -0.00 overdraft fees, unpayable rent balances
+    amount = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
     # All times stored as UTC (see header note)
     timestamp = db.Column(db.DateTime, default=_utc_now)
     account_type = db.Column(db.String(20), default='checking')
@@ -668,7 +705,7 @@ class StoreItem(db.Model):
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    price = db.Column(db.Float, nullable=False)
+    price = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
     tier = db.Column(db.String(20), nullable=True) # basic, standard, premium, luxury (teacher-only organizational label)
     item_type = db.Column(db.String(20), nullable=False, default='delayed') # immediate, delayed, collective
     inventory = db.Column(db.Integer, nullable=True) # null for unlimited
@@ -772,7 +809,7 @@ class RentSettings(db.Model):
     is_enabled = db.Column(db.Boolean, default=True)
 
     # Rent amount and frequency
-    rent_amount = db.Column(db.Float, default=50.0)
+    rent_amount = db.Column(db.Numeric(precision=12, scale=2), default=50.0)
     frequency_type = db.Column(db.String(20), default='monthly')  # 'daily', 'weekly', 'monthly', 'custom'
     custom_frequency_value = db.Column(db.Integer, nullable=True)  # For custom: x per time unit
     custom_frequency_unit = db.Column(db.String(20), nullable=True)  # 'days', 'weeks', 'months'
@@ -783,7 +820,7 @@ class RentSettings(db.Model):
 
     # Grace period and late penalties
     grace_period_days = db.Column(db.Integer, default=3)
-    late_penalty_amount = db.Column(db.Float, default=10.0)
+    late_penalty_amount = db.Column(db.Numeric(precision=12, scale=2), default=10.0)
     late_penalty_type = db.Column(db.String(20), default='once')  # 'once' or 'recurring'
     late_penalty_frequency_days = db.Column(db.Integer, nullable=True)  # For recurring type
 
@@ -815,12 +852,12 @@ class RentPayment(db.Model):
     # Each rent payment should be scoped to the specific class/period
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
-    amount_paid = db.Column(db.Float, nullable=False)
+    amount_paid = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
     period_month = db.Column(db.Integer, nullable=False)  # Month (1-12)
     period_year = db.Column(db.Integer, nullable=False)  # Year (e.g., 2025)
     payment_date = db.Column(db.DateTime, default=_utc_now)
     was_late = db.Column(db.Boolean, default=False)
-    late_fee_charged = db.Column(db.Float, default=0.0)
+    late_fee_charged = db.Column(db.Numeric(precision=12, scale=2), default=0.0)
 
     student = db.relationship('Student', backref='rent_payments')
 
@@ -878,14 +915,14 @@ class InsurancePolicy(db.Model):
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)  # Owner teacher
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    premium = db.Column(db.Float, nullable=False)  # Monthly cost
+    premium = db.Column(db.Numeric(precision=12, scale=2), nullable=False)  # Monthly cost
     charge_frequency = db.Column(db.String(20), default='monthly')  # monthly, weekly, etc
     autopay = db.Column(db.Boolean, default=True)
     waiting_period_days = db.Column(db.Integer, default=7)  # Days before coverage starts
     max_claims_count = db.Column(db.Integer, nullable=True)  # Max claims per period (null = unlimited)
     max_claims_period = db.Column(db.String(20), default='month')  # month, semester, year
-    max_claim_amount = db.Column(db.Float, nullable=True)  # Max $ per claim (null = unlimited)
-    max_payout_per_period = db.Column(db.Float, nullable=True)  # Max total $ payout per period (null = unlimited)
+    max_claim_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)  # Max $ per claim (null = unlimited)
+    max_payout_per_period = db.Column(db.Numeric(precision=12, scale=2), nullable=True)  # Max total $ payout per period (null = unlimited)
 
     # Claim type
     claim_type = db.Column(db.String(20), nullable=False, default='legacy_monetary')  # transaction_monetary, non_monetary, legacy_monetary
@@ -900,8 +937,8 @@ class InsurancePolicy(db.Model):
 
     # Bundle settings (JSON or separate table in future)
     bundle_with_policy_ids = db.Column(db.Text, nullable=True)  # Comma-separated IDs
-    bundle_discount_percent = db.Column(db.Float, default=0)  # Discount % for bundle
-    bundle_discount_amount = db.Column(db.Float, default=0)  # Discount $ amount for bundle
+    bundle_discount_percent = db.Column(db.Numeric(precision=5, scale=2), default=0)  # Discount % for bundle
+    bundle_discount_amount = db.Column(db.Numeric(precision=12, scale=2), default=0)  # Discount $ amount for bundle
 
     # Marketing badge for student-facing display
     marketing_badge = db.Column(db.String(50), nullable=True)  # Predefined badge options
@@ -1003,15 +1040,15 @@ class InsuranceClaim(db.Model):
 
     incident_date = db.Column(db.DateTime, nullable=False)  # When incident occurred
     filed_date = db.Column(db.DateTime, default=_utc_now)
-    description = db.Column(db.Text, nullable=False)
-    claim_amount = db.Column(db.Float, nullable=True)  # For monetary claims: requested amount
+    description = db.Column(db.Text, nullable=True)
+    claim_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)  # For monetary claims: requested amount
     claim_item = db.Column(db.Text, nullable=True)  # For non-monetary claims: what they're claiming
     comments = db.Column(db.Text, nullable=True)  # Optional comments from student
 
     status = db.Column(db.String(20), default='pending')  # pending, approved, rejected, paid
     rejection_reason = db.Column(db.Text, nullable=True)
     admin_notes = db.Column(db.Text, nullable=True)
-    approved_amount = db.Column(db.Float, nullable=True)
+    approved_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
     processed_date = db.Column(db.DateTime, nullable=True)
     processed_by_admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
     transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True)
@@ -1386,7 +1423,7 @@ class PayrollSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global/default settings
-    pay_rate = db.Column(db.Float, nullable=False, default=0.25)  # $ per minute
+    pay_rate = db.Column(db.Numeric(precision=12, scale=2), nullable=False, default=0.25)  # $ per minute
     payroll_frequency_days = db.Column(db.Integer, nullable=False, default=14)
     next_payroll_date = db.Column(db.DateTime, nullable=True)
     is_active = db.Column(db.Boolean, default=True)
@@ -1435,7 +1472,7 @@ class PayrollReward(db.Model):
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    amount = db.Column(db.Float, nullable=False)
+    amount = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=_utc_now)
 
@@ -1453,7 +1490,7 @@ class PayrollFine(db.Model):
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
-    amount = db.Column(db.Float, nullable=False)  # Positive value, will be deducted
+    amount = db.Column(db.Numeric(precision=12, scale=2), nullable=False)  # Positive value, will be deducted
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=_utc_now)
 
@@ -1488,13 +1525,13 @@ class BankingSettings(db.Model):
     # Overdraft/NSF fees
     overdraft_fee_enabled = db.Column(db.Boolean, default=False)  # Enable/disable overdraft fees
     overdraft_fee_type = db.Column(db.String(20), default='flat')  # 'flat' or 'progressive'
-    overdraft_fee_flat_amount = db.Column(db.Float, default=0.0)  # Flat fee per transaction
+    overdraft_fee_flat_amount = db.Column(db.Numeric(precision=12, scale=2), default=0.0)  # Flat fee per transaction
 
     # Progressive fee settings
-    overdraft_fee_progressive_1 = db.Column(db.Float, default=0.0)  # First tier fee
-    overdraft_fee_progressive_2 = db.Column(db.Float, default=0.0)  # Second tier fee
-    overdraft_fee_progressive_3 = db.Column(db.Float, default=0.0)  # Third tier fee
-    overdraft_fee_progressive_cap = db.Column(db.Float, nullable=True)  # Maximum total fees per period
+    overdraft_fee_progressive_1 = db.Column(db.Numeric(precision=12, scale=2), default=0.0)  # First tier fee
+    overdraft_fee_progressive_2 = db.Column(db.Numeric(precision=12, scale=2), default=0.0)  # Second tier fee
+    overdraft_fee_progressive_3 = db.Column(db.Numeric(precision=12, scale=2), default=0.0)  # Third tier fee
+    overdraft_fee_progressive_cap = db.Column(db.Numeric(precision=12, scale=2), nullable=True)  # Maximum total fees per period
 
     # Metadata
     is_active = db.Column(db.Boolean, default=True)
@@ -1531,8 +1568,8 @@ class DemoStudent(db.Model):
     ended_at = db.Column(db.DateTime, nullable=True)
 
     # Demo configuration (snapshot of initial state)
-    config_checking_balance = db.Column(db.Float, default=0.0)
-    config_savings_balance = db.Column(db.Float, default=0.0)
+    config_checking_balance = db.Column(db.Numeric(precision=12, scale=2), default=0.0)
+    config_savings_balance = db.Column(db.Numeric(precision=12, scale=2), default=0.0)
     config_hall_passes = db.Column(db.Integer, default=3)
     config_insurance_plan = db.Column(db.String(50), default='none')
     config_is_rent_enabled = db.Column(db.Boolean, default=True)

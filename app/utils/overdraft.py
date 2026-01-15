@@ -1,9 +1,10 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from sqlalchemy import func
 
 from app.extensions import db
-from app.models import Transaction
+from app.models import Transaction, _quantize_currency
 
 
 def evaluate_overdraft_allowance(student, debit_amount, banking_settings, teacher_id=None, join_code=None):
@@ -36,18 +37,24 @@ def charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, j
         force: Charge fee even if balance is non-negative (declined transaction).
     """
     if not banking_settings or not banking_settings.overdraft_fee_enabled:
-        return False, 0.0
+        return False, Decimal('0.00')
 
     current_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
+    current_balance = _quantize_currency(current_balance)
+
+    # CRITICAL FIX: Normalize near-zero balances to exactly zero
+    # This prevents floating-point errors from triggering fees on -0.00 or -0.0001
+    if abs(current_balance) < Decimal('0.01'):  # Less than 1 cent
+        current_balance = Decimal('0.00')
 
     # Only charge if balance is negative unless forced (declined transaction).
-    if not force and current_balance >= 0:
-        return False, 0.0
+    if not force and current_balance >= Decimal('0.00'):
+        return False, Decimal('0.00')
 
-    fee_amount = 0.0
+    fee_amount = Decimal('0.00')
 
     if banking_settings.overdraft_fee_type == 'flat':
-        fee_amount = banking_settings.overdraft_fee_flat_amount
+        fee_amount = _quantize_currency(banking_settings.overdraft_fee_flat_amount)
     elif banking_settings.overdraft_fee_type == 'progressive':
         now = datetime.now(timezone.utc)
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -65,11 +72,11 @@ def charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, j
         overdraft_fee_count = Transaction.query.filter(*fee_filters).count()
 
         if overdraft_fee_count == 0:
-            fee_amount = banking_settings.overdraft_fee_progressive_1 or 0.0
+            fee_amount = _quantize_currency(banking_settings.overdraft_fee_progressive_1 or 0)
         elif overdraft_fee_count == 1:
-            fee_amount = banking_settings.overdraft_fee_progressive_2 or 0.0
+            fee_amount = _quantize_currency(banking_settings.overdraft_fee_progressive_2 or 0)
         elif overdraft_fee_count >= 2:
-            fee_amount = banking_settings.overdraft_fee_progressive_3 or 0.0
+            fee_amount = _quantize_currency(banking_settings.overdraft_fee_progressive_3 or 0)
 
         if banking_settings.overdraft_fee_progressive_cap:
             total_filters = [
@@ -84,11 +91,13 @@ def charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, j
 
             total_fees_this_month = db.session.query(func.sum(Transaction.amount)).filter(
                 *total_filters
-            ).scalar() or 0.0
+            ).scalar()
+            total_fees_this_month = _quantize_currency(total_fees_this_month) if total_fees_this_month else Decimal('0.00')
+            cap = _quantize_currency(banking_settings.overdraft_fee_progressive_cap)
 
             # total_fees_this_month is negative, so we negate it
-            if abs(total_fees_this_month) + fee_amount > banking_settings.overdraft_fee_progressive_cap:
-                fee_amount = max(0, banking_settings.overdraft_fee_progressive_cap - abs(total_fees_this_month))
+            if abs(total_fees_this_month) + fee_amount > cap:
+                fee_amount = max(Decimal('0.00'), cap - abs(total_fees_this_month))
 
     if fee_amount > 0:
         overdraft_fee_tx = Transaction(
@@ -108,4 +117,4 @@ def charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, j
         db.session.flush()
         return True, fee_amount
 
-    return False, 0.0
+    return False, Decimal('0.00')
