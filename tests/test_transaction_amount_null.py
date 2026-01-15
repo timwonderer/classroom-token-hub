@@ -4,19 +4,17 @@ Test for handling NULL or invalid transaction amounts in get_total_earnings.
 This test verifies the fix for the decimal.InvalidOperation error that occurs
 when a transaction has a NULL amount value.
 """
-import pytest
 from decimal import Decimal
+from unittest.mock import PropertyMock, patch
 from app import db
 from app.models import Student, Transaction, Admin
 
 
-def test_get_total_earnings_with_null_amount(client, app):
-    """Test that get_total_earnings handles transactions correctly.
+def test_get_total_earnings_defensive_checks(client, app):
+    """Test that get_total_earnings defensive NULL checks don't break normal operations.
     
-    While the test database has a NOT NULL constraint on transaction.amount,
-    the production database may have NULL values due to historical data or
-    migration issues. This test verifies that our defensive programming
-    (checking for is not None) doesn't break normal operations.
+    This test verifies that the added defensive programming (checking for
+    is not None) doesn't break normal transaction processing.
     """
     with app.app_context():
         # Create a teacher
@@ -207,3 +205,81 @@ def test_get_total_earnings_with_zero_amount(client, app):
         # Earnings should not include zero amounts (> 0 condition)
         earnings = student.get_total_earnings(join_code=join_code, teacher_id=teacher.id)
         assert earnings == 5.00
+
+
+def test_get_total_earnings_with_mocked_null_amount(client, app):
+    """Test that get_total_earnings handles NULL amounts without crashing.
+    
+    This test mocks the transactions relationship to return transactions with
+    NULL amounts, simulating corrupted production data. Verifies that the
+    defensive NULL check prevents the crash.
+    """
+    with app.app_context():
+        # Create a teacher
+        teacher = Admin(
+            username="test_teacher4",
+            totp_secret="test_secret"
+        )
+        db.session.add(teacher)
+        db.session.commit()
+        
+        join_code = "TEST999"
+        
+        # Create a student
+        from app.hash_utils import get_random_salt
+        student = Student(
+            first_name="TestStudent4",
+            last_initial="D",
+            block="Period 4",
+            salt=get_random_salt(),
+            first_half_hash="test_hash_4",
+            dob_sum=2028
+        )
+        db.session.add(student)
+        db.session.commit()
+        
+        # Create a valid transaction
+        valid_tx = Transaction(
+            student_id=student.id,
+            teacher_id=teacher.id,
+            join_code=join_code,
+            amount=Decimal('20.00'),
+            description="Valid transaction",
+            is_void=False
+        )
+        db.session.add(valid_tx)
+        db.session.commit()
+        
+        # Create a mock transaction object with NULL amount
+        class MockTransaction:
+            def __init__(self, amount, join_code, teacher_id, is_void, description):
+                self.amount = amount
+                self.join_code = join_code
+                self.teacher_id = teacher_id
+                self.is_void = is_void
+                self.description = description
+        
+        # Mock the transactions relationship to include a NULL amount transaction
+        mock_transactions = [
+            valid_tx,  # Real transaction with amount=20.00
+            MockTransaction(None, join_code, teacher.id, False, "Corrupted"),  # NULL amount
+            MockTransaction(Decimal('15.00'), join_code, teacher.id, False, "Valid 2"),
+        ]
+        
+        with patch.object(Student, 'transactions', new_callable=PropertyMock) as mock_txs:
+            mock_txs.return_value = mock_transactions
+            
+            # This should NOT crash - the NULL check should skip the NULL transaction
+            earnings = student.get_total_earnings(join_code=join_code, teacher_id=teacher.id)
+            
+            # Should return 20.00 + 15.00 = 35.00, skipping the NULL amount
+            assert earnings == 35.00
+            
+            # Test with teacher_id only (deprecated path)
+            earnings_by_teacher = student.get_total_earnings(teacher_id=teacher.id)
+            assert earnings_by_teacher == 35.00
+            
+            # Test with no parameters (all classes path)
+            earnings_all = student.get_total_earnings()
+            assert earnings_all == 35.00
+
