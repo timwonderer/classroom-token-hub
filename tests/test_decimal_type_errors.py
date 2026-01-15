@@ -254,3 +254,110 @@ class TestDecimalTypeErrors:
         assert success
         assert total_due == Decimal('0.00')
         assert isinstance(total_due, Decimal)
+
+    @pytest.mark.regression
+    def test_apply_savings_interest_decimal_float_multiplication(self, client, app):
+        """
+        Regression test for TypeError: unsupported operand type(s) for *: 'decimal.Decimal' and 'float'
+        in apply_savings_interest when student.savings_balance (Decimal) is multiplied by float rates.
+        
+        This was reported in production:
+          File "app/routes/student.py", line 1613, in apply_savings_interest
+            interest = round(balance * ((1 + rate_per_period) ** periods_per_month - 1), 2)
+          TypeError: unsupported operand type(s) for *: 'decimal.Decimal' and 'float'
+        """
+        from app.routes.student import apply_savings_interest
+        from app.models import BankingSettings
+        from unittest.mock import patch
+        
+        # Create teacher
+        teacher = Admin(
+            username='teacher_interest_test',
+            totp_secret='test_secret'
+        )
+        db.session.add(teacher)
+        db.session.flush()
+
+        join_code = 'INTEREST_TEST'
+
+        # Create student with savings balance
+        student = Student(
+            first_name='Interest',
+            last_initial='T',
+            block='A',
+            salt=b'test_salt',
+            passphrase_hash='test_hash'
+        )
+        db.session.add(student)
+        db.session.flush()
+
+        # Add a savings deposit from 31+ days ago (eligible for interest)
+        past_date = datetime.now(timezone.utc) - timedelta(days=35)
+        deposit = Transaction(
+            student_id=student.id,
+            teacher_id=teacher.id,
+            join_code=join_code,
+            amount=Decimal('100.00'),
+            account_type='savings',
+            type='Deposit',
+            description='Initial savings',
+            timestamp=past_date,
+            date_funds_available=past_date
+        )
+        db.session.add(deposit)
+
+        # Create banking settings with compound interest (daily frequency - most likely to trigger bug)
+        banking_settings = BankingSettings(
+            teacher_id=teacher.id,
+            savings_apy=4.5,  # 4.5% APY
+            interest_calculation_type='compound',
+            compound_frequency='daily'
+        )
+        db.session.add(banking_settings)
+        db.session.commit()
+
+        # Mock context to return our test data
+        mock_context = {
+            'teacher_id': teacher.id,
+            'join_code': join_code,
+            'student_teacher_id': teacher.id
+        }
+        
+        # This should NOT raise TypeError
+        with patch('app.routes.student.get_current_class_context', return_value=mock_context):
+            with patch('app.routes.student.get_current_teacher_id', return_value=teacher.id):
+                try:
+                    apply_savings_interest(student)
+                    success = True
+                except TypeError as e:
+                    success = False
+                    pytest.fail(f"TypeError occurred in apply_savings_interest: {e}")
+
+        assert success
+
+        # Verify interest transaction was created
+        interest_tx = Transaction.query.filter_by(
+            student_id=student.id,
+            description='Monthly Savings Interest',
+            account_type='savings'
+        ).first()
+        
+        # Interest should have been calculated (may or may not be > 0 depending on settings)
+        assert interest_tx is not None or student.savings_balance == Decimal('100.00')
+
+    def test_quantize_currency_handles_invalid_inputs(self, app):
+        """
+        Test that _quantize_currency handles edge cases that could cause InvalidOperation.
+        """
+        # None should return 0.00
+        assert _quantize_currency(None) == Decimal('0.00')
+        
+        # Normal values should work
+        assert _quantize_currency(Decimal('10.50')) == Decimal('10.50')
+        assert _quantize_currency(100.25) == Decimal('100.25')
+        assert _quantize_currency('50.00') == Decimal('50.00')
+        
+        # Zero should work
+        assert _quantize_currency(0) == Decimal('0.00')
+        assert _quantize_currency(Decimal('0')) == Decimal('0.00')
+

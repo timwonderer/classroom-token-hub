@@ -1505,7 +1505,7 @@ def transfer():
             forecast_interest = savings_balance * (annual_rate / 12)
     else:
         # Simple interest: calculate only on principal (excluding interest earnings)
-        principal = sum(tx.amount for tx in savings_transactions if tx.type != 'Interest' and 'Interest' not in (tx.description or ''))
+        principal = sum(float(tx.amount) for tx in savings_transactions if tx.type != 'Interest' and 'Interest' not in (tx.description or ''))
         forecast_interest = principal * (annual_rate / 12)
 
     # Calculate 12-month savings projection for graph
@@ -1601,7 +1601,8 @@ def apply_savings_interest(student, annual_rate=0.045):
     # Calculate interest based on type
     if calculation_type == 'compound':
         # For compound interest, use current total balance (including previous interest)
-        balance = student.savings_balance
+        # Convert Decimal to float for arithmetic with float rates
+        balance = float(student.savings_balance)
 
         # Determine the rate based on compound frequency
         if compound_frequency == 'daily':
@@ -1623,7 +1624,7 @@ def apply_savings_interest(student, annual_rate=0.045):
             interest = round(balance * monthly_rate, 2)
     else:
         # Simple interest: only calculate on original deposits (not including previous interest)
-        eligible_balance = 0
+        eligible_balance = 0.0  # Use float for consistency with rate calculations
         for tx in student.transactions:
             if tx.account_type != 'savings' or tx.is_void or tx.amount <= Decimal('0'):
                 continue
@@ -1632,7 +1633,7 @@ def apply_savings_interest(student, annual_rate=0.045):
                 continue
             available_at = _as_utc(tx.date_funds_available)
             if available_at and (now - available_at).days >= 30:
-                eligible_balance += tx.amount
+                eligible_balance += float(tx.amount)
 
         monthly_rate = annual_rate / 12
         interest = round((eligible_balance or 0.0) * monthly_rate, 2)

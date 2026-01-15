@@ -31,11 +31,16 @@ def _quantize_currency(value):
     Returns:
         Decimal: The value quantized to 2 decimal places (e.g., 123.45)
     """
+    from decimal import InvalidOperation
     if value is None:
         return Decimal('0.00')
-    if isinstance(value, Decimal):
-        return value.quantize(Decimal('0.01'))
-    return Decimal(str(value)).quantize(Decimal('0.01'))
+    try:
+        if isinstance(value, Decimal):
+            return value.quantize(Decimal('0.01'))
+        return Decimal(str(value)).quantize(Decimal('0.01'))
+    except (InvalidOperation, ValueError, TypeError):
+        # Handle NaN, Infinity, or unparseable values
+        return Decimal('0.00')
 
 
 
