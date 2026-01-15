@@ -6,7 +6,7 @@ Times are stored as UTC in the database.
 """
 
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import enum
 
 from app.extensions import db
@@ -31,7 +31,6 @@ def _quantize_currency(value):
     Returns:
         Decimal: The value quantized to 2 decimal places (e.g., 123.45)
     """
-    from decimal import InvalidOperation
     if value is None:
         return Decimal('0.00')
     try:
@@ -1999,4 +1998,3 @@ class AnalyticsEvent(db.Model):
     
     def __repr__(self):
         return f'<AnalyticsEvent {self.event_type} on {self.event_date.date()} for {self.join_code}>'
-
