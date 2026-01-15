@@ -19,6 +19,7 @@ import hashlib
 from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 
 from flask import (
     Blueprint, redirect, url_for, flash, request, session,
@@ -3656,7 +3657,7 @@ def rent_settings():
 
     # Calculate payroll warning
     payroll_warning = None
-    if settings and settings.is_enabled and settings.rent_amount > 0 and payroll_settings:
+    if settings and settings.is_enabled and settings.rent_amount > Decimal('0') and payroll_settings:
         # Calculate rent per month based on frequency
         rent_per_month = settings.rent_amount
         if settings.frequency_type == 'daily':
