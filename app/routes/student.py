@@ -1102,9 +1102,9 @@ def dashboard():
                 if txn and not txn.is_void:
                     payments.append(payment)
 
-            total_paid = sum(p.amount_paid for p in payments) if payments else 0.0
-            late_fee = rent_settings.late_fee if rent_is_active and now > grace_end_date else 0.0
-            total_due = rent_settings.rent_amount + late_fee if rent_is_active else 0.0
+            total_paid = sum(p.amount_paid for p in payments) if payments else Decimal('0.00')
+            late_fee = rent_settings.late_fee if rent_is_active and now > grace_end_date else Decimal('0.00')
+            total_due = rent_settings.rent_amount + late_fee if rent_is_active else Decimal('0.00')
             is_paid = total_paid >= total_due if rent_is_active else False
 
             if rent_is_active and not is_paid:
@@ -1198,24 +1198,24 @@ def dashboard():
     # Earnings this week/month
     earnings_this_week = sum(
         (tx.amount for tx in transactions
-        if tx.amount > 0 and _occurred_after(tx.timestamp, week_start) and not tx.is_void),
+        if tx.amount > Decimal('0') and _occurred_after(tx.timestamp, week_start) and not tx.is_void),
         Decimal('0.00')
     )
     earnings_this_month = sum(
         (tx.amount for tx in transactions
-        if tx.amount > 0 and _occurred_after(tx.timestamp, month_start) and not tx.is_void),
+        if tx.amount > Decimal('0') and _occurred_after(tx.timestamp, month_start) and not tx.is_void),
         Decimal('0.00')
     )
 
     # Spending this week/month
     spending_this_week = abs(sum(
         (tx.amount for tx in transactions
-        if tx.amount < 0 and _occurred_after(tx.timestamp, week_start) and not tx.is_void),
+        if tx.amount < Decimal('0') and _occurred_after(tx.timestamp, week_start) and not tx.is_void),
         Decimal('0.00')
     ))
     spending_this_month = abs(sum(
         (tx.amount for tx in transactions
-        if tx.amount < 0 and _occurred_after(tx.timestamp, month_start) and not tx.is_void),
+        if tx.amount < Decimal('0') and _occurred_after(tx.timestamp, month_start) and not tx.is_void),
         Decimal('0.00')
     ))
 
@@ -1625,7 +1625,7 @@ def apply_savings_interest(student, annual_rate=0.045):
         # Simple interest: only calculate on original deposits (not including previous interest)
         eligible_balance = 0
         for tx in student.transactions:
-            if tx.account_type != 'savings' or tx.is_void or tx.amount <= 0:
+            if tx.account_type != 'savings' or tx.is_void or tx.amount <= Decimal('0'):
                 continue
             # Exclude interest transactions from principal calculation
             if tx.type == 'Interest' or 'Interest' in (tx.description or ''):
@@ -1850,7 +1850,7 @@ def purchase_insurance(policy_id):
     checking_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
     savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
     banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
-    overdraft_shortfall = 0.0
+    overdraft_shortfall = Decimal('0.00')
 
     allowed, shortfall, _, _ = evaluate_overdraft_allowance(
         student,
@@ -2058,7 +2058,7 @@ def file_claim(policy_id):
             .filter(Transaction.is_void == False)
             .filter(Transaction.timestamp >= cutoff_date)
             .filter(~Transaction.id.in_(claimed_tx_subq))
-            .filter(Transaction.amount < 0)
+            .filter(Transaction.amount < Decimal('0'))
         )
         if policy.teacher_id:
             tx_query = tx_query.filter(Transaction.teacher_id == policy.teacher_id)
@@ -2484,16 +2484,16 @@ def rent():
         if txn and not txn.is_void:
             payments.append(payment)
 
-    total_paid = sum(p.amount_paid for p in payments) if payments else 0.0
+    total_paid = sum(p.amount_paid for p in payments) if payments else Decimal('0.00')
 
-    late_fee = 0.0
+    late_fee = Decimal('0.00')
     if rent_is_active and now > grace_end_date:
         late_fee = settings.late_fee
 
-    total_due = settings.rent_amount + late_fee if rent_is_active else 0.0
+    total_due = settings.rent_amount + late_fee if rent_is_active else Decimal('0.00')
     is_paid = total_paid >= total_due if rent_is_active else False
     is_late = now > grace_end_date and not is_paid if rent_is_active else False
-    remaining_amount = max(0, total_due - total_paid) if rent_is_active else 0.0
+    remaining_amount = max(Decimal('0.00'), total_due - total_paid) if rent_is_active else Decimal('0.00')
 
     period_status[current_block] = {
         'is_paid': is_paid,
@@ -2632,14 +2632,14 @@ def rent_pay(period):
         if txn and not txn.is_void:
             existing_payments.append(payment)
 
-    total_paid_so_far = sum(p.amount_paid for p in existing_payments) if existing_payments else 0.0
+    total_paid_so_far = sum(p.amount_paid for p in existing_payments) if existing_payments else Decimal('0.00')
 
     # Calculate if late and total amount due
     due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
     is_late = now > grace_end_date
 
     # Calculate late fee if applicable
-    late_fee = 0.0
+    late_fee = Decimal('0.00')
     if is_late:
         late_fee = settings.late_fee
 
@@ -2679,7 +2679,7 @@ def rent_pay(period):
     banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
 
     # Check if student has enough funds for this payment using shared utility
-    overdraft_shortfall = 0.0
+    overdraft_shortfall = Decimal('0.00')
     allowed, shortfall, _, _ = evaluate_overdraft_allowance(
         student,
         payment_amount,
@@ -2720,7 +2720,7 @@ def rent_pay(period):
     payment_description = f'Rent for Period {period} - {now.strftime("%B %Y")}'
     if is_partial and settings.allow_incremental_payment:
         payment_description += f' (Partial: ${payment_amount:.2f} of ${remaining_amount:.2f})'
-    elif late_fee > 0:
+    elif late_fee > Decimal('0'):
         payment_description += f' (includes ${late_fee:.2f} late fee)'
 
     projected_balance = checking_balance - payment_amount
@@ -2738,8 +2738,8 @@ def rent_pay(period):
     db.session.add(transaction)
 
     # Calculate late fee portion for this payment (proportional if partial payment)
-    late_fee_for_this_payment = 0.0
-    if is_late and late_fee > 0:
+    late_fee_for_this_payment = Decimal('0.00')
+    if is_late and late_fee > Decimal('0.00'):
         # If this is a partial payment, allocate late fee proportionally
         if is_partial:
             late_fee_for_this_payment = (payment_amount / total_due) * late_fee

@@ -365,9 +365,9 @@ class Student(db.Model):
             # Proper scoping by join_code (period-level isolation)
             # Include legacy transactions with NULL join_code but matching teacher_id
             return float(round(sum(
-                (tx.amount for tx in self.transactions
+                (_quantize_currency(tx.amount) for tx in self.transactions
                 if (tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id))
-                and tx.amount is not None and tx.amount > 0 and not tx.is_void
+                and tx.amount is not None and _quantize_currency(tx.amount) > Decimal('0') and not tx.is_void
                 and not (tx.description or "").startswith("Transfer")),
                 Decimal('0.00')
             ), 2))
@@ -375,16 +375,16 @@ class Student(db.Model):
             # DEPRECATED: Only use this for backward compatibility during migration
             # This will show aggregated earnings across all periods with same teacher
             return float(round(sum(
-                (tx.amount for tx in self.transactions
-                if tx.teacher_id == teacher_id and tx.amount is not None and tx.amount > 0 and not tx.is_void
+                (_quantize_currency(tx.amount) for tx in self.transactions
+                if tx.teacher_id == teacher_id and tx.amount is not None and _quantize_currency(tx.amount) > Decimal('0') and not tx.is_void
                 and not (tx.description or "").startswith("Transfer")),
                 Decimal('0.00')
             ), 2))
         else:
             # No scope provided - return total across all classes
             return float(round(sum(
-                (tx.amount for tx in self.transactions
-                if tx.amount is not None and tx.amount > 0 and not tx.is_void
+                (_quantize_currency(tx.amount) for tx in self.transactions
+                if tx.amount is not None and _quantize_currency(tx.amount) > Decimal('0') and not tx.is_void
                 and not (tx.description or "").startswith("Transfer")),
                 Decimal('0.00')
             ), 2))
@@ -402,7 +402,7 @@ class Student(db.Model):
     def total_earnings(self):
         return float(round(sum(
             (tx.amount for tx in self.transactions 
-            if tx.amount > 0 and not tx.is_void 
+            if tx.amount > Decimal('0') and not tx.is_void 
             and not (tx.description or "").startswith("Transfer")),
             Decimal('0.00')
         ), 2))
@@ -421,7 +421,7 @@ class Student(db.Model):
 
         deposits = []
         for tx in self.transactions:
-            if tx.amount <= 0 or tx.is_void:
+            if tx.amount <= Decimal('0') or tx.is_void:
                 continue
             if (tx.description or "").lower().startswith("transfer"):
                 continue
