@@ -145,11 +145,13 @@ class Student(db.Model):
 
     @property
     def checking_balance(self):
-        return round(sum(tx.amount for tx in self.transactions if tx.account_type == 'checking' and not tx.is_void), 2)
+        # CRITICAL: Convert to float to avoid Decimal type mixing
+        return float(round(sum(float(tx.amount) for tx in self.transactions if tx.account_type == 'checking' and not tx.is_void), 2))
 
     @property
     def savings_balance(self):
-        return round(sum(tx.amount for tx in self.transactions if tx.account_type == 'savings' and not tx.is_void), 2)
+        # CRITICAL: Convert to float to avoid Decimal type mixing
+        return float(round(sum(float(tx.amount) for tx in self.transactions if tx.account_type == 'savings' and not tx.is_void), 2))
 
     def get_active_insurance(self, teacher_id):
         """Return the active insurance enrollment scoped to a teacher, if any."""
@@ -181,25 +183,26 @@ class Student(db.Model):
         if join_code:
             # Proper scoping by join_code (period-level isolation)
             # Include legacy transactions with NULL join_code but matching teacher_id
-            return round(sum(
-                tx.amount for tx in self.transactions
+            # CRITICAL: Convert to float to avoid Decimal type mixing
+            return float(round(sum(
+                float(tx.amount) for tx in self.transactions
                 if tx.account_type == 'checking' and not tx.is_void and (
                     tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id)
                 )
-            ), 2)
+            ), 2))
         elif teacher_id:
             # DEPRECATED: Only use this for backward compatibility during migration
             # This will show aggregated balance across all periods with same teacher
-            return round(sum(
-                tx.amount for tx in self.transactions
+            return float(round(sum(
+                float(tx.amount) for tx in self.transactions
                 if tx.account_type == 'checking' and not tx.is_void and tx.teacher_id == teacher_id
-            ), 2)
+            ), 2))
         else:
             # No scope provided - return total across all classes
-            return round(sum(
-                tx.amount for tx in self.transactions
+            return float(round(sum(
+                float(tx.amount) for tx in self.transactions
                 if tx.account_type == 'checking' and not tx.is_void
-            ), 2)
+            ), 2))
 
     def get_savings_balance(self, teacher_id=None, join_code=None):
         """
@@ -218,25 +221,26 @@ class Student(db.Model):
         if join_code:
             # Proper scoping by join_code (period-level isolation)
             # Include legacy transactions with NULL join_code but matching teacher_id
-            return round(sum(
-                tx.amount for tx in self.transactions
+            # CRITICAL: Convert to float to avoid Decimal type mixing
+            return float(round(sum(
+                float(tx.amount) for tx in self.transactions
                 if tx.account_type == 'savings' and not tx.is_void and (
                     tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id)
                 )
-            ), 2)
+            ), 2))
         elif teacher_id:
             # DEPRECATED: Only use this for backward compatibility during migration
             # This will show aggregated balance across all periods with same teacher
-            return round(sum(
-                tx.amount for tx in self.transactions
+            return float(round(sum(
+                float(tx.amount) for tx in self.transactions
                 if tx.account_type == 'savings' and not tx.is_void and tx.teacher_id == teacher_id
-            ), 2)
+            ), 2))
         else:
             # No scope provided - return total across all classes
-            return round(sum(
-                tx.amount for tx in self.transactions
+            return float(round(sum(
+                float(tx.amount) for tx in self.transactions
                 if tx.account_type == 'savings' and not tx.is_void
-            ), 2)
+            ), 2))
 
     def get_total_earnings(self, teacher_id=None, join_code=None):
         """
