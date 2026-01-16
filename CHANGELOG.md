@@ -10,13 +10,14 @@ and this project follows semantic versioning principles.
 
 ### Fixed
 - **Decimal JSON Serialization Error** - Fixed `TypeError: Object of type Decimal is not JSON serializable` in student dashboard and API endpoints
-  - **Issue**: After Decimal refactoring, `projected_pay` values were being serialized to JSON without conversion
+  - **Issue**: After Decimal refactoring, Decimal values in templates and JSON responses were not converted to serializable types
   - **Impact**: Student dashboard and `/api/student-status` endpoint returned 500 errors
-  - **Solution**: Convert Decimal values to float before JSON serialization in three locations:
+  - **Solution**: Convert all Decimal values to float before passing to templates or JSON serialization:
+    - `app/routes/student.py`: Dashboard variables (checking_balance, savings_balance, forecast_interest, earnings, spending, projected_pay_per_block)
     - `app/routes/student.py`: Student dashboard `period_states_json`
     - `app/routes/api.py`: `/student/start-work` and `/student/stop-work` endpoints (projected_pay)
     - `app/routes/api.py`: `/student/status` endpoint (period_states)
-  - Maintains Decimal precision for calculations, converts only at serialization boundary
+  - Maintains Decimal precision for calculations, converts only at template/serialization boundary
 - **CRITICAL: Decimal Precision in All Financial Calculations** - Refactored all financial logic to use Python's `Decimal` type throughout, not just for database storage
   - **Issue**: PR #880 was a hotfix that converted `Decimal` to `float` to resolve TypeErrors, but introduced floating-point precision errors
   - **Impact**: Small residual balances accumulate over time, incorrect interest calculations, potential overdraft fee issues
