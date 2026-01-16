@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import func
 
@@ -13,14 +13,18 @@ def evaluate_overdraft_allowance(student, debit_amount, banking_settings, teache
 
     Returns (allowed, shortfall, checking_balance, savings_balance).
     """
-    checking_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
-    savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
+    checking_balance = Decimal(str(student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)))
+    savings_balance = Decimal(str(student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)))
+    try:
+        debit_amount = Decimal(str(debit_amount))
+    except (TypeError, InvalidOperation):
+        return False, Decimal('0.00'), checking_balance, savings_balance
 
     if debit_amount <= 0:
-        return True, 0.0, checking_balance, savings_balance
+        return True, Decimal('0.00'), checking_balance, savings_balance
 
     if checking_balance >= debit_amount:
-        return True, 0.0, checking_balance, savings_balance
+        return True, Decimal('0.00'), checking_balance, savings_balance
 
     shortfall = debit_amount - checking_balance
     if banking_settings and banking_settings.overdraft_protection_enabled and savings_balance >= shortfall:

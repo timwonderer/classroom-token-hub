@@ -11,7 +11,7 @@ import secrets
 import re
 from calendar import monthrange
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app
 from sqlalchemy import or_, func, select, and_
@@ -2665,7 +2665,7 @@ def rent_pay(period):
     # Determine payment amount based on incremental setting
     if settings.allow_incremental_payment and payment_amount_input:
         try:
-            payment_amount = float(payment_amount_input)
+            payment_amount = Decimal(payment_amount_input).quantize(Decimal('0.01'))
             # Validate payment amount
             if payment_amount <= 0:
                 flash("Payment amount must be greater than 0.", "error")
@@ -2673,7 +2673,7 @@ def rent_pay(period):
             if payment_amount > remaining_amount:
                 flash(f"Payment amount (${payment_amount:.2f}) exceeds remaining balance (${remaining_amount:.2f}). Paying exact remaining amount.", "info")
                 payment_amount = remaining_amount
-        except ValueError:
+        except (InvalidOperation, ValueError):
             flash("Invalid payment amount.", "error")
             return redirect(url_for('student.rent'))
     else:
@@ -2728,7 +2728,7 @@ def rent_pay(period):
     elif late_fee > Decimal('0'):
         payment_description += f' (includes ${late_fee:.2f} late fee)'
 
-    projected_balance = checking_balance - payment_amount
+    projected_balance = Decimal(str(checking_balance)) - payment_amount
 
     transaction = Transaction(
         student_id=student.id,

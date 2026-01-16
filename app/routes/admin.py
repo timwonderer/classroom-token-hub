@@ -19,7 +19,7 @@ import hashlib
 from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from flask import (
     Blueprint, redirect, url_for, flash, request, session,
@@ -3371,7 +3371,7 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
     db.session.commit()
 
 
-def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, current_month: int) -> float:
+def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, current_month: int) -> Decimal:
     """
     Normalize the configured rent amount to a monthly view based on frequency type.
 
@@ -3392,30 +3392,31 @@ def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, 
 
     if rent_settings.frequency_type == 'daily':
         # Use actual number of days in the month for accuracy
-        days_in_month = monthrange(current_year, current_month)[1]
+        days_in_month = Decimal(monthrange(current_year, current_month)[1])
         return rent_settings.rent_amount * days_in_month
 
     if rent_settings.frequency_type == 'weekly':
         # Approximation: 4 weeks per month
-        return rent_settings.rent_amount * 4
+        return rent_settings.rent_amount * Decimal('4')
 
     if rent_settings.frequency_type == 'custom':
         # Approximate a monthly amount based on custom frequency configuration
         unit = getattr(rent_settings, 'custom_frequency_unit', None)
         value = getattr(rent_settings, 'custom_frequency_value', None)
         try:
-            if value and value > 0:
+            value_dec = Decimal(str(value))
+            if value_dec > 0:
                 if unit == 'day':
                     # Every N days -> scale to days per month
-                    days_in_month = monthrange(current_year, current_month)[1]
-                    return rent_settings.rent_amount * (days_in_month / float(value))
+                    days_in_month = Decimal(monthrange(current_year, current_month)[1])
+                    return rent_settings.rent_amount * (days_in_month / value_dec)
                 elif unit == 'week':
                     # Every N weeks -> scale to ~4 weeks per month
-                    return rent_settings.rent_amount * (4.0 / float(value))
+                    return rent_settings.rent_amount * (Decimal('4') / value_dec)
                 elif unit == 'month':
                     # Every N months -> monthly share of that amount
-                    return rent_settings.rent_amount / float(value)
-        except (TypeError, ValueError, ZeroDivisionError):
+                    return rent_settings.rent_amount / value_dec
+        except (TypeError, ValueError, ZeroDivisionError, InvalidOperation):
             # If anything goes wrong, fall back to the base amount
             pass
 
@@ -3737,17 +3738,17 @@ def rent_settings():
         )
 
         # Map student_id -> total_paid using defaultdict for efficiency
-        payments_map = defaultdict(float)
+        payments_map = defaultdict(lambda: Decimal('0.00'))
         for p in period_payments:
-            payments_map[p.student_id] += p.amount_paid
+            payments_map[p.student_id] += Decimal(str(p.amount_paid))
 
         # Use helper function to calculate base rent amount
         base_rent_amount = _calculate_base_rent_amount(settings, current_year, current_month)
 
         # Build unpaid list
         for student in rent_enabled_students:
-            paid = payments_map.get(student.id, 0.0)
-            if paid < base_rent_amount - 0.01:  # Float tolerance
+            paid = payments_map.get(student.id, Decimal('0.00'))
+            if paid < base_rent_amount - Decimal('0.01'):
                 # Calculate status - determine due date first, then check if late
                 is_late = False
 
