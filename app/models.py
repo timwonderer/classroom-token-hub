@@ -251,12 +251,14 @@ class Student(db.Model):
     @property
     def checking_balance(self):
         total = sum((_quantize_currency(tx.amount) for tx in self.transactions if tx.account_type == 'checking' and not tx.is_void), Decimal('0.00'))
-        return _quantize_currency(total)
+        # CRITICAL: Convert to float for compatibility with arithmetic calculations
+        return float(_quantize_currency(total))
 
     @property
     def savings_balance(self):
         total = sum((_quantize_currency(tx.amount) for tx in self.transactions if tx.account_type == 'savings' and not tx.is_void), Decimal('0.00'))
-        return _quantize_currency(total)
+        # CRITICAL: Convert to float for compatibility with arithmetic calculations
+        return float(_quantize_currency(total))
 
     def get_active_insurance(self, teacher_id):
         """Return the active insurance enrollment scoped to a teacher, if any."""
@@ -283,7 +285,7 @@ class Student(db.Model):
             join_code: The unique class identifier for period-level isolation
 
         Returns:
-            Decimal: The checking balance quantized to 2 decimal places
+            float: The checking balance rounded to 2 decimal places
         """
         if join_code:
             # Proper scoping by join_code (period-level isolation)
@@ -295,7 +297,8 @@ class Student(db.Model):
                 )),
                 Decimal('0.00')
             )
-            return _quantize_currency(total)
+            # CRITICAL: Convert to float for compatibility with arithmetic calculations
+            return float(_quantize_currency(total))
         elif teacher_id:
             # DEPRECATED: Only use this for backward compatibility during migration
             # This will show aggregated balance across all periods with same teacher
@@ -304,7 +307,8 @@ class Student(db.Model):
                 if tx.account_type == 'checking' and not tx.is_void and tx.teacher_id == teacher_id),
                 Decimal('0.00')
             )
-            return _quantize_currency(total)
+            # CRITICAL: Convert to float for compatibility with arithmetic calculations
+            return float(_quantize_currency(total))
         else:
             # No scope provided - return total across all classes
             total = sum(
@@ -312,7 +316,8 @@ class Student(db.Model):
                 if tx.account_type == 'checking' and not tx.is_void),
                 Decimal('0.00')
             )
-            return _quantize_currency(total)
+            # CRITICAL: Convert to float for compatibility with arithmetic calculations
+            return float(_quantize_currency(total))
 
     def get_savings_balance(self, teacher_id=None, join_code=None):
         """
@@ -326,7 +331,7 @@ class Student(db.Model):
             join_code: The unique class identifier for period-level isolation
 
         Returns:
-            Decimal: The savings balance quantized to 2 decimal places
+            float: The savings balance rounded to 2 decimal places
         """
         if join_code:
             # Proper scoping by join_code (period-level isolation)
@@ -338,7 +343,8 @@ class Student(db.Model):
                 )),
                 Decimal('0.00')
             )
-            return _quantize_currency(total)
+            # CRITICAL: Convert to float for compatibility with arithmetic calculations
+            return float(_quantize_currency(total))
         elif teacher_id:
             # DEPRECATED: Only use this for backward compatibility during migration
             # This will show aggregated balance across all periods with same teacher
@@ -347,7 +353,8 @@ class Student(db.Model):
                 if tx.account_type == 'savings' and not tx.is_void and tx.teacher_id == teacher_id),
                 Decimal('0.00')
             )
-            return _quantize_currency(total)
+            # CRITICAL: Convert to float for compatibility with arithmetic calculations
+            return float(_quantize_currency(total))
         else:
             # No scope provided - return total across all classes
             total = sum(
@@ -355,7 +362,8 @@ class Student(db.Model):
                 if tx.account_type == 'savings' and not tx.is_void),
                 Decimal('0.00')
             )
-            return _quantize_currency(total)
+            # CRITICAL: Convert to float for compatibility with arithmetic calculations
+            return float(_quantize_currency(total))
 
     def get_total_earnings(self, teacher_id=None, join_code=None):
         """

@@ -1484,29 +1484,33 @@ def transfer():
 
     # Get banking settings for interest rate display
     settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
-    annual_rate = settings.savings_apy / 100 if settings else 0.045
+    # CRITICAL: Convert to float to avoid Decimal type mixing
+    annual_rate = float(settings.savings_apy / 100) if settings and settings.savings_apy is not None else 0.045
     calculation_type = settings.interest_calculation_type if settings else 'simple'
     compound_frequency = settings.compound_frequency if settings else 'monthly'
 
     # Calculate forecast interest based on settings
     # CRITICAL FIX v3: Calculate BOTH checking and savings balances using join_code scoping
     checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
+    # CRITICAL: Ensure balances are floats to avoid Decimal type mixing
+    checking_balance = float(checking_balance)
+    savings_balance = float(savings_balance)
 
     if calculation_type == 'compound':
         if compound_frequency == 'daily':
-            periods_per_month = 30
-            rate_per_period = annual_rate / 365
-            forecast_interest = savings_balance * ((1 + rate_per_period) ** periods_per_month - 1)
+            periods_per_month = 30.0
+            rate_per_period = annual_rate / 365.0
+            forecast_interest = savings_balance * ((1.0 + rate_per_period) ** periods_per_month - 1.0)
         elif compound_frequency == 'weekly':
             periods_per_month = 4.33
-            rate_per_period = annual_rate / 52
-            forecast_interest = savings_balance * ((1 + rate_per_period) ** periods_per_month - 1)
+            rate_per_period = annual_rate / 52.0
+            forecast_interest = savings_balance * ((1.0 + rate_per_period) ** periods_per_month - 1.0)
         else:  # monthly
-            forecast_interest = savings_balance * (annual_rate / 12)
+            forecast_interest = savings_balance * (annual_rate / 12.0)
     else:
         # Simple interest: calculate only on principal (excluding interest earnings)
         principal = sum(float(tx.amount) for tx in savings_transactions if tx.type != 'Interest' and 'Interest' not in (tx.description or ''))
-        forecast_interest = principal * (annual_rate / 12)
+        forecast_interest = principal * (annual_rate / 12.0)
 
     # Calculate 12-month savings projection for graph
     projection_months = []
@@ -1520,18 +1524,18 @@ def transfer():
         if month < 12:  # Don't calculate interest for the last point
             if calculation_type == 'compound':
                 if compound_frequency == 'daily':
-                    periods = 30
-                    rate = annual_rate / 365
-                    interest = current_balance * ((1 + rate) ** periods - 1)
+                    periods = 30.0
+                    rate = annual_rate / 365.0
+                    interest = current_balance * ((1.0 + rate) ** periods - 1.0)
                 elif compound_frequency == 'weekly':
                     periods = 4.33
-                    rate = annual_rate / 52
-                    interest = current_balance * ((1 + rate) ** periods - 1)
+                    rate = annual_rate / 52.0
+                    interest = current_balance * ((1.0 + rate) ** periods - 1.0)
                 else:  # monthly
-                    interest = current_balance * (annual_rate / 12)
+                    interest = current_balance * (annual_rate / 12.0)
                 current_balance += interest
             else:  # simple interest
-                interest = savings_balance * (annual_rate / 12)  # Simple interest on original principal
+                interest = savings_balance * (annual_rate / 12.0)  # Simple interest on original principal
                 current_balance += interest
 
     return render_template('student_transfer.html',
@@ -1601,30 +1605,29 @@ def apply_savings_interest(student, annual_rate=0.045):
     # Calculate interest based on type
     if calculation_type == 'compound':
         # For compound interest, use current total balance (including previous interest)
-        # Convert Decimal to float for arithmetic with float rates
-        balance = float(student.savings_balance)
+        balance = student.savings_balance
 
         # Determine the rate based on compound frequency
         if compound_frequency == 'daily':
             # Daily compounding: rate = (1 + annual_rate/365)^365 - 1 ≈ annual_rate for small rates
             # For monthly payout with daily compounding: (1 + annual_rate/365)^30
-            periods_per_year = 365
-            periods_per_month = 30
+            periods_per_year = 365.0
+            periods_per_month = 30.0
             rate_per_period = annual_rate / periods_per_year
-            interest = round(balance * ((1 + rate_per_period) ** periods_per_month - 1), 2)
+            interest = round(balance * ((1.0 + rate_per_period) ** periods_per_month - 1.0), 2)
         elif compound_frequency == 'weekly':
             # Weekly compounding: (1 + annual_rate/52)^4.33 (approx weeks per month)
-            periods_per_year = 52
+            periods_per_year = 52.0
             periods_per_month = 4.33
-            rate_per_period = annual_rate / periods_per_year
-            interest = round(balance * ((1 + rate_per_period) ** periods_per_month - 1), 2)
+            rate_per_period = float(annual_rate) / periods_per_year
+            interest = round(balance * ((1.0 + rate_per_period) ** periods_per_month - 1.0), 2)
         else:  # monthly
             # Monthly compounding
-            monthly_rate = annual_rate / 12
+            monthly_rate = float(annual_rate) / 12.0
             interest = round(balance * monthly_rate, 2)
     else:
         # Simple interest: only calculate on original deposits (not including previous interest)
-        eligible_balance = 0.0  # Use float for consistency with rate calculations
+        eligible_balance = 0.0
         for tx in student.transactions:
             if tx.account_type != 'savings' or tx.is_void or tx.amount <= Decimal('0'):
                 continue
@@ -1633,9 +1636,10 @@ def apply_savings_interest(student, annual_rate=0.045):
                 continue
             available_at = _as_utc(tx.date_funds_available)
             if available_at and (now - available_at).days >= 30:
+                # CRITICAL: Convert to float to avoid Decimal type mixing
                 eligible_balance += float(tx.amount)
 
-        monthly_rate = annual_rate / 12
+        monthly_rate = float(annual_rate) / 12.0
         interest = round((eligible_balance or 0.0) * monthly_rate, 2)
 
     if interest > 0:
