@@ -1629,7 +1629,7 @@ def apply_savings_interest(student, annual_rate=0.045):
         # Simple interest: only calculate on original deposits (not including previous interest)
         eligible_balance = 0.0
         for tx in student.transactions:
-            if tx.account_type != 'savings' or tx.is_void or tx.amount <= 0:
+            if tx.account_type != 'savings' or tx.is_void or tx.amount <= Decimal('0'):
                 continue
             # Exclude interest transactions from principal calculation
             if tx.type == 'Interest' or 'Interest' in (tx.description or ''):
