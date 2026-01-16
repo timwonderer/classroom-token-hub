@@ -79,11 +79,13 @@ def test_payroll_visibility_bug(client):
     db.session.commit()
 
     # 5. Simulate Teacher 1's view
-    # We query as if we are Teacher 1 (filtered by teacher_id as per our fix)
+    # We query as if we are Teacher 1 (filtered by join_code as per our fix)
+    # Teacher 1 has join code "JOIN_A"
+    
     visible_transactions = (
         Transaction.query
         .filter_by(type='payroll')
-        .filter(Transaction.teacher_id == teacher1.id)
+        .filter(Transaction.join_code.in_(['JOIN_A'])) # Filter by my join codes
         .all()
     )
     

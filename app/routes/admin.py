@@ -5104,10 +5104,21 @@ def payroll():
     next_pay_date_utc = _compute_next_pay_date(default_setting, now_utc)
 
     # Recent payroll activity
+    # CRITICAL: Filter by join_code as it is the source of truth for class isolation
+    # Get all join codes for this teacher (from active blocks)
+    my_join_codes = [
+        res.join_code for res in 
+        db.session.query(TeacherBlock.join_code)
+        .filter_by(teacher_id=admin_id)
+        .filter(TeacherBlock.join_code.isnot(None))
+        .distinct()
+        .all()
+    ]
+    
     recent_payrolls = (
         Transaction.query
         .filter(Transaction.student_id.in_(student_ids_subq))
-        .filter(Transaction.teacher_id == admin_id)  # Fix: Scope to this teacher
+        .filter(Transaction.join_code.in_(my_join_codes))  # Fix: Scope by join_code (source of truth)
         .filter_by(type='payroll')
         .order_by(Transaction.timestamp.desc())
         .limit(20)
