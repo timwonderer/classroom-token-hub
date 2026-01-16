@@ -36,11 +36,13 @@ def get_pay_rate_for_block(block, teacher_id=None):
         teacher_id (int, optional): The teacher's ID. If not provided, uses session.
 
     Returns:
-        float: The pay rate per second.
+        Decimal: The pay rate per second as Decimal for precise financial calculations.
     """
+    from decimal import Decimal
+    
     # Can't lookup settings without a teacher_id - return default
     if teacher_id is None:
-        return DEFAULT_PAY_RATE_PER_SECOND
+        return Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))
 
     # Try block-specific settings first
     if block:
@@ -50,8 +52,8 @@ def get_pay_rate_for_block(block, teacher_id=None):
             is_active=True
         ).first()
         if setting and setting.pay_rate:
-            # SQLAlchemy Numeric returns Decimal; convert to float for arithmetic/JSON usage.
-            return float(setting.pay_rate) / 60.0  # Convert per-minute to per-second
+            # Convert per-minute to per-second using Decimal arithmetic
+            return setting.pay_rate / Decimal('60')
 
     # Fall back to global settings for this teacher
     global_setting = PayrollSettings.query.filter_by(
@@ -60,10 +62,10 @@ def get_pay_rate_for_block(block, teacher_id=None):
         is_active=True
     ).first()
     if global_setting and global_setting.pay_rate:
-        return float(global_setting.pay_rate) / 60.0
+        return global_setting.pay_rate / Decimal('60')
 
     # Ultimate fallback to hardcoded default
-    return DEFAULT_PAY_RATE_PER_SECOND
+    return Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))
 
 
 @with_teacher_id_fallback
