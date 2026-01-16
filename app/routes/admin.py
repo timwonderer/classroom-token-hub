@@ -706,8 +706,10 @@ def dashboard():
 @admin_required
 def give_bonus_all():
     """Give bonus or payroll adjustment to all students."""
+    from app.models import _quantize_currency
+    
     title = request.form.get('title')
-    amount = float(request.form.get('amount'))
+    amount = _quantize_currency(request.form.get('amount'))
     tx_type = request.form.get('type')
 
     # Get current admin ID for teacher_id
@@ -3405,16 +3407,17 @@ def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, 
         value = getattr(rent_settings, 'custom_frequency_value', None)
         try:
             if value and value > 0:
+                from app.models import _quantize_currency
                 if unit == 'day':
                     # Every N days -> scale to days per month
                     days_in_month = monthrange(current_year, current_month)[1]
-                    return rent_settings.rent_amount * (days_in_month / float(value))
+                    return _quantize_currency(rent_settings.rent_amount * Decimal(str(days_in_month)) / Decimal(str(value)))
                 elif unit == 'week':
                     # Every N weeks -> scale to ~4 weeks per month
-                    return rent_settings.rent_amount * (4.0 / float(value))
+                    return _quantize_currency(rent_settings.rent_amount * Decimal('4') / Decimal(str(value)))
                 elif unit == 'month':
                     # Every N months -> monthly share of that amount
-                    return rent_settings.rent_amount / float(value)
+                    return _quantize_currency(rent_settings.rent_amount / Decimal(str(value)))
         except (TypeError, ValueError, ZeroDivisionError):
             # If anything goes wrong, fall back to the base amount
             pass
@@ -3463,7 +3466,8 @@ def rent_settings():
             block_settings.is_enabled = request.form.get('is_enabled') == 'on'
 
             # Rent amount and frequency
-            block_settings.rent_amount = float(request.form.get('rent_amount', 50.0))
+            from app.models import _quantize_currency
+            block_settings.rent_amount = _quantize_currency(request.form.get('rent_amount', '50.0'))
             block_settings.frequency_type = request.form.get('frequency_type', 'monthly')
 
             if block_settings.frequency_type == 'custom':
@@ -3484,7 +3488,7 @@ def rent_settings():
 
             # Grace period and late penalties
             block_settings.grace_period_days = int(request.form.get('grace_period_days', 3))
-            block_settings.late_penalty_amount = float(request.form.get('late_penalty_amount', 10.0))
+            block_settings.late_penalty_amount = _quantize_currency(request.form.get('late_penalty_amount', '10.0'))
             block_settings.late_penalty_type = request.form.get('late_penalty_type', 'once')
 
             if block_settings.late_penalty_type == 'recurring':
@@ -3532,12 +3536,13 @@ def rent_settings():
                     item_data['is_available'] = False
                 else:
                     try:
-                        store_price = float(item_data['store_price_str'])
-                        if store_price <= 0:
+                        from app.models import _quantize_currency
+                        store_price = _quantize_currency(item_data['store_price_str'])
+                        if store_price <= Decimal('0'):
                             flash(f"Store price must be positive for '{name}'.", 'error')
                             item_data['is_available'] = False
                             store_price = None
-                    except ValueError:
+                    except (ValueError, InvalidOperation):
                         flash(f"Invalid store price for '{name}'.", 'error')
                         item_data['is_available'] = False
                         store_price = None
@@ -4785,10 +4790,12 @@ def economy_health():
                 'apy': None,
             }
 
-        apy = float(settings.savings_apy or 0)
+        # Keep as Decimal for precise comparison
+        from app.models import _quantize_currency
+        apy = _quantize_currency(settings.savings_apy or Decimal('0'))
         payout = settings.interest_schedule_type or 'monthly'
 
-        if apy <= 0:
+        if apy <= Decimal('0'):
             level = 'warning'
             message = 'Interest is disabled. Set a small APY so students can grow savings over time.'
         elif apy >= 25:
@@ -5282,14 +5289,15 @@ def payroll_settings():
         settings_mode = request.form.get('settings_mode', 'simple')
 
         # Shared fields
+        from app.models import _quantize_currency
         expected_weekly_hours_raw = request.form.get('expected_weekly_hours')
-        expected_weekly_hours = float(expected_weekly_hours_raw) if expected_weekly_hours_raw else 5.0
+        expected_weekly_hours = _quantize_currency(expected_weekly_hours_raw) if expected_weekly_hours_raw else Decimal('5.0')
 
         # Parse form data based on mode
         if settings_mode == 'simple':
             # Simple mode fields
-            pay_rate_per_hour = float(request.form.get('simple_pay_rate', 15.0))
-            pay_rate_per_minute = pay_rate_per_hour / 60.0  # Convert to per-minute for storage
+            pay_rate_per_hour = _quantize_currency(request.form.get('simple_pay_rate', '15.0'))
+            pay_rate_per_minute = pay_rate_per_hour / Decimal('60')  # Convert to per-minute for storage
 
             frequency = request.form.get('simple_frequency', 'biweekly')
             frequency_days_map = {'weekly': 7, 'biweekly': 14, 'monthly': 30}
@@ -5298,8 +5306,8 @@ def payroll_settings():
             first_pay_date_str = request.form.get('simple_first_pay_date')
             first_pay_date = datetime.strptime(first_pay_date_str, '%Y-%m-%d') if first_pay_date_str else None
 
-            daily_limit_hours = request.form.get('simple_daily_limit')
-            daily_limit_hours = float(daily_limit_hours) if daily_limit_hours else None
+            daily_limit_hours_raw = request.form.get('simple_daily_limit')
+            daily_limit_hours = _quantize_currency(daily_limit_hours_raw) if daily_limit_hours_raw else None
 
             apply_to = request.form.get('simple_apply_to', 'all')
             selected_blocks = request.form.getlist('simple_blocks[]') if apply_to == 'selected' else blocks
@@ -5320,37 +5328,37 @@ def payroll_settings():
                 'overtime_threshold': None,
                 'overtime_threshold_unit': None,
                 'overtime_threshold_period': None,
-                'overtime_multiplier': 1.0,
+                'overtime_multiplier': Decimal('1.0'),
                 'max_time_per_day': None,
                 'max_time_per_day_unit': None,
                 'rounding_mode': 'down'
             }
 
         else:  # Advanced mode
-            pay_amount = float(request.form.get('adv_pay_amount', 0.25))
+            pay_amount = _quantize_currency(request.form.get('adv_pay_amount', '0.25'))
             time_unit = request.form.get('adv_time_unit', 'minutes')
 
             # Convert to per-minute for storage
             unit_to_minute_multiplier = {
-                'seconds': 60,
-                'minutes': 1,
-                'hours': 1/60,
-                'days': 1/(60*24)
+                'seconds': Decimal('60'),
+                'minutes': Decimal('1'),
+                'hours': Decimal('1') / Decimal('60'),
+                'days': Decimal('1') / (Decimal('60') * Decimal('24'))
             }
-            pay_rate_per_minute = pay_amount * unit_to_minute_multiplier.get(time_unit, 1)
+            pay_rate_per_minute = pay_amount * unit_to_minute_multiplier.get(time_unit, Decimal('1'))
 
             # Overtime settings
             overtime_enabled = 'adv_overtime_enabled' in request.form
-            overtime_threshold = request.form.get('adv_overtime_threshold')
-            overtime_threshold = float(overtime_threshold) if overtime_threshold else None
+            overtime_threshold_raw = request.form.get('adv_overtime_threshold')
+            overtime_threshold = _quantize_currency(overtime_threshold_raw) if overtime_threshold_raw else None
             overtime_unit = request.form.get('adv_overtime_unit')
             overtime_period = request.form.get('adv_overtime_period')
-            overtime_multiplier = request.form.get('adv_overtime_multiplier')
-            overtime_multiplier = float(overtime_multiplier) if overtime_multiplier else 1.0
+            overtime_multiplier_raw = request.form.get('adv_overtime_multiplier')
+            overtime_multiplier = _quantize_currency(overtime_multiplier_raw) if overtime_multiplier_raw else Decimal('1.0')
 
             # Max time per day
-            max_time_value = request.form.get('adv_max_time_value')
-            max_time_value = float(max_time_value) if max_time_value else None
+            max_time_value_raw = request.form.get('adv_max_time_value')
+            max_time_value = _quantize_currency(max_time_value_raw) if max_time_value_raw else None
             max_time_unit = request.form.get('adv_max_time_unit')
 
             # Pay schedule
@@ -5441,8 +5449,9 @@ def payroll_settings():
 def update_expected_weekly_hours():
     """Update the expected weekly hours for CWI calculation for a specific block or all blocks."""
     try:
+        from app.models import _quantize_currency
         admin_id = session.get("admin_id")
-        expected_weekly_hours = float(request.form.get('expected_weekly_hours', 5.0))
+        expected_weekly_hours = _quantize_currency(request.form.get('expected_weekly_hours', '5.0'))
         cwi_block = request.form.get('cwi_block')
         apply_to_all = request.form.get('apply_to_all', 'false').lower() == 'true'
 
@@ -5609,13 +5618,14 @@ def payroll_delete_fine(fine_id):
 def payroll_edit_reward(reward_id):
     """Edit an existing reward."""
     try:
+        from app.models import _quantize_currency
         admin_id = session.get("admin_id")
         reward = PayrollReward.query.filter_by(id=reward_id, teacher_id=admin_id).first_or_404()
         data = request.get_json()
 
         reward.name = data.get('name', reward.name)
         reward.description = data.get('description', reward.description)
-        reward.amount = float(data.get('amount', reward.amount))
+        reward.amount = _quantize_currency(data.get('amount', str(reward.amount)))
         reward.is_active = data.get('is_active', reward.is_active)
 
         db.session.commit()
@@ -5631,13 +5641,14 @@ def payroll_edit_reward(reward_id):
 def payroll_edit_fine(fine_id):
     """Edit an existing fine."""
     try:
+        from app.models import _quantize_currency
         admin_id = session.get("admin_id")
         fine = PayrollFine.query.filter_by(id=fine_id, teacher_id=admin_id).first_or_404()
         data = request.get_json()
 
         fine.name = data.get('name', fine.name)
         fine.description = data.get('description', fine.description)
-        fine.amount = float(data.get('amount', fine.amount))
+        fine.amount = _quantize_currency(data.get('amount', str(fine.amount)))
         fine.is_active = data.get('is_active', fine.is_active)
 
         db.session.commit()
@@ -7958,10 +7969,11 @@ def api_economy_analyze():
 
         # Perform analysis
         # Use expected_weekly_hours from payroll_settings unless explicitly overridden in request
+        from app.models import _quantize_currency
         expected_weekly_hours_override = data.get('expected_weekly_hours')
 
         if expected_weekly_hours_override is not None:
-            expected_weekly_hours = float(expected_weekly_hours_override)
+            expected_weekly_hours = _quantize_currency(expected_weekly_hours_override)
         else:
             expected_weekly_hours = None  # Will read from payroll_settings
 
@@ -8029,10 +8041,11 @@ def api_economy_validate(feature):
     }
     """
     try:
+        from app.models import _quantize_currency
         admin_id = session.get('admin_id')
         data = request.get_json()
 
-        value = float(data.get('value', 0))
+        value = _quantize_currency(data.get('value', '0'))
         block = data.get('block')
         feature = feature.lower()
         valid_features = ['rent', 'insurance', 'fine', 'store_item']

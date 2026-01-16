@@ -2515,12 +2515,13 @@ def create_demo_student():
     import secrets
 
     try:
+        from app.models import _quantize_currency
         admin_id = session.get('admin_id')
         data = request.get_json()
 
         # Extract configuration
-        checking_balance = float(data.get('checking_balance', 0))
-        savings_balance = float(data.get('savings_balance', 0))
+        checking_balance = _quantize_currency(data.get('checking_balance', '0'))
+        savings_balance = _quantize_currency(data.get('savings_balance', '0'))
         hall_passes = int(data.get('hall_passes', 3))
         insurance_plan = data.get('insurance_plan', 'none')
         period = data.get('period', 'A')

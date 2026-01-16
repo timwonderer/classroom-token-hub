@@ -1272,11 +1272,12 @@ def send_reward_to_reporter(report_id):
     
     # Get reward amount
     try:
-        reward_amount = float(request.form.get('reward_amount', 0))
-        if reward_amount <= 0:
+        from app.models import _quantize_currency
+        reward_amount = _quantize_currency(request.form.get('reward_amount', '0'))
+        if reward_amount <= Decimal('0'):
             flash("Reward amount must be greater than 0.", "error")
             return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-    except (ValueError, TypeError):
+    except (ValueError, TypeError, InvalidOperation):
         flash("Invalid reward amount.", "error")
         return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
     
@@ -1776,8 +1777,9 @@ def resolve_escalated_issue(issue_id):
         # Set reward amount if eligible
         if eligible_for_reward and reward_amount:
             try:
-                issue.reward_amount = float(reward_amount)
-            except ValueError:
+                from app.models import _quantize_currency
+                issue.reward_amount = _quantize_currency(reward_amount)
+            except (ValueError, InvalidOperation):
                 flash("Invalid reward amount. Please enter a valid number.", "error")
                 return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
         else:
