@@ -1485,7 +1485,7 @@ def transfer():
     # Get banking settings for interest rate display
     settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
     # CRITICAL: Convert to float to avoid Decimal type mixing
-    annual_rate = float(settings.savings_apy / 100) if settings and settings.savings_apy else 0.045
+    annual_rate = float(settings.savings_apy / 100) if settings and settings.savings_apy is not None else 0.045
     calculation_type = settings.interest_calculation_type if settings else 'simple'
     compound_frequency = settings.compound_frequency if settings else 'monthly'
 
