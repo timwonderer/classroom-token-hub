@@ -1515,7 +1515,7 @@ def transfer():
     # Calculate 12-month savings projection for graph
     projection_months = []
     projection_balances = []
-    current_balance = float(savings_balance)
+    current_balance = savings_balance
 
     for month in range(13):  # 0 to 12 months
         projection_months.append(month)
