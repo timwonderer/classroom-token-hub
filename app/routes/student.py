@@ -1509,7 +1509,7 @@ def transfer():
             forecast_interest = savings_balance * (annual_rate / 12.0)
     else:
         # Simple interest: calculate only on principal (excluding interest earnings)
-        principal = float(sum(float(tx.amount) for tx in savings_transactions if tx.type != 'Interest' and 'Interest' not in (tx.description or '')))
+        principal = sum(float(tx.amount) for tx in savings_transactions if tx.type != 'Interest' and 'Interest' not in (tx.description or ''))
         forecast_interest = principal * (annual_rate / 12.0)
 
     # Calculate 12-month savings projection for graph
