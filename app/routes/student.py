@@ -1021,6 +1021,12 @@ def dashboard():
     # Filter to only current class block
     period_states = {current_block.upper(): period_states.get(current_block.upper(), {})}
     student_blocks = [current_block.upper()]  # Only current block
+
+    # Convert Decimal values to float for JSON serialization
+    for state in period_states.values():
+        if 'projected_pay' in state and state['projected_pay'] is not None:
+            state['projected_pay'] = float(state['projected_pay'])
+
     period_states_json = json.dumps(period_states, separators=(',', ':'))
 
     unpaid_seconds_per_block = {
