@@ -4994,19 +4994,10 @@ def run_payroll():
 
         students = _scoped_students().all()
         # Pass teacher_id to ensure correct payroll settings are used
-        summary = calculate_payroll(students, last_payroll_time, teacher_id=current_admin_id)
+        summary = calculate_payroll_breakdown(students, last_payroll_time, teacher_id=current_admin_id)
 
-        for student_id, amount in summary.items():
-            # Find the join_code for this student with this teacher
-            # If student has multiple periods, use the first one
-            teacher_block = TeacherBlock.query.filter_by(
-                teacher_id=current_admin_id,
-                student_id=student_id,
-                is_claimed=True
-            ).first()
-
-            join_code = teacher_block.join_code if teacher_block else None
-
+        count = 0
+        for (student_id, join_code), amount in summary.items():
             tx = Transaction(
                 student_id=student_id,
                 teacher_id=current_admin_id,
@@ -5017,11 +5008,12 @@ def run_payroll():
                 type="payroll"
             )
             db.session.add(tx)
+            count += 1
 
         db.session.commit()
-        current_app.logger.info(f"Payroll complete. Paid {len(summary)} students.")
+        current_app.logger.info(f"Payroll complete. Created {count} transactions.")
 
-        success_message = f"Payroll complete. Paid {len(summary)} students."
+        success_message = f"Payroll complete. Processed {count} payments."
         if is_json:
             return jsonify(status="success", message=success_message), 200
 
@@ -5118,9 +5110,21 @@ def payroll():
     next_pay_date_utc = _compute_next_pay_date(default_setting, now_utc)
 
     # Recent payroll activity
+    # CRITICAL: Filter by join_code as it is the source of truth for class isolation
+    # Get all join codes for this teacher (from active blocks)
+    my_join_codes = [
+        res.join_code for res in 
+        db.session.query(TeacherBlock.join_code)
+        .filter_by(teacher_id=admin_id)
+        .filter(TeacherBlock.join_code.isnot(None))
+        .distinct()
+        .all()
+    ]
+    
     recent_payrolls = (
         Transaction.query
         .filter(Transaction.student_id.in_(student_ids_subq))
+        .filter(Transaction.join_code.in_(my_join_codes))  # Fix: Scope by join_code (source of truth)
         .filter_by(type='payroll')
         .order_by(Transaction.timestamp.desc())
         .limit(20)
@@ -5239,10 +5243,19 @@ def payroll():
             block=cwi_block
         ).first()
 
+    # Build join_code to label map for payroll display
+    # This is needed because transactions are now scoped by join_code
+    join_code_to_label = {}
+    teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
+    for tb in teacher_blocks:
+        if tb.join_code:
+            join_code_to_label[tb.join_code] = tb.get_class_label()
+
     return render_template(
         'admin_payroll.html',
         # Overview tab
         recent_payrolls=recent_payrolls,
+        join_code_to_label=join_code_to_label, # Pass lookup map
         next_payroll_date=next_pay_date_utc,  # Pass UTC timestamp
         next_payroll_by_block=next_payroll_by_block,
         total_payroll_estimate=total_payroll_estimate,

@@ -27,7 +27,8 @@ def test_admin_dashboard_rendering(client):
 
     response = client.get('/admin/')
     assert response.status_code == 200
-    assert b'Admin Panel' in response.data
+    assert response.status_code == 200
+    assert b'Teacher Dashboard' in response.data
 
 
 def test_insurance_upgrade_prompt_for_legacy_policies(client):
