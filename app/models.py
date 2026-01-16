@@ -1856,7 +1856,13 @@ class Announcement(db.Model):
         """Check if announcement has expired."""
         if self.expires_at is None:
             return False
-        return datetime.now(timezone.utc) > self.expires_at
+
+        # Handle timezone-naive datetimes from database
+        expires_at = self.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        return datetime.now(timezone.utc) > expires_at
 
     def should_display(self):
         """Check if announcement should be displayed."""
