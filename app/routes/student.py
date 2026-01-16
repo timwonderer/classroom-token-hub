@@ -1613,7 +1613,7 @@ def apply_savings_interest(student, annual_rate=0.045):
             # For monthly payout with daily compounding: (1 + annual_rate/365)^30
             periods_per_year = 365.0
             periods_per_month = 30.0
-            rate_per_period = float(annual_rate) / periods_per_year
+            rate_per_period = annual_rate / periods_per_year
             interest = round(balance * ((1.0 + rate_per_period) ** periods_per_month - 1.0), 2)
         elif compound_frequency == 'weekly':
             # Weekly compounding: (1 + annual_rate/52)^4.33 (approx weeks per month)
