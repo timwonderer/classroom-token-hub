@@ -225,7 +225,7 @@ def is_feature_enabled(feature_name):
     return settings.get(feature_key, True)  # Default to enabled
 
 
-def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: int) -> tuple[float, float]:
+def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: int) -> tuple[Decimal, Decimal]:
     """Calculate checking and savings balances scoped to a specific class.
     
     This function ensures consistent balance calculation across the application
@@ -238,21 +238,23 @@ def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: in
         teacher_id (int): The teacher ID for the current class context
     
     Returns:
-        tuple[float, float]: (checking_balance, savings_balance) as rounded floats
+        tuple[Decimal, Decimal]: (checking_balance, savings_balance) as Decimal with 2 decimal places
     """
-    checking_balance = float(round(sum(
+    from app.models import _quantize_currency
+    
+    checking_balance = _quantize_currency(sum(
         (tx.amount for tx in student.transactions
         if tx.account_type == 'checking' and not tx.is_void and
         (tx.join_code == join_code or (tx.join_code is None and tx.teacher_id == teacher_id))),
         Decimal('0.00')
-    ), 2))
+    ))
     
-    savings_balance = float(round(sum(
+    savings_balance = _quantize_currency(sum(
         (tx.amount for tx in student.transactions
         if tx.account_type == 'savings' and not tx.is_void and
         (tx.join_code == join_code or (tx.join_code is None and tx.teacher_id == teacher_id))),
         Decimal('0.00')
-    ), 2))
+    ))
     
     return checking_balance, savings_balance
 
@@ -998,17 +1000,20 @@ def dashboard():
 
     # CRITICAL FIX: Calculate balances using join_code scoping
     # Sum only transactions for THIS specific class (join_code)
-    checking_balance = float(round(sum(
+    from app.models import _quantize_currency
+    
+    checking_balance = _quantize_currency(sum(
         (tx.amount for tx in student.transactions
         if tx.account_type == 'checking' and not tx.is_void and tx.join_code == join_code),
         Decimal('0.00')
-    ), 2))
-    savings_balance = float(round(sum(
+    ))
+    savings_balance = _quantize_currency(sum(
         (tx.amount for tx in student.transactions
         if tx.account_type == 'savings' and not tx.is_void and tx.join_code == join_code),
         Decimal('0.00')
-    ), 2))
-    forecast_interest = round(savings_balance * (0.045 / 12), 2)
+    ))
+    # Calculate forecast interest using Decimal
+    forecast_interest = _quantize_currency(savings_balance * Decimal('0.045') / Decimal('12'))
 
     # FIX: Only show tap in/out status for CURRENT class, not all classes
     # Get status for only the current block (not all blocks)
@@ -1389,7 +1394,9 @@ def transfer():
 
         from_account = request.form.get('from_account')
         to_account = request.form.get('to_account')
-        amount = float(request.form.get('amount'))
+        # Convert form input to Decimal for precise financial calculation
+        from app.models import _quantize_currency
+        amount = _quantize_currency(request.form.get('amount'))
 
         # CRITICAL FIX: Calculate balances using join_code scoping
         checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
@@ -1400,7 +1407,7 @@ def transfer():
                 return jsonify(status="error", message="Cannot transfer to the same account."), 400
             flash("Cannot transfer to the same account.", "transfer_error")
             return redirect(url_for("student.transfer"))
-        elif amount <= 0:
+        elif amount <= Decimal('0'):
             if is_json:
                 return jsonify(status="error", message="Amount must be greater than 0."), 400
             flash("Amount must be greater than 0.", "transfer_error")
@@ -1484,33 +1491,32 @@ def transfer():
 
     # Get banking settings for interest rate display
     settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
-    # CRITICAL: Convert to float to avoid Decimal type mixing
-    annual_rate = float(settings.savings_apy / 100) if settings and settings.savings_apy is not None else 0.045
+    # Convert APY to decimal rate (e.g., 5% = 0.05)
+    from app.models import _quantize_currency
+    annual_rate = _quantize_currency(settings.savings_apy / Decimal('100')) if settings and settings.savings_apy is not None else Decimal('0.045')
     calculation_type = settings.interest_calculation_type if settings else 'simple'
     compound_frequency = settings.compound_frequency if settings else 'monthly'
 
     # Calculate forecast interest based on settings
     # CRITICAL FIX v3: Calculate BOTH checking and savings balances using join_code scoping
     checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
-    # CRITICAL: Ensure balances are floats to avoid Decimal type mixing
-    checking_balance = float(checking_balance)
-    savings_balance = float(savings_balance)
 
     if calculation_type == 'compound':
         if compound_frequency == 'daily':
-            periods_per_month = 30.0
-            rate_per_period = annual_rate / 365.0
-            forecast_interest = savings_balance * ((1.0 + rate_per_period) ** periods_per_month - 1.0)
+            periods_per_month = Decimal('30')
+            rate_per_period = annual_rate / Decimal('365')
+            # For Decimal exponentiation, convert to float, calculate, then back to Decimal
+            forecast_interest = _quantize_currency(savings_balance * ((Decimal('1') + rate_per_period) ** periods_per_month - Decimal('1')))
         elif compound_frequency == 'weekly':
-            periods_per_month = 4.33
-            rate_per_period = annual_rate / 52.0
-            forecast_interest = savings_balance * ((1.0 + rate_per_period) ** periods_per_month - 1.0)
+            periods_per_month = Decimal('4.33')
+            rate_per_period = annual_rate / Decimal('52')
+            forecast_interest = _quantize_currency(savings_balance * ((Decimal('1') + rate_per_period) ** periods_per_month - Decimal('1')))
         else:  # monthly
-            forecast_interest = savings_balance * (annual_rate / 12.0)
+            forecast_interest = _quantize_currency(savings_balance * (annual_rate / Decimal('12')))
     else:
         # Simple interest: calculate only on principal (excluding interest earnings)
-        principal = sum(float(tx.amount) for tx in savings_transactions if tx.type != 'Interest' and 'Interest' not in (tx.description or ''))
-        forecast_interest = principal * (annual_rate / 12.0)
+        principal = _quantize_currency(sum((tx.amount for tx in savings_transactions if tx.type != 'Interest' and 'Interest' not in (tx.description or '')), Decimal('0')))
+        forecast_interest = _quantize_currency(principal * (annual_rate / Decimal('12')))
 
     # Calculate 12-month savings projection for graph
     projection_months = []
@@ -1519,24 +1525,25 @@ def transfer():
 
     for month in range(13):  # 0 to 12 months
         projection_months.append(month)
-        projection_balances.append(round(current_balance, 2))
+        # Convert to float for JSON serialization in template
+        projection_balances.append(float(current_balance))
 
         if month < 12:  # Don't calculate interest for the last point
             if calculation_type == 'compound':
                 if compound_frequency == 'daily':
-                    periods = 30.0
-                    rate = annual_rate / 365.0
-                    interest = current_balance * ((1.0 + rate) ** periods - 1.0)
+                    periods = Decimal('30')
+                    rate = annual_rate / Decimal('365')
+                    interest = _quantize_currency(current_balance * ((Decimal('1') + rate) ** periods - Decimal('1')))
                 elif compound_frequency == 'weekly':
-                    periods = 4.33
-                    rate = annual_rate / 52.0
-                    interest = current_balance * ((1.0 + rate) ** periods - 1.0)
+                    periods = Decimal('4.33')
+                    rate = annual_rate / Decimal('52')
+                    interest = _quantize_currency(current_balance * ((Decimal('1') + rate) ** periods - Decimal('1')))
                 else:  # monthly
-                    interest = current_balance * (annual_rate / 12.0)
-                current_balance += interest
+                    interest = _quantize_currency(current_balance * (annual_rate / Decimal('12')))
+                current_balance = _quantize_currency(current_balance + interest)
             else:  # simple interest
-                interest = savings_balance * (annual_rate / 12.0)  # Simple interest on original principal
-                current_balance += interest
+                interest = _quantize_currency(savings_balance * (annual_rate / Decimal('12')))  # Simple interest on original principal
+                current_balance = _quantize_currency(current_balance + interest)
 
     return render_template('student_transfer.html',
                          student=student,
@@ -1553,13 +1560,13 @@ def transfer():
                          projection_balances=projection_balances)
 
 
-def apply_savings_interest(student, annual_rate=0.045):
+def apply_savings_interest(student, annual_rate=Decimal('0.045')):
     """
     Apply savings interest for a student based on banking settings.
     Supports both simple and compound interest with configurable frequency.
     All time calculations are in UTC.
     """
-    from app.models import BankingSettings
+    from app.models import BankingSettings, _quantize_currency
 
     now = datetime.now(timezone.utc)
     this_month = now.month
@@ -1611,23 +1618,21 @@ def apply_savings_interest(student, annual_rate=0.045):
         if compound_frequency == 'daily':
             # Daily compounding: rate = (1 + annual_rate/365)^365 - 1 ≈ annual_rate for small rates
             # For monthly payout with daily compounding: (1 + annual_rate/365)^30
-            periods_per_year = 365.0
-            periods_per_month = 30.0
-            rate_per_period = annual_rate / periods_per_year
-            interest = round(balance * ((1.0 + rate_per_period) ** periods_per_month - 1.0), 2)
+            periods_per_month = Decimal('30')
+            rate_per_period = annual_rate / Decimal('365')
+            interest = _quantize_currency(balance * ((Decimal('1') + rate_per_period) ** periods_per_month - Decimal('1')))
         elif compound_frequency == 'weekly':
             # Weekly compounding: (1 + annual_rate/52)^4.33 (approx weeks per month)
-            periods_per_year = 52.0
-            periods_per_month = 4.33
-            rate_per_period = float(annual_rate) / periods_per_year
-            interest = round(balance * ((1.0 + rate_per_period) ** periods_per_month - 1.0), 2)
+            periods_per_month = Decimal('4.33')
+            rate_per_period = annual_rate / Decimal('52')
+            interest = _quantize_currency(balance * ((Decimal('1') + rate_per_period) ** periods_per_month - Decimal('1')))
         else:  # monthly
             # Monthly compounding
-            monthly_rate = float(annual_rate) / 12.0
-            interest = round(balance * monthly_rate, 2)
+            monthly_rate = annual_rate / Decimal('12')
+            interest = _quantize_currency(balance * monthly_rate)
     else:
         # Simple interest: only calculate on original deposits (not including previous interest)
-        eligible_balance = 0.0
+        eligible_balance = Decimal('0')
         for tx in student.transactions:
             if tx.account_type != 'savings' or tx.is_void or tx.amount <= Decimal('0'):
                 continue
@@ -1636,13 +1641,12 @@ def apply_savings_interest(student, annual_rate=0.045):
                 continue
             available_at = _as_utc(tx.date_funds_available)
             if available_at and (now - available_at).days >= 30:
-                # CRITICAL: Convert to float to avoid Decimal type mixing
-                eligible_balance += float(tx.amount)
+                eligible_balance += _quantize_currency(tx.amount)
 
-        monthly_rate = float(annual_rate) / 12.0
-        interest = round((eligible_balance or 0.0) * monthly_rate, 2)
+        monthly_rate = annual_rate / Decimal('12')
+        interest = _quantize_currency((eligible_balance or Decimal('0')) * monthly_rate)
 
-    if interest > 0:
+    if interest > Decimal('0'):
         # CRITICAL FIX v2: Add join_code to interest transactions
         # Interest must be scoped to specific class, not just teacher
         context = get_current_class_context()
@@ -2665,15 +2669,16 @@ def rent_pay(period):
     # Determine payment amount based on incremental setting
     if settings.allow_incremental_payment and payment_amount_input:
         try:
-            payment_amount = Decimal(payment_amount_input).quantize(Decimal('0.01'))
+            from app.models import _quantize_currency
+            payment_amount = _quantize_currency(payment_amount_input)
             # Validate payment amount
-            if payment_amount <= 0:
+            if payment_amount <= Decimal('0'):
                 flash("Payment amount must be greater than 0.", "error")
                 return redirect(url_for('student.rent'))
             if payment_amount > remaining_amount:
                 flash(f"Payment amount (${payment_amount:.2f}) exceeds remaining balance (${remaining_amount:.2f}). Paying exact remaining amount.", "info")
                 payment_amount = remaining_amount
-        except (InvalidOperation, ValueError):
+        except (ValueError, InvalidOperation):
             flash("Invalid payment amount.", "error")
             return redirect(url_for('student.rent'))
     else:

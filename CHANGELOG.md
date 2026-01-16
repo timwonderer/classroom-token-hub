@@ -9,6 +9,25 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Fixed
+- **CRITICAL: Decimal Precision in All Financial Calculations** - Refactored all financial logic to use Python's `Decimal` type throughout, not just for database storage
+  - **Issue**: PR #880 was a hotfix that converted `Decimal` to `float` to resolve TypeErrors, but introduced floating-point precision errors
+  - **Impact**: Small residual balances accumulate over time, incorrect interest calculations, potential overdraft fee issues
+  - **Solution**: Systematic refactoring of all financial calculations to use Decimal arithmetic
+  - **Changes**:
+    - Updated `Student.get_checking_balance()` and `Student.get_savings_balance()` to return Decimal instead of float
+    - Updated `calculate_scoped_balances()` to return Decimal tuples
+    - Refactored all interest calculations in `student.py` to use Decimal arithmetic with proper exponentiation
+    - Updated `apply_savings_interest()` to use Decimal throughout for compound and simple interest
+    - Refactored transfer route to convert form inputs to Decimal before validation
+    - Updated rent payment processing to use Decimal for payment amounts
+    - Updated `payroll.py` `get_pay_rate_for_block()` to return Decimal per-second rate
+    - Refactored all `admin.py` financial form handling (rent, payroll, store items, rewards, fines) to use `_quantize_currency()`
+    - Updated `api.py` demo session balance inputs to use Decimal
+    - Updated `system_admin.py` reward amounts to use Decimal
+    - Refactored `utils/economy_balance.py` CWI calculations and balance validators to use Decimal
+    - Updated `_normalize_to_weekly()` helper to work with Decimal inputs/outputs
+  - **Backward Compatibility**: Decimal objects convert to float only for JSON serialization and template rendering
+  - **Testing**: All existing decimal precision tests pass; financial calculations now mathematically exact
 - **Decimal.InvalidOperation in get_total_earnings** - Fixed crash when calculating student earnings with NULL transaction amounts
   - Added null check (`tx.amount is not None`) before comparison in `get_total_earnings()` method
   - Prevents `decimal.InvalidOperation` error on `/admin/students` page when database has corrupted transaction data

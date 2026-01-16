@@ -285,7 +285,7 @@ class Student(db.Model):
             join_code: The unique class identifier for period-level isolation
 
         Returns:
-            float: The checking balance rounded to 2 decimal places
+            Decimal: The checking balance rounded to 2 decimal places
         """
         if join_code:
             # Proper scoping by join_code (period-level isolation)
@@ -297,8 +297,7 @@ class Student(db.Model):
                 )),
                 Decimal('0.00')
             )
-            # CRITICAL: Convert to float for compatibility with arithmetic calculations
-            return float(_quantize_currency(total))
+            return _quantize_currency(total)
         elif teacher_id:
             # DEPRECATED: Only use this for backward compatibility during migration
             # This will show aggregated balance across all periods with same teacher
@@ -307,8 +306,7 @@ class Student(db.Model):
                 if tx.account_type == 'checking' and not tx.is_void and tx.teacher_id == teacher_id),
                 Decimal('0.00')
             )
-            # CRITICAL: Convert to float for compatibility with arithmetic calculations
-            return float(_quantize_currency(total))
+            return _quantize_currency(total)
         else:
             # No scope provided - return total across all classes
             total = sum(
@@ -316,8 +314,7 @@ class Student(db.Model):
                 if tx.account_type == 'checking' and not tx.is_void),
                 Decimal('0.00')
             )
-            # CRITICAL: Convert to float for compatibility with arithmetic calculations
-            return float(_quantize_currency(total))
+            return _quantize_currency(total)
 
     def get_savings_balance(self, teacher_id=None, join_code=None):
         """
@@ -331,7 +328,7 @@ class Student(db.Model):
             join_code: The unique class identifier for period-level isolation
 
         Returns:
-            float: The savings balance rounded to 2 decimal places
+            Decimal: The savings balance rounded to 2 decimal places
         """
         if join_code:
             # Proper scoping by join_code (period-level isolation)
@@ -343,8 +340,7 @@ class Student(db.Model):
                 )),
                 Decimal('0.00')
             )
-            # CRITICAL: Convert to float for compatibility with arithmetic calculations
-            return float(_quantize_currency(total))
+            return _quantize_currency(total)
         elif teacher_id:
             # DEPRECATED: Only use this for backward compatibility during migration
             # This will show aggregated balance across all periods with same teacher
@@ -353,8 +349,7 @@ class Student(db.Model):
                 if tx.account_type == 'savings' and not tx.is_void and tx.teacher_id == teacher_id),
                 Decimal('0.00')
             )
-            # CRITICAL: Convert to float for compatibility with arithmetic calculations
-            return float(_quantize_currency(total))
+            return _quantize_currency(total)
         else:
             # No scope provided - return total across all classes
             total = sum(
@@ -362,8 +357,7 @@ class Student(db.Model):
                 if tx.account_type == 'savings' and not tx.is_void),
                 Decimal('0.00')
             )
-            # CRITICAL: Convert to float for compatibility with arithmetic calculations
-            return float(_quantize_currency(total))
+            return _quantize_currency(total)
 
     def get_total_earnings(self, teacher_id=None, join_code=None):
         """
@@ -1856,7 +1850,13 @@ class Announcement(db.Model):
         """Check if announcement has expired."""
         if self.expires_at is None:
             return False
-        return datetime.now(timezone.utc) > self.expires_at
+
+        # Handle timezone-naive datetimes from database
+        expires_at = self.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+        return datetime.now(timezone.utc) > expires_at
 
     def should_display(self):
         """Check if announcement should be displayed."""
