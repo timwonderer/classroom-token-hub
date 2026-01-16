@@ -13,6 +13,7 @@ import base64
 import qrcode
 import requests
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app, jsonify, Response
 from sqlalchemy import delete, or_, case

@@ -254,7 +254,7 @@ class EconomyBalanceChecker:
             getattr(rent_settings, 'custom_frequency_unit', None)
         )
         monthly_rent = _quantize_currency(weekly_rent * Decimal(str(self.AVERAGE_WEEKS_PER_MONTH)))
-        monthly_ratio = float(monthly_rent / Decimal(str(cwi))) if cwi > 0 else 0
+        monthly_ratio = float(monthly_rent / Decimal(cwi)) if cwi > 0 else 0
 
         # Recommended monthly rent bounds based on weekly CWI ratios
         recommended_min = cwi * self.RENT_MIN_RATIO * self.AVERAGE_WEEKS_PER_MONTH
@@ -329,7 +329,7 @@ class EconomyBalanceChecker:
             # Normalize to weekly based on charge_frequency
             weekly_premium = self._normalize_to_weekly(premium, policy.charge_frequency)
 
-            premium_ratio = float(weekly_premium / Decimal(str(cwi))) if cwi > 0 else 0
+            premium_ratio = float(weekly_premium / Decimal(cwi)) if cwi > 0 else 0
 
             # Check if within bounds
             if premium_ratio < self.INSURANCE_MIN_RATIO:
@@ -463,7 +463,7 @@ class EconomyBalanceChecker:
 
             from app.models import _quantize_currency
             fine_amount = _quantize_currency(fine.amount)
-            fine_ratio = float(fine_amount / Decimal(str(cwi))) if cwi > 0 else 0
+            fine_ratio = float(fine_amount / Decimal(cwi)) if cwi > 0 else 0
 
             # Check if within bounds
             if fine_ratio < self.FINE_MIN_RATIO:

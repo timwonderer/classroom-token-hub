@@ -3411,13 +3411,13 @@ def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, 
                 if unit == 'day':
                     # Every N days -> scale to days per month
                     days_in_month = monthrange(current_year, current_month)[1]
-                    return _quantize_currency(rent_settings.rent_amount * Decimal(str(days_in_month)) / Decimal(str(value)))
+                    return _quantize_currency(rent_settings.rent_amount * Decimal(days_in_month) / Decimal(value))
                 elif unit == 'week':
                     # Every N weeks -> scale to ~4 weeks per month
-                    return _quantize_currency(rent_settings.rent_amount * Decimal('4') / Decimal(str(value)))
+                    return _quantize_currency(rent_settings.rent_amount * Decimal('4') / Decimal(value))
                 elif unit == 'month':
                     # Every N months -> monthly share of that amount
-                    return _quantize_currency(rent_settings.rent_amount / Decimal(str(value)))
+                    return _quantize_currency(rent_settings.rent_amount / Decimal(value))
         except (TypeError, ValueError, ZeroDivisionError):
             # If anything goes wrong, fall back to the base amount
             pass
