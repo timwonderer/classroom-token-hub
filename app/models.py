@@ -66,7 +66,7 @@ class AnalyticsAlert(db.Model):
 
     # Deterministic identity (prevents duplicate / zombie alerts)
     alert_key = db.Column(db.String(100), nullable=False)  # e.g. 'participation_low'
-    join_code = db.Column(db.String(20), nullable=False, index=True)
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=False, index=True)
 
     # Snapshot window this alert applies to
     window_type = db.Column(db.String(10), nullable=False)  # 'week', 'month', 'pay_cycle', 'rent_cycle' (see analytics.ALLOWED_WINDOW_TYPES)
@@ -128,6 +128,71 @@ class AnalyticsAlert(db.Model):
             f'{self.window_start.date()}–{self.window_end.date()}>'
         )
 
+# -------------------- CLASS ECONOMY MODELS --------------------
+
+class ClassEconomy(db.Model):
+    """
+    Represents a distinct class economy, anchored by a unique join_code.
+    
+    This is the primary container for all economic activity and settings.
+    Authority is managed via ClassMembership roles (Admin/Student).
+    """
+    __tablename__ = 'class_economies'
+
+    join_code = db.Column(db.String(20), primary_key=True)
+    display_name = db.Column(db.String(100), nullable=True) # e.g. "Math 101"
+    status = db.Column(db.String(20), default='active', nullable=False) # active, archived
+    
+    # Metadata
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now, nullable=False)
+
+    # Relationships
+    memberships = db.relationship('ClassMembership', backref='economy', lazy='dynamic', cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<ClassEconomy {self.join_code} ({self.display_name or "Unnamed"})>'
+
+
+class ClassMembership(db.Model):
+    """
+    Defines a user's role and status within a specific ClassEconomy.
+    
+    Authority flows through these memberships:
+    - Admin: Can manage class settings, transactions, and student rosters.
+    - Student: Can participate in the economy (earn, spend, etc.).
+    """
+    __tablename__ = 'class_memberships'
+
+    id = db.Column(db.Integer, primary_key=True)
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=False, index=True)
+    
+    # Polymorphic-lite user reference
+    admin_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=True, index=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=True, index=True)
+    
+    role = db.Column(db.String(20), nullable=False) # 'admin', 'student', 'observer'
+    status = db.Column(db.String(20), default='active', nullable=False) # active, archived
+    
+    # Metadata
+    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now, nullable=False)
+
+    # Relationships
+    admin = db.relationship('Admin', backref=db.backref('class_memberships', lazy='dynamic', cascade='all, delete-orphan'))
+    student = db.relationship('Student', backref=db.backref('class_memberships', lazy='dynamic', cascade='all, delete-orphan'))
+
+    __table_args__ = (
+        db.UniqueConstraint('join_code', 'admin_id', name='uq_class_membership_admin'),
+        db.UniqueConstraint('join_code', 'student_id', name='uq_class_membership_student'),
+    )
+
+    def __repr__(self):
+        user_type = 'Admin' if self.admin_id else 'Student'
+        user_id = self.admin_id or self.student_id
+        return f'<ClassMembership {self.join_code} User:{user_type}/{user_id} Role:{self.role}>'
+
+
 class TeacherBlock(db.Model):
     """
     Represents an unclaimed seat in a teacher's class roster.
@@ -164,7 +229,8 @@ class TeacherBlock(db.Model):
     first_half_hash = db.Column(db.String(64), nullable=False)  # Hash of CONCAT(first_initial, DOB_sum) - e.g., "S2025"
 
     # Join code for this period (shared across all students in same teacher-block)
-    join_code = db.Column(db.String(20), nullable=False)
+    # CRITICAL: This now acts as a foreign key to the central ClassEconomy
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=False)
 
     # Claim status
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
@@ -582,7 +648,7 @@ class Transaction(db.Model):
     # Each join code represents a distinct class economy, even if same teacher
     # Example: Teacher has Period A (join=MATH1A) and Period B (join=MATH3B)
     # Student in both periods should see separate balances/transactions
-    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
 
     # CRITICAL: Use Numeric for exact decimal representation to avoid floating-point errors
     # Float causes bugs: -0.00 overdraft fees, unpayable rent balances
@@ -613,7 +679,7 @@ class StudentBlock(db.Model):
 
     # CRITICAL: join_code is the source of truth for class isolation
     # Links this student-period combination to a specific class economy
-    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
 
     # Toggle for enabling/disabling tap in/out for this student in this period
     tap_enabled = db.Column(db.Boolean, default=True, nullable=False)
@@ -641,7 +707,7 @@ class TapEvent(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     period = db.Column(db.String(10), nullable=False)
     # CRITICAL: join_code scopes attendance to a specific class economy
-    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
     status = db.Column(db.String(10), nullable=False)  # 'active' or 'inactive'
     # All times stored as UTC (see header note)
     timestamp = db.Column(db.DateTime, default=_utc_now)
@@ -668,7 +734,7 @@ class HallPassLog(db.Model):
 
     # CRITICAL: join_code is the source of truth for class isolation
     # Each hall pass request should be scoped to the specific class/period
-    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
 
     request_time = db.Column(db.DateTime, default=_utc_now, nullable=False)
     decision_time = db.Column(db.DateTime, nullable=True)
@@ -683,6 +749,9 @@ class HallPassSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
+
+    # CRITICAL: Centralized scoping anchor
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
 
     # Queue system toggle
     queue_enabled = db.Column(db.Boolean, default=True, nullable=False)
@@ -806,7 +875,7 @@ class StudentItem(db.Model):
 
     # CRITICAL: join_code is the source of truth for class isolation
     # Each purchase should be scoped to the specific class/period where it was made
-    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
 
     purchase_date = db.Column(db.DateTime, default=_utc_now)
     expiry_date = db.Column(db.DateTime, nullable=True)
@@ -830,6 +899,9 @@ class RentSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
+
+    # CRITICAL: Centralized scoping anchor
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
 
     # Main toggle
     is_enabled = db.Column(db.Boolean, default=True)
@@ -876,7 +948,7 @@ class RentPayment(db.Model):
 
     # CRITICAL: join_code is the source of truth for class isolation
     # Each rent payment should be scoped to the specific class/period
-    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
 
     amount_paid = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
     period_month = db.Column(db.Integer, nullable=False)  # Month (1-12)
@@ -939,6 +1011,9 @@ class InsurancePolicy(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     policy_code = db.Column(db.String(16), unique=True, nullable=False, index=True)  # Unique code per teacher's policy
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)  # Owner teacher
+    
+    # CRITICAL: Centralized scoping anchor
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
     premium = db.Column(db.Numeric(precision=12, scale=2), nullable=False)  # Monthly cost
@@ -1036,7 +1111,7 @@ class StudentInsurance(db.Model):
 
     # CRITICAL: join_code is the source of truth for class isolation
     # Each insurance enrollment should be scoped to the specific class/period
-    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
 
     status = db.Column(db.String(20), default='active')  # active, cancelled, suspended
     purchase_date = db.Column(db.DateTime, default=_utc_now)
@@ -1197,7 +1272,7 @@ class Issue(db.Model):
 
     # Class context
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
-    join_code = db.Column(db.String(20), nullable=False, index=True)
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=False, index=True)
     class_label = db.Column(db.String(50), nullable=True)  # Cached class name
 
     # Issue categorization
@@ -1449,6 +1524,9 @@ class PayrollSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global/default settings
+
+    # CRITICAL: Centralized scoping anchor
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
     pay_rate = db.Column(db.Numeric(precision=12, scale=2), nullable=False, default=0.25)  # $ per minute
     payroll_frequency_days = db.Column(db.Integer, nullable=False, default=14)
     next_payroll_date = db.Column(db.DateTime, nullable=True)
@@ -1533,6 +1611,9 @@ class BankingSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
+
+    # CRITICAL: Centralized scoping anchor
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
 
     # Interest settings for savings
     savings_apy = db.Column(db.Numeric(precision=8, scale=6), default=0.0)  # Annual Percentage Yield (e.g., 5.0 for 5%)
@@ -1633,6 +1714,9 @@ class FeatureSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
     block = db.Column(db.String(10), nullable=True)  # NULL = global defaults for teacher
+
+    # CRITICAL: Centralized scoping anchor
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
 
     # Feature toggles - all default to True (enabled)
     payroll_enabled = db.Column(db.Boolean, default=True, nullable=False)
@@ -1818,7 +1902,7 @@ class Announcement(db.Model):
     system_admin_id = db.Column(db.Integer, db.ForeignKey('system_admins.id', ondelete='CASCADE'), nullable=True)
 
     # Audience targeting
-    join_code = db.Column(db.String(20), nullable=True, index=True)  # For teacher/sysadmin specific class announcements
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)  # For teacher/sysadmin specific class announcements
     audience_type = db.Column(db.String(30), default='class', nullable=False)  # 'class', 'system_wide', 'all_teachers', 'all_students', 'teacher_all_classes', 'specific_class'
     target_teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=True)  # For 'teacher_all_classes' audience type
 
@@ -1921,7 +2005,7 @@ class AnalyticsSnapshot(db.Model):
     
     # Scoping (CRITICAL: join_code is source of truth for multi-tenancy)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
-    join_code = db.Column(db.String(20), nullable=False, index=True)
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=False, index=True)
     
     # Time window
     window_type = db.Column(db.String(20), nullable=False)  # 'week', 'pay_cycle', 'rent_cycle', 'custom'
@@ -1985,7 +2069,7 @@ class AnalyticsEvent(db.Model):
     
     # Scoping
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
-    join_code = db.Column(db.String(20), nullable=False, index=True)
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=False, index=True)
     
     # Event details
     event_type = db.Column(db.String(50), nullable=False)  # 'rent_change', 'wage_change', 'inflation', 'holiday', 'wildcard', 'custom'
