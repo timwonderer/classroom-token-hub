@@ -1605,8 +1605,7 @@ def apply_savings_interest(student, annual_rate=0.045):
     # Calculate interest based on type
     if calculation_type == 'compound':
         # For compound interest, use current total balance (including previous interest)
-        # CRITICAL: Convert to float to avoid Decimal type mixing
-        balance = float(student.savings_balance)
+        balance = student.savings_balance
 
         # Determine the rate based on compound frequency
         if compound_frequency == 'daily':
