@@ -132,25 +132,6 @@ def get_daily_limit_seconds(block, teacher_id=None):
 
 
 @with_teacher_id_fallback
-def calculate_payroll(students, last_payroll_time, teacher_id=None):
-    """
-    Calculates payroll for a given list of students since the last payroll run.
-    Now uses PayrollSettings from database for configurable pay rates.
-
-    CRITICAL: Scopes payroll settings by teacher_id to prevent multi-tenancy leaks.
-
-    Args:
-        students (list): A list of Student objects.
-        last_payroll_time (datetime): The timestamp of the last payroll run.
-        teacher_id (int, optional): The teacher's ID. If not provided, uses session.
-
-    Returns:
-        dict: A dictionary mapping student IDs to their calculated payroll amount.
-    """
-    return summary
-
-
-@with_teacher_id_fallback
 def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
     """
     Calculates payroll for a given list of students since the last payroll run,
