@@ -11,7 +11,7 @@ import secrets
 import re
 from calendar import monthrange
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app
 from sqlalchemy import or_, func, select, and_
@@ -2733,7 +2733,7 @@ def rent_pay(period):
     elif late_fee > Decimal('0'):
         payment_description += f' (includes ${late_fee:.2f} late fee)'
 
-    projected_balance = checking_balance - payment_amount
+    projected_balance = Decimal(str(checking_balance)) - payment_amount
 
     transaction = Transaction(
         student_id=student.id,

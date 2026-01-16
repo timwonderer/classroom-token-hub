@@ -19,7 +19,7 @@ import hashlib
 from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 from flask import (
     Blueprint, redirect, url_for, flash, request, session,
@@ -3373,7 +3373,7 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
     db.session.commit()
 
 
-def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, current_month: int) -> float:
+def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, current_month: int) -> Decimal:
     """
     Normalize the configured rent amount to a monthly view based on frequency type.
 
@@ -3394,12 +3394,12 @@ def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, 
 
     if rent_settings.frequency_type == 'daily':
         # Use actual number of days in the month for accuracy
-        days_in_month = monthrange(current_year, current_month)[1]
+        days_in_month = Decimal(monthrange(current_year, current_month)[1])
         return rent_settings.rent_amount * days_in_month
 
     if rent_settings.frequency_type == 'weekly':
         # Approximation: 4 weeks per month
-        return rent_settings.rent_amount * 4
+        return rent_settings.rent_amount * Decimal('4')
 
     if rent_settings.frequency_type == 'custom':
         # Approximate a monthly amount based on custom frequency configuration
@@ -3665,23 +3665,29 @@ def rent_settings():
     if settings and settings.is_enabled and settings.rent_amount > Decimal('0') and payroll_settings:
         # Calculate rent per month based on frequency
         rent_per_month = settings.rent_amount
+        thirty_days = Decimal('30')
+        four_weeks = Decimal('4')
         if settings.frequency_type == 'daily':
-            rent_per_month = settings.rent_amount * 30
+            rent_per_month = settings.rent_amount * thirty_days
         elif settings.frequency_type == 'weekly':
-            rent_per_month = settings.rent_amount * 4
+            rent_per_month = settings.rent_amount * four_weeks
         elif settings.frequency_type == 'custom':
             if settings.custom_frequency_unit == 'days':
-                rent_per_month = settings.rent_amount * (30 / settings.custom_frequency_value)
+                rent_per_month = settings.rent_amount * (
+                    thirty_days / Decimal(str(settings.custom_frequency_value))
+                )
             elif settings.custom_frequency_unit == 'weeks':
-                rent_per_month = settings.rent_amount * (30 / (settings.custom_frequency_value * 7))
+                rent_per_month = settings.rent_amount * (
+                    thirty_days / (Decimal(str(settings.custom_frequency_value)) * Decimal('7'))
+                )
             elif settings.custom_frequency_unit == 'months':
-                rent_per_month = settings.rent_amount / settings.custom_frequency_value
+                rent_per_month = settings.rent_amount / Decimal(str(settings.custom_frequency_value))
 
         # Using simple mode settings if available
-        pay_per_minute = payroll_settings.pay_rate
+        pay_per_minute = Decimal(str(payroll_settings.pay_rate))
         estimated_monthly_payroll = pay_per_minute * 60 * 6 * 20  # 6 hours/day * 20 days
 
-        if rent_per_month > estimated_monthly_payroll * 0.8:  # If rent is more than 80% of payroll
+        if rent_per_month > estimated_monthly_payroll * Decimal('0.8'):  # If rent is more than 80% of payroll
             payroll_warning = f"Rent (${rent_per_month:.2f}/month) exceeds recommended 80% of estimated monthly payroll (${estimated_monthly_payroll:.2f}). Students may struggle to afford rent."
 
     # Get rent items for this setting
@@ -3736,17 +3742,17 @@ def rent_settings():
         )
 
         # Map student_id -> total_paid using defaultdict for efficiency
-        payments_map = defaultdict(float)
+        payments_map = defaultdict(lambda: Decimal('0.00'))
         for p in period_payments:
-            payments_map[p.student_id] += p.amount_paid
+            payments_map[p.student_id] += Decimal(str(p.amount_paid))
 
         # Use helper function to calculate base rent amount
         base_rent_amount = _calculate_base_rent_amount(settings, current_year, current_month)
 
         # Build unpaid list
         for student in rent_enabled_students:
-            paid = payments_map.get(student.id, 0.0)
-            if paid < base_rent_amount - 0.01:  # Float tolerance
+            paid = payments_map.get(student.id, Decimal('0.00'))
+            if paid < base_rent_amount - Decimal('0.01'):
                 # Calculate status - determine due date first, then check if late
                 is_late = False
 
