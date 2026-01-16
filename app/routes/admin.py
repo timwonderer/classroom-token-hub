@@ -3660,23 +3660,29 @@ def rent_settings():
     if settings and settings.is_enabled and settings.rent_amount > Decimal('0') and payroll_settings:
         # Calculate rent per month based on frequency
         rent_per_month = settings.rent_amount
+        thirty_days = Decimal('30')
+        four_weeks = Decimal('4')
         if settings.frequency_type == 'daily':
-            rent_per_month = settings.rent_amount * 30
+            rent_per_month = settings.rent_amount * thirty_days
         elif settings.frequency_type == 'weekly':
-            rent_per_month = settings.rent_amount * 4
+            rent_per_month = settings.rent_amount * four_weeks
         elif settings.frequency_type == 'custom':
             if settings.custom_frequency_unit == 'days':
-                rent_per_month = settings.rent_amount * (30 / settings.custom_frequency_value)
+                rent_per_month = settings.rent_amount * (
+                    thirty_days / Decimal(str(settings.custom_frequency_value))
+                )
             elif settings.custom_frequency_unit == 'weeks':
-                rent_per_month = settings.rent_amount * (30 / (settings.custom_frequency_value * 7))
+                rent_per_month = settings.rent_amount * (
+                    thirty_days / (Decimal(str(settings.custom_frequency_value)) * Decimal('7'))
+                )
             elif settings.custom_frequency_unit == 'months':
-                rent_per_month = settings.rent_amount / settings.custom_frequency_value
+                rent_per_month = settings.rent_amount / Decimal(str(settings.custom_frequency_value))
 
         # Using simple mode settings if available
-        pay_per_minute = payroll_settings.pay_rate
+        pay_per_minute = Decimal(str(payroll_settings.pay_rate))
         estimated_monthly_payroll = pay_per_minute * 60 * 6 * 20  # 6 hours/day * 20 days
 
-        if rent_per_month > estimated_monthly_payroll * 0.8:  # If rent is more than 80% of payroll
+        if rent_per_month > estimated_monthly_payroll * Decimal('0.8'):  # If rent is more than 80% of payroll
             payroll_warning = f"Rent (${rent_per_month:.2f}/month) exceeds recommended 80% of estimated monthly payroll (${estimated_monthly_payroll:.2f}). Students may struggle to afford rent."
 
     # Get rent items for this setting
