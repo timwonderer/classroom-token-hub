@@ -9,6 +9,11 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Fixed
+- **Decimal.InvalidOperation in recent_deposits** - Fixed crash when accessing student dashboard with NULL transaction amounts
+  - **Issue**: `Student.recent_deposits` property compared `tx.amount <= Decimal('0')` without checking for NULL
+  - **Impact**: Student dashboard returned 500 error with `decimal.InvalidOperation: [<class 'decimal.InvalidOperation'>]`
+  - **Solution**: Added null check (`tx.amount is None`) before comparison in both `recent_deposits` and `total_earnings` properties
+  - Prevents crashes when database has corrupted transaction data with NULL amounts
 - **Decimal JSON Serialization Error** - Fixed `TypeError: Object of type Decimal is not JSON serializable` in student dashboard and API endpoints
   - **Issue**: After Decimal refactoring, Decimal values in templates and JSON responses were not converted to serializable types
   - **Impact**: Student dashboard and `/api/student-status` endpoint returned 500 errors
