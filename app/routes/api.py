@@ -1959,7 +1959,7 @@ def handle_tap():
                 "message": "Hall pass requested.",
                 "active": is_active,
                 "duration": duration,
-                "projected_pay": projected_pay,
+                "projected_pay": float(projected_pay),
                 "hall_pass": {
                     "id": hall_pass_log.id,
                     "status": hall_pass_log.status,
@@ -2119,7 +2119,7 @@ def handle_tap():
         "status": "ok",
         "active": is_active,
         "duration": duration,
-        "projected_pay": projected_pay
+        "projected_pay": float(projected_pay)
     })
 
 
@@ -2424,6 +2424,11 @@ def student_status():
 
     period_states = get_all_block_statuses(student, join_code=context['join_code'])
 
+    # Convert Decimal values to float for JSON serialization
+    for state in period_states.values():
+        if 'projected_pay' in state and state['projected_pay'] is not None:
+            state['projected_pay'] = float(state['projected_pay'])
+
     return jsonify({
         "status": "ok",
         "periods": period_states
@@ -2515,12 +2520,13 @@ def create_demo_student():
     import secrets
 
     try:
+        from app.models import _quantize_currency
         admin_id = session.get('admin_id')
         data = request.get_json()
 
         # Extract configuration
-        checking_balance = float(data.get('checking_balance', 0))
-        savings_balance = float(data.get('savings_balance', 0))
+        checking_balance = _quantize_currency(data.get('checking_balance', '0'))
+        savings_balance = _quantize_currency(data.get('savings_balance', '0'))
         hall_passes = int(data.get('hall_passes', 3))
         insurance_plan = data.get('insurance_plan', 'none')
         period = data.get('period', 'A')
