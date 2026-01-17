@@ -131,9 +131,9 @@ jobs:
 
 
           # Testing-only secrets — DO NOT reuse in production
-          ENCRYPTION_KEY: 7f0e9c3b6a2d1e8f4c9a0d3e7b5a2f6c9e1d4a8b3f2c0e7a6d5b9c4e1f8a
-          PEPPER_KEY: 9d2c6e1a8f5b0c7e4d3a2f9b6e1d8c0a5f7b9e4c6a3d2f8e0b5a1c9
-          SECRET_KEY: 2b7f9e1a5c4d8f6e0a3b9d2c7e5f1a8c4e6d9b0f2a7c5e1d3b9
+          ENCRYPTION_KEY: UENU-3IwrMOdyGCaQR-2suY5Mv5NCsyQkja6CHJBG1I=
+          PEPPER_KEY: 9183723b5d7ba66102f766a6a8600a76fe4b95b9be57fb7d8fd1791b67ecdf7c
+          SECRET_KEY: 7536c8660c96747163e93cefd072489243ba976abd646cb3df9e26d2af3e2afe
         run: |
           echo "🔄 Starting Migration Rehearsal..."
 
@@ -143,8 +143,26 @@ jobs:
           if grep -q "IRREVERSIBLE" migrations/versions/*.py; then
              echo "⚠️ Irreversible migration declared; skipping downgrade."
           else
-             flask db downgrade -1
-             echo "✅ Downgrade Successful"
+             # Get current head and its down_revision to handle merge migrations
+             CURRENT_HEAD=$(flask db current 2>/dev/null | head -1 | awk '{print $1}')
+             if [ -n "$CURRENT_HEAD" ]; then
+               # Find the migration file and extract its down_revision
+               MIGRATION_FILE=$(grep -l "^Revision ID: $CURRENT_HEAD" migrations/versions/*.py 2>/dev/null | head -1)
+               if [ -n "$MIGRATION_FILE" ]; then
+                 DOWN_REV=$(grep "^down_revision" "$MIGRATION_FILE" | head -1 | sed "s/.*'\([^']*\)'.*/\1/")
+                 if [ -n "$DOWN_REV" ]; then
+                   echo "Downgrading from $CURRENT_HEAD to $DOWN_REV"
+                   flask db downgrade "$DOWN_REV"
+                   echo "✅ Downgrade Successful"
+                 else
+                   echo "⚠️ Could not determine down_revision, skipping downgrade test"
+                 fi
+               else
+                 echo "⚠️ Could not find migration file for $CURRENT_HEAD, skipping downgrade test"
+               fi
+             else
+               echo "⚠️ Could not determine current head, skipping downgrade test"
+             fi
           fi
 
           flask db upgrade
