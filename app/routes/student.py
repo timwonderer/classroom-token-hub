@@ -1402,6 +1402,7 @@ def transfer():
 
     join_code = context['join_code']
     teacher_id = context['teacher_id']
+    membership_id = context.get('membership_id')
 
     if request.method == 'POST':
         is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
@@ -1462,6 +1463,7 @@ def transfer():
                 student_id=student.id,
                 teacher_id=teacher_id,
                 join_code=join_code,  # CRITICAL: Add join_code for period isolation
+                actor_membership_id=membership_id, # Audit Anchor
                 amount=-amount,
                 account_type=from_account,
                 type='Withdrawal',
@@ -1472,6 +1474,7 @@ def transfer():
                 student_id=student.id,
                 teacher_id=teacher_id,
                 join_code=join_code,  # CRITICAL: Add join_code for period isolation
+                actor_membership_id=membership_id, # Audit Anchor
                 amount=amount,
                 account_type=to_account,
                 type='Deposit',
@@ -1676,6 +1679,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
                 student_id=student.id,
                 teacher_id=teacher_id,
                 join_code=context['join_code'],  # CRITICAL: Add join_code for period isolation
+                actor_membership_id=context.get('membership_id'), # Audit Anchor
                 amount=interest,
                 account_type='savings',
                 type='Interest',
@@ -1822,6 +1826,7 @@ def purchase_insurance(policy_id):
 
     join_code = context['join_code']
     teacher_id = context['teacher_id']
+    membership_id = context.get('membership_id')
 
     policy = InsurancePolicy.query.get_or_404(policy_id)
 
@@ -1934,6 +1939,7 @@ def purchase_insurance(policy_id):
         student_id=student.id,
         teacher_id=teacher_id,
         join_code=join_code,  # CRITICAL: Add join_code for period isolation
+        actor_membership_id=membership_id, # Audit Anchor
         amount=-policy.premium,
         account_type='checking',
         type='insurance_premium',
@@ -1947,6 +1953,7 @@ def purchase_insurance(policy_id):
             student_id=student.id,
             teacher_id=teacher_id,
             join_code=join_code,
+            actor_membership_id=membership_id, # Audit Anchor
             amount=-overdraft_shortfall,
             account_type='savings',
             type='Withdrawal',
@@ -1956,6 +1963,7 @@ def purchase_insurance(policy_id):
             student_id=student.id,
             teacher_id=teacher_id,
             join_code=join_code,
+            actor_membership_id=membership_id, # Audit Anchor
             amount=overdraft_shortfall,
             account_type='checking',
             type='Deposit',
@@ -2589,6 +2597,7 @@ def rent_pay(period):
 
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
+    membership_id = context.get('membership_id')
     current_block = (context.get('block') or '').upper()
     settings = get_rent_settings_for_context(context)
 
@@ -2760,6 +2769,7 @@ def rent_pay(period):
         student_id=student.id,
         teacher_id=teacher_id,
         join_code=join_code,  # CRITICAL: Add join_code for period isolation
+        actor_membership_id=membership_id, # Audit Anchor
         amount=-payment_amount,
         account_type='checking',
         type='Rent Payment',
@@ -2798,6 +2808,7 @@ def rent_pay(period):
             student_id=student.id,
             teacher_id=teacher_id,
             join_code=join_code,  # CRITICAL: Add join_code for period isolation
+            actor_membership_id=membership_id, # Audit Anchor
             amount=-overdraft_shortfall,
             account_type='savings',
             type='Withdrawal',
@@ -2807,6 +2818,7 @@ def rent_pay(period):
             student_id=student.id,
             teacher_id=teacher_id,
             join_code=join_code,  # CRITICAL: Add join_code for period isolation
+            actor_membership_id=membership_id, # Audit Anchor
             amount=overdraft_shortfall,
             account_type='checking',
             type='Deposit',

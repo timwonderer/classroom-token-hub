@@ -389,6 +389,7 @@ def purchase_item():
                         student_id=student.id,
                         teacher_id=teacher_id,
                         join_code=join_code,  # CRITICAL: Add join_code for period isolation
+                        actor_membership_id=membership_id, # Audit Anchor
                         amount=-shortfall,
                         account_type='savings',
                         type='Withdrawal',
@@ -398,6 +399,7 @@ def purchase_item():
                         student_id=student.id,
                         teacher_id=teacher_id,
                         join_code=join_code,  # CRITICAL: Add join_code for period isolation
+                        actor_membership_id=membership_id, # Audit Anchor
                         amount=shortfall,
                         account_type='checking',
                         type='Deposit',
@@ -504,6 +506,7 @@ def purchase_item():
                     student_id=student.id,
                     teacher_id=teacher_id,
                     join_code=join_code,  # CRITICAL: Add join_code for period isolation
+                    actor_membership_id=membership_id, # Audit Anchor
                     amount=-shortfall,
                     account_type='savings',
                     type='Withdrawal',
@@ -513,6 +516,7 @@ def purchase_item():
                     student_id=student.id,
                     teacher_id=teacher_id,
                     join_code=join_code,  # CRITICAL: Add join_code for period isolation
+                    actor_membership_id=membership_id, # Audit Anchor
                     amount=shortfall,
                     account_type='checking',
                     type='Deposit',
@@ -642,11 +646,18 @@ def use_item():
         context = get_current_class_context()
 
         if context:
+            membership_id = context.get('membership_id')
+            # Verify membership exists (Audit Anchor requirement)
+            if not membership_id:
+                # Rollback specific changes if context is invalid
+                db.session.rollback()
+                return jsonify({"status": "error", "message": "Invalid class membership."}), 403
+
             redemption_tx = Transaction(
                 student_id=student.id,
                 teacher_id=context['teacher_id'],
                 join_code=context['join_code'],  # CRITICAL: Add join_code for period isolation
-                actor_membership_id=context.get('membership_id'), # Audit Anchor
+                actor_membership_id=membership_id, # Audit Anchor
                 amount=0.0,
                 account_type='checking',
                 type='redemption',
