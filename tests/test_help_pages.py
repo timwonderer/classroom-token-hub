@@ -8,10 +8,12 @@ def test_admin_help_page(client):
     db.session.add(admin)
     db.session.commit()
 
-    # Login as admin
+    # Login as admin with all required session keys
     with client.session_transaction() as sess:
         sess["admin_id"] = admin.id
         sess["is_admin"] = True
+        sess["is_system_admin"] = False
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
 
     resp = client.get("/admin/help-support")
     if resp.status_code != 200:
