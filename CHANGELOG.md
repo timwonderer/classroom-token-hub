@@ -14,6 +14,12 @@ and this project follows semantic versioning principles.
   - **Impact**: Student dashboard returned 500 error with `decimal.InvalidOperation: [<class 'decimal.InvalidOperation'>]`
   - **Solution**: Added null check (`tx.amount is None`) before comparison in both `recent_deposits` and `total_earnings` properties
   - Prevents crashes when database has corrupted transaction data with NULL amounts
+- **CRITICAL: Float/Decimal Type Error in Savings Interest Calculation** - Fixed `TypeError: unsupported operand type(s) for *: 'float' and 'decimal.Decimal'` in `apply_savings_interest()` function
+  - **Issue**: The `student.savings_balance` property returns a `float`, but interest calculations were using `Decimal` arithmetic. When the float balance was multiplied by a Decimal rate expression, Python raised a TypeError.
+  - **Impact**: Student dashboard returned 500 errors when compound interest was enabled for the class
+  - **Root Cause**: The Decimal refactoring (PR #882) updated the interest calculation logic to use Decimal, but the `savings_balance` property still returns float for backward compatibility with other parts of the codebase
+  - **Solution**: Wrap `student.savings_balance` with `_quantize_currency()` to convert it to Decimal before performing Decimal arithmetic
+  - **Location**: `app/routes/student.py` in `apply_savings_interest()` function, line 1621
 - **Decimal JSON Serialization Error** - Fixed `TypeError: Object of type Decimal is not JSON serializable` in student dashboard and API endpoints
   - **Issue**: After Decimal refactoring, Decimal values in templates and JSON responses were not converted to serializable types
   - **Impact**: Student dashboard and `/api/student-status` endpoint returned 500 errors
