@@ -18,6 +18,7 @@ Per spec section 4.2:
 """
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from sqlalchemy import and_, or_, true
@@ -276,7 +277,7 @@ class AnalyticsEngine:
         # Assuming perfect attendance, expected balance = CWI * weeks
         days = (window_end - window_start).days
         weeks = days / 7.0
-        expected_balance = cwi * weeks
+        expected_balance = Decimal(str(cwi * weeks))
         
         # Count students within ±20% of expected
         within_band = 0
@@ -290,7 +291,7 @@ class AnalyticsEngine:
             # Calculate deviation
             if expected_balance > 0:
                 deviation = abs(current_balance - expected_balance) / expected_balance
-                if deviation <= self.CWI_DEVIATION_BAND:
+                if deviation <= Decimal(str(self.CWI_DEVIATION_BAND)):
                     within_band += 1
             elif current_balance == 0:
                 # If expected is 0 and actual is 0, that's within band

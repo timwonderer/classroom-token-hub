@@ -601,11 +601,13 @@ class EconomyBalanceChecker:
 
         This is converted to other frequencies as needed.
         """
+        from app.models import _quantize_currency
         # Convert input rent to weekly for comparison
+        # Convert to Decimal first for _normalize_to_weekly
         weekly_rent = self._normalize_to_weekly(
-            rent_amount,
+            _quantize_currency(rent_amount),
             frequency_type,
-            custom_frequency_value,
+            _quantize_currency(custom_frequency_value) if custom_frequency_value else None,
             custom_frequency_unit,
         )
 

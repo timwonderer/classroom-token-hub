@@ -117,15 +117,17 @@ def test_calculate_payroll(client):
 def test_get_pay_rate_for_block_default(test_teacher):
     """Test that get_pay_rate_for_block returns default rate when no settings exist."""
     from app.payroll import get_pay_rate_for_block, DEFAULT_PAY_RATE_PER_SECOND
+    from decimal import Decimal
     
     # Get pay rate when no settings exist - should return default
     rate = get_pay_rate_for_block("A", teacher_id=test_teacher.id)
-    assert rate == DEFAULT_PAY_RATE_PER_SECOND
-    assert isinstance(rate, float)
+    # Now returns Decimal for precise financial calculations
+    assert rate == Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))
+    assert isinstance(rate, Decimal)
 
 
 def test_get_pay_rate_for_block_block_specific(test_teacher):
-    """Test that block-specific settings return correct float values."""
+    """Test that block-specific settings return correct Decimal values."""
     from app.payroll import get_pay_rate_for_block
     from app.models import PayrollSettings
     from decimal import Decimal
@@ -144,10 +146,10 @@ def test_get_pay_rate_for_block_block_specific(test_teacher):
     # Get pay rate for the block - should convert to per-second rate
     rate = get_pay_rate_for_block("A", teacher_id=test_teacher.id)
     
-    # Expected: 0.50 / 60.0 = 0.008333...
-    expected_rate = 0.50 / 60.0
-    assert abs(rate - expected_rate) < FLOAT_TOLERANCE
-    assert isinstance(rate, float)
+    # Expected: 0.50 / 60 = 0.008333... (as Decimal)
+    expected_rate = Decimal("0.50") / Decimal("60")
+    assert abs(rate - expected_rate) < Decimal(str(FLOAT_TOLERANCE))
+    assert isinstance(rate, Decimal)
 
 
 def test_get_pay_rate_for_block_global_fallback(test_teacher):
@@ -170,10 +172,10 @@ def test_get_pay_rate_for_block_global_fallback(test_teacher):
     # Should fall back to global settings
     rate = get_pay_rate_for_block("B", teacher_id=test_teacher.id)
     
-    # Expected: 0.30 / 60.0 = 0.005
-    expected_rate = 0.30 / 60.0
+    # Expected: 0.30 / 60 = 0.005 (as Decimal)
+    expected_rate = Decimal("0.30") / Decimal("60")
     assert rate == expected_rate
-    assert isinstance(rate, float)
+    assert isinstance(rate, Decimal)
 
 
 def test_get_pay_rate_for_block_precedence(test_teacher):
@@ -203,11 +205,11 @@ def test_get_pay_rate_for_block_precedence(test_teacher):
     
     # Block A should use block-specific rate
     rate_a = get_pay_rate_for_block("A", teacher_id=test_teacher.id)
-    assert rate_a == 0.75 / 60.0
+    assert rate_a == Decimal("0.75") / Decimal("60")
     
     # Block B should fall back to global rate
     rate_b = get_pay_rate_for_block("B", teacher_id=test_teacher.id)
-    assert rate_b == 0.25 / 60.0
+    assert rate_b == Decimal("0.25") / Decimal("60")
 
 
 def test_get_pay_rate_for_block_per_minute_to_per_second_conversion(test_teacher):
@@ -229,9 +231,10 @@ def test_get_pay_rate_for_block_per_minute_to_per_second_conversion(test_teacher
     # Get pay rate
     rate = get_pay_rate_for_block("A", teacher_id=test_teacher.id)
     
-    # Expected: 1.20 / 60.0 = 0.02
-    assert rate == 0.02
-    assert isinstance(rate, float)
+    # Expected: 1.20 / 60 = 0.02 (as Decimal)
+    expected_rate = Decimal("1.20") / Decimal("60")
+    assert rate == expected_rate
+    assert isinstance(rate, Decimal)
 
 
 def test_get_pay_rate_for_block_json_serialization(test_teacher):
@@ -254,14 +257,16 @@ def test_get_pay_rate_for_block_json_serialization(test_teacher):
     # Get pay rate
     rate = get_pay_rate_for_block("A", teacher_id=test_teacher.id)
     
-    # Should be serializable to JSON without errors
-    data = {"pay_rate": rate}
+    # Should be serializable to JSON after converting to float
+    # Decimal values need to be converted to float for JSON serialization
+    data = {"pay_rate": float(rate)}
     json_str = json.dumps(data)
     assert json_str is not None
     
     # Deserialize and verify
     deserialized = json.loads(json_str)
-    assert abs(deserialized["pay_rate"] - (0.45 / 60.0)) < FLOAT_TOLERANCE
+    expected_rate = float(Decimal("0.45") / Decimal("60"))
+    assert abs(deserialized["pay_rate"] - expected_rate) < FLOAT_TOLERANCE
 
 
 def test_get_pay_rate_for_block_inactive_settings_ignored(test_teacher):
@@ -282,13 +287,14 @@ def test_get_pay_rate_for_block_inactive_settings_ignored(test_teacher):
     
     # Should fall back to default rate since the setting is inactive
     rate = get_pay_rate_for_block("A", teacher_id=test_teacher.id)
-    assert rate == DEFAULT_PAY_RATE_PER_SECOND
+    assert rate == Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))
 
 
 def test_get_pay_rate_for_block_no_teacher_id(client):
     """Test that function returns default when no teacher_id is provided."""
     from app.payroll import get_pay_rate_for_block, DEFAULT_PAY_RATE_PER_SECOND
+    from decimal import Decimal
     
     # Call without teacher_id (and outside request context)
     rate = get_pay_rate_for_block("A", teacher_id=None)
-    assert rate == DEFAULT_PAY_RATE_PER_SECOND
+    assert rate == Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))

@@ -6,6 +6,7 @@ from app import Transaction, apply_savings_interest, db
 
 def test_apply_savings_interest_with_naive_datetimes(client, test_student):
     from unittest.mock import patch
+    from decimal import Decimal
     from app import app
 
     past_date = datetime.now(timezone.utc) - timedelta(days=31)
@@ -41,7 +42,9 @@ def test_apply_savings_interest_with_naive_datetimes(client, test_student):
     )
 
     assert interest_tx is not None
-    assert interest_tx.amount == round(100.0 * (0.045 / 12), 2)
+    # Transaction amount is stored as Decimal
+    expected_interest = Decimal(str(round(100.0 * (0.045 / 12), 2)))
+    assert interest_tx.amount == expected_interest
 
 
 def test_dashboard_renders_recent_deposit(client, test_student):
