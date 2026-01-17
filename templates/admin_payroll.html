@@ -343,8 +343,13 @@
                   <em>Unknown</em>
                   {% endif %}
                 </td>
-                <td>{{ class_labels_by_block.get(record.student.block, record.student.block) if record.student and
-                  record.student.block else "N/A" }}</td>
+                <td>
+                  {% if record.join_code and join_code_to_label %}
+                    {{ join_code_to_label.get(record.join_code, record.join_code) }}
+                  {% else %}
+                    {{ class_labels_by_block.get(record.student.block, record.student.block) if record.student and record.student.block else "N/A" }}
+                  {% endif %}
+                </td>
                 <td class="text-success fw-bold">${{ "%.2f"|format(record.amount) }}</td>
                 <td><span class="badge bg-secondary">{{ record.account_type|title }}</span></td>
               </tr>

@@ -14,6 +14,7 @@ Reference: AGENTS financial setup.md
 from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from enum import Enum
+from decimal import Decimal
 
 
 class WarningLevel(Enum):
@@ -134,30 +135,31 @@ class EconomyBalanceChecker:
 
     def _normalize_to_weekly(
         self,
-        value: float,
+        value: Decimal,
         frequency: str,
-        custom_frequency_value: Optional[float] = None,
+        custom_frequency_value: Optional[Decimal] = None,
         custom_frequency_unit: Optional[str] = None,
-    ) -> float:
+    ) -> Decimal:
         """Normalize a value to its weekly equivalent based on frequency."""
+        from app.models import _quantize_currency
 
         if frequency == 'monthly':
-            return value / self.AVERAGE_WEEKS_PER_MONTH
+            return _quantize_currency(value / Decimal(str(self.AVERAGE_WEEKS_PER_MONTH)))
         if frequency == 'weekly':
             return value
         if frequency == 'biweekly':
-            return value / 2
+            return _quantize_currency(value / Decimal('2'))
         if frequency == 'daily':
-            return value * 7
+            return _quantize_currency(value * Decimal('7'))
         if frequency == 'custom':
             # Default to days when unit is unspecified
             unit = (custom_frequency_unit or 'days').lower()
-            freq_value = custom_frequency_value or 1
+            freq_value = custom_frequency_value or Decimal('1')
             if unit == 'weeks':
-                return value * (7 / freq_value)
+                return _quantize_currency(value * (Decimal('7') / freq_value))
             if unit == 'months':
-                return value / (self.AVERAGE_WEEKS_PER_MONTH * freq_value)
-            return value * (7 / freq_value)
+                return _quantize_currency(value / (Decimal(str(self.AVERAGE_WEEKS_PER_MONTH)) * freq_value))
+            return _quantize_currency(value * (Decimal('7') / freq_value))
 
         return value
 
@@ -196,28 +198,30 @@ class EconomyBalanceChecker:
         notes = []
 
         # Get expected weekly hours from settings if not provided
+        from app.models import _quantize_currency
         if expected_weekly_hours is None:
-            expected_weekly_hours = float(payroll_settings.expected_weekly_hours or 5.0)
+            expected_weekly_hours = _quantize_currency(payroll_settings.expected_weekly_hours or Decimal('5.0'))
             notes.append(f"Using expected weekly hours from payroll settings: {expected_weekly_hours} hours")
         else:
+            expected_weekly_hours = _quantize_currency(expected_weekly_hours)
             notes.append(f"Using provided expected weekly hours: {expected_weekly_hours} hours")
 
         # Convert pay_rate to per-minute rate
         # Note: pay_rate is stored as per-minute in the database for storage efficiency
-        pay_rate_per_minute = float(payroll_settings.pay_rate)
+        pay_rate_per_minute = _quantize_currency(payroll_settings.pay_rate)
         notes.append(f"Pay rate: ${pay_rate_per_minute:.4f} per minute (from database)")
 
         # Calculate expected weekly minutes
-        expected_weekly_minutes = expected_weekly_hours * 60
+        expected_weekly_minutes = expected_weekly_hours * Decimal('60')
         notes.append(f"Expected weekly attendance: {expected_weekly_hours} hours = {expected_weekly_minutes} minutes")
 
         # Calculate weekly income
-        cwi = expected_weekly_minutes * pay_rate_per_minute
+        cwi = _quantize_currency(expected_weekly_minutes * pay_rate_per_minute)
         notes.append(f"CWI = {expected_weekly_minutes} min × ${pay_rate_per_minute:.4f}/min = ${cwi:.2f}")
 
         return CWICalculation(
-            cwi=cwi,
-            pay_rate=float(payroll_settings.pay_rate),
+            cwi=float(cwi),  # Convert to float for JSON serialization
+            pay_rate=float(payroll_settings.pay_rate),  # Convert to float for JSON serialization
             time_unit=payroll_settings.time_unit or "minutes",
             pay_rate_per_minute=pay_rate_per_minute,
             expected_weekly_minutes=expected_weekly_minutes,
@@ -241,15 +245,16 @@ class EconomyBalanceChecker:
         if not rent_settings or not rent_settings.is_enabled:
             return warnings
 
-        rent_amount = float(rent_settings.rent_amount)
+        from app.models import _quantize_currency
+        rent_amount = _quantize_currency(rent_settings.rent_amount)
         weekly_rent = self._normalize_to_weekly(
             rent_amount,
             rent_settings.frequency_type,
             rent_settings.custom_frequency_value,
             getattr(rent_settings, 'custom_frequency_unit', None)
         )
-        monthly_rent = weekly_rent * self.AVERAGE_WEEKS_PER_MONTH
-        monthly_ratio = monthly_rent / cwi if cwi > 0 else 0
+        monthly_rent = _quantize_currency(weekly_rent * Decimal(str(self.AVERAGE_WEEKS_PER_MONTH)))
+        monthly_ratio = float(monthly_rent / Decimal(cwi)) if cwi > 0 else 0
 
         # Recommended monthly rent bounds based on weekly CWI ratios
         recommended_min = cwi * self.RENT_MIN_RATIO * self.AVERAGE_WEEKS_PER_MONTH
@@ -318,12 +323,13 @@ class EconomyBalanceChecker:
                 continue
 
             # Convert premium to weekly equivalent for comparison
-            premium = float(policy.premium)
+            from app.models import _quantize_currency
+            premium = _quantize_currency(policy.premium)
 
             # Normalize to weekly based on charge_frequency
             weekly_premium = self._normalize_to_weekly(premium, policy.charge_frequency)
 
-            premium_ratio = weekly_premium / cwi if cwi > 0 else 0
+            premium_ratio = float(weekly_premium / Decimal(cwi)) if cwi > 0 else 0
 
             # Check if within bounds
             if premium_ratio < self.INSURANCE_MIN_RATIO:
@@ -455,8 +461,9 @@ class EconomyBalanceChecker:
             if not fine.is_active:
                 continue
 
-            fine_amount = float(fine.amount)
-            fine_ratio = fine_amount / cwi if cwi > 0 else 0
+            from app.models import _quantize_currency
+            fine_amount = _quantize_currency(fine.amount)
+            fine_ratio = float(fine_amount / Decimal(cwi)) if cwi > 0 else 0
 
             # Check if within bounds
             if fine_ratio < self.FINE_MIN_RATIO:
@@ -467,7 +474,7 @@ class EconomyBalanceChecker:
                         feature=f"Fine: {fine.name}",
                         level=level,
                         message=f"Fine amount (${abs(fine_amount):.2f}) is too small to be meaningful. Recommended range: ${recommended_min:.2f} - ${recommended_max:.2f}",
-                        current_value=fine_amount,
+                        current_value=float(fine_amount),  # Convert to float for JSON serialization
                         recommended_min=recommended_min,
                         recommended_max=recommended_max,
                         cwi_ratio=fine_ratio

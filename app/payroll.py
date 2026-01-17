@@ -36,11 +36,13 @@ def get_pay_rate_for_block(block, teacher_id=None):
         teacher_id (int, optional): The teacher's ID. If not provided, uses session.
 
     Returns:
-        float: The pay rate per second.
+        Decimal: The pay rate per second as Decimal for precise financial calculations.
     """
+    from decimal import Decimal
+    
     # Can't lookup settings without a teacher_id - return default
     if teacher_id is None:
-        return DEFAULT_PAY_RATE_PER_SECOND
+        return Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))
 
     # Try block-specific settings first
     if block:
@@ -50,8 +52,8 @@ def get_pay_rate_for_block(block, teacher_id=None):
             is_active=True
         ).first()
         if setting and setting.pay_rate:
-            # SQLAlchemy Numeric returns Decimal; convert to float for arithmetic/JSON usage.
-            return float(setting.pay_rate) / 60.0  # Convert per-minute to per-second
+            # Convert per-minute to per-second using Decimal arithmetic
+            return setting.pay_rate / Decimal('60')
 
     # Fall back to global settings for this teacher
     global_setting = PayrollSettings.query.filter_by(
@@ -60,10 +62,10 @@ def get_pay_rate_for_block(block, teacher_id=None):
         is_active=True
     ).first()
     if global_setting and global_setting.pay_rate:
-        return float(global_setting.pay_rate) / 60.0
+        return global_setting.pay_rate / Decimal('60')
 
     # Ultimate fallback to hardcoded default
-    return DEFAULT_PAY_RATE_PER_SECOND
+    return Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))
 
 
 @with_teacher_id_fallback
@@ -145,6 +147,26 @@ def calculate_payroll(students, last_payroll_time, teacher_id=None):
     Returns:
         dict: A dictionary mapping student IDs to their calculated payroll amount.
     """
+    return summary
+
+
+@with_teacher_id_fallback
+def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
+    """
+    Calculates payroll for a given list of students since the last payroll run,
+    broken down by student AND class (join_code).
+
+    CRITICAL: Scopes payroll settings by teacher_id to prevent multi-tenancy leaks.
+
+    Args:
+        students (list): A list of Student objects.
+        last_payroll_time (datetime): The timestamp of the last payroll run.
+        teacher_id (int, optional): The teacher's ID. If not provided, uses session.
+
+    Returns:
+        dict: A dictionary mapping (student_id, join_code) tuple to their calculated payroll amount.
+              Example: {(101, 'MATH1A'): 50.00, (101, 'MATH3B'): 40.00}
+    """
     summary = {}
 
     for student in students:
@@ -157,6 +179,7 @@ def calculate_payroll(students, last_payroll_time, teacher_id=None):
             t for t in [normalized_last_payroll_time, student_last_payroll_time] if t
         ]
         payroll_anchor = max(possible_anchors) if possible_anchors else None
+        
         for block_original in student_blocks:
             block_upper = block_original.upper()
 
@@ -183,7 +206,21 @@ def calculate_payroll(students, last_payroll_time, teacher_id=None):
             if total_seconds > 0:
                 amount = round(total_seconds * rate_per_second, 2)
                 if amount > 0:
-                    summary.setdefault(student.id, 0)
-                    summary[student.id] += amount
+                    summary.setdefault((student.id, join_code), 0)
+                    summary[(student.id, join_code)] += amount
 
+    return summary
+
+
+@with_teacher_id_fallback
+def calculate_payroll(students, last_payroll_time, teacher_id=None):
+    """
+    Wrapper for backward compatibility. Returns simple student_id -> amount mapping.
+    Aggregates amounts from different classes for the same student.
+    """
+    breakdown = calculate_payroll_breakdown(students, last_payroll_time, teacher_id=teacher_id)
+    summary = {}
+    for (student_id, _), amount in breakdown.items():
+        summary.setdefault(student_id, 0)
+        summary[student_id] += amount
     return summary
