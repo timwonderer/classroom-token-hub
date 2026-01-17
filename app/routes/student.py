@@ -1675,11 +1675,19 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
         # Interest must be scoped to specific class, not just teacher
         context = get_current_class_context()
         if context:
+            # Audit Anchor: ensure membership_id is present
+            membership_id = context.get('membership_id')
+            if not membership_id:
+                # If we can't identify the actor's membership, we skip recording interest
+                # to maintain audit integrity (or log a warning)
+                current_app.logger.warning(f"Skipping interest for student {student.id}: missing membership_id")
+                return
+
             interest_tx = Transaction(
                 student_id=student.id,
                 teacher_id=teacher_id,
                 join_code=context['join_code'],  # CRITICAL: Add join_code for period isolation
-                actor_membership_id=context.get('membership_id'), # Audit Anchor
+                actor_membership_id=membership_id, # Audit Anchor
                 amount=interest,
                 account_type='savings',
                 type='Interest',

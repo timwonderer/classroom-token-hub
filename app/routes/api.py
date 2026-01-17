@@ -2587,6 +2587,20 @@ def create_demo_student():
         demo_link = StudentTeacher(student_id=demo_student.id, admin_id=admin_id)
         db.session.add(demo_link)
 
+        # Ensure ClassEconomy exists (for ClassMembership join)
+        # Note: In a real flow, this would exist. For demo, we might need to assume it's created or implied.
+        # However, ClassMembership requires a join_code foreign key.
+        # TeacherBlock migration logic typically handles ClassEconomy creation.
+        # Here we just ensure the join_code is valid for membership.
+        # (Assuming ClassEconomy creation is handled elsewhere or implicitly safe for demo logic,
+        # but optimally we should create it if we enforce FKs)
+        from app.models import ClassEconomy, ClassMembership
+
+        # Check if ClassEconomy exists for this join_code, if not create (for demo safety)
+        if not ClassEconomy.query.get(join_code):
+            db.session.add(ClassEconomy(join_code=join_code, display_name=f"Demo {period}"))
+            db.session.flush() # Ensure it exists for FKs
+
         # Create a claimed seat for this demo student so student routes have class context
         demo_seat = TeacherBlock(
             teacher_id=admin_id,
@@ -2605,6 +2619,27 @@ def create_demo_student():
         )
         db.session.add(demo_seat)
 
+        # Create Admin ClassMembership (The "Actor" for setup)
+        admin_membership = ClassMembership.query.filter_by(join_code=join_code, admin_id=admin_id).first()
+        if not admin_membership:
+            admin_membership = ClassMembership(
+                join_code=join_code,
+                admin_id=admin_id,
+                role='admin',
+                status='active'
+            )
+            db.session.add(admin_membership)
+            db.session.flush() # Get ID
+
+        # Create Student ClassMembership (Required for context resolution)
+        student_membership = ClassMembership(
+            join_code=join_code,
+            student_id=demo_student.id,
+            role='student',
+            status='active'
+        )
+        db.session.add(student_membership)
+
         # Ensure tap settings exist for the demo block
         db.session.add(StudentBlock(student_id=demo_student.id, period=period, tap_enabled=True))
 
@@ -2614,6 +2649,7 @@ def create_demo_student():
                 student_id=demo_student.id,
                 teacher_id=admin_id,
                 join_code=join_code,
+                actor_membership_id=admin_membership.id, # Audit Anchor: Admin created this
                 amount=checking_balance,
                 account_type='checking',
                 type='admin_adjustment',
@@ -2626,6 +2662,7 @@ def create_demo_student():
                 student_id=demo_student.id,
                 teacher_id=admin_id,
                 join_code=join_code,
+                actor_membership_id=admin_membership.id, # Audit Anchor: Admin created this
                 amount=savings_balance,
                 account_type='savings',
                 type='admin_adjustment',
