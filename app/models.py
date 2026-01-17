@@ -414,7 +414,7 @@ class Student(db.Model):
     def total_earnings(self):
         return float(round(sum(
             (tx.amount for tx in self.transactions
-            if tx.amount is not None and tx.amount > Decimal('0') and not tx.is_void
+            if tx.amount is not None and tx.amount.is_finite() and tx.amount > Decimal('0') and not tx.is_void
             and not (tx.description or "").startswith("Transfer")),
             Decimal('0.00')
         ), 2))
@@ -434,7 +434,7 @@ class Student(db.Model):
         deposits = []
         for tx in self.transactions:
             # Skip transactions with NULL amounts (corrupted data)
-            if tx.amount is None or tx.amount <= Decimal('0') or tx.is_void:
+            if tx.amount is None or not tx.amount.is_finite() or tx.amount <= Decimal('0') or tx.is_void:
                 continue
             if (tx.description or "").lower().startswith("transfer"):
                 continue

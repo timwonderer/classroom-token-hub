@@ -1270,7 +1270,7 @@ def dashboard():
         active_insurance=active_insurance,
         rent_status=rent_status,
         unpaid_seconds_per_block=unpaid_seconds_per_block,
-        projected_pay_per_block={blk: float(pay) if pay else 0 for blk, pay in projected_pay_per_block.items()},
+        projected_pay_per_block={blk: float(pay or 0) for blk, pay in projected_pay_per_block.items()},
         student_name=student_name,
         total_unpaid_elapsed=total_unpaid_elapsed,
         feature_settings=feature_settings,
