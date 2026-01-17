@@ -639,6 +639,9 @@ class Transaction(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
 
+    # Audit Anchor: Link to the ClassMembership of the actor who performed the transaction
+    actor_membership_id = db.Column(db.Integer, db.ForeignKey('class_memberships.id'), nullable=True)
+
     # CRITICAL: join_code is the source of truth for class isolation
     # Each join code represents a distinct class economy, even if same teacher
     # Example: Teacher has Period A (join=MATH1A) and Period B (join=MATH3B)

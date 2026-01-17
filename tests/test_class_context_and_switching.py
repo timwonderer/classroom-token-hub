@@ -10,7 +10,7 @@ Ensures that:
 import os
 import pytest
 from flask import session
-from app.models import Student, Admin, TeacherBlock
+from app.models import Student, Admin, TeacherBlock, ClassEconomy, ClassMembership
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 
@@ -52,6 +52,24 @@ def setup_multi_class_student(client):
     db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher1.id))
     db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher2.id))
     db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher3.id))
+    db.session.commit()
+
+    # Create Class Economies
+    db.session.add(ClassEconomy(join_code="TEACHER1A", display_name="Class 1A"))
+    db.session.add(ClassEconomy(join_code="TEACHER2B", display_name="Class 2B"))
+    db.session.add(ClassEconomy(join_code="TEACHER3C", display_name="Class 3C"))
+    db.session.add(ClassEconomy(join_code="UNCLAIMEDZ", display_name="Unclaimed Z"))
+    db.session.commit()
+
+    # Create ClassMemberships
+    # Admin memberships
+    db.session.add(ClassMembership(join_code="TEACHER1A", admin_id=teacher1.id, role='admin'))
+    db.session.add(ClassMembership(join_code="TEACHER2B", admin_id=teacher2.id, role='admin'))
+    db.session.add(ClassMembership(join_code="TEACHER3C", admin_id=teacher3.id, role='admin'))
+    # Student memberships
+    db.session.add(ClassMembership(join_code="TEACHER1A", student_id=student.id, role='student'))
+    db.session.add(ClassMembership(join_code="TEACHER2B", student_id=student.id, role='student'))
+    db.session.add(ClassMembership(join_code="TEACHER3C", student_id=student.id, role='student'))
     db.session.commit()
 
     # Create claimed seats for the student in multiple classes
@@ -126,6 +144,15 @@ def setup_single_class_student(client):
     # Link student to teacher
     from app.models import StudentTeacher
     db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.commit()
+
+    # Create Class Economy
+    db.session.add(ClassEconomy(join_code="SINGLED", display_name="Single D"))
+    db.session.commit()
+
+    # Create ClassMemberships
+    db.session.add(ClassMembership(join_code="SINGLED", admin_id=teacher.id, role='admin'))
+    db.session.add(ClassMembership(join_code="SINGLED", student_id=student.id, role='student'))
     db.session.commit()
 
     seat = TeacherBlock(

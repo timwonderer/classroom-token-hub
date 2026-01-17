@@ -60,9 +60,6 @@ def normalize_to_utc(dt):
 
 
 # -------------------- PERIOD SELECTION HELPERS --------------------
-# TODO: Context Resolution Violation (Legacy Anchor)
-# Violation: The "Active Economy" is resolved via the legacy TeacherBlock model instead of ClassMembership.
-# Invariant: Authority must derive from the explicit ClassMembership link to a ClassEconomy.
 
 def get_current_class_context():
     """Get the currently selected class context (join_code, teacher_id, block).
@@ -72,10 +69,10 @@ def get_current_class_context():
     class economy, even if they share the same teacher.
 
     Returns:
-        dict with keys: join_code, teacher_id, block, seat_id
+        dict with keys: join_code, teacher_id, block, seat_id, membership_id
         None if no context available
     """
-    from app.models import TeacherBlock
+    from app.models import TeacherBlock, ClassMembership
 
     student = get_logged_in_student()
     if not student:
@@ -84,39 +81,61 @@ def get_current_class_context():
     # Check if a join code is already selected in session
     current_join_code = session.get('current_join_code')
 
-    # Get all claimed seats for this student
-    claimed_seats = TeacherBlock.query.filter_by(
+    # Get all active memberships for this student
+    memberships = ClassMembership.query.filter_by(
         student_id=student.id,
-        is_claimed=True
+        status='active',
+        role='student'
     ).all()
 
-    if not claimed_seats:
+    if not memberships:
         return None
 
-    # If no join code selected, default to first claimed seat
+    # If no join code selected, default to first membership
     if not current_join_code:
-        first_seat = claimed_seats[0]
-        current_join_code = first_seat.join_code
-        # Store in session for future requests
+        current_membership = memberships[0]
+        current_join_code = current_membership.join_code
         session['current_join_code'] = current_join_code
+    else:
+        # Verify the selected join code is valid for this student
+        current_membership = next(
+            (m for m in memberships if m.join_code == current_join_code),
+            None
+        )
+        if not current_membership:
+            # Fallback to first valid membership
+            current_membership = memberships[0]
+            current_join_code = current_membership.join_code
+            session['current_join_code'] = current_join_code
 
-    # Find the seat matching current join code
-    current_seat = next(
-        (seat for seat in claimed_seats if seat.join_code == current_join_code),
-        None
-    )
+    # Resolve teacher_id (Admin of this economy)
+    # We look for a ClassMembership for this join_code with role='admin'
+    admin_membership = ClassMembership.query.filter_by(
+        join_code=current_join_code,
+        role='admin'
+    ).first()
 
-    # If join code not found in student's seats, reset to first seat
-    if not current_seat:
-        current_seat = claimed_seats[0]
-        session['current_join_code'] = current_seat.join_code
+    teacher_id = admin_membership.admin_id if admin_membership else None
+
+    # Resolve block name (Display only, via TeacherBlock or fallback)
+    # Ideally we should use ClassEconomy.display_name but strict req mentions TeacherBlock is for UX/Audit
+    # We try to find the TeacherBlock linked to this student and join_code
+    seat = TeacherBlock.query.filter_by(
+        student_id=student.id,
+        join_code=current_join_code,
+        is_claimed=True
+    ).first()
+
+    block_name = seat.block if seat else "Unknown"
+    seat_id = seat.id if seat else None
 
     # Return full class context
     return {
-        'join_code': current_seat.join_code,
-        'teacher_id': current_seat.teacher_id,
-        'block': current_seat.block,
-        'seat_id': current_seat.id
+        'join_code': current_join_code,
+        'teacher_id': teacher_id,
+        'block': block_name,
+        'seat_id': seat_id,
+        'membership_id': current_membership.id
     }
 
 
@@ -125,20 +144,12 @@ def get_rent_settings_for_context(context):
     if not context:
         return None
 
-    teacher_id = context.get('teacher_id')
-    if not teacher_id:
+    join_code = context.get('join_code')
+    if not join_code:
         return None
 
-    current_block = (context.get('block') or '').strip().upper()
-    if current_block:
-        settings = RentSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=current_block
-        ).first()
-        if settings:
-            return settings
-
-    return RentSettings.query.filter_by(teacher_id=teacher_id).first()
+    # Strict scoping by join_code
+    return RentSettings.query.filter_by(join_code=join_code).first()
 
 
 def get_current_teacher_id():

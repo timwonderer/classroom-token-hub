@@ -195,19 +195,32 @@ def purchase_item():
     if not check_password_hash(student.passphrase_hash or '', passphrase):
         return jsonify({"status": "error", "message": "Incorrect passphrase."}), 403
 
-    # CRITICAL FIX v2: Get full class context (join_code is source of truth)
+    # CRITICAL FIX v3: Get context using ClassMembership-aware helper
     context = get_current_class_context()
     if not context:
         return jsonify({"status": "error", "message": "No class context available."}), 400
 
     join_code = context['join_code']
     teacher_id = context['teacher_id']
+    membership_id = context.get('membership_id')
 
-    item = StoreItem.query.filter_by(id=item_id, teacher_id=teacher_id).first()
+    # Verify membership exists (Audit Anchor requirement)
+    if not membership_id:
+        return jsonify({"status": "error", "message": "Invalid class membership."}), 403
 
     # 2. Validate item and purchase conditions
+    # Scope by teacher_id which is derived from the join_code context
+    item = StoreItem.query.filter_by(id=item_id, teacher_id=teacher_id).first()
+
     if not item or not item.is_active:
         return jsonify({"status": "error", "message": "This item is not available."}), 404
+
+    # Check visible blocks if applicable (prevent cross-class leakage within same teacher)
+    current_block = context.get('block', '').upper()
+    if item.visible_blocks.count() > 0:
+        is_visible = any(b.block == current_block for b in item.visible_blocks)
+        if not is_visible:
+             return jsonify({"status": "error", "message": "This item is not available for your class period."}), 404
 
     # Check rent late restrictions
     from app.models import RentSettings, RentPayment, RentItem
@@ -350,6 +363,7 @@ def purchase_item():
             student_id=student.id,
             teacher_id=teacher_id,
             join_code=join_code,  # CRITICAL: Add join_code for period isolation
+            actor_membership_id=membership_id, # Audit Anchor
             amount=-total_price,
             account_type='checking',
             type='purchase',
@@ -632,6 +646,7 @@ def use_item():
                 student_id=student.id,
                 teacher_id=context['teacher_id'],
                 join_code=context['join_code'],  # CRITICAL: Add join_code for period isolation
+                actor_membership_id=context.get('membership_id'), # Audit Anchor
                 amount=0.0,
                 account_type='checking',
                 type='redemption',
