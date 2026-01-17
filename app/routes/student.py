@@ -60,6 +60,9 @@ def normalize_to_utc(dt):
 
 
 # -------------------- PERIOD SELECTION HELPERS --------------------
+# TODO: Context Resolution Violation (Legacy Anchor)
+# Violation: The "Active Economy" is resolved via the legacy TeacherBlock model instead of ClassMembership.
+# Invariant: Authority must derive from the explicit ClassMembership link to a ClassEconomy.
 
 def get_current_class_context():
     """Get the currently selected class context (join_code, teacher_id, block).
