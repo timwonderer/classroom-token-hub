@@ -59,14 +59,14 @@ def test_shared_student_diff_teacher_diff_period(client):
     # Should NOT pay for 30 mins from Period 2
     s1 = calculate_payroll([student], now-timedelta(days=1), teacher_id=t1.id)
     assert student.id in s1
-    assert abs(s1[student.id] - 600.0) < 0.1
+    assert abs(float(s1[student.id]) - 600.0) < 0.1
 
     # 4. Pay T2
     # Should pay for 30 mins ($300)
     # Should NOT pay for Period 1
     s2 = calculate_payroll([student], now-timedelta(days=1), teacher_id=t2.id)
     assert student.id in s2
-    assert abs(s2[student.id] - 300.0) < 0.1
+    assert abs(float(s2[student.id]) - 300.0) < 0.1
 
 
 def test_same_teacher_same_block_diff_context(client):

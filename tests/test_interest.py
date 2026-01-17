@@ -41,7 +41,9 @@ def test_apply_savings_interest_with_naive_datetimes(client, test_student):
     )
 
     assert interest_tx is not None
-    assert interest_tx.amount == round(100.0 * (0.045 / 12), 2)
+    from decimal import Decimal
+    # Expected: 100 * (0.045 / 12) = 0.375 -> rounds to 0.38
+    assert interest_tx.amount == Decimal('0.38')
 
 
 def test_dashboard_renders_recent_deposit(client, test_student):
