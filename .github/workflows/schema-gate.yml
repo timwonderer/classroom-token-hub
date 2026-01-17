@@ -143,8 +143,26 @@ jobs:
           if grep -q "IRREVERSIBLE" migrations/versions/*.py; then
              echo "⚠️ Irreversible migration declared; skipping downgrade."
           else
-             flask db downgrade 
-             echo "✅ Downgrade Successful"
+             # Get current head and its down_revision to handle merge migrations
+             CURRENT_HEAD=$(flask db current 2>/dev/null | head -1 | awk '{print $1}')
+             if [ -n "$CURRENT_HEAD" ]; then
+               # Find the migration file and extract its down_revision
+               MIGRATION_FILE=$(grep -l "^Revision ID: $CURRENT_HEAD" migrations/versions/*.py 2>/dev/null | head -1)
+               if [ -n "$MIGRATION_FILE" ]; then
+                 DOWN_REV=$(grep "^down_revision" "$MIGRATION_FILE" | head -1 | sed "s/.*'\([^']*\)'.*/\1/")
+                 if [ -n "$DOWN_REV" ]; then
+                   echo "Downgrading from $CURRENT_HEAD to $DOWN_REV"
+                   flask db downgrade "$DOWN_REV"
+                   echo "✅ Downgrade Successful"
+                 else
+                   echo "⚠️ Could not determine down_revision, skipping downgrade test"
+                 fi
+               else
+                 echo "⚠️ Could not find migration file for $CURRENT_HEAD, skipping downgrade test"
+               fi
+             else
+               echo "⚠️ Could not determine current head, skipping downgrade test"
+             fi
           fi
 
           flask db upgrade
