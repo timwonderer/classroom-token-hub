@@ -135,13 +135,31 @@ class EconomyBalanceChecker:
 
     def _normalize_to_weekly(
         self,
-        value: Decimal,
+        value,
         frequency: str,
-        custom_frequency_value: Optional[Decimal] = None,
+        custom_frequency_value=None,
         custom_frequency_unit: Optional[str] = None,
     ) -> Decimal:
-        """Normalize a value to its weekly equivalent based on frequency."""
+        """Normalize a value to its weekly equivalent based on frequency.
+        
+        Args:
+            value: The value to normalize (can be float, int, or Decimal)
+            frequency: The frequency type ('monthly', 'weekly', 'biweekly', 'daily', 'custom')
+            custom_frequency_value: For custom frequency, the value
+            custom_frequency_unit: For custom frequency, the unit ('days', 'weeks', 'months')
+            
+        Returns:
+            Decimal: The weekly equivalent value
+        """
         from app.models import _quantize_currency
+        
+        # Ensure value is Decimal for precise calculations
+        if not isinstance(value, Decimal):
+            value = _quantize_currency(value)
+        
+        # Ensure custom_frequency_value is Decimal if provided
+        if custom_frequency_value is not None and not isinstance(custom_frequency_value, Decimal):
+            custom_frequency_value = _quantize_currency(custom_frequency_value)
 
         if frequency == 'monthly':
             return _quantize_currency(value / Decimal(str(self.AVERAGE_WEEKS_PER_MONTH)))
@@ -603,11 +621,11 @@ class EconomyBalanceChecker:
         """
         from app.models import _quantize_currency
         # Convert input rent to weekly for comparison
-        # Convert to Decimal first for _normalize_to_weekly
+        # _normalize_to_weekly now handles float/Decimal conversion internally
         weekly_rent = self._normalize_to_weekly(
-            _quantize_currency(rent_amount),
+            rent_amount,
             frequency_type,
-            _quantize_currency(custom_frequency_value) if custom_frequency_value else None,
+            custom_frequency_value,
             custom_frequency_unit,
         )
 
@@ -618,9 +636,11 @@ class EconomyBalanceChecker:
         monthly_recommended = cwi * self.RENT_DEFAULT_RATIO
 
         # Convert to weekly for ratio calculation
+        # Convert weekly_rent to float for ratio calculation to avoid Decimal/float issues
+        weekly_rent_float = float(weekly_rent)
 
         # Calculate ratio based on weekly equivalents
-        ratio = weekly_rent / cwi if cwi > 0 else 0
+        ratio = weekly_rent_float / cwi if cwi > 0 else 0
         monthly_ratio = ratio * self.AVERAGE_WEEKS_PER_MONTH
 
         # Convert recommendations to match the input frequency for clarity
@@ -691,7 +711,7 @@ class EconomyBalanceChecker:
 
     def validate_insurance_value(
         self,
-        premium: float,
+        premium,
         frequency: str,
         cwi: float,
         max_claim_amount: Optional[float] = None,
@@ -699,7 +719,10 @@ class EconomyBalanceChecker:
         claim_type: Optional[str] = None,
     ) -> Tuple[List[Dict[str, str]], Dict[str, float], float]:
         weekly_value = self._normalize_to_weekly(premium, frequency)
-        ratio = weekly_value / cwi if cwi > 0 else 0
+        # Convert to float for ratio calculation
+        weekly_value_float = float(weekly_value)
+        premium_float = float(premium) if hasattr(premium, '__float__') else premium
+        ratio = weekly_value_float / cwi if cwi > 0 else 0
 
         # Calculate frequency-specific recommendations
         min_weekly = cwi * self.INSURANCE_MIN_RATIO
@@ -746,19 +769,19 @@ class EconomyBalanceChecker:
         elif ratio > self.INSURANCE_MAX_RATIO:
             warnings.append({
                 'level': 'critical',
-                'message': f'Premium (${premium:.2f}/{frequency}) is too expensive. Students may not enroll.',
+                'message': f'Premium (${premium_float:.2f}/{frequency}) is too expensive. Students may not enroll.',
             })
         else:
             warnings.append({
                 'level': 'success',
-                'message': f'Premium is balanced at ${premium:.2f}/{frequency}',
+                'message': f'Premium is balanced at ${premium_float:.2f}/{frequency}',
             })
 
-        if claim_type != 'non_monetary' and premium > 0:
-            coverage_min = premium * self.COVERAGE_MIN_MULTIPLIER
-            coverage_max = premium * self.COVERAGE_MAX_MULTIPLIER
-            period_min = premium * self.PERIOD_MIN_MULTIPLIER
-            period_max = premium * self.PERIOD_MAX_MULTIPLIER
+        if claim_type != 'non_monetary' and premium_float > 0:
+            coverage_min = premium_float * self.COVERAGE_MIN_MULTIPLIER
+            coverage_max = premium_float * self.COVERAGE_MAX_MULTIPLIER
+            period_min = premium_float * self.PERIOD_MIN_MULTIPLIER
+            period_max = premium_float * self.PERIOD_MAX_MULTIPLIER
 
             def add_limit_warning(
                 value: Optional[float],
@@ -808,8 +831,10 @@ class EconomyBalanceChecker:
 
         return warnings, recommendations, ratio
 
-    def validate_fine_value(self, fine_amount: float, cwi: float) -> Tuple[List[Dict[str, str]], Dict[str, float], float]:
-        ratio = fine_amount / cwi if cwi > 0 else 0
+    def validate_fine_value(self, fine_amount, cwi: float) -> Tuple[List[Dict[str, str]], Dict[str, float], float]:
+        # Convert to float if Decimal for ratio calculation
+        fine_amount_float = float(fine_amount) if hasattr(fine_amount, '__float__') else fine_amount
+        ratio = fine_amount_float / cwi if cwi > 0 else 0
 
         recommendations = {
             'min': round(cwi * self.FINE_MIN_RATIO, 2),
@@ -821,23 +846,25 @@ class EconomyBalanceChecker:
         if ratio < self.FINE_MIN_RATIO:
             warnings.append({
                 'level': 'warning',
-                'message': f'Fine (${fine_amount:.2f}) may be too small to be meaningful.',
+                'message': f'Fine (${fine_amount_float:.2f}) may be too small to be meaningful.',
             })
         elif ratio > self.FINE_MAX_RATIO:
             warnings.append({
                 'level': 'critical',
-                'message': f'Fine (${fine_amount:.2f}) is too harsh. May cause student insolvency.',
+                'message': f'Fine (${fine_amount_float:.2f}) is too harsh. May cause student insolvency.',
             })
         else:
             warnings.append({
                 'level': 'success',
-                'message': f'Fine is balanced at ${fine_amount:.2f}',
+                'message': f'Fine is balanced at ${fine_amount_float:.2f}',
             })
 
         return warnings, recommendations, ratio
 
-    def validate_store_item_value(self, price: float, cwi: float) -> Tuple[List[Dict[str, str]], Dict[str, Dict[str, float]], float]:
-        ratio = price / cwi if cwi > 0 else 0
+    def validate_store_item_value(self, price, cwi: float) -> Tuple[List[Dict[str, str]], Dict[str, Dict[str, float]], float]:
+        # Convert to float if Decimal for ratio calculation
+        price_float = float(price) if hasattr(price, '__float__') else price
+        ratio = price_float / cwi if cwi > 0 else 0
         recommendations: Dict[str, Dict[str, float]] = {}
         warnings: List[Dict[str, str]] = []
 
@@ -925,19 +952,20 @@ class EconomyBalanceChecker:
         """
         weekly_income = cwi
 
-        # Calculate weekly rent
-        weekly_rent = 0
+        # Calculate weekly rent (convert to float for consistent arithmetic)
+        weekly_rent = 0.0
         if rent_settings and rent_settings.is_enabled:
             rent_amount = float(rent_settings.rent_amount)
-            weekly_rent = self._normalize_to_weekly(
+            weekly_rent_decimal = self._normalize_to_weekly(
                 rent_amount,
                 rent_settings.frequency_type,
                 rent_settings.custom_frequency_value,
                 getattr(rent_settings, 'custom_frequency_unit', None)
             )
+            weekly_rent = float(weekly_rent_decimal)
 
         # Calculate weekly insurance (use cheapest active policy as baseline)
-        weekly_insurance = 0
+        weekly_insurance = 0.0
         if insurance_policies:
             active_policies = [p for p in insurance_policies if p.is_active]
             if active_policies:
@@ -946,11 +974,12 @@ class EconomyBalanceChecker:
                 for policy in active_policies:
                     premium = float(policy.premium)
                     weekly_equiv = self._normalize_to_weekly(premium, policy.charge_frequency)
+                    weekly_equiv_float = float(weekly_equiv)
 
-                    if weekly_equiv < cheapest_weekly:
-                        cheapest_weekly = weekly_equiv
+                    if weekly_equiv_float < cheapest_weekly:
+                        cheapest_weekly = weekly_equiv_float
 
-                weekly_insurance = cheapest_weekly if cheapest_weekly != float('inf') else 0
+                weekly_insurance = cheapest_weekly if cheapest_weekly != float('inf') else 0.0
 
         # Estimate weekly store spending if not provided
         if average_store_spending is None:
