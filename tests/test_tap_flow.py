@@ -13,9 +13,14 @@ def parse_server_state(html):
     return json.loads(script.string)
 
 def create_claimed_seat(teacher_id, student_id, block, join_code, salt=None):
-    from app.models import TeacherBlock
+    from app.models import TeacherBlock, ClassEconomy
     if salt is None:
         salt = get_random_salt()
+
+    # Ensure ClassEconomy exists for FK constraint
+    if not ClassEconomy.query.get(join_code):
+        db.session.add(ClassEconomy(join_code=join_code, display_name=f"Class {join_code}"))
+        db.session.flush()
 
     tb = TeacherBlock(
         teacher_id=teacher_id,
