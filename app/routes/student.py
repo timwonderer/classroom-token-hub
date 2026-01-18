@@ -196,17 +196,30 @@ def get_feature_settings_for_student():
         return FeatureSettings.get_defaults()
 
     current_block = (context.get('block') or '').strip().upper() or None
+    join_code = context.get('join_code')
 
-    # Try block-specific settings first
-    if current_block:
+    # Try block-specific settings first (scoped by join_code)
+    if current_block and join_code:
         block_settings = FeatureSettings.query.filter_by(
-            teacher_id=teacher_id,
+            join_code=join_code,
             block=current_block
         ).first()
         if block_settings:
             return block_settings.to_dict()
 
     # Fall back to global settings for this teacher
+    # Note: Global settings (block=None) might not have a join_code if they apply to all of a teacher's classes
+    # But we should prefer one linked to this join_code if it exists (e.g. class-wide default)
+    if join_code:
+        class_settings = FeatureSettings.query.filter_by(
+            join_code=join_code,
+            block=None
+        ).first()
+        if class_settings:
+            return class_settings.to_dict()
+
+    # Final fallback: Teacher global (no block, no join_code or just teacher_id)
+    # This maintains backward compatibility for settings created before join_code association
     global_settings = FeatureSettings.query.filter_by(
         teacher_id=teacher_id,
         block=None
