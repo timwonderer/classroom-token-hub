@@ -1021,6 +1021,12 @@ def dashboard():
     # Filter to only current class block
     period_states = {current_block.upper(): period_states.get(current_block.upper(), {})}
     student_blocks = [current_block.upper()]  # Only current block
+
+    # Convert Decimal values to float for JSON serialization
+    for state in period_states.values():
+        if 'projected_pay' in state and state['projected_pay'] is not None:
+            state['projected_pay'] = float(state['projected_pay'])
+
     period_states_json = json.dumps(period_states, separators=(',', ':'))
 
     unpaid_seconds_per_block = {
@@ -1259,27 +1265,27 @@ def dashboard():
         student_items=student_items,
         recent_transactions=transactions[:5],  # Most recent 5 transactions
         now=local_now,
-        forecast_interest=forecast_interest,
+        forecast_interest=float(forecast_interest),
         recent_deposit=recent_deposit,
         active_insurance=active_insurance,
         rent_status=rent_status,
         unpaid_seconds_per_block=unpaid_seconds_per_block,
-        projected_pay_per_block=projected_pay_per_block,
+        projected_pay_per_block={blk: float(pay or 0) for blk, pay in projected_pay_per_block.items()},
         student_name=student_name,
         total_unpaid_elapsed=total_unpaid_elapsed,
         feature_settings=feature_settings,
         # FIX: Pass scoped balances to template instead of using unscoped properties
-        checking_balance=checking_balance,
-        savings_balance=savings_balance,
+        checking_balance=float(checking_balance),
+        savings_balance=float(savings_balance),
         teacher_id=teacher_id,
         pending_recovery_code=pending_recovery_code,
         # Weekly/monthly analytics
         unique_days_tapped=unique_days_tapped,
         total_minutes_this_week=int(total_minutes_this_week),
-        earnings_this_week=round(earnings_this_week, 2),
-        earnings_this_month=round(earnings_this_month, 2),
-        spending_this_week=round(spending_this_week, 2),
-        spending_this_month=round(spending_this_month, 2),
+        earnings_this_week=float(round(earnings_this_week, 2)),
+        earnings_this_month=float(round(earnings_this_month, 2)),
+        spending_this_week=float(round(spending_this_week, 2)),
+        spending_this_month=float(round(spending_this_month, 2)),
         announcements=announcements,
     )
 
@@ -1612,7 +1618,8 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
     # Calculate interest based on type
     if calculation_type == 'compound':
         # For compound interest, use current total balance (including previous interest)
-        balance = student.savings_balance
+        # Convert float balance to Decimal for arithmetic compatibility with Decimal rates
+        balance = _quantize_currency(student.savings_balance)
 
         # Determine the rate based on compound frequency
         if compound_frequency == 'daily':

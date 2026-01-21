@@ -1959,7 +1959,7 @@ def handle_tap():
                 "message": "Hall pass requested.",
                 "active": is_active,
                 "duration": duration,
-                "projected_pay": projected_pay,
+                "projected_pay": float(projected_pay),
                 "hall_pass": {
                     "id": hall_pass_log.id,
                     "status": hall_pass_log.status,
@@ -2119,7 +2119,7 @@ def handle_tap():
         "status": "ok",
         "active": is_active,
         "duration": duration,
-        "projected_pay": projected_pay
+        "projected_pay": float(projected_pay)
     })
 
 
@@ -2423,6 +2423,11 @@ def student_status():
     check_and_auto_tapout_if_limit_reached(student)
 
     period_states = get_all_block_statuses(student, join_code=context['join_code'])
+
+    # Convert Decimal values to float for JSON serialization
+    for state in period_states.values():
+        if 'projected_pay' in state and state['projected_pay'] is not None:
+            state['projected_pay'] = float(state['projected_pay'])
 
     return jsonify({
         "status": "ok",
