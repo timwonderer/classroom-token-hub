@@ -9,6 +9,13 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Fixed
+- **CRITICAL: Decimal.InvalidOperation in Student Dashboard Earnings/Spending Calculations** - Fixed crash when calculating weekly/monthly analytics with NULL transaction amounts
+  - **Issue**: Dashboard earnings and spending calculations compared `tx.amount > Decimal('0')` without checking for NULL
+  - **Impact**: Student dashboard returned 500 error with `decimal.InvalidOperation: [<class 'decimal.InvalidOperation'>]` when corrupted transactions exist
+  - **Affected Code**: Lines 1210-1231 in `app/routes/student.py` (earnings_this_week, earnings_this_month, spending_this_week, spending_this_month)
+  - **Additional Fix**: Line 1646 in savings interest calculation also needed NULL check
+  - **Solution**: Added null check (`tx.amount is not None`) before all Decimal comparisons in dashboard calculations
+  - Completes the NULL handling fix from PR #885 which fixed the Student model properties
 - **Decimal.InvalidOperation in recent_deposits** - Fixed crash when accessing student dashboard with NULL transaction amounts
   - **Issue**: `Student.recent_deposits` property compared `tx.amount <= Decimal('0')` without checking for NULL
   - **Impact**: Student dashboard returned 500 error with `decimal.InvalidOperation: [<class 'decimal.InvalidOperation'>]`
