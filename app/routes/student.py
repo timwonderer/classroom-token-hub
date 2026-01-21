@@ -1207,26 +1207,28 @@ def dashboard():
         return ts_utc is not None and ts_utc >= start
 
     # Earnings this week/month
+    # FIX: Add null check to prevent decimal.InvalidOperation on corrupted data
     earnings_this_week = sum(
         (tx.amount for tx in transactions
-        if tx.amount > Decimal('0') and _occurred_after(tx.timestamp, week_start) and not tx.is_void),
+        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_after(tx.timestamp, week_start) and not tx.is_void),
         Decimal('0.00')
     )
     earnings_this_month = sum(
         (tx.amount for tx in transactions
-        if tx.amount > Decimal('0') and _occurred_after(tx.timestamp, month_start) and not tx.is_void),
+        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_after(tx.timestamp, month_start) and not tx.is_void),
         Decimal('0.00')
     )
 
     # Spending this week/month
+    # FIX: Add null check to prevent decimal.InvalidOperation on corrupted data
     spending_this_week = abs(sum(
         (tx.amount for tx in transactions
-        if tx.amount < Decimal('0') and _occurred_after(tx.timestamp, week_start) and not tx.is_void),
+        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_after(tx.timestamp, week_start) and not tx.is_void),
         Decimal('0.00')
     ))
     spending_this_month = abs(sum(
         (tx.amount for tx in transactions
-        if tx.amount < Decimal('0') and _occurred_after(tx.timestamp, month_start) and not tx.is_void),
+        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_after(tx.timestamp, month_start) and not tx.is_void),
         Decimal('0.00')
     ))
 
@@ -1641,7 +1643,8 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
         # Simple interest: only calculate on original deposits (not including previous interest)
         eligible_balance = Decimal('0')
         for tx in student.transactions:
-            if tx.account_type != 'savings' or tx.is_void or tx.amount <= Decimal('0'):
+            # FIX: Add null check to prevent decimal.InvalidOperation on corrupted data
+            if tx.account_type != 'savings' or tx.is_void or tx.amount is None or tx.amount <= Decimal('0'):
                 continue
             # Exclude interest transactions from principal calculation
             if tx.type == 'Interest' or 'Interest' in (tx.description or ''):
