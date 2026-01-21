@@ -68,7 +68,7 @@ from app.utils.passwordless_client import (
     get_public_api_key
 )
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
-from app.payroll import calculate_payroll
+from app.payroll import calculate_payroll, calculate_payroll_breakdown
 from app.attendance import get_last_payroll_time, calculate_unpaid_attendance_seconds, get_join_code_for_student_period
 import time
 
