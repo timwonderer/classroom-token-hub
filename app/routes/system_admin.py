@@ -154,7 +154,7 @@ def auth_check():
     return ("", 204)
 
 @sysadmin_bp.route('/login', methods=['GET', 'POST'])
-@limiter.limit("30 per minute")
+@limiter.limit("10 per minute")
 def login():
     """System admin login with TOTP authentication."""
     session.pop("is_system_admin", None)
