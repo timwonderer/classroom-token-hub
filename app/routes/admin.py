@@ -8033,7 +8033,7 @@ def api_economy_analyze():
             'cwi_breakdown': {
                 'pay_rate_per_hour': analysis.cwi.pay_rate_per_minute * 60,
                 'pay_rate_per_minute': analysis.cwi.pay_rate_per_minute,
-                'expected_weekly_hours': analysis.cwi.expected_weekly_minutes / 60,
+                'expected_weekly_hours': analysis.cwi.expected_weekly_minutes / 60.0,
                 'expected_weekly_minutes': analysis.cwi.expected_weekly_minutes,
                 'notes': analysis.cwi.notes
             }
@@ -8100,7 +8100,7 @@ def api_economy_validate(feature):
         # Use expected_weekly_hours from payroll_settings, not from request
         cwi_calc = checker.calculate_cwi(payroll_settings)
         cwi = cwi_calc.cwi
-        expected_weekly_hours = cwi_calc.expected_weekly_minutes / 60
+        expected_weekly_hours = cwi_calc.expected_weekly_minutes / 60.0
 
         warnings = []
         recommendations = {}
