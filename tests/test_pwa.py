@@ -18,7 +18,7 @@ def test_offline_page_accessible(client):
     # Check for key elements in the offline page
     html = response.data.decode('utf-8')
     assert 'You are offline' in html
-    assert 'wifi-off' in html  # SVG icon class
+    assert 'wifi_off' in html  # Material Symbols icon class
     assert 'Try Again' in html
 
 
