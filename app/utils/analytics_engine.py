@@ -286,7 +286,10 @@ class AnalyticsEngine:
                 teacher_id=self.teacher_id,
                 join_code=self.join_code
             )
-            
+
+            # Convert Decimal to float for arithmetic operations
+            current_balance = float(current_balance) if current_balance is not None else 0.0
+
             # Calculate deviation
             if expected_balance > 0:
                 deviation = abs(current_balance - expected_balance) / expected_balance
@@ -330,7 +333,10 @@ class AnalyticsEngine:
                 teacher_id=self.teacher_id,
                 join_code=self.join_code
             )
-            
+
+            # Convert Decimal to float for arithmetic comparison
+            balance = float(balance) if balance is not None else 0.0
+
             # Check if the student can save at least 10% of CWI
             if balance >= 0.1 * cwi:
                 passing_students += 1
@@ -550,7 +556,7 @@ class AnalyticsEngine:
         # Calculate average balance (for CWI comparison only, not for ranking)
         students = self._get_enrolled_students()
         total_balance = sum(
-            s.get_checking_balance(teacher_id=self.teacher_id, join_code=self.join_code)
+            float(s.get_checking_balance(teacher_id=self.teacher_id, join_code=self.join_code) or 0)
             for s in students
         )
         avg_balance = total_balance / len(students) if students else 0.0

@@ -143,6 +143,10 @@ class EconomyBalanceChecker:
         """Normalize a value to its weekly equivalent based on frequency."""
         from app.models import _quantize_currency
 
+        # Ensure value is Decimal for consistent arithmetic
+        if not isinstance(value, Decimal):
+            value = Decimal(str(value))
+
         if frequency == 'monthly':
             return _quantize_currency(value / Decimal(str(self.AVERAGE_WEEKS_PER_MONTH)))
         if frequency == 'weekly':
