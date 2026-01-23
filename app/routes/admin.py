@@ -8031,10 +8031,10 @@ def api_economy_analyze():
             'warnings': warnings_by_level,
             'recommendations': analysis.recommendations,
             'cwi_breakdown': {
-                'pay_rate_per_hour': float(analysis.cwi.pay_rate_per_minute) * 60,
-                'pay_rate_per_minute': float(analysis.cwi.pay_rate_per_minute),
-                'expected_weekly_hours': float(analysis.cwi.expected_weekly_minutes) / 60,
-                'expected_weekly_minutes': float(analysis.cwi.expected_weekly_minutes),
+                'pay_rate_per_hour': analysis.cwi.pay_rate_per_minute * 60,
+                'pay_rate_per_minute': analysis.cwi.pay_rate_per_minute,
+                'expected_weekly_hours': analysis.cwi.expected_weekly_minutes / 60,
+                'expected_weekly_minutes': analysis.cwi.expected_weekly_minutes,
                 'notes': analysis.cwi.notes
             }
         })
@@ -8100,7 +8100,7 @@ def api_economy_validate(feature):
         # Use expected_weekly_hours from payroll_settings, not from request
         cwi_calc = checker.calculate_cwi(payroll_settings)
         cwi = cwi_calc.cwi
-        expected_weekly_hours = float(cwi_calc.expected_weekly_minutes) / 60
+        expected_weekly_hours = cwi_calc.expected_weekly_minutes / 60
 
         warnings = []
         recommendations = {}
@@ -8140,10 +8140,10 @@ def api_economy_validate(feature):
             'cwi': cwi,
             'ratio': ratio if feature != 'insurance' else None,
             'cwi_breakdown': {
-                'pay_rate_per_hour': float(cwi_calc.pay_rate_per_minute) * 60,
-                'pay_rate_per_minute': float(cwi_calc.pay_rate_per_minute),
+                'pay_rate_per_hour': cwi_calc.pay_rate_per_minute * 60,
+                'pay_rate_per_minute': cwi_calc.pay_rate_per_minute,
                 'expected_weekly_hours': expected_weekly_hours,
-                'expected_weekly_minutes': float(cwi_calc.expected_weekly_minutes),
+                'expected_weekly_minutes': cwi_calc.expected_weekly_minutes,
             }
         })
 
