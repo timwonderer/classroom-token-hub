@@ -943,12 +943,12 @@ class EconomyBalanceChecker:
         weekly_rent = 0
         if rent_settings and rent_settings.is_enabled:
             rent_amount = float(rent_settings.rent_amount)
-            weekly_rent = self._normalize_to_weekly(
+            weekly_rent = float(self._normalize_to_weekly(
                 rent_amount,
                 rent_settings.frequency_type,
                 rent_settings.custom_frequency_value,
                 getattr(rent_settings, 'custom_frequency_unit', None)
-            )
+            ))
 
         # Calculate weekly insurance (use cheapest active policy as baseline)
         weekly_insurance = 0
@@ -959,7 +959,7 @@ class EconomyBalanceChecker:
                 cheapest_weekly = float('inf')
                 for policy in active_policies:
                     premium = float(policy.premium)
-                    weekly_equiv = self._normalize_to_weekly(premium, policy.charge_frequency)
+                    weekly_equiv = float(self._normalize_to_weekly(premium, policy.charge_frequency))
 
                     if weekly_equiv < cheapest_weekly:
                         cheapest_weekly = weekly_equiv
