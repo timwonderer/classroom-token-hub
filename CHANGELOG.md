@@ -8,6 +8,8 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-01-22
+
 ### Fixed
 - **CRITICAL: Decimal.InvalidOperation in Student Dashboard Earnings/Spending Calculations** - Fixed crash when calculating weekly/monthly analytics with NULL transaction amounts
   - **Issue**: Dashboard earnings and spending calculations compared `tx.amount > Decimal('0')` without checking for NULL
