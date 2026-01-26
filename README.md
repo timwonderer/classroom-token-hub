@@ -170,11 +170,11 @@ An interactive banking and classroom management platform for teaching students a
 - **[Database Schema](docs/technical-reference/database_schema.md)** — Up-to-date database reference
 - **[API Reference](docs/technical-reference/api_reference.md)** — REST API documentation
 - **[Development Priorities](docs/development/DEVELOPMENT.md)** — Current priorities, roadmap, and tasks
-- **[Changelog](docs/CHANGELOG.md)** — Version history and notable changes
+- **[Changelog](CHANGELOG.md)** — Version history and notable changes
 
 ### Deployment & Operations
 
-- **[Deployment Guide](docs/DEPLOYMENT.md)** — Production deployment instructions
+- **[Deployment Guide](docs/operations/Deployment_Guide.md)** — Production deployment instructions
 - **[Operations Guides](docs/operations/)** — Operational procedures and troubleshooting
 - **[Contributing Guide](.github/CONTRIBUTING.md)** — How to contribute to the project
 
