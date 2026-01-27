@@ -69,10 +69,10 @@ def get_current_class_context():
     class economy, even if they share the same teacher.
 
     Returns:
-        dict with keys: join_code, teacher_id, block, seat_id
+        dict with keys: join_code, teacher_id, block, seat_id, membership_id, economy
         None if no context available
     """
-    from app.models import TeacherBlock
+    from app.models import TeacherBlock, ClassEconomy, ClassMembership
 
     student = get_logged_in_student()
     if not student:
@@ -108,21 +108,44 @@ def get_current_class_context():
         current_seat = claimed_seats[0]
         session['current_join_code'] = current_seat.join_code
 
+    # Get ClassEconomy and ClassMembership for enhanced context
+    economy = ClassEconomy.query.get(current_seat.join_code)
+    membership = ClassMembership.query.filter_by(
+        join_code=current_seat.join_code,
+        student_id=student.id,
+        status='active'
+    ).first()
+
     # Return full class context
     return {
         'join_code': current_seat.join_code,
         'teacher_id': current_seat.teacher_id,
         'block': current_seat.block,
-        'seat_id': current_seat.id
+        'seat_id': current_seat.id,
+        'membership_id': membership.id if membership else None,
+        'economy': economy
     }
 
 
 def get_rent_settings_for_context(context):
-    """Return rent settings scoped to the current class context."""
+    """Return rent settings scoped to the current class context.
+
+    CRITICAL: Uses join_code as primary lookup, falls back to teacher_id/block
+    for backward compatibility during migration.
+    """
     if not context:
         return None
 
+    join_code = context.get('join_code')
     teacher_id = context.get('teacher_id')
+
+    # Primary: Look up by join_code (new architecture)
+    if join_code:
+        settings = RentSettings.query.filter_by(join_code=join_code).first()
+        if settings:
+            return settings
+
+    # Fallback: Look up by teacher_id + block (legacy)
     if not teacher_id:
         return None
 
@@ -135,7 +158,8 @@ def get_rent_settings_for_context(context):
         if settings:
             return settings
 
-    return RentSettings.query.filter_by(teacher_id=teacher_id).first()
+    # Final fallback: Global settings for teacher
+    return RentSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
 
 
 def get_current_teacher_id():
@@ -162,8 +186,10 @@ def get_feature_settings_for_student():
     """
     Get feature settings for the currently logged-in student.
 
-    Returns the merged feature settings for the student's current teacher/period context.
-    Settings cascade: period-specific > global > system defaults.
+    Returns the merged feature settings for the student's current class context.
+    Settings cascade: join_code-specific > block-specific > global > system defaults.
+
+    CRITICAL: Uses join_code as primary lookup for proper multi-tenancy isolation.
 
     Returns:
         dict: Feature settings dictionary with enabled/disabled flags
@@ -177,13 +203,24 @@ def get_feature_settings_for_student():
     if not context:
         return FeatureSettings.get_defaults()
 
+    join_code = context.get('join_code')
     teacher_id = context.get('teacher_id')
+
+    # Primary: Look up by join_code (new architecture)
+    if join_code:
+        join_code_settings = FeatureSettings.query.filter_by(
+            join_code=join_code
+        ).first()
+        if join_code_settings:
+            return join_code_settings.to_dict()
+
+    # Fallback: Legacy teacher_id + block lookup
     if not teacher_id:
         return FeatureSettings.get_defaults()
 
     current_block = (context.get('block') or '').strip().upper() or None
 
-    # Try block-specific settings first
+    # Try block-specific settings
     if current_block:
         block_settings = FeatureSettings.query.filter_by(
             teacher_id=teacher_id,
