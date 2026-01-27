@@ -203,7 +203,12 @@ def purchase_item():
     join_code = context['join_code']
     teacher_id = context['teacher_id']
 
-    item = StoreItem.query.filter_by(id=item_id, teacher_id=teacher_id).first()
+    # CRITICAL: Use join_code as primary filter for class isolation
+    # Fall back to teacher_id for items without join_code (legacy)
+    item = StoreItem.query.filter_by(id=item_id, join_code=join_code).first()
+    if not item:
+        # Fallback: Check for legacy items scoped by teacher_id only
+        item = StoreItem.query.filter_by(id=item_id, teacher_id=teacher_id, join_code=None).first()
 
     # 2. Validate item and purchase conditions
     if not item or not item.is_active:
@@ -271,8 +276,12 @@ def purchase_item():
 
     total_price = unit_price * quantity
 
-    # Get banking settings for overdraft handling (reuse teacher_id from above)
-    banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first()
+    # Get banking settings for overdraft handling
+    # CRITICAL: Use join_code as primary filter for class isolation
+    banking_settings = BankingSettings.query.filter_by(join_code=join_code).first()
+    if not banking_settings:
+        # Fallback: Legacy settings by teacher_id
+        banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id, join_code=None).first()
 
     # Check if student has sufficient funds
     if student.checking_balance < total_price:
@@ -776,15 +785,16 @@ def handle_hall_pass_action(pass_id, action):
 def get_active_hall_passes():
     """Get last 10 students who used hall passes for verification display
 
-    This endpoint supports teacher scoping via query parameter.
-    Usage: /api/hall-pass/verification/active?teacher_id=123
-    If no teacher_id is provided, shows all hall pass activity (backward compatible).
+    CRITICAL: This endpoint requires join_code for proper class isolation.
+    Usage: /api/hall-pass/verification/active?join_code=ABC123
+    Legacy: /api/hall-pass/verification/active?teacher_id=123 (deprecated)
     """
 
     from app.models import Admin, Student, StudentTeacher
     from sqlalchemy import or_
 
-    # Determine which teacher's data to show (optional)
+    # CRITICAL: Use join_code as primary scoping mechanism
+    join_code = request.args.get('join_code')
     teacher_id = request.args.get('teacher_id', type=int)
 
     # Start with base query
@@ -793,8 +803,12 @@ def get_active_hall_passes():
         HallPassLog.left_time.isnot(None)
     )
 
-    # If teacher_id is provided, validate and scope the query
-    if teacher_id:
+    # Primary: Scope by join_code (new architecture)
+    if join_code:
+        query = query.filter(HallPassLog.join_code == join_code)
+
+    # Fallback: Scope by teacher_id (legacy)
+    elif teacher_id:
         # Validate teacher exists
         teacher = Admin.query.get(teacher_id)
         if not teacher:
@@ -829,6 +843,15 @@ def get_active_hall_passes():
 
         # Add teacher scoping filter
         query = query.filter(HallPassLog.student_id.in_(student_ids_subquery))
+
+    else:
+        # SECURITY: Require either join_code or teacher_id to prevent global data leak
+        # System admins can still see all data by providing teacher_id
+        if not session.get('is_system_admin'):
+            return jsonify({
+                "status": "error",
+                "message": "join_code or teacher_id is required"
+            }), 400
 
     # Get the last 10 students who have left class
     recent_passes = query.order_by(HallPassLog.left_time.desc()).limit(10).all()
