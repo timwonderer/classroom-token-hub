@@ -380,3 +380,271 @@ def can_access_student_routes():
         bool: True if user can access student routes, False otherwise.
     """
     return 'student_id' in session or is_viewing_as_student()
+
+
+# -------------------- CLASS MEMBERSHIP AUTHORIZATION --------------------
+
+def resolve_join_code(join_code):
+    """
+    Resolve a join code, following aliases if necessary.
+
+    If the join_code is an old/rotated code, resolves to the current code.
+    Returns None if the code doesn't exist in any form.
+
+    Args:
+        join_code: The join code to resolve
+
+    Returns:
+        tuple: (resolved_join_code, ClassEconomy) or (None, None) if not found
+    """
+    from app.models import ClassEconomy, ClassJoinCodeAlias
+
+    # First, try direct lookup
+    economy = ClassEconomy.query.get(join_code)
+    if economy:
+        return join_code, economy
+
+    # Check if it's an old/aliased code
+    alias = ClassJoinCodeAlias.query.filter_by(old_code=join_code).first()
+    if alias:
+        economy = ClassEconomy.query.get(alias.current_join_code)
+        if economy:
+            return alias.current_join_code, economy
+
+    return None, None
+
+
+def get_membership(join_code, admin_id=None, student_id=None):
+    """
+    Get a user's membership for a specific class economy.
+
+    Args:
+        join_code: The class economy's join code
+        admin_id: The admin's ID (mutually exclusive with student_id)
+        student_id: The student's ID (mutually exclusive with admin_id)
+
+    Returns:
+        ClassMembership: The membership record, or None if not found
+    """
+    from app.models import ClassMembership
+
+    if not join_code:
+        return None
+
+    # Resolve the join code in case it's an alias
+    resolved_code, economy = resolve_join_code(join_code)
+    if not resolved_code:
+        return None
+
+    if admin_id:
+        return ClassMembership.query.filter_by(
+            join_code=resolved_code,
+            admin_id=admin_id,
+            status='active'
+        ).first()
+    elif student_id:
+        return ClassMembership.query.filter_by(
+            join_code=resolved_code,
+            student_id=student_id,
+            status='active'
+        ).first()
+
+    return None
+
+
+def get_current_membership():
+    """
+    Get the current user's membership for their active class context.
+
+    Automatically determines user type from session and uses current_join_code.
+
+    Returns:
+        ClassMembership: The membership record, or None if not found
+    """
+    join_code = session.get('current_join_code')
+    if not join_code:
+        return None
+
+    if session.get('is_admin'):
+        admin_id = session.get('admin_id')
+        return get_membership(join_code, admin_id=admin_id)
+    elif 'student_id' in session:
+        student_id = session.get('student_id')
+        return get_membership(join_code, student_id=student_id)
+
+    return None
+
+
+def check_membership_access(join_code, allowed_roles=None, require_active_economy=True):
+    """
+    Check if the current user has membership access to a class economy.
+
+    This is the core authorization check for the join_code-centric architecture.
+
+    Args:
+        join_code: The class economy's join code to check access for
+        allowed_roles: List of roles that are allowed (e.g., ['admin', 'student'])
+                      If None, any active membership is sufficient
+        require_active_economy: If True, also checks that the economy status is 'active'
+
+    Returns:
+        tuple: (is_allowed, membership, economy, error_message)
+            - is_allowed: True if access is granted
+            - membership: The ClassMembership record (or None)
+            - economy: The ClassEconomy record (or None)
+            - error_message: Human-readable error if access denied
+    """
+    from app.models import ClassEconomy, ClassMembership
+
+    if not join_code:
+        return False, None, None, "No class context specified"
+
+    # Resolve the join code
+    resolved_code, economy = resolve_join_code(join_code)
+    if not economy:
+        return False, None, None, "Class not found"
+
+    # Check economy status if required
+    if require_active_economy and economy.status != 'active':
+        return False, None, economy, "This class is archived and read-only"
+
+    # System admins have global access
+    if session.get('is_system_admin'):
+        return True, None, economy, None
+
+    # Get the user's membership
+    membership = None
+    if session.get('is_admin'):
+        admin_id = session.get('admin_id')
+        membership = ClassMembership.query.filter_by(
+            join_code=resolved_code,
+            admin_id=admin_id,
+            status='active'
+        ).first()
+    elif 'student_id' in session:
+        student_id = session.get('student_id')
+        membership = ClassMembership.query.filter_by(
+            join_code=resolved_code,
+            student_id=student_id,
+            status='active'
+        ).first()
+
+    if not membership:
+        return False, None, economy, "You do not have access to this class"
+
+    # Check role if required
+    if allowed_roles and membership.role not in allowed_roles:
+        return False, membership, economy, f"This action requires one of these roles: {', '.join(allowed_roles)}"
+
+    return True, membership, economy, None
+
+
+def membership_required(allowed_roles=None, require_active_economy=True):
+    """
+    Decorator to require class membership for a route.
+
+    Uses the 'join_code' from:
+    1. Route kwargs (if present)
+    2. Request args (if present)
+    3. Session's current_join_code (fallback)
+
+    Args:
+        allowed_roles: List of roles that are allowed (e.g., ['admin'])
+        require_active_economy: If True, requires economy status to be 'active'
+
+    Usage:
+        @app.route('/class/<join_code>/settings')
+        @admin_required
+        @membership_required(allowed_roles=['admin'])
+        def class_settings(join_code):
+            # membership is available via get_current_membership()
+            pass
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            # Get join_code from route, request args, or session
+            join_code = kwargs.get('join_code') or request.args.get('join_code') or session.get('current_join_code')
+
+            is_allowed, membership, economy, error = check_membership_access(
+                join_code,
+                allowed_roles=allowed_roles,
+                require_active_economy=require_active_economy
+            )
+
+            if not is_allowed:
+                if request.path.startswith('/api/'):
+                    return jsonify({"status": "error", "error": error}), 403
+                flash(error, "error")
+                # Redirect based on user type
+                if session.get('is_admin'):
+                    return redirect(url_for('admin.dashboard'))
+                else:
+                    return redirect(url_for('student.select_class'))
+
+            # Store membership in request context for use in route
+            from flask import g
+            g.current_membership = membership
+            g.current_economy = economy
+
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def get_or_create_membership(join_code, admin_id=None, student_id=None, role=None):
+    """
+    Get existing membership or create a new one.
+
+    This is used during class joining and roster operations.
+
+    Args:
+        join_code: The class economy's join code
+        admin_id: The admin's ID (for admin/observer roles)
+        student_id: The student's ID (for student role)
+        role: The role to assign if creating ('admin', 'observer', 'student')
+
+    Returns:
+        tuple: (membership, created) - The membership and whether it was newly created
+    """
+    from app.models import ClassMembership, ClassEconomy
+    from app.extensions import db
+
+    # Resolve and validate join code
+    resolved_code, economy = resolve_join_code(join_code)
+    if not economy:
+        return None, False
+
+    # Determine role if not provided
+    if not role:
+        role = 'admin' if admin_id else 'student'
+
+    # Check for existing membership
+    existing = get_membership(resolved_code, admin_id=admin_id, student_id=student_id)
+    if existing:
+        return existing, False
+
+    # Create new membership
+    membership = ClassMembership(
+        join_code=resolved_code,
+        admin_id=admin_id,
+        student_id=student_id,
+        role=role,
+        status='active'
+    )
+    db.session.add(membership)
+
+    return membership, True
+
+
+def get_actor_membership_id():
+    """
+    Get the current actor's membership ID for audit logging.
+
+    This should be used when creating transactions or other audited records.
+
+    Returns:
+        int: The ClassMembership.id for the current user's active class, or None
+    """
+    membership = get_current_membership()
+    return membership.id if membership else None
