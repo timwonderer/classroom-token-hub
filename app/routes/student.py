@@ -1370,9 +1370,7 @@ def dashboard():
             # System-wide announcements
             Announcement.audience_type == 'system_wide',
             # All students announcements
-            Announcement.audience_type == 'all_students',
-            # Teacher's all classes announcements
-            (Announcement.audience_type == 'teacher_all_classes') & (Announcement.target_teacher_id == teacher_id)
+            Announcement.audience_type == 'all_students'
         )
     ).order_by(Announcement.created_at.desc()).all()
 

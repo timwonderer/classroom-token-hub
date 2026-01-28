@@ -793,12 +793,16 @@ class HallPassLog(db.Model):
     # Each hall pass request should be scoped to the specific class/period
     join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
 
+    # Audit Anchor: Who approved/rejected/modified this request?\n    actor_membership_id = db.Column(db.Integer, db.ForeignKey('class_memberships.id', ondelete='SET NULL'), nullable=True, index=True)
+
     request_time = db.Column(db.DateTime, default=_utc_now, nullable=False)
     decision_time = db.Column(db.DateTime, nullable=True)
     left_time = db.Column(db.DateTime, nullable=True)
     return_time = db.Column(db.DateTime, nullable=True)
 
     student = db.relationship('Student', backref='hall_pass_logs')
+    # relationship to membership is implied / useful?
+    # actor_membership = db.relationship('ClassMembership', foreign_keys=[actor_membership_id])
 
 
 class HallPassSettings(db.Model):
