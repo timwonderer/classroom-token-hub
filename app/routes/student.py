@@ -674,7 +674,57 @@ def claim_account():
             has_completed_setup=False,
         )
         db.session.add(new_student)
-        db.session.flush()  # Get student ID
+
+        try:
+            db.session.flush()  # Get student ID
+        except IntegrityError:
+            # Handle duplicate first_half_hash - student already exists but wasn't found
+            # by the deduplication logic above (edge case with different field combinations)
+            db.session.rollback()
+
+            # Look up the existing student directly by first_half_hash
+            existing_by_hash = Student.query.filter_by(
+                first_half_hash=matched_seat.first_half_hash
+            ).first()
+
+            if existing_by_hash:
+                # Link this seat to the existing student
+                matched_seat.student_id = existing_by_hash.id
+                matched_seat.is_claimed = True
+                matched_seat.claimed_at = datetime.now(timezone.utc)
+
+                # Create StudentTeacher link if not exists
+                existing_link = StudentTeacher.query.filter_by(
+                    student_id=existing_by_hash.id,
+                    admin_id=matched_seat.teacher_id
+                ).first()
+
+                if not existing_link:
+                    link = StudentTeacher(
+                        student_id=existing_by_hash.id,
+                        admin_id=matched_seat.teacher_id
+                    )
+                    db.session.add(link)
+
+                db.session.commit()
+
+                if existing_by_hash.has_completed_setup:
+                    flash("This seat has been linked to your existing account. Please log in.", "claim")
+                    return redirect(url_for('student.login'))
+                else:
+                    session['claimed_student_id'] = existing_by_hash.id
+                    session.pop('generated_username', None)
+                    session.pop('theme_prompt', None)
+                    session.pop('theme_slug', None)
+                    return redirect(url_for('student.create_username'))
+            else:
+                # Unexpected state - constraint violation but no matching student found
+                current_app.logger.error(
+                    f"IntegrityError on first_half_hash but no matching student found. "
+                    f"Seat ID: {matched_seat.id}, Hash: {matched_seat.first_half_hash[:16]}..."
+                )
+                flash("An error occurred while claiming your account. Please try again.", "danger")
+                return redirect(url_for('student.claim_account'))
 
         # Link seat to student
         matched_seat.student_id = new_student.id
@@ -1234,26 +1284,28 @@ def dashboard():
         return ts_utc is not None and ts_utc >= start
 
     # Earnings this week/month
+    # FIX: Add null check to prevent decimal.InvalidOperation on corrupted data
     earnings_this_week = sum(
         (tx.amount for tx in transactions
-        if tx.amount > Decimal('0') and _occurred_after(tx.timestamp, week_start) and not tx.is_void),
+        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_after(tx.timestamp, week_start) and not tx.is_void),
         Decimal('0.00')
     )
     earnings_this_month = sum(
         (tx.amount for tx in transactions
-        if tx.amount > Decimal('0') and _occurred_after(tx.timestamp, month_start) and not tx.is_void),
+        if tx.amount is not None and tx.amount > Decimal('0') and _occurred_after(tx.timestamp, month_start) and not tx.is_void),
         Decimal('0.00')
     )
 
     # Spending this week/month
+    # FIX: Add null check to prevent decimal.InvalidOperation on corrupted data
     spending_this_week = abs(sum(
         (tx.amount for tx in transactions
-        if tx.amount < Decimal('0') and _occurred_after(tx.timestamp, week_start) and not tx.is_void),
+        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_after(tx.timestamp, week_start) and not tx.is_void),
         Decimal('0.00')
     ))
     spending_this_month = abs(sum(
         (tx.amount for tx in transactions
-        if tx.amount < Decimal('0') and _occurred_after(tx.timestamp, month_start) and not tx.is_void),
+        if tx.amount is not None and tx.amount < Decimal('0') and _occurred_after(tx.timestamp, month_start) and not tx.is_void),
         Decimal('0.00')
     ))
 
@@ -1671,7 +1723,8 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
         # Simple interest: only calculate on original deposits (not including previous interest)
         eligible_balance = Decimal('0')
         for tx in student.transactions:
-            if tx.account_type != 'savings' or tx.is_void or tx.amount <= Decimal('0'):
+            # FIX: Add null check to prevent decimal.InvalidOperation on corrupted data
+            if tx.account_type != 'savings' or tx.is_void or tx.amount is None or tx.amount <= Decimal('0'):
                 continue
             # Exclude interest transactions from principal calculation
             if tx.type == 'Interest' or 'Interest' in (tx.description or ''):

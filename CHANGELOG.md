@@ -8,7 +8,23 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-01-22
+
 ### Fixed
+- **CRITICAL: Decimal.InvalidOperation in Student Dashboard Earnings/Spending Calculations** - Fixed crash when calculating weekly/monthly analytics with NULL transaction amounts
+  - **Issue**: Dashboard earnings and spending calculations compared `tx.amount > Decimal('0')` without checking for NULL
+  - **Impact**: Student dashboard returned 500 error with `decimal.InvalidOperation: [<class 'decimal.InvalidOperation'>]` when corrupted transactions exist
+  - **Affected Code**: Lines 1261-1283 in `app/routes/student.py` (earnings_this_week, earnings_this_month, spending_this_week, spending_this_month)
+  - **Additional Fix**: Line 1697 in savings interest calculation also needed NULL check
+  - **Solution**: Added null check (`tx.amount is not None`) before all Decimal comparisons in dashboard calculations
+  - Completes the NULL handling fix from PR #885 which fixed the Student model properties
+- **Duplicate Student Claim Handling** - Added IntegrityError handling for duplicate student account claims
+  - **Issue**: Edge cases in deduplication logic could cause IntegrityError when claiming student accounts with duplicate `first_half_hash` values
+  - **Solution**: Wrapped `db.session.flush()` in try-except block to catch IntegrityError and link to existing student accounts gracefully
+  - Prevents crashes and provides better user experience when duplicate claims occur
+- **NameError in Payroll Function** - Fixed import error for `calculate_payroll_breakdown` in admin routes
+  - **Issue**: Admin payroll routes referenced `calculate_payroll_breakdown` without proper import
+  - **Solution**: Added explicit import of `calculate_payroll_breakdown` from `app.payroll` module
 - **Decimal.InvalidOperation in recent_deposits** - Fixed crash when accessing student dashboard with NULL transaction amounts
   - **Issue**: `Student.recent_deposits` property compared `tx.amount <= Decimal('0')` without checking for NULL
   - **Impact**: Student dashboard returned 500 error with `decimal.InvalidOperation: [<class 'decimal.InvalidOperation'>]`

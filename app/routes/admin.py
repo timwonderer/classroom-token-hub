@@ -68,7 +68,7 @@ from app.utils.passwordless_client import (
     get_public_api_key
 )
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
-from app.payroll import calculate_payroll
+from app.payroll import calculate_payroll, calculate_payroll_breakdown
 from app.attendance import get_last_payroll_time, calculate_unpaid_attendance_seconds, get_join_code_for_student_period
 import time
 
@@ -8031,10 +8031,10 @@ def api_economy_analyze():
             'warnings': warnings_by_level,
             'recommendations': analysis.recommendations,
             'cwi_breakdown': {
-                'pay_rate_per_hour': analysis.cwi.pay_rate_per_minute * 60,
-                'pay_rate_per_minute': analysis.cwi.pay_rate_per_minute,
-                'expected_weekly_hours': analysis.cwi.expected_weekly_minutes / 60.0,
-                'expected_weekly_minutes': analysis.cwi.expected_weekly_minutes,
+                'pay_rate_per_hour': float(analysis.cwi.pay_rate_per_minute) * 60,
+                'pay_rate_per_minute': float(analysis.cwi.pay_rate_per_minute),
+                'expected_weekly_hours': float(analysis.cwi.expected_weekly_minutes) / 60.0,
+                'expected_weekly_minutes': float(analysis.cwi.expected_weekly_minutes),
                 'notes': analysis.cwi.notes
             }
         })
@@ -8140,10 +8140,10 @@ def api_economy_validate(feature):
             'cwi': cwi,
             'ratio': ratio if feature != 'insurance' else None,
             'cwi_breakdown': {
-                'pay_rate_per_hour': cwi_calc.pay_rate_per_minute * 60,
-                'pay_rate_per_minute': cwi_calc.pay_rate_per_minute,
-                'expected_weekly_hours': expected_weekly_hours,
-                'expected_weekly_minutes': cwi_calc.expected_weekly_minutes,
+                'pay_rate_per_hour': float(cwi_calc.pay_rate_per_minute) * 60,
+                'pay_rate_per_minute': float(cwi_calc.pay_rate_per_minute),
+                'expected_weekly_hours': float(expected_weekly_hours),
+                'expected_weekly_minutes': float(cwi_calc.expected_weekly_minutes),
             }
         })
 
