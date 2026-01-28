@@ -8,6 +8,27 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Added
+- **ClassEconomy Architecture** - New join_code-centric multi-tenancy foundation
+  - `ClassEconomy` model: Primary container for class economies with `join_code` as primary key
+  - `ClassMembership` model: Role-based authorization (admin/observer/student) per class
+  - `ClassJoinCodeAlias` model: Support for join code rotation with redirect capability
+  - `actor_membership_id` on Transaction: Audit trail for who performed each transaction
+  - `join_code` foreign keys added to settings tables: PayrollSettings, RentSettings, BankingSettings, HallPassSettings, FeatureSettings, InsurancePolicy, StoreItem, PayrollReward, PayrollFine
+  - Authorization helpers in `app/auth.py`: `check_membership_access()`, `membership_required()` decorator, `get_or_create_membership()`
+
+### Changed
+- **Student Routes** - Updated to use join_code as primary lookup
+  - `get_current_class_context()`: Now includes membership_id and economy reference
+  - `get_rent_settings_for_context()`: Primary lookup by join_code with teacher_id fallback
+  - `get_feature_settings_for_student()`: Primary lookup by join_code with teacher_id fallback
+- **API Routes** - Updated for join_code-centric class isolation
+  - `purchase_item`: Uses join_code for StoreItem and BankingSettings lookups
+  - `get_active_hall_passes`: Now requires join_code or teacher_id (prevents global data leak)
+
+### Security
+- **Hall Pass Data Leak Fix** - `get_active_hall_passes` API now requires explicit scoping parameter to prevent returning global hall pass data across all classes
+
 ## [1.7.1] - 2026-01-22
 
 ### Fixed
