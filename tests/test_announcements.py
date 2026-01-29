@@ -8,7 +8,7 @@ import pytest
 import pyotp
 from datetime import datetime, timedelta, timezone
 from app import db
-from app.models import Admin, Announcement, TeacherBlock, Student
+from app.models import Admin, Announcement, TeacherBlock, Student, ClassEconomy
 
 
 @pytest.fixture
@@ -26,6 +26,17 @@ def test_teacher():
 @pytest.fixture
 def teacher_block(test_teacher):
     """Create a teacher block with join code."""
+    # Create ClassEconomy first for FK constraint
+    if not ClassEconomy.query.get('TEST123'):
+        economy = ClassEconomy(
+            join_code='TEST123',
+            display_name='Test Announcements Class',
+            status='active',
+            created_by_admin_id=test_teacher.id
+        )
+        db.session.add(economy)
+        db.session.flush()
+    
     block = TeacherBlock(
         teacher_id=test_teacher.id,
         block='A',
