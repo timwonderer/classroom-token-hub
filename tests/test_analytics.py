@@ -273,6 +273,16 @@ def test_multi_tenancy_scoping(client, setup_analytics_test):
     join_code2 = "TEST456"
     block2 = "B"
     
+    # Create ClassEconomy for second join code
+    economy2 = ClassEconomy(
+        join_code=join_code2,
+        display_name="Test Analytics Class 2",
+        status='active',
+        created_by_admin_id=admin.id
+    )
+    db.session.add(economy2)
+    db.session.flush()
+    
     payroll2 = PayrollSettings(
         teacher_id=admin.id,
         block=block2,
@@ -375,6 +385,17 @@ def test_block_resolution_falls_back_to_student_block(client, setup_analytics_te
     """Block resolution uses StudentBlock when TeacherBlock lacks join_code."""
     admin, join_code, block, students, payroll = setup_analytics_test
     legacy_join_code = "LEGACY123"
+    
+    # Create ClassEconomy for legacy join code
+    legacy_economy = ClassEconomy(
+        join_code=legacy_join_code,
+        display_name="Legacy Class",
+        status='active',
+        created_by_admin_id=admin.id
+    )
+    db.session.add(legacy_economy)
+    db.session.flush()
+    
     legacy_salt = get_random_salt()
     legacy_student = Student(
         first_name="Legacy",

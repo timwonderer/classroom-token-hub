@@ -191,6 +191,23 @@ class TestAnnouncementMultiTenancy:
 
     def test_announcements_scoped_by_join_code(self, client, test_teacher):
         """Test that announcements are properly scoped by join_code."""
+        # Create ClassEconomies for FK constraints
+        economy_a = ClassEconomy(
+            join_code='CODE_A',
+            display_name='Class A',
+            status='active',
+            created_by_admin_id=test_teacher.id
+        )
+        economy_b = ClassEconomy(
+            join_code='CODE_B',
+            display_name='Class B',
+            status='active',
+            created_by_admin_id=test_teacher.id
+        )
+        db.session.add(economy_a)
+        db.session.add(economy_b)
+        db.session.flush()
+        
         # Create two different blocks with different join codes
         block_a = TeacherBlock(
             teacher_id=test_teacher.id,

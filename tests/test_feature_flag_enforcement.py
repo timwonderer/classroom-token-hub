@@ -222,6 +222,16 @@ def setup_student_with_enabled_banking(client):
 
     join_code = "MATH2C"
     
+    # Create ClassEconomy first for FK constraint
+    economy = ClassEconomy(
+        join_code=join_code,
+        display_name='Math Period 2C',
+        status='active',
+        created_by_admin_id=teacher.id
+    )
+    db.session.add(economy)
+    db.session.flush()
+    
     # Create TeacherBlock entry (claimed seat)
     seat = TeacherBlock(
         teacher_id=teacher.id,

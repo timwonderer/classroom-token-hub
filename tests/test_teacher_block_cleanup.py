@@ -169,7 +169,10 @@ def test_delete_block_removes_teacher_blocks(client):
     _create_student_with_teacher_block("Alice", teacher, block="X")
     _create_student_with_teacher_block("Bob", teacher, block="X")
     
-    # Create an unclaimed TeacherBlock in the same block
+    # Use existing join code that was created by _create_student_with_teacher_block
+    join_code = f"TEST{teacher.id}X"
+    
+    # Create an unclaimed TeacherBlock in the same block using same join_code
     unclaimed_tb = TeacherBlock(
         teacher_id=teacher.id,
         block="X",
@@ -179,7 +182,7 @@ def test_delete_block_removes_teacher_blocks(client):
         dob_sum=2025,
         salt=get_random_salt(),
         first_half_hash="test_hash",
-        join_code=f"TESTX{teacher.id}",
+        join_code=join_code,
         is_claimed=False,
     )
     db.session.add(unclaimed_tb)
