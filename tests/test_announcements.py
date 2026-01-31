@@ -8,7 +8,7 @@ import pytest
 import pyotp
 from datetime import datetime, timedelta, timezone
 from app import db
-from app.models import Admin, Announcement, TeacherBlock, Student, ClassEconomy
+from app.models import Admin, Announcement, TeacherBlock, ClassEconomy
 
 
 @pytest.fixture
