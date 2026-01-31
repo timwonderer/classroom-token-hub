@@ -8,7 +8,7 @@ students cannot access those routes even via direct URL.
 import pytest
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
-from app.models import Student, Admin, Transaction, TeacherBlock, FeatureSettings
+from app.models import Student, Admin, Transaction, TeacherBlock, FeatureSettings, ClassEconomy
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 
@@ -43,6 +43,16 @@ def setup_student_with_disabled_banking(client):
     db.session.commit()
 
     join_code = "MATH1B"
+    
+    # Create ClassEconomy first for FK constraint
+    economy = ClassEconomy(
+        join_code=join_code,
+        display_name='Math Period 1B',
+        status='active',
+        created_by_admin_id=teacher.id
+    )
+    db.session.add(economy)
+    db.session.flush()
     
     # Create TeacherBlock entry (claimed seat)
     seat = TeacherBlock(
@@ -211,6 +221,16 @@ def setup_student_with_enabled_banking(client):
     db.session.commit()
 
     join_code = "MATH2C"
+    
+    # Create ClassEconomy first for FK constraint
+    economy = ClassEconomy(
+        join_code=join_code,
+        display_name='Math Period 2C',
+        status='active',
+        created_by_admin_id=teacher.id
+    )
+    db.session.add(economy)
+    db.session.flush()
     
     # Create TeacherBlock entry (claimed seat)
     seat = TeacherBlock(

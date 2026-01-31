@@ -8,7 +8,7 @@ import pytest
 import pyotp
 from datetime import datetime, timedelta, timezone
 from app import db
-from app.models import Admin, Announcement, TeacherBlock, Student
+from app.models import Admin, Announcement, TeacherBlock, ClassEconomy
 
 
 @pytest.fixture
@@ -26,6 +26,17 @@ def test_teacher():
 @pytest.fixture
 def teacher_block(test_teacher):
     """Create a teacher block with join code."""
+    # Create ClassEconomy first for FK constraint
+    if not ClassEconomy.query.get('TEST123'):
+        economy = ClassEconomy(
+            join_code='TEST123',
+            display_name='Test Announcements Class',
+            status='active',
+            created_by_admin_id=test_teacher.id
+        )
+        db.session.add(economy)
+        db.session.flush()
+    
     block = TeacherBlock(
         teacher_id=test_teacher.id,
         block='A',
@@ -180,6 +191,23 @@ class TestAnnouncementMultiTenancy:
 
     def test_announcements_scoped_by_join_code(self, client, test_teacher):
         """Test that announcements are properly scoped by join_code."""
+        # Create ClassEconomies for FK constraints
+        economy_a = ClassEconomy(
+            join_code='CODE_A',
+            display_name='Class A',
+            status='active',
+            created_by_admin_id=test_teacher.id
+        )
+        economy_b = ClassEconomy(
+            join_code='CODE_B',
+            display_name='Class B',
+            status='active',
+            created_by_admin_id=test_teacher.id
+        )
+        db.session.add(economy_a)
+        db.session.add(economy_b)
+        db.session.flush()
+        
         # Create two different blocks with different join codes
         block_a = TeacherBlock(
             teacher_id=test_teacher.id,

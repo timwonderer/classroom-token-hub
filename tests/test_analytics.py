@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from app import db
 from app.models import (
     Admin, Student, StudentBlock, StudentTeacher, TeacherBlock,
-    Transaction, PayrollSettings, AnalyticsAlert, DemoStudent
+    Transaction, PayrollSettings, AnalyticsAlert, DemoStudent, ClassEconomy
 )
 from app.utils.analytics_engine import AnalyticsEngine
 from app.hash_utils import get_random_salt, hash_username
@@ -29,9 +29,19 @@ def setup_analytics_test(client):
     db.session.add(admin)
     db.session.flush()
     
-    # Create join code
+    # Create join code and ClassEconomy (required for FK constraints)
     join_code = "TEST123"
     block = "A"
+    
+    # Create ClassEconomy record for FK constraint
+    economy = ClassEconomy(
+        join_code=join_code,
+        display_name="Test Analytics Class",
+        status='active',
+        created_by_admin_id=admin.id
+    )
+    db.session.add(economy)
+    db.session.flush()
     
     # Create payroll settings
     # Note: PayrollSettings uses 'block' field, not 'join_code'
@@ -263,6 +273,16 @@ def test_multi_tenancy_scoping(client, setup_analytics_test):
     join_code2 = "TEST456"
     block2 = "B"
     
+    # Create ClassEconomy for second join code
+    economy2 = ClassEconomy(
+        join_code=join_code2,
+        display_name="Test Analytics Class 2",
+        status='active',
+        created_by_admin_id=admin.id
+    )
+    db.session.add(economy2)
+    db.session.flush()
+    
     payroll2 = PayrollSettings(
         teacher_id=admin.id,
         block=block2,
@@ -365,6 +385,17 @@ def test_block_resolution_falls_back_to_student_block(client, setup_analytics_te
     """Block resolution uses StudentBlock when TeacherBlock lacks join_code."""
     admin, join_code, block, students, payroll = setup_analytics_test
     legacy_join_code = "LEGACY123"
+    
+    # Create ClassEconomy for legacy join code
+    legacy_economy = ClassEconomy(
+        join_code=legacy_join_code,
+        display_name="Legacy Class",
+        status='active',
+        created_by_admin_id=admin.id
+    )
+    db.session.add(legacy_economy)
+    db.session.flush()
+    
     legacy_salt = get_random_salt()
     legacy_student = Student(
         first_name="Legacy",

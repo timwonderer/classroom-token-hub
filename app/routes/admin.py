@@ -1128,7 +1128,6 @@ def signup():
             msg = "You must agree to the Terms of Service and Privacy Policy."
             if is_json:
                 return jsonify(status="error", message=msg), 400
-            flash(msg, "error")
 
             # Show QR again for retry
             totp_uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=username, issuer_name="Classroom Economy Admin")
@@ -1148,7 +1147,8 @@ def signup():
                 form=totp_form,
                 qr_b64=img_b64,
                 totp_secret=totp_secret,
-                tos_agreed=False
+                tos_agreed=False,
+                message=msg  # Pass error message to template
             )
 
         # Encrypt TOTP secret before storing

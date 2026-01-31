@@ -8,7 +8,7 @@ without using the terminal, with proper limit enforcement.
 import pytest
 from datetime import datetime, timezone, timedelta
 from app.models import (
-    Student, Admin, HallPassLog, StudentTeacher, HallPassSettings, TapEvent
+    Student, Admin, HallPassLog, StudentTeacher, HallPassSettings, TapEvent, ClassEconomy
 )
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
@@ -54,6 +54,16 @@ def setup_hall_pass_checkout_test(client):
     )
     db.session.add(settings)
     db.session.commit()
+
+    # Create ClassEconomy first for FK constraint
+    economy = ClassEconomy(
+        join_code="TEST123",
+        display_name='Test Hall Pass Class',
+        status='active',
+        created_by_admin_id=teacher.id
+    )
+    db.session.add(economy)
+    db.session.flush()
 
     # Create approved hall pass
     now = datetime.now(timezone.utc)

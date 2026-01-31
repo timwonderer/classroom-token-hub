@@ -9,7 +9,7 @@ import pyotp
 from datetime import datetime, timezone
 
 from app import db
-from app.models import Admin, Student, StudentTeacher, TeacherBlock, SystemAdmin
+from app.models import Admin, Student, StudentTeacher, TeacherBlock, SystemAdmin, ClassEconomy
 from app.hash_utils import get_random_salt, hash_hmac
 
 
@@ -51,6 +51,18 @@ def _create_student_with_teacher_block(first_name: str, teacher: Admin, block: s
     # Create StudentTeacher link
     db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
     
+    # Create ClassEconomy for FK constraint
+    join_code = f"TEST{teacher.id}{block}"
+    if not ClassEconomy.query.get(join_code):
+        economy = ClassEconomy(
+            join_code=join_code,
+            display_name=f'Test Class {teacher.id}{block}',
+            status='active',
+            created_by_admin_id=teacher.id
+        )
+        db.session.add(economy)
+        db.session.flush()
+    
     # Create TeacherBlock entry
     teacher_block = TeacherBlock(
         teacher_id=teacher.id,
@@ -61,7 +73,7 @@ def _create_student_with_teacher_block(first_name: str, teacher: Admin, block: s
         dob_sum=2025,
         salt=salt,
         first_half_hash=first_half_hash,
-        join_code=f"TEST{teacher.id}{block}",
+        join_code=join_code,
         is_claimed=False,
         student_id=student.id,
     )
@@ -157,7 +169,10 @@ def test_delete_block_removes_teacher_blocks(client):
     _create_student_with_teacher_block("Alice", teacher, block="X")
     _create_student_with_teacher_block("Bob", teacher, block="X")
     
-    # Create an unclaimed TeacherBlock in the same block
+    # Use existing join code that was created by _create_student_with_teacher_block
+    join_code = f"TEST{teacher.id}X"
+    
+    # Create an unclaimed TeacherBlock in the same block using same join_code
     unclaimed_tb = TeacherBlock(
         teacher_id=teacher.id,
         block="X",
@@ -167,7 +182,7 @@ def test_delete_block_removes_teacher_blocks(client):
         dob_sum=2025,
         salt=get_random_salt(),
         first_half_hash="test_hash",
-        join_code=f"TESTX{teacher.id}",
+        join_code=join_code,
         is_claimed=False,
     )
     db.session.add(unclaimed_tb)
