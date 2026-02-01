@@ -54,7 +54,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Check PR Classification
         id: check_classification
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const body = context.payload.pull_request.body || "";
@@ -189,7 +189,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Post Gate Status
         if: always()
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const classification = '${{ steps.check_classification.outputs.classification }}';
