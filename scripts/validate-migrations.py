@@ -15,7 +15,7 @@ Returns:
     Exit code 0 if validation passes
     Exit code 1 if critical issues found
 """
-import os
+import ast
 import re
 import sys
 from pathlib import Path
@@ -29,7 +29,7 @@ MIGRATIONS_DIR = PROJECT_ROOT / "migrations" / "versions"
 
 def extract_migration_info(filepath):
     """Extract revision info from a migration file."""
-    with open(filepath, 'r') as f:
+    with open(filepath, 'r', encoding='utf-8') as f:
         content = f.read()
 
     # Extract revision
@@ -42,13 +42,20 @@ def extract_migration_info(filepath):
         down_rev_raw = down_rev_match.group(1).strip()
         if down_rev_raw == 'None':
             down_revision = None
-        elif down_rev_raw.startswith('('):
-            # Tuple case - merge migration
-            tuples = re.findall(r"['\"]([^'\"]+)['\"]", down_rev_raw)
-            down_revision = tuple(tuples) if tuples else None
         else:
-            single = re.search(r"['\"]([^'\"]+)['\"]", down_rev_raw)
-            down_revision = single.group(1) if single else None
+            # Use ast.literal_eval for robust parsing (consistent with other scripts)
+            try:
+                down_revision = ast.literal_eval(down_rev_raw)
+            except (ValueError, SyntaxError):
+                # Fallback to regex extraction if literal_eval fails
+                if down_rev_raw.startswith('('):
+                    # Tuple case - merge migration
+                    tuples = re.findall(r"['\"]([^'\"]+)['\"]", down_rev_raw)
+                    down_revision = tuple(tuples) if tuples else None
+                else:
+                    # Single string case
+                    single = re.search(r"['\"]([^'\"]+)['\"]", down_rev_raw)
+                    down_revision = single.group(1) if single else None
     else:
         down_revision = "MISSING"
 
@@ -68,15 +75,13 @@ def extract_migration_info(filepath):
     }
 
 
-import ast
-
 def check_idempotency(filepath):
     """
     Check if migration operations are guarded by existence checks.
-    
+
     Returns a list of error strings.
     """
-    with open(filepath, 'r') as f:
+    with open(filepath, 'r', encoding='utf-8') as f:
         content = f.read()
     
     try:
@@ -296,8 +301,6 @@ def validate_migrations():
 
     for root in roots:
         walk_chain(root['revision'])
-    for child in down_to_up.get(None, []):
-        walk_chain(child)
 
     unreachable = all_revisions - visited
     if unreachable:
