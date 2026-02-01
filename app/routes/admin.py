@@ -933,9 +933,12 @@ def login():
                 session["last_activity"] = datetime.now(timezone.utc).isoformat()
                 flash("Admin login successful.")
                 next_url = request.args.get("next")
-                if not is_safe_url(next_url):
-                    return redirect(url_for("admin.dashboard"))
-                return redirect(next_url or url_for("admin.dashboard"))
+                redirect_target = None
+                if next_url and is_safe_url(next_url):
+                    redirect_target = next_url
+                else:
+                    redirect_target = url_for("admin.dashboard")
+                return redirect(redirect_target)
         flash("Invalid credentials or TOTP code.", "error")
         return redirect(url_for("admin.login", next=request.args.get("next")))
     return render_template("admin_login.html", form=form)
