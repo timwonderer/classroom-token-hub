@@ -6954,7 +6954,7 @@ def deletion_requests():
 
     if request.method == 'POST':
         request_type = request.form.get('request_type')  # 'period' or 'account'
-        period = request.form.get('period') if request_type == 'period' else None
+        join_code_or_period = request.form.get('period') if request_type == 'period' else None
         reason = request.form.get('reason', '').strip()
 
         # Validate
@@ -6962,25 +6962,61 @@ def deletion_requests():
             flash('Invalid request type.', 'error')
             return redirect(url_for('admin.deletion_requests'))
 
+        join_code = None
+        period = None
+
         if request_type == 'period':
-            if not period:
+            if not join_code_or_period:
                 flash('Period/block is required for period deletion requests.', 'error')
                 return redirect(url_for('admin.deletion_requests'))
-            # Validate period format and length
-            # Allow spaces, hyphens, underscores since periods may be named like "Period 1A" or "Block-2"
-            if not re.match(r'^[a-zA-Z0-9\s\-_]+$', period) or len(period) > 10:
-                flash('Invalid period format. Use alphanumeric characters, spaces, hyphens, and underscores only. Max 10 characters.', 'error')
-                return redirect(url_for('admin.deletion_requests'))
+
+            # Try to resolve as join_code first (new architecture)
+            teacher_block = TeacherBlock.query.filter_by(
+                teacher_id=admin_id,
+                join_code=join_code_or_period
+            ).first()
+
+            if teacher_block:
+                # It's a join_code - use it directly
+                join_code = teacher_block.join_code
+                period = teacher_block.block_name  # Keep for legacy display
+            else:
+                # It might be a legacy period string - look up by block_name
+                teacher_block = TeacherBlock.query.filter_by(
+                    teacher_id=admin_id,
+                    block_name=join_code_or_period
+                ).first()
+
+                if teacher_block:
+                    join_code = teacher_block.join_code
+                    period = teacher_block.block_name
+                else:
+                    # Fallback: treat as legacy period string without join_code
+                    period = join_code_or_period
+                    # Validate period format for legacy support
+                    if not re.match(r'^[a-zA-Z0-9\s\-_]+$', period) or len(period) > 10:
+                        flash('Invalid period format.', 'error')
+                        return redirect(url_for('admin.deletion_requests'))
 
         # Check for duplicate pending requests
         # Convert string to enum (will raise ValueError if invalid)
         request_type_enum = DeletionRequestType.from_string(request_type)
-        existing = DeletionRequest.query.filter_by(
-            admin_id=admin_id,
-            request_type=request_type_enum,
-            period=period,
-            status=DeletionRequestStatus.PENDING
-        ).first()
+
+        # Check by join_code if available, otherwise by period
+        if join_code:
+            existing = DeletionRequest.query.filter_by(
+                admin_id=admin_id,
+                request_type=request_type_enum,
+                join_code=join_code,
+                status=DeletionRequestStatus.PENDING
+            ).first()
+        else:
+            existing = DeletionRequest.query.filter_by(
+                admin_id=admin_id,
+                request_type=request_type_enum,
+                period=period,
+                status=DeletionRequestStatus.PENDING
+            ).first()
 
         if existing:
             flash(
@@ -6990,11 +7026,12 @@ def deletion_requests():
             )
             return redirect(url_for('admin.deletion_requests'))
 
-        # Create the deletion request
+        # Create the deletion request with join_code (new architecture)
         deletion_request = DeletionRequest(
             admin_id=admin_id,
             request_type=request_type_enum,
-            period=period,
+            join_code=join_code,  # Primary identifier (new architecture)
+            period=period,  # Legacy field for backward compatibility
             reason=reason
         )
         db.session.add(deletion_request)
@@ -7029,12 +7066,10 @@ def deletion_requests():
         DeletionRequest.status.in_([DeletionRequestStatus.APPROVED, DeletionRequestStatus.REJECTED])
     ).order_by(DeletionRequest.resolved_at.desc()).limit(10).all()
 
-    # Get teacher's periods for the dropdown (from both student_teachers and legacy teacher_id)
-    # Get teacher's periods for the dropdown (from student_teachers)
-    periods = db.session.query(Student.block).join(
-        StudentTeacher, Student.id == StudentTeacher.student_id
-    ).filter(StudentTeacher.admin_id == admin_id).distinct().all()
-    periods = [p[0] for p in periods]
+    # Get teacher's class periods for the dropdown using join-code architecture
+    # Returns list of tuples: (join_code, display_name)
+    teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
+    periods = [(tb.join_code, tb.display_name or tb.block_name) for tb in teacher_blocks]
 
     return render_template(
         'admin_deletion_requests.html',

@@ -52,19 +52,20 @@ INACTIVITY_THRESHOLD_DAYS = 180  # Number of days of inactivity before allowing 
 
 
 
-def _check_deletion_authorization(admin, request_type=None, period=None):
+def _check_deletion_authorization(admin, request_type=None, join_code=None, period=None):
     """
     Check if system admin is authorized to delete for this teacher.
-    
+
     Authorization is granted if:
     1. Teacher has a pending deletion request matching the criteria, OR
     2. Teacher has been inactive for INACTIVITY_THRESHOLD_DAYS or more
-    
+
     Args:
         admin: The Admin object to check authorization for
         request_type: Optional request type filter ('period' or 'account')
-        period: Optional period filter (for period-specific requests)
-    
+        join_code: Optional join_code filter (primary identifier for period deletions)
+        period: Optional period filter (legacy, for backward compatibility)
+
     Returns:
         tuple: (authorized: bool, pending_request: DeletionRequest or None)
     """
@@ -78,10 +79,15 @@ def _check_deletion_authorization(admin, request_type=None, period=None):
         if isinstance(request_type, str):
             request_type = DeletionRequestType.from_string(request_type)
         query = query.filter_by(request_type=request_type)
-    if period:
+
+    # Prefer join_code (new architecture), fallback to period (legacy)
+    if join_code:
+        query = query.filter_by(join_code=join_code)
+    elif period:
         query = query.filter_by(period=period)
+
     pending_request = query.first()
-    
+
     # Check inactivity
     inactivity_threshold = datetime.now(timezone.utc) - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
     is_inactive = False
@@ -92,7 +98,7 @@ def _check_deletion_authorization(admin, request_type=None, period=None):
         is_inactive = last_login < inactivity_threshold
     else:
         is_inactive = True
-    
+
     authorized = (pending_request is not None) or is_inactive
     return authorized, pending_request
 
@@ -989,66 +995,111 @@ def delete_period(admin_id, period):
     Authorization required:
     1. Teacher has a pending deletion request for this period, OR
     2. Teacher has been inactive for 6+ months
+
+    Note: The 'period' parameter can be either a join_code or legacy period string.
+    Join-code architecture is preferred.
     """
-    # Validate period parameter
-    if not period or len(period) > 10:
+    # Validate period/join_code parameter
+    if not period or len(period) > 20:  # Increased to 20 to accommodate join_codes
         flash("Invalid period parameter", "error")
         return redirect(url_for('sysadmin.teacher_overview'))
-    
-    # Sanitize period to prevent SQL injection (allow only alphanumeric, spaces, hyphens, underscores)
-    if not re.match(r'^[a-zA-Z0-9\s\-_]+$', period):
-        flash("Invalid period format", "error")
-        return redirect(url_for('sysadmin.teacher_overview'))
-    
+
     admin = Admin.query.get_or_404(admin_id)
 
-    # Check authorization using helper function
-    authorized, pending_request = _check_deletion_authorization(admin, 'period', period)
-    
+    # Try to resolve as join_code first (new architecture)
+    teacher_block = TeacherBlock.query.filter_by(
+        teacher_id=admin_id,
+        join_code=period
+    ).first()
+
+    join_code = None
+    period_name = None
+
+    if teacher_block:
+        # It's a join_code
+        join_code = teacher_block.join_code
+        period_name = teacher_block.block_name
+    else:
+        # Try as legacy period string (by block_name)
+        teacher_block = TeacherBlock.query.filter_by(
+            teacher_id=admin_id,
+            block_name=period
+        ).first()
+
+        if teacher_block:
+            join_code = teacher_block.join_code
+            period_name = teacher_block.block_name
+        else:
+            # Legacy fallback: period string without TeacherBlock
+            # Sanitize period to prevent SQL injection
+            if not re.match(r'^[a-zA-Z0-9\s\-_]+$', period):
+                flash("Invalid period format", "error")
+                return redirect(url_for('sysadmin.teacher_overview'))
+            period_name = period
+
+    # Check authorization using helper function (prefer join_code, fallback to period)
+    authorized, pending_request = _check_deletion_authorization(
+        admin, 'period', join_code=join_code, period=period_name
+    )
+
     if not authorized:
         flash(
-            f"Unauthorized: Cannot delete period '{period}' for teacher '{admin.username}'. "
+            f"Unauthorized: Cannot delete period '{period_name or period}' for teacher '{admin.username}'. "
             f"Teacher must request deletion or be inactive for 6+ months.",
             "error"
         )
         return redirect(url_for('sysadmin.teacher_overview'))
 
     try:
-        # Get students in this period linked to this teacher
-        # Uses StudentTeacher table only (Multi-Teacher Hardening)
-        students_in_period = db.session.query(Student).join(
-            StudentTeacher,
-            Student.id == StudentTeacher.student_id
-        ).filter(
-            StudentTeacher.admin_id == admin.id,
-            Student.block == period
-        ).all()
-
         removed_count = 0
-        for student in students_in_period:
-            # Remove the teacher-student link
-            # Only remove the StudentTeacher link if the student is not taught by this teacher in any other period
-            other_links = StudentTeacher.query.filter(
-                StudentTeacher.student_id == student.id,
-                StudentTeacher.admin_id == admin.id
-            ).join(Student, Student.id == StudentTeacher.student_id).filter(
-                Student.block != period
-            ).count()
-            
-            if other_links == 0:
-                StudentTeacher.query.filter_by(
-                    student_id=student.id,
-                    admin_id=admin.id
-                ).delete()
 
-            removed_count += 1
+        if join_code:
+            # New architecture: Delete by join_code
+            # This will cascade delete all associated data via FK constraints
 
-        # Delete TeacherBlock entries for this period
-        # This is critical - without it, the period still appears in the UI
-        TeacherBlock.query.filter_by(
-            teacher_id=admin.id,
-            block=period
-        ).delete()
+            # Get students in this class (by join_code)
+            from app.models import StudentBlock
+            student_blocks = StudentBlock.query.filter_by(join_code=join_code).all()
+            removed_count = len(student_blocks)
+
+            # Delete the TeacherBlock - this cascades to related data
+            if teacher_block:
+                db.session.delete(teacher_block)
+
+        else:
+            # Legacy fallback: Delete by period string
+            # Get students in this period linked to this teacher
+            students_in_period = db.session.query(Student).join(
+                StudentTeacher,
+                Student.id == StudentTeacher.student_id
+            ).filter(
+                StudentTeacher.admin_id == admin.id,
+                Student.block == period_name
+            ).all()
+
+            for student in students_in_period:
+                # Remove the teacher-student link
+                # Only remove the StudentTeacher link if the student is not taught by this teacher in any other period
+                other_links = StudentTeacher.query.filter(
+                    StudentTeacher.student_id == student.id,
+                    StudentTeacher.admin_id == admin.id
+                ).join(Student, Student.id == StudentTeacher.student_id).filter(
+                    Student.block != period_name
+                ).count()
+
+                if other_links == 0:
+                    StudentTeacher.query.filter_by(
+                        student_id=student.id,
+                        admin_id=admin.id
+                    ).delete()
+
+                removed_count += 1
+
+            # Delete TeacherBlock entries for this period (legacy)
+            TeacherBlock.query.filter_by(
+                teacher_id=admin.id,
+                block_name=period_name
+            ).delete()
 
         # Mark any pending deletion requests for this period as approved
         if pending_request:
@@ -1059,7 +1110,7 @@ def delete_period(admin_id, period):
         db.session.commit()
 
         flash(
-            f"Period '{period}' deleted for teacher '{admin.username}'. "
+            f"Period '{period_name or period}' deleted for teacher '{admin.username}'. "
             f"Removed {removed_count} student links. Students maintain access to other classes.",
             "success"
         )

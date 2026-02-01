@@ -629,12 +629,23 @@ class DeletionRequest(db.Model):
     Tracks teacher requests for period/block or account deletion.
     System admins can only approve deletions that have been requested by teachers
     or for accounts that have been inactive beyond the threshold.
+
+    Join-Code Architecture:
+    - join_code: Primary scoping field (FK to ClassEconomy)
+    - period: Legacy field for backward compatibility (will be deprecated)
+    - For period deletions, join_code is the authoritative identifier
     """
     __tablename__ = 'deletion_requests'
     id = db.Column(db.Integer, primary_key=True)
     admin_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
     request_type = db.Column(db.Enum(DeletionRequestType, values_callable=lambda x: [e.value for e in x]), nullable=False)
-    period = db.Column(db.String(10), nullable=True)  # Specified for period deletions only
+
+    # Join-code architecture fields
+    join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
+
+    # Legacy field (kept for backward compatibility during migration)
+    period = db.Column(db.String(10), nullable=True)  # DEPRECATED: Use join_code instead
+
     reason = db.Column(db.Text, nullable=True)  # Optional reason from teacher
     status = db.Column(db.Enum(DeletionRequestStatus, values_callable=lambda x: [e.value for e in x]), default=DeletionRequestStatus.PENDING, nullable=False)
     requested_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
@@ -645,10 +656,12 @@ class DeletionRequest(db.Model):
     # No ORM cascade needed - explicit deletion in system_admin.py:871 + DB CASCADE
     admin = db.relationship('Admin', backref=db.backref('deletion_requests', lazy='dynamic'))
     resolver = db.relationship('SystemAdmin', backref=db.backref('resolved_deletion_requests', lazy='dynamic'))
+    class_economy = db.relationship('ClassEconomy', foreign_keys=[join_code], backref=db.backref('deletion_requests', lazy='dynamic', passive_deletes=True))
 
     __table_args__ = (
         db.Index('ix_deletion_requests_admin_id', 'admin_id'),
         db.Index('ix_deletion_requests_status', 'status'),
+        db.Index('ix_deletion_requests_join_code', 'join_code'),
     )
 
     def __repr__(self):

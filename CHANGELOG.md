@@ -16,6 +16,7 @@ and this project follows semantic versioning principles.
   - `actor_membership_id` on Transaction: Audit trail for who performed each transaction
   - `join_code` foreign keys added to settings tables: PayrollSettings, RentSettings, BankingSettings, HallPassSettings, FeatureSettings, InsurancePolicy, StoreItem, PayrollReward, PayrollFine
   - Authorization helpers in `app/auth.py`: `check_membership_access()`, `membership_required()` decorator, `get_or_create_membership()`
+  - **DeletionRequest join_code scoping** - Added `join_code` FK to `deletion_requests` table for proper class-level scoping of period deletion requests
 
 ### Changed
 - **Student Routes** - Updated to use join_code as primary lookup
@@ -25,6 +26,11 @@ and this project follows semantic versioning principles.
 - **API Routes** - Updated for join_code-centric class isolation
   - `purchase_item`: Uses join_code for StoreItem and BankingSettings lookups
   - `get_active_hall_passes`: Now requires join_code or teacher_id (prevents global data leak)
+- **Deletion Requests** - Updated to use join_code-centric architecture
+  - `deletion_requests()` (admin.py): Now resolves join_code from TeacherBlock and uses it as primary identifier for period deletion requests
+  - `delete_period()` (system_admin.py): Accepts join_code or legacy period string, prefers join_code for all operations
+  - `_check_deletion_authorization()` (system_admin.py): Extended to support join_code-based authorization checks with legacy period fallback
+  - `period` field retained for backward compatibility during migration
 
 ### Security
 - **Hall Pass Data Leak Fix** - `get_active_hall_passes` API now requires explicit scoping parameter to prevent returning global hall pass data across all classes
