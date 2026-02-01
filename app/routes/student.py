@@ -850,6 +850,18 @@ def add_class():
         # This prevents redirects to external sites or protocol-relative URLs
         return target_url.scheme == ref_url.scheme and target_url.netloc == ref_url.netloc
 
+    def _is_safe_url(target: str) -> bool:
+        """
+        Wrapper around the shared is_safe_url helper to make the sanitizer
+        explicit within this view. Ensures that only same-origin or relative
+        URLs are treated as safe redirect targets.
+        """
+        try:
+            return bool(target) and is_safe_url(target)
+        except Exception:
+            # In case the helper raises for malformed URLs, treat as unsafe.
+            return False
+
     def _get_return_target(default_endpoint='student.dashboard'):
         """
         Return the safest place to redirect back to after add-class attempts.
@@ -964,7 +976,7 @@ def add_class():
             
             if new_block_check in current_blocks and existing_link:
                  flash(f"You are already enrolled in Block {new_block_check}.", "warning")
-                 return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
+                 return redirect(_get_return_target())
             
             # If they have a link but NOT for this block, we proceed (to add the new block)
 
@@ -999,12 +1011,12 @@ def add_class():
         try:
             db.session.commit()
             flash(f"Successfully added to Block {new_block}! You can now access this class from your dashboard.", "success")
-            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
+            return redirect(_get_return_target())
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Error adding class for student {student.id}: {str(e)}")
             flash("An error occurred while adding the class. Please try again or contact your teacher.", "danger")
-            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
+            return redirect(_get_return_target())
 
     return render_template('student_add_class.html', form=form)
 
