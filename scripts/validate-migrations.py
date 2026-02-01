@@ -68,6 +68,115 @@ def extract_migration_info(filepath):
     }
 
 
+import ast
+
+def check_idempotency(filepath):
+    """
+    Check if migration operations are guarded by existence checks.
+    
+    Returns a list of error strings.
+    """
+    with open(filepath, 'r') as f:
+        content = f.read()
+    
+    try:
+        tree = ast.parse(content)
+    except SyntaxError:
+        return [f"Syntax error parsing {filepath.name}"]
+
+    errors = []
+    
+    # Helper to find if a node is inside an If block
+    def is_guarded(node, parents):
+        # Check parents in reverse order
+        for parent in reversed(parents):
+            if isinstance(parent, ast.If):
+                return True
+        return False
+
+    # Walk the tree with parent tracking
+    for node in ast.walk(tree):
+        # We manually track parents by checking children, but ast.walk doesn't give context.
+        # So we'll use a NodeVisitor instead.
+        pass
+
+    class IdempotencyVisitor(ast.NodeVisitor):
+        def __init__(self):
+            self.errors = []
+            self.parents = []
+
+        def visit_Call(self, node):
+            # Check for op.method calls
+            if isinstance(node.func, ast.Attribute) and \
+               isinstance(node.func.value, ast.Name) and \
+               node.func.value.id == 'op':
+                
+                method = node.func.attr
+                
+                # Critical operations that need guards
+                if method in ['add_column', 'create_foreign_key', 'create_index']:
+                    if not self.is_guarded():
+                        self.errors.append(f"❌ Unguarded {method}() in {filepath.name}. Must be inside an 'if' block checking existence.")
+                
+                # Warnings for raw execution
+                if method == 'execute':
+                    self.errors.append(f"⚠️  Manual SQL execution detected: op.execute() in {filepath.name}. Verify idempotency manually.")
+
+            # Continue visiting children
+            self.generic_visit(node)
+
+        def is_guarded(self):
+            for parent in reversed(self.parents):
+                if isinstance(parent, ast.If):
+                    return True
+            return False
+
+        def visit_If(self, node):
+            self.parents.append(node)
+            self.generic_visit(node)
+            self.parents.pop()
+
+        def visit_FunctionDef(self, node):
+            self.parents.append(node)
+            self.generic_visit(node)
+            self.parents.pop()
+
+    visitor = IdempotencyVisitor()
+    visitor.visit(tree)
+    return visitor.errors
+
+# List of legacy migrations that are known to violate new idempotency rules
+# (unguarded add_column/create_index). These are whitelisted to prevent CI failure.
+LEGACY_MIGRATIONS = {
+    '02f217d8b08e_clean_initial_migration_ref.py',
+    '1n7bslh69u6x_add_has_completed_profile_migration_to_.py',
+    '2f3g4h5i6j7k_add_claim_type_and_transaction_link.py',
+    '8961726a4544_add_audit_log_tables.py',
+    'a1b2c3d4e5f7_add_student_blocks_and_tap_deletion.py',
+    'aa5697e97c94_add_join_code_to_tap_events.py',
+    'abc123def456_convert_transaction_amounts.py',
+    'add_has_assigned_students_to_admin.py',
+    'b2c3d4e5f6g7_add_insurance_monetary_toggle.py',
+    'b4c5d6e7f8g9_add_deletion_request_model.py',
+    'b73c4d92eadd_add_teacher_id_to_students.py',
+    'c1c6f7e5e3a0_add_student_teacher_association.py',
+    'c4d5e6f7a8b9_add_user_reports_table.py',
+    'd1e2f3a4b5c6_add_block_association_tables.py',
+    'd8e9f0a1b2c3_add_teacher_id_to_transactions.py',
+    'e1f2a3b4c5d6_add_last_name_hash_by_part.py',
+    'e5f6g7h8i9j0_add_missing_insurance_columns.py',
+    'f2g3h4i5j6k7_add_teacher_blocks_table.py',
+    'g1h2i3j4k5l6_add_max_payout_per_period_to_insurance.py',
+    'm0n1o2p3q4r5_add_bundle_and_bulk_discount_to_store.py',
+    'n1o2p3q4r5s6_add_interest_calculation_type.py',
+    'o2p3q4r5s6t7_add_collective_goal_settings.py',
+    'q4r5s6t7u8v9_add_user_reports_table.py',
+    'x1y2z3a4b5c6_add_redemption_prompt_to_store_items.py',
+    'z2a3b4c5d6e7_add_feature_settings_and_onboarding.py'
+}
+
+
+
 def validate_migrations():
     """Run all migration validations."""
     if not MIGRATIONS_DIR.exists():
@@ -88,6 +197,19 @@ def validate_migrations():
                 migrations.append(info)
             else:
                 errors.append(f"❌ No revision found in: {filepath.name}")
+            
+            # Run idempotency checks
+            if filepath.name in LEGACY_MIGRATIONS:
+                # specific debug or ignored
+                pass 
+            else:
+                idempotency_issues = check_idempotency(filepath)
+                for issue in idempotency_issues:
+                    if issue.startswith("❌"):
+                        errors.append(issue)
+                    else:
+                        warnings.append(issue)
+
         except Exception as e:
             errors.append(f"❌ Error parsing {filepath.name}: {e}")
 
@@ -209,6 +331,7 @@ def validate_migrations():
     print(f"   • {len(migrations)} migrations")
     print(f"   • {len(roots)} root(s)")
     print(f"   • {len(heads)} head(s)")
+    print(f"   • {len(warnings)} warning(s)")
     print(f"   • Continuous chain verified")
     print("\n🟢 Safe to deploy migrations")
     return 0
