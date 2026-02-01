@@ -264,7 +264,7 @@ def view_doc(doc_path):
                     abort(404)
 
                 # Normalize both paths before comparison
-                is_within_root = os.path.normcase(os.path.abspath(common)) == os.path.normcase(os.path.abspath(str(root_resolved)))
+                is_within_root = os.path.normcase(common) == os.path.normcase(str(root_resolved))
 
             if not is_within_root:
                 current_app.logger.warning(f"Path outside DOCS_ROOT: {untrusted_path}")
