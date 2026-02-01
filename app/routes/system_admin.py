@@ -1457,7 +1457,22 @@ def grafana_proxy(path):
             stream=True
         )
 
-        # Create streaming response
+        # Before streaming, check content type to avoid reflecting potentially unsafe HTML/XML
+        content_type = resp.headers.get('Content-Type', '')
+        if content_type.startswith(('text/html', 'application/xhtml+xml', 'text/xml', 'application/xml')):
+            current_app.logger.warning(
+                f"Blocked proxied Grafana response with HTML/XML content type: {content_type} "
+                f"for path: {normalized_path}"
+            )
+            # Avoid returning upstream HTML directly to prevent reflected XSS; show a safe message instead.
+            return Response(
+                "Unable to display Grafana HTML content via proxy. "
+                "Please access the Grafana dashboard directly.",
+                status=502,
+                mimetype='text/plain'
+            )
+
+        # Create streaming response for non-HTML content
         excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
         response_headers = [(name, value) for name, value in resp.raw.headers.items()
                            if name.lower() not in excluded_headers]
