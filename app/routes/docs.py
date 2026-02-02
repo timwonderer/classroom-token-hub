@@ -251,14 +251,22 @@ def view_doc(doc_path):
                 current_app.logger.warning(f"Error resolving documentation path '{untrusted_path}': {e}")
                 abort(404)
 
-            # Verify the resolved path is still within the docs root using commonpath
+            # Verify the resolved path is still within the docs root
             try:
-                common = os.path.commonpath([str(root_resolved), str(candidate)])
-            except ValueError:
-                current_app.logger.warning(f"Path outside DOCS_ROOT (invalid common path): {untrusted_path}")
-                abort(404)
+                # Prefer pathlib's is_relative_to when available (Python 3.9+)
+                is_within_root = candidate.is_relative_to(root_resolved)  # type: ignore[attr-defined]
+            except AttributeError:
+                # Fallback for older Python versions: use os.path.commonpath
+                try:
+                    common = os.path.commonpath([str(root_resolved), str(candidate)])
+                except ValueError:
+                    current_app.logger.warning(f"Path outside DOCS_ROOT (invalid common path): {untrusted_path}")
+                    abort(404)
 
-            if common != str(root_resolved):
+                # Normalize both paths before comparison
+                is_within_root = os.path.normcase(common) == os.path.normcase(str(root_resolved))
+
+            if not is_within_root:
                 current_app.logger.warning(f"Path outside DOCS_ROOT: {untrusted_path}")
                 abort(404)
 
