@@ -8049,7 +8049,7 @@ def api_economy_analyze():
 
     except Exception as e:
         current_app.logger.error(f"Error analyzing economy: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': 'An internal error occurred while analyzing the economy.'}), 500
 
 
 @admin_bp.route('/api/economy/validate/<feature>', methods=['POST'])

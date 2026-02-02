@@ -711,3 +711,46 @@ def test_check_insurance_balance_uses_frequency_premium_for_limits():
     assert period_warning.recommended_min == policy.premium * checker.PERIOD_MIN_MULTIPLIER
     assert period_warning.recommended_max == policy.premium * checker.PERIOD_MAX_MULTIPLIER
     assert period_warning.level == WarningLevel.INFO
+
+
+def test_analyze_endpoint_error_does_not_leak_exception_details(client):
+    """Test that /api/economy/analyze does not expose exception details in error messages."""
+    # Create admin without payroll settings to trigger an error
+    admin = Admin(
+        username="testadmin_error",
+        totp_secret="TESTSECRET123456"
+    )
+    db.session.add(admin)
+    db.session.commit()
+
+    # Login as admin
+    with client.session_transaction() as sess:
+        sess['is_admin'] = True
+        sess['admin_id'] = admin.id
+        sess['is_system_admin'] = False
+        sess['last_activity'] = datetime.now(timezone.utc).isoformat()
+
+    # Request analysis for a block with no payroll settings - should trigger error
+    response = client.post(
+        '/admin/api/economy/analyze',
+        json={'block': 'NonExistentBlock'}
+    )
+
+    # Should return 500 error
+    assert response.status_code == 500
+
+    data = response.get_json()
+    assert data['status'] == 'error'
+    
+    # Error message should be generic and not expose internal exception details
+    assert data['message'] == 'An internal error occurred while analyzing the economy.'
+    
+    # Should NOT contain any specific error details like:
+    # - Python exception types (e.g., "AttributeError", "NoneType")
+    # - Stack traces
+    # - Variable names
+    # - Database query errors
+    assert 'NoneType' not in data['message']
+    assert 'AttributeError' not in data['message']
+    assert 'Exception' not in data['message']
+    assert 'Traceback' not in data['message']
