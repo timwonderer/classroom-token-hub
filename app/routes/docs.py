@@ -235,12 +235,14 @@ def view_doc(doc_path):
             # Normalize the untrusted path as a relative path (strip any leading "/")
             # so that we never accidentally treat user-controlled input as absolute.
             normalized_str = Path(untrusted_path).as_posix().lstrip("/")
+            # Explicitly reject empty or root-only normalized paths before creating a Path object
+            if not normalized_str or normalized_str in (".", "./"):
+                current_app.logger.warning(f"Empty or root-only documentation path: {untrusted_path}")
+                abort(404)
+
             safe_rel_path = Path(normalized_str)
 
             # Reject empty components, absolute paths, or traversal components
-            if str(safe_rel_path) in (".", "./"):
-                current_app.logger.warning(f"Empty or root-only documentation path: {untrusted_path}")
-                abort(404)
             if safe_rel_path.is_absolute() or any(part == ".." for part in safe_rel_path.parts):
                 current_app.logger.warning(f"Path traversal attempt: {untrusted_path}")
                 abort(404)
