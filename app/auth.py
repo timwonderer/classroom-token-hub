@@ -198,7 +198,7 @@ def login_required(f):
                 return jsonify({"status": "error", "error": "User not logged in or session expired"}), 401
             next_path = _get_safe_next_path()
             encoded_next = urllib.parse.quote(next_path, safe="")
-            return redirect(f"{url_for('student.login')}?next={encoded_next}")
+            return redirect(f"{url_for('student.login')}?next={encoded_next}")  # nosec # Safe: validated by _get_safe_next_path()
 
         # Enforce strict 10-minute timeout from login time
         login_time_str = session.get('login_time')
@@ -225,7 +225,7 @@ def login_required(f):
             flash("Session expired. Please log in again.")
             next_path = _get_safe_next_path()
             encoded_next = urllib.parse.quote(next_path, safe="")
-            return redirect(f"{url_for('student.login')}?next={encoded_next}")
+            return redirect(f"{url_for('student.login')}?next={encoded_next}")  # nosec # Safe: validated by _get_safe_next_path()
 
         # Continue to update last_activity for other potential uses, but it no longer controls the timeout
         session['last_activity'] = datetime.now(timezone.utc).isoformat()
@@ -247,7 +247,7 @@ def admin_required(f):
             flash("You must be an admin to view this page.")
             next_path = _get_safe_next_path()
             encoded_next = urllib.parse.quote(next_path, safe="")
-            return redirect(f"{url_for('admin.login')}?next={encoded_next}")
+            return redirect(f"{url_for('admin.login')}?next={encoded_next}")  # nosec # Safe: validated by _get_safe_next_path()
 
         admin = get_current_admin()
         if not admin:
@@ -257,7 +257,7 @@ def admin_required(f):
             flash("Admin session is invalid. Please log in again.")
             next_path = _get_safe_next_path()
             encoded_next = urllib.parse.quote(next_path, safe="")
-            return redirect(f"{url_for('admin.login')}?next={encoded_next}")
+            return redirect(f"{url_for('admin.login')}?next={encoded_next}")  # nosec # Safe: validated by _get_safe_next_path()
 
         now = datetime.now(timezone.utc)
         last_activity = session.get('last_activity')

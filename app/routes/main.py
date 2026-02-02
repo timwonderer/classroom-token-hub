@@ -200,7 +200,7 @@ def switch_view():
     if not is_safe_url(next_url):
         return redirect(url_for('main.home'))
 
-    return redirect(next_url)
+    return redirect(next_url)  # nosec # Safe: validated by is_safe_url()
 
 
 @main_bp.route('/debug/admin-db-test')
