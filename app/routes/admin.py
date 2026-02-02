@@ -934,8 +934,13 @@ def login():
                 flash("Admin login successful.")
                 next_url = request.args.get("next")
                 redirect_target = None
-                if next_url and is_safe_url(next_url):
-                    redirect_target = next_url
+                if next_url:
+                    parsed_next = urlparse(next_url)
+                    # Only allow relative URLs with no scheme or netloc, and that pass the existing safety check
+                    if not parsed_next.scheme and not parsed_next.netloc and is_safe_url(next_url):
+                        redirect_target = next_url
+                    else:
+                        redirect_target = url_for("admin.dashboard")
                 else:
                     redirect_target = url_for("admin.dashboard")
                 return redirect(redirect_target)
