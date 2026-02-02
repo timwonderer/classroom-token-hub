@@ -730,10 +730,11 @@ def test_analyze_endpoint_error_does_not_leak_exception_details(client):
         sess['is_system_admin'] = False
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
 
-    # Request analysis for a block with no payroll settings - should trigger error
+    # Request analysis for a block with no payroll settings to trigger an internal error
+    # The actual error will occur when trying to calculate CWI without payroll settings
     response = client.post(
         '/admin/api/economy/analyze',
-        json={'block': 'NonExistentBlock'}
+        json={'block': 'TestBlock'}
     )
 
     # Should return 500 error
