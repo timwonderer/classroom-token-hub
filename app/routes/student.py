@@ -820,37 +820,6 @@ def add_class():
     student = get_logged_in_student()
     form = StudentAddClassForm()
 
-    def _is_safe_url(target):
-        """
-        Returns True if the target is a same-origin URL (preventing open redirect).
-
-        Uses same-origin validation to ensure redirect targets are internal to this
-        application. This prevents open redirect vulnerabilities where attackers could
-        redirect users to malicious external sites.
-
-        Args:
-            target: The URL to validate
-
-        Returns:
-            bool: True if the URL is safe (same origin), False otherwise
-        """
-        from urllib.parse import urlparse, urljoin
-
-        if not target:
-            return False
-
-        # Normalize backslashes to prevent Windows path tricks
-        target = target.replace("\\", "")
-
-        # Resolve relative URLs against the current application's base URL
-        # This converts relative paths like "dashboard" to full URLs
-        target_url = urlparse(urljoin(request.host_url, target))
-        ref_url = urlparse(request.host_url)
-
-        # Only allow same-origin URLs (same scheme and domain)
-        # This prevents redirects to external sites or protocol-relative URLs
-        return target_url.scheme == ref_url.scheme and target_url.netloc == ref_url.netloc
-
     def _is_safe_url(target: str) -> bool:
         """
         Wrapper around the shared is_safe_url helper to make the sanitizer

@@ -8,6 +8,19 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Security
+- **Hardened Grafana Proxy XSS Protection** - Improved content-type filtering to prevent XSS attacks (#897)
+  - **Issue**: Original implementation had case-sensitivity issues, missed dangerous MIME types (SVG), and could be bypassed
+  - **Solution**:
+    - Made Content-Type check case-insensitive per RFC 2045
+    - Added `image/svg+xml`, `text/xsl`, and `application/xslt+xml` to blocked MIME types
+    - Properly handles Content-Type parameters (e.g., "text/html; charset=utf-8")
+  - Prevents reflected XSS attacks via Grafana proxy endpoint
+- **Fixed Function Redefinition in Student Routes** - Removed duplicate `_is_safe_url` function definition (#897)
+  - **Issue**: Two identical function definitions in `add_class()` route, causing code clarity issues
+  - **Solution**: Removed redundant first definition, kept wrapper around shared `is_safe_url` helper
+  - Improves code maintainability and prevents potential bugs from function shadowing
+
 ## [1.7.1] - 2026-01-22
 
 ### Fixed

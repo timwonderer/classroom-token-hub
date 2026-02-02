@@ -1457,16 +1457,33 @@ def grafana_proxy(path):
             stream=True
         )
 
-        # Before streaming, check content type to avoid reflecting potentially unsafe HTML/XML
-        content_type = resp.headers.get('Content-Type', '')
-        if content_type.startswith(('text/html', 'application/xhtml+xml', 'text/xml', 'application/xml')):
+        # Before streaming, check content type to avoid reflecting potentially unsafe HTML/XML/SVG
+        # that could contain XSS payloads. Use case-insensitive comparison since MIME types
+        # are case-insensitive per RFC 2045.
+        content_type = resp.headers.get('Content-Type', '').lower().strip()
+
+        # List of dangerous MIME types that could execute scripts or contain XSS
+        dangerous_mime_types = (
+            'text/html',
+            'application/xhtml+xml',
+            'text/xml',
+            'application/xml',
+            'image/svg+xml',  # SVG can contain JavaScript
+            'text/xsl',       # XSL transformations can be dangerous
+            'application/xslt+xml',
+        )
+
+        # Block if Content-Type indicates dangerous content
+        # Split on semicolon to handle parameters like "text/html; charset=utf-8"
+        mime_type = content_type.split(';')[0].strip()
+        if mime_type in dangerous_mime_types:
             current_app.logger.warning(
-                f"Blocked proxied Grafana response with HTML/XML content type: {content_type} "
+                f"Blocked proxied Grafana response with dangerous content type: {content_type} "
                 f"for path: {normalized_path}"
             )
-            # Avoid returning upstream HTML directly to prevent reflected XSS; show a safe message instead.
+            # Avoid returning upstream HTML/XML/SVG directly to prevent reflected XSS
             return Response(
-                "Unable to display Grafana HTML content via proxy. "
+                "Unable to display this Grafana content via proxy due to security restrictions. "
                 "Please access the Grafana dashboard directly.",
                 status=502,
                 mimetype='text/plain'
