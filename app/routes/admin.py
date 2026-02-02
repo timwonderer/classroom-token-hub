@@ -5542,7 +5542,7 @@ def update_expected_weekly_hours():
 
     # Redirect back with cwi_block parameter to maintain the selected class
     next_url = request.form.get('next')
-    if next_url and is_safe_url(next_url):
+    if next_url and is_safe_url(next_url, request.host_url):
         return redirect(next_url)
 
     return redirect(url_for('admin.payroll', cwi_block=cwi_block))
