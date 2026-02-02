@@ -233,7 +233,10 @@ def view_doc(doc_path):
             
             Note: This function validates the path at a point in time. There is a 
             theoretical TOCTOU (time-of-check-time-of-use) window between validation 
-            and file access, but this is acceptable for a documentation serving feature.
+            and file access. However, exploiting this would require the ability to 
+            modify the filesystem between validation and read, which requires elevated 
+            privileges beyond typical web application threats. This is acceptable for 
+            a documentation serving feature.
             """
             # Normalize the untrusted path as a relative path (strip any leading "/")
             # so that we never accidentally treat user-controlled input as absolute.
