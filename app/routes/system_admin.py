@@ -741,7 +741,10 @@ def reset_teacher_totp(admin_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error resetting TOTP for admin {admin_id}: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({
+            "status": "error",
+            "message": "An internal error occurred while resetting the TOTP secret."
+        }), 500
 
 
 @sysadmin_bp.route('/admins/<int:admin_id>/delete', methods=['POST'])
