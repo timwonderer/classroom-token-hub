@@ -228,10 +228,17 @@ def view_doc(doc_path):
         def resolve_doc_path(untrusted_path: str, docs_root: Path) -> Path:
             """
             Resolve an untrusted documentation path to a safe file within docs_root.
+            The returned path is an absolute, normalized path that:
+            - is anchored under docs_root, and
+            - has a .md suffix applied.
             """
             # Normalize the untrusted path as a relative path
             safe_rel_path = Path(untrusted_path)
 
+            # Reject empty components, absolute paths, or traversal components
+            if not str(safe_rel_path) or str(safe_rel_path) in (".", "./"):
+                current_app.logger.warning(f"Empty or root-only documentation path: {untrusted_path}")
+                abort(404)
             # Reject absolute paths, traversal components, or attempts to escape the root
             if safe_rel_path.is_absolute() or any(part == ".." for part in safe_rel_path.parts):
                 current_app.logger.warning(f"Path traversal attempt: {untrusted_path}")
@@ -246,7 +253,8 @@ def view_doc(doc_path):
 
             # Build candidate path under documentation root and normalize it
             try:
-                candidate = (root_resolved / safe_rel_path).with_suffix('.md').resolve(strict=False)
+                candidate = (root_resolved / safe_rel_path).with_suffix(".md")
+                candidate_resolved = candidate.resolve(strict=False)
             except OSError as e:
                 current_app.logger.warning(f"Error resolving documentation path '{untrusted_path}': {e}")
                 abort(404)
@@ -254,11 +262,11 @@ def view_doc(doc_path):
             # Verify the resolved path is still within the docs root
             try:
                 # Prefer pathlib's is_relative_to when available (Python 3.9+)
-                is_within_root = candidate.is_relative_to(root_resolved)  # type: ignore[attr-defined]
+                is_within_root = candidate_resolved.is_relative_to(root_resolved)  # type: ignore[attr-defined]
             except AttributeError:
                 # Fallback for older Python versions: use os.path.commonpath
                 try:
-                    common = os.path.commonpath([str(root_resolved), str(candidate)])
+                    common = os.path.commonpath([str(root_resolved), str(candidate_resolved)])
                 except ValueError:
                     current_app.logger.warning(f"Path outside DOCS_ROOT (invalid common path): {untrusted_path}")
                     abort(404)
@@ -270,7 +278,7 @@ def view_doc(doc_path):
                 current_app.logger.warning(f"Path outside DOCS_ROOT: {untrusted_path}")
                 abort(404)
 
-            return candidate
+            return candidate_resolved
 
         # Ensure we have a safe, absolute docs root
         try:
@@ -282,9 +290,6 @@ def view_doc(doc_path):
         if not isinstance(docs_root, Path):
             docs_root = Path(docs_root)
         doc_file = resolve_doc_path(doc_path, docs_root)
-
-
-
 
         if not doc_file.exists():
             current_app.logger.info(f"Documentation not found: {doc_path}")
