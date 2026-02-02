@@ -1465,10 +1465,28 @@ def grafana_proxy(path):
         # are case-insensitive per RFC 2045.
         content_type = resp.headers.get('Content-Type', '').lower().strip()
 
+        # Split on semicolon to handle parameters like "application/json; charset=utf-8"
+        mime_type = content_type.split(';')[0].strip() if content_type else ''
+
+        # Explicitly block SVG first - SVG can contain embedded JavaScript and poses XSS risks
+        dangerous_types = ('image/svg+xml',)
+        if mime_type in dangerous_types:
+            current_app.logger.warning(
+                f"Blocked proxied Grafana response with dangerous content type: {content_type} "
+                f"for path: {normalized_path}"
+            )
+            return Response(
+                "Unable to display this Grafana content via proxy due to security restrictions. "
+                "Please access the Grafana dashboard directly.",
+                status=502,
+                mimetype='text/plain'
+            )
+
         # Allowlist of safe MIME type prefixes that are permitted to be streamed.
-        # Everything else (including HTML/XML/SVG or missing/unknown types) is blocked.
+        # Everything else (including HTML/XML or missing/unknown types) is blocked.
+        # Note: image/svg+xml is explicitly blocked above before this check.
         safe_mime_prefixes = (
-            'image/',              # images (png, jpeg, etc.)
+            'image/',              # images (png, jpeg, gif, etc.) - SVG blocked above
             'text/plain',          # plain text
             'text/css',            # stylesheets
             'application/json',    # JSON APIs
@@ -1478,9 +1496,6 @@ def grafana_proxy(path):
             'application/pdf',
             'text/csv',
         )
-
-        # Split on semicolon to handle parameters like "application/json; charset=utf-8"
-        mime_type = content_type.split(';')[0].strip() if content_type else ''
 
         # Block if Content-Type is missing or not in the allowlist of safe prefixes
         if not mime_type or not any(mime_type.startswith(prefix) for prefix in safe_mime_prefixes):
