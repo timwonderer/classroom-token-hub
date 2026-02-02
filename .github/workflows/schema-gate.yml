@@ -34,12 +34,12 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -54,7 +54,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Check PR Classification
         id: check_classification
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const body = context.payload.pull_request.body || "";
@@ -189,7 +189,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Post Gate Status
         if: always()
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const classification = '${{ steps.check_classification.outputs.classification }}';

@@ -10,6 +10,11 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_wtf import CSRFProtect
 from apscheduler.schedulers.background import BackgroundScheduler
+# TODO: [DEPENDABOT PR #648] Flask-Limiter 4.x introduces breaking changes:
+# - 'default_limits' renamed to 'default_limits_per_method'
+# - Decorator syntax may have changed for exempt routes
+# - See https://flask-limiter.readthedocs.io/en/stable/changelog.html
+# Review before upgrading from 3.5.0 to 4.1.1
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 

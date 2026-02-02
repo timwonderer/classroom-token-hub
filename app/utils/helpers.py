@@ -14,6 +14,10 @@ import hmac
 import os
 
 from flask import request, current_app, session, render_template, url_for
+# TODO: [DEPENDABOT PR #463] MarkupSafe 3.x introduces breaking changes:
+# - soft_str and soft_unicode removed (deprecated since 2.0)
+# - Markup.striptags() behavior may differ
+# - Review Jinja2 compatibility before upgrading from 2.1.5 to 3.0.3
 from markupsafe import Markup
 import markdown
 import bleach
