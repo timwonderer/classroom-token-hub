@@ -935,10 +935,12 @@ def login():
                 next_url = request.args.get("next")
                 redirect_target = None
                 if next_url:
-                    parsed_next = urlparse(next_url)
+                    # Normalize backslashes to mitigate browser quirks and parsing issues
+                    normalized_next = next_url.replace('\\', '')
+                    parsed_next = urlparse(normalized_next)
                     # Only allow relative URLs with no scheme or netloc, and that pass the existing safety check
-                    if not parsed_next.scheme and not parsed_next.netloc and is_safe_url(next_url):
-                        redirect_target = next_url
+                    if (not parsed_next.scheme and not parsed_next.netloc and is_safe_url(normalized_next)):
+                        redirect_target = normalized_next
                     else:
                         redirect_target = url_for("admin.dashboard")
                 else:
