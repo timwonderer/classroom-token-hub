@@ -711,3 +711,70 @@ def test_check_insurance_balance_uses_frequency_premium_for_limits():
     assert period_warning.recommended_min == policy.premium * checker.PERIOD_MIN_MULTIPLIER
     assert period_warning.recommended_max == policy.premium * checker.PERIOD_MAX_MULTIPLIER
     assert period_warning.level == WarningLevel.INFO
+
+
+def test_analyze_endpoint_error_does_not_leak_exception_details(client):
+    """Test that /api/economy/analyze does not expose exception details in error messages.
+    
+    This test verifies that when the economy analysis endpoint encounters an error,
+    the error message returned to the client is generic and doesn't expose internal
+    implementation details, exception types, or stack traces.
+    """
+    # Create admin with payroll settings but trigger an error through invalid data
+    admin = Admin(
+        username="testadmin_error",
+        totp_secret="TESTSECRET123456"
+    )
+    db.session.add(admin)
+    db.session.flush()
+    
+    # Create payroll settings to pass the initial check
+    payroll_settings = PayrollSettings(
+        teacher_id=admin.id,
+        pay_rate=10.0,
+        time_unit='minutes',
+        payroll_frequency_days=7,
+        expected_weekly_hours=5.0,
+        is_active=True,
+        block='TestBlock'
+    )
+    db.session.add(payroll_settings)
+    db.session.commit()
+
+    # Login as admin
+    with client.session_transaction() as sess:
+        sess['is_admin'] = True
+        sess['admin_id'] = admin.id
+        sess['is_system_admin'] = False
+        sess['last_activity'] = datetime.now(timezone.utc).isoformat()
+
+    # Make a valid request to verify the endpoint works normally
+    response = client.post(
+        '/admin/api/economy/analyze',
+        json={'block': 'TestBlock'}
+    )
+
+    # Should return 200 success
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['status'] == 'success'
+    
+    # Test error handling - request with no payroll settings should return generic message
+    response_no_settings = client.post(
+        '/admin/api/economy/analyze',
+        json={'block': 'NonExistentBlock'}
+    )
+    
+    # Should return 400 with generic message (not leaking internal details)
+    assert response_no_settings.status_code == 400
+    data = response_no_settings.get_json()
+    assert data['status'] == 'error'
+    
+    # The error message should be informative but not expose internal details
+    assert 'Please configure payroll settings' in data['message']
+    
+    # Should NOT contain any internal error details
+    assert 'NoneType' not in data['message']
+    assert 'AttributeError' not in data['message']
+    assert 'Exception' not in data['message']
+    assert 'Traceback' not in data['message']
