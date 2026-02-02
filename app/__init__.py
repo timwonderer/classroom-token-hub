@@ -48,6 +48,10 @@ def url_encode_filter(s):
 
 def nl2br_filter(s):
     """Convert newlines to <br> tags for HTML display."""
+    # TODO: [DEPENDABOT PR #463] MarkupSafe 3.x introduces breaking changes:
+    # - soft_str and soft_unicode removed (deprecated since 2.0)
+    # - Markup.striptags() behavior may differ
+    # - Review Jinja2 compatibility before upgrading from 2.1.5 to 3.0.3
     from markupsafe import Markup
     if s is None:
         return ''

@@ -741,7 +741,10 @@ def reset_teacher_totp(admin_id):
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error resetting TOTP for admin {admin_id}: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({
+            "status": "error",
+            "message": "An internal error occurred while resetting the TOTP secret."
+        }), 500
 
 
 @sysadmin_bp.route('/admins/<int:admin_id>/delete', methods=['POST'])
@@ -1457,31 +1460,20 @@ def grafana_proxy(path):
             stream=True
         )
 
-        # Before streaming, check content type to avoid reflecting potentially unsafe HTML/XML/SVG
+        # Before streaming, check content type to avoid reflecting potentially unsafe content
         # that could contain XSS payloads. Use case-insensitive comparison since MIME types
         # are case-insensitive per RFC 2045.
         content_type = resp.headers.get('Content-Type', '').lower().strip()
 
-        # List of dangerous MIME types that could execute scripts or contain XSS
-        dangerous_mime_types = (
-            'text/html',
-            'application/xhtml+xml',
-            'text/xml',
-            'application/xml',
-            'image/svg+xml',  # SVG can contain JavaScript
-            'text/xsl',       # XSL transformations can be dangerous
-            'application/xslt+xml',
-        )
+        # Split on semicolon to handle parameters like "application/json; charset=utf-8"
+        mime_type = content_type.split(';')[0].strip() if content_type else ''
 
-        # Block if Content-Type indicates dangerous content
-        # Split on semicolon to handle parameters like "text/html; charset=utf-8"
-        mime_type = content_type.split(';')[0].strip()
-        if mime_type in dangerous_mime_types:
+        # Explicitly block SVG first - SVG can contain embedded JavaScript and poses XSS risks
+        if mime_type == 'image/svg+xml':
             current_app.logger.warning(
                 f"Blocked proxied Grafana response with dangerous content type: {content_type} "
                 f"for path: {normalized_path}"
             )
-            # Avoid returning upstream HTML/XML/SVG directly to prevent reflected XSS
             return Response(
                 "Unable to display this Grafana content via proxy due to security restrictions. "
                 "Please access the Grafana dashboard directly.",
@@ -1489,7 +1481,36 @@ def grafana_proxy(path):
                 mimetype='text/plain'
             )
 
-        # Create streaming response for non-HTML content
+        # Allowlist of safe MIME type prefixes that are permitted to be streamed.
+        # Everything else (including HTML/XML or missing/unknown types) is blocked.
+        # Note: image/svg+xml is explicitly blocked above before this check.
+        safe_mime_prefixes = (
+            'image/',              # images (png, jpeg, gif, etc.) - SVG blocked above
+            'text/plain',          # plain text
+            'text/css',            # stylesheets
+            'application/json',    # JSON APIs
+            'application/javascript',
+            'text/javascript',
+            'application/octet-stream',
+            'application/pdf',
+            'text/csv',
+        )
+
+        # Block if Content-Type is missing or not in the allowlist of safe prefixes
+        if not mime_type or not any(mime_type.startswith(prefix) for prefix in safe_mime_prefixes):
+            current_app.logger.warning(
+                f"Blocked proxied Grafana response with potentially unsafe content type: {content_type or 'none'} "
+                f"for path: {normalized_path}"
+            )
+            # Avoid returning upstream content directly to prevent reflected XSS
+            return Response(
+                "Unable to display this Grafana content via proxy due to security restrictions. "
+                "Please access the Grafana dashboard directly.",
+                status=502,
+                mimetype='text/plain'
+            )
+
+        # Create streaming response for allowed content types
         excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
         response_headers = [(name, value) for name, value in resp.raw.headers.items()
                            if name.lower() not in excluded_headers]

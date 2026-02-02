@@ -14,6 +14,10 @@ import hmac
 import os
 
 from flask import request, current_app, session, render_template, url_for
+# TODO: [DEPENDABOT PR #463] MarkupSafe 3.x introduces breaking changes:
+# - soft_str and soft_unicode removed (deprecated since 2.0)
+# - Markup.striptags() behavior may differ
+# - Review Jinja2 compatibility before upgrading from 2.1.5 to 3.0.3
 from markupsafe import Markup
 import markdown
 import bleach
@@ -62,15 +66,22 @@ def format_utc_iso(dt):
     return dt.isoformat().replace("+00:00", "Z")
 
 
-def is_safe_url(target):
+def is_safe_url(target, host_url=None):
     """
     Ensure a redirect URL is safe by checking if it's on the same domain.
+    
+    Args:
+        target: The URL to validate
+        host_url: Optional host URL to validate against. If not provided, uses request.host_url
     """
     # Allow empty targets
     if not target:
         return True
-    ref_url = urlparse(request.host_url)
-    test_url = urlparse(urljoin(request.host_url, target))
+    # Use provided host_url or fall back to request.host_url
+    if host_url is None:
+        host_url = request.host_url
+    ref_url = urlparse(host_url)
+    test_url = urlparse(urljoin(host_url, target))
     return test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc
 
 

@@ -218,4 +218,4 @@ def debug_admin_db_test():
         }), 200
     except Exception as e:
         current_app.logger.exception("Admin DB test failed")
-        return jsonify({"status": "error", "error": str(e)}), 500
+        return jsonify({"status": "error", "message": "Admin DB test failed due to an internal error."}), 500
