@@ -238,7 +238,7 @@ def view_doc(doc_path):
             safe_rel_path = Path(normalized_str)
 
             # Reject empty components, absolute paths, or traversal components
-            if not str(safe_rel_path) or str(safe_rel_path) in (".", "./"):
+            if str(safe_rel_path) in (".", "./"):
                 current_app.logger.warning(f"Empty or root-only documentation path: {untrusted_path}")
                 abort(404)
             if safe_rel_path.is_absolute() or any(part == ".." for part in safe_rel_path.parts):
