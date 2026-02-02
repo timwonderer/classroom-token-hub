@@ -1,0 +1,151 @@
+{% extends "layout_admin.html" %}
+{% set page_title = "Passkey Settings" %}
+{% set page_subtitle = "Manage your passkeys" %}
+{% set current_page = "passkey_settings" %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <!-- Header -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h2 class="mb-2">
+                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 32px;">fingerprint</span>
+                        Passkey Authentication
+                    </h2>
+                    <p class="text-muted">
+                        Passkeys provide secure, passwordless authentication using your device or security key.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Info Banner -->
+            <div class="alert alert-info d-flex align-items-start mb-4">
+                <span class="material-symbols-outlined me-2 mt-1">info</span>
+                <div>
+                    <strong>About Passkeys</strong><br>
+                    Passkeys use WebAuthn/FIDO2 for phishing-resistant authentication. Works with:
+                    <ul class="mb-0 mt-2">
+                        <li>Hardware security keys (YubiKey, etc.)</li>
+                        <li>Platform authenticators (Touch ID, Face ID, Windows Hello)</li>
+                        <li>Synced passkeys across devices</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Registered Passkeys -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <span class="material-symbols-outlined" style="vertical-align: middle;">security</span>
+                        Your Passkeys
+                    </h5>
+                    <button class="btn btn-primary" id="registerPasskeyButton">
+                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 18px;">add</span>
+                        Register New Passkey
+                    </button>
+                </div>
+                <div class="card-body">
+                    {% if credentials %}
+                        <div class="list-group list-group-flush">
+                            {% for cred in credentials %}
+                            <div class="list-group-item px-0 d-flex justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <span class="material-symbols-outlined text-primary me-2">security_key</span>
+                                        <h6 class="mb-0">{{ cred.authenticator_name or "Unnamed Passkey" }}</h6>
+                                    </div>
+                                    <div class="text-muted small">
+                                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 14px;">calendar_today</span>
+                                        Registered: {{ cred.created_at.strftime('%B %d, %Y at %I:%M %p') if cred.created_at else 'Unknown' }}
+                                    </div>
+                                    {% if cred.last_used %}
+                                    <div class="text-muted small">
+                                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 14px;">schedule</span>
+                                        Last used: {{ cred.last_used.strftime('%B %d, %Y at %I:%M %p') }}
+                                    </div>
+                                    {% else %}
+                                    <div class="text-muted small">
+                                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 14px;">schedule</span>
+                                        Never used
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <button class="btn btn-sm btn-outline-danger delete-passkey-btn"
+                                        data-credential-id="{{ cred.id }}"
+                                        data-credential-name="{{ cred.authenticator_name or 'Unnamed Passkey' }}">
+                                    <span class="material-symbols-outlined" style="font-size: 16px;">delete</span>
+                                    Delete
+                                </button>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <span class="material-symbols-outlined text-muted mb-3" style="font-size: 64px;">security_key</span>
+                            <p class="text-muted">
+                                You don't have any passkeys registered yet.<br>
+                                Click "Register New Passkey" above to get started.
+                            </p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Passwordless.dev SDK (Official UMD build) -->
+<script src="https://cdn.passwordless.dev/dist/1.1.0/umd/passwordless.umd.min.js" crossorigin="anonymous"></script>
+<script src="{{ static_url('js/passkey.js') }}"></script>
+
+<script>
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    // Setup passkey registration
+    setupPasskeyRegistration({
+        buttonId: 'registerPasskeyButton',
+        startUrl: '{{ url_for("admin.passkey_register_start") }}',
+        finishUrl: '{{ url_for("admin.passkey_register_finish") }}'
+    });
+
+    // Setup passkey deletion
+    document.querySelectorAll('.delete-passkey-btn').forEach(button => {
+        button.addEventListener('click', async function() {
+            const credentialId = this.dataset.credentialId;
+            const credentialName = this.dataset.credentialName;
+
+            if (!confirm(`Delete "${credentialName}"?`)) {
+                return;
+            }
+
+            try {
+                this.disabled = true;
+                this.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+                const response = await fetch(`{{ url_for("admin.passkey_delete", passkey_id=0) }}`.replace('/0/', `/${credentialId}/`), {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to delete passkey');
+                }
+
+                window.location.reload();
+
+            } catch (error) {
+                alert('Error: ' + error.message);
+                this.disabled = false;
+                this.innerHTML = '<span class="material-symbols-outlined" style="font-size: 16px;">delete</span> Delete';
+            }
+        });
+    });
+</script>
+
+{% endblock %}

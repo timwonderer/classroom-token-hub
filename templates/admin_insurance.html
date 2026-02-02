@@ -3,9 +3,19 @@
 {% set current_page = "insurance" %}
 {% block title %}Insurance Management{% endblock %}
 {% block page_icon %}shield{% endblock %}
+{% set custom_full_guide = true %}
+{% block page_header_actions %}
+  <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#insuranceGuide" aria-controls="insuranceGuide">
+    <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
+  </button>
+  <a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-rent-insurance') }}" class="btn btn-outline-primary d-flex align-items-center gap-2" target="_blank" rel="noopener">
+    <span class="material-symbols-outlined">menu_book</span> <span>Full Guide</span>
+  </a>
+{% endblock %}
 
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
+<script src="{{ static_url('js/economy-balance.js') }}"></script>
 <style>
     .EasyMDEContainer .CodeMirror {
         min-height: 120px;
@@ -20,6 +30,115 @@
 {% endblock %}
 
 {% block content %}
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="insuranceGuide" aria-labelledby="insuranceGuideLabel">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title" id="insuranceGuideLabel">How to: Insurance Management</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body">
+    <p>Create insurance policies, enroll students, and review claims.</p>
+    <div class="accordion mt-4 mb-4" id="insuranceGuideAccordion">
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="insuranceGuideHeadingPolicies">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#insuranceGuidePolicies" aria-expanded="false" aria-controls="insuranceGuidePolicies">
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">policy</span>
+            <strong>Manage Policies</strong>
+          </button>
+        </h2>
+        <div id="insuranceGuidePolicies" class="accordion-collapse collapse mt-2" aria-labelledby="insuranceGuideHeadingPolicies" data-bs-parent="#insuranceGuideAccordion">
+          <div class="accordion-body">
+            <p>Create or update policies in the Existing Policies or Add New Policy tabs.</p>
+          </div>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="insuranceGuideHeadingSettingsBreakdown">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#insuranceGuideSettingsBreakdown" aria-expanded="false" aria-controls="insuranceGuideSettingsBreakdown">
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">tune</span>
+            <strong>Policy Settings Breakdown</strong>
+          </button>
+        </h2>
+        <div id="insuranceGuideSettingsBreakdown" class="accordion-collapse collapse mt-2" aria-labelledby="insuranceGuideHeadingSettingsBreakdown" data-bs-parent="#insuranceGuideAccordion">
+          <div class="accordion-body">
+            <ul class="mb-0">
+              <li><strong>Premium:</strong> amount charged per cycle to stay enrolled.</li>
+              <li><strong>Frequency:</strong> how often premiums are collected.</li>
+              <li><strong>Claim type:</strong> determines whether payouts are monetary or non-monetary.</li>
+              <li><strong>Waiting period:</strong> days before a student can submit a claim.</li>
+              <li><strong>Max claims:</strong> caps total claims per period or overall.</li>
+              <li><strong>Status:</strong> active policies can be enrolled; inactive policies are hidden.</li>
+            </ul>
+            <div class="alert alert-info mt-3 mb-0">
+              <strong>Side effects:</strong> Changing policy terms affects future enrollments and claims.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="insuranceGuideHeadingStudents">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#insuranceGuideStudents" aria-expanded="false" aria-controls="insuranceGuideStudents">
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">group</span>
+            <strong>Student Enrollment</strong>
+          </button>
+        </h2>
+        <div id="insuranceGuideStudents" class="accordion-collapse collapse mt-2" aria-labelledby="insuranceGuideHeadingStudents" data-bs-parent="#insuranceGuideAccordion">
+          <div class="accordion-body">
+            <p>Use the Active Student Policies tab to see who is enrolled and manage coverage.</p>
+          </div>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="insuranceGuideHeadingClaims">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#insuranceGuideClaims" aria-expanded="false" aria-controls="insuranceGuideClaims">
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">assignment</span>
+            <strong>Review Claims</strong>
+          </button>
+        </h2>
+        <div id="insuranceGuideClaims" class="accordion-collapse collapse mt-2" aria-labelledby="insuranceGuideHeadingClaims" data-bs-parent="#insuranceGuideAccordion">
+          <div class="accordion-body">
+            <p>Open the Claims tab to review and resolve pending requests.</p>
+            <div class="alert alert-info mb-0">
+              <strong>Tip:</strong> Claims follow the waiting period set on each policy.
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="accordion-item">
+        <h2 class="accordion-header" id="insuranceGuideHeadingBalance">
+          <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#insuranceGuideBalance" aria-expanded="false" aria-controls="insuranceGuideBalance">
+            <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">balance</span>
+            <strong>Balance Premiums</strong>
+          </button>
+        </h2>
+        <div id="insuranceGuideBalance" class="accordion-collapse collapse mt-2" aria-labelledby="insuranceGuideHeadingBalance" data-bs-parent="#insuranceGuideAccordion">
+          <div class="accordion-body">
+            <p>Compare premium costs with CWI to keep coverage affordable.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Class Selector Banner -->
+{% if teacher_blocks %}
+<div class="alert alert-primary d-flex align-items-center justify-content-between mb-4">
+  <div class="d-flex align-items-center gap-3">
+    <span class="material-symbols-outlined" style="font-size: 2rem;">school</span>
+    <div>
+      <h6 class="mb-1 fw-bold">Viewing Insurance For:</h6>
+      <select class="form-select form-select-sm" id="settings_block_selector" style="width: auto; min-width: 200px;">
+        {% for block in teacher_blocks %}
+          <option value="{{ block }}" {% if block == settings_block %}selected{% endif %}>
+            {{ class_labels_by_block.get(block, block) }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+</div>
+{% endif %}
 
 <!-- Nav Tabs -->
 <ul class="nav nav-tabs mb-4" id="insuranceTabs" role="tablist">
@@ -161,6 +280,10 @@
           {{ form.hidden_tag() }}
           <input type="hidden" name="settings_mode" id="settingsModeInput" value="simple">
 
+          <!-- Economy Balance Check -->
+          <div id="cwi-info" class="mb-3"></div>
+          <div id="economy-warnings" class="mb-3"></div>
+
           <!-- SIMPLE MODE -->
           <div id="simpleModeFields">
             <div class="alert alert-info">
@@ -177,8 +300,13 @@
                 {{ form.premium.label(class="form-label fw-bold", for="simple_premium") }}
                 <div class="input-group">
                   <span class="input-group-text">$</span>
-                  {{ form.premium(class="form-control", placeholder="10.00", id="simple_premium") }}
-                  <span class="input-group-text">/{{ form.charge_frequency(class="form-select", id="simple_charge_frequency", style="width: auto;") }}</span>
+                  {{ form.premium(class="form-control", placeholder="10.00", id="simple_premium", **{
+                    'data-economy-validate': 'insurance',
+                    'data-economy-coverage-target': '#simple_max_claim_amount',
+                    'data-economy-period-target': '#simple_max_payout_per_period',
+                    'data-economy-claim-type-target': '#simple_claim_type'
+                  }) }}
+                  <span class="input-group-text">/{{ form.charge_frequency(class="form-select", id="simple_charge_frequency", style="width: auto;", **{'data-economy-frequency-field': 'true', 'data-economy-frequency-target': '#simple_premium'}) }}</span>
                 </div>
               </div>
             </div>
@@ -190,28 +318,47 @@
 
             <div class="mb-3">
               {{ form.claim_type.label(class="form-label fw-bold") }}
-              {{ form.claim_type(class="form-select", id="simple_claim_type") }}
+              {{ form.claim_type(class="form-select", id="simple_claim_type", **{'data-economy-trigger': '#simple_premium'}) }}
               <small class="text-muted">Choose how claims are processed.</small>
             </div>
 
-            <div class="row">
+            <div class="mb-3">
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="simpleClaimLimitToggle">
+                <label class="form-check-label fw-bold" for="simpleClaimLimitToggle">
+                  Is there a limit to how much payout a student receives per approved claim?
+                </label>
+              </div>
+              <small class="text-muted">Turn on to cap the payout for each approved claim.</small>
+            </div>
+
+            <div class="row" id="simpleClaimLimitFields" style="display:none;">
               <div class="col-md-6 mb-3">
-                <label class="form-label fw-bold">Claim Amount (Flat Rate)</label>
+                <label class="form-label fw-bold">Max Payout Per Approved Claim</label>
                 <div class="input-group">
                   <span class="input-group-text">$</span>
-                  {{ form.max_claim_amount(class="form-control", placeholder="50.00", id="simple_max_claim_amount") }}
+                {{ form.max_claim_amount(class="form-control", placeholder="50.00", id="simple_max_claim_amount", **{'data-economy-trigger': '#simple_premium'}) }}
                 </div>
-                <small class="text-muted">Amount paid per approved claim</small>
+                <small class="text-muted">Optional. Leave blank for no per-claim cap.</small>
               </div>
               <div class="col-md-6 mb-3">
-                <label class="form-label fw-bold">Max Payout Per Period</label>
+                <label class="form-label fw-bold">Maximum number of claims per period</label>
                 <div class="input-group">
-                  <span class="input-group-text">$</span>
-                  {{ form.max_payout_per_period(class="form-control", placeholder="200.00", id="simple_max_payout_per_period") }}
-                  <span class="input-group-text">/{{ form.max_claims_period(class="form-select", id="simple_max_claims_period", style="width: auto;") }}</span>
+                  {{ form.max_claims_count(class="form-control", placeholder="3", id="simple_max_claims_count") }}
+                  <span class="input-group-text">claims</span>
                 </div>
-                <small class="text-muted">Maximum total payout in the period</small>
+                <small class="text-muted">Optional. Uses the period selected below.</small>
               </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-bold">Max Payout Per Period</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                  {{ form.max_payout_per_period(class="form-control", placeholder="200.00", id="simple_max_payout_per_period", **{'data-economy-trigger': '#simple_premium'}) }}
+                <span class="input-group-text">/{{ form.max_claims_period(class="form-select", id="simple_max_claims_period", style="width: auto;") }}</span>
+              </div>
+              <small class="text-muted">Optional. Leave blank for no total cap in the period.</small>
             </div>
 
             <div class="row">
@@ -260,7 +407,7 @@
                   </div>
                   <div class="mb-0">
                     {{ form.claim_type.label(class="form-label fw-bold") }}
-                    {{ form.claim_type(class="form-select", id="advanced_claim_type") }}
+                    {{ form.claim_type(class="form-select", id="advanced_claim_type", **{'data-economy-trigger': '#advanced_premium'}) }}
                     <div class="alert alert-light border mt-2 mb-0">
                       <small>
                         <strong>Transactions-based:</strong> Students pick a spending transaction; amount auto-calculated.<br>
@@ -285,13 +432,18 @@
                       {{ form.premium.label(class="form-label fw-bold") }}
                       <div class="input-group">
                         <span class="input-group-text">$</span>
-                        {{ form.premium(class="form-control", placeholder="0.00") }}
+                        {{ form.premium(class="form-control", placeholder="0.00", id="advanced_premium", **{
+                          'data-economy-validate': 'insurance',
+                          'data-economy-coverage-target': '#advanced_max_claim_amount',
+                          'data-economy-period-target': '#advanced_max_payout_per_period',
+                          'data-economy-claim-type-target': '#advanced_claim_type'
+                        }) }}
                       </div>
                       <small class="text-muted">Cost per cycle</small>
                     </div>
                     <div class="col-md-6 mb-3">
                       {{ form.charge_frequency.label(class="form-label fw-bold") }}
-                      {{ form.charge_frequency(class="form-select") }}
+                      {{ form.charge_frequency(class="form-select", id="advanced_charge_frequency", **{'data-economy-frequency-field': 'true', 'data-economy-frequency-target': '#advanced_premium'}) }}
                       <small class="text-muted">Billing frequency</small>
                     </div>
                   </div>
@@ -362,7 +514,7 @@
                     {{ form.max_claim_amount.label(class="form-label fw-bold") }}
                     <div class="input-group">
                       <span class="input-group-text">$</span>
-                      {{ form.max_claim_amount(class="form-control", placeholder="0.00") }}
+                      {{ form.max_claim_amount(class="form-control", placeholder="0.00", id="advanced_max_claim_amount", **{'data-economy-trigger': '#advanced_premium'}) }}
                     </div>
                     <small class="text-muted">Max payout per claim (0 = ∞)</small>
                   </div>
@@ -370,7 +522,7 @@
                     {{ form.max_payout_per_period.label(class="form-label fw-bold") }}
                     <div class="input-group">
                       <span class="input-group-text">$</span>
-                      {{ form.max_payout_per_period(class="form-control", placeholder="0.00") }}
+                      {{ form.max_payout_per_period(class="form-control", placeholder="0.00", id="advanced_max_payout_per_period", **{'data-economy-trigger': '#advanced_premium'}) }}
                     </div>
                     <small class="text-muted">Max total payout per period (0 = ∞)</small>
                   </div>
@@ -459,16 +611,26 @@
                 </div>
               </div>
 
-              <div id="tierSelectionNew" class="border rounded p-3 bg-light" style="display: none;">
-                <div class="alert alert-info py-2 px-3 d-none" id="tierSummaryNew"></div>
+              {% if form.tier_level is defined %}
+              <div id="tierSelectionNew" class="card bg-light-subtle border-0 shadow-sm" style="display: none;">
+                <div class="card-body">
+                  <div class="row g-3 align-items-start">
+                    <div class="col-lg-8">
+                      <div class="alert alert-info py-2 px-3 d-none mb-0" id="tierSummaryNew"></div>
+                    </div>
+                    <div class="col-lg-4">
+                      {{ form.tier_level.label(class="form-label fw-bold small mb-1") }}
+                      {{ form.tier_level(class="form-select form-select-sm", id="tier_level") }}
+                      <small class="text-muted">Tag this insurance as basic, mid-tier, or premium for clearer choices.</small>
+                    </div>
+                  </div>
 
-                {% if tier_groups %}
-                <div class="mb-3">
-                  <div class="row g-3">
+                  {% if tier_groups %}
+                  <div class="row g-3 mt-2">
                     {% for group in tier_groups %}
                     <div class="col-md-6">
-                      <div class="card h-100 border-{{ group.color }}">
-                        <div class="card-body">
+                      <div class="card h-100 border-{{ group.color }} shadow-sm">
+                        <div class="card-body d-flex flex-column">
                           <div class="d-flex justify-content-between align-items-start mb-2">
                             <div>
                               <span class="badge bg-{{ group.color }} text-white">{{ group.name }}</span>
@@ -479,34 +641,47 @@
                             </button>
                           </div>
                           <div class="small text-muted">{{ group.policies|length }} policy{{ 'ies' if group.policies|length != 1 else '' }} in this group</div>
+                          {% if group.policies %}
+                          <ul class="list-unstyled small mt-2 mb-0">
+                            {% for policy_info in group.policies %}
+                            <li class="d-flex align-items-center gap-2">
+                              <i class="bi bi-shield-check text-{{ group.color }}"></i>
+                              <span>{{ policy_info.title }}</span>
+                              {% if policy_info.level %}
+                              <span class="badge rounded-pill text-bg-light border border-{{ group.color }} text-{{ group.color }} text-uppercase" style="font-size: 0.65rem;">{{ policy_info.level.replace('_', ' ') }}</span>
+                              {% endif %}
+                            </li>
+                            {% endfor %}
+                          </ul>
+                          {% endif %}
                         </div>
                       </div>
                     </div>
                     {% endfor %}
                   </div>
-                </div>
-                <div class="mb-3">
-                  <button type="button" class="btn btn-outline-secondary btn-sm" id="startNewGroupBtnNew">Create a new group</button>
-                </div>
-                {% else %}
-                <div class="alert alert-warning d-flex align-items-center" role="alert">
-                  <i class="bi bi-info-circle me-2"></i>
-                  <div>No grouped insurance exists yet. Name your first group to create a "select one only" group.</div>
-                </div>
-                {% endif %}
-
-                <div id="newGroupFieldsNew" class="card card-body border-0 bg-white shadow-sm {% if tier_groups %}d-none{% endif %}">
-                  <div class="d-flex align-items-center mb-3">
-                    <small class="text-muted">Students can choose one policy per group.</small>
+                  <div class="mt-3">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="startNewGroupBtnNew">Create a new group</button>
                   </div>
-                  <div class="row g-2">
-                    <div class="col-md-7">
-                      {{ form.tier_name.label(class="form-label fw-bold small") }}
-                      {{ form.tier_name(class="form-control form-control-sm", id="tier_name") }}
+                  {% else %}
+                  <div class="alert alert-warning d-flex align-items-center mt-3" role="alert">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <div>No grouped insurance exists yet. Name your first group to create a "select one only" group.</div>
+                  </div>
+                  {% endif %}
+
+                  <div id="newGroupFieldsNew" class="card card-body border-0 bg-white shadow-sm {% if tier_groups %}d-none{% endif %} mt-3">
+                    <div class="d-flex align-items-center mb-3">
+                      <small class="text-muted">Students can choose one policy per group.</small>
                     </div>
-                    <div class="col-md-5">
-                      {{ form.tier_color.label(class="form-label fw-bold small") }}
-                      {{ form.tier_color(class="form-select form-select-sm", id="tier_color") }}
+                    <div class="row g-2">
+                      <div class="col-md-7">
+                        {{ form.tier_name.label(class="form-label fw-bold small") }}
+                        {{ form.tier_name(class="form-control form-control-sm", id="tier_name") }}
+                      </div>
+                      <div class="col-md-5">
+                        {{ form.tier_color.label(class="form-label fw-bold small") }}
+                        {{ form.tier_color(class="form-select form-select-sm", id="tier_color") }}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -515,12 +690,17 @@
               <div class="d-none">
                 {{ form.tier_category_id(id="tier_category_id") }}
               </div>
+              {% else %}
+              <div class="alert alert-warning mb-0">
+                Tier grouping controls are temporarily unavailable. Reload the page after updating the site to enable grouping.
+              </div>
+              {% endif %}
             </div>
           </div>
           </div><!-- End Advanced Mode Fields -->
 
           <div class="d-grid">
-            {{ form.submit(class="btn btn-primary btn-lg", value="💾 Create Policy") }}
+            {{ form.submit(class="btn btn-primary btn-lg", value="Create Policy") }}
           </div>
         </form>
       </div>
@@ -533,6 +713,56 @@
       const settingsModeInput = document.getElementById('settingsModeInput');
       const simpleModeFields = document.getElementById('simpleModeFields');
       const advancedModeFields = document.getElementById('advancedModeFields');
+      const cwiInfoContainer = document.getElementById('cwi-info');
+      const economyWarningsContainer = document.getElementById('economy-warnings');
+      const simpleModeInputs = simpleModeFields ? simpleModeFields.querySelectorAll('input, select, textarea') : [];
+      const advancedModeInputs = advancedModeFields ? advancedModeFields.querySelectorAll('input, select, textarea') : [];
+      const claimLimitToggle = document.getElementById('simpleClaimLimitToggle');
+      const claimLimitFields = document.getElementById('simpleClaimLimitFields');
+      const maxClaimAmountInput = document.getElementById('simple_max_claim_amount');
+      const maxClaimsCountInput = document.getElementById('simple_max_claims_count');
+
+      function setClaimLimit(isEnabled, allowInputs) {
+        if (!claimLimitFields) {
+          return;
+        }
+
+        const shouldShow = Boolean(isEnabled && allowInputs);
+        claimLimitFields.style.display = shouldShow ? '' : 'none';
+
+        const disableInputs = !shouldShow;
+        if (maxClaimAmountInput) {
+          maxClaimAmountInput.disabled = disableInputs;
+        }
+        if (maxClaimsCountInput) {
+          maxClaimsCountInput.disabled = disableInputs;
+        }
+      }
+
+      function setMode(isAdvanced) {
+        if (!simpleModeFields || !advancedModeFields || !settingsModeInput) {
+          return;
+        }
+
+        if (isAdvanced) {
+          simpleModeFields.style.display = 'none';
+          advancedModeFields.style.display = 'block';
+          settingsModeInput.value = 'advanced';
+        } else {
+          simpleModeFields.style.display = 'block';
+          advancedModeFields.style.display = 'none';
+          settingsModeInput.value = 'simple';
+        }
+
+        simpleModeInputs.forEach((input) => {
+          input.disabled = isAdvanced;
+        });
+        advancedModeInputs.forEach((input) => {
+          input.disabled = !isAdvanced;
+        });
+
+        setClaimLimit(claimLimitToggle && claimLimitToggle.checked, !isAdvanced);
+      }
 
       // Highlight fields with errors
       {% if form.errors %}
@@ -561,18 +791,35 @@
 
       if (insuranceModeToggle) {
         insuranceModeToggle.addEventListener('change', function() {
-          if (this.checked) {
-            // Advanced mode
-            simpleModeFields.style.display = 'none';
-            advancedModeFields.style.display = 'block';
-            settingsModeInput.value = 'advanced';
-          } else {
-            // Simple mode
-            simpleModeFields.style.display = 'block';
-            advancedModeFields.style.display = 'none';
-            settingsModeInput.value = 'simple';
+          setMode(this.checked);
+          if (economyWarningsContainer) {
+            economyWarningsContainer.innerHTML = '';
+            economyWarningsContainer.style.display = 'none';
           }
         });
+      }
+
+      if (claimLimitToggle) {
+        const hasClaimLimitValue = (maxClaimAmountInput && maxClaimAmountInput.value) ||
+          (maxClaimsCountInput && maxClaimsCountInput.value);
+        const hasClaimLimitError = (maxClaimAmountInput && maxClaimAmountInput.classList.contains('is-invalid')) ||
+          (maxClaimsCountInput && maxClaimsCountInput.classList.contains('is-invalid'));
+        const initialClaimLimit = Boolean(hasClaimLimitValue || hasClaimLimitError);
+
+        claimLimitToggle.checked = initialClaimLimit;
+        setClaimLimit(initialClaimLimit, true);
+
+        claimLimitToggle.addEventListener('change', function() {
+          setClaimLimit(this.checked, true);
+        });
+      }
+
+      if (insuranceModeToggle && settingsModeInput) {
+        const initialAdvanced = settingsModeInput.value === 'advanced';
+        insuranceModeToggle.checked = initialAdvanced;
+        setMode(initialAdvanced);
+      } else {
+        setMode(false);
       }
 
       // Handle mutually exclusive repurchase restrictions for new policy form
@@ -616,6 +863,7 @@
       const tierCategoryInput = document.getElementById('tier_category_id');
       const tierNameInput = document.getElementById('tier_name');
       const tierColorInput = document.getElementById('tier_color');
+      const tierLevelInput = document.getElementById('tier_level');
       const tierSummaryNew = document.getElementById('tierSummaryNew');
       const newGroupFieldsNew = document.getElementById('newGroupFieldsNew');
       const startNewGroupBtnNew = document.getElementById('startNewGroupBtnNew');
@@ -625,6 +873,7 @@
         if (tierCategoryInput) tierCategoryInput.value = '';
         if (tierNameInput) tierNameInput.value = '';
         if (tierColorInput) tierColorInput.value = '';
+        if (tierLevelInput) tierLevelInput.value = '';
       }
 
       function showTierSelection() {
@@ -643,14 +892,21 @@
         clearTierFields();
       }
 
+      function updateTierSummary() {
+        if (!tierSummaryNew) return;
+        const levelLabel = (tierLevelInput && tierLevelInput.value)
+          ? ` · ${tierLevelInput.options[tierLevelInput.selectedIndex].text}`
+          : '';
+        const groupLabel = tierNameInput && tierNameInput.value ? tierNameInput.value : 'Untitled Group';
+        tierSummaryNew.innerHTML = `<strong>Grouped:</strong> ${groupLabel} · select one only${levelLabel}`;
+        tierSummaryNew.classList.remove('d-none');
+      }
+
       function setTierValues(tier) {
         if (tierCategoryInput) tierCategoryInput.value = tier.id;
         if (tierNameInput) tierNameInput.value = tier.name || '';
         if (tierColorInput) tierColorInput.value = tier.color || 'primary';
-        if (tierSummaryNew) {
-          tierSummaryNew.innerHTML = `<strong>Grouped:</strong> ${tier.name || 'Untitled Group'} · select one only`;
-          tierSummaryNew.classList.remove('d-none');
-        }
+        updateTierSummary();
         if (newGroupFieldsNew) newGroupFieldsNew.classList.add('d-none');
       }
 
@@ -694,6 +950,14 @@
         });
       }
 
+      if (tierLevelInput) {
+        tierLevelInput.addEventListener('change', () => {
+          if (tierToggleNew && tierToggleNew.checked && tierCategoryInput && tierCategoryInput.value) {
+            updateTierSummary();
+          }
+        });
+      }
+
       // Initialize existing selection if data already present
       if (tierCategoryInput && tierCategoryInput.value) {
         if (tierToggleNew) tierToggleNew.checked = true;
@@ -710,6 +974,38 @@
       tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
       });
+
+      // Initialize Economy Balance Checker
+      if (typeof EconomyBalanceChecker !== 'undefined') {
+        const economyChecker = new EconomyBalanceChecker({
+          warningsContainer: '#economy-warnings'
+        });
+
+        const currentBlock = '{{ settings_block }}';
+        economyChecker.analyzeEconomy(null, currentBlock).then(analysis => {
+          economyChecker.displayCWIInfo(analysis, '#cwi-info');
+        }).catch(err => {
+          if (cwiInfoContainer) {
+            cwiInfoContainer.innerHTML = '';
+          }
+          console.log('Payroll not configured yet, skipping CWI display');
+        });
+
+        const frequencyFields = document.querySelectorAll('[data-economy-frequency-field]');
+        frequencyFields.forEach(field => {
+          const targetSelector = field.dataset.economyFrequencyTarget;
+          const premiumField = targetSelector ? document.querySelector(targetSelector) : null;
+          if (!premiumField) return;
+
+          const syncFrequency = () => {
+            premiumField.setAttribute('data-economy-frequency', field.value);
+            premiumField.dispatchEvent(new Event('input'));
+          };
+
+          field.addEventListener('change', syncFrequency);
+          syncFrequency();
+        });
+      }
     });
     </script>
   </div>
@@ -1133,9 +1429,19 @@ document.addEventListener('DOMContentLoaded', function() {
       new EasyMDE({
         element: descriptionField,
         spellChecker: false,
+        autoDownloadFontAwesome: false,
         toolbar: ["bold", "italic", "heading", "|", "unordered-list", "ordered-list", "|", "link", "quote", "|", "preview", "side-by-side", "fullscreen", "|", "guide"],
         status: false,
         placeholder: "Describe what this policy covers (Markdown supported)...",
+      });
+    }
+
+    // Handle class selector change
+    const settingsBlockSelector = document.getElementById('settings_block_selector');
+    if (settingsBlockSelector) {
+      settingsBlockSelector.addEventListener('change', function() {
+        const selectedBlock = this.value;
+        window.location.href = "{{ url_for('admin.insurance_management') }}?settings_block=" + encodeURIComponent(selectedBlock);
       });
     }
   });

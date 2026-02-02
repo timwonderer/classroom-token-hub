@@ -1,0 +1,334 @@
+{% extends "layout_system_admin.html" %}
+{% set current_page = "issues" %}
+{% block page_icon %}support_agent{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Back Button -->
+    <a href="{{ url_for('sysadmin.escalated_issues') }}" class="btn btn-outline-secondary mb-3">
+        <i class="bi bi-arrow-left me-2"></i>Back to Escalated Issues
+    </a>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <!-- Issue Details Card -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-primary text-white">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">
+                            <i class="bi bi-flag-fill me-2"></i>Issue #{{ issue.id }}
+                        </h4>
+                        <span class="badge
+                            {% if issue.status == 'elevated' %}bg-warning text-dark
+                            {% elif issue.status == 'developer_review' %}bg-info
+                            {% elif issue.status == 'developer_resolved' %}bg-success
+                            {% else %}bg-secondary{% endif %}">
+                            {{ issue.status|replace('_', ' ')|title }}
+                        </span>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <!-- Teacher Info -->
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Escalated By</h6>
+                        <p class="mb-0">
+                            <i class="bi bi-person-badge me-2"></i>
+                            <strong>{{ issue.teacher.username }}</strong>
+                            {% if issue.share_class_name_with_sysadmin and issue.class_label %}
+                            <span class="text-muted">| {{ issue.class_label }}</span>
+                            {% endif %}
+                        </p>
+                    </div>
+
+                    <hr>
+
+                    <!-- Student Reference (Opaque) -->
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Student Reference</h6>
+                        <p class="mb-0">
+                            <i class="bi bi-hash me-2"></i>
+                            <code>{{ issue.opaque_student_reference }}</code>
+                            <small class="text-muted d-block mt-1">
+                                Non-reversible identifier for privacy protection
+                            </small>
+                        </p>
+                    </div>
+
+                    <hr>
+
+                    <!-- Category -->
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Category</h6>
+                        <span class="badge bg-secondary">{{ issue.category.name if issue.category else 'Unknown' }}</span>
+                        <span class="badge bg-light text-dark ms-2">{{ issue.issue_type|title }}</span>
+                    </div>
+
+                    <hr>
+
+                    <!-- Bug Bounty Reward Eligibility -->
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Bug Bounty Reward Eligibility</h6>
+                        <p class="mb-0">
+                            <i class="bi bi-gift me-2"></i>
+                            {% if issue.eligible_for_reward %}
+                                <span class="badge bg-warning text-dark">Yes</span>
+                                {% if issue.reward_amount %}
+                                <span class="text-muted ms-2">Amount: ${{ "%.2f"|format(issue.reward_amount) }}</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge bg-secondary">No</span>
+                            {% endif %}
+                        </p>
+                    </div>
+
+                    <hr>
+
+                    <!-- Escalation Reason -->
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Escalation Reason</h6>
+                        <div class="alert alert-warning">
+                            <strong>{{ issue.escalation_reason }}</strong>
+                        </div>
+                    </div>
+
+                    <!-- Teacher Diagnostic Note -->
+                    {% if issue.teacher_diagnostic_note %}
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Teacher's Diagnostic Notes</h6>
+                        <div class="bg-light p-3 rounded">
+                            <p class="mb-0">{{ issue.teacher_diagnostic_note }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <hr>
+
+                    <!-- Student Explanation -->
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Student's Original Report</h6>
+                        <div class="bg-light p-3 rounded">
+                            <p class="mb-0">{{ issue.student_explanation }}</p>
+                        </div>
+                    </div>
+
+                    {% if issue.student_expected_outcome %}
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Expected Outcome</h6>
+                        <div class="bg-light p-3 rounded">
+                            <p class="mb-0">{{ issue.student_expected_outcome }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <hr>
+
+                    <!-- Timestamps -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <h6 class="text-muted mb-2">Escalated</h6>
+                            <p class="mb-0">
+                                <i class="bi bi-arrow-up-circle me-2"></i>
+                                <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
+                            </p>
+                        </div>
+                        {% if issue.sysadmin_reviewed_at %}
+                        <div class="col-md-6 mb-3">
+                            <h6 class="text-muted mb-2">Reviewed</h6>
+                            <p class="mb-0">
+                                <i class="bi bi-eye me-2"></i>
+                                <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.sysadmin_reviewed_at) }}"></span>
+                            </p>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Sysadmin Notes (if resolved) -->
+                    {% if issue.sysadmin_notes %}
+                    <hr>
+                    <div class="mb-3">
+                        <h6 class="text-muted mb-2">Resolution Notes</h6>
+                        <div class="alert alert-success">
+                            <p class="mb-0">{{ issue.sysadmin_notes }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Context Snapshot -->
+            {% if issue.context_snapshot %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-info-circle me-2"></i>System Context Snapshot
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if issue.context_snapshot.balances %}
+                    <h6 class="text-muted mb-2">Balances at Time of Report</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <p class="mb-0"><strong>Checking:</strong> ${{ "%.2f"|format(issue.context_snapshot.balances.checking) }}</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p class="mb-0"><strong>Savings:</strong> ${{ "%.2f"|format(issue.context_snapshot.balances.savings) }}</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p class="mb-0"><strong>Total:</strong> ${{ "%.2f"|format(issue.context_snapshot.balances.total) }}</p>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {% if issue.context_snapshot.transaction %}
+                    <hr>
+                    <h6 class="text-muted mb-2">Related Transaction</h6>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>ID:</strong> #{{ issue.context_snapshot.transaction.id }}</p>
+                            <p class="mb-1"><strong>Amount:</strong>
+                                <span class="{% if issue.context_snapshot.transaction.amount > 0 %}text-success{% else %}text-danger{% endif %}">
+                                    ${{ "%.2f"|format(issue.context_snapshot.transaction.amount) }}
+                                </span>
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-1"><strong>Account:</strong> {{ issue.context_snapshot.transaction.account_type|title }}</p>
+                            <p class="mb-1"><strong>Type:</strong> {{ issue.context_snapshot.transaction.type|title }}</p>
+                        </div>
+                    </div>
+                    <p class="mb-0 mt-2"><strong>Description:</strong> {{ issue.context_snapshot.transaction.description }}</p>
+                    {% if issue.context_snapshot.transaction.is_void %}
+                    <div class="alert alert-danger mt-2 mb-0">
+                        <i class="bi bi-x-circle-fill me-2"></i>Transaction was voided
+                    </div>
+                    {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Sidebar -->
+        <div class="col-lg-4">
+            <!-- Start Review Button (for elevated status) -->
+            {% if issue.status == 'elevated' %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-play-circle me-2"></i>Start Review
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-3">Mark this issue as being reviewed to acknowledge it and begin investigation.</p>
+                    <form method="POST" action="{{ url_for('sysadmin.start_review_escalated_issue', issue_id=issue.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-info w-100">
+                            <i class="bi bi-play-circle me-2"></i>Start Review
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Actions Card -->
+            {% if issue.status in ['elevated', 'developer_review'] %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-check-circle me-2"></i>Resolve Issue
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" action="{{ url_for('sysadmin.resolve_escalated_issue', issue_id=issue.id) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                        <div class="mb-3">
+                            <label for="resolution_note" class="form-label">Resolution Notes</label>
+                            <textarea class="form-control" id="resolution_note" name="resolution_note" rows="4"
+                                      placeholder="Describe how the issue was resolved or what action was taken..." required></textarea>
+                            <small class="form-text text-muted">This will be visible to the teacher.</small>
+                        </div>
+
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="eligible_for_reward" name="eligible_for_reward">
+                            <label class="form-check-label" for="eligible_for_reward">
+                                Student eligible for bug bounty reward
+                            </label>
+                        </div>
+
+                        <div class="mb-3" id="reward_amount_field" style="display: none;">
+                            <label for="reward_amount" class="form-label">Reward Amount</label>
+                            <div class="input-group">
+                                <span class="input-group-text">$</span>
+                                <input type="number" class="form-control" id="reward_amount" name="reward_amount"
+                                       min="0" step="0.01" placeholder="0.00">
+                            </div>
+                            <small class="form-text text-muted">Enter the bug bounty reward amount.</small>
+                        </div>
+
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="bi bi-check-circle me-2"></i>Mark as Resolved
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Status History -->
+            {% if history %}
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-clock-history me-2"></i>Status History
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="timeline">
+                        {% for entry in history %}
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <span class="badge bg-secondary">{{ entry.new_status|replace('_', ' ')|title }}</span>
+                                    <small class="text-muted d-block mt-1">
+                                        by {{ entry.changed_by_type|title }}
+                                    </small>
+                                </div>
+                                <small class="text-muted">
+                                    <span class="local-timestamp" data-timestamp="{{ format_utc_iso(entry.changed_at) }}"></span>
+                                </small>
+                            </div>
+                        </div>
+                        {% if not loop.last %}<hr>{% endif %}
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script src="{{ static_url('js/timezone-utils.js') }}"></script>
+
+<script>
+// Toggle reward amount field based on checkbox
+document.addEventListener('DOMContentLoaded', function() {
+    const checkbox = document.getElementById('eligible_for_reward');
+    const amountField = document.getElementById('reward_amount_field');
+    const amountInput = document.getElementById('reward_amount');
+
+    if (checkbox && amountField) {
+        checkbox.addEventListener('change', function() {
+            if (this.checked) {
+                amountField.style.display = 'block';
+                amountInput.required = true;
+            } else {
+                amountField.style.display = 'none';
+                amountInput.required = false;
+                amountInput.value = '';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

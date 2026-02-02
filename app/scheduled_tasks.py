@@ -22,59 +22,61 @@ def enforce_daily_limits_job():
     logger.info("Starting scheduled auto tap-out enforcement job")
 
     try:
-        with db.session.begin_nested():
-            students = Student.query.all()
-            checked_count = 0
-            tapped_out_count = 0
+        # Load all students into memory first to avoid named cursor issues
+        # yield_per() creates a server-side cursor that gets invalidated by commit()
+        students = Student.query.all()
+        checked_count = 0
+        tapped_out_count = 0
 
-            for student in students:
-                try:
-                    # Get the student's current active sessions
-                    student_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
-                    has_active_session = False
+        for student in students:
+            try:
+                # Get the student's current active sessions
+                student_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
+                has_active_session = False
 
-                    for period in student_blocks:
-                        latest_event = (
-                            TapEvent.query
-                            .filter_by(student_id=student.id, period=period)
-                            .order_by(TapEvent.timestamp.desc())
-                            .first()
-                        )
+                for period in student_blocks:
+                    latest_event = (
+                        TapEvent.query
+                        .filter_by(student_id=student.id, period=period)
+                        .order_by(TapEvent.timestamp.desc())
+                        .first()
+                    )
 
-                        # If student is active, check their limit
-                        if latest_event and latest_event.status == "active":
-                            has_active_session = True
-                            break
+                    # If student is active, check their limit
+                    if latest_event and latest_event.status == "active":
+                        has_active_session = True
+                        break
 
-                    if has_active_session:
-                        checked_count += 1
-                        # Get the latest event ID before running check
-                        latest_before = TapEvent.query.filter_by(
-                            student_id=student.id
-                        ).order_by(TapEvent.timestamp.desc()).first()
+                if has_active_session:
+                    checked_count += 1
+                    # Get the latest event ID before running check
+                    latest_before = TapEvent.query.filter_by(
+                        student_id=student.id
+                    ).order_by(TapEvent.timestamp.desc()).first()
 
-                        check_and_auto_tapout_if_limit_reached(student)
+                    check_and_auto_tapout_if_limit_reached(student, commit=False)
 
-                        # Check if a new tap-out event was created
-                        latest_after = TapEvent.query.filter_by(
-                            student_id=student.id
-                        ).order_by(TapEvent.timestamp.desc()).first()
+                    # Check if a new tap-out event was created
+                    latest_after = TapEvent.query.filter_by(
+                        student_id=student.id
+                    ).order_by(TapEvent.timestamp.desc()).first()
 
-                        if latest_after and latest_after.id != latest_before.id:
-                            if latest_after.status == "inactive":
-                                tapped_out_count += 1
-                                logger.info(f"Auto-tapped out student {student.id} ({student.full_name})")
+                    if latest_after and (latest_before is None or latest_after.id != latest_before.id):
+                        if latest_after.status == "inactive":
+                            tapped_out_count += 1
+                            logger.info(f"Auto-tapped out student {student.id} ({student.full_name})")
 
-                except Exception as e:
-                    logger.error(f"Error checking student {student.id}: {e}", exc_info=True)
-                    continue
-
-            db.session.commit()
-            logger.info(f"Auto tap-out job completed. Checked {checked_count} active students, tapped out {tapped_out_count}")
+                # Commit after successfully processing this student so previous students' work is preserved
+                db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                logger.error(f"Error checking student {student.id}: {e}", exc_info=True)
+                continue
+        logger.info(f"Auto tap-out job completed. Checked {checked_count} active students, tapped out {tapped_out_count}")
 
     except Exception as e:
-        logger.error(f"Auto tap-out job failed: {e}", exc_info=True)
         db.session.rollback()
+        logger.error(f"Auto tap-out job failed: {e}", exc_info=True)
 
 
 def cleanup_expired_demo_sessions_job():

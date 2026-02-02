@@ -2,6 +2,8 @@
 
 An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.
 
+**Version:** 1.7.1
+
 ---
 
 ## Overview
@@ -10,30 +12,58 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
+**Project Status:** Version 1.7.1 Released! This maintenance release fixes critical Decimal calculation errors in student dashboards, interest calculations, and analytics. Major features from v1.7.0 include a comprehensive analytics dashboard with system health metrics, flexible rent itemization with store integration, enhanced mobile navigation with PWA support, and visual privilege badges for rent items. See [RELEASE_NOTES_v1.7.1.md](docs/archive/releases/RELEASE_NOTES_v1.7.1.md) for full details.
+
 ---
 
 ## Features
 
 ### Core Features
 
-- **System Admin Portal** — Manage teachers, review error logs, and adjust student ownership
+- **System Admin Portal** — Manage teachers (including account recovery), review error logs, and adjust student ownership
 - **Teacher Dashboard** — Manage students, run payroll, configure rent/insurance/banking settings
+- **Analytics Dashboard** — System health metrics, CWI analysis, participation tracking, and trend monitoring
 - **Student Portal** — View balances, redeem store items, track attendance, and manage hall passes
 - **Join-Code Rosters** — Upload rosters and let students self-claim seats securely
 - **Shared Students** — Link multiple teachers to the same student via `student_teachers`
-- **Attendance Tracking** — Tap in/out system with automatic time logging
+- **Attendance Tracking** — Start Work/Break Done system with automatic time logging
 - **Automated Payroll** — Configurable pay rates, schedules, and rewards/fines
 - **Transaction Logging** — Complete audit trail of all financial activities scoped by teacher
 - **Classroom Store** — Virtual/physical items with bundles, expirations, and redemption tracking
+- **Rent Itemization** — Specify what rent covers with store alternatives and privilege tracking
 - **Hall Pass System** — Time-limited passes with automatic tracking
 - **Insurance System** — Policies, enrollments, and claims managed in-app
 - **Rent & Fees** — Optional recurring rent with waivers and late-fee configuration
 - **TOTP Authentication** — Secure admin access with two-factor authentication
 
+### Mobile & PWA Features
+
+- **Progressive Web App** — Install as mobile app on iOS and Android devices
+- **Offline Support** — Intelligent caching with offline fallback page
+- **Mobile-Optimized UI** — Responsive design with hamburger menu navigation
+- **Full Navigation Access** — Slide-out sidebar provides complete menu access on mobile
+- **Touch-Friendly** — Larger buttons and improved touch targets throughout
+- **Unified Templates** — Same responsive layout works for desktop, mobile, and PWA
+- **Fast Performance** — Aggressive caching for quick load times
+- **Home Screen Installation** — Add to home screen for app-like experience
+
+### Accessibility Features 
+
+- **Enhanced Accessibility** — Improvements following WCAG 2.1 AA guidelines
+- **Screen Reader Support** — Optimized for NVDA, JAWS, and VoiceOver
+- **Keyboard Navigation** — Full keyboard accessibility throughout
+- **ARIA Labels** — Comprehensive labeling for assistive technologies
+- **High Contrast** — Improved color contrast ratios for better readability
+- **Responsive Design** — Works seamlessly across all device sizes
+
+> [!IMPORTANT]
+> While the app is designed to be accessible and meet WCAG 2.1 guidelines, no claims of compliance of any kind is being made or implied. It is not recommended to deploy this app without external audits or validations if compliance is required by law.
+
 ### Security Features
 
 - **PII Encryption** — All student names encrypted at rest
 - **TOTP for Admins** — Time-based one-time passwords required
+- **Admin Account Recovery** — System admins can securely reset teacher 2FA
 - **CSRF Protection** — Protection against cross-site request forgery
 - **Credential Hashing** — Salted and peppered password hashing
 - **Cloudflare Turnstile** — Bot protection on login forms
@@ -121,7 +151,7 @@ An interactive banking and classroom management platform for teaching students a
 ### Testing with Sample Data
 
 - Use `student_upload_template.csv` as a reference for CSV roster uploads
-- Run `python seed_dummy_students.py` to seed the database with sample students
+- Run `python scripts/seed_dummy_students.py` to seed the database with sample students
 
 ---
 
@@ -139,14 +169,14 @@ An interactive banking and classroom management platform for teaching students a
 - **[Architecture Guide](docs/technical-reference/architecture.md)** — System design and patterns
 - **[Database Schema](docs/technical-reference/database_schema.md)** — Up-to-date database reference
 - **[API Reference](docs/technical-reference/api_reference.md)** — REST API documentation
-- **[Development TODO](docs/development/TODO.md)** — Current priorities and follow-ups
+- **[Development Priorities](docs/development/DEVELOPMENT.md)** — Current priorities, roadmap, and tasks
 - **[Changelog](CHANGELOG.md)** — Version history and notable changes
 
 ### Deployment & Operations
 
-- **[Deployment Guide](docs/DEPLOYMENT.md)** — Production deployment instructions
+- **[Deployment Guide](docs/operations/Deployment_Guide.md)** — Production deployment instructions
 - **[Operations Guides](docs/operations/)** — Operational procedures and troubleshooting
-- **[Contributing Guide](CONTRIBUTING.md)** — How to contribute to the project
+- **[Contributing Guide](.github/CONTRIBUTING.md)** — How to contribute to the project
 
 ---
 
@@ -172,9 +202,10 @@ An interactive banking and classroom management platform for teaching students a
 - pytest and pytest-flask
 
 **Deployment:**
-- Docker support
-- GitHub Actions CI/CD
-- DigitalOcean production hosting
+- Docker support with multi-stage builds
+- GitHub Actions CI/CD pipeline
+- Production-ready for Linux servers (tested on Ubuntu/Debian)
+- Compatible with major cloud providers
 
 ---
 
@@ -195,6 +226,8 @@ classroom-economy/
 ├── migrations/               # Database migrations
 ├── docs/                     # Documentation
 ├── scripts/                  # Utility scripts
+├── deploy/                   # Deployment configuration (nginx, etc.)
+├── tools/                    # Editor/tooling helpers
 ├── wsgi.py                   # WSGI entry point
 └── requirements.txt          # Python dependencies
 ```
@@ -224,20 +257,18 @@ flask db downgrade                 # Rollback
 ```bash
 flask run                     # Run development server
 flask create-sysadmin         # Create system admin
-python create_admin.py        # Create teacher account
-python manage_invites.py      # Manage admin invites
-python seed_dummy_students.py # Seed test data
+python scripts/create_admin.py        # Create teacher account
+python scripts/manage_invites.py      # Manage admin invites
+python scripts/seed_dummy_students.py # Seed test data
 ```
 
 ---
 
 ## Roadmap
 
-Active priorities are tracked in [docs/development/TODO.md](docs/development/TODO.md). Current focus areas include:
+Active development priorities and the path to version 1.0 are tracked in [docs/development/DEVELOPMENT.md](docs/development/DEVELOPMENT.md).
 
-- Multi-teacher hardening (teacher ownership enforcement, tenancy audit, runbook)
-- Coverage for shared-student payroll and attendance flows
-- Operational safety for future migrations and maintenance windows
+**Version 1.0 Status:** All critical blockers (P0 and P1) have been resolved! The platform is ready for staging deployment and final validation before production release.
 
 ---
 
@@ -253,11 +284,11 @@ curl http://your-domain/health
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+We welcome contributions! Please see [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) for guidelines.
 
 **Before contributing:**
 1. Review the [Architecture Guide](docs/technical-reference/architecture.md)
-2. Check [TODO.md](docs/development/TODO.md) for current priorities
+2. Check [docs/development/DEVELOPMENT.md](docs/development/DEVELOPMENT.md) for current priorities
 3. Ensure all tests pass
 4. Follow the existing code style
 
@@ -267,17 +298,27 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 This project is licensed under the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/).
 
-### ✅ You CAN:
+### Permitted Uses:
 - Use in classrooms, clubs, and nonprofit educational settings
 - Modify for school use, assignments, or personal learning
 - Share with students or other educators
 - Use for research or academic presentations (non-commercial)
 
-### ❌ You CANNOT:
+### Prohibited Uses:
 - Use as part of a commercial product or SaaS platform
 - Host a paid service or subscription
 - Incorporate into revenue-generating offerings
 - Use internally within for-profit businesses
+
+### Licensing & Attribution
+
+**Full License:** See [LICENSE](LICENSE) for complete terms
+
+**Commercial Use Policy:** See [COMMERCIAL.md](COMMERCIAL.md) for detailed guidance on permitted and prohibited commercial activities
+
+**Third-Party Attributions:** See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for open-source dependencies and services
+
+**Project Philosophy:** See [ATTRIBUTION.md](ATTRIBUTION.md) for the project's ethical foundations
 
 ---
 
@@ -293,4 +334,4 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 Built for educators and students to make learning about finance engaging and practical.
 
-**Last Updated:** 2025-11-28
+**Last Updated:** 2026-01-09

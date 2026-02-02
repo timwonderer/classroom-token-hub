@@ -15,7 +15,7 @@ from functools import lru_cache
 import ipaddress
 import urllib.request
 import urllib.error
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 # Cloudflare IP ranges (updated periodically)
@@ -53,7 +53,7 @@ def get_cloudflare_ips():
 
     # Check cache
     if _cloudflare_ips_cache and _cloudflare_ips_cache_time:
-        if datetime.utcnow() - _cloudflare_ips_cache_time < CACHE_DURATION:
+        if datetime.now(timezone.utc) - _cloudflare_ips_cache_time < CACHE_DURATION:
             return _cloudflare_ips_cache
 
     try:
@@ -69,7 +69,7 @@ def get_cloudflare_ips():
 
         # Update cache
         _cloudflare_ips_cache = (ipv4_ranges, ipv6_ranges)
-        _cloudflare_ips_cache_time = datetime.utcnow()
+        _cloudflare_ips_cache_time = datetime.now(timezone.utc)
 
         return _cloudflare_ips_cache
     except (urllib.error.URLError, TimeoutError) as e:
@@ -179,7 +179,34 @@ def validate_cloudflare_request():
     Usage:
         Use this in middleware or views that require Cloudflare proxy.
         Only necessary if you want to enforce Cloudflare-only access.
+
+    Note:
+        This handles the case where the app is behind a local reverse proxy
+        (nginx, etc.) by checking the X-Forwarded-For or X-Real-IP headers
+        when request.remote_addr is localhost.
     """
+    # Check if request is coming from local proxy
+    if request.remote_addr in ('127.0.0.1', 'localhost', '::1'):
+        # Behind local proxy - check the upstream proxy IP
+        # X-Real-IP is set by nginx and contains the immediate upstream IP
+        upstream_ip = request.headers.get('X-Real-IP')
+
+        if not upstream_ip:
+            # Fallback to X-Forwarded-For (rightmost entry is the immediate proxy)
+            forwarded_for = request.headers.get('X-Forwarded-For')
+            if forwarded_for:
+                # X-Forwarded-For format: "client, proxy1, proxy2"
+                # The rightmost IP is the immediate upstream proxy
+                ips = [ip.strip() for ip in forwarded_for.split(',')]
+                upstream_ip = ips[-1] if ips else None
+
+        if upstream_ip:
+            return is_cloudflare_ip(upstream_ip)
+
+        # No proxy headers found - can't validate
+        return False
+
+    # Direct connection - check request.remote_addr
     return is_cloudflare_ip(request.remote_addr)
 
 

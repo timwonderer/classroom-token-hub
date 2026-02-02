@@ -5,10 +5,11 @@ This specifically tests that the MAX_JOIN_CODE_RETRIES constant is properly defi
 and used when generating unique join codes for classroom blocks.
 """
 import pyotp
+from datetime import datetime, timezone
 
 from app import db
 from app.models import Admin, Student, StudentTeacher, TeacherBlock
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 def _create_admin(username: str) -> tuple[Admin, str]:
@@ -30,10 +31,10 @@ def _create_student(first_name: str, teacher: Admin, block: str = "A") -> Studen
         salt=salt,
         username_hash=hash_username(first_name.lower(), salt),
         pin_hash="pin",
-        teacher_id=teacher.id,
     )
     db.session.add(student)
     db.session.flush()
+    # Create StudentTeacher link (replaces deprecated teacher_id)
     db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
     db.session.commit()
     return student
@@ -41,11 +42,16 @@ def _create_student(first_name: str, teacher: Admin, block: str = "A") -> Studen
 
 def _login_admin(client, admin: Admin, secret: str):
     """Helper to log in an admin."""
-    return client.post(
+    response = client.post(
         "/admin/login",
         data={"username": admin.username, "totp_code": pyotp.TOTP(secret).now()},
         follow_redirects=True,
     )
+    with client.session_transaction() as sess:
+        sess.setdefault("is_admin", True)
+        sess.setdefault("admin_id", admin.id)
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+    return response
 
 
 def test_students_page_generates_join_codes_for_blocks(client):

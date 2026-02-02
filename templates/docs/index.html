@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% set full_width = true %}
+
+{% block title %}Documentation - Classroom Token Hub{% endblock %}
+
+ <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <!-- Header -->
+    <div class="text-center mb-5">
+        <span class="material-symbols-outlined" style="font-size: 2.5rem; vertical-align: middle; font-weight:600; color:var(--secondary)">local_atm</span>
+        <span class="material-symbols-outlined" style="font-size: 2.5rem; vertical-align: middle; font-weight:600; color:var(--secondary)">store</span>
+        <span class="material-symbols-outlined" style="font-size: 2.5rem; vertical-align: middle; font-weight:600; color:var(--secondary)"> finance_mode</span>             
+        <p  class="mb-2" style="font-size:2.5rem; font-weight:600;color:var(--primary);">
+             CLASSROOM TOKEN HUB
+        </p>
+        <p class="lead text-muted">Help and Support Center </p>
+
+        <!-- Search Bar -->
+        <form action="{{ url_for('docs.search') }}" method="get" class="mt-4">
+            <div class="input-group input-group-lg mx-auto" style="max-width: 600px;">
+                <input type="search" name="q" class="form-control" placeholder="Start with 1-3 keywords about your issue..." aria-label="Search">
+                <button class="btn btn-primary" type="submit">
+                    <span class="material-symbols-outlined" style="vertical-align: middle;">search</span>
+                    Search
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Documentation Categories -->
+    <div class="row g-4 mb-5">
+        <!-- Student Diagnostics -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #007bff;">school</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">For Students</h3>
+                    <p class="card-text text-muted">Find quick solutions to your common issues.</p>
+                    <ul>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/student') }}" class="text-decoration-none">All Student Diagnostics</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/student-login') }}" class="text-decoration-none">Login & Setup</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/student-classes') }}" class="text-decoration-none">Classes & Join Codes</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/student-attendance') }}" class="text-decoration-none">Attendance & Payroll</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/student-money') }}" class="text-decoration-none">Balances & Transfers</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/student-store') }}" class="text-decoration-none">Store Purchases</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/student-rent-insurance') }}" class="text-decoration-none">Rent & Insurance</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/student-hall-pass') }}" class="text-decoration-none">Hall Passes</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/student-support') }}" class="text-decoration-none">Help & Issue Reports</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Teacher Diagnostics -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #dc3545;">person</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">For Teachers</h3>
+                    <p class="card-text text-muted">Concise, solution-first guides to help you get back on track.</p>
+                    <ul>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher') }}" class="text-decoration-none">All Teacher Diagnostics</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-login') }}" class="text-decoration-none">Login & Security</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-onboarding') }}" class="text-decoration-none">Feature Settings</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-students') }}" class="text-decoration-none">Students & Join Codes</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-attendance-payroll') }}" class="text-decoration-none">Attendance & Payroll</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-transactions-banking') }}" class="text-decoration-none">Transactions & Banking</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-store') }}" class="text-decoration-none">Store & Redemptions</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-rent-insurance') }}" class="text-decoration-none">Rent & Insurance</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-hall-pass') }}" class="text-decoration-none">Hall Passes</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-announcements-issues') }}" class="text-decoration-none">Announcements & Issues</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Feature Guides -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #28a745;">auto_awesome</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">Feature Guides</h3>
+                    <p class="card-text text-muted">In-depth guides for each major feature of the system.</p>
+                    <ul>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='features/payroll/running-payroll') }}" class="text-decoration-none">Payroll Management</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='features/store/creating-items') }}" class="text-decoration-none">Store & Items</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='features/banking/transferring-money') }}" class="text-decoration-none">Banking & Transfers</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/economy_guide') }}" class="text-decoration-none">Economy Design Guide</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- More Docs -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #20c997;">folder</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">Technical Archives</h3>
+                    <p class="card-text text-muted">Engineering, operations, and project context.</p>
+                    <ul>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='development/DEVELOPMENT') }}" class="text-decoration-none">Development</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='operations/README') }}" class="text-decoration-none">Operations</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='project/PROJECT_HISTORY') }}" class="text-decoration-none">Project History</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Reference -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #6f42c1;">code</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">Developer Reference</h3>
+                    <p class="card-text text-muted">Architecture, database schema, and API docs for developers and maintainers.</p>
+                    <ul>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/architecture') }}" class="text-decoration-none">Architecture</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/database_schema') }}" class="text-decoration-none">Database Schema</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/Class-economy-analytics-specs') }}" class="text-decoration-none">Analytics Dashboard</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/ECONOMY_SPECIFICATION') }}" class="text-decoration-none">Economy Spec</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/api_reference') }}" class="text-decoration-none">API Reference</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Operations & Deployment -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #fd7e14;">cloud_upload</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">Operations</h3>
+                    <p class="card-text text-muted">Deployment, maintenance, and operational procedures for maintainers.</p>
+                    <ul>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='Deployment_Guide') }}" class="text-decoration-none">Deployment Guide</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='CHANGELOG') }}" class="text-decoration-none">Changelog</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Legal & Licensing -->
+        <div class="col-md-6 col-lg-4">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <span class="material-symbols-outlined" style="font-size: 3rem; color: #17a2b8;">gavel</span>
+                    </div>
+                    <h3 class="card-title h5 text-center">Legal & Licensing</h3>
+                    <p class="card-text text-muted">License terms, commercial use policy, attributions, and project philosophy.</p>
+                    <ul>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='legal/license') }}" class="text-decoration-none">License (PolyForm Noncommercial)</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='legal/commercial') }}" class="text-decoration-none">Commercial Use Policy</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='legal/attribution') }}" class="text-decoration-none">Attribution & Philosophy</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='legal/third-party-notices') }}" class="text-decoration-none">Third-Party Notices</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="card bg-light">
+        <div class="card-body">
+            <h4 class="card-title">
+                <span class="material-symbols-outlined" style="vertical-align: middle;">bolt</span>
+                Quick Links
+            </h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Common Questions</h6>
+                    <ul>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/student-login') }}" class="text-decoration-none">Why can’t I log in?</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-students') }}" class="text-decoration-none">Why can’t students claim accounts?</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-attendance-payroll') }}" class="text-decoration-none">Why didn’t payroll run?</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/economy_guide') }}" class="text-decoration-none">How do I set pricing and rent?</a></li>
+                    </ul>
+                </div>
+                <div class="col-md-6">
+                    <h6>External Resources</h6>
+                    <ul>
+                        <li><a href="https://github.com/timwonderer/classroom-economy" target="_blank" rel="noopener" class="text-decoration-none">GitHub Repository</a></li>
+                        <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener" class="text-decoration-none">Contributing Guide</a></li>
+                        <li><a href="https://github.com/timwonderer/classroom-economy/issues" target="_blank" rel="noopener" class="text-decoration-none">Report Issues</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

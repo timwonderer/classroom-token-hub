@@ -30,7 +30,7 @@
     <div class="tab-pane fade show active" id="attendance" role="tabpanel">
         <div class="card mb-4">
             <div class="card-header">
-                <span class="material-symbols-outlined">schedule</span> Attendance Overview
+                <span class="material-symbols-outlined" style="vertical-align: middle;">schedule</span> Attendance Overview
             </div>
             <div class="card-body">
                 {% if student_blocks %}
@@ -66,19 +66,40 @@
                                     <th>Date</th>
                                     <th>Action</th>
                                     <th>Time</th>
+                                    <th>Report</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for event in block_events[:20] %}
                                 <tr>
-                                    <td>{{ event.timestamp.strftime('%m/%d/%y') if event.timestamp else 'N/A' }}</td>
+                                    <td>
+                                        {% if event.timestamp %}
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(event.timestamp) }}" data-format="compact-date"></span>
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         {% set is_tap_in = event.status == 'active' %}
                                         <span class="badge {% if is_tap_in %}bg-success{% else %}bg-danger{% endif %}">
-                                            {{ 'Tap In' if is_tap_in else 'Tap Out' }}
+                                            {{ 'Start Work' if is_tap_in else 'Break / Done' }}
                                         </span>
                                     </td>
-                                    <td>{{ event.timestamp.strftime('%I:%M %p') if event.timestamp else 'N/A' }}</td>
+                                    <td>
+                                        {% if event.timestamp %}
+                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(event.timestamp) }}" data-format="time"></span>
+                                        {% else %}
+                                            N/A
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('student.report_tap_event_issue', tap_event_id=event.id) }}"
+                                           class="btn btn-sm btn-link text-muted p-0"
+                                           title="Report an issue with this attendance record"
+                                           data-bs-toggle="tooltip">
+                                            <span class="material-symbols-outlined fs-6">help</span>
+                                        </a>
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -191,20 +212,20 @@
                 <div class="row mb-3">
                     <div class="col-md-4">
                         <div class="text-center p-3 bg-light rounded">
-                            <h6 class="text-muted mb-1">Total Tap Events</h6>
+                            <h6 class="text-muted mb-1">Total Events</h6>
                             <h3 class="mb-0">{{ all_tap_events|length }}</h3>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="text-center p-3 bg-light rounded">
-                            <h6 class="text-muted mb-1">Tap Ins</h6>
-                            <h3 class="mb-0 text-success">{{ all_tap_events|selectattr('action', 'equalto', 'tap_in')|list|length }}</h3>
+                            <h6 class="text-muted mb-1">Start Work</h6>
+                            <h3 class="mb-0 text-success">{{ all_tap_events|selectattr('action', 'equalto', 'start_work')|list|length }}</h3>
                         </div>
                     </div>
                     <div class="col-md-4">
                         <div class="text-center p-3 bg-light rounded">
-                            <h6 class="text-muted mb-1">Tap Outs</h6>
-                            <h3 class="mb-0 text-danger">{{ all_tap_events|selectattr('action', 'equalto', 'tap_out')|list|length }}</h3>
+                            <h6 class="text-muted mb-1">Break / Done</h6>
+                            <h3 class="mb-0 text-danger">{{ all_tap_events|selectattr('action', 'equalto', 'stop_work')|list|length }}</h3>
                         </div>
                     </div>
                 </div>
@@ -259,13 +280,13 @@
 
             <!-- Pay Rate Info -->
             <div class="col-md-6 mb-4">
-                <div class="card">
+                        <div class="card">
                     <div class="card-header">
                         <span class="material-symbols-outlined">attach_money</span> Pay Rate Information
                     </div>
                     <div class="card-body">
                         <div class="alert alert-info">
-                            <span class="material-symbols-outlined">info</span> <strong>Current Pay Rate:</strong> $0.25 per minute
+                            <span class="material-symbols-outlined">info</span> <strong>Current Pay Rate:</strong> ${{ "%.2f"|format(pay_rate_per_minute) }} per minute
                         </div>
                         <h6 class="mb-3">Time Value Calculator:</h6>
                         <div class="table-responsive">
@@ -277,35 +298,17 @@
                                     </tr>
                                 </thead>
                                 <tbody>
+                                    {% for label, value in pay_rate_table %}
                                     <tr>
-                                        <td>1 minute</td>
-                                        <td class="text-success">$0.25</td>
+                                        <td>{{ label }}</td>
+                                        <td class="text-success">${{ "%.2f"|format(value) }}</td>
                                     </tr>
-                                    <tr>
-                                        <td>10 minutes</td>
-                                        <td class="text-success">$2.50</td>
-                                    </tr>
-                                    <tr>
-                                        <td>30 minutes</td>
-                                        <td class="text-success">$7.50</td>
-                                    </tr>
-                                    <tr>
-                                        <td>1 hour</td>
-                                        <td class="text-success">$15.00</td>
-                                    </tr>
-                                    <tr>
-                                        <td>2 hours</td>
-                                        <td class="text-success">$30.00</td>
-                                    </tr>
-                                    <tr>
-                                        <td>4 hours</td>
-                                        <td class="text-success">$60.00</td>
-                                    </tr>
+                                    {% endfor %}
                                 </tbody>
                             </table>
                         </div>
                         <div class="alert alert-warning mt-3">
-                            <span class="material-symbols-outlined">schedule</span> <strong>Remember:</strong> Time is tracked when you tap in and tap out. Make sure to tap in when you start working!
+                            <span class="material-symbols-outlined">schedule</span> <strong>Remember:</strong> Time is tracked when you Start Work and Break / Done. Make sure to Start Work when you begin working!
                         </div>
                     </div>
                 </div>

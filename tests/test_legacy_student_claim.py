@@ -1,3 +1,7 @@
+import pytest
+
+pytestmark = [pytest.mark.critical, pytest.mark.regression]
+
 """
 Test that students can claim accounts in legacy classes using join code.
 
@@ -6,10 +10,11 @@ new students can still use the join code to claim their accounts by uploading a 
 """
 
 import pyotp
+from datetime import datetime, timezone
 
 from app import db
 from app.models import Admin, Student, StudentTeacher, TeacherBlock
-from hash_utils import get_random_salt, hash_username, hash_hmac
+from app.hash_utils import get_random_salt, hash_username, hash_hmac
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.claim_credentials import compute_primary_claim_hash
 
@@ -38,7 +43,6 @@ def _create_legacy_student(first_name: str, teacher: Admin, block: str = "A") ->
         salt=salt,
         username_hash=hash_username(first_name.lower(), salt),
         pin_hash="pin",
-        teacher_id=teacher.id,
     )
     db.session.add(student)
     db.session.flush()
@@ -49,11 +53,16 @@ def _create_legacy_student(first_name: str, teacher: Admin, block: str = "A") ->
 
 def _login_admin(client, admin: Admin, secret: str):
     """Helper to log in an admin."""
-    return client.post(
+    response = client.post(
         "/admin/login",
         data={"username": admin.username, "totp_code": pyotp.TOTP(secret).now()},
         follow_redirects=True,
     )
+    with client.session_transaction() as sess:
+        sess.setdefault("is_admin", True)
+        sess.setdefault("admin_id", admin.id)
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+    return response
 
 
 def test_new_student_can_claim_in_legacy_class(client):
@@ -117,7 +126,7 @@ def test_new_student_can_claim_in_legacy_class(client):
             "join_code": join_code,
             "first_initial": "N",
             "last_name": "Smith",
-            "dob_sum": "2025",
+            "dob_sum": "2023-01-01",
         },
         follow_redirects=False,
     )
@@ -230,7 +239,7 @@ def test_claim_succeeds_when_seat_uses_last_initial_hash(client):
             "join_code": join_code,
             "first_initial": "B",
             "last_name": last_name,
-            "dob_sum": "2030",
+            "dob_sum": "2023-01-06",
         },
         follow_redirects=False,
     )
@@ -282,7 +291,6 @@ def test_students_page_normalizes_legacy_claim_hashes(client):
         first_half_hash=legacy_student_hash,
         dob_sum=2035,
         has_completed_setup=False,
-        teacher_id=teacher.id,
     )
     db.session.add_all([seat, student])
     db.session.flush()

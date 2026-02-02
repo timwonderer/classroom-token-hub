@@ -9,12 +9,47 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 
 import sqlalchemy as sa
-from flask import session, flash, redirect, url_for, request, current_app
+from flask import session, flash, redirect, url_for, request, current_app, jsonify
 
 
 # -------------------- SESSION CONFIGURATION --------------------
 
 SESSION_TIMEOUT_MINUTES = 10
+
+
+def _get_safe_next_path() -> str:
+    """
+    Return a safe relative path that can be used as a `next` parameter.
+
+    Ensures the value is a same-site path without scheme or host to avoid
+    open redirect vulnerabilities if used in a subsequent redirect.
+    """
+    # Start from the Flask path, which is already URL-decoded and does not
+    # include the scheme or host for normal requests.
+    raw_path = request.path or "/"
+
+    # Normalize any backslashes to forward slashes to avoid browser quirks.
+    raw_path = raw_path.replace("\\", "/")
+
+    # Parse the path in case an attacker has tried to smuggle in a scheme
+    # or netloc via malformed input.
+    parsed = urllib.parse.urlparse(raw_path)
+
+    # Only allow pure paths without scheme or netloc.
+    if parsed.scheme or parsed.netloc:
+        return "/"
+
+    path = parsed.path or "/"
+
+    # Disallow protocol-relative style (`//evil.com`) paths.
+    if path.startswith("//"):
+        return "/"
+
+    # Ensure the path is absolute within this application.
+    if not path.startswith("/"):
+        path = "/" + path
+
+    return path
 
 
 # -------------------- AUTHENTICATION DECORATORS --------------------
@@ -79,6 +114,9 @@ def login_required(f):
             # Admins must also have a student context when bypassing login_required
             if 'student_id' not in session:
                 session['view_as_student'] = False
+                # Return JSON for API requests
+                if request.path.startswith('/api/'):
+                    return jsonify({"status": "error", "error": "No student context"}), 401
                 flash("Select a student before viewing the student experience.")
                 return redirect(url_for('admin.dashboard'))
 
@@ -87,6 +125,9 @@ def login_required(f):
                 demo_session_id = session.get('demo_session_id')
                 if not demo_session_id:
                     session['view_as_student'] = False
+                    # Return JSON for API requests
+                    if request.path.startswith('/api/'):
+                        return jsonify({"status": "error", "error": "Demo session expired"}), 401
                     flash("Demo session expired. Start a new demo to continue.")
                     return redirect(url_for('admin.dashboard'))
 
@@ -94,7 +135,22 @@ def login_required(f):
                 demo_session = DemoStudent.query.filter_by(session_id=demo_session_id).first()
                 now = datetime.now(timezone.utc)
 
-                if not demo_session or not demo_session.is_active or now > demo_session.expires_at:
+                expires_at = None
+                if demo_session and isinstance(demo_session.expires_at, datetime):
+                    if demo_session.expires_at.tzinfo is None:
+                        # Treat naive timestamps as UTC to avoid shifting into earlier local time
+                        expires_at = demo_session.expires_at.replace(tzinfo=timezone.utc)
+                    else:
+                        expires_at = demo_session.expires_at
+                else:
+                    # If missing/invalid, refresh expiry window to prevent false expirations mid-redirect
+                    expires_at = now + timedelta(minutes=10)
+                    if demo_session:
+                        demo_session.expires_at = expires_at
+                        from app.extensions import db
+                        db.session.commit()
+
+                if not demo_session or not demo_session.is_active or (expires_at and now > expires_at):
                     try:
                         if demo_session:
                             from app.extensions import db  # Imported lazily to avoid circular import
@@ -109,7 +165,9 @@ def login_required(f):
                         session.pop('is_demo', None)
                         session.pop('demo_session_id', None)
                         session['view_as_student'] = False
-
+                        # Return JSON for API requests
+                        if request.path.startswith('/api/'):
+                            return jsonify({"status": "error", "error": "Demo session expired"}), 401
                         flash("Demo session expired. Start a new demo to continue.")
                         return redirect(url_for('admin.dashboard'))
                     except Exception:
@@ -123,6 +181,9 @@ def login_required(f):
                         session.pop('is_demo', None)
                         session.pop('demo_session_id', None)
                         session['view_as_student'] = False
+                        # Return JSON for API requests
+                        if request.path.startswith('/api/'):
+                            return jsonify({"status": "error", "error": "Demo session expired"}), 401
                         flash("Demo session expired. Start a new demo to continue.")
                         return redirect(url_for('admin.dashboard'))
 
@@ -132,7 +193,11 @@ def login_required(f):
 
         # Regular student authentication check
         if 'student_id' not in session:
-            encoded_next = urllib.parse.quote(request.path, safe="")
+            # Return JSON for API requests
+            if request.path.startswith('/api/'):
+                return jsonify({"status": "error", "error": "User not logged in or session expired"}), 401
+            next_path = _get_safe_next_path()
+            encoded_next = urllib.parse.quote(next_path, safe="")
             return redirect(f"{url_for('student.login')}?next={encoded_next}")
 
         # Enforce strict 10-minute timeout from login time
@@ -142,6 +207,9 @@ def login_required(f):
             session.pop('student_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
+            # Return JSON for API requests
+            if request.path.startswith('/api/'):
+                return jsonify({"status": "error", "error": "Session is invalid. Please log in again."}), 401
             flash("Session is invalid. Please log in again.")
             return redirect(url_for('student.login'))
 
@@ -151,8 +219,12 @@ def login_required(f):
             session.pop('student_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
+            # Return JSON for API requests
+            if request.path.startswith('/api/'):
+                return jsonify({"status": "error", "error": "Session expired. Please log in again."}), 401
             flash("Session expired. Please log in again.")
-            encoded_next = urllib.parse.quote(request.path, safe="")
+            next_path = _get_safe_next_path()
+            encoded_next = urllib.parse.quote(next_path, safe="")
             return redirect(f"{url_for('student.login')}?next={encoded_next}")
 
         # Continue to update last_activity for other potential uses, but it no longer controls the timeout
@@ -170,10 +242,11 @@ def admin_required(f):
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        current_app.logger.info(f"🧪 Admin access attempt: session = {dict(session)}")
+        current_app.logger.info(f"Admin access attempt: session = {dict(session)}")
         if not session.get("is_admin"):
             flash("You must be an admin to view this page.")
-            encoded_next = urllib.parse.quote(request.path, safe="")
+            next_path = _get_safe_next_path()
+            encoded_next = urllib.parse.quote(next_path, safe="")
             return redirect(f"{url_for('admin.login')}?next={encoded_next}")
 
         admin = get_current_admin()
@@ -182,7 +255,8 @@ def admin_required(f):
             session.pop("admin_id", None)
             session.pop("last_activity", None)
             flash("Admin session is invalid. Please log in again.")
-            encoded_next = urllib.parse.quote(request.path, safe="")
+            next_path = _get_safe_next_path()
+            encoded_next = urllib.parse.quote(next_path, safe="")
             return redirect(f"{url_for('admin.login')}?next={encoded_next}")
 
         now = datetime.now(timezone.utc)
@@ -191,12 +265,14 @@ def admin_required(f):
         if last_activity:
             last_activity = datetime.fromisoformat(last_activity)
             if (now - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
-                session.pop("is_admin", None)
+                session.clear()
                 flash("Admin session expired. Please log in again.")
-                encoded_next = urllib.parse.quote(request.path, safe="")
+                next_path = _get_safe_next_path()
+                encoded_next = urllib.parse.quote(next_path, safe="")
                 return redirect(f"{url_for('admin.login')}?next={encoded_next}")
 
         session['last_activity'] = now.isoformat()
+        ensure_admin_join_code(admin.id)
         return f(*args, **kwargs)
     return decorated_function
 
@@ -218,7 +294,7 @@ def system_admin_required(f):
         if last_activity:
             last_activity = datetime.fromisoformat(last_activity)
             if now - last_activity > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
-                session.pop("is_system_admin", None)
+                session.clear()
                 flash("Session expired. Please log in again.")
                 return redirect(url_for('sysadmin.login', next=request.path))
         session['last_activity'] = now.isoformat()
@@ -251,35 +327,69 @@ def get_current_admin():
     return Admin.query.get(admin_id)
 
 
+def ensure_admin_join_code(admin_id):
+    """Ensure an admin has a current join code selected in session."""
+    from app.models import TeacherBlock  # Imported lazily to avoid circular import
+
+    if not admin_id:
+        return
+
+    join_code = session.get('current_join_code')
+    if join_code:
+        if TeacherBlock.query.filter_by(teacher_id=admin_id, join_code=join_code).first():
+            return
+        session.pop('current_join_code', None)
+
+    teacher_block = (
+        TeacherBlock.query
+        .filter_by(teacher_id=admin_id)
+        .filter(TeacherBlock.join_code.isnot(None))
+        .order_by(TeacherBlock.block, TeacherBlock.join_code)
+        .first()
+    )
+    if teacher_block and teacher_block.join_code:
+        session['current_join_code'] = teacher_block.join_code
+
+
 def get_admin_student_query(include_unassigned=True):
     """Return a Student query scoped to the current admin's ownership.
 
     System admins are allowed to see all students. Regular admins only see
-    students they own, with optional access to unassigned students during
-    migration.
+    students linked to them via the StudentTeacher association table.
+    
+    CRITICAL SECURITY NOTE: We ONLY use the StudentTeacher table as the source of truth.
+    The teacher_id column on Student is DEPRECATED and should NOT be used for scoping
+    because it can contain stale data from deleted teachers or data migration issues.
+    
+    Args:
+        include_unassigned (bool): [DEPRECATED] No longer used. Kept for backward compatibility.
     """
-    from app.models import Student, StudentTeacher  # Imported lazily to avoid circular import
+    from app.models import Student, StudentTeacher, DemoStudent  # Imported lazily to avoid circular import
 
     if session.get("is_system_admin"):
-        return Student.query
+        demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
+        return Student.query.filter(~Student.id.in_(demo_ids_subq))
 
     admin = get_current_admin()
     if not admin:
         return Student.query.filter(sa.text("0=1"))
 
+    # Get student IDs that are explicitly linked to this admin via StudentTeacher table
+    # This is the ONLY source of truth for student-teacher associations
     shared_student_ids = (
         StudentTeacher.query.with_entities(StudentTeacher.student_id)
         .filter(StudentTeacher.admin_id == admin.id)
         .subquery()
     )
 
-    filters = [
-        Student.teacher_id == admin.id,
+    # SECURITY FIX: Only use StudentTeacher associations, NOT the deprecated teacher_id column
+    # The old code used: sa.or_(Student.teacher_id == admin.id, Student.id.in_(shared_student_ids))
+    # This caused multi-tenancy leaks when teacher_id had stale data
+    demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
+    return Student.query.filter(
         Student.id.in_(shared_student_ids),
-    ]
-    if include_unassigned:
-        filters.append(Student.teacher_id.is_(None))
-    return Student.query.filter(sa.or_(*filters))
+        ~Student.id.in_(demo_ids_subq)
+    )
 
 
 def get_student_for_admin(student_id, include_unassigned=True):

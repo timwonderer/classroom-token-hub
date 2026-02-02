@@ -1,22 +1,33 @@
 name: Check Database Migrations
 
 on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'migrations/versions/**'
+      - 'app/models/**'
+      - 'scripts/validate-migrations.py'
   pull_request:
     branches: [ main ]
     paths:
       - 'migrations/versions/**'
       - 'app/models/**'
+      - 'scripts/validate-migrations.py'
 
   # Also allow manual trigger
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write  # For commenting on PRs
+
 jobs:
-  check-migration-heads:
+  validate-migrations:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         fetch-depth: 0  # Full history needed for migration checks
 
@@ -39,99 +50,19 @@ jobs:
         pip install alembic flask-migrate
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: Check for multiple migration heads
+    - name: Run Migration Validation Script
       run: |
-        echo "🔍 Checking for multiple migration heads..."
-        python << 'PYTHON_SCRIPT'
-        import sys
-        from alembic.script import ScriptDirectory
-        from alembic.config import Config
-
-        try:
-            config = Config('migrations/alembic.ini')
-            config.set_main_option('script_location', 'migrations')
-            script = ScriptDirectory.from_config(config)
-            heads = list(script.get_revisions('heads'))
-
-            print(f"\n📊 Migration Status:")
-            print(f"   Total heads: {len(heads)}")
-
-            if len(heads) > 1:
-                print(f"\n❌ ERROR: {len(heads)} migration heads detected!")
-                print("\n⚠️  This PR would create divergent migration paths.")
-                print("\nMigration heads found:")
-                for i, head in enumerate(heads, 1):
-                    print(f"  {i}. {head.revision} - {head.doc}")
-                print("\n🔧 To fix this:")
-                print("   1. Sync with main: git fetch origin main && git merge origin/main")
-                print("   2. Create merge migration: flask db merge heads -m 'Merge migration heads'")
-                print("   3. Commit and push the merge migration")
-                print("\n❌ Pull request cannot be merged until this is resolved.")
-                sys.exit(1)
-            else:
-                print(f"✅ Migration heads check passed!")
-                if heads:
-                    print(f"   Current head: {heads[0].revision}")
-                    print(f"   Message: {heads[0].doc}")
-
-        except Exception as e:
-            print(f"⚠️  Warning: Could not check migration heads: {e}")
-            print("   Allowing check to pass...")
-            sys.exit(0)
-        PYTHON_SCRIPT
-
-    - name: Verify migration files are valid
-      run: |
-        echo "🔍 Validating migration file syntax..."
-        python << 'PYTHON_SCRIPT'
-        import sys
-        import os
-        from pathlib import Path
-
-        migration_dir = Path('migrations/versions')
-        if not migration_dir.exists():
-            print("✓ No migrations directory found")
-            sys.exit(0)
-
-        errors = []
-        for migration_file in migration_dir.glob('*.py'):
-            if migration_file.name == '__init__.py':
-                continue
-
-            try:
-                with open(migration_file, 'r') as f:
-                    content = f.read()
-
-                # Check for required components
-                if 'def upgrade():' not in content:
-                    errors.append(f"{migration_file.name}: Missing upgrade() function")
-                if 'def downgrade():' not in content:
-                    errors.append(f"{migration_file.name}: Missing downgrade() function")
-                if 'revision =' not in content:
-                    errors.append(f"{migration_file.name}: Missing revision identifier")
-                if 'down_revision =' not in content:
-                    errors.append(f"{migration_file.name}: Missing down_revision")
-
-            except Exception as e:
-                errors.append(f"{migration_file.name}: {str(e)}")
-
-        if errors:
-            print("❌ Migration validation errors found:")
-            for error in errors:
-                print(f"   • {error}")
-            sys.exit(1)
-        else:
-            print("✅ All migration files are valid")
-        PYTHON_SCRIPT
+        echo "🔍 Running comprehensive migration validation..."
+        python scripts/validate-migrations.py
 
     - name: Comment on PR (if check fails)
-      if: failure()
-      uses: actions/github-script@v6
+      if: failure() && github.event_name == 'pull_request'
+      uses: actions/github-script@v8
       with:
         script: |
           github.rest.issues.createComment({
             issue_number: context.issue.number,
             owner: context.repo.owner,
             repo: context.repo.repo,
-            body: '⚠️ **Migration Check Failed**\n\nThis PR has multiple migration heads or invalid migration files. Please check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.\n\n**Common fixes:**\n1. Sync with main before creating migrations: `git fetch origin main && git merge origin/main`\n2. Create a merge migration: `flask db merge heads -m "Merge migration heads"`\n3. Ensure all migration files have valid `upgrade()` and `downgrade()` functions'
+            body: '⚠️ **Migration Validation Failed**\n\nThe migration validation script (`scripts/validate-migrations.py`) has failed. This script checks for:\n\n1. Continuous revision chain (no breaks/gaps)\n2. Single migration head\n3. Correct `upgrade()` and `downgrade()` functions\n4. **Idempotency checks** (e.g. guards for `add_column`)\n\nPlease check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.'
           })

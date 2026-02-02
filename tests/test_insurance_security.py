@@ -35,7 +35,7 @@ def _enroll_student(student_id, policy_id):
         student_id=student_id,
         policy_id=policy_id,
         status="active",
-        coverage_start_date=datetime.utcnow() - timedelta(days=2),
+        coverage_start_date=datetime.now(timezone.utc) - timedelta(days=2),
         payment_current=True,
     )
     db.session.add(enrollment)
@@ -72,7 +72,11 @@ def _build_claim(enrollment, policy, student_id, transaction):
 
 
 def test_duplicate_transaction_claim_blocked(client, test_student, admin_user):
-    test_student.teacher_id = admin_user.id
+    from app.models import StudentTeacher
+
+    # Create StudentTeacher association for proper scoping
+    st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
+    db.session.add(st)
     db.session.commit()
 
     policy = _create_policy(admin_user.id)
@@ -94,7 +98,11 @@ def test_duplicate_transaction_claim_blocked(client, test_student, admin_user):
 
 
 def test_voided_transaction_cannot_be_approved(client, test_student, admin_user):
-    test_student.teacher_id = admin_user.id
+    from app.models import StudentTeacher
+
+    # Create StudentTeacher association for proper scoping
+    st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
+    db.session.add(st)
     db.session.commit()
 
     policy = _create_policy(admin_user.id)

@@ -11,28 +11,46 @@ from datetime import timezone
 from urllib.parse import urlparse, urljoin
 import hashlib
 import hmac
-from flask import request, current_app, session, render_template
-from jinja2 import TemplateNotFound
+import os
+
+from flask import request, current_app, session, render_template, url_for
+# TODO: [DEPENDABOT PR #463] MarkupSafe 3.x introduces breaking changes:
+# - soft_str and soft_unicode removed (deprecated since 2.0)
+# - Markup.striptags() behavior may differ
+# - Review Jinja2 compatibility before upgrading from 2.1.5 to 3.0.3
 from markupsafe import Markup
 import markdown
 import bleach
 
-from .device import is_mobile
-
 
 def render_template_with_fallback(template_name, **context):
     """
-    Renders a template, falling back to a mobile version if the user is on a mobile device.
-    """
-    if session.get('force_desktop'):
-        return render_template(template_name, **context)
+    Renders a template with static_url helper available.
 
-    if is_mobile() and not session.get('force_desktop'):
-        try:
-            mobile_template_name = f"mobile/{template_name}"
-            return render_template(mobile_template_name, **context)
-        except TemplateNotFound:
-            pass  # Fall back to the desktop version
+    Note: Mobile-specific templates have been removed. The responsive design
+    now uses CSS media queries and adaptive layouts instead.
+    """
+    # Ensure static_url helper is always available even if Jinja globals/context processors are missing
+    static_url_func = current_app.jinja_env.globals.get('static_url')
+
+    if not static_url_func:
+        current_app.logger.warning("static_url missing from Jinja globals; using fallback with cache-busting")
+
+        def _fallback_static_url(filename: str):
+            if not filename:
+                return url_for('static', filename=filename)
+
+            file_path = os.path.join(current_app.static_folder, filename)
+            try:
+                version = int(os.stat(file_path).st_mtime)
+                return url_for('static', filename=filename, v=version)
+            except (OSError, TypeError) as exc:
+                current_app.logger.debug(f"Could not add cache buster for {filename}: {exc}")
+                return url_for('static', filename=filename)
+
+        static_url_func = _fallback_static_url
+
+    context.setdefault('static_url', static_url_func)
 
     return render_template(template_name, **context)
 
@@ -48,15 +66,22 @@ def format_utc_iso(dt):
     return dt.isoformat().replace("+00:00", "Z")
 
 
-def is_safe_url(target):
+def is_safe_url(target, host_url=None):
     """
     Ensure a redirect URL is safe by checking if it's on the same domain.
+    
+    Args:
+        target: The URL to validate
+        host_url: Optional host URL to validate against. If not provided, uses request.host_url
     """
     # Allow empty targets
     if not target:
         return True
-    ref_url = urlparse(request.host_url)
-    test_url = urlparse(urljoin(request.host_url, target))
+    # Use provided host_url or fall back to request.host_url
+    if host_url is None:
+        host_url = request.host_url
+    ref_url = urlparse(host_url)
+    test_url = urlparse(urljoin(host_url, target))
     return test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc
 
 
@@ -118,13 +143,14 @@ def render_markdown(text):
     allowed_protocols = ['http', 'https', 'mailto']
 
     # Sanitize HTML to prevent XSS attacks
-    sanitized_html = bleach.clean(
-        html,
+    cleaner = bleach.Cleaner(
         tags=allowed_tags,
         attributes=allowed_attributes,
         protocols=allowed_protocols,
-        strip=True
+        strip=True,
+        strip_comments=True,
     )
+    sanitized_html = cleaner.clean(html)
 
     # Return as Markup so Jinja2 doesn't double-escape it
     return Markup(sanitized_html)

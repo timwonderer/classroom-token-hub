@@ -9,7 +9,7 @@ import pyotp
 
 from app import app, db
 from app.models import Admin, Student, StudentTeacher, SystemAdmin
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 def _create_sysadmin(username: str = "sysadmin"):
@@ -47,7 +47,6 @@ def _create_student(first_name: str, primary_teacher: Admin = None, linked_teach
         salt=salt,
         username_hash=hash_username(first_name.lower(), salt),
         pin_hash="pin",
-        teacher_id=primary_teacher.id if primary_teacher else None,
     )
     db.session.add(student)
     db.session.flush()
@@ -143,7 +142,6 @@ def test_sysadmin_counts_students_with_only_links(client):
         salt=salt,
         username_hash=hash_username("noowner", salt),
         pin_hash="pin",
-        teacher_id=None,  # No primary owner
     )
     db.session.add(student)
     db.session.flush()

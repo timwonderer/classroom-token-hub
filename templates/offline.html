@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline - Classroom Token Hub</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --brand-primary: #1a4d47;
+            --gray-100: #f5f5f3;
+            --gray-800: #2c2c2c;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--gray-100);
+            color: var(--gray-800);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            text-align: center;
+            padding: 20px;
+        }
+        .offline-container {
+            max-width: 400px;
+        }
+        .icon {
+            font-size: 4rem;
+            color: var(--brand-primary);
+            margin-bottom: 20px;
+        }
+        h1 {
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+        p {
+            margin-bottom: 20px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-container">
+        <div class="icon">
+            <span class="material-symbols-outlined">wifi_off</span>
+            <!-- Use a cellular-specific offline icon alongside wifi_off to indicate loss of network connectivity -->
+            <span class="material-symbols-outlined">signal_cellular_connected_no_internet_0_bar</span>
+        </div>
+        <h1>You are offline</h1>
+        <p>It looks like you've lost your internet connection. Please check your connection and try again.</p>
+        <a href="/" class="btn btn-primary" style="background-color: var(--brand-primary); border: none;">Try Again</a>
+    </div>
+</body>
+</html>

@@ -1,8 +1,12 @@
+---
+title: Database Schema Documentation
+category: technical-reference
+roles: [developer]
+---
+
 # Database Schema Documentation
 
 This document summarizes the database schema for Classroom Token Hub based on `app/models.py`. All timestamps are stored in UTC.
-
----
 
 ## Core Models
 
@@ -20,7 +24,6 @@ Stores student records and credentials.
 | `second_half_hash` | String(64) | Secondary hash for backward compatibility. |
 | `username_hash` | String(64) | Hash of generated username. |
 | `last_name_hash_by_part` | JSON | Hashes for each last-name segment (fuzzy matching). |
-| `teacher_id` | Integer (nullable) | **Deprecated** legacy primary owner reference. |
 | `pin_hash` / `passphrase_hash` | Text | Credential hashes. |
 | `hall_passes` | Integer | Remaining hall passes. |
 | `is_rent_enabled` | Boolean | Whether rent billing is enabled. |
@@ -42,10 +45,14 @@ Teacher/admin accounts.
 |---|---|---|
 | `id` | Integer | Primary key. |
 | `username` | String(80) | Unique username. |
+| `display_name` | String(100), nullable | Customizable display name shown in UI (falls back to username). |
 | `totp_secret` | String(32) | TOTP secret for login. |
 | `created_at` | DateTime | Creation timestamp. |
 | `last_login` | DateTime | Last login time. |
 | `has_assigned_students` | Boolean | One-time setup flag. |
+
+**Helper Methods**
+- `get_display_name()`: Returns display_name if set, otherwise username.
 
 ### `system_admins`
 Super-user accounts with global visibility.
@@ -75,7 +82,8 @@ Roster seats created during CSV uploads so students can self-claim via join code
 |---|---|---|
 | `id` | Integer | Primary key. |
 | `teacher_id` | Integer | FK to `admins.id`. |
-| `block` | String(10) | Class block identifier. |
+| `block` | String(10) | Class block identifier (technical). |
+| `class_label` | String(50), nullable | Teacher-customizable display name for this class (e.g., "AP Biology"). |
 | `first_name` | PIIEncryptedType | Encrypted first name from roster. |
 | `last_initial` | String(1) | Last initial from roster. |
 | `last_name_hash_by_part` | JSON | Hashes for fuzzy last-name matching. |
@@ -84,17 +92,21 @@ Roster seats created during CSV uploads so students can self-claim via join code
 | `join_code` | String(20) | Shared join code for the block. |
 | `student_id` | Integer | Claimed student FK. |
 | `is_claimed` | Boolean | Claim status. |
+
+**Helper Methods**
+- `get_class_label()`: Returns class_label if set, otherwise block.
 | `claimed_at` | DateTime | Claim timestamp. |
 
-### `transactions`
-Ledger entries for checking/savings accounts, scoped by teacher economy.
+### `transaction`
+Ledger entries for checking/savings accounts, scoped by join code (class economy).
 
 | Column | Type | Description |
 |---|---|---|
 | `id` | Integer | Primary key. |
 | `student_id` | Integer | FK to `students.id`. |
-| `teacher_id` | Integer (nullable) | FK to `admins.id` indicating which teacher economy the transaction belongs to. |
-| `amount` | Float | Positive/negative amount. |
+| `teacher_id` | Integer (nullable) | FK to `admins.id`. Legacy field kept for backward compatibility; replaced by `join_code` for scoping. |
+| `join_code` | String(20), nullable | Source of truth for class/period isolation. Indexed for performance. |
+| `amount` | Numeric(12, 2) | Positive/negative amount. **Changed from Float to Numeric for exact decimal precision** (fixes -0.00 overdraft fee bug and rent payment rounding errors). |
 | `timestamp` | DateTime | Transaction timestamp. |
 | `account_type` | String(20) | `checking` or `savings`. |
 | `description` | String(255) | Description. |
@@ -117,6 +129,24 @@ Append-only log of tap in/out actions.
 | `status` | String(10) | `active` or `inactive`. |
 | `timestamp` | DateTime | Event timestamp. |
 | `reason` | String(50) | Optional reason. |
+| `join_code` | String(20) | Source of truth for class/period scoping. Indexed. |
+| `is_deleted` | Boolean | Soft-delete flag for teacher removals. |
+| `deleted_at` | DateTime | Timestamp when deleted. |
+| `deleted_by` | Integer | FK to `admins.id` for who deleted. |
+
+### `student_blocks`
+Per-student, per-period state (attendance gating, join-code mapping).
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `student_id` | Integer | FK to `students.id` (CASCADE). |
+| `period` | String(10) | Class period label. |
+| `join_code` | String(20) | Source of truth for class isolation. Indexed. |
+| `tap_enabled` | Boolean | Whether tap in/out is enabled for this period. |
+| `done_for_day_date` | Date | Pacific-date stamp when student marks done for day. |
+| `created_at` | DateTime | Creation timestamp. |
+| `updated_at` | DateTime | Last update timestamp. |
 
 ### `hall_pass_logs`
 Tracks hall pass lifecycle.
@@ -216,6 +246,92 @@ Key fields: `savings_apy`, `savings_monthly_rate`, `interest_calculation_type`, 
 
 ---
 
+## Analytics (v1.7.0+)
+
+### `analytics_snapshots`
+Precomputed analytics metrics cached by time window for fast dashboard loading.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `join_code` | String(20) | FK to teacher_blocks for multi-tenancy. |
+| `time_window` | String(10) | 'weekly' or 'monthly'. |
+| `snapshot_date` | DateTime | Date this snapshot represents. |
+| `participation_rate` | Float | % of students actively participating. |
+| `money_velocity` | Float | Average transactions per student. |
+| `cwi_deviation_pct` | Float | % of students significantly deviating from CWI. |
+| `budget_survival_rate` | Float | % of students who can afford basic expenses. |
+| `trend_participation` | String(20) | 'improving', 'stable', or 'worsening'. |
+| `trend_velocity` | String(20) | Velocity trend indicator. |
+| `trend_cwi_deviation` | String(20) | CWI deviation trend. |
+| `trend_survival` | String(20) | Survival rate trend. |
+| `computed_at` | DateTime | When this snapshot was computed. |
+
+**Purpose:** Enables 5-second dashboard load time by precomputing expensive metrics.
+
+### `analytics_events`
+Timeline of important economy events for annotation and correlation with metrics.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `join_code` | String(20) | FK for multi-tenancy scoping. |
+| `event_type` | String(50) | Type: 'wage_change', 'rent_change', 'inflation', 'bonus_payroll', 'store_event'. |
+| `event_date` | DateTime | When the event occurred. |
+| `description` | Text | Human-readable description. |
+| `old_value` | Float, nullable | Previous value (for changes). |
+| `new_value` | Float, nullable | New value (for changes). |
+| `created_at` | DateTime | Event recording timestamp. |
+
+**Purpose:** Helps teachers correlate metric changes with economy adjustments.
+
+### `analytics_alerts`
+Visual alerts shown on dashboard when metrics need attention.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `join_code` | String(20) | FK for multi-tenancy. |
+| `alert_type` | String(20) | Severity: 'critical', 'warning', 'info'. |
+| `metric_name` | String(50) | Which metric triggered this alert. |
+| `what_changed` | Text | Description of the change. |
+| `why_it_matters` | Text | Impact explanation. |
+| `suggested_actions` | Text | Concrete recommendations. |
+| `is_active` | Boolean | Whether alert is still relevant. |
+| `created_at` | DateTime | Alert creation time. |
+| `resolved_at` | DateTime, nullable | When alert was resolved/dismissed. |
+
+**Purpose:** Provides actionable guidance for economy optimization.
+
+---
+
+## Rent Itemization (v1.7.0+)
+
+### `rent_items`
+Itemized breakdown of what rent payment covers.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `join_code` | String(20) | FK to teacher_blocks for per-class configuration. |
+| `name` | String(100) | Item name (e.g., "Desk", "Locker"). |
+| `description` | Text, nullable | Explanation of what this item provides. |
+| `base_value` | Float | Dollar amount this contributes to rent. |
+| `display_order` | Integer | Sort order for student display. |
+| `purchase_available` | Boolean | Whether available as store alternative. |
+| `custom_price` | Float, nullable | À la carte store price (if available). |
+| `purchase_duration` | String(20) | 'per_use' or 'per_period'. |
+| `created_at` | DateTime | Creation timestamp. |
+| `updated_at` | DateTime | Last modification time. |
+
+**Store Integration:** When `purchase_available=True`, automatically creates/updates corresponding StoreItem with appropriate purchase limits based on `purchase_duration`.
+
+**Relationships:**
+- Automatically manages StoreItem sync
+- Used to calculate rent privilege badges
+
+---
+
 ## System & Support
 
 ### `admin_invite_codes`
@@ -250,3 +366,10 @@ Key fields: `student_id`, `created_at`, `expires_at`.
 - Prefer `student_teachers` for ownership; `students.teacher_id` is scheduled for removal once all data is migrated.
 - All monetary values are stored as floating point; rounding is handled in business logic.
 - Indices are defined on frequent lookup fields (e.g., join codes, student/teacher IDs, timestamps) to support pagination and scoped queries.
+- **v1.7.0** added analytics models (`analytics_snapshots`, `analytics_events`, `analytics_alerts`) for system health monitoring and rent itemization (`rent_items`) for transparent rent breakdown.
+- All new models properly scoped by `join_code` for multi-tenancy compliance.
+
+## Full Documentation
+
+For the complete documentation set, visit:
+https://github.com/timwonderer/classroom-economy/tree/main/docs

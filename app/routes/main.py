@@ -9,7 +9,7 @@ from flask import Blueprint, redirect, url_for, jsonify, current_app, session, r
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.extensions import db
+from app.extensions import db, limiter
 from app.models import Admin
 from app.utils.helpers import render_template_with_fallback as render_template, is_safe_url
 
@@ -21,8 +21,25 @@ main_bp = Blueprint('main', __name__)
 
 @main_bp.route('/')
 def home():
-    """Redirect to student login page."""
-    return redirect(url_for('student.login'))
+    """
+    Smart root route:
+    - If logged in as student -> Student Dashboard
+    - If logged in as admin -> Admin Dashboard
+    - If logged in as sysadmin -> Sysadmin Dashboard
+    - If not logged in -> Redirect to Marketing Site (classroomtokenhub.com)
+    """
+    # Check for user session and redirect accordingly
+    if session.get('is_system_admin') and session.get('sysadmin_id'):
+        return redirect(url_for('sysadmin.dashboard'))
+    elif session.get('is_admin') and session.get('admin_id'):
+        return redirect(url_for('admin.dashboard'))
+    elif session.get('student_id'):
+        return redirect(url_for('student.dashboard'))
+    else:
+        # Default: Redirect to marketing site
+        # Use environment variable or default to the canonical domain
+        marketing_url = current_app.config.get('MARKETING_SITE_URL', 'https://classroomtokenhub.com')
+        return redirect(marketing_url)
 
 
 @main_bp.route('/health')
@@ -124,6 +141,23 @@ def terms():
     return render_template('tos.html')
 
 
+@main_bp.route('/offline')
+def offline():
+    """Render the offline fallback page."""
+    return render_template('offline.html')
+
+
+@main_bp.route('/sw.js')
+@limiter.exempt
+def service_worker():
+    """Serve the service worker file from the root scope.
+
+    Exempt from rate limiting because browsers check this frequently
+    for PWA updates and it's a static file that doesn't need protection.
+    """
+    return current_app.send_static_file('sw.js')
+
+
 # -------------------- HALL PASS TERMINALS (NO AUTH REQUIRED) --------------------
 
 @main_bp.route('/hall-pass/terminal')
@@ -184,4 +218,4 @@ def debug_admin_db_test():
         }), 200
     except Exception as e:
         current_app.logger.exception("Admin DB test failed")
-        return jsonify({"status": "error", "error": str(e)}), 500
+        return jsonify({"status": "error", "message": "Admin DB test failed due to an internal error."}), 500

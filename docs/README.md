@@ -1,56 +1,66 @@
+---
+title: Documentation Home
+description: Complete guide to using Classroom Token Hub - feature guides, troubleshooting, and help resources.
+keywords: [documentation, help, guide, tutorial, how-to, manual, support]
+roles: [teacher, student]
+---
+
 # Classroom Token Hub - Documentation Index
 
-Welcome to the Classroom Token Hub documentation! This index points you to the most relevant resources for your role.
+Welcome to the Classroom Token Hub documentation. This index points you to fast, diagnostic answers first.
 
 ---
 
 ## Start Here
 
 1. Review the [project README](../README.md) for a high-level overview and setup steps.
-2. Skim the [Architecture Guide](technical-reference/architecture.md) for structure, conventions, and security notes.
-3. Check [Development TODO](development/TODO.md) for current priorities and follow-ups.
-4. If you are operating the app, keep the [Deployment Guide](DEPLOYMENT.md) and [Operations README](operations/README.md) handy.
+2. Use the [Student Diagnostics Index](diagnostics/student.md) or [Teacher Diagnostics Index](diagnostics/teacher.md) for fast answers.
+3. Skim the [Architecture Guide](technical-reference/architecture.md) for system structure and security notes.
+4. If you are operating the app, keep the [Deployment Guide](Deployment_Guide.md) and [Operations README](operations/README.md) handy.
 
 ---
 
 ## Documentation Map
 
-### 📖 User Guides
-- **[Student Guide](user-guides/student_guide.md)** — Login, dashboard, store, transfers, hall passes.
-- **[Teacher Manual](user-guides/teacher_manual.md)** — Admin dashboard, payroll, roster uploads, store/rent/insurance management.
+### Diagnostics (Fast Answers)
+- **[Student Diagnostics Index](diagnostics/student.md)** - Login, classes, attendance, money, store, rent, hall passes.
+- **[Teacher Diagnostics Index](diagnostics/teacher.md)** - Feature settings, students, payroll, store, rent, announcements.
+- **[Classroom Economy Guide](user-guides/economy_guide.md)** - Pricing ranges and balance checks.
 
-### 🧭 Quick References
-- **[Architecture Guide](technical-reference/architecture.md)** — Stack, project layout, patterns, and security posture.
-- **[Database Schema](technical-reference/database_schema.md)** — Current models and relationships (includes multi-teacher links and payroll/rent/insurance tables).
-- **[API Reference](technical-reference/api_reference.md)** — REST endpoints and authentication expectations.
+### Quick References
+- **[Architecture Guide](technical-reference/architecture.md)** - Stack, project layout, patterns, and security posture.
+- **[Database Schema](technical-reference/database_schema.md)** - Current models and relationships.
+- **[API Reference](technical-reference/api_reference.md)** - REST endpoints and authentication expectations.
+- **[Analytics Specification](technical-reference/Class-economy-analytics-specs.md)** - System health observability and analytics dashboard.
+- **[Economy Specification](technical-reference/ECONOMY_SPECIFICATION.md)** - Developer-only ratios and balancing rules.
+- **[Timezone Handling](technical-reference/TIMEZONE_HANDLING.md)** - UTC storage and conversion patterns.
 
-### 🎯 Development
-- **[TODO](development/TODO.md)** — Active work, open questions, and recent wins.
-- **[Multi-Tenancy Status](development/MULTI_TENANCY_TODO.md)** — Rollout notes and remaining hardening tasks.
-- **[System Admin Interface](development/SYSADMIN_INTERFACE_DESIGN.md)** — Capabilities and UX principles for sysadmin flows.
-- **[Migration Guide](development/MIGRATION_GUIDE.md)** — Alembic tips, consolidation steps, and conflict resolution.
+### Deployment & Operations
+- **[Deployment Guide](Deployment_Guide.md)** - Environment variables, CI/CD references, and production checklist.
+- **[Operations README](operations/README.md)** - Cleanup, demo session hygiene, and PII audit procedures.
+- **[Multi-Tenancy Fix Deployment](operations/MULTI_TENANCY_FIX_DEPLOYMENT.md)** - Deployment procedures for multi-tenancy fixes.
+- **[Changelog](../CHANGELOG.md)** - Notable changes and release notes.
 
-### 🚀 Deployment & Operations
-- **[Deployment Guide](DEPLOYMENT.md)** — Environment variables, CI/CD references, and production checklist.
-- **[Operations Guides](operations/)** — Cleanup, demo session hygiene, and PII audit procedures.
-- **[Changelog](../CHANGELOG.md)** — Notable changes and release notes.
+### Releases
+- **[Changelog](../CHANGELOG.md)** - All release notes and version history are maintained in the main changelog.
 
 ---
 
 ## Common Questions
-- **How do I add students?** → [Teacher Manual – Student Management](user-guides/teacher_manual.md#student-management)
-- **How do I run payroll?** → [Teacher Manual – Payroll](user-guides/teacher_manual.md#payroll)
-- **What’s the database structure?** → [Database Schema](technical-reference/database_schema.md)
-- **Where are tenancy helpers?** → [`app/auth.py`](../app/auth.py) and [Multi-Tenancy Status](development/MULTI_TENANCY_TODO.md)
-- **How do I clean demo sessions?** → [Operations – Demo Sessions](operations/DEMO_SESSIONS.md)
+- **Why can't I log in?** -> [Student Login Diagnostics](diagnostics/student-login.md)
+- **Why can't students claim accounts?** -> [Teacher Students Diagnostics](diagnostics/teacher-students.md)
+- **Why didn't payroll run?** -> [Teacher Payroll Diagnostics](diagnostics/teacher-attendance-payroll.md)
+- **What's the database structure?** -> [Database Schema](technical-reference/database_schema.md)
+- **How does the economy system work?** -> [Classroom Economy Guide](user-guides/economy_guide.md)
 
 ---
 
 ## Documentation Standards
 
+- Prefer diagnostic checklists over long explanations.
+- Keep each doc focused on a single feature or route.
+- Use "If X happened, check these" and "This is expected when" sections.
 - Update relevant docs with every feature, schema, or operational change.
-- Keep “Last Updated” stamps current when modifying a document.
-- Link related sections across user, developer, and ops docs to avoid duplication.
 
 ---
 
@@ -58,16 +68,16 @@ Welcome to the Classroom Token Hub documentation! This index points you to the m
 
 | Document | Audience | Purpose | Last Updated |
 |----------|----------|---------|--------------|
+| [Student Diagnostics Index](diagnostics/student.md) | Students | Fast diagnostic entry point | 2026-01-03 |
+| [Teacher Diagnostics Index](diagnostics/teacher.md) | Teachers | Fast diagnostic entry point | 2026-01-03 |
 | [Architecture Guide](technical-reference/architecture.md) | Developers | System architecture and patterns | 2025-11-23 |
 | [Database Schema](technical-reference/database_schema.md) | Developers | Current models and relationships | 2025-11-23 |
 | [API Reference](technical-reference/api_reference.md) | Developers | REST API documentation | 2025-11-23 |
-| [Student Guide](user-guides/student_guide.md) | Students | How to use the platform | 2025-11-18 |
-| [Teacher Manual](user-guides/teacher_manual.md) | Teachers | Admin features and workflows | 2025-11-18 |
-| [TODO](development/TODO.md) | Developers | Current tasks and priorities | 2025-11-23 |
-| [Deployment Guide](DEPLOYMENT.md) | DevOps | Deployment instructions | 2025-11-25 |
-| [Multi-Tenancy Status](development/MULTI_TENANCY_TODO.md) | Developers | Multi-teacher rollout plan | 2025-11-23 |
-| [Migration Guide](development/MIGRATION_GUIDE.md) | Developers | Database migration help | 2025-11-18 |
-| [Operations Guides](operations/) | Ops | Operational procedures | 2025-11-28 |
-| [Changelog](../CHANGELOG.md) | All | Version history and changes | 2025-11-28 |
+| [Analytics Specification](technical-reference/Class-economy-analytics-specs.md) | Developers | Analytics dashboard and metrics | 2026-01-09 |
+| [Classroom Economy Guide](user-guides/economy_guide.md) | Teachers | Economy ranges and balance checks | 2025-12-28 |
+| [Deployment Guide](Deployment_Guide.md) | DevOps | Deployment instructions | 2025-11-25 |
+| [Economy Specification](technical-reference/ECONOMY_SPECIFICATION.md) | Developers | Financial system spec | 2025-12-11 |
+| [Changelog](../CHANGELOG.md) | All | Version history and changes | 2026-01-09 |
+| [README](../README.md) | All | Project overview and quick start | 2025-12-21 |
 
 ---

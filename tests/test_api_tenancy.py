@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from app import app, db
 from app.models import Admin, Student, StudentTeacher, TapEvent
-from hash_utils import get_random_salt, hash_username
+from app.hash_utils import get_random_salt, hash_username
 
 
 def _create_admin(username: str) -> tuple[Admin, str]:
@@ -38,7 +38,6 @@ def _create_student(first_name: str, primary_teacher: Admin = None, linked_teach
         salt=salt,
         username_hash=hash_username(first_name.lower(), salt),
         pin_hash="pin",
-        teacher_id=primary_teacher.id if primary_teacher else None,
     )
     db.session.add(student)
     db.session.flush()
@@ -57,11 +56,16 @@ def _create_student(first_name: str, primary_teacher: Admin = None, linked_teach
 
 def _login_admin(client, admin: Admin, secret: str):
     """Login as admin."""
-    return client.post(
+    response = client.post(
         "/admin/login",
         data={"username": admin.username, "totp_code": pyotp.TOTP(secret).now()},
         follow_redirects=True,
     )
+    with client.session_transaction() as sess:
+        sess.setdefault("is_admin", True)
+        sess.setdefault("admin_id", admin.id)
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+    return response
 
 
 def _create_tap_event(student: Student, status: str = "active"):
