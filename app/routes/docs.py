@@ -232,8 +232,10 @@ def view_doc(doc_path):
             - is anchored under docs_root, and
             - has a .md suffix applied.
             """
-            # Normalize the untrusted path as a relative path
-            safe_rel_path = Path(untrusted_path)
+            # Normalize the untrusted path as a relative path (strip any leading "/")
+            # so that we never accidentally treat user-controlled input as absolute.
+            normalized_str = Path(untrusted_path).as_posix().lstrip("/")
+            safe_rel_path = Path(normalized_str)
 
             # Reject empty components, absolute paths, or traversal components
             if not str(safe_rel_path) or str(safe_rel_path) in (".", "./"):
@@ -253,31 +255,30 @@ def view_doc(doc_path):
             # Build candidate path under documentation root and normalize it
             try:
                 candidate = (root_resolved / safe_rel_path).with_suffix(".md")
-                candidate_resolved = candidate.resolve(strict=False)
+                # Use realpath to normalize and resolve any symlinks before comparison
+                candidate_real = os.path.realpath(str(candidate))
+                root_real = os.path.realpath(str(root_resolved))
             except OSError as e:
                 current_app.logger.warning(f"Error resolving documentation path '{untrusted_path}': {e}")
                 abort(404)
 
             # Verify the resolved path is still within the docs root
             try:
-                # Prefer pathlib's is_relative_to when available (Python 3.9+)
-                is_within_root = candidate_resolved.is_relative_to(root_resolved)  # type: ignore[attr-defined]
-            except AttributeError:
-                # Fallback for older Python versions: use os.path.commonpath
-                try:
-                    common = os.path.commonpath([str(root_resolved), str(candidate_resolved)])
-                except ValueError:
-                    current_app.logger.warning(f"Path outside DOCS_ROOT (invalid common path): {untrusted_path}")
-                    abort(404)
+                common = os.path.commonpath([root_real, candidate_real])
+            except ValueError:
+                current_app.logger.warning(f"Path outside DOCS_ROOT (invalid common path): {untrusted_path}")
+                abort(404)
 
-                # Normalize both paths before comparison
-                is_within_root = os.path.normcase(common) == os.path.normcase(str(root_resolved))
+            # Normalize both paths before comparison
+            is_within_root = os.path.normcase(common) == os.path.normcase(root_real)
 
             if not is_within_root:
                 current_app.logger.warning(f"Path outside DOCS_ROOT: {untrusted_path}")
                 abort(404)
 
-            return candidate_resolved
+            # Return the fully normalized, safe candidate path
+            safe_candidate_resolved = Path(candidate_real)
+            return safe_candidate_resolved
 
         # Ensure we have a safe, absolute docs root
         try:
