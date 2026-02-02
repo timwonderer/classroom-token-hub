@@ -1469,8 +1469,7 @@ def grafana_proxy(path):
         mime_type = content_type.split(';')[0].strip() if content_type else ''
 
         # Explicitly block SVG first - SVG can contain embedded JavaScript and poses XSS risks
-        dangerous_types = ('image/svg+xml',)
-        if mime_type in dangerous_types:
+        if mime_type == 'image/svg+xml':
             current_app.logger.warning(
                 f"Blocked proxied Grafana response with dangerous content type: {content_type} "
                 f"for path: {normalized_path}"
