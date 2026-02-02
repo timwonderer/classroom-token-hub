@@ -17,6 +17,41 @@ from flask import session, flash, redirect, url_for, request, current_app, jsoni
 SESSION_TIMEOUT_MINUTES = 10
 
 
+def _get_safe_next_path() -> str:
+    """
+    Return a safe relative path that can be used as a `next` parameter.
+
+    Ensures the value is a same-site path without scheme or host to avoid
+    open redirect vulnerabilities if used in a subsequent redirect.
+    """
+    # Start from the Flask path, which is already URL-decoded and does not
+    # include the scheme or host for normal requests.
+    raw_path = request.path or "/"
+
+    # Normalize any backslashes to forward slashes to avoid browser quirks.
+    raw_path = raw_path.replace("\\", "/")
+
+    # Parse the path in case an attacker has tried to smuggle in a scheme
+    # or netloc via malformed input.
+    parsed = urllib.parse.urlparse(raw_path)
+
+    # Only allow pure paths without scheme or netloc.
+    if parsed.scheme or parsed.netloc:
+        return "/"
+
+    path = parsed.path or "/"
+
+    # Disallow protocol-relative style (`//evil.com`) paths.
+    if path.startswith("//"):
+        return "/"
+
+    # Ensure the path is absolute within this application.
+    if not path.startswith("/"):
+        path = "/" + path
+
+    return path
+
+
 # -------------------- AUTHENTICATION DECORATORS --------------------
 
 def login_required(f):
@@ -161,7 +196,8 @@ def login_required(f):
             # Return JSON for API requests
             if request.path.startswith('/api/'):
                 return jsonify({"status": "error", "error": "User not logged in or session expired"}), 401
-            encoded_next = urllib.parse.quote(request.path, safe="")
+            next_path = _get_safe_next_path()
+            encoded_next = urllib.parse.quote(next_path, safe="")
             return redirect(f"{url_for('student.login')}?next={encoded_next}")
 
         # Enforce strict 10-minute timeout from login time
@@ -187,7 +223,8 @@ def login_required(f):
             if request.path.startswith('/api/'):
                 return jsonify({"status": "error", "error": "Session expired. Please log in again."}), 401
             flash("Session expired. Please log in again.")
-            encoded_next = urllib.parse.quote(request.path, safe="")
+            next_path = _get_safe_next_path()
+            encoded_next = urllib.parse.quote(next_path, safe="")
             return redirect(f"{url_for('student.login')}?next={encoded_next}")
 
         # Continue to update last_activity for other potential uses, but it no longer controls the timeout
@@ -208,7 +245,8 @@ def admin_required(f):
         current_app.logger.info(f"Admin access attempt: session = {dict(session)}")
         if not session.get("is_admin"):
             flash("You must be an admin to view this page.")
-            encoded_next = urllib.parse.quote(request.path, safe="")
+            next_path = _get_safe_next_path()
+            encoded_next = urllib.parse.quote(next_path, safe="")
             return redirect(f"{url_for('admin.login')}?next={encoded_next}")
 
         admin = get_current_admin()
@@ -217,7 +255,8 @@ def admin_required(f):
             session.pop("admin_id", None)
             session.pop("last_activity", None)
             flash("Admin session is invalid. Please log in again.")
-            encoded_next = urllib.parse.quote(request.path, safe="")
+            next_path = _get_safe_next_path()
+            encoded_next = urllib.parse.quote(next_path, safe="")
             return redirect(f"{url_for('admin.login')}?next={encoded_next}")
 
         now = datetime.now(timezone.utc)
@@ -228,7 +267,8 @@ def admin_required(f):
             if (now - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
                 session.clear()
                 flash("Admin session expired. Please log in again.")
-                encoded_next = urllib.parse.quote(request.path, safe="")
+                next_path = _get_safe_next_path()
+                encoded_next = urllib.parse.quote(next_path, safe="")
                 return redirect(f"{url_for('admin.login')}?next={encoded_next}")
 
         session['last_activity'] = now.isoformat()
