@@ -7931,7 +7931,7 @@ def api_calculate_cwi():
 
     except Exception as e:
         current_app.logger.error(f"Error calculating CWI: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': 'Failed to calculate CWI'}), 500
 
 
 @admin_bp.route('/api/economy/analyze', methods=['POST'])
