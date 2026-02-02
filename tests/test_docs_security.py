@@ -6,9 +6,6 @@ attack vectors and only allows access to files within the docs directory.
 """
 
 import pytest
-from pathlib import Path
-import tempfile
-import os
 
 
 def test_docs_blocks_parent_directory_traversal(client):
@@ -54,8 +51,10 @@ def test_docs_blocks_backslash_traversal(client):
 
 def test_docs_blocks_null_byte_injection(client):
     """Test that null byte injection is blocked."""
-    # Null bytes in URLs should be blocked by regex validation
-    response = client.get('/docs/user-guides\x00/../../etc/passwd')
+    # Note: Flask/Werkzeug may reject NUL bytes before routing.
+    # If it does, we expect the regex validation to catch it.
+    # Using percent-encoded %00 to test the application-level validation.
+    response = client.get('/docs/user-guides%00/../../etc/passwd')
     assert response.status_code == 404
 
 
@@ -77,12 +76,14 @@ def test_docs_allows_nested_valid_paths(client):
 def test_docs_blocks_suspicious_characters(client):
     """Test that paths with suspicious characters are blocked."""
     # Test various suspicious patterns
+    # Note: Using percent-encoded %00 instead of literal NUL since
+    # Flask/Werkzeug may reject literal NULs before routing
     suspicious_paths = [
-        '/docs/test\0file',  # Null byte
-        '/docs/test|file',   # Pipe
-        '/docs/test&file',   # Ampersand
-        '/docs/test;file',   # Semicolon
-        '/docs/test$file',   # Dollar sign
+        '/docs/test%00file',  # Null byte (percent-encoded)
+        '/docs/test|file',    # Pipe
+        '/docs/test&file',    # Ampersand
+        '/docs/test;file',    # Semicolon
+        '/docs/test$file',    # Dollar sign
     ]
 
     for path in suspicious_paths:
@@ -109,11 +110,11 @@ def test_docs_empty_path_handling(client):
 
 def test_docs_blocks_hidden_files(client):
     """Test that hidden files (starting with .) are handled appropriately."""
-    # Depending on regex, dots might be allowed in filenames
-    # but .. should still be blocked
+    # Dots in filenames are allowed, but files starting with . should either
+    # be blocked by regex or return 404 if they don't exist
     response = client.get('/docs/.hidden')
-    # Either blocked by regex or file doesn't exist
-    assert response.status_code in [404, 500]
+    # Should return 404, not 500 (which would indicate a server error)
+    assert response.status_code == 404
 
 
 def test_docs_symlink_escape_prevention(client, app, tmp_path):

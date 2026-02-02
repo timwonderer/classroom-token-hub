@@ -260,18 +260,19 @@ def view_doc(doc_path):
             # Verify the resolved path is still within the docs root
             # Using startswith() instead of is_relative_to() because CodeQL recognizes
             # startswith() as a valid SafeAccessCheck pattern, preventing false positives
-            root_str = str(root_resolved)
-            candidate_str = str(candidate)
+            root_path_str = str(root_resolved)
+            candidate_path_str = str(candidate)
 
-            # Ensure root path ends with separator to prevent partial matches
-            # e.g., /docs/test should not match /docs_other/file
-            if not root_str.endswith(os.sep):
-                root_str += os.sep
+            # For the prefix check, ensure the root path ends with a separator
+            root_with_sep = root_path_str
+            if not root_with_sep.endswith(os.sep):
+                root_with_sep += os.sep
 
             # Check if candidate is exactly the root or starts with root + separator
+            norm_candidate = os.path.normcase(candidate_path_str)
             is_within_root = (
-                os.path.normcase(candidate_str) == os.path.normcase(str(root_resolved)) or
-                os.path.normcase(candidate_str).startswith(os.path.normcase(root_str))
+                norm_candidate == os.path.normcase(root_path_str) or
+                norm_candidate.startswith(os.path.normcase(root_with_sep))
             )
 
             if not is_within_root:
@@ -279,9 +280,9 @@ def view_doc(doc_path):
                 abort(404)
 
             # Path has been validated through multiple layers:
-            # 1. Regex validation (line 224) blocks suspicious characters
-            # 2. Component check (line 236) blocks absolute paths and .. traversal
-            # 3. Resolved path verification (above) ensures containment within docs root
+            # 1. Earlier regex validation of the docs path blocks suspicious characters
+            # 2. The component check in this function blocks absolute paths and '..' traversal
+            # 3. The resolved path verification above ensures containment within the docs root
             return candidate
 
         # Ensure we have a safe, absolute docs root
