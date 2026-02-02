@@ -7,7 +7,6 @@ allowing users to access help without leaving the app or losing their session.
 
 import re
 from pathlib import Path
-import os
 from flask import Blueprint, abort, current_app, session, request, url_for
 from werkzeug.exceptions import HTTPException
 import bleach
@@ -230,7 +229,14 @@ def view_doc(doc_path):
             Resolve an untrusted documentation path to a safe file within docs_root.
             The returned path is an absolute, normalized path that:
             - is anchored under docs_root, and
-            - has a .md suffix applied.
+            - has a .md suffix applied (before path resolution, preventing suffix bypass).
+            
+            Note: This function validates the path at a point in time. There is a 
+            theoretical TOCTOU (time-of-check-time-of-use) window between validation 
+            and file access. However, exploiting this would require the ability to 
+            modify the filesystem between validation and read, which requires elevated 
+            privileges beyond typical web application threats. This is acceptable for 
+            a documentation serving feature.
             """
             # Normalize the untrusted path as a relative path (strip any leading "/")
             # so that we never accidentally treat user-controlled input as absolute.
@@ -255,32 +261,20 @@ def view_doc(doc_path):
                 abort(500)
 
             # Build candidate path under documentation root and normalize it
-            try:
-                candidate = (root_resolved / safe_rel_path).with_suffix(".md")
-                # Use realpath to normalize and resolve any symlinks before comparison
-                candidate_real = os.path.realpath(str(candidate))
-                root_real = os.path.realpath(str(root_resolved))
-            except OSError as e:
-                current_app.logger.warning(f"Error resolving documentation path '{untrusted_path}': {e}")
-                abort(404)
+            # Note: with_suffix replaces any existing suffix, ensuring only .md files are accessed
+            candidate = (root_resolved / safe_rel_path).with_suffix(".md")
+            
+            # Resolve to canonical absolute path, following symlinks
+            candidate_resolved = candidate.resolve()
 
-            # Verify the resolved path is still within the docs root
-            try:
-                common = os.path.commonpath([root_real, candidate_real])
-            except ValueError:
-                current_app.logger.warning(f"Path outside DOCS_ROOT (invalid common path): {untrusted_path}")
-                abort(404)
-
-            # Normalize both paths before comparison
-            is_within_root = os.path.normcase(common) == os.path.normcase(root_real)
-
-            if not is_within_root:
+            # Verify the resolved path is still within the docs root using pathlib's
+            # is_relative_to() for consistent cross-platform behavior
+            if not candidate_resolved.is_relative_to(root_resolved):
                 current_app.logger.warning(f"Path outside DOCS_ROOT: {untrusted_path}")
                 abort(404)
 
             # Return the fully normalized, safe candidate path
-            safe_candidate_resolved = Path(candidate_real)
-            return safe_candidate_resolved
+            return candidate_resolved
 
         # Ensure we have a safe, absolute docs root
         try:
