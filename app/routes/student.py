@@ -12,6 +12,7 @@ import re
 from calendar import monthrange
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from urllib.parse import urlparse
 
 from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app
 from sqlalchemy import or_, func, select, and_
@@ -862,25 +863,48 @@ def add_class():
             # In case the helper raises for malformed URLs, treat as unsafe.
             return False
 
-    def _get_return_target(default_endpoint='student.dashboard'):
+    def _get_return_target(default_endpoint: str = 'student.dashboard'):
         """
         Return the safest place to redirect back to after add-class attempts.
 
         Prioritize an explicit `next` value, fall back to referrer, then dashboard.
 
-        Security: All redirect targets are validated with _is_safe_url() to ensure
-        they are same-origin URLs, preventing open redirect vulnerabilities.
+        Security: All redirect targets are validated with _is_safe_url() and
+        additionally restricted to internal, relative URLs (no scheme or host)
+        to prevent open redirect vulnerabilities.
         """
+        def _normalize_and_validate_internal_target(raw_target: str) -> str | None:
+            """
+            Ensure the target is an internal relative URL:
+            - strip backslashes, which some browsers treat like slashes
+            - disallow any scheme or netloc
+            Returns the cleaned path if valid, otherwise None.
+            """
+            if not raw_target:
+                return None
+            # Normalize backslashes to reduce browser inconsistencies
+            cleaned = raw_target.replace('\\', '')
+            parsed = urlparse(cleaned)
+            # Require relative URL: no scheme and no netloc
+            if parsed.scheme or parsed.netloc:
+                return None
+            return cleaned
+
+        # 1) Explicit next parameter (form or query string)
         next_url = request.form.get('next') or request.args.get('next')
         if next_url and _is_safe_url(next_url):
-            return next_url
+            internal_next = _normalize_and_validate_internal_target(next_url)
+            if internal_next:
+                return internal_next
 
-        # Validate referrer to prevent open redirects (same-origin check)
+        # 2) Referrer header, after validation
         ref_url = request.referrer
         if ref_url and _is_safe_url(ref_url):
-            return ref_url
+            internal_ref = _normalize_and_validate_internal_target(ref_url)
+            if internal_ref:
+                return internal_ref
 
-        # Safe fallback: always use internal route
+        # 3) Safe fallback: always use internal route
         return url_for(default_endpoint)
 
     if form.validate_on_submit():
