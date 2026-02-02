@@ -5542,7 +5542,7 @@ def update_expected_weekly_hours():
 
     # Redirect back with cwi_block parameter to maintain the selected class
     next_url = request.form.get('next')
-    if next_url and is_safe_url(next_url):
+    if next_url and is_safe_url(next_url, request.host_url):
         return redirect(next_url)
 
     return redirect(url_for('admin.payroll', cwi_block=cwi_block))
@@ -7931,7 +7931,7 @@ def api_calculate_cwi():
 
     except Exception as e:
         current_app.logger.error(f"Error calculating CWI: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': 'Failed to calculate CWI'}), 500
 
 
 @admin_bp.route('/api/economy/analyze', methods=['POST'])
@@ -8049,7 +8049,7 @@ def api_economy_analyze():
 
     except Exception as e:
         current_app.logger.error(f"Error analyzing economy: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        return jsonify({'status': 'error', 'message': 'An internal error occurred while analyzing the economy.'}), 500
 
 
 @admin_bp.route('/api/economy/validate/<feature>', methods=['POST'])
