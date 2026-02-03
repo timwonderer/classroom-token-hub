@@ -2831,13 +2831,6 @@ def rent():
                           days_until_due=days_until_due,
                           unpaid_periods=unpaid_periods,
                           total_back_rent=total_back_rent)
-                          savings_balance=savings_balance,
-                          due_date=due_date,
-                          grace_end_date=grace_end_date,
-                          preview_start_date=preview_start_date,
-                          payment_history=payment_history,
-                          rent_items=rent_items,
-                          days_until_due=days_until_due)
 
 
 @student_bp.route('/rent/pay/<period>', methods=['POST'])
