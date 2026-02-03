@@ -1774,14 +1774,20 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
 
         student_ids = [student.id for student in block_students]
 
-        # Batch rent payments for the month
+        # Calculate current coverage period (pre-paid system)
+        from app.routes.student import _calculate_rent_deadlines
+        current_due_date, _ = _calculate_rent_deadlines(rent_settings, now)
+        coverage_month = current_due_date.month
+        coverage_year = current_due_date.year
+
+        # Batch rent payments for the current coverage period
         rent_payment_rows = (
             RentPayment.query
             .filter(
                 RentPayment.student_id.in_(student_ids),
                 RentPayment.period == block,
-                RentPayment.period_month == now.month,
-                RentPayment.period_year == now.year,
+                RentPayment.coverage_month == coverage_month,
+                RentPayment.coverage_year == coverage_year,
                 db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
             )
             .with_entities(RentPayment.student_id)
@@ -1837,7 +1843,11 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
 
 
 def _get_rent_privileges_for_student(student, teacher_id, join_code):
-    """Return rent privileges for a single student in the current class context."""
+    """Return rent privileges for a single student in the current class context.
+    
+    Pre-paid system: Check if student has paid rent that COVERS the current period.
+    A payment made for January covers the student until the February due date.
+    """
     rent_privileges = []
     if not (teacher_id and join_code):
         return rent_privileges
@@ -1852,11 +1862,25 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
         return rent_privileges
 
     now = datetime.now(timezone.utc)
+    
+    # Import here to avoid circular dependency
+    from app.routes.student import _calculate_rent_deadlines
+    
+    # Calculate current due date and determine which coverage period we're in
+    current_due_date, grace_end_date = _calculate_rent_deadlines(rent_settings, now)
+    
+    # For pre-paid system: Check if there's a payment that covers the current period
+    # The coverage month/year should match the period the payment covers
+    # Students have privileges if they've paid for the coverage period of the current due date
+    coverage_month = current_due_date.month
+    coverage_year = current_due_date.year
+    
+    # Check if student has paid rent that covers this period
     has_paid_rent = RentPayment.query.filter(
         RentPayment.student_id == student.id,
         RentPayment.period == current_block,
-        RentPayment.period_month == now.month,
-        RentPayment.period_year == now.year,
+        RentPayment.coverage_month == coverage_month,
+        RentPayment.coverage_year == coverage_year,
         db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
     ).first() is not None
 
@@ -3743,11 +3767,17 @@ def rent_settings():
             .subquery()
         )
 
-        # Fetch all payments for this period
+        # Calculate current coverage period (pre-paid system)
+        from app.routes.student import _calculate_rent_deadlines
+        current_due_date, _ = _calculate_rent_deadlines(settings, now)
+        coverage_month = current_due_date.month
+        coverage_year = current_due_date.year
+
+        # Fetch all payments that cover the current period
         period_payments = (
             RentPayment.query
             .filter(RentPayment.student_id.in_(rent_enabled_student_ids_subq))
-            .filter_by(period_month=current_month, period_year=current_year)
+            .filter_by(coverage_month=coverage_month, coverage_year=coverage_year)
             .all()
         )
 
@@ -3757,7 +3787,7 @@ def rent_settings():
             payments_map[p.student_id] += Decimal(str(p.amount_paid))
 
         # Use helper function to calculate base rent amount
-        base_rent_amount = _calculate_base_rent_amount(settings, current_year, current_month)
+        base_rent_amount = _calculate_base_rent_amount(settings, coverage_year, coverage_month)
 
         # Build unpaid list
         for student in rent_enabled_students:

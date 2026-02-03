@@ -874,9 +874,17 @@ class RentPayment(db.Model):
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
     amount_paid = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
-    period_month = db.Column(db.Integer, nullable=False)  # Month (1-12)
-    period_year = db.Column(db.Integer, nullable=False)  # Year (e.g., 2025)
+    
+    # Payment date tracking (when payment was made)
+    period_month = db.Column(db.Integer, nullable=False)  # Month payment was made (1-12)
+    period_year = db.Column(db.Integer, nullable=False)  # Year payment was made (e.g., 2025)
     payment_date = db.Column(db.DateTime, default=_utc_now)
+    
+    # Coverage period tracking (which month/year this payment covers)
+    # Enables pre-paid system: payment in January can cover February
+    coverage_month = db.Column(db.Integer, nullable=False)  # Month covered (1-12)
+    coverage_year = db.Column(db.Integer, nullable=False)  # Year covered (e.g., 2025)
+    
     was_late = db.Column(db.Boolean, default=False)
     late_fee_charged = db.Column(db.Numeric(precision=12, scale=2), default=0.0)
 
