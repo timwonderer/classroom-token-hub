@@ -2533,6 +2533,154 @@ def _calculate_coverage_period(settings, payment_date=None):
     return coverage_month, coverage_year
 
 
+def _calculate_unpaid_periods(student, settings, period, join_code, now):
+    """
+    Calculate all unpaid rent periods for a student (back rent accumulation).
+    
+    Returns a list of unpaid periods, each with:
+    - coverage_month: Month the payment should cover
+    - coverage_year: Year the payment should cover
+    - due_date: When this period was/is due
+    - grace_end_date: End of grace period
+    - is_late: Whether this period is past grace period
+    - amount_owed: Amount still owed for this period
+    
+    Args:
+        student: Student object
+        settings: RentSettings object
+        period: Block/period identifier
+        join_code: Join code for the class
+        now: Current datetime
+    
+    Returns:
+        list of dicts with unpaid period information
+    """
+    unpaid_periods = []
+    
+    # If no first_rent_due_date is set, we can't calculate historical periods
+    if not settings.first_rent_due_date:
+        # Just check current period
+        current_due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
+        coverage_month = current_due_date.month
+        coverage_year = current_due_date.year
+        
+        # Check if this period is paid
+        paid_amount = db.session.query(db.func.sum(RentPayment.amount_paid)).filter(
+            RentPayment.student_id == student.id,
+            RentPayment.period == period,
+            RentPayment.coverage_month == coverage_month,
+            RentPayment.coverage_year == coverage_year,
+            db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+        ).scalar() or Decimal('0.00')
+        
+        late_fee = Decimal('0.00')
+        if now > grace_end_date:
+            late_fee = settings.late_fee
+        
+        total_due = settings.rent_amount + late_fee
+        amount_owed = max(Decimal('0.00'), total_due - paid_amount)
+        
+        if amount_owed > Decimal('0.00'):
+            unpaid_periods.append({
+                'coverage_month': coverage_month,
+                'coverage_year': coverage_year,
+                'due_date': current_due_date,
+                'grace_end_date': grace_end_date,
+                'is_late': now > grace_end_date,
+                'amount_owed': amount_owed,
+                'late_fee': late_fee
+            })
+        
+        return unpaid_periods
+    
+    # Calculate all periods from first_rent_due_date to now
+    first_due = settings.first_rent_due_date
+    current_check_date = first_due
+    
+    # Loop through each period until we reach the current time
+    while current_check_date <= now:
+        due_date, grace_end_date = _calculate_rent_deadlines(settings, current_check_date)
+        coverage_month = due_date.month
+        coverage_year = due_date.year
+        
+        # Check if student has paid for this period
+        paid_amount = db.session.query(db.func.sum(RentPayment.amount_paid)).filter(
+            RentPayment.student_id == student.id,
+            RentPayment.period == period,
+            RentPayment.coverage_month == coverage_month,
+            RentPayment.coverage_year == coverage_year,
+            db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+        ).scalar() or Decimal('0.00')
+        
+        # Calculate amount owed for this period
+        late_fee = Decimal('0.00')
+        if now > grace_end_date:
+            late_fee = settings.late_fee
+        
+        total_due = settings.rent_amount + late_fee
+        amount_owed = max(Decimal('0.00'), total_due - paid_amount)
+        
+        # Only include if not fully paid
+        if amount_owed > Decimal('0.00'):
+            unpaid_periods.append({
+                'coverage_month': coverage_month,
+                'coverage_year': coverage_year,
+                'due_date': due_date,
+                'grace_end_date': grace_end_date,
+                'is_late': now > grace_end_date,
+                'amount_owed': amount_owed,
+                'late_fee': late_fee
+            })
+        
+        # Move to next period
+        if settings.frequency_type == 'monthly':
+            # Add 1 month
+            if current_check_date.month == 12:
+                current_check_date = datetime(current_check_date.year + 1, 1, current_check_date.day)
+            else:
+                # Handle day overflow for months with different days
+                try:
+                    current_check_date = datetime(current_check_date.year, current_check_date.month + 1, current_check_date.day)
+                except ValueError:
+                    # Day doesn't exist in next month (e.g., Jan 31 -> Feb 31)
+                    # Use last day of next month
+                    next_month = current_check_date.month + 1
+                    next_year = current_check_date.year
+                    if next_month > 12:
+                        next_month = 1
+                        next_year += 1
+                    last_day = monthrange(next_year, next_month)[1]
+                    current_check_date = datetime(next_year, next_month, last_day)
+        elif settings.frequency_type == 'weekly':
+            current_check_date = current_check_date + timedelta(weeks=1)
+        elif settings.frequency_type == 'daily':
+            current_check_date = current_check_date + timedelta(days=1)
+        elif settings.frequency_type == 'custom':
+            if settings.custom_frequency_unit == 'days':
+                current_check_date = current_check_date + timedelta(days=settings.custom_frequency_value)
+            elif settings.custom_frequency_unit == 'weeks':
+                current_check_date = current_check_date + timedelta(weeks=settings.custom_frequency_value)
+            elif settings.custom_frequency_unit == 'months':
+                # Add custom number of months
+                months_to_add = settings.custom_frequency_value
+                new_month = current_check_date.month + months_to_add
+                new_year = current_check_date.year + (new_month - 1) // 12
+                new_month = (new_month - 1) % 12 + 1
+                try:
+                    current_check_date = datetime(new_year, new_month, current_check_date.day)
+                except ValueError:
+                    last_day = monthrange(new_year, new_month)[1]
+                    current_check_date = datetime(new_year, new_month, last_day)
+            else:
+                # Unknown custom unit, stop
+                break
+        else:
+            # Unknown frequency type, stop
+            break
+    
+    return unpaid_periods
+
+
 @student_bp.route('/rent')
 @login_required
 def rent():
@@ -2643,6 +2791,10 @@ def rent():
     checking_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
     savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
 
+    # Calculate all unpaid periods (back rent accumulation)
+    unpaid_periods = _calculate_unpaid_periods(student, settings, current_block, join_code, now)
+    total_back_rent = sum(period['amount_owed'] for period in unpaid_periods)
+    
     # Get payment history for the current class only
     payment_history = RentPayment.query.filter(
         RentPayment.student_id == student.id,
@@ -2670,6 +2822,15 @@ def rent():
                           current_block=current_block,
                           join_code=join_code,
                           checking_balance=checking_balance,
+                          savings_balance=savings_balance,
+                          due_date=due_date,
+                          grace_end_date=grace_end_date,
+                          preview_start_date=preview_start_date,
+                          payment_history=payment_history,
+                          rent_items=rent_items,
+                          days_until_due=days_until_due,
+                          unpaid_periods=unpaid_periods,
+                          total_back_rent=total_back_rent)
                           savings_balance=savings_balance,
                           due_date=due_date,
                           grace_end_date=grace_end_date,
@@ -2738,57 +2899,24 @@ def rent_pay(period):
     checking_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
     savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
 
-    # Calculate which coverage period this payment will apply to (pre-paid system)
-    coverage_month = due_date.month
-    coverage_year = due_date.year
-
-    # Get all existing payments that cover this period
-    all_payments = RentPayment.query.filter(
-        RentPayment.student_id == student.id,
-        RentPayment.period == period,
-        RentPayment.coverage_month == coverage_month,
-        RentPayment.coverage_year == coverage_year,
-        or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
-    ).all()
-
-    # Filter out payments where the corresponding transaction was voided
-    existing_payments = []
-    for payment in all_payments:
-        # Find the transaction for this payment
-        txn = Transaction.query.filter(
-            Transaction.student_id == student.id,
-            Transaction.type == 'Rent Payment',
-            or_(Transaction.join_code == join_code, Transaction.join_code.is_(None)),
-            Transaction.timestamp >= payment.payment_date - timedelta(seconds=5),
-            Transaction.timestamp <= payment.payment_date + timedelta(seconds=5),
-            Transaction.amount == -payment.amount_paid
-        ).first()
-
-        # Only include if transaction exists and is not voided
-        if txn and not txn.is_void:
-            existing_payments.append(payment)
-
-    total_paid_so_far = sum(p.amount_paid for p in existing_payments) if existing_payments else Decimal('0.00')
-
-    # Calculate if late and total amount due
-    due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
-    is_late = now > grace_end_date
-
-    # Calculate late fee if applicable
-    late_fee = Decimal('0.00')
-    if is_late:
-        late_fee = settings.late_fee
-
-    # Total amount due (rent + late fee if applicable)
-    total_due = settings.rent_amount + late_fee
-
-    # Calculate remaining amount to pay
-    remaining_amount = total_due - total_paid_so_far
-
-    # Check if already fully paid
-    if remaining_amount <= 0:
-        flash(f"You have already paid rent for Period {period} this month!", "info")
+    # Calculate ALL unpaid periods (back rent accumulation)
+    unpaid_periods = _calculate_unpaid_periods(student, settings, period, join_code, now)
+    
+    if not unpaid_periods:
+        flash(f"You have paid all rent for Period {period}!", "info")
         return redirect(url_for('student.rent'))
+    
+    # Sort unpaid periods by date (oldest first) - back rent is paid first
+    unpaid_periods.sort(key=lambda p: (p['coverage_year'], p['coverage_month']))
+    
+    # Calculate total amount owed across all periods
+    total_owed_all_periods = sum(p['amount_owed'] for p in unpaid_periods)
+    
+    # Determine which period this payment will apply to (oldest unpaid period)
+    target_period = unpaid_periods[0]
+    coverage_month = target_period['coverage_month']
+    coverage_year = target_period['coverage_year']
+    remaining_amount = target_period['amount_owed']
 
     # Get payment amount from form (supports incremental payments)
     payment_amount_input = request.form.get('amount', '').strip()
@@ -2802,9 +2930,10 @@ def rent_pay(period):
             if payment_amount <= Decimal('0'):
                 flash("Payment amount must be greater than 0.", "error")
                 return redirect(url_for('student.rent'))
-            if payment_amount > remaining_amount:
-                flash(f"Payment amount (${payment_amount:.2f}) exceeds remaining balance (${remaining_amount:.2f}). Paying exact remaining amount.", "info")
-                payment_amount = remaining_amount
+            # Allow payment of more than one period if they want
+            if payment_amount > total_owed_all_periods:
+                flash(f"Payment amount (${payment_amount:.2f}) exceeds total amount owed (${total_owed_all_periods:.2f}). Paying exact amount owed.", "info")
+                payment_amount = total_owed_all_periods
         except (ValueError, InvalidOperation):
             flash("Invalid payment amount.", "error")
             return redirect(url_for('student.rent'))
@@ -2851,17 +2980,61 @@ def rent_pay(period):
     if shortfall > 0:
         overdraft_shortfall = shortfall
 
-    # FIX: Process payment with teacher_id
-    # Deduct from checking account
-    is_partial = payment_amount < remaining_amount
-    payment_description = f'Rent for Period {period} - {now.strftime("%B %Y")}'
-    if is_partial and settings.allow_incremental_payment:
-        payment_description += f' (Partial: ${payment_amount:.2f} of ${remaining_amount:.2f})'
-    elif late_fee > Decimal('0'):
-        payment_description += f' (includes ${late_fee:.2f} late fee)'
-
-    projected_balance = Decimal(str(checking_balance)) - payment_amount
-
+    # Process payment - apply to oldest unpaid periods first (back rent)
+    # If payment amount is greater than one period, split across multiple periods
+    remaining_payment = payment_amount
+    periods_paid = []
+    
+    for unpaid_period in unpaid_periods:
+        if remaining_payment <= Decimal('0'):
+            break
+        
+        amount_for_period = min(remaining_payment, unpaid_period['amount_owed'])
+        period_coverage_month = unpaid_period['coverage_month']
+        period_coverage_year = unpaid_period['coverage_year']
+        is_period_late = unpaid_period['is_late']
+        period_late_fee = unpaid_period['late_fee']
+        
+        # Calculate late fee portion for this payment
+        late_fee_for_this_payment = Decimal('0.00')
+        if is_period_late and period_late_fee > Decimal('0.00'):
+            # Allocate late fee proportionally if partial payment
+            total_period_due = unpaid_period['amount_owed']
+            late_fee_for_this_payment = (amount_for_period / total_period_due) * period_late_fee
+        
+        # Record rent payment for this period
+        payment_record = RentPayment(
+            student_id=student.id,
+            period=period,
+            join_code=join_code,
+            amount_paid=amount_for_period,
+            period_month=current_month,  # When payment was made
+            period_year=current_year,    # When payment was made
+            coverage_month=period_coverage_month,  # Which month this payment covers
+            coverage_year=period_coverage_year,    # Which year this payment covers
+            was_late=is_period_late,
+            late_fee_charged=late_fee_for_this_payment
+        )
+        db.session.add(payment_record)
+        
+        periods_paid.append({
+            'month': period_coverage_month,
+            'year': period_coverage_year,
+            'amount': amount_for_period
+        })
+        
+        remaining_payment -= amount_for_period
+    
+    # Create transaction for the total payment
+    if len(periods_paid) == 1:
+        period_info = periods_paid[0]
+        payment_description = f'Rent for Period {period} - {datetime(period_info["year"], period_info["month"], 1).strftime("%B %Y")}'
+        if amount_for_period < unpaid_periods[0]['amount_owed']:
+            payment_description += f' (Partial: ${amount_for_period:.2f} of ${unpaid_periods[0]["amount_owed"]:.2f})'
+    else:
+        # Multiple periods paid
+        payment_description = f'Rent for Period {period} - Multiple periods'
+    
     transaction = Transaction(
         student_id=student.id,
         teacher_id=teacher_id,
@@ -2873,33 +3046,6 @@ def rent_pay(period):
     )
     student.transactions.append(transaction)
     db.session.add(transaction)
-
-    # Calculate late fee portion for this payment (proportional if partial payment)
-    late_fee_for_this_payment = Decimal('0.00')
-    if is_late and late_fee > Decimal('0.00'):
-        # If this is a partial payment, allocate late fee proportionally
-        if is_partial:
-            late_fee_for_this_payment = (payment_amount / total_due) * late_fee
-        else:
-            late_fee_for_this_payment = late_fee
-
-    # Record rent payment
-    # Calculate which period this payment covers (pre-paid system)
-    coverage_month, coverage_year = _calculate_coverage_period(settings, now)
-    
-    payment = RentPayment(
-        student_id=student.id,
-        period=period,
-        join_code=join_code,
-        amount_paid=payment_amount,
-        period_month=current_month,  # When payment was made
-        period_year=current_year,    # When payment was made
-        coverage_month=coverage_month,  # Which month this payment covers
-        coverage_year=coverage_year,    # Which year this payment covers
-        was_late=is_late,
-        late_fee_charged=late_fee_for_this_payment
-    )
-    db.session.add(payment)
 
     db.session.flush()  # Flush to update balances without committing yet
 
@@ -2933,18 +3079,18 @@ def rent_pay(period):
     # Commit all transactions together
     db.session.commit()
 
-    # Calculate new totals after this payment
-    new_total_paid = total_paid_so_far + payment_amount
-    new_remaining = total_due - new_total_paid
-
-    # Success message
-    if is_partial and settings.allow_incremental_payment:
-        if new_remaining > 0:
-            flash(f"Partial payment of ${payment_amount:.2f} successful! Remaining balance: ${new_remaining:.2f}", "success")
-        else:
-            flash(f"Final payment of ${payment_amount:.2f} successful! Rent for Period {period} is now fully paid.", "success")
+    # Success message based on what was paid
+    if len(periods_paid) == 1:
+        period_info = periods_paid[0]
+        period_name = datetime(period_info["year"], period_info["month"], 1).strftime("%B %Y")
+        flash(f"Rent payment of ${payment_amount:.2f} successful for {period_name}!", "success")
     else:
-        flash(f"Rent payment for Period {period} (${payment_amount:.2f}) successful!", "success")
+        # Multiple periods paid
+        periods_desc = ", ".join([
+            datetime(p["year"], p["month"], 1).strftime("%b %Y") 
+            for p in periods_paid
+        ])
+        flash(f"Rent payment of ${payment_amount:.2f} successful! Paid for: {periods_desc}", "success")
 
     return redirect(url_for('student.rent'))
 
