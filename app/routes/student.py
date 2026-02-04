@@ -1143,16 +1143,18 @@ def dashboard():
             rent_is_active = True
 
         rent_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
-        current_month = now.month
-        current_year = now.year
+
+        # Calculate coverage period for pre-paid system
+        coverage_month = due_date.month
+        coverage_year = due_date.year
 
         all_paid = True
         for period in rent_blocks:
             all_payments_for_period = RentPayment.query.filter_by(
                 student_id=student.id,
                 period=period,
-                period_month=current_month,
-                period_year=current_year
+                coverage_month=coverage_month,
+                coverage_year=coverage_year
             ).all()
 
             payments = []
@@ -2337,11 +2339,17 @@ def shop():
         rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
         if rent_settings and rent_settings.is_enabled:
             now = datetime.now(timezone.utc)
+
+            # Calculate current due date to determine coverage period (pre-paid system)
+            current_due_date, _ = _calculate_rent_deadlines(rent_settings, now)
+            coverage_month = current_due_date.month
+            coverage_year = current_due_date.year
+
             has_paid_rent = RentPayment.query.filter(
                 RentPayment.student_id == student.id,
                 RentPayment.period == current_block,
-                RentPayment.period_month == now.month,
-                RentPayment.period_year == now.year,
+                RentPayment.coverage_month == coverage_month,
+                RentPayment.coverage_year == coverage_year,
                 db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
             ).first() is not None
 
@@ -2479,6 +2487,22 @@ def _calculate_rent_deadlines(settings, reference_date=None):
     return due_date, grace_end_date
 
 
+def _calculate_coverage_period(settings, payment_date=None):
+    """
+    Calculate which month/year a rent payment covers based on when it's made.
+
+    For pre-paid system: paying rent on the due date covers from the day after
+    the due date until the next due date.  The coverage period is identified by
+    the due date's month/year so that lookups stay consistent.
+
+    Returns:
+        tuple: (coverage_month, coverage_year)
+    """
+    payment_date = payment_date or datetime.now()
+    current_due_date, _ = _calculate_rent_deadlines(settings, payment_date)
+    return current_due_date.month, current_due_date.year
+
+
 @student_bp.route('/rent')
 @login_required
 def rent():
@@ -2529,17 +2553,19 @@ def rent():
         is_preview_period = now < due_date
     elif now >= due_date:
         rent_is_active = True
-    current_month = now.month
-    current_year = now.year
+
+    # Calculate which coverage period we're checking for (pre-paid system)
+    coverage_month = due_date.month
+    coverage_year = due_date.year
 
     period_status = {}
 
-    # Get all payments for the current period this month (supports incremental payments)
+    # Get all payments that COVER the current period (pre-paid system)
     all_payments_for_period = RentPayment.query.filter(
         RentPayment.student_id == student.id,
         RentPayment.period == current_block,
-        RentPayment.period_month == current_month,
-        RentPayment.period_year == current_year,
+        RentPayment.coverage_month == coverage_month,
+        RentPayment.coverage_year == coverage_year,
         or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
     ).all()
 
@@ -2677,15 +2703,19 @@ def rent_pay(period):
     current_month = now.month
     current_year = now.year
 
+    # Calculate coverage period (pre-paid system)
+    coverage_month = due_date.month
+    coverage_year = due_date.year
+
     checking_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
     savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
 
-    # Get all existing payments for this period this month
+    # Get all existing payments that cover this period
     all_payments = RentPayment.query.filter(
         RentPayment.student_id == student.id,
         RentPayment.period == period,
-        RentPayment.period_month == current_month,
-        RentPayment.period_year == current_year,
+        RentPayment.coverage_month == coverage_month,
+        RentPayment.coverage_year == coverage_year,
         or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
     ).all()
 
@@ -2821,7 +2851,7 @@ def rent_pay(period):
         else:
             late_fee_for_this_payment = late_fee
 
-    # Record rent payment
+    # Record rent payment with coverage period (pre-paid system)
     payment = RentPayment(
         student_id=student.id,
         period=period,
@@ -2829,6 +2859,8 @@ def rent_pay(period):
         amount_paid=payment_amount,
         period_month=current_month,
         period_year=current_year,
+        coverage_month=coverage_month,
+        coverage_year=coverage_year,
         was_late=is_late,
         late_fee_charged=late_fee_for_this_payment
     )

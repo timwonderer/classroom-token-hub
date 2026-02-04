@@ -8,13 +8,24 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Added
+- **Pre-paid Rent Coverage Period Tracking** - Rent payments now explicitly track which period they cover
+  - Added `coverage_month` and `coverage_year` columns to `RentPayment` model
+  - Paying rent on the due date (e.g., 1/28) now covers the student from 1/29 to the next due date (2/28)
+  - All rent privilege checks, purchase blocking, dashboard status, and shop indicators use coverage-based lookups
+  - Itemized rent item purchases (`per_period` duration) follow the same coverage period
+  - **Migration**: `a1b2c3d4e5f6` adds columns with backfill from existing `period_month`/`period_year`
+
 ### Fixed
 - **Store Purchase Blocked After Rent Paid Across Month Boundary** - Fixed rent-check logic using wrong month/year when verifying rent payments
   - **Issue**: `purchase_item()` used `now.month`/`now.year` instead of `current_due.month`/`current_due.year` when querying `RentPayment`. When a rent due date fell in January but the purchase check ran in February (past the grace period), the query looked for February payments and found none, incorrectly blocking the student.
-  - **Solution**: Derive `due_month` and `due_year` from the calculated `current_due` date instead of the current wall-clock time
+  - **Solution**: All rent lookups now use `coverage_month`/`coverage_year` derived from the due date, not the wall-clock time
 - **Issue Ticket Filing Fails With "An error occurred"** - Fixed Decimal serialization error in issue context snapshots
   - **Issue**: `create_context_snapshot()` stored raw `Decimal` objects (balances, transaction amounts) in a dict destined for a `db.JSON` column. Python's `json` module cannot serialize `Decimal`, causing a `TypeError` caught by the generic exception handler.
   - **Solution**: Convert all `Decimal` values to `float` before storing in the context snapshot
+- **Duplicate Store Items When Applying Rent to All Periods** - Fixed `_sync_rent_items_to_store` creating duplicate store items
+  - **Issue**: When a teacher applied rent settings to multiple blocks, each block created its own store item copy instead of sharing one item with block visibility
+  - **Solution**: Look up existing store items by `teacher_id` + `name` before creating new ones; use `StoreItemBlock` to add block visibility without replacing existing associations
 
 ### Security
 - **Hardened Grafana Proxy XSS Protection** - Improved content-type filtering to prevent XSS attacks (#897)
