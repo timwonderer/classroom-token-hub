@@ -1774,14 +1774,32 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
 
         student_ids = [student.id for student in block_students]
 
-        # Batch rent payments for the month
+        # Calculate current coverage period (pre-paid system)
+        # Use the most recently PASSED due date so that payments made for
+        # period N are found even after the calendar month rolls over but
+        # before the next due date arrives.
+        from app.routes.student import _calculate_rent_deadlines
+        current_due_date, _ = _calculate_rent_deadlines(rent_settings, now)
+        if now < current_due_date:
+            prev_due, _ = _calculate_rent_deadlines(rent_settings, current_due_date - timedelta(days=1))
+            if prev_due < current_due_date:
+                coverage_month = prev_due.month
+                coverage_year = prev_due.year
+            else:
+                coverage_month = current_due_date.month
+                coverage_year = current_due_date.year
+        else:
+            coverage_month = current_due_date.month
+            coverage_year = current_due_date.year
+
+        # Batch rent payments for the current coverage period
         rent_payment_rows = (
             RentPayment.query
             .filter(
                 RentPayment.student_id.in_(student_ids),
                 RentPayment.period == block,
-                RentPayment.period_month == now.month,
-                RentPayment.period_year == now.year,
+                RentPayment.coverage_month == coverage_month,
+                RentPayment.coverage_year == coverage_year,
                 db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
             )
             .with_entities(RentPayment.student_id)
@@ -1837,7 +1855,11 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
 
 
 def _get_rent_privileges_for_student(student, teacher_id, join_code):
-    """Return rent privileges for a single student in the current class context."""
+    """Return rent privileges for a single student in the current class context.
+
+    Pre-paid system: Check if student has paid rent that COVERS the current period.
+    A payment made for January covers the student until the February due date.
+    """
     rent_privileges = []
     if not (teacher_id and join_code):
         return rent_privileges
@@ -1852,11 +1874,28 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
         return rent_privileges
 
     now = datetime.now(timezone.utc)
+
+    # Calculate current due date and determine which coverage period we're in.
+    # Use the most recently PASSED due date for correct coverage matching.
+    from app.routes.student import _calculate_rent_deadlines
+    current_due_date, _ = _calculate_rent_deadlines(rent_settings, now)
+    if now < current_due_date:
+        prev_due, _ = _calculate_rent_deadlines(rent_settings, current_due_date - timedelta(days=1))
+        if prev_due < current_due_date:
+            coverage_month = prev_due.month
+            coverage_year = prev_due.year
+        else:
+            coverage_month = current_due_date.month
+            coverage_year = current_due_date.year
+    else:
+        coverage_month = current_due_date.month
+        coverage_year = current_due_date.year
+
     has_paid_rent = RentPayment.query.filter(
         RentPayment.student_id == student.id,
         RentPayment.period == current_block,
-        RentPayment.period_month == now.month,
-        RentPayment.period_year == now.year,
+        RentPayment.coverage_month == coverage_month,
+        RentPayment.coverage_year == coverage_year,
         db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
     ).first() is not None
 
@@ -3323,6 +3362,9 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
     Sync rent items with store items.
     Creates or updates store items for rent items that are marked as available in store.
     Deactivates store items for rent items that are no longer available.
+
+    FIX: Prevents duplicate store items when applying rent settings to all periods.
+    Store items are now shared across blocks using StoreItemBlock for visibility.
     """
     from app.models import RentItem, StoreItem, StoreItemBlock
 
@@ -3338,23 +3380,39 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                 limit = None  # Unlimited purchases
                 duration_note = "Purchase each time you need to use it."
 
-            # Create or update store item
+            base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
+            description = f"{base_desc}\n\n{duration_note}"
+
+            store_item = None
+
+            # Check if this rent_item already has a store_item_id
             if rent_item.store_item_id:
-                # Update existing store item
                 store_item = StoreItem.query.get(rent_item.store_item_id)
-                if store_item:
-                    store_item.name = rent_item.name
-                    base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
-                    store_item.description = f"{base_desc}\n\n{duration_note}"
-                    store_item.price = rent_item.store_price
-                    store_item.limit_per_student = limit
-                    store_item.is_active = True
-                    if block:
-                        store_item.set_blocks([block])
+
+            # If no store_item yet, check if a rent-linked one exists for this teacher+name.
+            # Only consider store items already linked to a RentItem to avoid
+            # overwriting unrelated non-rent store items with the same name.
+            if not store_item:
+                store_item = StoreItem.query.join(
+                    RentItem, RentItem.store_item_id == StoreItem.id
+                ).filter(
+                    StoreItem.teacher_id == teacher_id,
+                    StoreItem.name == rent_item.name
+                ).first()
+
+            if store_item:
+                # Update existing store item
+                store_item.name = rent_item.name
+                store_item.description = description
+                store_item.price = rent_item.store_price
+                store_item.limit_per_student = limit
+                store_item.is_active = True
+
+                # Link this rent_item to the store_item if not already linked
+                if not rent_item.store_item_id:
+                    rent_item.store_item_id = store_item.id
             else:
-                # Create new store item
-                base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
-                description = f"{base_desc}\n\n{duration_note}"
+                # Create new store item only if it doesn't exist
                 store_item = StoreItem(
                     teacher_id=teacher_id,
                     name=rent_item.name,
@@ -3370,16 +3428,35 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                 # Link the rent item to this store item
                 rent_item.store_item_id = store_item.id
 
-                # Set block visibility to match the rent setting's block
-                if block:
+            # Ensure block visibility is set (don't replace, add to existing)
+            if block:
+                existing_block = StoreItemBlock.query.filter_by(
+                    store_item_id=store_item.id,
+                    block=block
+                ).first()
+
+                if not existing_block:
                     store_item_block = StoreItemBlock(store_item_id=store_item.id, block=block)
                     db.session.add(store_item_block)
 
         elif rent_item.store_item_id:
-            # Deactivate store item if it exists but is no longer available
+            # Remove this block's visibility for the store item
             store_item = StoreItem.query.get(rent_item.store_item_id)
-            if store_item:
-                store_item.is_active = False
+            if store_item and block:
+                StoreItemBlock.query.filter_by(
+                    store_item_id=store_item.id,
+                    block=block
+                ).delete()
+
+                # Only deactivate the shared StoreItem if no other RentItem
+                # references it (i.e., it's not used by any other block)
+                other_refs = RentItem.query.filter(
+                    RentItem.store_item_id == store_item.id,
+                    RentItem.id != rent_item.id,
+                    RentItem.is_available_in_store == True
+                ).count()
+                if other_refs == 0:
+                    store_item.is_active = False
 
     db.session.commit()
 
@@ -3744,11 +3821,27 @@ def rent_settings():
             .subquery()
         )
 
-        # Fetch all payments for this period
+        # Calculate coverage period for pre-paid system.
+        # Use the most recently PASSED due date for correct coverage matching.
+        from app.routes.student import _calculate_rent_deadlines
+        coverage_due_date, _ = _calculate_rent_deadlines(settings, now_local)
+        if now_local < coverage_due_date:
+            prev_due, _ = _calculate_rent_deadlines(settings, coverage_due_date - timedelta(days=1))
+            if prev_due < coverage_due_date:
+                coverage_month = prev_due.month
+                coverage_year = prev_due.year
+            else:
+                coverage_month = coverage_due_date.month
+                coverage_year = coverage_due_date.year
+        else:
+            coverage_month = coverage_due_date.month
+            coverage_year = coverage_due_date.year
+
+        # Fetch all payments that cover the current period
         period_payments = (
             RentPayment.query
             .filter(RentPayment.student_id.in_(rent_enabled_student_ids_subq))
-            .filter_by(period_month=current_month, period_year=current_year)
+            .filter_by(coverage_month=coverage_month, coverage_year=coverage_year)
             .all()
         )
 
@@ -3757,8 +3850,8 @@ def rent_settings():
         for p in period_payments:
             payments_map[p.student_id] += Decimal(str(p.amount_paid))
 
-        # Use helper function to calculate base rent amount
-        base_rent_amount = _calculate_base_rent_amount(settings, current_year, current_month)
+        # Use helper function to calculate base rent amount for the coverage period
+        base_rent_amount = _calculate_base_rent_amount(settings, coverage_year, coverage_month)
 
         # Build unpaid list
         for student in rent_enabled_students:

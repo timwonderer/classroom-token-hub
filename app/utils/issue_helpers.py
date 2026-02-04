@@ -6,6 +6,7 @@ proper data minimization for sysadmin review.
 """
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from flask import request
 import hashlib
 import secrets
@@ -52,12 +53,13 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
     }
 
     # Get current balances (scoped by join_code)
+    # Convert Decimal to float for JSON serialization (db.JSON column)
     checking_balance = student.get_checking_balance(join_code=join_code)
     savings_balance = student.get_savings_balance(join_code=join_code)
     snapshot['balances'] = {
-        'checking': checking_balance,
-        'savings': savings_balance,
-        'total': checking_balance + savings_balance
+        'checking': float(checking_balance),
+        'savings': float(savings_balance),
+        'total': float(checking_balance + savings_balance)
     }
 
     # If transaction-specific, include transaction details
@@ -66,7 +68,7 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
         if transaction:
             snapshot['transaction'] = {
                 'id': transaction.id,
-                'amount': transaction.amount,
+                'amount': float(transaction.amount),
                 'account_type': transaction.account_type,
                 'description': transaction.description,
                 'type': transaction.type,
@@ -83,7 +85,7 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
     snapshot['recent_transactions'] = [
         {
             'id': t.id,
-            'amount': t.amount,
+            'amount': float(t.amount),
             'description': t.description,
             'timestamp': t.timestamp.isoformat() if t.timestamp else None
         }

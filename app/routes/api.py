@@ -217,23 +217,26 @@ def purchase_item():
     if rent_settings and rent_settings.is_enabled and rent_settings.prevent_purchase_when_late:
         # Check if student is late on rent
         now = datetime.now(timezone.utc)
-        current_month = now.month
-        current_year = now.year
 
         current_due, next_due = _calculate_due_dates(rent_settings, now)
 
         if current_due:
             grace_end_date = current_due + timedelta(days=rent_settings.grace_period_days)
 
+            # Pre-paid system: use the due date's month/year as the
+            # coverage period so we match payments that COVER this cycle.
+            coverage_month = current_due.month
+            coverage_year = current_due.year
+
             # Check if past grace period
             if now > grace_end_date:
-                # Check if rent is paid for current period
+                # Check if rent is paid for current coverage period
                 current_block = context.get('block', '').strip().upper()
                 total_paid = db.session.query(db.func.sum(RentPayment.amount_paid)).filter(
                     RentPayment.student_id == student.id,
                     RentPayment.period == current_block,
-                    RentPayment.period_month == current_month,
-                    RentPayment.period_year == current_year,
+                    RentPayment.coverage_month == coverage_month,
+                    RentPayment.coverage_year == coverage_year,
                     db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
                 ).scalar() or 0
 
