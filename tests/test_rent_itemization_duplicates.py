@@ -47,27 +47,28 @@ def setup_teacher_and_blocks(app):
         db.session.add(teacher)
         db.session.flush()
         
+        # Store the teacher ID
+        teacher_id = teacher.id
+        
         # Create rent settings for 3 blocks (A, B, C)
         blocks = ['A', 'B', 'C']
-        rent_settings_list = []
         
         for block in blocks:
             rent_setting = RentSettings(
-                teacher_id=teacher.id,
+                teacher_id=teacher_id,
                 block=block,
                 is_enabled=True,
                 rent_amount=Decimal('50.00'),
                 frequency_type='monthly'
             )
             db.session.add(rent_setting)
-            rent_settings_list.append(rent_setting)
         
         db.session.commit()
         
+        # Return IDs, not objects
         return {
-            'teacher': teacher,
-            'blocks': blocks,
-            'rent_settings': rent_settings_list
+            'teacher_id': teacher_id,
+            'blocks': blocks
         }
 
 
@@ -75,7 +76,7 @@ def test_no_duplicate_store_items_when_applying_to_all_blocks(app, setup_teacher
     """Test that applying rent items to all blocks creates only ONE store item per item."""
     with app.app_context():
         data = setup_teacher_and_blocks
-        teacher = Admin.query.get(data['teacher'].id)
+        teacher_id = data['teacher_id']
         blocks = data['blocks']
         
         # Create 2 rent items for each block (simulating "apply to all")
@@ -83,7 +84,7 @@ def test_no_duplicate_store_items_when_applying_to_all_blocks(app, setup_teacher
         
         for block in blocks:
             rent_setting = RentSettings.query.filter_by(
-                teacher_id=teacher.id,
+                teacher_id=teacher_id,
                 block=block
             ).first()
             
@@ -105,13 +106,13 @@ def test_no_duplicate_store_items_when_applying_to_all_blocks(app, setup_teacher
         
         for block in blocks:
             rent_setting = RentSettings.query.filter_by(
-                teacher_id=teacher.id,
+                teacher_id=teacher_id,
                 block=block
             ).first()
-            _sync_rent_items_to_store(rent_setting, teacher.id, block)
+            _sync_rent_items_to_store(rent_setting, teacher_id, block)
         
         # Check how many store items were created
-        store_items = StoreItem.query.filter_by(teacher_id=teacher.id).all()
+        store_items = StoreItem.query.filter_by(teacher_id=teacher_id).all()
         
         # Should only have 2 store items (Desk and Chair), not 6 (2 × 3 blocks)
         assert len(store_items) == 2, f"Expected 2 store items, got {len(store_items)}"
@@ -135,13 +136,13 @@ def test_all_rent_items_linked_to_same_store_item(app, setup_teacher_and_blocks)
     """Test that all RentItems with same name are linked to the same StoreItem."""
     with app.app_context():
         data = setup_teacher_and_blocks
-        teacher = Admin.query.get(data['teacher'].id)
+        teacher_id = data['teacher_id']
         blocks = data['blocks']
         
         # Create rent item named "Desk" for each block
         for block in blocks:
             rent_setting = RentSettings.query.filter_by(
-                teacher_id=teacher.id,
+                teacher_id=teacher_id,
                 block=block
             ).first()
             
@@ -162,16 +163,16 @@ def test_all_rent_items_linked_to_same_store_item(app, setup_teacher_and_blocks)
         
         for block in blocks:
             rent_setting = RentSettings.query.filter_by(
-                teacher_id=teacher.id,
+                teacher_id=teacher_id,
                 block=block
             ).first()
-            _sync_rent_items_to_store(rent_setting, teacher.id, block)
+            _sync_rent_items_to_store(rent_setting, teacher_id, block)
         
         # Get all rent items named "Desk"
         desk_rent_items = RentItem.query.join(
             RentSettings, RentItem.rent_setting_id == RentSettings.id
         ).filter(
-            RentSettings.teacher_id == teacher.id,
+            RentSettings.teacher_id == teacher_id,
             RentItem.name == 'Desk'
         ).all()
         
@@ -192,14 +193,14 @@ def test_store_item_visible_to_correct_blocks(app, setup_teacher_and_blocks):
     """Test that store items are visible to the correct blocks only."""
     with app.app_context():
         data = setup_teacher_and_blocks
-        teacher = Admin.query.get(data['teacher'].id)
+        teacher_id = data['teacher_id']
         
         # Create rent item for blocks A and B only (not C)
         blocks_with_item = ['A', 'B']
         
         for block in blocks_with_item:
             rent_setting = RentSettings.query.filter_by(
-                teacher_id=teacher.id,
+                teacher_id=teacher_id,
                 block=block
             ).first()
             
@@ -220,14 +221,14 @@ def test_store_item_visible_to_correct_blocks(app, setup_teacher_and_blocks):
         
         for block in blocks_with_item:
             rent_setting = RentSettings.query.filter_by(
-                teacher_id=teacher.id,
+                teacher_id=teacher_id,
                 block=block
             ).first()
-            _sync_rent_items_to_store(rent_setting, teacher.id, block)
+            _sync_rent_items_to_store(rent_setting, teacher_id, block)
         
         # Find the store item
         store_item = StoreItem.query.filter_by(
-            teacher_id=teacher.id,
+            teacher_id=teacher_id,
             name='Special Item'
         ).first()
         
