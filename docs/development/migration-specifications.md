@@ -132,12 +132,15 @@ def upgrade():
     # 1. Add nullable
     if not column_exists('student', 'email'):
         op.add_column('student', sa.Column('email', sa.String(255), nullable=True))
-    
+
     # 2. Backfill
-    op.execute("UPDATE student SET email = 'default@example.com' WHERE email IS NULL")
-    
-    # 3. Make required
-    op.alter_column('student', 'email', nullable=False)
+    if column_exists('student', 'email'):
+        op.execute(
+            "UPDATE student SET email = 'default@example.com' WHERE email IS NULL"
+        )
+
+        # 3. Make required
+        op.alter_column('student', 'email', nullable=False)
 ```
 
 #### 2. Renaming a Column
@@ -220,8 +223,8 @@ for fk in inspector.get_foreign_keys('students'):
     - Verify `down_revision`
     - **Add Idempotency Helpers**
     - Wrap `op` calls in existence checks
-6.  **Lint:** `python scripts/lint_migrations.py`
-7.  **Test:** `flask db upgrade` → `flask db downgrade` → `flask db upgrade`
+6.  **Lint (required):** `python scripts/lint_migrations.py`
+7.  **Validate & Test:** `python scripts/validate-migrations.py` → `flask db upgrade` → `flask db downgrade` → `flask db upgrade`
 8.  **Commit:** Git allowlist model and migration files
 
 ### Fixing "Multiple Heads"

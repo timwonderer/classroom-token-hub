@@ -25,7 +25,7 @@ depends_on = ${repr(depends_on)}
 # 2. Previous migration runs may have partially completed before failing
 # 3. The same migration may exist in multiple branches that get merged
 #
-# Reference: docs/development/MIGRATION_BEST_PRACTICES.md
+# Reference: docs/development/migration-specifications.md
 # ============================================================================
 
 def table_exists(table_name):

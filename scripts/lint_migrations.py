@@ -133,8 +133,7 @@ def find_unsafe_operations(content: str, filepath: Path) -> List[Dict]:
         for match in matches:
             line_num = content[:match.start()].count('\n') + 1
 
-            # Check if there's a safety check nearby (within 10 lines before)
-            lines_before = 10
+            # Check if there's a safety check nearby (within 200 characters before)
             context_start = max(0, content.rfind('\n', 0, match.start() - 200))
             context = content[context_start:match.start()]
 
@@ -185,6 +184,21 @@ def lint_migration(filepath: Path, verbose: bool = False) -> Tuple[List[Dict], L
             print(f"⏭️  Skipping {filepath.name} (not a migration file)")
         return errors, warnings
 
+    # Check for required helper functions
+    missing_helpers = []
+    for helper_name, description in REQUIRED_HELPERS.items():
+        if not has_helper_function(content, helper_name):
+            missing_helpers.append({
+                'line': 1,
+                'message': f'Missing required helper function: {helper_name}',
+                'severity': 'WARNING',
+                'fix': f'Add {helper_name} helper from migrations/migration_template.py.mako',
+                'description': description
+            })
+
+    if missing_helpers:
+        warnings.extend(missing_helpers)
+
     # Find unsafe operations
     unsafe_ops = find_unsafe_operations(content, filepath)
 
@@ -217,7 +231,7 @@ Examples:
   %(prog)s --report                           # Show summary report
 
 For more information, see:
-  - docs/development/MIGRATION_BEST_PRACTICES.md
+  - docs/development/migration-specifications.md
   - MIGRATION_COMPLIANCE_REVIEW.md
         """
     )
@@ -321,7 +335,7 @@ For more information, see:
         print("\nTo fix these issues:")
         print("  1. Add idempotency helpers from migrations/migration_template.py.mako")
         print("  2. Wrap CREATE operations in existence checks")
-        print("  3. See MIGRATION_BEST_PRACTICES.md for examples")
+        print("  3. See docs/development/migration-specifications.md for examples")
         print("\nOr see MIGRATION_COMPLIANCE_REVIEW.md for full audit report")
         sys.exit(1)
     elif total_warnings > 0:

@@ -12,9 +12,7 @@
 A comprehensive audit of all 107 migration files revealed **significant compliance violations** with the project's migration idempotency and safety requirements as documented in:
 
 - `.claude/rules/database-migrations.md`
-- `docs/development/MIGRATION_BEST_PRACTICES.md`
-- `docs/development/SCHEMA_CHANGE_MD.md`
-- `docs/development/SCHEMA_CONTRACTION_AND_DESTRUCTIVE_MIGRATION_POLICY.md`
+- `docs/development/migration-specifications.md` (replaces previous `MIGRATION_BEST_PRACTICES.md`, `SCHEMA_CHANGE_MD.md`, and `SCHEMA_CONTRACTION_AND_DESTRUCTIVE_MIGRATION_POLICY.md`)
 
 ### Key Findings
 
@@ -27,7 +25,7 @@ A comprehensive audit of all 107 migration files revealed **significant complian
 
 **CRITICAL RISK:** If the database state becomes out of sync with migration history (common scenarios: hotfix scripts, manual schema changes, failed migrations), **30+ migrations will fail** when attempting to re-run `flask db upgrade`.
 
-This violates the core principle from `MIGRATION_BEST_PRACTICES.md`:
+This violates the core principle from `docs/development/migration-specifications.md`:
 
 > **Idempotent migrations** can be run multiple times without causing errors or data corruption. This is critical because:
 > 1. Schema changes may have been applied manually in production to fix urgent issues
@@ -104,7 +102,7 @@ This is the **exact error** that the project documentation references as a real-
 
 ### MAJOR Issues (Violate Best Practices)
 
-#### 6. Hardcoded Constraint Names (Violates Section 3.1 of SCHEMA_CONTRACTION_AND_DESTRUCTIVE_MIGRATION_POLICY.md)
+#### 6. Hardcoded Constraint Names (Violates Section 3.1 of migration-specifications.md)
 
 > **Policy Violation:**
 > "Rule: Migrations MUST NOT assume constraint names... Hardcoded names are a known cause of production migration failure."
@@ -241,7 +239,7 @@ The "Golden Rules" state:
 5. ✅ NEVER skip migrations
    - **Status:** COMPLIANT (each schema change has a migration)
 
-### ❌ Violations of `docs/development/MIGRATION_BEST_PRACTICES.md`
+### ❌ Violations of `docs/development/migration-specifications.md`
 
 Section: "Core Principle: Migrations Must Be Idempotent"
 
@@ -267,7 +265,7 @@ Checklist items:
 - ❌ Migrations are idempotent where feasible
   - **Status:** VIOLATED (40+ non-idempotent migrations)
 
-### ⚠️ Partial Compliance with `SCHEMA_CONTRACTION_AND_DESTRUCTIVE_MIGRATION_POLICY.md`
+### ⚠️ Partial Compliance with `docs/development/migration-specifications.md` (Schema Contraction Policy)
 
 Section 3.1: "Constraint Name Agnosticism"
 
@@ -538,7 +536,7 @@ def main():
 
     if total_errors > 0:
         print("\n❌ Migration linting FAILED")
-        print("See MIGRATION_BEST_PRACTICES.md for guidance")
+        print("See docs/development/migration-specifications.md for guidance")
         sys.exit(1)
     else:
         print("\n✅ All migrations passed linting")
@@ -621,7 +619,7 @@ def test_migration_idempotency():
 
 #### 7. Documentation Updates
 
-Add section to `MIGRATION_BEST_PRACTICES.md`:
+Add section to `docs/development/migration-specifications.md`:
 
 ```markdown
 ## Pre-Merge Checklist
@@ -686,9 +684,7 @@ However, the **comprehensive audit** revealed:
 | Policy Document | Compliance Status |
 |-----------------|-------------------|
 | `.claude/rules/database-migrations.md` | ⚠️ Partial (4/5 rules) |
-| `MIGRATION_BEST_PRACTICES.md` | ❌ Non-Compliant (idempotency) |
-| `SCHEMA_CHANGE_MD.md` | ❌ Non-Compliant (3/3 checks fail) |
-| `SCHEMA_CONTRACTION_AND_DESTRUCTIVE_MIGRATION_POLICY.md` | ⚠️ Partial (constraint names) |
+| `docs/development/migration-specifications.md` | ❌ Non-Compliant (idempotency) |
 
 ### Recommendations
 
