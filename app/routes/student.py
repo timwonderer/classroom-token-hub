@@ -1283,7 +1283,6 @@ def dashboard():
     # Get active announcements for this student
     # Include: class-specific, system-wide, all students, and teacher's all classes
     from app.models import Announcement
-    from sqlalchemy import or_
 
     announcements = Announcement.query.filter(
         Announcement.is_active.is_(True),
