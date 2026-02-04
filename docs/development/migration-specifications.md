@@ -12,9 +12,9 @@
 3.  **NEVER edit old migrations after they're merged to main.**
 4.  **ALWAYS review auto-generated migrations** before committing.
 5.  **NEVER skip migrations** - each schema change needs its own migration.
-6.  **ALWAYS include idempotency helpers** in every migration.
-7.  **NEVER use hardcoded constraint names** - discover dynamically.
-8.  **ALWAYS check existence before CREATE operations.**
+6.  **ALWAYS include idempotency helpers** in every migration (`table_exists`, `column_exists`, etc.).
+7.  **NEVER use hardcoded constraint names** - discover dynamically via inspection.
+8.  **ALWAYS check existence before CREATE operations** (tables, columns, indexes, foreign keys).
 
 ---
 
@@ -27,106 +27,181 @@
 2.  Previous migration runs may have partially completed before failing.
 3.  The same migration may exist in multiple branches that get merged.
 
-### Required Idempotency Checks
+### Required Idempotency Helpers
 
-#### 1. Check if Columns Exist Before Adding
+Every migration MUST include these helper functions to enable safe existence checks:
+
 ```python
+def table_exists(table_name):
+    """Check if a table exists."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
+
 def column_exists(table_name, column_name):
     """Check if a column exists in a table."""
     conn = op.get_bind()
     inspector = sa.inspect(conn)
-    columns = [col['name'] for col in inspector.get_columns(table_name)]
-    return column_name in columns
+    try:
+        columns = [col['name'] for col in inspector.get_columns(table_name)]
+        return column_name in columns
+    except Exception:
+        return False
 
-def upgrade():
-    if not column_exists('table_name', 'column_name'):
-        with op.batch_alter_table('table_name', schema=None) as batch_op:
-            batch_op.add_column(sa.Column('column_name', sa.Integer(), nullable=True))
-        print("✅ Added column_name to table_name")
-    else:
-        print("⚠️ Column 'column_name' already exists, skipping...")
-```
-
-#### 2. Check if Foreign Keys Exist Before Creating
-```python
-def foreign_key_exists(table_name, fk_name):
-    """Check if a foreign key constraint exists on a table."""
-    conn = op.get_bind()
-    inspector = sa.inspect(conn)
-    foreign_keys = [fk['name'] for fk in inspector.get_foreign_keys(table_name)]
-    return fk_name in foreign_keys
-```
-
-#### 3. Check if Indexes Exist Before Creating
-```python
 def index_exists(table_name, index_name):
     """Check if an index exists on a table."""
     conn = op.get_bind()
     inspector = sa.inspect(conn)
-    indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
-    return index_name in indexes
+    try:
+        indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
+        return index_name in indexes
+    except Exception:
+        return False
+
+def foreign_key_exists(table_name, fk_name):
+    """Check if a foreign key exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        fks = [fk['name'] for fk in inspector.get_foreign_keys(table_name)]
+        return fk_name in fks
+    except Exception:
+        return False
+
+def get_foreign_keys_by_column(table_name, column_name):
+    """Get FKs for a column (for downgrade without hardcoded names)."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        return [
+            fk for fk in inspector.get_foreign_keys(table_name)
+            if column_name in fk['constrained_columns']
+        ]
+    except Exception:
+        return []
 ```
 
-#### 4. Downgrade Safety
-Downgrade functions must also be idempotent:
+### Usage Patterns
+
+#### Upgrade Safety
+```python
+def upgrade():
+    # IDEMPOTENT - Safe to run multiple times
+    if not column_exists('student', 'email'):
+        op.add_column('student', sa.Column('email', sa.String(length=255), nullable=True))
+        print("✅ Added email column to student")
+    else:
+        print("⚠️  Column 'email' already exists on 'student', skipping...")
+```
+
+#### Downgrade Safety
 ```python
 def downgrade():
-    if column_exists('table_name', 'column_name'):
-        with op.batch_alter_table('table_name', schema=None) as batch_op:
-            batch_op.drop_column('column_name')
+    # Check before dropping
+    if column_exists('student', 'email'):
+        op.drop_column('student', 'email')
+        print("❌ Dropped email column from student")
+    else:
+        print("⚠️  Column 'email' does not exist on 'student', skipping...")
 ```
 
 ---
 
-## 3. Schema Change Policy
+## 3. Implementation Guidelines
+
+### Migration Naming Conventions
+Use descriptive names that clearly state changes:
+
+- **Add Column:** `flask db migrate -m "Add join_code to Transaction table"`
+- **Create Table:** `flask db migrate -m "Create RecoveryRequest table"`
+- **Remove Column:** `flask db migrate -m "Remove deprecated field from StoreItem"`
+- **Renaming:** `flask db migrate -m "Rename student_id to user_id in Transaction"`
+- **Relationship:** `flask db migrate -m "Add foreign key between Student and Teacher"`
+
+### Common Scenarios
+
+#### 1. Adding a Required Field to Existing Table
+**Problem:** Cannot add `nullable=False` to a table with existing data.
+**Solution:**
+1.  Add column as `nullable=True`.
+2.  Backfill data (UPDATE).
+3.  Alter column to `nullable=False`.
+
+```python
+def upgrade():
+    # 1. Add nullable
+    if not column_exists('student', 'email'):
+        op.add_column('student', sa.Column('email', sa.String(255), nullable=True))
+    
+    # 2. Backfill
+    op.execute("UPDATE student SET email = 'default@example.com' WHERE email IS NULL")
+    
+    # 3. Make required
+    op.alter_column('student', 'email', nullable=False)
+```
+
+#### 2. Renaming a Column
+```python
+def upgrade():
+    op.alter_column('transaction', 'student_id', new_column_name='user_id')
+
+def downgrade():
+    op.alter_column('transaction', 'user_id', new_column_name='student_id')
+```
+
+#### 3. Data Migration
+When transforming existing data:
+```python
+def upgrade():
+    op.add_column('student', sa.Column('full_name', sa.String(255)))
+    
+    connection = op.get_bind()
+    connection.execute("""
+        UPDATE student
+        SET full_name = first_name || ' ' || last_initial
+    """)
+```
+
+---
+
+## 4. Policy Standards
 
 ### Schema Change Gate
-This gate is **PR‑blocking by design**. A schema-affecting PR that does not explicitly pass this gate **MUST NOT** be merged.
+This gate is **PR‑blocking**.
 
 **Applies when:**
-- Dropping or renaming a column/table.
-- Removing or changing foreign keys.
-- Replacing relations with association tables.
-- Removing model attributes mapping to columns.
+- Dropping/Renaming columns or tables
+- Removing/Changing Foreign Keys
+- Replacing relations
 
-### PR Classification (Required in PR Description)
-- [ ] **EXPAND** – Additive, backward-compatible (no removals).
-- [ ] **CONTRACT (CODE ONLY)** – Model attribute removal, DB schema unchanged.
-- [ ] **CONTRACT (DATABASE)** – Destructive migration only.
+**PR Classification:**
+- [ ] **EXPAND** – Additive, backward-compatible
+- [ ] **CONTRACT (CODE ONLY)** – Model attribute removal
+- [ ] **CONTRACT (DATABASE)** – Destructive migration
 
-### Schema Contraction & Destructive Migration Policy
+### Schema Contraction Policy ("Expand and Contract")
 
-> [!WARNING]
-> Schema deletion is not a refactor. It is a **high-risk operational change**.
+**Phase 1: Expand (Release N)**
+- New elements exist alongside legacy.
+- Application supports both.
+- NO destructive migrations.
 
-All destructive schema changes MUST follow the **Expand and Contract** pattern over three releases:
+**Phase 2: Contract Code (Release N+1)**
+- Legacy removed from Code models.
+- DB column remains.
+- Application operates without legacy.
 
-1.  **Phase 1: Expand (Release N)**
-    - New schema elements exist alongside legacy ones.
-    - Application supports both or migrates to new.
-    - Legacy elements remain present and populated.
-    - **NO destructive migrations.**
-
-2.  **Phase 2: Contract Code (Release N+1)**
-    - Legacy attribute/column removed from Code models.
-    - DB column remains physically present.
-    - Application operates fully without legacy attribute.
-    - Hidden usage must fail loudly.
-
-3.  **Phase 3: Contract Database (Release N+2)**
-    - Migration drops the legacy column/table.
-    - Usage: `flask db migrate -m "Contract: drop legacy column"`
-    - Must be a dedicated, isolated migration.
+**Phase 3: Contract Database (Release N+2)**
+- Migration drops legacy column/table.
+- Isolated migration.
 
 ### Constraint Name Agnosticism
-**Rule:** Migrations MUST NOT assume constraint names. They vary across environments.
-
-**Correct Pattern:**
+**Rule:** NEVER use hardcoded constraint names.
+**Pattern:**
 ```python
 from sqlalchemy import inspect
 bind = op.get_bind()
 inspector = inspect(bind)
-
 for fk in inspector.get_foreign_keys('students'):
     if fk['referred_table'] == 'admins':
         op.drop_constraint(fk['name'], 'students', type_='foreignkey')
@@ -134,65 +209,45 @@ for fk in inspector.get_foreign_keys('students'):
 
 ---
 
-## 4. Migration Workflow Guide
+## 5. Workflows
 
-### Complete Workflow
+### Standard Cycle
+1.  **Sync:** `git fetch origin main && git merge origin/main`
+2.  **Verify Head:** `flask db heads` (Must be 1)
+3.  **Code:** Modify `app/models.py`
+4.  **Generate:** `flask db migrate -m "Description"`
+5.  **Review & Guard:**
+    - Verify `down_revision`
+    - **Add Idempotency Helpers**
+    - Wrap `op` calls in existence checks
+6.  **Lint:** `python scripts/validate-migrations.py`
+7.  **Test:** `flask db upgrade` → `flask db downgrade` → `flask db upgrade`
+8.  **Commit:** Git allowlist model and migration files
 
-1.  **Sync with Main**:
-    ```bash
-    git fetch origin main && git merge origin/main
-    ```
-2.  **Verify Single Head**:
-    ```bash
-    flask db heads  # Must show exactly 1 head
-    ```
-3.  **Modify Model**: Edit `app/models.py`.
-4.  **Generate Migration**:
-    ```bash
-    flask db migrate -m "Description of change"
-    ```
-5.  **Review Migration File**:
-    - Check `down_revision` matches previous head.
-    - **Add Idempotency Helpers** (copied from template or examples above).
-    - ensure `upgrade()` and `downgrade()` use existence checks.
-6.  **Test Locally**:
-    ```bash
-    flask db upgrade
-    flask db downgrade
-    flask db upgrade
-    ```
-7.  **Run Tests**: `pytest tests/`
+### Fixing "Multiple Heads"
+1.  `flask db merge heads -m "Merge migration heads"`
+2.  Review generated merge file.
+3.  `flask db upgrade`
+4.  Test and commit.
 
-### Branch Consolidation & Multiple Heads
-If you see "multiple heads" (e.g., from merging feature branches):
-1.  **Merge Heads**:
-    ```bash
-    flask db merge heads -m "Merge migration heads"
-    ```
-2.  **Verify**: Ensure the merge migration handles any overlapping changes idempotently.
-
-### Production Deployment Checklist
-- [ ] All migrations tested locally (upgrade + downgrade).
-- [ ] Migration rehearsed on staging/production-like clone.
-- [ ] Backup plan ready.
-- [ ] Downtime scheduled if needed (for large data migrations).
+### Deployment Checklist
+- [ ] Migrations tested locally (upgrade + downgrade)
+- [ ] Idempotency verified
+- [ ] Staging rehearsal complete
+- [ ] Backup plan ready
 
 ---
 
-## 5. Deprecation Standards
+## 6. Deprecation Standards
 
-### Deprecated Symbols Registry
-The authoritative list lives in `docs/development/DEPRECATED_SYMBOLS.txt`. Use this to track symbols prohibited from application code.
+**Registry:** `docs/development/DEPRECATED_SYMBOLS.txt`
 
-### common Deprecated Patterns
-
-1.  **`datetime.utcnow()`**: Deprecated.
-    - **Use**: `datetime.now(datetime.UTC)` (Python 3.12+ style) or timezone-aware objects.
-2.  **`Query.get()`**: Deprecated in SQLAlchemy 2.0+.
-    - **Use**: `db.session.get(Model, id)`.
+**Deprecated Patterns:**
+- `datetime.utcnow()` → `datetime.now(datetime.UTC)`
+- `Query.get()` → `db.session.get(Model, id)`
 
 ---
 
-## 6. Resources
+## 7. Resources
 - [Alembic Documentation](https://alembic.sqlalchemy.org/)
 - [SQLAlchemy Inspector API](https://docs.sqlalchemy.org/en/20/core/reflection.html)
