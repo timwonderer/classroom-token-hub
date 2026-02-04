@@ -2970,7 +2970,7 @@ def login():
         next_url = request.args.get('next')
         if not is_safe_url(next_url):
             return redirect(url_for('student.dashboard'))
-        return redirect(next_url or url_for('student.dashboard'))
+        return redirect(next_url or url_for('student.dashboard'))  # nosec # Safe: validated by is_safe_url()
 
     # Always display CTA to claim/create account for first-time users
     setup_cta = True

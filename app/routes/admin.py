@@ -2570,7 +2570,8 @@ def bulk_delete_students():
         })
     except Exception as e:
         db.session.rollback()
-        return jsonify({"status": "error", "message": str(e)}), 500
+        current_app.logger.error(f"Error deleting students: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": "An error occurred while deleting students. Please try again."}), 500
 
 
 @admin_bp.route('/students/delete-block', methods=['POST'])
@@ -2643,7 +2644,7 @@ def delete_block():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting block {block}: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": "An error occurred while deleting the block. Please try again."}), 500
 
 
 @admin_bp.route('/pending-students/delete', methods=['POST'])
@@ -2698,7 +2699,7 @@ def delete_pending_student():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting pending student: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": "An error occurred while deleting the pending student. Please try again."}), 500
 
 
 @admin_bp.route('/pending-students/bulk-delete', methods=['POST'])
@@ -2760,7 +2761,7 @@ def bulk_delete_pending_students():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error bulk deleting pending students: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": "An error occurred while bulk deleting pending students. Please try again."}), 500
 
 
 @admin_bp.route('/legacy-unclaimed-students/bulk-delete', methods=['POST'])
@@ -2827,7 +2828,7 @@ def bulk_delete_legacy_unclaimed_students():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error bulk deleting legacy unclaimed students: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": "An error occurred while bulk deleting legacy students. Please try again."}), 500
 
 
 @admin_bp.route('/student/add-individual', methods=['POST'])
@@ -5545,7 +5546,7 @@ def update_expected_weekly_hours():
     # Redirect back with cwi_block parameter to maintain the selected class
     next_url = request.form.get('next')
     if next_url and is_safe_url(next_url, request.host_url):
-        return redirect(next_url)
+        return redirect(next_url)  # nosec # Safe: validated by is_safe_url()
 
     return redirect(url_for('admin.payroll', cwi_block=cwi_block))
 
@@ -7646,8 +7647,8 @@ def announcement_toggle(announcement_id):
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error toggling announcement: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        current_app.logger.error(f"Error toggling announcement: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An error occurred while toggling the announcement. Please try again.'}), 500
 
 
 # -------------------- TEACHER ONBOARDING --------------------

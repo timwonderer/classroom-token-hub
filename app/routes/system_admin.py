@@ -179,7 +179,7 @@ def login():
                 next_url = request.args.get("next")
                 if not is_safe_url(next_url):
                     return redirect(url_for("sysadmin.dashboard"))
-                return redirect(next_url or url_for("sysadmin.dashboard"))
+                return redirect(next_url or url_for("sysadmin.dashboard"))  # nosec # Safe: validated by is_safe_url()
         flash("Invalid credentials or TOTP.", "error")
         return redirect(url_for("sysadmin.login"))
     return render_template("system_admin_login.html", form=form)
@@ -1511,9 +1511,22 @@ def grafana_proxy(path):
             )
 
         # Create streaming response for allowed content types
-        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-        response_headers = [(name, value) for name, value in resp.raw.headers.items()
-                           if name.lower() not in excluded_headers]
+        # Security: Use allowlist for headers instead of blocklist to prevent XSS via reflected headers
+        # Only pass through specific, known-safe headers that are necessary for proper content delivery
+        allowed_headers = {
+            'content-type',          # Required for browser to interpret content correctly
+            'content-disposition',   # For file downloads
+            'cache-control',         # Caching behavior
+            'expires',               # Cache expiration
+            'last-modified',         # Conditional requests
+            'etag',                  # Conditional requests
+            'content-security-policy',  # Security policy (if Grafana sets it)
+        }
+
+        response_headers = [
+            (name, value) for name, value in resp.raw.headers.items()
+            if name.lower() in allowed_headers
+        ]
 
         response = Response(resp.iter_content(chunk_size=8192), resp.status_code, response_headers)
         return response
