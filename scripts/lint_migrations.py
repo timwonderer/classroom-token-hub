@@ -4,7 +4,7 @@ Migration Linter - Enforce Idempotency and Safety Best Practices
 
 This script validates that database migrations follow the project's standards
 as documented in:
-  - docs/development/MIGRATION_BEST_PRACTICES.md
+  - docs/development/migration-specifications.md
   - .claude/rules/database-migrations.md
 
 Usage:
