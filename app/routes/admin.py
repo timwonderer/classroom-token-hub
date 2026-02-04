@@ -3346,6 +3346,9 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
     Sync rent items with store items.
     Creates or updates store items for rent items that are marked as available in store.
     Deactivates store items for rent items that are no longer available.
+    
+    FIX: Prevents duplicate store items when applying rent settings to all periods.
+    Store items are now shared across blocks using StoreItemBlock for visibility.
     """
     from app.models import RentItem, StoreItem, StoreItemBlock
 
@@ -3361,23 +3364,36 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                 limit = None  # Unlimited purchases
                 duration_note = "Purchase each time you need to use it."
 
-            # Create or update store item
+            base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
+            description = f"{base_desc}\n\n{duration_note}"
+
+            store_item = None
+            
+            # Check if this rent_item already has a store_item_id
             if rent_item.store_item_id:
-                # Update existing store item
                 store_item = StoreItem.query.get(rent_item.store_item_id)
-                if store_item:
-                    store_item.name = rent_item.name
-                    base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
-                    store_item.description = f"{base_desc}\n\n{duration_note}"
-                    store_item.price = rent_item.store_price
-                    store_item.limit_per_student = limit
-                    store_item.is_active = True
-                    if block:
-                        store_item.set_blocks([block])
+            
+            # If no store_item yet, check if one exists for this teacher+name
+            # This prevents duplicates when applying to multiple blocks
+            if not store_item:
+                store_item = StoreItem.query.filter_by(
+                    teacher_id=teacher_id,
+                    name=rent_item.name
+                ).first()
+            
+            if store_item:
+                # Update existing store item
+                store_item.name = rent_item.name
+                store_item.description = description
+                store_item.price = rent_item.store_price
+                store_item.limit_per_student = limit
+                store_item.is_active = True
+                
+                # Link this rent_item to the store_item if not already linked
+                if not rent_item.store_item_id:
+                    rent_item.store_item_id = store_item.id
             else:
-                # Create new store item
-                base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
-                description = f"{base_desc}\n\n{duration_note}"
+                # Create new store item only if it doesn't exist
                 store_item = StoreItem(
                     teacher_id=teacher_id,
                     name=rent_item.name,
@@ -3393,8 +3409,15 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                 # Link the rent item to this store item
                 rent_item.store_item_id = store_item.id
 
-                # Set block visibility to match the rent setting's block
-                if block:
+            # Ensure block visibility is set (don't replace, add to existing)
+            if block:
+                # Check if this block is already associated
+                existing_block = StoreItemBlock.query.filter_by(
+                    store_item_id=store_item.id,
+                    block=block
+                ).first()
+                
+                if not existing_block:
                     store_item_block = StoreItemBlock(store_item_id=store_item.id, block=block)
                     db.session.add(store_item_block)
 
@@ -3585,6 +3608,10 @@ def rent_settings():
             parsed_items.append(item_data)
 
         from app.models import RentItem
+        
+        # First pass: collect or create store items for all blocks to avoid duplicates
+        # This ensures that when applying to multiple blocks, we create one store item per unique name
+        store_items_by_name = {}
         
         # Apply parsed items to each block
         for block in blocks_to_update:
