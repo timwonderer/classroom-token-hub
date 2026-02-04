@@ -245,7 +245,7 @@ This checks for:
 - Hardcoded constraint names
 - Other best practice violations
 
-**If linting fails:** Fix the issues before proceeding. See `MIGRATION_BEST_PRACTICES.md` for examples.
+**If linting fails:** Fix the issues before proceeding. See `docs/development/migration-specifications.md` for examples.
 
 ### Step 9: Test the Upgrade
 
