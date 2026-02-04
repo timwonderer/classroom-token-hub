@@ -8,6 +8,14 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+- **Store Purchase Blocked After Rent Paid Across Month Boundary** - Fixed rent-check logic using wrong month/year when verifying rent payments
+  - **Issue**: `purchase_item()` used `now.month`/`now.year` instead of `current_due.month`/`current_due.year` when querying `RentPayment`. When a rent due date fell in January but the purchase check ran in February (past the grace period), the query looked for February payments and found none, incorrectly blocking the student.
+  - **Solution**: Derive `due_month` and `due_year` from the calculated `current_due` date instead of the current wall-clock time
+- **Issue Ticket Filing Fails With "An error occurred"** - Fixed Decimal serialization error in issue context snapshots
+  - **Issue**: `create_context_snapshot()` stored raw `Decimal` objects (balances, transaction amounts) in a dict destined for a `db.JSON` column. Python's `json` module cannot serialize `Decimal`, causing a `TypeError` caught by the generic exception handler.
+  - **Solution**: Convert all `Decimal` values to `float` before storing in the context snapshot
+
 ### Security
 - **Hardened Grafana Proxy XSS Protection** - Improved content-type filtering to prevent XSS attacks (#897)
   - **Issue**: Original implementation had case-sensitivity issues, missed dangerous MIME types (SVG), and could be bypassed
