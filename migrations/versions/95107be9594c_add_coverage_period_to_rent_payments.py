@@ -1,8 +1,8 @@
 """Add coverage period fields to rent_payments for pre-paid system
 
-Revision ID: a1b2c3d4e5f6
-Revises: z2a3b4c5d6e7
-Create Date: 2026-02-04 00:00:00.000000
+Revision ID: 95107be9594c
+Revises: abc123def456
+Create Date: 2026-02-04 10:00:00.000000
 
 This migration adds coverage_month and coverage_year fields to track which
 period a rent payment covers, enabling a pre-paid rent system where:
@@ -15,8 +15,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'a1b2c3d4e5f6'
-down_revision = 'z2a3b4c5d6e7'
+revision = '95107be9594c'
+down_revision = 'abc123def456'
 branch_labels = None
 depends_on = None
 
@@ -65,19 +65,8 @@ def foreign_key_exists(table_name, fk_name):
         return False
 
 
-def constraint_exists(table_name, constraint_name):
-    """Check if a unique constraint exists on a table."""
-    conn = op.get_bind()
-    inspector = sa.inspect(conn)
-    try:
-        constraints = [c['name'] for c in inspector.get_unique_constraints(table_name)]
-        return constraint_name in constraints
-    except Exception:
-        return False
-
-
 def get_foreign_keys_by_column(table_name, column_name):
-    """Get foreign key constraints that reference a specific column."""
+    """Get foreign keys for a column (for downgrade without hardcoded names)."""
     conn = op.get_bind()
     inspector = sa.inspect(conn)
     try:
@@ -90,60 +79,71 @@ def get_foreign_keys_by_column(table_name, column_name):
 
 
 # ============================================================================
-# MIGRATION FUNCTIONS
+# MIGRATION OPERATIONS
 # ============================================================================
 
 def upgrade():
-    # Add coverage_month as nullable first
+    """Add coverage_month and coverage_year columns to rent_payments table.
+
+    These columns track which month/year a rent payment covers (not when it was paid).
+    This enables pre-paid rent where January payment covers February.
+    """
+    # Add coverage_month column
     if not column_exists('rent_payments', 'coverage_month'):
-        with op.batch_alter_table('rent_payments', schema=None) as batch_op:
-            batch_op.add_column(sa.Column('coverage_month', sa.Integer(), nullable=True))
-        print("✅ Added coverage_month column to rent_payments")
+        print("⚙️  Adding coverage_month column to rent_payments...")
+        op.add_column('rent_payments', sa.Column('coverage_month', sa.Integer(), nullable=True))
+        print("✅ Added coverage_month column")
     else:
         print("⚠️  Column 'coverage_month' already exists on 'rent_payments', skipping...")
 
-    # Add coverage_year as nullable first
+    # Add coverage_year column
     if not column_exists('rent_payments', 'coverage_year'):
-        with op.batch_alter_table('rent_payments', schema=None) as batch_op:
-            batch_op.add_column(sa.Column('coverage_year', sa.Integer(), nullable=True))
-        print("✅ Added coverage_year column to rent_payments")
+        print("⚙️  Adding coverage_year column to rent_payments...")
+        op.add_column('rent_payments', sa.Column('coverage_year', sa.Integer(), nullable=True))
+        print("✅ Added coverage_year column")
     else:
         print("⚠️  Column 'coverage_year' already exists on 'rent_payments', skipping...")
 
-    # Backfill existing records: assume payment covers the month/year it was made
-    # This maintains current behavior for existing payments
-    conn = op.get_bind()
-    conn.execute(sa.text("""
-        UPDATE rent_payments
-        SET coverage_month = period_month,
-            coverage_year = period_year
-        WHERE coverage_month IS NULL OR coverage_year IS NULL
-    """))
-    print("✅ Backfilled coverage fields for existing rent_payments")
+    # Backfill coverage fields for existing payments
+    # Assumption: For pre-paid system, payment made in month M covers M+1
+    # For existing data, we'll assume payment covers the same month it was paid
+    if column_exists('rent_payments', 'coverage_month') and column_exists('rent_payments', 'coverage_year'):
+        print("⚙️  Backfilling coverage fields for existing rent payments...")
+        op.execute("""
+            UPDATE rent_payments
+            SET
+                coverage_month = period_month,
+                coverage_year = period_year
+            WHERE coverage_month IS NULL OR coverage_year IS NULL
+        """)
+        print("✅ Backfilled coverage fields")
 
-    # Now make the columns NOT NULL since all records have values
-    if column_exists('rent_payments', 'coverage_month'):
-        with op.batch_alter_table('rent_payments', schema=None) as batch_op:
-            batch_op.alter_column('coverage_month', nullable=False)
-        print("✅ Made coverage_month NOT NULL")
+        # Make columns non-nullable after backfill
+        if column_exists('rent_payments', 'coverage_month'):
+            print("⚙️  Setting coverage_month to NOT NULL...")
+            op.alter_column('rent_payments', 'coverage_month', nullable=False)
+            print("✅ Set coverage_month to NOT NULL")
 
-    if column_exists('rent_payments', 'coverage_year'):
-        with op.batch_alter_table('rent_payments', schema=None) as batch_op:
-            batch_op.alter_column('coverage_year', nullable=False)
-        print("✅ Made coverage_year NOT NULL")
+        if column_exists('rent_payments', 'coverage_year'):
+            print("⚙️  Setting coverage_year to NOT NULL...")
+            op.alter_column('rent_payments', 'coverage_year', nullable=False)
+            print("✅ Set coverage_year to NOT NULL")
 
 
 def downgrade():
+    """Remove coverage_month and coverage_year columns from rent_payments table."""
+    # Drop coverage_year column
     if column_exists('rent_payments', 'coverage_year'):
-        with op.batch_alter_table('rent_payments', schema=None) as batch_op:
-            batch_op.drop_column('coverage_year')
-        print("❌ Dropped coverage_year from rent_payments")
+        print("⚙️  Dropping coverage_year column from rent_payments...")
+        op.drop_column('rent_payments', 'coverage_year')
+        print("✅ Dropped coverage_year column")
     else:
         print("⚠️  Column 'coverage_year' does not exist on 'rent_payments', skipping...")
 
+    # Drop coverage_month column
     if column_exists('rent_payments', 'coverage_month'):
-        with op.batch_alter_table('rent_payments', schema=None) as batch_op:
-            batch_op.drop_column('coverage_month')
-        print("❌ Dropped coverage_month from rent_payments")
+        print("⚙️  Dropping coverage_month column from rent_payments...")
+        op.drop_column('rent_payments', 'coverage_month')
+        print("✅ Dropped coverage_month column")
     else:
         print("⚠️  Column 'coverage_month' does not exist on 'rent_payments', skipping...")
