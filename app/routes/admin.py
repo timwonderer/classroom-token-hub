@@ -1747,7 +1747,8 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
     """
     Build a dict {(student_id, block): [privileges]} using batched queries to avoid N+1 issues.
     """
-    now = datetime.now(timezone.utc)
+    # Use naive datetime to match _calculate_rent_deadlines expectations.
+    now = datetime.now()
     student_rent_privileges = {}
 
     for block in blocks:
@@ -1873,7 +1874,8 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
     if not rent_settings or not rent_settings.is_enabled:
         return rent_privileges
 
-    now = datetime.now(timezone.utc)
+    # Use naive datetime to match _calculate_rent_deadlines expectations.
+    now = datetime.now()
 
     # Calculate current due date and determine which coverage period we're in.
     # Use the most recently PASSED due date for correct coverage matching.
@@ -3790,7 +3792,8 @@ def rent_settings():
 
     if settings and settings.is_enabled:
         # 1. Determine if rent is active for this period
-        now_local = datetime.now(timezone.utc)  # Use timezone-aware datetime for consistent date comparison
+        # Use naive datetime to match _calculate_rent_deadlines expectations.
+        now_local = datetime.now()
 
         # Check if we've passed the first due date (or if it's not set, assume active if enabled)
         if settings.first_rent_due_date:
