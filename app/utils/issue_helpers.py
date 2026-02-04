@@ -57,9 +57,9 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
     checking_balance = student.get_checking_balance(join_code=join_code)
     savings_balance = student.get_savings_balance(join_code=join_code)
     snapshot['balances'] = {
-        'checking': float(checking_balance) if isinstance(checking_balance, Decimal) else checking_balance,
-        'savings': float(savings_balance) if isinstance(savings_balance, Decimal) else savings_balance,
-        'total': float(checking_balance + savings_balance) if isinstance(checking_balance + savings_balance, Decimal) else checking_balance + savings_balance
+        'checking': float(checking_balance),
+        'savings': float(savings_balance),
+        'total': float(checking_balance + savings_balance)
     }
 
     # If transaction-specific, include transaction details
@@ -68,7 +68,7 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
         if transaction:
             snapshot['transaction'] = {
                 'id': transaction.id,
-                'amount': float(transaction.amount) if isinstance(transaction.amount, Decimal) else transaction.amount,
+                'amount': float(transaction.amount),
                 'account_type': transaction.account_type,
                 'description': transaction.description,
                 'type': transaction.type,
@@ -85,7 +85,7 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
     snapshot['recent_transactions'] = [
         {
             'id': t.id,
-            'amount': float(t.amount) if isinstance(t.amount, Decimal) else t.amount,
+            'amount': float(t.amount),
             'description': t.description,
             'timestamp': t.timestamp.isoformat() if t.timestamp else None
         }

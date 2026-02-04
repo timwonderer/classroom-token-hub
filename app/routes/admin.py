@@ -1775,10 +1775,22 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
         student_ids = [student.id for student in block_students]
 
         # Calculate current coverage period (pre-paid system)
+        # Use the most recently PASSED due date so that payments made for
+        # period N are found even after the calendar month rolls over but
+        # before the next due date arrives.
         from app.routes.student import _calculate_rent_deadlines
         current_due_date, _ = _calculate_rent_deadlines(rent_settings, now)
-        coverage_month = current_due_date.month
-        coverage_year = current_due_date.year
+        if now < current_due_date:
+            prev_due, _ = _calculate_rent_deadlines(rent_settings, current_due_date - timedelta(days=1))
+            if prev_due < current_due_date:
+                coverage_month = prev_due.month
+                coverage_year = prev_due.year
+            else:
+                coverage_month = current_due_date.month
+                coverage_year = current_due_date.year
+        else:
+            coverage_month = current_due_date.month
+            coverage_year = current_due_date.year
 
         # Batch rent payments for the current coverage period
         rent_payment_rows = (
@@ -1863,11 +1875,21 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
 
     now = datetime.now(timezone.utc)
 
-    # Calculate current due date and determine which coverage period we're in
+    # Calculate current due date and determine which coverage period we're in.
+    # Use the most recently PASSED due date for correct coverage matching.
     from app.routes.student import _calculate_rent_deadlines
     current_due_date, _ = _calculate_rent_deadlines(rent_settings, now)
-    coverage_month = current_due_date.month
-    coverage_year = current_due_date.year
+    if now < current_due_date:
+        prev_due, _ = _calculate_rent_deadlines(rent_settings, current_due_date - timedelta(days=1))
+        if prev_due < current_due_date:
+            coverage_month = prev_due.month
+            coverage_year = prev_due.year
+        else:
+            coverage_month = current_due_date.month
+            coverage_year = current_due_date.year
+    else:
+        coverage_month = current_due_date.month
+        coverage_year = current_due_date.year
 
     has_paid_rent = RentPayment.query.filter(
         RentPayment.student_id == student.id,
@@ -3367,12 +3389,15 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
             if rent_item.store_item_id:
                 store_item = StoreItem.query.get(rent_item.store_item_id)
 
-            # If no store_item yet, check if one exists for this teacher+name
-            # This prevents duplicates when applying to multiple blocks
+            # If no store_item yet, check if a rent-linked one exists for this teacher+name.
+            # Only consider store items already linked to a RentItem to avoid
+            # overwriting unrelated non-rent store items with the same name.
             if not store_item:
-                store_item = StoreItem.query.filter_by(
-                    teacher_id=teacher_id,
-                    name=rent_item.name
+                store_item = StoreItem.query.join(
+                    RentItem, RentItem.store_item_id == StoreItem.id
+                ).filter(
+                    StoreItem.teacher_id == teacher_id,
+                    StoreItem.name == rent_item.name
                 ).first()
 
             if store_item:
@@ -3415,10 +3440,23 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                     db.session.add(store_item_block)
 
         elif rent_item.store_item_id:
-            # Deactivate store item if it exists but is no longer available
+            # Remove this block's visibility for the store item
             store_item = StoreItem.query.get(rent_item.store_item_id)
-            if store_item:
-                store_item.is_active = False
+            if store_item and block:
+                StoreItemBlock.query.filter_by(
+                    store_item_id=store_item.id,
+                    block=block
+                ).delete()
+
+                # Only deactivate the shared StoreItem if no other RentItem
+                # references it (i.e., it's not used by any other block)
+                other_refs = RentItem.query.filter(
+                    RentItem.store_item_id == store_item.id,
+                    RentItem.id != rent_item.id,
+                    RentItem.is_available_in_store == True
+                ).count()
+                if other_refs == 0:
+                    store_item.is_active = False
 
     db.session.commit()
 
@@ -3783,11 +3821,21 @@ def rent_settings():
             .subquery()
         )
 
-        # Calculate coverage period for pre-paid system
+        # Calculate coverage period for pre-paid system.
+        # Use the most recently PASSED due date for correct coverage matching.
         from app.routes.student import _calculate_rent_deadlines
         coverage_due_date, _ = _calculate_rent_deadlines(settings, now_local)
-        coverage_month = coverage_due_date.month
-        coverage_year = coverage_due_date.year
+        if now_local < coverage_due_date:
+            prev_due, _ = _calculate_rent_deadlines(settings, coverage_due_date - timedelta(days=1))
+            if prev_due < coverage_due_date:
+                coverage_month = prev_due.month
+                coverage_year = prev_due.year
+            else:
+                coverage_month = coverage_due_date.month
+                coverage_year = coverage_due_date.year
+        else:
+            coverage_month = coverage_due_date.month
+            coverage_year = coverage_due_date.year
 
         # Fetch all payments that cover the current period
         period_payments = (

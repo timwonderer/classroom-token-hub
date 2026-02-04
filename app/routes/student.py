@@ -1150,11 +1150,12 @@ def dashboard():
 
         all_paid = True
         for period in rent_blocks:
-            all_payments_for_period = RentPayment.query.filter_by(
-                student_id=student.id,
-                period=period,
-                coverage_month=coverage_month,
-                coverage_year=coverage_year
+            all_payments_for_period = RentPayment.query.filter(
+                RentPayment.student_id == student.id,
+                RentPayment.period == period,
+                RentPayment.coverage_month == coverage_month,
+                RentPayment.coverage_year == coverage_year,
+                or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
             ).all()
 
             payments = []
@@ -2400,9 +2401,17 @@ def _calculate_rent_deadlines(settings, reference_date=None):
     """Return the due date and grace end date for the active month."""
     reference_date = reference_date or datetime.now()
 
+    # Normalize to naive datetimes for consistent comparison.
+    # The function constructs naive datetimes internally, so mixing
+    # aware and naive inputs would raise TypeError.
+    if reference_date.tzinfo is not None:
+        reference_date = reference_date.replace(tzinfo=None)
+
     # If first_rent_due_date is set and we haven't reached it yet, return it
     if settings.first_rent_due_date:
         first_due = settings.first_rent_due_date
+        if first_due.tzinfo is not None:
+            first_due = first_due.replace(tzinfo=None)
         # If we're before the first due date, return the first due date
         if reference_date < first_due:
             grace_end_date = first_due + timedelta(days=settings.grace_period_days)
@@ -2446,9 +2455,6 @@ def _calculate_rent_deadlines(settings, reference_date=None):
                     last_day_of_month = monthrange(target_year, target_month)[1]
                     due_day = min(first_due.day, last_day_of_month)
                     due_date = datetime(target_year, target_month, due_day)
-                    # Preserve timezone if first_due had one
-                    if first_due.tzinfo:
-                        due_date = due_date.replace(tzinfo=first_due.tzinfo)
 
             if freq_delta:
                 # Calculate periods passed for fixed time deltas
@@ -2471,9 +2477,6 @@ def _calculate_rent_deadlines(settings, reference_date=None):
                 last_day_of_month = monthrange(current_year, current_month)[1]
                 due_day = min(settings.due_day_of_month, last_day_of_month)
                 due_date = datetime(current_year, current_month, due_day)
-                # Preserve timezone if first_due had one
-                if first_due.tzinfo:
-                    due_date = due_date.replace(tzinfo=first_due.tzinfo)
 
     else:
         # No first_rent_due_date set, use traditional monthly logic
@@ -2486,21 +2489,6 @@ def _calculate_rent_deadlines(settings, reference_date=None):
     grace_end_date = due_date + timedelta(days=settings.grace_period_days)
     return due_date, grace_end_date
 
-
-def _calculate_coverage_period(settings, payment_date=None):
-    """
-    Calculate which month/year a rent payment covers based on when it's made.
-
-    For pre-paid system: paying rent on the due date covers from the day after
-    the due date until the next due date.  The coverage period is identified by
-    the due date's month/year so that lookups stay consistent.
-
-    Returns:
-        tuple: (coverage_month, coverage_year)
-    """
-    payment_date = payment_date or datetime.now()
-    current_due_date, _ = _calculate_rent_deadlines(settings, payment_date)
-    return current_due_date.month, current_due_date.year
 
 
 @student_bp.route('/rent')
