@@ -8,11 +8,13 @@ logging, Jinja filters, and registers blueprints.
 import os
 import logging
 import urllib.parse
+import uuid
 import pytz
 from datetime import datetime, date, timezone
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, request, render_template, session, g, url_for
+from flask import Flask, request, render_template, session, g, url_for, has_request_context
+from werkzeug.exceptions import HTTPException
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -96,6 +98,56 @@ def format_datetime(value, fmt='%Y-%m-%d %I:%M %p'):
 
 # -------------------- APPLICATION FACTORY --------------------
 
+REQUEST_ID_HEADERS = ("X-Request-Id", "X-Correlation-Id")
+
+
+class RequestIdFilter(logging.Filter):
+    def filter(self, record):
+        if not hasattr(record, "request_id"):
+            if has_request_context():
+                record.request_id = getattr(g, "request_id", "-")
+            else:
+                record.request_id = "-"
+        return True
+
+
+def _get_request_id():
+    for header in REQUEST_ID_HEADERS:
+        header_value = request.headers.get(header)
+        if not header_value:
+            continue
+        header_value = header_value.strip()
+        if 0 < len(header_value) <= 128:
+            return header_value
+    return uuid.uuid4().hex
+
+
+def register_error_handlers(app):
+    @app.errorhandler(Exception)
+    def handle_unhandled_exception(e):
+        if isinstance(e, HTTPException):
+            return e
+
+        app.logger.exception(
+            "Unhandled exception",
+            extra={
+                "route": request.path,
+                "method": request.method,
+                "request_id": getattr(g, "request_id", None),
+            },
+        )
+
+        # Content-aware error response
+        if request.accept_mimetypes.best == "application/json":
+            return {"error": "Internal Server Error"}, 500
+
+        # Just in case rendering the template fails
+        try:
+            return render_template("error_500.html"), 500
+        except Exception:
+            return "Internal Server Error", 500
+
+
 def create_app():
     """
     Application factory function.
@@ -147,12 +199,13 @@ def create_app():
     log_level = getattr(logging, log_level_name, logging.INFO)
     log_format = os.getenv(
         "LOG_FORMAT",
-        "[%(asctime)s] %(levelname)s in %(module)s: %(message)s",
+        "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s]: %(message)s",
     )
 
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(log_level)
     stream_handler.setFormatter(logging.Formatter(log_format))
+    stream_handler.addFilter(RequestIdFilter())
 
     app.logger.setLevel(log_level)
     # Prevent duplicate log entries by clearing handlers first
@@ -164,7 +217,23 @@ def create_app():
         file_handler = RotatingFileHandler(log_file, maxBytes=1_000_000, backupCount=5)
         file_handler.setLevel(log_level)
         file_handler.setFormatter(logging.Formatter(log_format))
+        file_handler.addFilter(RequestIdFilter())
         app.logger.addHandler(file_handler)
+
+    # -------------------- REQUEST CONTEXT --------------------
+    @app.before_request
+    def ensure_request_id():
+        g.request_id = _get_request_id()
+
+    @app.after_request
+    def attach_request_id_header(response):
+        request_id = getattr(g, "request_id", None)
+        if request_id:
+            response.headers.setdefault("X-Request-Id", request_id)
+        return response
+
+    # -------------------- ERROR HANDLERS --------------------
+    register_error_handlers(app)
 
     # -------------------- JINJA2 FILTERS AND GLOBALS --------------------
     app.jinja_env.filters['url_encode'] = url_encode_filter
