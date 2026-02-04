@@ -220,7 +220,7 @@ for fk in inspector.get_foreign_keys('students'):
     - Verify `down_revision`
     - **Add Idempotency Helpers**
     - Wrap `op` calls in existence checks
-6.  **Lint:** `python scripts/validate-migrations.py`
+6.  **Lint:** `python scripts/lint_migrations.py`
 7.  **Test:** `flask db upgrade` → `flask db downgrade` → `flask db upgrade`
 8.  **Commit:** Git allowlist model and migration files
 
