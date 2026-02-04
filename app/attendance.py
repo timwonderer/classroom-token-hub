@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from app.utils.time import utc_now, ensure_utc
 from sqlalchemy import func
 # Import from shared utilities to avoid circular dependency with payroll.py
 from app.utils.attendance_helpers import get_join_code_for_student_period
@@ -22,15 +23,9 @@ def get_last_payroll_time(student_id=None):
         query = Transaction.query.filter_by(type="payroll")
 
     last_payroll_tx = query.order_by(Transaction.timestamp.desc()).first()
-    return _as_utc(last_payroll_tx.timestamp) if last_payroll_tx else None
+    return ensure_utc(last_payroll_tx.timestamp) if last_payroll_tx else None
 
-def _as_utc(dt):
-    """Ensure a datetime is timezone-aware and in UTC."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+
 
 def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, join_code=None):
     """
@@ -42,7 +37,7 @@ def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, j
     from app.extensions import db
     from datetime import datetime, timezone
 
-    last_payroll_time = _as_utc(last_payroll_time)
+    last_payroll_time = ensure_utc(last_payroll_time)
 
     base_query = TapEvent.query.filter(
         TapEvent.student_id == student_id,
@@ -61,7 +56,7 @@ def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, j
         in_time = None
         total_seconds = 0
         for event in events:
-            event_time = _as_utc(event.timestamp)
+            event_time = ensure_utc(event.timestamp)
             if event.status == "active":
                 in_time = event_time
             elif event.status == "inactive" and in_time:
@@ -69,7 +64,7 @@ def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, j
                 in_time = None
         if in_time:
             # Student is still clocked in; count time up to now.
-            now = datetime.now(timezone.utc)
+            now = utc_now()
             total_seconds += (now - in_time).total_seconds()
         return int(total_seconds)
 
@@ -92,7 +87,7 @@ def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, j
 
     # Process events that occurred strictly after the last payroll.
     for event in events_after_payroll:
-        event_time = _as_utc(event.timestamp)
+        event_time = ensure_utc(event.timestamp)
         if event.status == "active":
             if in_time is None:
                 in_time = event_time
@@ -102,7 +97,7 @@ def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, j
 
     if in_time:
         # Student remained clocked in past the last recorded event; count up to now.
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         total_seconds += (now - in_time).total_seconds()
     return int(total_seconds)
 
@@ -128,7 +123,7 @@ def calculate_period_attendance(student_id, period, date):
     in_time = None
 
     for event in events:
-        event_time = _as_utc(event.timestamp)
+        event_time = ensure_utc(event.timestamp)
         if event.status == "active":
             in_time = event_time
         elif event.status == "inactive" and in_time:
@@ -167,7 +162,7 @@ def calculate_period_attendance_utc_range(student_id, period, start_utc, end_utc
     in_time = None
 
     for event in events:
-        event_time = _as_utc(event.timestamp)
+        event_time = ensure_utc(event.timestamp)
         if event.status == "active":
             in_time = event_time
         elif event.status == "inactive" and in_time:
@@ -185,7 +180,7 @@ def get_session_status(student_id, period):
     from app.models import TapEvent
     from datetime import datetime, timezone
 
-    today = datetime.now(timezone.utc).date()
+    today = utc_now().date()
 
     # Check if student is currently active
     latest_event = (
@@ -221,7 +216,7 @@ def get_all_block_statuses(student, join_code=None):
     from datetime import datetime, timezone
     from app.payroll import get_pay_rate_for_block
 
-    today = datetime.now(timezone.utc).date()
+    today = utc_now().date()
     if join_code:
         # Scope to claimed seats for the selected class
         claimed_seats = TeacherBlock.query.filter_by(

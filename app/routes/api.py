@@ -28,6 +28,7 @@ from app.routes.student import get_current_class_context, get_current_teacher_id
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
+from app.utils.time import utc_now, ensure_utc
 
 # Import external modules
 from app.attendance import (
@@ -44,13 +45,7 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 # -------------------- Rent Helpers --------------------
 
-def _ensure_aware(dt):
-    """Ensure datetime is timezone-aware in UTC."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
+
 
 
 def _get_period_delta(rent_setting):
@@ -85,7 +80,7 @@ def _calculate_due_dates(rent_setting, now):
     Calculate the current and next due dates for a rent setting based on the provided time.
     Returns (current_due, next_due). If first due date is not set, returns (None, None).
     """
-    first_due = _ensure_aware(rent_setting.first_rent_due_date)
+    first_due = ensure_utc(rent_setting.first_rent_due_date)
     if not first_due:
         return (None, None)
 
@@ -216,7 +211,7 @@ def purchase_item():
     rent_settings = get_rent_settings_for_context(context)
     if rent_settings and rent_settings.is_enabled and rent_settings.prevent_purchase_when_late:
         # Check if student is late on rent
-        now = datetime.now(timezone.utc)
+        now = utc_now()
 
         current_due, next_due = _calculate_due_dates(rent_settings, now)
 
@@ -415,7 +410,7 @@ def purchase_item():
             # Calculate NEXT rent due date and set as expiry
             rent_setting = RentSettings.query.get(rent_item.rent_setting_id)
             if rent_setting and rent_setting.is_enabled:
-                now = datetime.now(timezone.utc)
+                now = utc_now()
 
                 if rent_setting.first_rent_due_date:
                     current_due, next_due = _calculate_due_dates(rent_setting, now)
@@ -431,7 +426,7 @@ def purchase_item():
 
         # Fall back to standard auto_expiry for delayed items
         if expiry_date is None and item.item_type == 'delayed' and item.auto_expiry_days:
-            expiry_date = datetime.now(timezone.utc) + timedelta(days=item.auto_expiry_days)
+            expiry_date = utc_now() + timedelta(days=item.auto_expiry_days)
 
         student_item_status = 'purchased'
         if item.item_type == 'immediate':
@@ -446,7 +441,7 @@ def purchase_item():
             new_student_item = StudentItem(
                 student_id=student.id,
                 store_item_id=item.id,
-                purchase_date=datetime.now(timezone.utc),
+                purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
                 is_from_bundle=True,
@@ -460,7 +455,7 @@ def purchase_item():
             new_student_item = StudentItem(
                 student_id=student.id,
                 store_item_id=item.id,
-                purchase_date=datetime.now(timezone.utc),
+                purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
                 is_from_bundle=False,
@@ -473,7 +468,7 @@ def purchase_item():
                 new_student_item = StudentItem(
                     student_id=student.id,
                     store_item_id=item.id,
-                    purchase_date=datetime.now(timezone.utc),
+                    purchase_date=utc_now(),
                     expiry_date=expiry_date,
                     status=student_item_status,
                     is_from_bundle=False,
@@ -600,7 +595,7 @@ def use_item():
             return jsonify({"status": "error", "message": "This item has already been used or is not available."}), 400
 
     # Check expiry
-    if student_item.expiry_date and datetime.now(timezone.utc) > student_item.expiry_date:
+    if student_item.expiry_date and utc_now() > student_item.expiry_date:
         student_item.status = 'expired'
         db.session.commit()
         return jsonify({"status": "error", "message": "This item has expired."}), 400
@@ -613,7 +608,7 @@ def use_item():
             student_item.bundle_remaining -= 1
             if student_item.bundle_remaining == 0:
                 student_item.status = 'redeemed'  # All uses consumed
-            student_item.redemption_date = datetime.now(timezone.utc)
+            student_item.redemption_date = utc_now()
             if student_item.redemption_details:
                 student_item.redemption_details += f"\n---\n{details}"
             else:
@@ -621,7 +616,7 @@ def use_item():
         else:
             # Regular item - mark as processing
             student_item.status = 'processing'
-            student_item.redemption_date = datetime.now(timezone.utc)
+            student_item.redemption_date = utc_now()
             student_item.redemption_details = details
 
         # CRITICAL FIX v2: Create a redemption transaction with join_code
@@ -692,7 +687,7 @@ def approve_redemption():
 def handle_hall_pass_action(pass_id, action):
     log_entry = HallPassLog.query.get_or_404(pass_id)
     student = log_entry.student
-    now = datetime.now(timezone.utc)
+    now = utc_now()
 
     if action == 'approve':
         if log_entry.status != 'pending':
@@ -938,7 +933,7 @@ def _check_simultaneous_pass_limit(log_entry):
     # Check simultaneous limit
     if pass_type_config and pass_type_config.get('simultaneous_limit') is not None:
         user_tz = _get_default_timezone()
-        now_user_tz = datetime.now(user_tz)
+        now_user_tz = utc_now().astimezone(user_tz)
         today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
         today_start_utc = today_start_user_tz.astimezone(pytz.utc).replace(tzinfo=None)
 
@@ -988,7 +983,7 @@ def hall_pass_terminal_use():
         return limit_response
 
     # Mark as left and create tap-out event
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     log_entry.status = 'left'
     log_entry.left_time = now
 
@@ -1035,7 +1030,7 @@ def hall_pass_terminal_return():
         return jsonify({"status": "error", "message": f"Student is not currently out. Status: {log_entry.status}"}), 400
 
     # Mark as returned and create tap-in event
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     log_entry.status = 'returned'
     log_entry.return_time = now
 
@@ -1080,7 +1075,7 @@ def cancel_hall_pass(pass_id):
 
     # Mark as rejected (or create a new 'cancelled' status if preferred)
     log_entry.status = 'rejected'
-    log_entry.decision_time = datetime.now(timezone.utc)
+    log_entry.decision_time = utc_now()
 
     db.session.commit()
     return jsonify({"status": "success", "message": "Hall pass request cancelled."})
@@ -1112,7 +1107,7 @@ def checkout_hall_pass():
         return limit_response
     
     # Mark as left and create tap-out event
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     log_entry.status = 'left'
     log_entry.left_time = now
     
@@ -1163,7 +1158,7 @@ def checkin_hall_pass():
         return jsonify({"status": "error", "message": f"You are not currently checked out. Status: {log_entry.status}"}), 400
     
     # Mark as returned and create tap-in event
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     log_entry.status = 'returned'
     log_entry.return_time = now
     
@@ -1248,7 +1243,7 @@ def get_hall_pass_queue():
         user_tz = pytz.timezone('America/Los_Angeles')
 
     # Get current time in user's timezone
-    now_user_tz = datetime.now(user_tz)
+    now_user_tz = utc_now().astimezone(user_tz)
 
     # Get start of today (midnight) in user's timezone
     today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -1361,7 +1356,7 @@ def hall_pass_settings():
             return jsonify({"status": "error", "message": "Queue limit must be between 1 and 50"}), 400
         settings.queue_limit = queue_limit
 
-    settings.updated_at = datetime.now(timezone.utc)
+    settings.updated_at = utc_now()
     db.session.commit()
 
     return jsonify({
@@ -1567,7 +1562,7 @@ def save_hall_pass_setup():
         else:
             settings.queue_enabled = hall_pass_enabled
             settings.pass_types = pass_types
-            settings.updated_at = datetime.now(timezone.utc)
+            settings.updated_at = utc_now()
 
         db.session.commit()
 
@@ -1797,7 +1792,7 @@ def handle_tap():
         )
         return jsonify({"error": "Unable to resolve class context for this period."}), 400
 
-    now = datetime.now(timezone.utc)
+    now = utc_now()
 
     # --- Check if tap is enabled for this student in this period ---
     from app.models import StudentBlock
@@ -1902,7 +1897,7 @@ def handle_tap():
                 except pytz.UnknownTimeZoneError:
                     user_tz = pytz.timezone('America/Los_Angeles')
 
-                now_user_tz = datetime.now(user_tz)
+                now_user_tz = utc_now().astimezone(user_tz)
                 today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
                 today_start_utc = today_start_user_tz.astimezone(pytz.utc).replace(tzinfo=None)
 
@@ -2221,7 +2216,7 @@ def delete_tap_entry(event_id):
 
     # Mark as deleted
     event.is_deleted = True
-    event.deleted_at = datetime.now(timezone.utc)
+    event.deleted_at = utc_now()
     event.deleted_by = admin.id
 
     db.session.commit()
@@ -2301,16 +2296,11 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
     from app.attendance import calculate_period_attendance_utc_range
 
     # Helper function to ensure UTC timezone-aware datetime
-    def _as_utc(dt):
-        if dt is None:
-            return None
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
+
 
     # Keep original case for settings lookup, but uppercase for TapEvent queries
     student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
-    now_utc = datetime.now(timezone.utc)
+    now_utc = utc_now()
 
     # Use Pacific timezone for daily reset
     pacific = pytz.timezone('America/Los_Angeles')
@@ -2360,7 +2350,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
 
                 # Add current active session time
                 # Convert to UTC-aware datetime to prevent TypeError
-                last_tap_in_utc = _as_utc(latest_event.timestamp)
+                last_tap_in_utc = ensure_utc(latest_event.timestamp)
 
                 # Only add active session time if tapped in today (within Pacific day boundaries)
                 if start_of_day_utc <= last_tap_in_utc < end_of_day_utc:
@@ -2445,7 +2435,7 @@ def set_timezone():
     """Store user's timezone in session for datetime formatting"""
     # Allow access if user is logged in as student OR admin
     is_authenticated = False
-    now = datetime.now(timezone.utc)
+    now = utc_now()
 
     # Check Admin Session
     if session.get('is_admin') and session.get('admin_id'):
@@ -2578,7 +2568,7 @@ def create_demo_student():
             join_code=join_code,
             student_id=demo_student.id,
             is_claimed=True,
-            claimed_at=datetime.now(timezone.utc)
+            claimed_at=utc_now()
         )
         db.session.add(demo_seat)
 
@@ -2615,7 +2605,7 @@ def create_demo_student():
             admin_id=admin_id,
             student_id=demo_student.id,
             session_id=demo_session_id,
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+            expires_at=utc_now() + timedelta(minutes=10),
             config_checking_balance=checking_balance,
             config_savings_balance=savings_balance,
             config_hall_passes=hall_passes,
@@ -2771,3 +2761,6 @@ def view_as_student_status():
         "status": "success",
         "view_as_student": session.get('view_as_student', False)
     })
+
+
+

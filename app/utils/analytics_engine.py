@@ -18,6 +18,7 @@ Per spec section 4.2:
 """
 
 from datetime import datetime, timezone
+from app.utils.time import utc_now
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from sqlalchemy import and_, or_, true
@@ -615,13 +616,13 @@ class AnalyticsEngine:
                     what_changed=alert_data['what_changed'],
                     why_it_matters=alert_data['why_it_matters'],
                     suggested_action=alert_data.get('suggested_action'),
-                    created_at=datetime.now(timezone.utc)
+                    created_at=utc_now()
                 )
                 db.session.add(alert)
             elif existing_alert.resolved_at:
                 # If alert was previously resolved, re-activate it
                 existing_alert.resolved_at = None
-                existing_alert.created_at = datetime.now(timezone.utc)
+                existing_alert.created_at = utc_now()
 
         # Resolve alerts from this window that no longer apply
         stale_alerts = AnalyticsAlert.query.filter(
@@ -664,5 +665,5 @@ class AnalyticsEngine:
             return snapshot
         
         # Create new snapshot
-        is_complete = window_end <= datetime.now(timezone.utc)
+        is_complete = window_end <= utc_now()
         return self.create_snapshot(window_type, window_start, window_end, is_complete)

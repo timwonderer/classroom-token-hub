@@ -6,6 +6,7 @@ Contains session management helpers, authentication decorators, and timeout logi
 
 import urllib.parse
 from datetime import datetime, timedelta, timezone
+from app.utils.time import utc_now
 from functools import wraps
 
 import sqlalchemy as sa
@@ -81,7 +82,7 @@ def login_required(f):
                     return redirect(url_for('admin.dashboard'))
 
                 login_time = datetime.fromisoformat(login_time_str)
-                if (datetime.now(timezone.utc) - login_time) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+                if (utc_now() - login_time) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
                     demo_session_id = session.get('demo_session_id')
 
                     try:
@@ -133,7 +134,7 @@ def login_required(f):
 
                 from app.models import DemoStudent  # Imported lazily to avoid circular import
                 demo_session = DemoStudent.query.filter_by(session_id=demo_session_id).first()
-                now = datetime.now(timezone.utc)
+                now = utc_now()
 
                 expires_at = None
                 if demo_session and isinstance(demo_session.expires_at, datetime):
@@ -188,7 +189,7 @@ def login_required(f):
                         return redirect(url_for('admin.dashboard'))
 
             # Update admin's last activity
-            session['last_activity'] = datetime.now(timezone.utc).isoformat()
+            session['last_activity'] = utc_now().isoformat()
             return f(*args, **kwargs)
 
         # Regular student authentication check
@@ -214,7 +215,7 @@ def login_required(f):
             return redirect(url_for('student.login'))
 
         login_time = datetime.fromisoformat(login_time_str)
-        if (datetime.now(timezone.utc) - login_time) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+        if (utc_now() - login_time) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
             # Clear student-specific keys but preserve CSRF token
             session.pop('student_id', None)
             session.pop('login_time', None)
@@ -228,7 +229,7 @@ def login_required(f):
             return redirect(f"{url_for('student.login')}?next={encoded_next}")  # nosec # Safe: validated by _get_safe_next_path()
 
         # Continue to update last_activity for other potential uses, but it no longer controls the timeout
-        session['last_activity'] = datetime.now(timezone.utc).isoformat()
+        session['last_activity'] = utc_now().isoformat()
         return f(*args, **kwargs)
     return decorated_function
 
@@ -259,7 +260,7 @@ def admin_required(f):
             encoded_next = urllib.parse.quote(next_path, safe="")
             return redirect(f"{url_for('admin.login')}?next={encoded_next}")  # nosec # Safe: validated by _get_safe_next_path()
 
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         last_activity = session.get('last_activity')
 
         if last_activity:
@@ -290,7 +291,7 @@ def system_admin_required(f):
             flash("System administrator access required.")
             return redirect(url_for('sysadmin.login', next=request.path))
         last_activity = session.get('last_activity')
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         if last_activity:
             last_activity = datetime.fromisoformat(last_activity)
             if now - last_activity > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
