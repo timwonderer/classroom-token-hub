@@ -5,7 +5,7 @@ All SQLAlchemy models are defined here with proper relationships and properties.
 Times are stored as UTC in the database.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 import enum
 
