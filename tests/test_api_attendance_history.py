@@ -110,9 +110,11 @@ def test_attendance_history_with_date_filters(client, admin_with_students):
         sess['admin_id'] = admin.id
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
     
-    # Get today's date in YYYY-MM-DD format
-    today = datetime.now(timezone.utc).date()
-    today_str = today.strftime('%Y-%m-%d')
+    # Use the tap event date to avoid timezone-boundary flakiness
+    event_ts = admin_with_students['tap_events'][0].timestamp
+    if event_ts.tzinfo is None:
+        event_ts = event_ts.replace(tzinfo=timezone.utc)
+    today_str = event_ts.date().strftime('%Y-%m-%d')
     
     # Call the API endpoint with today's date as filter
     response = client.get(f'/api/attendance/history?start_date={today_str}&end_date={today_str}')

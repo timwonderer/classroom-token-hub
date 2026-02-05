@@ -45,19 +45,14 @@ from app.utils.help_content import HELP_ARTICLES
 from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
 from app.attendance import get_all_block_statuses
 from app.payroll import get_pay_rate_for_block
+from app.utils.time import utc_now, ensure_utc, normalize_for_db
 
 # Create blueprint
 student_bp = Blueprint('student', __name__, url_prefix='/student')
 
 # -------------------- DATETIME HELPERS --------------------
 
-def normalize_to_utc(dt):
-    """Ensure datetime objects are timezone-aware in UTC for safe comparisons."""
-    if not dt:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+
 
 
 # -------------------- PERIOD SELECTION HELPERS --------------------
@@ -186,9 +181,9 @@ def get_feature_settings_for_student():
 
     # Try block-specific settings first
     if current_block:
-        block_settings = FeatureSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=current_block
+        block_settings = FeatureSettings.query.filter(
+            FeatureSettings.teacher_id == teacher_id,
+            func.upper(FeatureSettings.block) == func.upper(current_block)
         ).first()
         if block_settings:
             return block_settings.to_dict()
@@ -353,7 +348,7 @@ def complete_profile():
             year = int(dob_year)
             
             # Validate ranges
-            current_year = datetime.now().year
+            current_year = utc_now().year
             if not (1 <= month <= 12):
                 flash("Invalid month.", "error")
                 return redirect(url_for('student.complete_profile'))
@@ -384,7 +379,7 @@ def complete_profile():
             month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
                           'July', 'August', 'September', 'October', 'November', 'December']
             dob_display = f"{month_names[month]} {day}, {year}"
-            current_year = datetime.now().year
+            current_year = utc_now().year
             max_birth_year = current_year - 5
             
             return render_template(
@@ -458,7 +453,7 @@ def complete_profile():
                 return redirect(url_for('student.complete_profile'))
     
     # GET request - show form
-    current_year = datetime.now().year
+    current_year = utc_now().year
     max_birth_year = current_year - 5  # Students should be at least 5 years old
     
     return render_template(
@@ -603,7 +598,7 @@ def claim_account():
             # Student already exists - link this seat to existing student
             matched_seat.student_id = existing_student.id
             matched_seat.is_claimed = True
-            matched_seat.claimed_at = datetime.now(timezone.utc)
+            matched_seat.claimed_at = utc_now()
 
             # Create StudentTeacher link
             existing_link = StudentTeacher.query.filter_by(
@@ -665,7 +660,7 @@ def claim_account():
                 # Link this seat to the existing student
                 matched_seat.student_id = existing_by_hash.id
                 matched_seat.is_claimed = True
-                matched_seat.claimed_at = datetime.now(timezone.utc)
+                matched_seat.claimed_at = utc_now()
 
                 # Create StudentTeacher link if not exists
                 existing_link = StudentTeacher.query.filter_by(
@@ -703,7 +698,7 @@ def claim_account():
         # Link seat to student
         matched_seat.student_id = new_student.id
         matched_seat.is_claimed = True
-        matched_seat.claimed_at = datetime.now(timezone.utc)
+        matched_seat.claimed_at = utc_now()
 
         # Create StudentTeacher link
         link = StudentTeacher(
@@ -983,7 +978,7 @@ def add_class():
         # Link the seat to the existing student
         matched_seat.student_id = student.id
         matched_seat.is_claimed = True
-        matched_seat.claimed_at = datetime.now(timezone.utc)
+        matched_seat.claimed_at = utc_now()
 
         # Create StudentTeacher link if it doesn't exist
         if not existing_link:
@@ -1127,7 +1122,7 @@ def dashboard():
     rent_status = None
     rent_settings = get_rent_settings_for_context(context)
     if rent_settings and rent_settings.is_enabled and student.is_rent_enabled:
-        now = datetime.now()
+        now = utc_now()
         due_date, grace_end_date = _calculate_rent_deadlines(rent_settings, now)
 
         preview_start_date = None
@@ -1187,7 +1182,7 @@ def dashboard():
         }
 
     tz = pytz.timezone('America/Los_Angeles')
-    local_now = datetime.now(tz)
+    local_now = utc_now().astimezone(tz)
     # --- DASHBOARD DEBUG LOGGING ---
     current_app.logger.info(f"DASHBOARD DEBUG: Student {student.id} - Block states:")
     for blk, blk_state in period_states.items():
@@ -1200,7 +1195,7 @@ def dashboard():
     # --- Calculate remaining session time for frontend timer ---
     login_time = datetime.fromisoformat(session['login_time'])
     expiry_time = login_time + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
-    session_remaining_seconds = max(0, int((expiry_time - datetime.now(timezone.utc)).total_seconds()))
+    session_remaining_seconds = max(0, int((expiry_time - utc_now()).total_seconds()))
 
     # --- Get feature settings for this student ---
     feature_settings = get_feature_settings_for_student()
@@ -1214,21 +1209,16 @@ def dashboard():
         StudentRecoveryCode.dismissed == False,
         StudentRecoveryCode.code_hash == None,  # Not yet verified
         RecoveryRequest.status == 'pending',
-        RecoveryRequest.expires_at > datetime.now(timezone.utc)
+        RecoveryRequest.expires_at > utc_now()
     ).first()
 
     # --- Calculate weekly/monthly analytics ---
     from app.models import TapEvent
-    now_utc = datetime.now(timezone.utc)
+    now_utc = utc_now()
     week_start = now_utc - timedelta(days=now_utc.weekday())  # Monday of current week
     month_start = now_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    def _as_utc(ts):
-        if not ts:
-            return None
-        if ts.tzinfo is None:
-            return ts.replace(tzinfo=timezone.utc)
-        return ts.astimezone(timezone.utc)
+
 
     # Days tapped in this week
     tap_events_this_week = TapEvent.query.filter(
@@ -1239,7 +1229,7 @@ def dashboard():
     ).all()
 
     # Calculate unique days and total minutes
-    unique_days_tapped = len(set(_as_utc(event.timestamp).date() for event in tap_events_this_week if event.status == 'active'))
+    unique_days_tapped = len(set(ensure_utc(event.timestamp).date() for event in tap_events_this_week if event.status == 'active'))
 
     # Calculate total minutes this week
     total_minutes_this_week = 0
@@ -1247,7 +1237,7 @@ def dashboard():
 
     for event in sorted(tap_events_this_week, key=lambda e: e.timestamp):
         period = event.period
-        event_ts = _as_utc(event.timestamp)
+        event_ts = ensure_utc(event.timestamp)
         if event.status == 'active':
             active_sessions[period] = event_ts
         elif event.status == 'inactive' and period in active_sessions:
@@ -1261,7 +1251,7 @@ def dashboard():
         total_minutes_this_week += duration
 
     def _occurred_after(ts, start):
-        ts_utc = _as_utc(ts)
+        ts_utc = ensure_utc(ts)
         return ts_utc is not None and ts_utc >= start
 
     # Earnings this week/month
@@ -1298,7 +1288,7 @@ def dashboard():
         Announcement.is_active.is_(True),
         or_(
             Announcement.expires_at.is_(None),
-            Announcement.expires_at > datetime.now(timezone.utc)
+            Announcement.expires_at > utc_now()
         ),
         or_(
             # Class-specific announcements
@@ -1422,7 +1412,7 @@ def payroll():
             ("2 hours", round(pay_rate_per_minute * 120, 2)),
             ("4 hours", round(pay_rate_per_minute * 240, 2)),
         ],
-        now=datetime.now(timezone.utc)
+        now=utc_now()
     )
 
 
@@ -1633,16 +1623,11 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
     """
     from app.models import BankingSettings, _quantize_currency
 
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     this_month = now.month
     this_year = now.year
 
-    def _as_utc(dt):
-        if dt is None:
-            return None
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
+
 
     # Get banking settings for current teacher
     teacher_id = get_current_teacher_id()
@@ -1657,7 +1642,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
 
     # Check if interest was already applied this month
     for tx in student.transactions:
-        tx_timestamp = _as_utc(tx.timestamp)
+        tx_timestamp = ensure_utc(tx.timestamp)
         if (
             tx.account_type == 'savings'
             and tx.description == "Monthly Savings Interest"
@@ -1670,7 +1655,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
     for tx in student.transactions:
         if tx.account_type != 'savings' or "Transfer" not in (tx.description or ""):
             continue
-        tx_timestamp = _as_utc(tx.timestamp)
+        tx_timestamp = ensure_utc(tx.timestamp)
         if tx_timestamp and tx_timestamp.date() == now.date():
             return
 
@@ -1706,7 +1691,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
             # Exclude interest transactions from principal calculation
             if tx.type == 'Interest' or 'Interest' in (tx.description or ''):
                 continue
-            available_at = _as_utc(tx.date_funds_available)
+            available_at = ensure_utc(tx.date_funds_available)
             if available_at and (now - available_at).days >= 30:
                 eligible_balance += _quantize_currency(tx.amount)
 
@@ -1737,13 +1722,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
 @login_required
 def insurance_marketplace():
     """Insurance marketplace - browse and manage policies."""
-    def normalize_to_utc(dt):
-        """Ensure datetime objects are timezone-aware in UTC for safe comparisons."""
-        if not dt:
-            return None
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
+
 
     # Check if insurance feature is enabled
     if not is_feature_enabled('insurance'):
@@ -1759,7 +1738,7 @@ def insurance_marketplace():
         return redirect(url_for('student.dashboard'))
 
     teacher_id = context['teacher_id']
-    now_utc = datetime.now(timezone.utc)
+    now_utc = utc_now()
 
     # FIX: Get student's active policies scoped to current class only
     my_policies = StudentInsurance.query.join(
@@ -1801,7 +1780,7 @@ def insurance_marketplace():
             ).order_by(StudentInsurance.cancel_date.desc()).first()
 
             if cancelled and cancelled.cancel_date:
-                cancel_dt = normalize_to_utc(cancelled.cancel_date)
+                cancel_dt = ensure_utc(cancelled.cancel_date)
                 days_since_cancel = (now_utc - cancel_dt).days
                 if days_since_cancel < policy.repurchase_wait_days:
                     can_purchase[policy.id] = False
@@ -1837,8 +1816,8 @@ def insurance_marketplace():
     enrolled_tiers = set()
     for enrollment in my_policies:
         # Normalize dates for safe comparisons in templates
-        enrollment.coverage_start_date = normalize_to_utc(enrollment.coverage_start_date)
-        enrollment.cancel_date = normalize_to_utc(enrollment.cancel_date)
+        enrollment.coverage_start_date = ensure_utc(enrollment.coverage_start_date)
+        enrollment.cancel_date = ensure_utc(enrollment.cancel_date)
         if enrollment.policy.tier_category_id:
             enrolled_tiers.add(enrollment.policy.tier_category_id)
 
@@ -1902,7 +1881,7 @@ def purchase_insurance(policy_id):
 
         # Check for cooldown period (temporary restriction)
         if policy.enable_repurchase_cooldown and cancelled.cancel_date:
-            days_since_cancel = (datetime.now(timezone.utc) - cancelled.cancel_date).days
+            days_since_cancel = (utc_now() - cancelled.cancel_date).days
             if days_since_cancel < policy.repurchase_wait_days:
                 flash(f"You must wait {policy.repurchase_wait_days - days_since_cancel} more days before repurchasing this policy.", "warning")
                 return redirect(url_for('student.student_insurance'))
@@ -1967,10 +1946,10 @@ def purchase_insurance(policy_id):
         student_id=student.id,
         policy_id=policy.id,
         status='active',
-        purchase_date=datetime.now(timezone.utc),
-        last_payment_date=datetime.now(timezone.utc),
-        next_payment_due=datetime.now(timezone.utc) + timedelta(days=30),  # Simplified
-        coverage_start_date=datetime.now(timezone.utc) + timedelta(days=policy.waiting_period_days),
+        purchase_date=utc_now(),
+        last_payment_date=utc_now(),
+        next_payment_due=utc_now() + timedelta(days=30),  # Simplified
+        coverage_start_date=utc_now() + timedelta(days=policy.waiting_period_days),
         payment_current=True
     )
     db.session.add(enrollment)
@@ -2028,7 +2007,7 @@ def cancel_insurance(enrollment_id):
         return redirect(url_for('student.student_insurance'))
 
     enrollment.status = 'cancelled'
-    enrollment.cancel_date = datetime.now(timezone.utc)
+    enrollment.cancel_date = utc_now()
 
     db.session.commit()
     flash(f"Insurance policy '{enrollment.policy.title}' has been cancelled.", "info")
@@ -2055,13 +2034,13 @@ def file_claim(policy_id):
     policy = enrollment.policy
     form = InsuranceClaimForm()
     if policy.claim_type == 'transaction_monetary' and not form.incident_date.data:
-        form.incident_date.data = datetime.now(timezone.utc).date()
+        form.incident_date.data = utc_now().date()
 
     # Validation errors
     errors = []
 
     def _get_period_bounds():
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         if policy.max_claims_period == 'year':
             return (
                 now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
@@ -2083,9 +2062,9 @@ def file_claim(policy_id):
         return period_start, period_end
 
     # Normalize coverage dates for safe comparisons
-    enrollment.coverage_start_date = normalize_to_utc(enrollment.coverage_start_date)
-    enrollment.cancel_date = normalize_to_utc(enrollment.cancel_date)
-    now_utc = datetime.now(timezone.utc)
+    enrollment.coverage_start_date = ensure_utc(enrollment.coverage_start_date)
+    enrollment.cancel_date = ensure_utc(enrollment.cancel_date)
+    now_utc = utc_now()
 
     # Check if coverage has started
     if not enrollment.coverage_start_date or enrollment.coverage_start_date > now_utc:
@@ -2186,13 +2165,13 @@ def file_claim(policy_id):
                 flash("This transaction already has a claim. Each transaction can only be claimed once.", "danger")
                 return redirect(url_for('student.file_claim', policy_id=policy_id))
 
-            incident_date_value = normalize_to_utc(selected_transaction.timestamp)
+            incident_date_value = ensure_utc(selected_transaction.timestamp)
             claim_amount_value = abs(selected_transaction.amount)
             transaction_id_value = selected_transaction.id
 
             days_since_incident = (now_utc - incident_date_value).days
         else:
-            incident_date_value = normalize_to_utc(datetime.combine(form.incident_date.data, datetime.min.time()))
+            incident_date_value = ensure_utc(datetime.combine(form.incident_date.data, datetime.min.time()))
             days_since_incident = (now_utc - incident_date_value).days
 
         if policy.claim_type == 'non_monetary':
@@ -2280,9 +2259,9 @@ def view_policy(enrollment_id):
     ).all()
 
     # Normalize dates for safe comparisons in template
-    enrollment.coverage_start_date = normalize_to_utc(enrollment.coverage_start_date)
-    enrollment.cancel_date = normalize_to_utc(enrollment.cancel_date)
-    now_utc = datetime.now(timezone.utc)
+    enrollment.coverage_start_date = ensure_utc(enrollment.coverage_start_date)
+    enrollment.cancel_date = ensure_utc(enrollment.cancel_date)
+    now_utc = utc_now()
 
     return render_template('student_view_policy.html',
                           student=student,
@@ -2313,11 +2292,12 @@ def shop():
 
     teacher_id = context['teacher_id']
 
-    now = datetime.now(timezone.utc)
+    now = utc_now()
+    now_db = normalize_for_db(now)
     items = StoreItem.query.filter(
         StoreItem.teacher_id == teacher_id,
         StoreItem.is_active == True,
-        or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now)
+        or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now_db)
     ).order_by(StoreItem.name).all()
 
     # FIX: Fetch student's purchased items scoped to current teacher's store
@@ -2338,7 +2318,7 @@ def shop():
     if teacher_id and join_code and current_block:
         rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
         if rent_settings and rent_settings.is_enabled:
-            now = datetime.now(timezone.utc)
+            now = utc_now()
 
             # Calculate current due date to determine coverage period (pre-paid system)
             current_due_date, _ = _calculate_rent_deadlines(rent_settings, now)
@@ -2398,19 +2378,11 @@ def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, 
 
 def _calculate_rent_deadlines(settings, reference_date=None):
     """Return the due date and grace end date for the active month."""
-    reference_date = reference_date or datetime.now()
-
-    # Normalize to naive datetimes for consistent comparison.
-    # The function constructs naive datetimes internally, so mixing
-    # aware and naive inputs would raise TypeError.
-    if reference_date.tzinfo is not None:
-        reference_date = reference_date.replace(tzinfo=None)
+    reference_date = ensure_utc(reference_date) if reference_date else utc_now()
 
     # If first_rent_due_date is set and we haven't reached it yet, return it
     if settings.first_rent_due_date:
-        first_due = settings.first_rent_due_date
-        if first_due.tzinfo is not None:
-            first_due = first_due.replace(tzinfo=None)
+        first_due = ensure_utc(settings.first_rent_due_date)
         # If we're before the first due date, return the first due date
         if reference_date < first_due:
             grace_end_date = first_due + timedelta(days=settings.grace_period_days)
@@ -2425,7 +2397,7 @@ def _calculate_rent_deadlines(settings, reference_date=None):
             target_month = (first_due.month + months_diff - 1) % 12 + 1
             last_day_of_month = monthrange(target_year, target_month)[1]
             due_day = min(first_due.day, last_day_of_month)
-            due_date = datetime(target_year, target_month, due_day)
+            due_date = datetime(target_year, target_month, due_day, tzinfo=timezone.utc)
         else:
             # Calculate due date based on frequency
             freq_delta = None
@@ -2453,7 +2425,7 @@ def _calculate_rent_deadlines(settings, reference_date=None):
 
                     last_day_of_month = monthrange(target_year, target_month)[1]
                     due_day = min(first_due.day, last_day_of_month)
-                    due_date = datetime(target_year, target_month, due_day)
+                    due_date = datetime(target_year, target_month, due_day, tzinfo=timezone.utc)
 
             if freq_delta:
                 # Calculate periods passed for fixed time deltas
@@ -2461,21 +2433,20 @@ def _calculate_rent_deadlines(settings, reference_date=None):
                 periods = time_diff // freq_delta
                 due_date = first_due + (periods * freq_delta)
 
+            use_fallback = False
             if not freq_delta and settings.frequency_type != 'custom':
                 # Fallback for unknown frequency types
                 use_fallback = True
             elif settings.frequency_type == 'custom' and settings.custom_frequency_unit not in ['days', 'weeks', 'months']:
                  # Fallback for unknown custom units
                 use_fallback = True
-            else:
-                use_fallback = False
 
             if use_fallback:
                 current_year = reference_date.year
                 current_month = reference_date.month
                 last_day_of_month = monthrange(current_year, current_month)[1]
                 due_day = min(settings.due_day_of_month, last_day_of_month)
-                due_date = datetime(current_year, current_month, due_day)
+                due_date = datetime(current_year, current_month, due_day, tzinfo=timezone.utc)
 
     else:
         # No first_rent_due_date set, use traditional monthly logic
@@ -2483,7 +2454,7 @@ def _calculate_rent_deadlines(settings, reference_date=None):
         current_month = reference_date.month
         last_day_of_month = monthrange(current_year, current_month)[1]
         due_day = min(settings.due_day_of_month, last_day_of_month)
-        due_date = datetime(current_year, current_month, due_day)
+        due_date = datetime(current_year, current_month, due_day, tzinfo=timezone.utc)
 
     grace_end_date = due_date + timedelta(days=settings.grace_period_days)
     return due_date, grace_end_date
@@ -2522,7 +2493,7 @@ def rent():
     student_blocks = [current_block]
 
     # Calculate rent status for each period
-    now = datetime.now()
+    now = utc_now()
 
     # Calculate due dates
     due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
@@ -2664,7 +2635,7 @@ def rent_pay(period):
         flash("Invalid period.", "error")
         return redirect(url_for('student.rent'))
 
-    now = datetime.now()
+    now = utc_now()
 
     # Calculate due dates and preview period
     due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
@@ -2977,7 +2948,7 @@ def login():
 
 
         session['student_id'] = student.id
-        session['login_time'] = datetime.now(timezone.utc).isoformat()
+        session['login_time'] = utc_now().isoformat()
         session['last_activity'] = session['login_time']
 
 
@@ -3019,7 +2990,7 @@ def demo_login(session_id):
             return redirect(url_for('admin.dashboard'))
 
         # Check if session has expired
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         expires_at = demo_session.expires_at
         if not isinstance(expires_at, datetime):
             # If missing or invalid, refresh expiry to 10 minutes from now to avoid false immediate expiry
@@ -3066,7 +3037,7 @@ def demo_login(session_id):
 
         # Set student session variables
         session['student_id'] = student.id
-        session['login_time'] = datetime.now(timezone.utc).isoformat()
+        session['login_time'] = utc_now().isoformat()
         session['last_activity'] = session['login_time']
         session['is_demo'] = True
         session['demo_session_id'] = session_id
@@ -3105,7 +3076,7 @@ def logout():
             demo_session = DemoStudent.query.filter_by(session_id=demo_session_id).first()
             if demo_session:
                 demo_session.is_active = False
-                demo_session.ended_at = datetime.now(timezone.utc)
+                demo_session.ended_at = utc_now()
 
                 cleanup_demo_student_data(demo_session)
 
@@ -3415,7 +3386,7 @@ def verify_recovery(code_id):
     if expires_at and expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
 
-    if expires_at < datetime.now(timezone.utc):
+    if expires_at < utc_now():
         flash("This recovery request has expired.", "error")
         return redirect(url_for('student.dashboard'))
 
@@ -3441,7 +3412,7 @@ def verify_recovery(code_id):
 
         # Hash and store the code
         recovery_code.code_hash = hash_hmac(code.encode(), b'')
-        recovery_code.verified_at = datetime.now(timezone.utc)
+        recovery_code.verified_at = utc_now()
         db.session.commit()
 
         current_app.logger.info(f"Student {student.id} verified recovery request {recovery_code.recovery_request_id}")

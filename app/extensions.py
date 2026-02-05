@@ -20,7 +20,7 @@ from flask_limiter.util import get_remote_address
 
 # Initialize extensions (without binding to an app yet)
 db = SQLAlchemy()
-migrate = Migrate()
+migrate = Migrate(compare_type=True)
 csrf = CSRFProtect()
 scheduler = BackgroundScheduler()
 

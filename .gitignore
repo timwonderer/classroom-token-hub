@@ -16,3 +16,4 @@ local.db
 .claude/settings.local.json
 *.log.*
 venv
+.codex/

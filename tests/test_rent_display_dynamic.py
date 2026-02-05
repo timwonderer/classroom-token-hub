@@ -242,7 +242,9 @@ def test_status_text_past_due(client, setup_rent_with_items):
     
     # Set rent due date to 5 days ago (past grace period)
     now = datetime.now(timezone.utc)
-    data['rent_settings'].first_rent_due_date = now - timedelta(days=5)
+    due_date = now - timedelta(days=5)
+    data['rent_settings'].first_rent_due_date = due_date
+    data['rent_settings'].grace_period_days = 0
     db.session.commit()
     
     with client.session_transaction() as sess:

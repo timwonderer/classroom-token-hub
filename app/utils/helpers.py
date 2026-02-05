@@ -59,10 +59,8 @@ def format_utc_iso(dt):
     """Return a UTC ISO-8601 string (with trailing Z) for a datetime or None."""
     if not dt:
         return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    else:
-        dt = dt.astimezone(timezone.utc)
+    from app.utils.time import ensure_utc
+    dt = ensure_utc(dt)
     return dt.isoformat().replace("+00:00", "Z")
 
 
