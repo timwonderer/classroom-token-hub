@@ -4066,6 +4066,18 @@ def insurance_management():
     if not settings_block and teacher_blocks:
         settings_block = teacher_blocks[0]
 
+    # CRITICAL: Get the join_code for the selected block for proper multi-tenancy scoping
+    # All data (policies, enrollments, claims) must be filtered by join_code
+    selected_join_code = None
+    if settings_block:
+        # Find the join_code for this block from TeacherBlock
+        teacher_block_record = TeacherBlock.query.filter_by(
+            teacher_id=admin_id,
+            block=settings_block
+        ).first()
+        if teacher_block_record:
+            selected_join_code = teacher_block_record.join_code
+
     # Get class labels for display
     class_labels_by_block = _get_class_labels_for_blocks(admin_id, teacher_blocks)
 
@@ -4074,7 +4086,30 @@ def insurance_management():
     form.blocks.choices = [(block, f"Period {block}") for block in blocks]
 
     current_teacher_id = admin_id
-    existing_policies = InsurancePolicy.query.filter_by(teacher_id=current_teacher_id).all()
+
+    # CRITICAL: Filter policies by selected block for multi-tenancy
+    # Policies are visible in a block if:
+    # 1. They have an InsurancePolicyBlock entry for the selected block, OR
+    # 2. They have NO InsurancePolicyBlock entries (available to all blocks)
+    if settings_block:
+        # Get policies that are either specifically visible to this block or visible to all blocks
+        existing_policies = (
+            InsurancePolicy.query
+            .filter_by(teacher_id=current_teacher_id)
+            .filter(
+                sa.or_(
+                    InsurancePolicy.id.in_(
+                        db.session.query(InsurancePolicyBlock.policy_id).filter(
+                            InsurancePolicyBlock.block == settings_block.upper()
+                        )
+                    ),
+                    ~sa.exists().where(InsurancePolicyBlock.policy_id == InsurancePolicy.id)
+                )
+            )
+            .all()
+        )
+    else:
+        existing_policies = InsurancePolicy.query.filter_by(teacher_id=current_teacher_id).all()
 
     # Collect existing tier groups for the current teacher
     tier_groups_map = {}
@@ -4176,16 +4211,19 @@ def insurance_management():
     student_ids_in_block = [s.id for s in students_in_block]
 
     # Get student enrollments for selected block
+    # CRITICAL: Filter by join_code for proper multi-tenancy scoping
     active_enrollments = []
     cancelled_enrollments = []
     claims = []
     pending_claims_count = 0
 
-    if student_ids_in_block:
+    if student_ids_in_block and selected_join_code:
+        # Filter enrollments by join_code to ensure proper class isolation
         active_enrollments = (
             StudentInsurance.query
             .join(Student, StudentInsurance.student_id == Student.id)
             .filter(Student.id.in_(student_ids_in_block))
+            .filter(StudentInsurance.join_code == selected_join_code)
             .filter(StudentInsurance.status == 'active')
             .all()
         )
@@ -4193,15 +4231,17 @@ def insurance_management():
             StudentInsurance.query
             .join(Student, StudentInsurance.student_id == Student.id)
             .filter(Student.id.in_(student_ids_in_block))
+            .filter(StudentInsurance.join_code == selected_join_code)
             .filter(StudentInsurance.status == 'cancelled')
             .all()
         )
 
-        # Get claims for selected block, filtered by student IDs for proper multi-tenancy isolation
+        # Get claims for selected block, filtered by join_code for proper multi-tenancy isolation
         claims = (
             InsuranceClaim.query
             .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
             .filter(StudentInsurance.student_id.in_(student_ids_in_block))
+            .filter(StudentInsurance.join_code == selected_join_code)
             .order_by(InsuranceClaim.filed_date.desc())
             .all()
         )
@@ -4209,6 +4249,7 @@ def insurance_management():
             InsuranceClaim.query
             .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
             .filter(StudentInsurance.student_id.in_(student_ids_in_block))
+            .filter(StudentInsurance.join_code == selected_join_code)
             .filter(InsuranceClaim.status == 'pending')
             .count()
         )
