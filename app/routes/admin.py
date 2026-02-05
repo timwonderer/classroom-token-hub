@@ -1789,19 +1789,12 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
         # Use the most recently PASSED due date so that payments made for
         # period N are found even after the calendar month rolls over but
         # before the next due date arrives.
-        from app.routes.student import _calculate_rent_deadlines
-        current_due_date, _ = _calculate_rent_deadlines(rent_settings, now)
-        if now < current_due_date:
-            prev_due, _ = _calculate_rent_deadlines(rent_settings, current_due_date - timedelta(days=1))
-            if prev_due < current_due_date:
-                coverage_month = prev_due.month
-                coverage_year = prev_due.year
-            else:
-                coverage_month = current_due_date.month
-                coverage_year = current_due_date.year
-        else:
-            coverage_month = current_due_date.month
-            coverage_year = current_due_date.year
+        from app.routes.student import _calculate_rent_coverage_due_date
+        coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
+        if not coverage_due_date:
+            continue
+        coverage_month = coverage_due_date.month
+        coverage_year = coverage_due_date.year
 
         # Batch rent payments for the current coverage period
         rent_payment_rows = (
@@ -1889,19 +1882,12 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
 
     # Calculate current due date and determine which coverage period we're in.
     # Use the most recently PASSED due date for correct coverage matching.
-    from app.routes.student import _calculate_rent_deadlines
-    current_due_date, _ = _calculate_rent_deadlines(rent_settings, now)
-    if now < current_due_date:
-        prev_due, _ = _calculate_rent_deadlines(rent_settings, current_due_date - timedelta(days=1))
-        if prev_due < current_due_date:
-            coverage_month = prev_due.month
-            coverage_year = prev_due.year
-        else:
-            coverage_month = current_due_date.month
-            coverage_year = current_due_date.year
-    else:
-        coverage_month = current_due_date.month
-        coverage_year = current_due_date.year
+    from app.routes.student import _calculate_rent_coverage_due_date
+    coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
+    if not coverage_due_date:
+        return rent_privileges
+    coverage_month = coverage_due_date.month
+    coverage_year = coverage_due_date.year
 
     has_paid_rent = RentPayment.query.filter(
         RentPayment.student_id == student.id,
@@ -3801,110 +3787,105 @@ def rent_settings():
         from app.models import RentItem
         rent_items = RentItem.query.filter_by(rent_setting_id=settings.id).order_by(RentItem.order_index).all()
 
-    # Calculate rent active status and unpaid students
+    # Calculate rent active status and unpaid students (grouped by class/join code)
     rent_active_for_period = False
     unpaid_students = []
+    unpaid_students_by_class = []
 
     if settings and settings.is_enabled:
-        # 1. Determine if rent is active for this period
-        # Use UTC-aware datetime for rent deadline calculations.
         now_utc = utc_now()
 
-        # Check if we've passed the first due date (or if it's not set, assume active if enabled)
-        if settings.first_rent_due_date:
-            due_date = settings.first_rent_due_date.date()
-            today = now_utc.date()
+        # Build class/join_code map for this teacher
+        teacher_block_rows = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
+        classes_by_block = {}
+        for tb in teacher_block_rows:
+            block_name = (tb.block or '').strip().upper()
+            if not block_name:
+                continue
+            if block_name not in classes_by_block:
+                classes_by_block[block_name] = {
+                    'block': block_name,
+                    'join_code': tb.join_code,
+                    'class_label': tb.get_class_label(),
+                    'student_ids': set()
+                }
+            if tb.is_claimed and tb.student_id:
+                classes_by_block[block_name]['student_ids'].add(tb.student_id)
 
-            # Rent is active if:
-            # 1. The due date has already passed, OR
-            # 2. The due date is in the current month (even if not yet reached)
-            # This ensures students can see their rent obligations before the due date
-            if today >= due_date or (due_date.year == today.year and due_date.month == today.month):
-                rent_active_for_period = True
-            # If due date is in a future month, rent is NOT active yet
-        else:
-            # No start date set - valid state? Assume active if enabled.
+        from app.routes.student import _calculate_rent_coverage_due_date
+
+        for class_info in classes_by_block.values():
+            block_name = class_info['block']
+            join_code = class_info['join_code']
+            class_label = class_info['class_label']
+            student_ids = list(class_info['student_ids'])
+
+            if not student_ids:
+                continue
+
+            block_settings = RentSettings.query.filter_by(teacher_id=admin_id, block=block_name).first()
+            if not block_settings or not block_settings.is_enabled:
+                continue
+
+            coverage_due_date = _calculate_rent_coverage_due_date(block_settings, now_utc)
+            if not coverage_due_date:
+                continue
+
+            if now_utc < coverage_due_date:
+                # Rent not active yet for this class
+                continue
+
             rent_active_for_period = True
 
-    # 2. Calculate unpaid students if active
-    if rent_active_for_period:
-        # Fetch all rent-enabled students for this admin
-        rent_enabled_students = _scoped_students().filter_by(is_rent_enabled=True).order_by(Student.first_name).all()
-
-        # Build a subquery of rent-enabled student IDs for efficient filtering
-        rent_enabled_student_ids_subq = (
-            _scoped_students()
-            .filter_by(is_rent_enabled=True)
-            .with_entities(Student.id)
-            .subquery()
-        )
-
-        # Calculate coverage period for pre-paid system.
-        # Use the most recently PASSED due date for correct coverage matching.
-        from app.routes.student import _calculate_rent_deadlines
-        coverage_due_date, _ = _calculate_rent_deadlines(settings, now_utc)
-        if now_utc < coverage_due_date:
-            prev_due, _ = _calculate_rent_deadlines(settings, coverage_due_date - timedelta(days=1))
-            if prev_due < coverage_due_date:
-                coverage_month = prev_due.month
-                coverage_year = prev_due.year
-            else:
-                coverage_month = coverage_due_date.month
-                coverage_year = coverage_due_date.year
-        else:
             coverage_month = coverage_due_date.month
             coverage_year = coverage_due_date.year
+            period_label_for_class = coverage_due_date.strftime('%B %Y')
 
-        # Fetch all payments that cover the current period
-        period_payments = (
-            RentPayment.query
-            .filter(RentPayment.student_id.in_(rent_enabled_student_ids_subq))
-            .filter_by(coverage_month=coverage_month, coverage_year=coverage_year)
-            .all()
-        )
+            # Fetch all payments that cover the current period for this class
+            period_payments = (
+                RentPayment.query
+                .filter(RentPayment.student_id.in_(student_ids))
+                .filter_by(coverage_month=coverage_month, coverage_year=coverage_year)
+                .filter(db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)))
+                .all()
+            )
 
-        # Map student_id -> total_paid using defaultdict for efficiency
-        payments_map = defaultdict(lambda: Decimal('0.00'))
-        for p in period_payments:
-            payments_map[p.student_id] += Decimal(str(p.amount_paid))
+            payments_map = defaultdict(lambda: Decimal('0.00'))
+            for p in period_payments:
+                payments_map[p.student_id] += Decimal(str(p.amount_paid))
 
-        # Use helper function to calculate base rent amount for the coverage period
-        base_rent_amount = _calculate_base_rent_amount(settings, coverage_year, coverage_month)
+            base_rent_amount = _calculate_base_rent_amount(block_settings, coverage_year, coverage_month)
+            grace_days = block_settings.grace_period_days or 0
+            grace_end_date = coverage_due_date + timedelta(days=grace_days)
 
-        # Build unpaid list
-        for student in rent_enabled_students:
-            paid = payments_map.get(student.id, Decimal('0.00'))
-            if paid < base_rent_amount - Decimal('0.01'):
-                # Calculate status - determine due date first, then check if late
-                is_late = False
+            class_unpaid = []
+            class_students = Student.query.filter(
+                Student.id.in_(student_ids),
+                Student.is_rent_enabled == True
+            ).order_by(Student.first_name).all()
 
-                # Determine due day; if not set, fall back to last day of month
-                if settings.due_day_of_month is None:
-                    _, due_day = monthrange(current_year, current_month)
-                else:
-                    due_day = settings.due_day_of_month
+            for student in class_students:
+                paid = payments_map.get(student.id, Decimal('0.00'))
+                if paid < base_rent_amount - Decimal('0.01'):
+                    remaining = base_rent_amount - paid
+                    is_late = now_utc > grace_end_date
+                    item = {
+                        'student': student,
+                        'period': period_label_for_class,
+                        'total_paid': paid,
+                        'total_due': base_rent_amount,
+                        'remaining': remaining,
+                        'is_late': is_late
+                    }
+                    class_unpaid.append(item)
+                    unpaid_students.append(item)
 
-                try:
-                    due_date = datetime(current_year, current_month, due_day, tzinfo=timezone.utc)
-                except ValueError:
-                    # Handle short months (e.g. Feb 30)
-                    # Fallback to last day of month
-                    _, last_day = monthrange(current_year, current_month)
-                    due_date = datetime(current_year, current_month, last_day, tzinfo=timezone.utc)
-
-                # Check if payment is late (grace_period_days might be None)
-                grace_days = settings.grace_period_days or 0
-                if now > due_date + timedelta(days=grace_days):
-                    is_late = True
-
-                unpaid_students.append({
-                    'student': student,
-                    'period': f"{datetime(current_year, current_month, 1).strftime('%B')} {current_year}",  # Rent billing period
-                    'total_paid': paid,
-                    'total_due': base_rent_amount,
-                    'remaining': base_rent_amount - paid,
-                    'is_late': is_late
-                })
+            unpaid_students_by_class.append({
+                'block': block_name,
+                'join_code': join_code,
+                'class_label': class_label,
+                'unpaid_students': class_unpaid
+            })
 
     # Determine period label based on frequency type
     period_label = "Month"  # Default
@@ -3947,6 +3928,7 @@ def rent_settings():
                           class_labels_by_block=class_labels_by_block,
                           rent_items=rent_items,
                           unpaid_students=unpaid_students,
+                          unpaid_students_by_class=unpaid_students_by_class,
                           rent_active_for_period=rent_active_for_period,
                           period_label=period_label)
 
