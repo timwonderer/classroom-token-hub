@@ -45,7 +45,7 @@ from app.utils.help_content import HELP_ARTICLES
 from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
 from app.attendance import get_all_block_statuses
 from app.payroll import get_pay_rate_for_block
-from app.utils.time import utc_now, ensure_utc
+from app.utils.time import utc_now, ensure_utc, normalize_for_db
 
 # Create blueprint
 student_bp = Blueprint('student', __name__, url_prefix='/student')
@@ -2293,10 +2293,11 @@ def shop():
     teacher_id = context['teacher_id']
 
     now = utc_now()
+    now_db = normalize_for_db(now)
     items = StoreItem.query.filter(
         StoreItem.teacher_id == teacher_id,
         StoreItem.is_active == True,
-        or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now)
+        or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now_db)
     ).order_by(StoreItem.name).all()
 
     # FIX: Fetch student's purchased items scoped to current teacher's store
@@ -2432,14 +2433,13 @@ def _calculate_rent_deadlines(settings, reference_date=None):
                 periods = time_diff // freq_delta
                 due_date = first_due + (periods * freq_delta)
 
+            use_fallback = False
             if not freq_delta and settings.frequency_type != 'custom':
                 # Fallback for unknown frequency types
                 use_fallback = True
             elif settings.frequency_type == 'custom' and settings.custom_frequency_unit not in ['days', 'weeks', 'months']:
                  # Fallback for unknown custom units
                 use_fallback = True
-            else:
-                use_fallback = False
 
             if use_fallback:
                 current_year = reference_date.year

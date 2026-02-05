@@ -115,10 +115,10 @@ class AnalyticsAlert(db.Model):
         return True
 
     @is_active.expression
-    def is_active(cls):
+    def is_active(self):
         return sa.and_(
-            cls.resolved_at.is_(None),
-            sa.or_(cls.valid_until.is_(None), cls.valid_until > sa.func.now())
+            self.resolved_at.is_(None),
+            sa.or_(self.valid_until.is_(None), self.valid_until > sa.func.now())
         )
 
     def acknowledge(self):

@@ -8,6 +8,7 @@ As per docs/development/TIMEZONE_HANDLING_SPECIFICATION.md:
 """
 
 from datetime import datetime, timezone
+from app.extensions import db
 
 # Re-export timezone for convenience
 UTC = timezone.utc
@@ -40,3 +41,17 @@ def ensure_utc(dt: datetime) -> datetime | None:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt.astimezone(timezone.utc)
+
+def normalize_for_db(dt: datetime) -> datetime | None:
+    """
+    Normalize datetimes for database comparisons (SQLite stores naive UTC).
+
+    - Ensures UTC awareness.
+    - Strips timezone for SQLite comparisons to match stored values.
+    """
+    dt = ensure_utc(dt)
+    if dt is None:
+        return None
+    if db.engine.dialect.name == "sqlite":
+        return dt.replace(tzinfo=None)
+    return dt

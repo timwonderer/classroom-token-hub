@@ -1,17 +1,8 @@
 from datetime import datetime, timezone, timedelta
-from app.utils.time import utc_now, ensure_utc
+from app.utils.time import utc_now, ensure_utc, normalize_for_db
 from sqlalchemy import func
 # Import from shared utilities to avoid circular dependency with payroll.py
 from app.utils.attendance_helpers import get_join_code_for_student_period
-from app.extensions import db
-
-
-def _normalize_for_db(dt):
-    """Normalize datetimes for database comparisons (SQLite stores naive UTC)."""
-    dt = ensure_utc(dt)
-    if db.engine.dialect.name == "sqlite":
-        return dt.replace(tzinfo=None)
-    return dt
 
 def get_last_payroll_time(student_id=None):
     """
@@ -43,7 +34,6 @@ def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, j
     and only calculates completed sessions to ensure correctness.
     """
     from app.models import TapEvent
-    from app.extensions import db
     from datetime import datetime, timezone
 
     last_payroll_time = ensure_utc(last_payroll_time)
@@ -124,8 +114,8 @@ def calculate_period_attendance(student_id, period, date):
     start_utc = datetime.combine(date, datetime.min.time(), tzinfo=timezone.utc)
     end_utc = start_utc + timedelta(days=1)
 
-    start_db = _normalize_for_db(start_utc)
-    end_db = _normalize_for_db(end_utc)
+    start_db = normalize_for_db(start_utc)
+    end_db = normalize_for_db(end_utc)
 
     # Get all events for this student/period on the specified date
     events = TapEvent.query.filter(
@@ -166,8 +156,8 @@ def calculate_period_attendance_utc_range(student_id, period, start_utc, end_utc
     """
     from app.models import TapEvent
 
-    start_db = _normalize_for_db(start_utc)
-    end_db = _normalize_for_db(end_utc)
+    start_db = normalize_for_db(start_utc)
+    end_db = normalize_for_db(end_utc)
 
     # Get all events in the UTC range
     events = TapEvent.query.filter(

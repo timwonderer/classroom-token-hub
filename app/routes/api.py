@@ -28,7 +28,7 @@ from app.routes.student import get_current_class_context, get_current_teacher_id
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
-from app.utils.time import utc_now, ensure_utc
+from app.utils.time import utc_now, ensure_utc, normalize_for_db
 
 # Import external modules
 from app.attendance import (
@@ -944,13 +944,14 @@ def _check_simultaneous_pass_limit(log_entry):
         now_user_tz = utc_now().astimezone(user_tz)
         today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
         today_start_utc = today_start_user_tz.astimezone(pytz.utc)
+        today_start_db = normalize_for_db(today_start_utc)
 
         # Count currently out students for THIS destination from today (excluding this student)
         currently_out = HallPassLog.query.filter(
             HallPassLog.status == 'left',
             HallPassLog.reason == log_entry.reason,
             HallPassLog.join_code == log_entry.join_code,
-            HallPassLog.left_time >= today_start_utc,
+            HallPassLog.left_time >= today_start_db,
             HallPassLog.id != log_entry.id  # Exclude current pass
         ).count()
 
@@ -1258,6 +1259,7 @@ def get_hall_pass_queue():
 
     # Convert to UTC for database comparison (database stores times in UTC)
     today_start_utc = today_start_user_tz.astimezone(pytz.utc)
+    today_start_db = normalize_for_db(today_start_utc)
 
     # Build subquery for students belonging to this teacher
     # Use StudentTeacher table as the source of truth for associations.
@@ -1281,7 +1283,7 @@ def get_hall_pass_queue():
     # SCOPED to this teacher's students
     queue = HallPassLog.query.filter(
         HallPassLog.status == 'approved',
-        HallPassLog.decision_time >= today_start_utc,
+        HallPassLog.decision_time >= today_start_db,
         HallPassLog.student_id.in_(student_ids_subquery)
     ).order_by(HallPassLog.decision_time.asc()).all()
 
@@ -1289,7 +1291,7 @@ def get_hall_pass_queue():
     # SCOPED to this teacher's students
     currently_out_count = HallPassLog.query.filter(
         HallPassLog.status == 'left',
-        HallPassLog.left_time >= today_start_utc,
+        HallPassLog.left_time >= today_start_db,
         HallPassLog.student_id.in_(student_ids_subquery)
     ).count()
 
@@ -1621,12 +1623,6 @@ def get_available_hall_pass_types():
 def attendance_history():
     """Get paginated attendance history with filters (admin only)"""
     try:
-        def _normalize_for_db(dt):
-            """Normalize datetimes for database comparisons (SQLite stores naive UTC)."""
-            dt = ensure_utc(dt)
-            if db.engine.dialect.name == "sqlite":
-                return dt.replace(tzinfo=None)
-            return dt
         # Get pagination parameters
         page = int(request.args.get('page', 1))
         page_size = min(int(request.args.get('page_size', 50)), 100)  # Max 100 per page
@@ -1662,7 +1658,7 @@ def attendance_history():
                 # Parse date and treat as UTC midnight (start of day)
                 start_datetime = datetime.strptime(start_date, '%Y-%m-%d')
                 start_datetime = start_datetime.replace(tzinfo=timezone.utc)
-                query = query.filter(TapEvent.timestamp >= _normalize_for_db(start_datetime))
+                query = query.filter(TapEvent.timestamp >= normalize_for_db(start_datetime))
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid start date format"}), 400
 
@@ -1671,7 +1667,7 @@ def attendance_history():
                 # Parse date and treat as UTC end of day (23:59:59)
                 end_datetime = datetime.strptime(end_date, '%Y-%m-%d')
                 end_datetime = end_datetime.replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
-                query = query.filter(TapEvent.timestamp <= _normalize_for_db(end_datetime))
+                query = query.filter(TapEvent.timestamp <= normalize_for_db(end_datetime))
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid end date format"}), 400
 
@@ -1914,13 +1910,14 @@ def handle_tap():
                 now_user_tz = utc_now().astimezone(user_tz)
                 today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
                 today_start_utc = today_start_user_tz.astimezone(pytz.utc)
+                today_start_db = normalize_for_db(today_start_utc)
 
                 # Count approved (waiting) passes for THIS destination from today
                 queue_count = HallPassLog.query.filter(
                     HallPassLog.status == 'approved',
                     HallPassLog.reason == reason,
                     HallPassLog.join_code == join_code,
-                    HallPassLog.decision_time >= today_start_utc
+                    HallPassLog.decision_time >= today_start_db
                 ).count()
 
                 # Count currently out students for THIS destination from today
@@ -1928,7 +1925,7 @@ def handle_tap():
                     HallPassLog.status == 'left',
                     HallPassLog.reason == reason,
                     HallPassLog.join_code == join_code,
-                    HallPassLog.left_time >= today_start_utc
+                    HallPassLog.left_time >= today_start_db
                 ).count()
 
                 total_in_queue = queue_count + out_count
