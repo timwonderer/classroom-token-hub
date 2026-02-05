@@ -1810,6 +1810,10 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
         all_student_ids.update(block_student_ids)
 
         # Calculate current coverage period (pre-paid system)
+        # Use the most recently PASSED due date so that payments made for
+        # period N are found even after the calendar month rolls over but
+        # before the next due date arrives.
+        from app.routes.student import _calculate_rent_coverage_due_date
         coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
         if not coverage_due_date:
             continue
