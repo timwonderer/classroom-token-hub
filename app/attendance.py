@@ -1,8 +1,17 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from app.utils.time import utc_now, ensure_utc
 from sqlalchemy import func
 # Import from shared utilities to avoid circular dependency with payroll.py
 from app.utils.attendance_helpers import get_join_code_for_student_period
+from app.extensions import db
+
+
+def _normalize_for_db(dt):
+    """Normalize datetimes for database comparisons (SQLite stores naive UTC)."""
+    dt = ensure_utc(dt)
+    if db.engine.dialect.name == "sqlite":
+        return dt.replace(tzinfo=None)
+    return dt
 
 def get_last_payroll_time(student_id=None):
     """
@@ -111,11 +120,19 @@ def calculate_period_attendance(student_id, period, date):
     """
     from app.models import TapEvent
 
+    # Build UTC range for the specified date
+    start_utc = datetime.combine(date, datetime.min.time(), tzinfo=timezone.utc)
+    end_utc = start_utc + timedelta(days=1)
+
+    start_db = _normalize_for_db(start_utc)
+    end_db = _normalize_for_db(end_utc)
+
     # Get all events for this student/period on the specified date
     events = TapEvent.query.filter(
         TapEvent.student_id == student_id,
         TapEvent.period == period,
-        func.date(TapEvent.timestamp) == date,
+        TapEvent.timestamp >= start_db,
+        TapEvent.timestamp < end_db,
         TapEvent.is_deleted == False  # Exclude deleted events
     ).order_by(TapEvent.timestamp.asc()).all()
 
@@ -149,12 +166,15 @@ def calculate_period_attendance_utc_range(student_id, period, start_utc, end_utc
     """
     from app.models import TapEvent
 
+    start_db = _normalize_for_db(start_utc)
+    end_db = _normalize_for_db(end_utc)
+
     # Get all events in the UTC range
     events = TapEvent.query.filter(
         TapEvent.student_id == student_id,
         TapEvent.period == period,
-        TapEvent.timestamp >= start_utc,
-        TapEvent.timestamp < end_utc,
+        TapEvent.timestamp >= start_db,
+        TapEvent.timestamp < end_db,
         TapEvent.is_deleted == False  # Exclude deleted events
     ).order_by(TapEvent.timestamp.asc()).all()
 

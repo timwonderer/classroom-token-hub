@@ -181,9 +181,9 @@ def get_feature_settings_for_student():
 
     # Try block-specific settings first
     if current_block:
-        block_settings = FeatureSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=current_block
+        block_settings = FeatureSettings.query.filter(
+            FeatureSettings.teacher_id == teacher_id,
+            func.upper(FeatureSettings.block) == current_block
         ).first()
         if block_settings:
             return block_settings.to_dict()
@@ -2377,19 +2377,11 @@ def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, 
 
 def _calculate_rent_deadlines(settings, reference_date=None):
     """Return the due date and grace end date for the active month."""
-    reference_date = reference_date or utc_now()
-
-    # Normalize to naive datetimes for consistent comparison.
-    # The function constructs naive datetimes internally, so mixing
-    # aware and naive inputs would raise TypeError.
-    if reference_date.tzinfo is not None:
-        reference_date = reference_date.replace(tzinfo=None)
+    reference_date = ensure_utc(reference_date) if reference_date else utc_now()
 
     # If first_rent_due_date is set and we haven't reached it yet, return it
     if settings.first_rent_due_date:
-        first_due = settings.first_rent_due_date
-        if first_due.tzinfo is not None:
-            first_due = first_due.replace(tzinfo=None)
+        first_due = ensure_utc(settings.first_rent_due_date)
         # If we're before the first due date, return the first due date
         if reference_date < first_due:
             grace_end_date = first_due + timedelta(days=settings.grace_period_days)
@@ -2404,7 +2396,7 @@ def _calculate_rent_deadlines(settings, reference_date=None):
             target_month = (first_due.month + months_diff - 1) % 12 + 1
             last_day_of_month = monthrange(target_year, target_month)[1]
             due_day = min(first_due.day, last_day_of_month)
-            due_date = datetime(target_year, target_month, due_day)
+            due_date = datetime(target_year, target_month, due_day, tzinfo=timezone.utc)
         else:
             # Calculate due date based on frequency
             freq_delta = None
@@ -2432,7 +2424,7 @@ def _calculate_rent_deadlines(settings, reference_date=None):
 
                     last_day_of_month = monthrange(target_year, target_month)[1]
                     due_day = min(first_due.day, last_day_of_month)
-                    due_date = datetime(target_year, target_month, due_day)
+                    due_date = datetime(target_year, target_month, due_day, tzinfo=timezone.utc)
 
             if freq_delta:
                 # Calculate periods passed for fixed time deltas
@@ -2454,7 +2446,7 @@ def _calculate_rent_deadlines(settings, reference_date=None):
                 current_month = reference_date.month
                 last_day_of_month = monthrange(current_year, current_month)[1]
                 due_day = min(settings.due_day_of_month, last_day_of_month)
-                due_date = datetime(current_year, current_month, due_day)
+                due_date = datetime(current_year, current_month, due_day, tzinfo=timezone.utc)
 
     else:
         # No first_rent_due_date set, use traditional monthly logic
@@ -2462,7 +2454,7 @@ def _calculate_rent_deadlines(settings, reference_date=None):
         current_month = reference_date.month
         last_day_of_month = monthrange(current_year, current_month)[1]
         due_day = min(settings.due_day_of_month, last_day_of_month)
-        due_date = datetime(current_year, current_month, due_day)
+        due_date = datetime(current_year, current_month, due_day, tzinfo=timezone.utc)
 
     grace_end_date = due_date + timedelta(days=settings.grace_period_days)
     return due_date, grace_end_date

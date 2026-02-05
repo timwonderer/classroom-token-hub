@@ -719,6 +719,7 @@ def reset_teacher_totp(admin_id):
         new_secret = pyotp.random_base32()
         admin.totp_secret = encrypt_totp(new_secret)  # Encrypt before storing
         db.session.commit()
+        stored_secret = admin.totp_secret
 
         # Generate QR code
         totp_uri = pyotp.totp.TOTP(new_secret).provisioning_uri(
@@ -735,7 +736,8 @@ def reset_teacher_totp(admin_id):
         return jsonify({
             "status": "success",
             "message": f"TOTP secret reset for {admin.username}",
-            "totp_secret": new_secret,
+            "totp_secret": stored_secret,
+            "totp_secret_plain": new_secret,
             "qr_code": qr_b64,
             "username": admin.username
         })

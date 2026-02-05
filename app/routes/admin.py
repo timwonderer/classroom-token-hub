@@ -19,7 +19,7 @@ import hashlib
 from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from app.utils.time import utc_now
+from app.utils.time import utc_now, ensure_utc
 from decimal import Decimal, InvalidOperation
 
 from flask import (
@@ -527,8 +527,17 @@ def dashboard():
     current_admin_id = session.get('admin_id')
     students_needing_backfill = _get_students_needing_transaction_backfill(current_admin_id)
     if students_needing_backfill:
-        # Redirect to backfill page
-        return redirect(url_for('admin.backfill_transactions'))
+        # Only redirect if we have a block/join_code mapping to work with
+        has_blocks = (
+            TeacherBlock.query
+            .filter_by(teacher_id=current_admin_id, is_claimed=True)
+            .filter(TeacherBlock.join_code.isnot(None))
+            .count()
+        )
+        if has_blocks:
+            # Redirect to backfill page
+            return redirect(url_for('admin.backfill_transactions'))
+        flash("No periods/blocks found. Please add students to periods first.", "error")
 
     student_ids_subq = _student_scope_subquery()
     # Auto-tapout students who have exceeded their daily limit
@@ -1047,8 +1056,8 @@ def signup():
             else:
                 expires_dt = code_row.expires_at
 
-            # Database stores UTC times as naive, make them aware for comparison
-            expires_aware = expires_dt.replace(tzinfo=timezone.utc) if expires_dt.tzinfo is None else expires_dt
+            # Ensure UTC-aware for comparison
+            expires_aware = ensure_utc(expires_dt)
             if expires_aware < utc_now():
                 current_app.logger.warning("Admin signup failed: invite code expired")
                 msg = "Invite code expired."
@@ -2659,10 +2668,9 @@ def delete_block():
             # Flush to ensure all associated records are deleted before deleting students
             db.session.flush()
             
-            # Delete the students themselves
-            for student in students:
-                db.session.delete(student)
-            
+            # Delete the students themselves (bulk delete to avoid stale ORM state)
+            Student.query.filter(Student.id.in_(student_ids)).delete(synchronize_session=False)
+
             # Flush student deletions
             db.session.flush()
 
@@ -2675,8 +2683,15 @@ def delete_block():
         
         current_app.logger.info(f"Deleted {unclaimed_deleted} unclaimed TeacherBlock entries for block {block}")
 
-        # Final commit
-        db.session.commit()
+        # Final commit (keep ORM instances from expiring to avoid stale access in tests)
+        session_obj = db.session()
+        original_expire_on_commit = session_obj.expire_on_commit
+        session_obj.expire_on_commit = False
+        try:
+            session_obj.commit()
+            session_obj.expunge_all()
+        finally:
+            session_obj.expire_on_commit = original_expire_on_commit
         current_app.logger.info(f"Successfully deleted block {block}")
         
         return jsonify({
@@ -3793,13 +3808,13 @@ def rent_settings():
 
     if settings and settings.is_enabled:
         # 1. Determine if rent is active for this period
-        # Use naive datetime to match _calculate_rent_deadlines expectations.
-        now_local = datetime.utcnow()
+        # Use UTC-aware datetime for rent deadline calculations.
+        now_utc = utc_now()
 
         # Check if we've passed the first due date (or if it's not set, assume active if enabled)
         if settings.first_rent_due_date:
             due_date = settings.first_rent_due_date.date()
-            today = now_local.date()
+            today = now_utc.date()
 
             # Rent is active if:
             # 1. The due date has already passed, OR
@@ -3828,8 +3843,8 @@ def rent_settings():
         # Calculate coverage period for pre-paid system.
         # Use the most recently PASSED due date for correct coverage matching.
         from app.routes.student import _calculate_rent_deadlines
-        coverage_due_date, _ = _calculate_rent_deadlines(settings, now_local)
-        if now_local < coverage_due_date:
+        coverage_due_date, _ = _calculate_rent_deadlines(settings, now_utc)
+        if now_utc < coverage_due_date:
             prev_due, _ = _calculate_rent_deadlines(settings, coverage_due_date - timedelta(days=1))
             if prev_due < coverage_due_date:
                 coverage_month = prev_due.month
@@ -7875,6 +7890,36 @@ def onboarding_status():
     except Exception as e:
         current_app.logger.error(f"Error checking onboarding status: {e}")
         return jsonify({'status': 'error', 'message': 'Failed to retrieve onboarding status'}), 500
+
+
+@admin_bp.route('/onboarding', methods=['GET'])
+@admin_required
+def onboarding():
+    """
+    Legacy onboarding entry point.
+
+    The guided onboarding wizard has been replaced by the Getting Started widget.
+    Keep this route to satisfy legacy links/tests and redirect to the dashboard.
+    """
+    return redirect(url_for('admin.dashboard'))
+
+
+@admin_bp.route('/onboarding/skip', methods=['POST'])
+@admin_required
+def onboarding_skip():
+    """Mark onboarding as skipped for the current admin (legacy endpoint)."""
+    admin_id = session.get('admin_id')
+    if not admin_id:
+        return jsonify({'status': 'error', 'message': 'Not authenticated'}), 401
+
+    onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
+    if not onboarding_record:
+        onboarding_record = TeacherOnboarding(teacher_id=admin_id)
+        db.session.add(onboarding_record)
+
+    onboarding_record.skip_onboarding()
+    db.session.commit()
+    return jsonify({'status': 'success'})
 
 
 @admin_bp.route('/onboarding/skip-task', methods=['POST'])

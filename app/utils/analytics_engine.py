@@ -29,6 +29,7 @@ from app.models import (
     RentSettings, AnalyticsSnapshot, AnalyticsAlert, TeacherBlock,
     StudentTeacher
 )
+from app.models import DemoStudent
 from app.utils.economy_balance import EconomyBalanceChecker
 import logging
 
@@ -139,7 +140,19 @@ class AnalyticsEngine:
 
         scoped_student_ids = teacherblock_ids.union(studentblock_ids).subquery()
 
-        return query.filter(Student.id.in_(scoped_student_ids)).distinct(Student.id).all()
+        demo_student_ids = (
+            DemoStudent.query.with_entities(DemoStudent.student_id)
+            .filter(DemoStudent.admin_id == self.teacher_id)
+            .subquery()
+        )
+
+        return (
+            query
+            .filter(Student.id.in_(scoped_student_ids))
+            .filter(~Student.id.in_(demo_student_ids))
+            .distinct(Student.id)
+            .all()
+        )
     
     def _get_cwi(self) -> float:
         """Calculate current CWI for this class."""

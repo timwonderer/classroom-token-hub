@@ -5,13 +5,15 @@ All SQLAlchemy models are defined here with proper relationships and properties.
 Times are stored as UTC in the database.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal, InvalidOperation
 import enum
 
+import sqlalchemy as sa
+from sqlalchemy.ext.hybrid import hybrid_property
 from app.extensions import db
 from app.utils.encryption import PIIEncryptedType
-from app.utils.time import utc_now
+from app.utils.time import utc_now, ensure_utc
 
 
 def _quantize_currency(value):
@@ -42,6 +44,12 @@ def _quantize_currency(value):
     except (InvalidOperation, ValueError, TypeError):
         # Handle NaN, Infinity, or unparseable values
         return Decimal('0.00')
+
+def _current_utc_month():
+    return utc_now().month
+
+def _current_utc_year():
+    return utc_now().year
 
 
 
@@ -97,13 +105,21 @@ class AnalyticsAlert(db.Model):
         db.Index('ix_analytics_alerts_window', 'window_type', 'window_start', 'window_end'),
     )
 
+    @hybrid_property
     def is_active(self):
         """Return True if alert is unresolved and within its validity window."""
         if self.resolved_at is not None:
             return False
-        if self.valid_until is not None and utc_now() > self.valid_until:
+        if self.valid_until is not None and utc_now() > ensure_utc(self.valid_until):
             return False
         return True
+
+    @is_active.expression
+    def is_active(cls):
+        return sa.and_(
+            cls.resolved_at.is_(None),
+            sa.or_(cls.valid_until.is_(None), cls.valid_until > sa.func.now())
+        )
 
     def acknowledge(self):
         """Mark alert as acknowledged by a human."""
@@ -420,13 +436,6 @@ class Student(db.Model):
         now = utc_now()
         recent_timeframe = now - timedelta(days=2)
 
-        def _as_utc(dt):
-            if dt is None:
-                return None
-            if dt.tzinfo is None:
-                return dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone.utc)
-
         deposits = []
         for tx in self.transactions:
             # Skip transactions with NULL amounts (corrupted data)
@@ -434,7 +443,7 @@ class Student(db.Model):
                 continue
             if (tx.description or "").lower().startswith("transfer"):
                 continue
-            tx_time = _as_utc(tx.timestamp)
+            tx_time = ensure_utc(tx.timestamp)
             if not tx_time or tx_time < recent_timeframe:
                 continue
             deposits.append(tx)
@@ -872,14 +881,14 @@ class RentPayment(db.Model):
     amount_paid = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
 
     # Payment date tracking (when payment was made)
-    period_month = db.Column(db.Integer, nullable=False)  # Month payment was made (1-12)
-    period_year = db.Column(db.Integer, nullable=False)  # Year payment was made (e.g., 2025)
+    period_month = db.Column(db.Integer, nullable=False, default=_current_utc_month)  # Month payment was made (1-12)
+    period_year = db.Column(db.Integer, nullable=False, default=_current_utc_year)  # Year payment was made (e.g., 2025)
     payment_date = db.Column(db.DateTime(timezone=True), default=utc_now)
 
     # Coverage period tracking (which month/year this payment covers)
     # Enables pre-paid system: payment in January covers until February due date
-    coverage_month = db.Column(db.Integer, nullable=False)  # Month covered (1-12)
-    coverage_year = db.Column(db.Integer, nullable=False)  # Year covered (e.g., 2025)
+    coverage_month = db.Column(db.Integer, nullable=False, default=_current_utc_month)  # Month covered (1-12)
+    coverage_year = db.Column(db.Integer, nullable=False, default=_current_utc_year)  # Year covered (e.g., 2025)
 
     was_late = db.Column(db.Boolean, default=False)
     late_fee_charged = db.Column(db.Numeric(precision=12, scale=2), default=0.0)
@@ -1714,7 +1723,7 @@ class TeacherOnboarding(db.Model):
 
     # Step tracking (for resume functionality)
     current_step = db.Column(db.Integer, default=1, nullable=False)
-    total_steps = db.Column(db.Integer, default=4, nullable=False)
+    total_steps = db.Column(db.Integer, default=5, nullable=False)
 
     # Detailed step completion tracking (JSON for flexibility)
     # Format: {"welcome": true, "roster": false, "features": false, "settings": false}
