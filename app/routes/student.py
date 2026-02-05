@@ -2330,16 +2330,18 @@ def shop():
 
             # Calculate current coverage period (pre-paid system)
             coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
-            coverage_month = coverage_due_date.month
-            coverage_year = coverage_due_date.year
+            
+            if coverage_due_date:
+                coverage_month = coverage_due_date.month
+                coverage_year = coverage_due_date.year
 
-            has_paid_rent = RentPayment.query.filter(
-                RentPayment.student_id == student.id,
-                RentPayment.period == current_block,
-                RentPayment.coverage_month == coverage_month,
-                RentPayment.coverage_year == coverage_year,
-                db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
-            ).first() is not None
+                has_paid_rent = RentPayment.query.filter(
+                    RentPayment.student_id == student.id,
+                    RentPayment.period == current_block,
+                    RentPayment.coverage_month == coverage_month,
+                    RentPayment.coverage_year == coverage_year,
+                    db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                ).first() is not None
 
             # Get all per-period rent items
             per_period_items = RentItem.query.filter_by(
@@ -2491,26 +2493,7 @@ def _get_rent_period_delta(settings):
 
 def _add_rent_period(dt, delta):
     """Add a timedelta or relativedelta to dt."""
-    if isinstance(delta, relativedelta):
-        return dt + delta
     return dt + delta
-
-
-def _calculate_rent_cycle_dates(settings, reference_date=None):
-    """
-    Return (current_due_date, next_due_date, grace_end_date).
-
-    current_due_date is the deadline for the current cycle, while next_due_date
-    represents the next cycle's due date (the coverage period for pre-paid rent).
-    """
-    reference_date = ensure_utc(reference_date) if reference_date else utc_now()
-    current_due_date, grace_end_date = _calculate_rent_deadlines(settings, reference_date)
-    if not current_due_date:
-        return None, None, None
-
-    delta = _get_rent_period_delta(settings)
-    next_due_date = _add_rent_period(current_due_date, delta)
-    return current_due_date, next_due_date, grace_end_date
 
 
 def _calculate_rent_coverage_due_date(settings, reference_date=None):
