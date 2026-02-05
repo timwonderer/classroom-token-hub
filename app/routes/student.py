@@ -2330,6 +2330,7 @@ def shop():
 
             # Calculate current coverage period (pre-paid system)
             coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
+
             
             if coverage_due_date:
                 coverage_month = coverage_due_date.month
