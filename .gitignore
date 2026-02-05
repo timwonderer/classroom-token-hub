@@ -17,3 +17,4 @@ local.db
 *.log.*
 venv
 .codex/
+*_optimized.txt
