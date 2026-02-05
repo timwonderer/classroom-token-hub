@@ -16,6 +16,7 @@ import ipaddress
 import urllib.request
 import urllib.error
 from datetime import datetime, timedelta, timezone
+from app.utils.time import utc_now
 
 
 # Cloudflare IP ranges (updated periodically)
@@ -53,7 +54,7 @@ def get_cloudflare_ips():
 
     # Check cache
     if _cloudflare_ips_cache and _cloudflare_ips_cache_time:
-        if datetime.now(timezone.utc) - _cloudflare_ips_cache_time < CACHE_DURATION:
+        if utc_now() - _cloudflare_ips_cache_time < CACHE_DURATION:
             return _cloudflare_ips_cache
 
     try:
@@ -69,7 +70,7 @@ def get_cloudflare_ips():
 
         # Update cache
         _cloudflare_ips_cache = (ipv4_ranges, ipv6_ranges)
-        _cloudflare_ips_cache_time = datetime.now(timezone.utc)
+        _cloudflare_ips_cache_time = utc_now()
 
         return _cloudflare_ips_cache
     except (urllib.error.URLError, TimeoutError) as e:

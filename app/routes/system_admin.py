@@ -13,6 +13,7 @@ import base64
 import qrcode
 import requests
 from datetime import datetime, timedelta, timezone
+from app.utils.time import utc_now
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app, jsonify, Response
@@ -83,7 +84,7 @@ def _check_deletion_authorization(admin, request_type=None, period=None):
     pending_request = query.first()
     
     # Check inactivity
-    inactivity_threshold = datetime.now(timezone.utc) - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
+    inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
     is_inactive = False
     if admin.last_login:
         last_login = admin.last_login
@@ -143,14 +144,14 @@ def auth_check():
         last_activity = datetime.fromisoformat(last_activity_str)
         if last_activity.tzinfo is None:
             last_activity = last_activity.replace(tzinfo=timezone.utc)
-        if (datetime.now(timezone.utc) - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+        if (utc_now() - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
             session.pop("is_system_admin", None)
             session.pop("sysadmin_id", None)
             session.pop("last_activity", None)
             raise Unauthorized("Session expired")
 
     # Update activity to keep session alive.
-    session["last_activity"] = datetime.now(timezone.utc).isoformat()
+    session["last_activity"] = utc_now().isoformat()
     return ("", 204)
 
 @sysadmin_bp.route('/login', methods=['GET', 'POST'])
@@ -172,14 +173,14 @@ def login():
             if totp.verify(totp_code, valid_window=1):
                 session["is_system_admin"] = True
                 session["sysadmin_id"] = admin.id
-                session['last_activity'] = datetime.now(timezone.utc).isoformat()
+                session['last_activity'] = utc_now().isoformat()
                 # Establish global maintenance bypass for subsequent role testing.
                 session['maintenance_global_bypass'] = True
                 flash("System admin login successful.")
                 next_url = request.args.get("next")
                 if not is_safe_url(next_url):
                     return redirect(url_for("sysadmin.dashboard"))
-                return redirect(next_url or url_for("sysadmin.dashboard"))
+                return redirect(next_url or url_for("sysadmin.dashboard"))  # nosec # Safe: validated by is_safe_url()
         flash("Invalid credentials or TOTP.", "error")
         return redirect(url_for("sysadmin.login"))
     return render_template("system_admin_login.html", form=form)
@@ -341,7 +342,7 @@ def passkey_auth_finish():
             return jsonify({"error": "Admin not found"}), 401
 
         # Update credential last_used timestamp
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         credential_id = verified_user.credential_id
         if credential_id:
             credential = SystemAdminCredential.query.filter_by(credential_id=credential_id).first()
@@ -718,6 +719,7 @@ def reset_teacher_totp(admin_id):
         new_secret = pyotp.random_base32()
         admin.totp_secret = encrypt_totp(new_secret)  # Encrypt before storing
         db.session.commit()
+        stored_secret = admin.totp_secret
 
         # Generate QR code
         totp_uri = pyotp.totp.TOTP(new_secret).provisioning_uri(
@@ -734,7 +736,8 @@ def reset_teacher_totp(admin_id):
         return jsonify({
             "status": "success",
             "message": f"TOTP secret reset for {admin.username}",
-            "totp_secret": new_secret,
+            "totp_secret": stored_secret,
+            "totp_secret_plain": new_secret,
             "qr_code": qr_b64,
             "username": admin.username
         })
@@ -831,7 +834,7 @@ def manage_teachers():
         code = (form.code.data.strip() if form.code.data else None) or secrets.token_urlsafe(8)
         current_app.logger.info(f"Creating invite code: {repr(code)} (length: {len(code)})")
         expiry_days = request.form.get('expiry_days', 30, type=int)
-        expires_at = datetime.now(timezone.utc) + timedelta(days=expiry_days)
+        expires_at = utc_now() + timedelta(days=expiry_days)
         invite = AdminInviteCode(code=code, expires_at=expires_at)
         db.session.add(invite)
         db.session.commit()
@@ -873,7 +876,7 @@ def teacher_overview():
     teachers = Admin.query.order_by(Admin.username.asc()).all()
     
     # Define inactivity threshold (6 months)
-    inactivity_threshold = datetime.now(timezone.utc) - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
+    inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
 
     # Batch query: Get all teacher-student relationships in one query
     # Uses StudentTeacher table only (Multi-Teacher Hardening)
@@ -1056,7 +1059,7 @@ def delete_period(admin_id, period):
         # Mark any pending deletion requests for this period as approved
         if pending_request:
             pending_request.status = DeletionRequestStatus.APPROVED
-            pending_request.resolved_at = datetime.now(timezone.utc)
+            pending_request.resolved_at = utc_now()
             pending_request.resolved_by = session.get('sysadmin_id')
 
         db.session.commit()
@@ -1244,7 +1247,7 @@ def update_user_report(report_id):
     # Update report
     report.status = new_status
     report.admin_notes = admin_notes if admin_notes else None
-    report.reviewed_at = datetime.now(timezone.utc)
+    report.reviewed_at = utc_now()
     report.reviewed_by_sysadmin_id = session.get('sysadmin_id')
     
     try:
@@ -1322,16 +1325,16 @@ def send_reward_to_reporter(report_id):
             amount=reward_amount,
             account_type='checking',
             description=f"Bug Report Reward (Report #{report_id})",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=utc_now(),
             is_void=False
         )
         db.session.add(transaction)
         
         # Update report
         report.reward_amount = reward_amount
-        report.reward_sent_at = datetime.now(timezone.utc)
+        report.reward_sent_at = utc_now()
         report.status = 'rewarded'
-        report.reviewed_at = datetime.now(timezone.utc)
+        report.reviewed_at = utc_now()
         report.reviewed_by_sysadmin_id = session.get('sysadmin_id')
         
         db.session.commit()
@@ -1369,12 +1372,12 @@ def grafana_auth_check():
         last_activity = datetime.fromisoformat(last_activity_str)
         if last_activity.tzinfo is None:
             last_activity = last_activity.replace(tzinfo=timezone.utc)
-        if (datetime.now(timezone.utc) - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+        if (utc_now() - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
             session.clear()
             return Response('Unauthorized: Session expired', 401)
 
     # Update activity to keep session alive
-    session["last_activity"] = datetime.now(timezone.utc).isoformat()
+    session["last_activity"] = utc_now().isoformat()
 
     # Verify the sysadmin still exists
     sysadmin = SystemAdmin.query.get(session.get('sysadmin_id'))
@@ -1511,9 +1514,22 @@ def grafana_proxy(path):
             )
 
         # Create streaming response for allowed content types
-        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-        response_headers = [(name, value) for name, value in resp.raw.headers.items()
-                           if name.lower() not in excluded_headers]
+        # Security: Use allowlist for headers instead of blocklist to prevent XSS via reflected headers
+        # Only pass through specific, known-safe headers that are necessary for proper content delivery
+        allowed_headers = {
+            'content-type',          # Required for browser to interpret content correctly
+            'content-disposition',   # For file downloads
+            'cache-control',         # Caching behavior
+            'expires',               # Cache expiration
+            'last-modified',         # Conditional requests
+            'etag',                  # Conditional requests
+            'content-security-policy',  # Security policy (if Grafana sets it)
+        }
+
+        response_headers = [
+            (name, value) for name, value in resp.raw.headers.items()
+            if name.lower() in allowed_headers
+        ]
 
         response = Response(resp.iter_content(chunk_size=8192), resp.status_code, response_headers)
         return response
@@ -1657,7 +1673,7 @@ def announcement_edit(announcement_id):
             announcement.priority = form.priority.data
             announcement.is_active = form.is_active.data
             announcement.expires_at = form.expires_at.data
-            announcement.updated_at = datetime.now(timezone.utc)
+            announcement.updated_at = utc_now()
 
             db.session.commit()
 
@@ -1714,7 +1730,7 @@ def announcement_toggle(announcement_id):
 
     try:
         announcement.is_active = not announcement.is_active
-        announcement.updated_at = datetime.now(timezone.utc)
+        announcement.updated_at = utc_now()
         db.session.commit()
 
         return jsonify({
@@ -1823,7 +1839,7 @@ def resolve_escalated_issue(issue_id):
     try:
         old_status = issue.status
         issue.status = 'developer_resolved'
-        issue.sysadmin_resolved_at = datetime.now(timezone.utc)
+        issue.sysadmin_resolved_at = utc_now()
         issue.sysadmin_notes = resolution_note
         issue.sysadmin_id = session.get('sysadmin_id')
         issue.eligible_for_reward = eligible_for_reward

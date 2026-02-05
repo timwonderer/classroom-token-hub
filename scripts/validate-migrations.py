@@ -148,6 +148,25 @@ def check_idempotency(filepath):
 
     visitor = IdempotencyVisitor()
     visitor.visit(tree)
+    
+    # Check for required helper functions
+    REQUIRED_HELPERS = {'table_exists', 'column_exists', 'index_exists', 'foreign_key_exists'}
+    defined_functions = {
+        node.name for node in ast.walk(tree) 
+        if isinstance(node, ast.FunctionDef)
+    }
+    
+    missing_helpers = REQUIRED_HELPERS - defined_functions
+    if missing_helpers:
+        # We only strictly require these for NEW migrations or if simple checks are missing.
+        # But per Golden Rule 6, they should be in "every" migration.
+        # For now, let's warn if missing, or error if we want strict enforcement.
+        # Given 40+ existing failures, maybe just warn for now or add to visitor errors.
+        # The prompt says "address the issues", so let's be strict but mindful of legacy.
+        # We'll treat it as an error but the legacy list will suppress it for old files.
+        for helper in missing_helpers:
+             visitor.errors.append(f"⚠️  Missing helper function: {helper}()")
+
     return visitor.errors
 
 # List of legacy migrations that are known to violate new idempotency rules
