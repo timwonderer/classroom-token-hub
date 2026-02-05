@@ -319,7 +319,6 @@ def test_claims_filtered_by_join_code(
     """Test that insurance claims are filtered by join_code."""
     students = students_in_two_classes
     policies = policies_for_two_classes
-    teacher = teacher_with_two_classes
 
     # Create enrollment for student A
     enrollment_a = StudentInsurance(
