@@ -70,8 +70,6 @@ def _get_period_delta(rent_setting):
 
 def _add_period(dt, delta):
     """Add a timedelta or relativedelta to dt."""
-    if isinstance(delta, relativedelta):
-        return dt + delta
     return dt + delta
 
 
@@ -213,15 +211,16 @@ def purchase_item():
         # Check if student is late on rent
         now = utc_now()
 
-        current_due, next_due = _calculate_due_dates(rent_settings, now)
+        from app.routes.student import _calculate_rent_coverage_due_date
+        coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
 
-        if current_due:
-            grace_end_date = current_due + timedelta(days=rent_settings.grace_period_days)
+        if coverage_due_date:
+            grace_end_date = coverage_due_date + timedelta(days=rent_settings.grace_period_days)
 
-            # Pre-paid system: use the due date's month/year as the
-            # coverage period so we match payments that COVER this cycle.
-            coverage_month = current_due.month
-            coverage_year = current_due.year
+            # Pre-paid system: use the most recently passed due date
+            # as the coverage period so we match payments that COVER this cycle.
+            coverage_month = coverage_due_date.month
+            coverage_year = coverage_due_date.year
 
             # Check if past grace period
             if now > grace_end_date:
