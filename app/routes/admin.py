@@ -4114,16 +4114,16 @@ def insurance_management():
         existing_policies = (
             InsurancePolicy.query
             .filter_by(teacher_id=current_teacher_id)
-            .outerjoin(InsurancePolicyBlock, InsurancePolicy.id == InsurancePolicyBlock.policy_id)
             .filter(
                 sa.or_(
-                    InsurancePolicyBlock.block == settings_block.upper(),
-                    ~InsurancePolicy.id.in_(
-                        db.session.query(InsurancePolicyBlock.policy_id).distinct()
-                    )
+                    InsurancePolicy.id.in_(
+                        db.session.query(InsurancePolicyBlock.policy_id).filter(
+                            InsurancePolicyBlock.block == settings_block.upper()
+                        )
+                    ),
+                    ~sa.exists().where(InsurancePolicyBlock.policy_id == InsurancePolicy.id)
                 )
             )
-            .distinct()
             .all()
         )
     else:
