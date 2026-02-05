@@ -183,7 +183,7 @@ def get_feature_settings_for_student():
     if current_block:
         block_settings = FeatureSettings.query.filter(
             FeatureSettings.teacher_id == teacher_id,
-            func.upper(FeatureSettings.block) == current_block
+            func.upper(FeatureSettings.block) == func.upper(current_block)
         ).first()
         if block_settings:
             return block_settings.to_dict()
@@ -2432,14 +2432,14 @@ def _calculate_rent_deadlines(settings, reference_date=None):
                 periods = time_diff // freq_delta
                 due_date = first_due + (periods * freq_delta)
 
+            # Initialize use_fallback
+            use_fallback = False
             if not freq_delta and settings.frequency_type != 'custom':
                 # Fallback for unknown frequency types
                 use_fallback = True
             elif settings.frequency_type == 'custom' and settings.custom_frequency_unit not in ['days', 'weeks', 'months']:
                  # Fallback for unknown custom units
                 use_fallback = True
-            else:
-                use_fallback = False
 
             if use_fallback:
                 current_year = reference_date.year

@@ -2684,14 +2684,13 @@ def delete_block():
         current_app.logger.info(f"Deleted {unclaimed_deleted} unclaimed TeacherBlock entries for block {block}")
 
         # Final commit (keep ORM instances from expiring to avoid stale access in tests)
-        session_obj = db.session()
-        original_expire_on_commit = session_obj.expire_on_commit
-        session_obj.expire_on_commit = False
+        original_expire_on_commit = db.session.expire_on_commit
+        db.session.expire_on_commit = False
         try:
-            session_obj.commit()
-            session_obj.expunge_all()
+            db.session.commit()
+            db.session.expunge_all()
         finally:
-            session_obj.expire_on_commit = original_expire_on_commit
+            db.session.expire_on_commit = original_expire_on_commit
         current_app.logger.info(f"Successfully deleted block {block}")
         
         return jsonify({
@@ -6415,7 +6414,6 @@ def enforce_daily_limits():
     errors = []
 
     pacific = pytz.timezone('America/Los_Angeles')
-    now_utc = utc_now()
 
     for student in students:
         try:
