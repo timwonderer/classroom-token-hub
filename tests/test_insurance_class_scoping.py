@@ -16,7 +16,6 @@ from app import db
 from app.models import (
     Admin, Student, TeacherBlock, StudentBlock, StudentTeacher,
     InsurancePolicy, InsurancePolicyBlock, StudentInsurance, InsuranceClaim,
-    Transaction
 )
 from app.hash_utils import hash_username, get_random_salt
 
