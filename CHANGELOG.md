@@ -38,6 +38,9 @@ and this project follows semantic versioning principles.
   - **Issue**: When a teacher applied rent settings to multiple blocks, each block created its own store item copy instead of sharing one item with block visibility
   - **Solution**: Look up existing store items by `teacher_id` + `name` before creating new ones; use `StoreItemBlock` to add block visibility without replacing existing associations
 
+### Changed
+- **Redundant Check Removal** - Simplified `_add_period` utility function in `app/routes/api.py` by removing a redundant `isinstance` check.
+
 ### Security
 - **Hardened Grafana Proxy XSS Protection** - Improved content-type filtering to prevent XSS attacks (#897)
   - **Issue**: Original implementation had case-sensitivity issues, missed dangerous MIME types (SVG), and could be bypassed

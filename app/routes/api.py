@@ -70,8 +70,6 @@ def _get_period_delta(rent_setting):
 
 def _add_period(dt, delta):
     """Add a timedelta or relativedelta to dt."""
-    if isinstance(delta, relativedelta):
-        return dt + delta
     return dt + delta
 
 
