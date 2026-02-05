@@ -17,6 +17,17 @@ and this project follows semantic versioning principles.
   - **Migration**: `a1b2c3d4e5f6` adds columns with backfill from existing `period_month`/`period_year`
 
 ### Fixed
+- **Insurance Class Selector Not Filtering Data** - Fixed multi-tenancy scoping issue where insurance management page showed all classes' data regardless of selected class
+  - **Issue**: The "Viewing Insurance For" dropdown on the Insurance Management page did not filter policies, enrollments, or claims. Teachers with multiple class periods saw all insurance data aggregated together instead of scoped to the selected period.
+  - **Root Cause**:
+    - `InsurancePolicy` queries filtered only by `teacher_id`, not by `InsurancePolicyBlock.block`
+    - `StudentInsurance` enrollments were not filtered by `join_code`
+    - `InsuranceClaim` queries did not include `join_code` filtering
+  - **Solution**:
+    - Added `InsurancePolicyBlock` join to filter policies by selected block (or show policies available to all blocks)
+    - Added `join_code` lookup from `TeacherBlock` for the selected period
+    - Added `join_code` filter to all `StudentInsurance` and `InsuranceClaim` queries
+  - **Impact**: Teachers now see only the insurance policies, enrollments, and claims for the currently selected class period
 - **Store Purchase Blocked After Rent Paid Across Month Boundary** - Fixed rent-check logic using wrong month/year when verifying rent payments
   - **Issue**: `purchase_item()` used `now.month`/`now.year` instead of `current_due.month`/`current_due.year` when querying `RentPayment`. When a rent due date fell in January but the purchase check ran in February (past the grace period), the query looked for February payments and found none, incorrectly blocking the student.
   - **Solution**: All rent lookups now use `coverage_month`/`coverage_year` derived from the due date, not the wall-clock time
