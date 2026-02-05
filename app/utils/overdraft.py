@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from app.utils.time import utc_now
 from decimal import Decimal, InvalidOperation
 
 from sqlalchemy import func
@@ -60,7 +61,7 @@ def charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, j
     if banking_settings.overdraft_fee_type == 'flat':
         fee_amount = _quantize_currency(banking_settings.overdraft_fee_flat_amount)
     elif banking_settings.overdraft_fee_type == 'progressive':
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
         fee_filters = [

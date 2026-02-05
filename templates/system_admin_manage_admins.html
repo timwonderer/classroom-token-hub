@@ -188,7 +188,7 @@ function reset2FA(adminId, username) {
     if (data.status === 'success') {
       document.getElementById('resetUsername').textContent = data.username;
       document.getElementById('resetQRCode').src = 'data:image/png;base64,' + data.qr_code;
-      document.getElementById('resetSecret').textContent = data.totp_secret;
+      document.getElementById('resetSecret').textContent = data.totp_secret_plain || data.totp_secret;
 
       const modal = new bootstrap.Modal(document.getElementById('reset2FAModal'));
       modal.show();

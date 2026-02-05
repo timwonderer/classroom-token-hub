@@ -228,6 +228,12 @@ def view_doc(doc_path):
         def resolve_doc_path(untrusted_path: str, docs_root: Path) -> Path:
             """
             Resolve an untrusted documentation path to a safe file within docs_root.
+
+            Security validation strategy:
+            1. Reject absolute paths and '..' components
+            2. Resolve the path (following symlinks)
+            3. Verify resolved path is within docs root using startswith()
+               (CodeQL recognizes startswith() as a valid path safety check)
             """
             # Normalize the untrusted path as a relative path
             safe_rel_path = Path(untrusted_path)
@@ -252,24 +258,31 @@ def view_doc(doc_path):
                 abort(404)
 
             # Verify the resolved path is still within the docs root
-            try:
-                # Prefer pathlib's is_relative_to when available (Python 3.9+)
-                is_within_root = candidate.is_relative_to(root_resolved)  # type: ignore[attr-defined]
-            except AttributeError:
-                # Fallback for older Python versions: use os.path.commonpath
-                try:
-                    common = os.path.commonpath([str(root_resolved), str(candidate)])
-                except ValueError:
-                    current_app.logger.warning(f"Path outside DOCS_ROOT (invalid common path): {untrusted_path}")
-                    abort(404)
+            # Using startswith() instead of is_relative_to() because CodeQL recognizes
+            # startswith() as a valid SafeAccessCheck pattern, preventing false positives
+            root_path_str = str(root_resolved)
+            candidate_path_str = str(candidate)
 
-                # Normalize both paths before comparison
-                is_within_root = os.path.normcase(common) == os.path.normcase(str(root_resolved))
+            # For the prefix check, ensure the root path ends with a separator
+            root_with_sep = root_path_str
+            if not root_with_sep.endswith(os.sep):
+                root_with_sep += os.sep
+
+            # Check if candidate is exactly the root or starts with root + separator
+            norm_candidate = os.path.normcase(candidate_path_str)
+            is_within_root = (
+                norm_candidate == os.path.normcase(root_path_str) or
+                norm_candidate.startswith(os.path.normcase(root_with_sep))
+            )
 
             if not is_within_root:
                 current_app.logger.warning(f"Path outside DOCS_ROOT: {untrusted_path}")
                 abort(404)
 
+            # Path has been validated through multiple layers:
+            # 1. Earlier regex validation of the docs path blocks suspicious characters
+            # 2. The component check in this function blocks absolute paths and '..' traversal
+            # 3. The resolved path verification above ensures containment within the docs root
             return candidate
 
         # Ensure we have a safe, absolute docs root

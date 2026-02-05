@@ -6,6 +6,8 @@ proper data minimization for sysadmin review.
 """
 
 from datetime import datetime, timezone
+from app.utils.time import utc_now
+from decimal import Decimal
 from flask import request
 import hashlib
 import secrets
@@ -45,19 +47,20 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
         dict: Context snapshot with ledger state, amounts, timestamps, etc.
     """
     snapshot = {
-        'timestamp': datetime.now(timezone.utc).isoformat(),
+        'timestamp': utc_now().isoformat(),
         'page_url': request.url if request else None,
         'user_agent': request.headers.get('User-Agent') if request else None,
         'ip_address': get_real_ip() if request else None,
     }
 
     # Get current balances (scoped by join_code)
+    # Convert Decimal to float for JSON serialization (db.JSON column)
     checking_balance = student.get_checking_balance(join_code=join_code)
     savings_balance = student.get_savings_balance(join_code=join_code)
     snapshot['balances'] = {
-        'checking': checking_balance,
-        'savings': savings_balance,
-        'total': checking_balance + savings_balance
+        'checking': float(checking_balance),
+        'savings': float(savings_balance),
+        'total': float(checking_balance + savings_balance)
     }
 
     # If transaction-specific, include transaction details
@@ -66,7 +69,7 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
         if transaction:
             snapshot['transaction'] = {
                 'id': transaction.id,
-                'amount': transaction.amount,
+                'amount': float(transaction.amount),
                 'account_type': transaction.account_type,
                 'description': transaction.description,
                 'type': transaction.type,
@@ -83,7 +86,7 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
     snapshot['recent_transactions'] = [
         {
             'id': t.id,
-            'amount': t.amount,
+            'amount': float(t.amount),
             'description': t.description,
             'timestamp': t.timestamp.isoformat() if t.timestamp else None
         }
@@ -135,7 +138,7 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
         student, join_code, related_transaction_id, related_record_type, related_record_id
     )
 
-    now_utc = datetime.now(timezone.utc)
+    now_utc = utc_now()
 
     # Create the issue
     issue = Issue(
@@ -191,7 +194,7 @@ def record_status_change(issue, previous_status, new_status, changed_by_type, ch
         changed_by_type=changed_by_type,
         changed_by_id=changed_by_id,
         notes=notes,
-        changed_at=datetime.now(timezone.utc)
+        changed_at=utc_now()
     )
 
     db.session.add(history)
@@ -224,7 +227,7 @@ def record_resolution_action(issue, action_type, performed_by_type, performed_by
         amount_changed=amount_changed,
         before_value=before_value,
         after_value=after_value,
-        created_at=datetime.now(timezone.utc)
+        created_at=utc_now()
     )
 
     db.session.add(action)
@@ -243,6 +246,6 @@ def update_issue_status(issue, new_status, changed_by_type, changed_by_id, notes
     """
     previous_status = issue.status
     issue.status = new_status
-    issue.updated_at = datetime.now(timezone.utc)
+    issue.updated_at = utc_now()
 
     record_status_change(issue, previous_status, new_status, changed_by_type, changed_by_id, notes)

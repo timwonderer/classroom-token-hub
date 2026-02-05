@@ -19,6 +19,7 @@ import hashlib
 from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from app.utils.time import utc_now, ensure_utc
 from decimal import Decimal, InvalidOperation
 
 from flask import (
@@ -400,7 +401,7 @@ def _check_onboarding_redirect():
                 teacher_id=admin_id,
                 is_completed=True,
                 is_skipped=True,
-                completed_at=datetime.now(timezone.utc)
+                completed_at=utc_now()
             )
             db.session.add(onboarding)
             db.session.commit()
@@ -526,8 +527,17 @@ def dashboard():
     current_admin_id = session.get('admin_id')
     students_needing_backfill = _get_students_needing_transaction_backfill(current_admin_id)
     if students_needing_backfill:
-        # Redirect to backfill page
-        return redirect(url_for('admin.backfill_transactions'))
+        # Only redirect if we have a block/join_code mapping to work with
+        has_blocks = (
+            TeacherBlock.query
+            .filter_by(teacher_id=current_admin_id, is_claimed=True)
+            .filter(TeacherBlock.join_code.isnot(None))
+            .count()
+        )
+        if has_blocks:
+            # Redirect to backfill page
+            return redirect(url_for('admin.backfill_transactions'))
+        flash("No periods/blocks found. Please add students to periods first.", "error")
 
     student_ids_subq = _student_scope_subquery()
     # Auto-tapout students who have exceeded their daily limit
@@ -611,7 +621,7 @@ def dashboard():
         .filter(Transaction.student_id.in_(student_ids_subq))
         .filter(~Transaction.student_id.in_(demo_ids_subq))
         .filter(
-            Transaction.timestamp >= datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0),
+            Transaction.timestamp >= utc_now().replace(hour=0, minute=0, second=0, microsecond=0),
             Transaction.is_void == False,
         )
         .count()
@@ -650,7 +660,7 @@ def dashboard():
     if last_payroll_time:
         next_payroll_date = last_payroll_time + timedelta(days=14)
     else:
-        now_utc = datetime.now(timezone.utc)
+        now_utc = utc_now()
         days_until_friday = (4 - now_utc.weekday() + 7) % 7
         if days_until_friday == 0:
             days_until_friday = 7
@@ -925,12 +935,12 @@ def login():
             totp = pyotp.TOTP(decrypted_secret)
             if totp.verify(totp_code, valid_window=1):
                 # Update last login timestamp
-                admin.last_login = datetime.now(timezone.utc)
+                admin.last_login = utc_now()
                 db.session.commit()
 
                 session["is_admin"] = True
                 session["admin_id"] = admin.id
-                session["last_activity"] = datetime.now(timezone.utc).isoformat()
+                session["last_activity"] = utc_now().isoformat()
                 flash("Admin login successful.")
                 next_url = request.args.get("next")
                 redirect_target = None
@@ -1046,9 +1056,9 @@ def signup():
             else:
                 expires_dt = code_row.expires_at
 
-            # Database stores UTC times as naive, make them aware for comparison
-            expires_aware = expires_dt.replace(tzinfo=timezone.utc) if expires_dt.tzinfo is None else expires_dt
-            if expires_aware < datetime.now(timezone.utc):
+            # Ensure UTC-aware for comparison
+            expires_aware = ensure_utc(expires_dt)
+            if expires_aware < utc_now():
                 current_app.logger.warning("Admin signup failed: invite code expired")
                 msg = "Invite code expired."
                 if is_json:
@@ -1169,7 +1179,7 @@ def signup():
             dob_sum_hash=dob_sum_hash,
             salt=salt,
             tos_accepted=True,
-            tos_accepted_at=datetime.now(timezone.utc)
+            tos_accepted_at=utc_now()
         )
         db.session.add(new_admin)
         db.session.execute(
@@ -1317,7 +1327,7 @@ def recover():
             admin_id=teacher.id,
             status='pending'
         ).filter(
-            RecoveryRequest.expires_at > datetime.now(timezone.utc)
+            RecoveryRequest.expires_at > utc_now()
         ).first()
 
         if existing_request:
@@ -1326,7 +1336,7 @@ def recover():
             return redirect(url_for('admin.recovery_status'))
 
         # Create recovery request (5-day expiration)
-        expires_at = datetime.now(timezone.utc) + timedelta(days=5)
+        expires_at = utc_now() + timedelta(days=5)
         recovery_request = RecoveryRequest(
             admin_id=teacher.id,
             dob_sum_hash=teacher.dob_sum_hash,
@@ -1375,7 +1385,7 @@ def recovery_status():
     expires_at = recovery_request.expires_at
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
-    if expires_at < datetime.now(timezone.utc):
+    if expires_at < utc_now():
         recovery_request.status = 'expired'
         db.session.commit()
         flash("Your recovery request has expired. Please start a new recovery.", "error")
@@ -1556,7 +1566,7 @@ def confirm_reset():
 
     # Mark recovery request as completed
     recovery_request.status = 'verified'
-    recovery_request.completed_at = datetime.now(timezone.utc)
+    recovery_request.completed_at = utc_now()
 
     db.session.commit()
 
@@ -1639,7 +1649,7 @@ def resume_credentials():
         resume_pin_hash=resume_pin_hash,
         status='pending'
     ).filter(
-        RecoveryRequest.expires_at > datetime.now(timezone.utc)
+        RecoveryRequest.expires_at > utc_now()
     ).first()
 
     if not recovery_request:
@@ -1747,7 +1757,8 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
     """
     Build a dict {(student_id, block): [privileges]} using batched queries to avoid N+1 issues.
     """
-    now = datetime.now(timezone.utc)
+    # Use UTC-aware datetime to match database-stored UTC expiry dates.
+    now = utc_now()
     student_rent_privileges = {}
 
     for block in blocks:
@@ -1774,14 +1785,32 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
 
         student_ids = [student.id for student in block_students]
 
-        # Batch rent payments for the month
+        # Calculate current coverage period (pre-paid system)
+        # Use the most recently PASSED due date so that payments made for
+        # period N are found even after the calendar month rolls over but
+        # before the next due date arrives.
+        from app.routes.student import _calculate_rent_deadlines
+        current_due_date, _ = _calculate_rent_deadlines(rent_settings, now)
+        if now < current_due_date:
+            prev_due, _ = _calculate_rent_deadlines(rent_settings, current_due_date - timedelta(days=1))
+            if prev_due < current_due_date:
+                coverage_month = prev_due.month
+                coverage_year = prev_due.year
+            else:
+                coverage_month = current_due_date.month
+                coverage_year = current_due_date.year
+        else:
+            coverage_month = current_due_date.month
+            coverage_year = current_due_date.year
+
+        # Batch rent payments for the current coverage period
         rent_payment_rows = (
             RentPayment.query
             .filter(
                 RentPayment.student_id.in_(student_ids),
                 RentPayment.period == block,
-                RentPayment.period_month == now.month,
-                RentPayment.period_year == now.year,
+                RentPayment.coverage_month == coverage_month,
+                RentPayment.coverage_year == coverage_year,
                 db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
             )
             .with_entities(RentPayment.student_id)
@@ -1837,7 +1866,11 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
 
 
 def _get_rent_privileges_for_student(student, teacher_id, join_code):
-    """Return rent privileges for a single student in the current class context."""
+    """Return rent privileges for a single student in the current class context.
+
+    Pre-paid system: Check if student has paid rent that COVERS the current period.
+    A payment made for January covers the student until the February due date.
+    """
     rent_privileges = []
     if not (teacher_id and join_code):
         return rent_privileges
@@ -1851,12 +1884,30 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
     if not rent_settings or not rent_settings.is_enabled:
         return rent_privileges
 
-    now = datetime.now(timezone.utc)
+    # Use a timezone-aware UTC datetime to match how expiry dates are stored.
+    now = utc_now()
+
+    # Calculate current due date and determine which coverage period we're in.
+    # Use the most recently PASSED due date for correct coverage matching.
+    from app.routes.student import _calculate_rent_deadlines
+    current_due_date, _ = _calculate_rent_deadlines(rent_settings, now)
+    if now < current_due_date:
+        prev_due, _ = _calculate_rent_deadlines(rent_settings, current_due_date - timedelta(days=1))
+        if prev_due < current_due_date:
+            coverage_month = prev_due.month
+            coverage_year = prev_due.year
+        else:
+            coverage_month = current_due_date.month
+            coverage_year = current_due_date.year
+    else:
+        coverage_month = current_due_date.month
+        coverage_year = current_due_date.year
+
     has_paid_rent = RentPayment.query.filter(
         RentPayment.student_id == student.id,
         RentPayment.period == current_block,
-        RentPayment.period_month == now.month,
-        RentPayment.period_year == now.year,
+        RentPayment.coverage_month == coverage_month,
+        RentPayment.coverage_year == coverage_year,
         db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
     ).first() is not None
 
@@ -2130,7 +2181,7 @@ def student_detail(student_id):
 
     # Compute due dates and overdue status
     from datetime import date
-    today = datetime.now(PACIFIC).date()
+    today = utc_now().astimezone(PACIFIC).date()
     # Rent due on 5th, overdue after 6th
     rent_due = date(today.year, today.month, 5)
     student.rent_due_date = rent_due
@@ -2445,7 +2496,7 @@ def edit_student():
                 join_code=join_code,
                 is_claimed=is_claimed,
                 student_id=student.id,  # Always link since student record exists
-                claimed_at=datetime.now(timezone.utc) if is_claimed else None
+                claimed_at=utc_now() if is_claimed else None
             )
             db.session.add(new_tb)
 
@@ -2570,7 +2621,8 @@ def bulk_delete_students():
         })
     except Exception as e:
         db.session.rollback()
-        return jsonify({"status": "error", "message": str(e)}), 500
+        current_app.logger.error(f"Error deleting students: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": "An error occurred while deleting students. Please try again."}), 500
 
 
 @admin_bp.route('/students/delete-block', methods=['POST'])
@@ -2616,10 +2668,9 @@ def delete_block():
             # Flush to ensure all associated records are deleted before deleting students
             db.session.flush()
             
-            # Delete the students themselves
-            for student in students:
-                db.session.delete(student)
-            
+            # Delete the students themselves (bulk delete to avoid stale ORM state)
+            Student.query.filter(Student.id.in_(student_ids)).delete(synchronize_session=False)
+
             # Flush student deletions
             db.session.flush()
 
@@ -2632,8 +2683,14 @@ def delete_block():
         
         current_app.logger.info(f"Deleted {unclaimed_deleted} unclaimed TeacherBlock entries for block {block}")
 
-        # Final commit
-        db.session.commit()
+        # Final commit (keep ORM instances from expiring to avoid stale access in tests)
+        original_expire_on_commit = db.session.expire_on_commit
+        db.session.expire_on_commit = False
+        try:
+            db.session.commit()
+            db.session.expunge_all()
+        finally:
+            db.session.expire_on_commit = original_expire_on_commit
         current_app.logger.info(f"Successfully deleted block {block}")
         
         return jsonify({
@@ -2643,7 +2700,7 @@ def delete_block():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting block {block}: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": "An error occurred while deleting the block. Please try again."}), 500
 
 
 @admin_bp.route('/pending-students/delete', methods=['POST'])
@@ -2698,7 +2755,7 @@ def delete_pending_student():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting pending student: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": "An error occurred while deleting the pending student. Please try again."}), 500
 
 
 @admin_bp.route('/pending-students/bulk-delete', methods=['POST'])
@@ -2760,7 +2817,7 @@ def bulk_delete_pending_students():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error bulk deleting pending students: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": "An error occurred while bulk deleting pending students. Please try again."}), 500
 
 
 @admin_bp.route('/legacy-unclaimed-students/bulk-delete', methods=['POST'])
@@ -2827,7 +2884,7 @@ def bulk_delete_legacy_unclaimed_students():
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error bulk deleting legacy unclaimed students: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"status": "error", "message": "An error occurred while bulk deleting legacy students. Please try again."}), 500
 
 
 @admin_bp.route('/student/add-individual', methods=['POST'])
@@ -3139,7 +3196,7 @@ def add_manual_student():
             join_code=join_code,
             is_claimed=is_claimed,
             student_id=new_student.id,
-            claimed_at=datetime.now(timezone.utc) if is_claimed else None,
+            claimed_at=utc_now() if is_claimed else None,
         )
         db.session.add(new_tb)
         
@@ -3322,6 +3379,9 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
     Sync rent items with store items.
     Creates or updates store items for rent items that are marked as available in store.
     Deactivates store items for rent items that are no longer available.
+
+    FIX: Prevents duplicate store items when applying rent settings to all periods.
+    Store items are now shared across blocks using StoreItemBlock for visibility.
     """
     from app.models import RentItem, StoreItem, StoreItemBlock
 
@@ -3337,23 +3397,39 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                 limit = None  # Unlimited purchases
                 duration_note = "Purchase each time you need to use it."
 
-            # Create or update store item
+            base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
+            description = f"{base_desc}\n\n{duration_note}"
+
+            store_item = None
+
+            # Check if this rent_item already has a store_item_id
             if rent_item.store_item_id:
-                # Update existing store item
                 store_item = StoreItem.query.get(rent_item.store_item_id)
-                if store_item:
-                    store_item.name = rent_item.name
-                    base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
-                    store_item.description = f"{base_desc}\n\n{duration_note}"
-                    store_item.price = rent_item.store_price
-                    store_item.limit_per_student = limit
-                    store_item.is_active = True
-                    if block:
-                        store_item.set_blocks([block])
+
+            # If no store_item yet, check if a rent-linked one exists for this teacher+name.
+            # Only consider store items already linked to a RentItem to avoid
+            # overwriting unrelated non-rent store items with the same name.
+            if not store_item:
+                store_item = StoreItem.query.join(
+                    RentItem, RentItem.store_item_id == StoreItem.id
+                ).filter(
+                    StoreItem.teacher_id == teacher_id,
+                    StoreItem.name == rent_item.name
+                ).first()
+
+            if store_item:
+                # Update existing store item
+                store_item.name = rent_item.name
+                store_item.description = description
+                store_item.price = rent_item.store_price
+                store_item.limit_per_student = limit
+                store_item.is_active = True
+
+                # Link this rent_item to the store_item if not already linked
+                if not rent_item.store_item_id:
+                    rent_item.store_item_id = store_item.id
             else:
-                # Create new store item
-                base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
-                description = f"{base_desc}\n\n{duration_note}"
+                # Create new store item only if it doesn't exist
                 store_item = StoreItem(
                     teacher_id=teacher_id,
                     name=rent_item.name,
@@ -3369,16 +3445,35 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                 # Link the rent item to this store item
                 rent_item.store_item_id = store_item.id
 
-                # Set block visibility to match the rent setting's block
-                if block:
+            # Ensure block visibility is set (don't replace, add to existing)
+            if block:
+                existing_block = StoreItemBlock.query.filter_by(
+                    store_item_id=store_item.id,
+                    block=block
+                ).first()
+
+                if not existing_block:
                     store_item_block = StoreItemBlock(store_item_id=store_item.id, block=block)
                     db.session.add(store_item_block)
 
         elif rent_item.store_item_id:
-            # Deactivate store item if it exists but is no longer available
+            # Remove this block's visibility for the store item
             store_item = StoreItem.query.get(rent_item.store_item_id)
-            if store_item:
-                store_item.is_active = False
+            if store_item and block:
+                StoreItemBlock.query.filter_by(
+                    store_item_id=store_item.id,
+                    block=block
+                ).delete()
+
+                # Only deactivate the shared StoreItem if no other RentItem
+                # references it (i.e., it's not used by any other block)
+                other_refs = RentItem.query.filter(
+                    RentItem.store_item_id == store_item.id,
+                    RentItem.id != rent_item.id,
+                    RentItem.is_available_in_store == True
+                ).count()
+                if other_refs == 0:
+                    store_item.is_active = False
 
     db.session.commit()
 
@@ -3636,8 +3731,8 @@ def rent_settings():
 
     # Get statistics
     total_students = _scoped_students().filter_by(is_rent_enabled=True).count()
-    current_month = datetime.now().month
-    current_year = datetime.now().year
+    current_month = utc_now().month
+    current_year = utc_now().year
     paid_this_month = (
         RentPayment.query
         .filter(RentPayment.student_id.in_(student_ids_subq))
@@ -3646,7 +3741,7 @@ def rent_settings():
     )
 
     # Get active waivers
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     active_waivers = (
         RentWaiver.query
         .join(Student, RentWaiver.student_id == Student.id)
@@ -3712,12 +3807,13 @@ def rent_settings():
 
     if settings and settings.is_enabled:
         # 1. Determine if rent is active for this period
-        now_local = datetime.now(timezone.utc)  # Use timezone-aware datetime for consistent date comparison
+        # Use UTC-aware datetime for rent deadline calculations.
+        now_utc = utc_now()
 
         # Check if we've passed the first due date (or if it's not set, assume active if enabled)
         if settings.first_rent_due_date:
             due_date = settings.first_rent_due_date.date()
-            today = now_local.date()
+            today = now_utc.date()
 
             # Rent is active if:
             # 1. The due date has already passed, OR
@@ -3743,11 +3839,27 @@ def rent_settings():
             .subquery()
         )
 
-        # Fetch all payments for this period
+        # Calculate coverage period for pre-paid system.
+        # Use the most recently PASSED due date for correct coverage matching.
+        from app.routes.student import _calculate_rent_deadlines
+        coverage_due_date, _ = _calculate_rent_deadlines(settings, now_utc)
+        if now_utc < coverage_due_date:
+            prev_due, _ = _calculate_rent_deadlines(settings, coverage_due_date - timedelta(days=1))
+            if prev_due < coverage_due_date:
+                coverage_month = prev_due.month
+                coverage_year = prev_due.year
+            else:
+                coverage_month = coverage_due_date.month
+                coverage_year = coverage_due_date.year
+        else:
+            coverage_month = coverage_due_date.month
+            coverage_year = coverage_due_date.year
+
+        # Fetch all payments that cover the current period
         period_payments = (
             RentPayment.query
             .filter(RentPayment.student_id.in_(rent_enabled_student_ids_subq))
-            .filter_by(period_month=current_month, period_year=current_year)
+            .filter_by(coverage_month=coverage_month, coverage_year=coverage_year)
             .all()
         )
 
@@ -3756,8 +3868,8 @@ def rent_settings():
         for p in period_payments:
             payments_map[p.student_id] += Decimal(str(p.amount_paid))
 
-        # Use helper function to calculate base rent amount
-        base_rent_amount = _calculate_base_rent_amount(settings, current_year, current_month)
+        # Use helper function to calculate base rent amount for the coverage period
+        base_rent_amount = _calculate_base_rent_amount(settings, coverage_year, coverage_month)
 
         # Build unpaid list
         for student in rent_enabled_students:
@@ -3859,7 +3971,7 @@ def add_rent_waiver():
         return redirect(url_for('admin.rent_settings'))
 
     # Calculate waiver end date based on frequency
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     waiver_start = now
 
     # Calculate days per period based on frequency type
@@ -3972,6 +4084,18 @@ def insurance_management():
     if not settings_block and teacher_blocks:
         settings_block = teacher_blocks[0]
 
+    # CRITICAL: Get the join_code for the selected block for proper multi-tenancy scoping
+    # All data (policies, enrollments, claims) must be filtered by join_code
+    selected_join_code = None
+    if settings_block:
+        # Find the join_code for this block from TeacherBlock
+        teacher_block_record = TeacherBlock.query.filter_by(
+            teacher_id=admin_id,
+            block=settings_block
+        ).first()
+        if teacher_block_record:
+            selected_join_code = teacher_block_record.join_code
+
     # Get class labels for display
     class_labels_by_block = _get_class_labels_for_blocks(admin_id, teacher_blocks)
 
@@ -3980,7 +4104,30 @@ def insurance_management():
     form.blocks.choices = [(block, f"Period {block}") for block in blocks]
 
     current_teacher_id = admin_id
-    existing_policies = InsurancePolicy.query.filter_by(teacher_id=current_teacher_id).all()
+
+    # CRITICAL: Filter policies by selected block for multi-tenancy
+    # Policies are visible in a block if:
+    # 1. They have an InsurancePolicyBlock entry for the selected block, OR
+    # 2. They have NO InsurancePolicyBlock entries (available to all blocks)
+    if settings_block:
+        # Get policies that are either specifically visible to this block or visible to all blocks
+        existing_policies = (
+            InsurancePolicy.query
+            .filter_by(teacher_id=current_teacher_id)
+            .filter(
+                sa.or_(
+                    InsurancePolicy.id.in_(
+                        db.session.query(InsurancePolicyBlock.policy_id).filter(
+                            InsurancePolicyBlock.block == settings_block.upper()
+                        )
+                    ),
+                    ~sa.exists().where(InsurancePolicyBlock.policy_id == InsurancePolicy.id)
+                )
+            )
+            .all()
+        )
+    else:
+        existing_policies = InsurancePolicy.query.filter_by(teacher_id=current_teacher_id).all()
 
     # Collect existing tier groups for the current teacher
     tier_groups_map = {}
@@ -4082,16 +4229,19 @@ def insurance_management():
     student_ids_in_block = [s.id for s in students_in_block]
 
     # Get student enrollments for selected block
+    # CRITICAL: Filter by join_code for proper multi-tenancy scoping
     active_enrollments = []
     cancelled_enrollments = []
     claims = []
     pending_claims_count = 0
 
-    if student_ids_in_block:
+    if student_ids_in_block and selected_join_code:
+        # Filter enrollments by join_code to ensure proper class isolation
         active_enrollments = (
             StudentInsurance.query
             .join(Student, StudentInsurance.student_id == Student.id)
             .filter(Student.id.in_(student_ids_in_block))
+            .filter(StudentInsurance.join_code == selected_join_code)
             .filter(StudentInsurance.status == 'active')
             .all()
         )
@@ -4099,15 +4249,17 @@ def insurance_management():
             StudentInsurance.query
             .join(Student, StudentInsurance.student_id == Student.id)
             .filter(Student.id.in_(student_ids_in_block))
+            .filter(StudentInsurance.join_code == selected_join_code)
             .filter(StudentInsurance.status == 'cancelled')
             .all()
         )
 
-        # Get claims for selected block, filtered by student IDs for proper multi-tenancy isolation
+        # Get claims for selected block, filtered by join_code for proper multi-tenancy isolation
         claims = (
             InsuranceClaim.query
             .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
             .filter(StudentInsurance.student_id.in_(student_ids_in_block))
+            .filter(StudentInsurance.join_code == selected_join_code)
             .order_by(InsuranceClaim.filed_date.desc())
             .all()
         )
@@ -4115,6 +4267,7 @@ def insurance_management():
             InsuranceClaim.query
             .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
             .filter(StudentInsurance.student_id.in_(student_ids_in_block))
+            .filter(StudentInsurance.join_code == selected_join_code)
             .filter(InsuranceClaim.status == 'pending')
             .count()
         )
@@ -4408,7 +4561,7 @@ def process_claim(claim_id):
     enrollment = StudentInsurance.query.get(claim.student_insurance_id)
 
     def _get_period_bounds():
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         if claim.policy.max_claims_period == 'year':
             return (
                 now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
@@ -4445,7 +4598,7 @@ def process_claim(claim_id):
     if coverage_start and coverage_start.tzinfo is None:
         coverage_start = coverage_start.replace(tzinfo=timezone.utc)
 
-    if not coverage_start or coverage_start > datetime.now(timezone.utc):
+    if not coverage_start or coverage_start > utc_now():
         validation_errors.append("Coverage has not started yet (still in waiting period)")
 
     # Check if payment is current
@@ -4482,7 +4635,7 @@ def process_claim(claim_id):
     # Ensure timezone-aware comparison
     if incident_reference and incident_reference.tzinfo is None:
         incident_reference = incident_reference.replace(tzinfo=timezone.utc)
-    days_since_incident = (datetime.now(timezone.utc) - incident_reference).days if incident_reference else 0
+    days_since_incident = (utc_now() - incident_reference).days if incident_reference else 0
     if days_since_incident > claim.policy.claim_time_limit_days:
         validation_errors.append(f"Claim filed too late ({days_since_incident} days after incident, limit is {claim.policy.claim_time_limit_days} days)")
 
@@ -4538,7 +4691,7 @@ def process_claim(claim_id):
         claim.status = new_status
         claim.admin_notes = form.admin_notes.data
         claim.rejection_reason = form.rejection_reason.data if new_status == 'rejected' else None
-        claim.processed_date = datetime.now(timezone.utc)
+        claim.processed_date = utc_now()
         claim.processed_by_admin_id = session.get('admin_id')
 
         # Handle monetary claims - auto-deposit when approved/paid
@@ -4955,7 +5108,7 @@ def payroll_history():
 
     # Current timestamp for header (Pacific Time)
     pacific = pytz.timezone('America/Los_Angeles')
-    current_time = datetime.now(pacific)
+    current_time = utc_now().astimezone(pacific)
 
     return render_template(
         'admin_payroll_history.html',
@@ -5058,7 +5211,7 @@ def payroll():
         last_payroll_time = last_payroll_time.replace(tzinfo=timezone.utc)
 
 
-    now_utc = datetime.now(timezone.utc)
+    now_utc = utc_now()
 
     # Get student scope subquery for filtering
     student_ids_subq = _student_scope_subquery()
@@ -5091,14 +5244,11 @@ def payroll():
         if setting.block:
             settings_by_block[setting.block] = setting
 
-    def _as_utc(dt):
-        if not dt:
-            return None
-        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+
 
     def _compute_next_pay_date(setting, now):
         freq_days = setting.payroll_frequency_days if setting and setting.payroll_frequency_days else 14
-        first_pay = _as_utc(setting.first_pay_date) if setting and setting.first_pay_date else None
+        first_pay = ensure_utc(setting.first_pay_date) if setting and setting.first_pay_date else None
 
         # Anchor the schedule strictly to the configured first pay date so manual runs
         # don't shift the calendar. If no first date is set, fall back to now + frequency.
@@ -5455,7 +5605,7 @@ def payroll_settings():
             for key, value in settings_data.items():
                 setattr(setting, key, value)
 
-            setting.updated_at = datetime.now(timezone.utc)
+            setting.updated_at = utc_now()
             db.session.add(setting)
 
         db.session.commit()
@@ -5545,7 +5695,7 @@ def update_expected_weekly_hours():
     # Redirect back with cwi_block parameter to maintain the selected class
     next_url = request.form.get('next')
     if next_url and is_safe_url(next_url, request.host_url):
-        return redirect(next_url)
+        return redirect(next_url)  # nosec # Safe: validated by is_safe_url()
 
     return redirect(url_for('admin.payroll', cwi_block=cwi_block))
 
@@ -5782,7 +5932,7 @@ def payroll_apply_reward(reward_id):
                     description=f"Reward: {reward.name}",
                     account_type='checking',
                     type='reward',
-                    timestamp=datetime.now(timezone.utc)
+                    timestamp=utc_now()
                 )
                 db.session.add(transaction)
                 count += 1
@@ -5853,7 +6003,7 @@ def payroll_apply_fine(fine_id):
                     description=f"Fine: {fine.name}",
                     account_type='checking',
                     type='fine',
-                    timestamp=datetime.now(timezone.utc)
+                    timestamp=utc_now()
                 )
                 db.session.add(transaction)
                 applied_count += 1
@@ -5961,7 +6111,7 @@ def payroll_manual_payment():
                         description=f"Manual Payment: {description}",
                         account_type=account_type,
                         type='manual_payment',
-                        timestamp=datetime.now(timezone.utc)
+                        timestamp=utc_now()
                     )
                     db.session.add(transaction)
                     applied_count += 1
@@ -6277,7 +6427,7 @@ def export_students():
 
     # Prepare response
     output.seek(0)
-    filename = f"students_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"students_export_{utc_now().strftime('%Y%m%d_%H%M%S')}.csv"
 
     return Response(
         output.getvalue(),
@@ -6305,7 +6455,6 @@ def enforce_daily_limits():
     errors = []
 
     pacific = pytz.timezone('America/Los_Angeles')
-    now_utc = datetime.now(timezone.utc)
 
     for student in students:
         try:
@@ -6384,7 +6533,7 @@ def tap_out_students():
     if not tap_out_all and not student_ids:
         return jsonify({"status": "error", "message": "Either student_ids or tap_out_all must be provided."}), 400
 
-    now_utc = datetime.now(timezone.utc)
+    now_utc = utc_now()
     tapped_out = []
     already_inactive = []
     errors = []
@@ -6528,7 +6677,7 @@ def tap_in_students():
     if not student_ids:
         return jsonify({"status": "error", "message": "student_ids must be provided."}), 400
 
-    now_utc = datetime.now(timezone.utc)
+    now_utc = utc_now()
     tapped_in = []
     already_active = []
     errors = []
@@ -6923,7 +7072,7 @@ def banking_settings_update():
             settings.overdraft_fee_progressive_2 = form.overdraft_fee_progressive_2.data or 0.0
             settings.overdraft_fee_progressive_3 = form.overdraft_fee_progressive_3.data or 0.0
             settings.overdraft_fee_progressive_cap = form.overdraft_fee_progressive_cap.data
-            settings.updated_at = datetime.now(timezone.utc)
+            settings.updated_at = utc_now()
 
         try:
             db.session.commit()
@@ -7170,7 +7319,7 @@ def feature_settings():
                 for key, value in features_data.items():
                     setattr(global_settings, key, value)
 
-                global_settings.updated_at = datetime.now(timezone.utc)
+                global_settings.updated_at = utc_now()
 
                 # Also update all period-specific settings
                 for period in periods:
@@ -7186,7 +7335,7 @@ def feature_settings():
                     for key, value in features_data.items():
                         setattr(period_settings, key, value)
 
-                    period_settings.updated_at = datetime.now(timezone.utc)
+                    period_settings.updated_at = utc_now()
 
                 flash('Feature settings applied to all periods successfully!', 'success')
             else:
@@ -7207,7 +7356,7 @@ def feature_settings():
                     for key, value in features_data.items():
                         setattr(period_settings, key, value)
 
-                    period_settings.updated_at = datetime.now(timezone.utc)
+                    period_settings.updated_at = utc_now()
 
                 flash(f'Feature settings applied to {len(selected_periods)} period(s) successfully!', 'success')
 
@@ -7295,7 +7444,7 @@ def update_period_feature_settings(period):
             if feature_key in data:
                 setattr(settings, db_column, bool(data[feature_key]))
 
-        settings.updated_at = datetime.now(timezone.utc)
+        settings.updated_at = utc_now()
         db.session.commit()
 
         return jsonify({
@@ -7374,7 +7523,7 @@ def copy_feature_settings():
                 if key in valid_feature_columns:
                     setattr(target_settings, key, value)
 
-            target_settings.updated_at = datetime.now(timezone.utc)
+            target_settings.updated_at = utc_now()
             copied_count += 1
 
         db.session.commit()
@@ -7562,7 +7711,7 @@ def announcement_edit(announcement_id):
             announcement.priority = form.priority.data
             announcement.is_active = form.is_active.data
             announcement.expires_at = form.expires_at.data
-            announcement.updated_at = datetime.now(timezone.utc)
+            announcement.updated_at = utc_now()
 
             db.session.commit()
 
@@ -7635,7 +7784,7 @@ def announcement_toggle(announcement_id):
 
     try:
         announcement.is_active = not announcement.is_active
-        announcement.updated_at = datetime.now(timezone.utc)
+        announcement.updated_at = utc_now()
         db.session.commit()
 
         return jsonify({
@@ -7646,8 +7795,8 @@ def announcement_toggle(announcement_id):
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error toggling announcement: {e}")
-        return jsonify({'status': 'error', 'message': str(e)}), 500
+        current_app.logger.error(f"Error toggling announcement: {e}", exc_info=True)
+        return jsonify({'status': 'error', 'message': 'An error occurred while toggling the announcement. Please try again.'}), 500
 
 
 # -------------------- TEACHER ONBOARDING --------------------
@@ -7780,6 +7929,36 @@ def onboarding_status():
     except Exception as e:
         current_app.logger.error(f"Error checking onboarding status: {e}")
         return jsonify({'status': 'error', 'message': 'Failed to retrieve onboarding status'}), 500
+
+
+@admin_bp.route('/onboarding', methods=['GET'])
+@admin_required
+def onboarding():
+    """
+    Legacy onboarding entry point.
+
+    The guided onboarding wizard has been replaced by the Getting Started widget.
+    Keep this route to satisfy legacy links/tests and redirect to the dashboard.
+    """
+    return redirect(url_for('admin.dashboard'))
+
+
+@admin_bp.route('/onboarding/skip', methods=['POST'])
+@admin_required
+def onboarding_skip():
+    """Mark onboarding as skipped for the current admin (legacy endpoint)."""
+    admin_id = session.get('admin_id')
+    if not admin_id:
+        return jsonify({'status': 'error', 'message': 'Not authenticated'}), 401
+
+    onboarding_record = TeacherOnboarding.query.filter_by(teacher_id=admin_id).first()
+    if not onboarding_record:
+        onboarding_record = TeacherOnboarding(teacher_id=admin_id)
+        db.session.add(onboarding_record)
+
+    onboarding_record.skip_onboarding()
+    db.session.commit()
+    return jsonify({'status': 'success'})
 
 
 @admin_bp.route('/onboarding/skip-task', methods=['POST'])
@@ -8307,7 +8486,7 @@ def passkey_auth_finish():
             return jsonify({"error": "Admin not found"}), 401
 
         # Update credential last_used timestamp
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         credential_id = verified_user.credential_id
         if credential_id:
             credential = AdminCredential.query.filter_by(credential_id=credential_id).first()
@@ -8455,7 +8634,7 @@ def view_issue(issue_id):
     if issue.status == 'submitted':
         from app.utils.issue_helpers import update_issue_status
         update_issue_status(issue, 'teacher_review', 'teacher', admin_id)
-        issue.teacher_reviewed_at = datetime.now(timezone.utc)
+        issue.teacher_reviewed_at = utc_now()
         db.session.commit()
 
     return render_template('admin_view_issue.html',
@@ -8523,9 +8702,9 @@ def resolve_issue(issue_id):
 
         # Update issue status
         update_issue_status(issue, 'teacher_resolved', 'teacher', admin_id, notes=teacher_notes)
-        issue.teacher_resolved_at = datetime.now(timezone.utc)
+        issue.teacher_resolved_at = utc_now()
         issue.teacher_notes = teacher_notes
-        issue.closed_at = datetime.now(timezone.utc)
+        issue.closed_at = utc_now()
         issue.closed_by_type = 'teacher'
 
         db.session.commit()
@@ -8570,7 +8749,7 @@ def escalate_issue(issue_id):
         issue.teacher_diagnostic_note = diagnostic_note
         issue.share_class_name_with_sysadmin = share_class_name
         issue.eligible_for_reward = eligible_for_reward
-        issue.escalated_at = datetime.now(timezone.utc)
+        issue.escalated_at = utc_now()
 
         # Update status
         update_issue_status(issue, 'elevated', 'teacher', admin_id, notes=f"Escalated: {escalation_reason}")
