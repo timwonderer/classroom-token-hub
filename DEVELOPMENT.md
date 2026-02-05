@@ -33,6 +33,7 @@
 - ✅ **Mobile Navigation** - Full navigation menu accessible on mobile and PWA
 - ✅ **Rent Privilege Badges** - Visual indicators for active rent privileges
 - ✅ **Purchase Duration Options** - Per-use vs per-period choices for rent items
+- ✅ **Code Quality Improvement** - Simplified redundant logic in `_add_period` utility function
 - ✅ **Enhanced Purchase Restrictions** - Dynamic behavior based on rent itemization
 - ✅ **ToS Acknowledgment** - Compliance modal during admin signup
 - ✅ **Issue Resolution Improvements** - EasyMDE form fixes and zero-value event display
