@@ -1,6 +1,5 @@
 
 import subprocess
-import os
 
 commands = [
     ["flask", "db", "heads"],

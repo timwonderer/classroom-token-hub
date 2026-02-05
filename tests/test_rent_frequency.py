@@ -1,6 +1,6 @@
 
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from app.routes.student import _calculate_rent_deadlines
 
 # Mocking the settings object
