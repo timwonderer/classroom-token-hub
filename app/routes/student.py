@@ -19,6 +19,7 @@ from sqlalchemy import or_, func, select, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
 import pytz
+from dateutil.relativedelta import relativedelta
 
 from app.extensions import db, limiter
 from app.models import (
@@ -1124,6 +1125,7 @@ def dashboard():
     if rent_settings and rent_settings.is_enabled and student.is_rent_enabled:
         now = utc_now()
         due_date, grace_end_date = _calculate_rent_deadlines(rent_settings, now)
+        coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
 
         preview_start_date = None
         if rent_settings.bill_preview_enabled and rent_settings.bill_preview_days:
@@ -1134,14 +1136,20 @@ def dashboard():
         if preview_start_date and now >= preview_start_date:
             rent_is_active = True
             is_preview_period = now < due_date
-        elif now >= due_date:
+        elif coverage_due_date and now >= coverage_due_date:
             rent_is_active = True
 
         rent_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
 
         # Calculate coverage period for pre-paid system
-        coverage_month = due_date.month
-        coverage_year = due_date.year
+        if is_preview_period:
+            coverage_month = due_date.month
+            coverage_year = due_date.year
+            grace_end_date_for_status = grace_end_date
+        else:
+            coverage_month = coverage_due_date.month if coverage_due_date else due_date.month
+            coverage_year = coverage_due_date.year if coverage_due_date else due_date.year
+            grace_end_date_for_status = (coverage_due_date + timedelta(days=rent_settings.grace_period_days)) if coverage_due_date else grace_end_date
 
         all_paid = True
         for period in rent_blocks:
@@ -1167,7 +1175,7 @@ def dashboard():
                     payments.append(payment)
 
             total_paid = sum(p.amount_paid for p in payments) if payments else Decimal('0.00')
-            late_fee = rent_settings.late_fee if rent_is_active and now > grace_end_date else Decimal('0.00')
+            late_fee = rent_settings.late_fee if rent_is_active and now > grace_end_date_for_status else Decimal('0.00')
             total_due = rent_settings.rent_amount + late_fee if rent_is_active else Decimal('0.00')
             is_paid = total_paid >= total_due if rent_is_active else False
 
@@ -2320,18 +2328,20 @@ def shop():
         if rent_settings and rent_settings.is_enabled:
             now = utc_now()
 
-            # Calculate current due date to determine coverage period (pre-paid system)
-            current_due_date, _ = _calculate_rent_deadlines(rent_settings, now)
-            coverage_month = current_due_date.month
-            coverage_year = current_due_date.year
+            # Calculate current coverage period (pre-paid system)
+            coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
 
-            has_paid_rent = RentPayment.query.filter(
-                RentPayment.student_id == student.id,
-                RentPayment.period == current_block,
-                RentPayment.coverage_month == coverage_month,
-                RentPayment.coverage_year == coverage_year,
-                db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
-            ).first() is not None
+            if coverage_due_date:
+                coverage_month = coverage_due_date.month
+                coverage_year = coverage_due_date.year
+
+                has_paid_rent = RentPayment.query.filter(
+                    RentPayment.student_id == student.id,
+                    RentPayment.period == current_block,
+                    RentPayment.coverage_month == coverage_month,
+                    RentPayment.coverage_year == coverage_year,
+                    db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                ).first() is not None
 
             # Get all per-period rent items
             per_period_items = RentItem.query.filter_by(
@@ -2460,6 +2470,69 @@ def _calculate_rent_deadlines(settings, reference_date=None):
     return due_date, grace_end_date
 
 
+def _get_rent_period_delta(settings):
+    """Return a timedelta/relativedelta representing one rent period."""
+    if settings.frequency_type == 'daily':
+        return timedelta(days=1)
+    if settings.frequency_type == 'weekly':
+        return timedelta(weeks=1)
+    if settings.frequency_type == 'monthly':
+        return relativedelta(months=1)
+    if settings.frequency_type == 'custom':
+        unit = getattr(settings, 'custom_frequency_unit', None)
+        value = getattr(settings, 'custom_frequency_value', None) or 1
+        if unit == 'days':
+            return timedelta(days=value)
+        if unit == 'weeks':
+            return timedelta(weeks=value)
+        if unit == 'months':
+            return relativedelta(months=value)
+    # Fallback to monthly behavior
+    return relativedelta(months=1)
+
+
+def _add_rent_period(dt, delta):
+    """Add a timedelta or relativedelta to dt."""
+    return dt + delta
+
+
+def _calculate_rent_coverage_due_date(settings, reference_date=None):
+    """
+    Return the most recently passed due date for coverage tracking.
+
+    If we're before the current due date, this returns the previous due date.
+    """
+    reference_date = ensure_utc(reference_date) if reference_date else utc_now()
+    if settings.first_rent_due_date:
+        first_due = ensure_utc(settings.first_rent_due_date)
+        if first_due and reference_date < first_due:
+            return None
+    current_due_date, _ = _calculate_rent_deadlines(settings, reference_date)
+    if not current_due_date:
+        return None
+
+    if reference_date >= current_due_date:
+        return current_due_date
+
+    # If we're before the current due date, compute the previous due date.
+    # For monthly settings without a first_rent_due_date, compute the prior
+    # month explicitly to preserve the configured day-of-month.
+    if settings.frequency_type == 'monthly' and not settings.first_rent_due_date:
+        prev_year = current_due_date.year
+        prev_month = current_due_date.month - 1
+        if prev_month == 0:
+            prev_month = 12
+            prev_year -= 1
+
+        _, last_day = monthrange(prev_year, prev_month)
+        due_day = settings.due_day_of_month or last_day
+        due_day = min(due_day, last_day)
+        return datetime(prev_year, prev_month, due_day, tzinfo=timezone.utc)
+
+    delta = _get_rent_period_delta(settings)
+    return current_due_date - delta
+
+
 
 @student_bp.route('/rent')
 @login_required
@@ -2497,6 +2570,7 @@ def rent():
 
     # Calculate due dates
     due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
 
     # Calculate preview start date if preview is enabled
     preview_start_date = None
@@ -2509,12 +2583,18 @@ def rent():
     if preview_start_date and now >= preview_start_date:
         rent_is_active = True
         is_preview_period = now < due_date
-    elif now >= due_date:
+    elif coverage_due_date and now >= coverage_due_date:
         rent_is_active = True
 
     # Calculate which coverage period we're checking for (pre-paid system)
-    coverage_month = due_date.month
-    coverage_year = due_date.year
+    if is_preview_period:
+        coverage_month = due_date.month
+        coverage_year = due_date.year
+        grace_end_date_for_status = grace_end_date
+    else:
+        coverage_month = coverage_due_date.month if coverage_due_date else due_date.month
+        coverage_year = coverage_due_date.year if coverage_due_date else due_date.year
+        grace_end_date_for_status = (coverage_due_date + timedelta(days=settings.grace_period_days)) if coverage_due_date else grace_end_date
 
     period_status = {}
 
@@ -2545,12 +2625,12 @@ def rent():
     total_paid = sum(p.amount_paid for p in payments) if payments else Decimal('0.00')
 
     late_fee = Decimal('0.00')
-    if rent_is_active and now > grace_end_date:
+    if rent_is_active and now > grace_end_date_for_status:
         late_fee = settings.late_fee
 
     total_due = settings.rent_amount + late_fee if rent_is_active else Decimal('0.00')
     is_paid = total_paid >= total_due if rent_is_active else False
-    is_late = now > grace_end_date and not is_paid if rent_is_active else False
+    is_late = now > grace_end_date_for_status and not is_paid if rent_is_active else False
     remaining_amount = max(Decimal('0.00'), total_due - total_paid) if rent_is_active else Decimal('0.00')
 
     period_status[current_block] = {
@@ -2639,6 +2719,7 @@ def rent_pay(period):
 
     # Calculate due dates and preview period
     due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
     preview_start_date = None
     if settings.bill_preview_enabled and settings.bill_preview_days:
         preview_start_date = due_date - timedelta(days=settings.bill_preview_days)
@@ -2646,7 +2727,7 @@ def rent_pay(period):
     rent_is_active = False
     if preview_start_date and now >= preview_start_date:
         rent_is_active = True
-    elif now >= due_date:
+    elif coverage_due_date and now >= coverage_due_date:
         rent_is_active = True
 
     if not rent_is_active:
@@ -2661,9 +2742,13 @@ def rent_pay(period):
     current_month = now.month
     current_year = now.year
 
+    # Determine which due date this payment should cover
+    is_preview_period = preview_start_date and now >= preview_start_date and now < due_date
+    payment_due_date = due_date if is_preview_period else coverage_due_date
+
     # Calculate coverage period (pre-paid system)
-    coverage_month = due_date.month
-    coverage_year = due_date.year
+    coverage_month = payment_due_date.month
+    coverage_year = payment_due_date.year
 
     checking_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
     savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
@@ -2698,7 +2783,10 @@ def rent_pay(period):
 
     # Calculate if late and total amount due
     due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
-    is_late = now > grace_end_date
+    grace_end_date_for_payment = grace_end_date
+    if payment_due_date and payment_due_date != due_date:
+        grace_end_date_for_payment = payment_due_date + timedelta(days=settings.grace_period_days)
+    is_late = now > grace_end_date_for_payment
 
     # Calculate late fee if applicable
     late_fee = Decimal('0.00')
