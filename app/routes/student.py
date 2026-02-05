@@ -183,7 +183,7 @@ def get_feature_settings_for_student():
     if current_block:
         block_settings = FeatureSettings.query.filter(
             FeatureSettings.teacher_id == teacher_id,
-            func.upper(FeatureSettings.block) == current_block
+            func.upper(FeatureSettings.block) == func.upper(current_block)
         ).first()
         if block_settings:
             return block_settings.to_dict()

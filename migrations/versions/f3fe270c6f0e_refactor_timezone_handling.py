@@ -468,11 +468,12 @@ def upgrade():
         WHERE coverage_month IS NULL OR coverage_year IS NULL
     """)
     
-    # Handle NULLs if payment_date was null (fallback to current date or 0 to satisfy NOT NULL)
-    # Using 0/0 as fallback since nullable=False is required
+    # Handle rows where payment_date was NULL and coverage_* is still NULL.
+    # Use a clearly artificial sentinel (January 1970) to satisfy NOT NULL without
+    # mimicking a real payment date, so future analysis can easily identify backfilled rows.
     op.execute("""
         UPDATE rent_payments
-        SET coverage_month = 1, coverage_year = 2026
+        SET coverage_month = 1, coverage_year = 1970
         WHERE coverage_month IS NULL
     """)
 
