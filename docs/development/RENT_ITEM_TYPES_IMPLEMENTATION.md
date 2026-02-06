@@ -1,4 +1,4 @@
-# Rent Item Types Implementation Plan
+<file name=0 path=/Users/timothychang/Documents/GitHub/classroom-economy/docs/development/RENT_ITEM_TYPES_IMPLEMENTATION.md># Rent Item Types Implementation Plan
 
 **Feature:** Rent Item Type Extension (Privilege / Per-Use / Hall Pass)
 **Date:** 2026-02-06
@@ -123,6 +123,28 @@ Tracks per-use item allocations per student per rent period.
 ---
 
 ## Route Changes
+
+### Rent Item Edit Guardrail (Mid-Period Lock)
+
+**Rule:** If at least one student has successfully paid rent for the current coverage period, rent item *type semantics* are immutable until the next period.
+
+**Enforced at:**
+- `POST /admin/rent-settings`
+
+**Blocked or deferred changes:**
+- Changing `rent_item_type`
+- Modifying `use_limit` or unlimited toggle
+- Modifying `hall_pass_count`
+
+**Allowed mid-period changes:**
+- Display name and description
+- Store price (affects only paid purchases, not rent-granted uses)
+- Store listing visibility (for privilege items only)
+
+**Implementation note:**
+- The backend should detect paid rent records for the current join_code + period.
+- If detected, semantic changes are saved as pending configuration and applied when the period rolls over.
+- Alternatively (simpler v1): block submission and require confirmation that changes apply next period only.
 
 ### Admin Routes (`app/routes/admin.py`)
 
@@ -313,18 +335,27 @@ Wherever hall passes are decremented (in hall pass routes):
    - Hall pass top-off scoped by join_code
    - Per-use tracking per class period
 
-### Integration Tests
+6. **Integration Tests**
+   - Full rent payment flow with mixed item types
+   - Store purchase flow with rent allocation checking
+   - Hall pass usage with rent-granted tracking
+   - Rent settings update — changing item types, removing items
 
-6. **Full rent payment flow** with mixed item types
-7. **Store purchase flow** with rent allocation checking
-8. **Hall pass usage** with rent-granted tracking
-9. **Rent settings update** — changing item types, removing items
+10. **Mid-period edit guardrail tests:**  
+   - Editing rent item type after rent payment shows warning and does not alter current allocations  
+   - Changes apply correctly on next period rollover
 
 ---
 
 ## Edge Cases
 
-1. **Teacher changes item type after students paid rent:** Existing allocations/privileges remain for the current period. New type takes effect on next rent period.
+1. **Teacher changes item type after students paid rent:**  
+   Once rent has been paid for a given coverage period (month/year), the `rent_item_type` and its type-specific fields (`use_limit`, `hall_pass_count`) are **locked for that period**.  
+   - Existing allocations, privileges, and hall pass top-offs remain valid until the period ends.  
+   - Any changes made in Rent Settings are queued and only take effect starting with the **next rent period**.  
+   - Admin UI should display a warning banner when editing a rent item mid-period:  
+     > 'Changes will apply starting next rent period. Current students’ rent benefits will not be altered.'
+
 2. **Student has unlimited per-use allocation but teacher later changes to limited:** Current period keeps unlimited. Next period uses new limit.
 3. **Hall pass top-off when student has 0 passes:** Simply grants the full `hall_pass_count`.
 4. **Incremental rent payment with per-use items:** Allocations are only created when rent is **fully paid** for the period.
