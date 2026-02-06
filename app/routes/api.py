@@ -402,26 +402,32 @@ def purchase_item():
         # Create the student's item(s)
         expiry_date = None
 
-        # Check if this is a rent item with "per_period" duration
+        # Check if this is a rent item
         from app.models import RentItem, RentSettings
         rent_item = RentItem.query.filter_by(store_item_id=item.id).first()
-        if rent_item and rent_item.purchase_duration == 'per_period':
-            # Calculate NEXT rent due date and set as expiry
-            rent_setting = RentSettings.query.get(rent_item.rent_setting_id)
-            if rent_setting and rent_setting.is_enabled:
-                now = utc_now()
+        uses_remaining = None
 
-                if rent_setting.first_rent_due_date:
-                    current_due, next_due = _calculate_due_dates(rent_setting, now)
+        if rent_item:
+            if rent_item.purchase_duration == 'per_period':
+                # Calculate NEXT rent due date and set as expiry
+                rent_setting = RentSettings.query.get(rent_item.rent_setting_id)
+                if rent_setting and rent_setting.is_enabled:
+                    now = utc_now()
 
-                    if current_due and next_due:
-                        # Align expiry to the next scheduled due date
-                        expiry_date = next_due
-                else:
-                    # No first_rent_due_date set, use simple calculation from now
-                    # This is a fallback for backwards compatibility
-                    delta = _get_period_delta(rent_setting)
-                    expiry_date = _add_period(now, delta)
+                    if rent_setting.first_rent_due_date:
+                        current_due, next_due = _calculate_due_dates(rent_setting, now)
+
+                        if current_due and next_due:
+                            # Align expiry to the next scheduled due date
+                            expiry_date = next_due
+                    else:
+                        # No first_rent_due_date set, use simple calculation from now
+                        # This is a fallback for backwards compatibility
+                        delta = _get_period_delta(rent_setting)
+                        expiry_date = _add_period(now, delta)
+            elif rent_item.rent_item_type == 'per_use' and rent_item.use_limit:
+                # Set multi-use limit
+                uses_remaining = rent_item.use_limit
 
         # Fall back to standard auto_expiry for delayed items
         if expiry_date is None and item.item_type == 'delayed' and item.auto_expiry_days:
@@ -445,7 +451,8 @@ def purchase_item():
                 status=student_item_status,
                 is_from_bundle=True,
                 bundle_remaining=item.bundle_quantity * quantity,  # Total uses = bundle_quantity * number of bundles purchased
-                quantity_purchased=quantity
+                quantity_purchased=quantity,
+                uses_remaining=uses_remaining
             )
             db.session.add(new_student_item)
         elif item.is_bundle and item.bundle_quantity is None:
@@ -458,7 +465,8 @@ def purchase_item():
                 expiry_date=expiry_date,
                 status=student_item_status,
                 is_from_bundle=False,
-                quantity_purchased=quantity
+                quantity_purchased=quantity,
+                uses_remaining=uses_remaining
             )
             db.session.add(new_student_item)
         else:
@@ -471,7 +479,8 @@ def purchase_item():
                     expiry_date=expiry_date,
                     status=student_item_status,
                     is_from_bundle=False,
-                    quantity_purchased=1
+                    quantity_purchased=1,
+                    uses_remaining=uses_remaining
                 )
                 db.session.add(new_student_item)
 
@@ -612,6 +621,22 @@ def use_item():
                 student_item.redemption_details += f"\n---\n{details}"
             else:
                 student_item.redemption_details = details
+        elif student_item.uses_remaining is not None:
+            # Multi-use item (Rent Per-Use with limit > 1)
+            student_item.uses_remaining -= 1
+            if student_item.uses_remaining <= 0:
+                # Last use - mark as processing (if requires approval) or completed/redeemed
+                # Assuming rent per-use items are 'delayed' type (request redemption)
+                student_item.status = 'processing'
+            else:
+                # Still has uses remaining - keep status as 'purchased' so it remains in "My Items"
+                pass
+
+            student_item.redemption_date = utc_now()
+            if student_item.redemption_details:
+                student_item.redemption_details += f"\n---\n{details} (Use {student_item.uses_remaining + 1})"
+            else:
+                student_item.redemption_details = f"{details} (Use {student_item.uses_remaining + 1})"
         else:
             # Regular item - mark as processing
             student_item.status = 'processing'
@@ -639,6 +664,8 @@ def use_item():
 
         if student_item.is_from_bundle:
             return jsonify({"status": "success", "message": f"You have used 1 from your bundle of {student_item.store_item.name}. {student_item.bundle_remaining} uses remaining."})
+        elif student_item.uses_remaining is not None and student_item.uses_remaining > 0:
+            return jsonify({"status": "success", "message": f"You have used {student_item.store_item.name}. {student_item.uses_remaining} uses remaining."})
         else:
             return jsonify({"status": "success", "message": f"You have requested to use {student_item.store_item.name}. Awaiting admin approval."})
 
