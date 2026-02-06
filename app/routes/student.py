@@ -2944,7 +2944,8 @@ def rent_pay(period):
 
     # Award Hall Passes if rent is fully paid
     passes_awarded = 0
-    if total_paid_so_far + payment_amount >= total_due:
+    # FIX: Ensure we only award if it was NOT fully paid before this payment
+    if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
         from app.models import RentItem
         hall_pass_items = RentItem.query.filter_by(
             rent_setting_id=settings.id,
