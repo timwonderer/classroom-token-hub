@@ -1781,6 +1781,7 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
     setting_ids = [rs.id for rs in all_rent_settings]
     all_rent_items = RentItem.query.filter(
         RentItem.rent_setting_id.in_(setting_ids),
+        RentItem.rent_item_type == 'privilege',
         RentItem.purchase_duration == 'per_period',
         RentItem.is_available_in_store == True
     ).all()
@@ -1938,6 +1939,7 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
 
     per_period_items = RentItem.query.filter_by(
         rent_setting_id=rent_settings.id,
+        rent_item_type='privilege',
         purchase_duration='per_period',
         is_available_in_store=True
     ).all()

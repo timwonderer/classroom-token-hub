@@ -257,6 +257,43 @@ def purchase_item():
                             "message": "You cannot make purchases while late on rent. Please pay your rent first."
                         }), 403
 
+    # Check if student has free uses remaining from rent (per-use rent items)
+    if item.is_rent_linked and quantity == 1:
+        # Look for an active StudentItem with uses_remaining for this store item
+        active_rent_item = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.store_item_id == item.id,
+            StudentItem.uses_remaining > 0,
+            db.or_(
+                StudentItem.expiry_date.is_(None),
+                StudentItem.expiry_date > utc_now()
+            )
+        ).first()
+
+        if active_rent_item:
+            # Free use from rent - decrement uses_remaining and log it
+            active_rent_item.uses_remaining -= 1
+            active_rent_item.redemption_date = utc_now()
+
+            # Create a $0 transaction to log the free use
+            free_use_tx = Transaction(
+                student_id=student.id,
+                teacher_id=teacher_id,
+                join_code=join_code,
+                amount=0.0,
+                account_type='checking',
+                type='purchase',
+                description=f"Free use (rent perk): {item.name}"
+            )
+            db.session.add(free_use_tx)
+            db.session.commit()
+
+            remaining = active_rent_item.uses_remaining
+            if remaining > 0:
+                return jsonify({"status": "success", "message": f"Free use of {item.name} (rent perk)! {remaining} free uses remaining."})
+            else:
+                return jsonify({"status": "success", "message": f"Free use of {item.name} (rent perk)! No more free uses remaining."})
+
     # Calculate price (with bulk discount if applicable)
     unit_price = item.price
     if (item.bulk_discount_enabled and

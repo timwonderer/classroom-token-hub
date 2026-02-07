@@ -2344,15 +2344,32 @@ def shop():
                     db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
                 ).first() is not None
 
-            # Get all per-period rent items
+            # Get privilege-type per-period rent items (only these show "Included in your rent!")
             per_period_items = RentItem.query.filter_by(
                 rent_setting_id=rent_settings.id,
+                rent_item_type='privilege',
                 purchase_duration='per_period',
                 is_available_in_store=True
             ).all()
 
-            # Collect store item IDs
+            # Collect store item IDs (only privilege items get the "Included in your rent!" badge)
             per_period_rent_item_ids = {item.store_item_id for item in per_period_items if item.store_item_id}
+
+    # Build free uses remaining map for rent-linked per-use items
+    rent_free_uses = {}  # {store_item_id: uses_remaining or -1 for unlimited}
+    if student:
+        rent_linked_items = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.uses_remaining != None,
+            StudentItem.uses_remaining > 0,
+            db.or_(
+                StudentItem.expiry_date.is_(None),
+                StudentItem.expiry_date > utc_now()
+            )
+        ).all()
+        for si in rent_linked_items:
+            if si.store_item_id:
+                rent_free_uses[si.store_item_id] = si.uses_remaining
 
     # Calculate class size for collective goals (count claimed seats in this class)
     from app.models import TeacherBlock
@@ -2365,6 +2382,7 @@ def shop():
 
     return render_template('student_shop.html', student=student, items=items, student_items=student_items,
                          has_paid_rent=has_paid_rent, per_period_rent_item_ids=per_period_rent_item_ids,
+                         rent_free_uses=rent_free_uses,
                          class_size=class_size, current_block=current_block)
 
 
@@ -2974,6 +2992,60 @@ def rent_pay(period):
             # Update rent_hall_passes to reflect the new grant level
             if student_block:
                 student_block.rent_hall_passes = total_grant
+
+    # Grant per-use free uses if rent is fully paid
+    per_use_items_granted = 0
+    if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
+        from app.models import RentItem
+        per_use_items = RentItem.query.filter_by(
+            rent_setting_id=settings.id,
+            rent_item_type='per_use'
+        ).all()
+
+        for pu_item in per_use_items:
+            if not pu_item.store_item_id:
+                continue
+
+            # Check if student already has an active (non-expired) StudentItem with uses_remaining for this store item
+            existing = StudentItem.query.filter(
+                StudentItem.student_id == student.id,
+                StudentItem.store_item_id == pu_item.store_item_id,
+                StudentItem.uses_remaining > 0,
+                db.or_(
+                    StudentItem.expiry_date.is_(None),
+                    StudentItem.expiry_date > utc_now()
+                )
+            ).first()
+
+            if existing:
+                # Top-off: reset uses_remaining to the granted amount
+                if pu_item.use_limit:
+                    existing.uses_remaining = pu_item.use_limit
+                # If unlimited (use_limit is None), leave as-is
+                continue
+
+            # Calculate expiry (next rent due date)
+            expiry_date = None
+            if settings.first_rent_due_date:
+                from app.routes.api import _calculate_due_dates
+                now_ts = utc_now()
+                current_due, next_due = _calculate_due_dates(settings, now_ts)
+                if next_due:
+                    expiry_date = next_due
+
+            # Grant a free StudentItem with uses_remaining
+            granted_item = StudentItem(
+                student_id=student.id,
+                store_item_id=pu_item.store_item_id,
+                purchase_date=utc_now(),
+                expiry_date=expiry_date,
+                status='purchased',
+                is_from_bundle=False,
+                quantity_purchased=1,
+                uses_remaining=pu_item.use_limit  # None means unlimited
+            )
+            db.session.add(granted_item)
+            per_use_items_granted += 1
 
     # Commit all transactions together
     db.session.commit()
