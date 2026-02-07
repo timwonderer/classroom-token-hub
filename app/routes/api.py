@@ -742,6 +742,13 @@ def handle_hall_pass_action(pass_id, action):
         # Only deduct hall pass for regular reasons (not Office/Summons/Done for the day)
         if should_deduct:
             student.hall_passes -= 1
+            # Decrement rent_hall_passes first (rent-granted passes consumed before purchased)
+            student_block = StudentBlock.query.filter_by(
+                student_id=student.id,
+                join_code=log_entry.join_code
+            ).first()
+            if student_block and student_block.rent_hall_passes > 0:
+                student_block.rent_hall_passes -= 1
 
         db.session.commit()
         return jsonify({"status": "success", "message": "Pass approved.", "pass_number": pass_number})

@@ -3748,36 +3748,63 @@ def rent_settings():
 
             existing_items = block_settings.rent_items.all()
             existing_map = {}
-            
+
             # For the original block, we map by ID to preserve precise identity
             # For other blocks, we map by Name to attempt to sync updates across classes
             if block == settings_block:
                 existing_map = {str(item.id): item for item in existing_items}
             else:
                 existing_map = {item.name: item for item in existing_items}
-            
+
             processed_items = set()
+
+            # Mid-period lock: detect if any student has paid rent for current coverage period
+            mid_period_locked = False
+            block_join_code = db.session.query(TeacherBlock.join_code).filter_by(
+                teacher_id=admin_id, block=block
+            ).first()
+            if block_join_code:
+                from app.routes.student import _calculate_rent_coverage_due_date
+                now = utc_now()
+                coverage_due = _calculate_rent_coverage_due_date(block_settings, now)
+                if coverage_due:
+                    paid_count = RentPayment.query.filter_by(
+                        period=block,
+                        coverage_month=coverage_due.month,
+                        coverage_year=coverage_due.year,
+                        join_code=block_join_code[0]
+                    ).count()
+                    if paid_count > 0:
+                        mid_period_locked = True
 
             for item_data in parsed_items:
                 target_item = None
-                
+
                 # Try to find matching existing item
                 if block == settings_block:
                     target_item = existing_map.get(item_data['id'])
                 else:
                     target_item = existing_map.get(item_data['name'])
-                
+
                 if target_item:
-                    # Update existing
+                    # Update existing - always allow cosmetic fields
                     target_item.name = item_data['name']
                     target_item.description = item_data['description'] if item_data['description'] else None
                     target_item.order_index = item_data['order_index']
-                    target_item.is_available_in_store = item_data['is_available']
                     target_item.store_price = item_data['store_price']
                     target_item.purchase_duration = item_data['purchase_duration']
-                    target_item.rent_item_type = item_data['rent_item_type']
-                    target_item.use_limit = item_data['use_limit']
-                    target_item.hall_pass_count = item_data['hall_pass_count']
+
+                    if mid_period_locked:
+                        # Semantic fields locked: rent_item_type, use_limit, hall_pass_count
+                        # Only allow is_available_in_store change for privilege items
+                        if target_item.rent_item_type == 'privilege':
+                            target_item.is_available_in_store = item_data['is_available']
+                    else:
+                        # No lock - update all fields freely
+                        target_item.is_available_in_store = item_data['is_available']
+                        target_item.rent_item_type = item_data['rent_item_type']
+                        target_item.use_limit = item_data['use_limit']
+                        target_item.hall_pass_count = item_data['hall_pass_count']
                     processed_items.add(target_item)
                 else:
                     # Create new
@@ -3807,9 +3834,13 @@ def rent_settings():
                     db.session.delete(item)
             
             db.session.commit()
-            
+
             # Sync to store
             _sync_rent_items_to_store(block_settings, admin_id, block)
+
+            if mid_period_locked and block == settings_block:
+                flash("Some changes are locked because students have already paid rent this period. "
+                      "Item type, use limits, and hall pass counts will apply next period.", "warning")
 
         if apply_to_all:
             flash(f"Rent settings applied to all {len(blocks_to_update)} classes!", "success")

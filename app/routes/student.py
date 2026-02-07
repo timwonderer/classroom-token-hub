@@ -2942,9 +2942,9 @@ def rent_pay(period):
     # Check if overdraft fee should be charged (after overdraft protection)
     fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=teacher_id, join_code=join_code)
 
-    # Award Hall Passes if rent is fully paid
+    # Award Hall Passes if rent is fully paid (top-off model)
     passes_awarded = 0
-    # FIX: Ensure we only award if it was NOT fully paid before this payment
+    # Only award if this payment completes full rent (not already fully paid)
     if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
         from app.models import RentItem
         hall_pass_items = RentItem.query.filter_by(
@@ -2952,13 +2952,28 @@ def rent_pay(period):
             rent_item_type='hall_pass'
         ).all()
 
-        for item in hall_pass_items:
-            if item.hall_pass_count:
-                passes_awarded += item.hall_pass_count
+        # Calculate total grant from all hall_pass rent items
+        total_grant = sum(item.hall_pass_count for item in hall_pass_items if item.hall_pass_count)
 
-        if passes_awarded > 0:
-            student.hall_passes = (student.hall_passes or 0) + passes_awarded
-            db.session.add(student)
+        if total_grant > 0:
+            # Top-off logic: only replenish rent-granted portion
+            # rent_hall_passes tracks how many of student's current passes came from rent
+            student_block = StudentBlock.query.filter_by(
+                student_id=student.id,
+                join_code=join_code
+            ).first()
+
+            current_rent_passes = student_block.rent_hall_passes if student_block else 0
+            top_off = max(0, total_grant - current_rent_passes)
+
+            if top_off > 0:
+                student.hall_passes = (student.hall_passes or 0) + top_off
+                passes_awarded = top_off
+                db.session.add(student)
+
+            # Update rent_hall_passes to reflect the new grant level
+            if student_block:
+                student_block.rent_hall_passes = total_grant
 
     # Commit all transactions together
     db.session.commit()

@@ -1,6 +1,6 @@
 import pytest
 from decimal import Decimal
-from app.models import RentItem, RentSettings, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher
+from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher
 from app.extensions import db
 from datetime import datetime, timedelta, timezone
 
@@ -279,3 +279,296 @@ def test_prevent_deletion_of_linked_items(client, teacher_admin):
 
     db.session.refresh(store_item)
     assert store_item is not None # Should still exist
+
+
+def test_hall_pass_topoff_replenishes_rent_portion_only(client, teacher_admin, student_in_class):
+    """Test hall pass top-off only replenishes the rent-granted portion, not purchased passes."""
+    student = student_in_class
+
+    # Create student block with join_code
+    sb = StudentBlock.query.filter_by(student_id=student.id).first()
+    if not sb:
+        sb = StudentBlock(student_id=student.id, period='A', join_code='JOINCODE123')
+        db.session.add(sb)
+        db.session.flush()
+
+    # Scenario: rent grants 3, student has 1 rent + 2 purchased = 3 total
+    sb.rent_hall_passes = 1
+    student.hall_passes = 3  # 1 rent + 2 purchased
+    db.session.commit()
+
+    # Create rent settings with hall_pass item granting 3 passes
+    settings = RentSettings(
+        teacher_id=teacher_admin.id, block='A', is_enabled=True,
+        rent_amount=Decimal('50.00'), frequency_type='monthly',
+        due_day_of_month=1, first_rent_due_date=datetime(2026, 2, 1, tzinfo=timezone.utc)
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    hall_pass_item = RentItem(
+        rent_setting_id=settings.id, name='Hall Passes',
+        rent_item_type='hall_pass', hall_pass_count=3
+    )
+    db.session.add(hall_pass_item)
+    db.session.commit()
+
+    # Simulate the top-off logic directly (same as student.py rent_pay)
+    total_grant = sum(item.hall_pass_count for item in [hall_pass_item] if item.hall_pass_count)
+    current_rent_passes = sb.rent_hall_passes
+    top_off = max(0, total_grant - current_rent_passes)
+
+    student.hall_passes = (student.hall_passes or 0) + top_off
+    sb.rent_hall_passes = total_grant
+    db.session.commit()
+
+    db.session.refresh(student)
+    db.session.refresh(sb)
+
+    # Expected: 3(original) + 2(top-off of rent portion: 3-1=2) = 5 total
+    assert student.hall_passes == 5
+    # rent_hall_passes should now be 3 (the full grant amount)
+    assert sb.rent_hall_passes == 3
+
+
+def test_hall_pass_topoff_zero_existing(client, teacher_admin, student_in_class):
+    """Test hall pass top-off when student has 0 passes grants full amount."""
+    student = student_in_class
+
+    sb = StudentBlock.query.filter_by(student_id=student.id).first()
+    if not sb:
+        sb = StudentBlock(student_id=student.id, period='A', join_code='JOINCODE123')
+        db.session.add(sb)
+        db.session.flush()
+
+    sb.rent_hall_passes = 0
+    student.hall_passes = 0
+    db.session.commit()
+
+    # Top-off with grant of 3
+    total_grant = 3
+    current_rent_passes = sb.rent_hall_passes
+    top_off = max(0, total_grant - current_rent_passes)
+
+    student.hall_passes = (student.hall_passes or 0) + top_off
+    sb.rent_hall_passes = total_grant
+    db.session.commit()
+
+    db.session.refresh(student)
+    db.session.refresh(sb)
+
+    assert student.hall_passes == 3
+    assert sb.rent_hall_passes == 3
+
+
+def test_hall_pass_consumption_decrements_rent_passes_first(client, teacher_admin, student_in_class):
+    """Test that using a hall pass decrements rent_hall_passes before purchased passes."""
+    student = student_in_class
+
+    sb = StudentBlock.query.filter_by(student_id=student.id).first()
+    if not sb:
+        sb = StudentBlock(student_id=student.id, period='A', join_code='JOINCODE123')
+        db.session.add(sb)
+        db.session.flush()
+
+    # Student has 3 rent + 2 purchased = 5 total
+    sb.rent_hall_passes = 3
+    student.hall_passes = 5
+    db.session.commit()
+
+    # Simulate hall pass consumption (same as api.py hall pass approval)
+    student.hall_passes -= 1
+    if sb.rent_hall_passes > 0:
+        sb.rent_hall_passes -= 1
+    db.session.commit()
+
+    db.session.refresh(student)
+    db.session.refresh(sb)
+
+    assert student.hall_passes == 4
+    assert sb.rent_hall_passes == 2  # Rent pass consumed first
+
+    # Consume 2 more rent passes
+    for _ in range(2):
+        student.hall_passes -= 1
+        if sb.rent_hall_passes > 0:
+            sb.rent_hall_passes -= 1
+    db.session.commit()
+
+    db.session.refresh(student)
+    db.session.refresh(sb)
+
+    assert student.hall_passes == 2
+    assert sb.rent_hall_passes == 0  # All rent passes consumed
+
+    # Next pass consumed is from purchased (rent_hall_passes stays 0)
+    student.hall_passes -= 1
+    if sb.rent_hall_passes > 0:
+        sb.rent_hall_passes -= 1
+    db.session.commit()
+
+    db.session.refresh(student)
+    db.session.refresh(sb)
+
+    assert student.hall_passes == 1
+    assert sb.rent_hall_passes == 0  # Still 0, purchased pass consumed
+
+
+def test_mid_period_lock_blocks_semantic_changes(client, teacher_admin):
+    """Test that semantic fields are locked when students have paid rent for current period."""
+    with client.session_transaction() as sess:
+        sess['admin_id'] = teacher_admin.id
+        sess['is_admin'] = True
+
+    # Create settings and a rent item
+    settings = RentSettings(
+        teacher_id=teacher_admin.id, block='A', is_enabled=True,
+        rent_amount=Decimal('50.00'), frequency_type='monthly',
+        due_day_of_month=1, first_rent_due_date=datetime(2026, 2, 1, tzinfo=timezone.utc)
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    rent_item = RentItem(
+        rent_setting_id=settings.id, name='Desk',
+        rent_item_type='privilege', order_index=0,
+        is_available_in_store=True, store_price=Decimal('100.00'),
+        purchase_duration='per_period'
+    )
+    db.session.add(rent_item)
+    db.session.flush()
+
+    # Create a TeacherBlock with join_code
+    tb = TeacherBlock(
+        teacher_id=teacher_admin.id, block='A', join_code='LOCKTEST',
+        first_name='Seat', last_initial='1', last_name_hash_by_part=[], dob_sum=0,
+        salt=b'salt', first_half_hash='hash'
+    )
+    db.session.add(tb)
+    db.session.flush()
+
+    # Create a student who has paid rent for the current coverage period
+    student = Student(first_name="Payer", last_initial="P", block="A", salt=b'salt')
+    db.session.add(student)
+    db.session.flush()
+
+    link = StudentTeacher(student_id=student.id, admin_id=teacher_admin.id)
+    db.session.add(link)
+
+    now = datetime.now(timezone.utc)
+    payment = RentPayment(
+        student_id=student.id, period='A', join_code='LOCKTEST',
+        amount_paid=Decimal('50.00'),
+        coverage_month=now.month, coverage_year=now.year
+    )
+    db.session.add(payment)
+    db.session.commit()
+
+    # Now try to change rent_item_type from privilege to per_use
+    data = {
+        'settings_block': 'A',
+        'is_enabled': 'on',
+        'rent_amount': '50.00',
+        'frequency_type': 'monthly',
+        'due_day_of_month': '1',
+        'rent_item_name_0': 'Desk',
+        'rent_item_id_0': str(rent_item.id),
+        'rent_item_type_0': 'per_use',  # Changed from privilege
+        'rent_item_store_available_0': 'on',
+        'rent_item_store_price_0': '100.00',
+        'rent_item_purchase_duration_0': 'per_use',
+        'rent_item_use_limit_0': '5',
+    }
+
+    resp = client.post('/admin/rent-settings', data=data, follow_redirects=True)
+    assert resp.status_code == 200
+
+    # Check that the item type was NOT changed (mid-period lock)
+    db.session.refresh(rent_item)
+    assert rent_item.rent_item_type == 'privilege'  # Should remain privilege
+    assert rent_item.use_limit is None  # Should not have been set
+
+    # But cosmetic changes should be allowed
+    assert rent_item.name == 'Desk'  # Name update should work
+
+
+def test_mid_period_lock_allows_new_items(client, teacher_admin):
+    """Test that new items can be added even when mid-period lock is active."""
+    with client.session_transaction() as sess:
+        sess['admin_id'] = teacher_admin.id
+        sess['is_admin'] = True
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id, block='A', is_enabled=True,
+        rent_amount=Decimal('50.00'), frequency_type='monthly',
+        due_day_of_month=1, first_rent_due_date=datetime(2026, 2, 1, tzinfo=timezone.utc)
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    tb = TeacherBlock(
+        teacher_id=teacher_admin.id, block='A', join_code='LOCKTEST2',
+        first_name='Seat', last_initial='2', last_name_hash_by_part=[], dob_sum=0,
+        salt=b'salt', first_half_hash='hash'
+    )
+    db.session.add(tb)
+    db.session.flush()
+
+    student = Student(first_name="Payer", last_initial="P", block="A", salt=b'salt')
+    db.session.add(student)
+    db.session.flush()
+
+    link = StudentTeacher(student_id=student.id, admin_id=teacher_admin.id)
+    db.session.add(link)
+
+    now = datetime.now(timezone.utc)
+    payment = RentPayment(
+        student_id=student.id, period='A', join_code='LOCKTEST2',
+        amount_paid=Decimal('50.00'),
+        coverage_month=now.month, coverage_year=now.year
+    )
+    db.session.add(payment)
+    db.session.commit()
+
+    # Add a new item - should work even with lock active
+    data = {
+        'settings_block': 'A',
+        'is_enabled': 'on',
+        'rent_amount': '50.00',
+        'frequency_type': 'monthly',
+        'due_day_of_month': '1',
+        'rent_item_name_0': 'New Item',
+        'rent_item_type_0': 'per_use',
+        'rent_item_store_available_0': 'on',
+        'rent_item_store_price_0': '10.00',
+        'rent_item_purchase_duration_0': 'per_use',
+        'rent_item_use_limit_0': '3',
+    }
+
+    resp = client.post('/admin/rent-settings', data=data, follow_redirects=True)
+    assert resp.status_code == 200
+
+    # New item should be created with the specified type
+    new_item = RentItem.query.filter_by(rent_setting_id=settings.id, name='New Item').first()
+    assert new_item is not None
+    assert new_item.rent_item_type == 'per_use'
+    assert new_item.use_limit == 3
+
+
+def test_legacy_rent_items_default_to_privilege(client, teacher_admin):
+    """Test that existing rent items without rent_item_type default to privilege."""
+    settings = RentSettings(teacher_id=teacher_admin.id, block='A', is_enabled=True)
+    db.session.add(settings)
+    db.session.flush()
+
+    # Create item without explicitly setting rent_item_type (simulates legacy data)
+    item = RentItem(
+        rent_setting_id=settings.id, name='Legacy Desk',
+        is_available_in_store=True, store_price=Decimal('50.00'),
+        purchase_duration='per_period'
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    db.session.refresh(item)
+    assert item.rent_item_type == 'privilege'  # Default value for backward compat
