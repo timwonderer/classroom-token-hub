@@ -78,44 +78,46 @@ depends_on = None
 
 def upgrade():
     # Add rent_item_type to rent_items (default 'privilege' for backward compat)
-    if not column_exists('rent_items', 'rent_item_type'):
-        with op.batch_alter_table('rent_items', schema=None) as batch_op:
-            batch_op.add_column(sa.Column('rent_item_type', sa.String(length=20), nullable=False, server_default='privilege'))
+    if table_exists('rent_items'):
+        if not column_exists('rent_items', 'rent_item_type'):
+            with op.batch_alter_table('rent_items', schema=None) as batch_op:
+                batch_op.add_column(sa.Column('rent_item_type', sa.String(length=20), nullable=False, server_default='privilege'))
 
-    if not column_exists('rent_items', 'use_limit'):
-        with op.batch_alter_table('rent_items', schema=None) as batch_op:
-            batch_op.add_column(sa.Column('use_limit', sa.Integer(), nullable=True))
+        if not column_exists('rent_items', 'use_limit'):
+            with op.batch_alter_table('rent_items', schema=None) as batch_op:
+                batch_op.add_column(sa.Column('use_limit', sa.Integer(), nullable=True))
 
-    if not column_exists('rent_items', 'hall_pass_count'):
-        with op.batch_alter_table('rent_items', schema=None) as batch_op:
-            batch_op.add_column(sa.Column('hall_pass_count', sa.Integer(), nullable=True))
+        if not column_exists('rent_items', 'hall_pass_count'):
+            with op.batch_alter_table('rent_items', schema=None) as batch_op:
+                batch_op.add_column(sa.Column('hall_pass_count', sa.Integer(), nullable=True))
 
-    if not column_exists('store_items', 'is_rent_linked'):
+    if table_exists('store_items') and not column_exists('store_items', 'is_rent_linked'):
         with op.batch_alter_table('store_items', schema=None) as batch_op:
             batch_op.add_column(sa.Column('is_rent_linked', sa.Boolean(), nullable=False, server_default=sa.sql.expression.false()))
 
-    if not column_exists('student_blocks', 'rent_hall_passes'):
+    if table_exists('student_blocks') and not column_exists('student_blocks', 'rent_hall_passes'):
         with op.batch_alter_table('student_blocks', schema=None) as batch_op:
             batch_op.add_column(sa.Column('rent_hall_passes', sa.Integer(), nullable=False, server_default='0'))
 
 
 def downgrade():
-    if column_exists('student_blocks', 'rent_hall_passes'):
+    if table_exists('student_blocks') and column_exists('student_blocks', 'rent_hall_passes'):
         with op.batch_alter_table('student_blocks', schema=None) as batch_op:
             batch_op.drop_column('rent_hall_passes')
 
-    if column_exists('store_items', 'is_rent_linked'):
+    if table_exists('store_items') and column_exists('store_items', 'is_rent_linked'):
         with op.batch_alter_table('store_items', schema=None) as batch_op:
             batch_op.drop_column('is_rent_linked')
 
-    if column_exists('rent_items', 'hall_pass_count'):
-        with op.batch_alter_table('rent_items', schema=None) as batch_op:
-            batch_op.drop_column('hall_pass_count')
+    if table_exists('rent_items'):
+        if column_exists('rent_items', 'hall_pass_count'):
+            with op.batch_alter_table('rent_items', schema=None) as batch_op:
+                batch_op.drop_column('hall_pass_count')
 
-    if column_exists('rent_items', 'use_limit'):
-        with op.batch_alter_table('rent_items', schema=None) as batch_op:
-            batch_op.drop_column('use_limit')
+        if column_exists('rent_items', 'use_limit'):
+            with op.batch_alter_table('rent_items', schema=None) as batch_op:
+                batch_op.drop_column('use_limit')
 
-    if column_exists('rent_items', 'rent_item_type'):
-        with op.batch_alter_table('rent_items', schema=None) as batch_op:
-            batch_op.drop_column('rent_item_type')
+        if column_exists('rent_items', 'rent_item_type'):
+            with op.batch_alter_table('rent_items', schema=None) as batch_op:
+                batch_op.drop_column('rent_item_type')

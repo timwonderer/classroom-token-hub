@@ -77,12 +77,12 @@ depends_on = None
 
 
 def upgrade():
-    if not column_exists('student_items', 'uses_remaining'):
+    if table_exists('student_items') and not column_exists('student_items', 'uses_remaining'):
         with op.batch_alter_table('student_items', schema=None) as batch_op:
             batch_op.add_column(sa.Column('uses_remaining', sa.Integer(), nullable=True))
 
 
 def downgrade():
-    if column_exists('student_items', 'uses_remaining'):
+    if table_exists('student_items') and column_exists('student_items', 'uses_remaining'):
         with op.batch_alter_table('student_items', schema=None) as batch_op:
             batch_op.drop_column('uses_remaining')
