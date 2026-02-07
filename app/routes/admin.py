@@ -3361,6 +3361,12 @@ def delete_store_item(item_id):
     """Deactivate a store item (soft delete)."""
     admin_id = session.get("admin_id")
     item = StoreItem.query.filter_by(id=item_id, teacher_id=admin_id).first_or_404()
+
+    # Prevent deletion if linked to rent settings
+    if item.is_rent_linked:
+        flash(f"Cannot delete '{item.name}' because it is managed by Rent Settings. Please remove it from Rent Settings instead.", "error")
+        return redirect(url_for('admin.store_management'))
+
     # To preserve history, we'll just deactivate it instead of a hard delete
     # A hard delete would be: db.session.delete(item)
     item.is_active = False
@@ -3376,6 +3382,11 @@ def hard_delete_store_item(item_id):
     admin_id = session.get("admin_id")
     item = StoreItem.query.filter_by(id=item_id, teacher_id=admin_id).first_or_404()
     item_name = item.name
+
+    # Prevent deletion if linked to rent settings
+    if item.is_rent_linked:
+        flash(f"Cannot delete '{item.name}' because it is managed by Rent Settings. Please remove it from Rent Settings instead.", "error")
+        return redirect(url_for('admin.store_management'))
 
     # Check if there are any student purchases of this item
     from app.models import StudentItem
@@ -3413,13 +3424,26 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
     rent_items = RentItem.query.filter_by(rent_setting_id=rent_settings.id).all()
 
     for rent_item in rent_items:
+        # Skip store sync for hall passes
+        if rent_item.rent_item_type == 'hall_pass':
+            continue
+
         if rent_item.is_available_in_store and rent_item.store_price:
             # Determine purchase limit based on duration type
-            if rent_item.purchase_duration == 'per_period':
+            limit = None
+            duration_note = ""
+
+            if rent_item.rent_item_type == 'per_use':
+                limit = None
+                if rent_item.use_limit:
+                    duration_note = f"Includes {rent_item.use_limit} uses."
+                else:
+                    duration_note = "Single use item."
+            elif rent_item.purchase_duration == 'per_period':
                 limit = 1  # Can only buy once per rent period
                 duration_note = "Valid until next rent payment is due."
-            else:  # per_use
-                limit = None  # Unlimited purchases
+            else:  # fallback
+                limit = None
                 duration_note = "Purchase each time you need to use it."
 
             base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
@@ -3449,20 +3473,29 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                 store_item.price = rent_item.store_price
                 store_item.limit_per_student = limit
                 store_item.is_active = True
+                # Force item_type to delayed to ensure use tracking works
+                store_item.item_type = 'delayed'
+
+                # Ensure it's marked as linked
+                store_item.is_rent_linked = True
 
                 # Link this rent_item to the store_item if not already linked
                 if not rent_item.store_item_id:
                     rent_item.store_item_id = store_item.id
             else:
                 # Create new store item only if it doesn't exist
+                is_linked = True
+                # Rent items should be 'delayed' (redeemable) to allow use tracking
+                # especially for multi-use items or privileges valid for a period
                 store_item = StoreItem(
                     teacher_id=teacher_id,
                     name=rent_item.name,
                     description=description,
                     price=rent_item.store_price,
-                    item_type='immediate',
+                    item_type='delayed',
                     limit_per_student=limit,
-                    is_active=True
+                    is_active=True,
+                    is_rent_linked=is_linked
                 )
                 db.session.add(store_item)
                 db.session.flush()  # Get the store_item.id
@@ -3648,14 +3681,38 @@ def rent_settings():
             if not name:
                 continue
             
+            rent_item_type = request.form.get(f'rent_item_type_{idx}', 'privilege') # Default to privilege if missing
+            use_limit = None
+            if rent_item_type == 'per_use':
+                use_limit_val = request.form.get(f'rent_item_use_limit_{idx}', '').strip()
+                if use_limit_val and use_limit_val.isdigit():
+                    use_limit = int(use_limit_val)
+
+            hall_pass_count = None
+            if rent_item_type == 'hall_pass':
+                hall_pass_val = request.form.get(f'rent_item_hall_pass_count_{idx}', '').strip()
+                if hall_pass_val and hall_pass_val.isdigit():
+                    hall_pass_count = int(hall_pass_val)
+
+            # Logic changes based on type
+            is_available = request.form.get(f'rent_item_store_available_{idx}') == 'on'
+            if rent_item_type == 'per_use':
+                is_available = True  # Always available in store for per_use items
+            elif rent_item_type == 'hall_pass':
+                # Hall passes are not typically listed in store via this mechanism
+                pass
+
             item_data = {
                 'id': request.form.get(f'rent_item_id_{idx}'),
                 'name': name,
                 'description': request.form.get(f'rent_item_description_{idx}', '').strip(),
-                'is_available': request.form.get(f'rent_item_store_available_{idx}') == 'on',
+                'is_available': is_available,
                 'store_price_str': request.form.get(f'rent_item_store_price_{idx}', '').strip(),
                 'purchase_duration': request.form.get(f'rent_item_purchase_duration_{idx}', 'per_use'),
-                'order_index': int(idx)
+                'order_index': int(idx),
+                'rent_item_type': rent_item_type,
+                'use_limit': use_limit,
+                'hall_pass_count': hall_pass_count
             }
             
             # Validation logic reuse
@@ -3718,6 +3775,9 @@ def rent_settings():
                     target_item.is_available_in_store = item_data['is_available']
                     target_item.store_price = item_data['store_price']
                     target_item.purchase_duration = item_data['purchase_duration']
+                    target_item.rent_item_type = item_data['rent_item_type']
+                    target_item.use_limit = item_data['use_limit']
+                    target_item.hall_pass_count = item_data['hall_pass_count']
                     processed_items.add(target_item)
                 else:
                     # Create new
@@ -3728,7 +3788,10 @@ def rent_settings():
                         order_index=item_data['order_index'],
                         is_available_in_store=item_data['is_available'],
                         store_price=item_data['store_price'],
-                        purchase_duration=item_data['purchase_duration']
+                        purchase_duration=item_data['purchase_duration'],
+                        rent_item_type=item_data['rent_item_type'],
+                        use_limit=item_data['use_limit'],
+                        hall_pass_count=item_data['hall_pass_count']
                     )
                     db.session.add(new_item)
                     # No need to add to processed_items as it's new

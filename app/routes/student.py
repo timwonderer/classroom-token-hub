@@ -2942,6 +2942,24 @@ def rent_pay(period):
     # Check if overdraft fee should be charged (after overdraft protection)
     fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=teacher_id, join_code=join_code)
 
+    # Award Hall Passes if rent is fully paid
+    passes_awarded = 0
+    # FIX: Ensure we only award if it was NOT fully paid before this payment
+    if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
+        from app.models import RentItem
+        hall_pass_items = RentItem.query.filter_by(
+            rent_setting_id=settings.id,
+            rent_item_type='hall_pass'
+        ).all()
+
+        for item in hall_pass_items:
+            if item.hall_pass_count:
+                passes_awarded += item.hall_pass_count
+
+        if passes_awarded > 0:
+            student.hall_passes = (student.hall_passes or 0) + passes_awarded
+            db.session.add(student)
+
     # Commit all transactions together
     db.session.commit()
 
@@ -2954,9 +2972,15 @@ def rent_pay(period):
         if new_remaining > 0:
             flash(f"Partial payment of ${payment_amount:.2f} successful! Remaining balance: ${new_remaining:.2f}", "success")
         else:
-            flash(f"Final payment of ${payment_amount:.2f} successful! Rent for Period {period} is now fully paid.", "success")
+            msg = f"Final payment of ${payment_amount:.2f} successful! Rent for Period {period} is now fully paid."
+            if passes_awarded > 0:
+                msg += f" You received {passes_awarded} hall passes!"
+            flash(msg, "success")
     else:
-        flash(f"Rent payment for Period {period} (${payment_amount:.2f}) successful!", "success")
+        msg = f"Rent payment for Period {period} (${payment_amount:.2f}) successful!"
+        if passes_awarded > 0:
+            msg += f" You received {passes_awarded} hall passes!"
+        flash(msg, "success")
 
     return redirect(url_for('student.rent'))
 
