@@ -388,6 +388,24 @@
 
         const getTarget = (trigger) => trigger.getAttribute('data-bs-target') || trigger.getAttribute('href');
 
+        // Helper functions for safe sessionStorage access
+        const safeSetItem = (key, value) => {
+            try {
+                sessionStorage.setItem(key, value);
+            } catch (e) {
+                // Silently fail if sessionStorage is unavailable or quota exceeded
+            }
+        };
+
+        const safeGetItem = (key) => {
+            try {
+                return sessionStorage.getItem(key);
+            } catch (e) {
+                // Silently fail if sessionStorage is unavailable
+                return null;
+            }
+        };
+
         tabTriggers.forEach(trigger => {
             const nav = trigger.closest('.nav');
             const navId = nav?.id || 'default';
@@ -402,7 +420,7 @@
             trigger.addEventListener('shown.bs.tab', event => {
                 const shownTarget = getTarget(event.target);
                 if (shownTarget && shownTarget.startsWith('#')) {
-                    sessionStorage.setItem(`${storageBase}:${navId}`, shownTarget);
+                    safeSetItem(`${storageBase}:${navId}`, shownTarget);
                 }
             });
         });
@@ -426,7 +444,7 @@
             if (handledNavs.has(navId)) {
                 return;
             }
-            const storedTarget = sessionStorage.getItem(`${storageBase}:${navId}`);
+            const storedTarget = safeGetItem(`${storageBase}:${navId}`);
             if (!storedTarget) {
                 return;
             }

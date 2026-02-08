@@ -671,21 +671,28 @@ def use_item():
             else:
                 student_item.redemption_details = details
         elif student_item.uses_remaining is not None:
-            # Multi-use item (Rent Per-Use with limit > 1)
-            student_item.uses_remaining -= 1
-            if student_item.uses_remaining <= 0:
-                # Last use - mark as processing (if requires approval) or completed/redeemed
-                # Assuming rent per-use items are 'delayed' type (request redemption)
-                student_item.status = 'processing'
-            else:
-                # Still has uses remaining - keep status as 'purchased' so it remains in "My Items"
-                pass
+            # Multi-use item (Rent Per-Use with limit > 1) or unlimited (-1)
+            # Don't decrement if unlimited
+            if student_item.uses_remaining != -1:
+                student_item.uses_remaining -= 1
+                if student_item.uses_remaining <= 0:
+                    # Last use - mark as processing (if requires approval) or completed/redeemed
+                    # Assuming rent per-use items are 'delayed' type (request redemption)
+                    student_item.status = 'processing'
+                else:
+                    # Still has uses remaining - keep status as 'purchased' so it remains in "My Items"
+                    pass
 
             student_item.redemption_date = utc_now()
-            if student_item.redemption_details:
-                student_item.redemption_details += f"\n---\n{details} ({student_item.uses_remaining} uses remaining)"
+            if student_item.uses_remaining == -1:
+                uses_msg = "unlimited uses remaining"
             else:
-                student_item.redemption_details = f"{details} ({student_item.uses_remaining} uses remaining)"
+                uses_msg = f"{student_item.uses_remaining} uses remaining"
+            
+            if student_item.redemption_details:
+                student_item.redemption_details += f"\n---\n{details} ({uses_msg})"
+            else:
+                student_item.redemption_details = f"{details} ({uses_msg})"
         else:
             # Regular item - mark as processing
             student_item.status = 'processing'
@@ -713,9 +720,13 @@ def use_item():
 
         if student_item.is_from_bundle:
             return jsonify({"status": "success", "message": f"You have used 1 from your bundle of {student_item.store_item.name}. {student_item.bundle_remaining} uses remaining."})
-        elif student_item.uses_remaining is not None and student_item.uses_remaining > 0:
-            return jsonify({"status": "success", "message": f"You have used {student_item.store_item.name}. {student_item.uses_remaining} uses remaining."})
-        else:
+        elif student_item.uses_remaining is not None:
+            if student_item.uses_remaining == -1:
+                return jsonify({"status": "success", "message": f"You have used {student_item.store_item.name}. Unlimited uses remaining."})
+            elif student_item.uses_remaining > 0:
+                return jsonify({"status": "success", "message": f"You have used {student_item.store_item.name}. {student_item.uses_remaining} uses remaining."})
+            else:
+                return jsonify({"status": "success", "message": f"You have requested to use {student_item.store_item.name}. Awaiting admin approval."})
             return jsonify({"status": "success", "message": f"You have requested to use {student_item.store_item.name}. Awaiting admin approval."})
 
     except SQLAlchemyError as e:

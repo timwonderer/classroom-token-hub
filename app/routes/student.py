@@ -2368,8 +2368,8 @@ def shop():
                 StudentItem.uses_remaining == -1
             ),
             db.or_(
-            StudentItem.expiry_date.is_(None),
-            StudentItem.expiry_date > utc_now()
+                StudentItem.expiry_date.is_(None),
+                StudentItem.expiry_date > utc_now()
             )
         )
         if join_code:
