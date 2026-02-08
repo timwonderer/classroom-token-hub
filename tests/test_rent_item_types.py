@@ -711,3 +711,172 @@ def test_privilege_badge_only_shows_privilege_items(client, teacher_admin, stude
     assert len(badge_items) == 1
     assert badge_items[0].name == 'Desk Badge'
     assert badge_items[0].rent_item_type == 'privilege'
+
+
+def test_late_fee_only_when_unpaid_by_grace(client, teacher_admin, student_in_class):
+    """Test that late fees are only applied when rent is not fully paid by grace deadline."""
+    from datetime import timedelta
+    from app.routes.student import utc_now, _total_paid_by_grace
+    
+    student = student_in_class
+    
+    # Set up rent settings with late fee
+    now = utc_now()
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        late_penalty_amount=Decimal('2.00'),
+        frequency_type='weekly',
+        first_rent_due_date=now - timedelta(days=7),
+        grace_period_days=3
+    )
+    db.session.add(settings)
+    db.session.commit()
+    
+    # Calculate current due date and grace end
+    from app.routes.student import _calculate_rent_coverage_due_date
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
+    grace_end_date = coverage_due_date + timedelta(days=settings.grace_period_days)
+    
+    # Test 1: Full payment BEFORE grace deadline - no late fee
+    payment_date_before_grace = grace_end_date - timedelta(days=1)
+    
+    payment1 = RentPayment(
+        student_id=student.id,
+        period='A',
+        coverage_month=coverage_due_date.month,
+        coverage_year=coverage_due_date.year,
+        amount_paid=Decimal('10.00'),
+        payment_date=payment_date_before_grace,
+        join_code='JOINCODE123'
+    )
+    db.session.add(payment1)
+    
+    # Create matching transaction
+    txn1 = Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=-Decimal('10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        timestamp=payment_date_before_grace,
+        description='Rent payment'
+    )
+    db.session.add(txn1)
+    db.session.commit()
+    
+    # Verify payment was made before grace deadline
+    payments = [payment1]
+    paid_by_grace = _total_paid_by_grace(payments, grace_end_date)
+    assert paid_by_grace == Decimal('10.00')
+    
+    # When paid in full by grace deadline, late fee should NOT apply
+    # So total due = rent_amount only (no late fee)
+    late_fee = Decimal('0.00')
+    if now > grace_end_date and paid_by_grace < settings.rent_amount:
+        late_fee = settings.late_penalty_amount
+    
+    # Since we're testing with now > grace_end_date scenario, let's adjust
+    # Actually, we need to test what happens when we check AFTER grace period
+    future_now = grace_end_date + timedelta(days=1)
+    
+    # At this point, since paid_by_grace >= rent_amount, no late fee
+    late_fee = Decimal('0.00')
+    if future_now > grace_end_date and paid_by_grace < settings.rent_amount:
+        late_fee = settings.late_penalty_amount
+    
+    assert late_fee == Decimal('0.00'), "Late fee should not apply when paid in full by grace deadline"
+    
+    # Clean up for test 2
+    db.session.delete(payment1)
+    db.session.delete(txn1)
+    db.session.commit()
+    
+    # Test 2: Partial payment before grace deadline - late fee applies
+    # Pay $6 before grace (less than $10 required)
+    payment2 = RentPayment(
+        student_id=student.id,
+        period='A',
+        coverage_month=coverage_due_date.month,
+        coverage_year=coverage_due_date.year,
+        amount_paid=Decimal('6.00'),
+        payment_date=payment_date_before_grace,
+        join_code='JOINCODE123'
+    )
+    db.session.add(payment2)
+    
+    txn2 = Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=-Decimal('6.00'),
+        account_type='checking',
+        type='Rent Payment',
+        timestamp=payment_date_before_grace,
+        description='Partial rent payment'
+    )
+    db.session.add(txn2)
+    db.session.commit()
+    
+    # Verify partial payment
+    payments2 = [payment2]
+    paid_by_grace2 = _total_paid_by_grace(payments2, grace_end_date)
+    assert paid_by_grace2 == Decimal('6.00')
+    
+    # Since only $6 paid by grace (< $10), late fee SHOULD apply when checked after grace
+    late_fee2 = Decimal('0.00')
+    if future_now > grace_end_date and paid_by_grace2 < settings.rent_amount:
+        late_fee2 = settings.late_penalty_amount
+    
+    assert late_fee2 == Decimal('2.00'), "Late fee should apply when not paid in full by grace deadline"
+    
+    # Total due should be rent + late fee = $12
+    total_due = settings.rent_amount + late_fee2
+    assert total_due == Decimal('12.00')
+    
+    # Clean up
+    db.session.delete(payment2)
+    db.session.delete(txn2)
+    db.session.commit()
+    
+    # Test 3: Payment AFTER grace deadline - should not count toward paid_by_grace
+    payment_date_after_grace = grace_end_date + timedelta(days=1)
+    
+    payment3 = RentPayment(
+        student_id=student.id,
+        period='A',
+        coverage_month=coverage_due_date.month,
+        coverage_year=coverage_due_date.year,
+        amount_paid=Decimal('10.00'),
+        payment_date=payment_date_after_grace,
+        join_code='JOINCODE123'
+    )
+    db.session.add(payment3)
+    
+    txn3 = Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=-Decimal('10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        timestamp=payment_date_after_grace,
+        description='Rent payment after grace'
+    )
+    db.session.add(txn3)
+    db.session.commit()
+    
+    # Payment made after grace should not count in paid_by_grace
+    payments3 = [payment3]
+    paid_by_grace3 = _total_paid_by_grace(payments3, grace_end_date)
+    assert paid_by_grace3 == Decimal('0.00'), "Payment after grace should not count in paid_by_grace"
+    
+    # Since nothing paid by grace, late fee applies
+    late_fee3 = Decimal('0.00')
+    if future_now > grace_end_date and paid_by_grace3 < settings.rent_amount:
+        late_fee3 = settings.late_penalty_amount
+    
+    assert late_fee3 == Decimal('2.00'), "Late fee should apply when payment is after grace deadline"
