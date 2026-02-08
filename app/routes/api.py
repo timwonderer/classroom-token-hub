@@ -263,7 +263,10 @@ def purchase_item():
         rent_item_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
             StudentItem.store_item_id == item.id,
-            StudentItem.uses_remaining > 0,
+            db.or_(
+                StudentItem.uses_remaining > 0,
+                StudentItem.uses_remaining == -1
+            ),
             db.or_(
                 StudentItem.expiry_date.is_(None),
                 StudentItem.expiry_date > utc_now()
@@ -277,8 +280,9 @@ def purchase_item():
         active_rent_item = rent_item_query.first()
 
         if active_rent_item:
-            # Free use from rent - decrement uses_remaining and log it
-            active_rent_item.uses_remaining -= 1
+            # Free use from rent - decrement uses_remaining unless unlimited (-1)
+            if active_rent_item.uses_remaining != -1:
+                active_rent_item.uses_remaining -= 1
             active_rent_item.redemption_date = utc_now()
 
             # Create a $0 transaction to log the free use
@@ -295,10 +299,11 @@ def purchase_item():
             db.session.commit()
 
             remaining = active_rent_item.uses_remaining
+            if remaining == -1:
+                return jsonify({"status": "success", "message": f"Free use of {item.name} (rent perk)! Unlimited free uses remaining."})
             if remaining > 0:
                 return jsonify({"status": "success", "message": f"Free use of {item.name} (rent perk)! {remaining} free uses remaining."})
-            else:
-                return jsonify({"status": "success", "message": f"Free use of {item.name} (rent perk)! No more free uses remaining."})
+            return jsonify({"status": "success", "message": f"Free use of {item.name} (rent perk)! No more free uses remaining."})
 
     # Calculate price (with bulk discount if applicable)
     unit_price = item.price
@@ -451,7 +456,7 @@ def purchase_item():
         uses_remaining = None
 
         if rent_item:
-            if rent_item.purchase_duration == 'per_period':
+            if rent_item.rent_item_type == 'privilege':
                 # Calculate NEXT rent due date and set as expiry
                 rent_setting = RentSettings.query.get(rent_item.rent_setting_id)
                 if rent_setting and rent_setting.is_enabled:
@@ -468,9 +473,7 @@ def purchase_item():
                         # This is a fallback for backwards compatibility
                         delta = _get_period_delta(rent_setting)
                         expiry_date = _add_period(now, delta)
-            elif rent_item.rent_item_type == 'per_use':
-                # Set per-use limit (default to single-use when not specified)
-                uses_remaining = rent_item.use_limit or 1
+            # For per-use rent items, do not set uses_remaining on paid purchases.
 
         # Fall back to standard auto_expiry for delayed items
         if expiry_date is None and item.item_type == 'delayed' and item.auto_expiry_days:

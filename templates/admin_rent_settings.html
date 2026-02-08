@@ -731,7 +731,13 @@
 
                       <div class="row">
                         <div class="col-md-12 mb-3">
-                          <label class="form-label fw-bold">Item Type</label>
+                          <label class="form-label fw-bold">
+                            Item Type
+                            <span class="ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
+                              data-bs-title="Privileges are ongoing, non-countable benefits (sit in teacher's chair, choose music). Per-use items are countable services or goods (print worksheet, borrow pencil, phone call home, late work pass).">
+                              <i class="bi bi-info-circle"></i>
+                            </span>
+                          </label>
                           <div class="btn-group w-100" role="group">
                             <input type="radio" class="btn-check" name="rent_item_type_{{ loop.index0 }}" id="type_privilege_{{ loop.index0 }}" value="privilege" {% if not item.rent_item_type or item.rent_item_type == 'privilege' %}checked{% endif %} onchange="toggleItemType({{ loop.index0 }})">
                             <label class="btn btn-outline-primary" for="type_privilege_{{ loop.index0 }}">
@@ -767,14 +773,9 @@
                           </div>
                           <small class="text-muted">Allow students to buy this privilege separately (expires next rent due date)</small>
                         </div>
-                        <div class="col-md-6 mb-3" id="purchase_duration_field_{{ loop.index0 }}" style="{% if item.is_available_in_store %}{% else %}display: none;{% endif %}">
-                          <label class="form-label fw-bold">Purchase Duration</label>
-                          <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="rent_item_purchase_duration_{{ loop.index0 }}" id="duration_per_use_{{ loop.index0 }}" value="per_use" {% if item.purchase_duration != 'per_period' %}checked{% endif %}>
-                            <label class="btn btn-outline-secondary" for="duration_per_use_{{ loop.index0 }}">Per Use</label>
-
-                            <input type="radio" class="btn-check" name="rent_item_purchase_duration_{{ loop.index0 }}" id="duration_per_period_{{ loop.index0 }}" value="per_period" {% if item.purchase_duration == 'per_period' %}checked{% endif %}>
-                            <label class="btn btn-outline-secondary" for="duration_per_period_{{ loop.index0 }}">Per Period</label>
+                        <div class="col-md-6 mb-3">
+                          <div class="alert alert-info mb-0">
+                            <small><strong>Privilege duration:</strong> Always per-period (valid until next rent due date).</small>
                           </div>
                         </div>
                       </div>
@@ -787,9 +788,9 @@
                             placeholder="Price">
                         </div>
                         <div class="col-md-6 mb-3" id="use_limit_field_{{ loop.index0 }}" style="{% if item.rent_item_type != 'per_use' %}display: none;{% endif %}">
-                          <label class="form-label fw-bold">Uses Per Purchase</label>
-                          <input type="number" min="1" class="form-control" name="rent_item_use_limit_{{ loop.index0 }}" value="{{ item.use_limit or '' }}" placeholder="1 (Leave empty for single use)">
-                          <small class="text-muted">How many times can it be used?</small>
+                          <label class="form-label fw-bold">Free Uses Per Period</label>
+                          <input type="number" min="1" class="form-control" name="rent_item_use_limit_{{ loop.index0 }}" value="{{ item.use_limit or '' }}" placeholder="Leave blank for unlimited">
+                          <small class="text-muted">Rent payers get this many free uses per period.</small>
                         </div>
                       </div>
 
@@ -1024,6 +1025,10 @@
 
     updateAccordionsBadges();
 
+    // Initialize tooltips
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    tooltipTriggerList.forEach(trigger => new bootstrap.Tooltip(trigger));
+
     // Initialize Economy Balance Checker
     if (typeof EconomyBalanceChecker !== 'undefined') {
       const economyChecker = new EconomyBalanceChecker({
@@ -1125,7 +1130,13 @@
 
         <div class="row">
           <div class="col-md-12 mb-3">
-            <label class="form-label fw-bold">Item Type</label>
+            <label class="form-label fw-bold">
+              Item Type
+              <span class="ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
+                data-bs-title="Privileges are ongoing, non-countable benefits (sit in teacher's chair, choose music). Per-use items are countable services or goods (print worksheet, borrow pencil, phone call home, late work pass).">
+                <i class="bi bi-info-circle"></i>
+              </span>
+            </label>
             <div class="btn-group w-100" role="group">
               <input type="radio" class="btn-check" name="rent_item_type_${rentItemCounter}" id="type_privilege_${rentItemCounter}" value="privilege" checked onchange="toggleItemType(${rentItemCounter})">
               <label class="btn btn-outline-primary" for="type_privilege_${rentItemCounter}">
@@ -1158,14 +1169,9 @@
             </div>
             <small class="text-muted">Allow students to buy this privilege separately (expires next rent due date)</small>
           </div>
-          <div class="col-md-6 mb-3" id="purchase_duration_field_${rentItemCounter}" style="display: none;">
-            <label class="form-label fw-bold">Purchase Duration</label>
-            <div class="btn-group w-100" role="group">
-              <input type="radio" class="btn-check" name="rent_item_purchase_duration_${rentItemCounter}" id="duration_per_use_${rentItemCounter}" value="per_use" checked>
-              <label class="btn btn-outline-secondary" for="duration_per_use_${rentItemCounter}">Per Use</label>
-
-              <input type="radio" class="btn-check" name="rent_item_purchase_duration_${rentItemCounter}" id="duration_per_period_${rentItemCounter}" value="per_period">
-              <label class="btn btn-outline-secondary" for="duration_per_period_${rentItemCounter}">Per Period</label>
+          <div class="col-md-6 mb-3">
+            <div class="alert alert-info mb-0">
+              <small><strong>Privilege duration:</strong> Always per-period (valid until next rent due date).</small>
             </div>
           </div>
         </div>
@@ -1176,9 +1182,9 @@
             <input type="number" step="0.01" min="0" class="form-control" name="rent_item_store_price_${rentItemCounter}" placeholder="Price">
           </div>
           <div class="col-md-6 mb-3" id="use_limit_field_${rentItemCounter}" style="display: none;">
-            <label class="form-label fw-bold">Uses Per Purchase</label>
-            <input type="number" min="1" class="form-control" name="rent_item_use_limit_${rentItemCounter}" placeholder="1 (Leave empty for single use)">
-            <small class="text-muted">How many times can it be used?</small>
+            <label class="form-label fw-bold">Free Uses Per Period</label>
+            <input type="number" min="1" class="form-control" name="rent_item_use_limit_${rentItemCounter}" placeholder="Leave blank for unlimited">
+            <small class="text-muted">Rent payers get this many free uses per period.</small>
           </div>
         </div>
 
@@ -1194,6 +1200,9 @@
 
     container.appendChild(itemCard);
     rentItemCounter++;
+
+    const newTooltips = itemCard.querySelectorAll('[data-bs-toggle="tooltip"]');
+    newTooltips.forEach(trigger => new bootstrap.Tooltip(trigger));
 
     // Renumber all items
     renumberRentItems();
@@ -1257,16 +1266,12 @@
   window.toggleStorePrice = function (index) {
     const checkbox = document.getElementById(`store_available_${index}`);
     const commonPriceField = document.getElementById(`common_price_field_${index}`);
-    const purchaseDurationField = document.getElementById(`purchase_duration_field_${index}`);
     const typePrivilege = document.getElementById(`type_privilege_${index}`);
 
     // Only relevant if type is Privilege
     if (typePrivilege && typePrivilege.checked) {
       if (checkbox && commonPriceField) {
         commonPriceField.style.display = checkbox.checked ? 'flex' : 'none';
-      }
-      if (checkbox && purchaseDurationField) {
-        purchaseDurationField.style.display = checkbox.checked ? 'block' : 'none';
       }
     }
   };

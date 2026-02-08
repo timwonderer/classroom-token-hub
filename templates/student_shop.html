@@ -40,7 +40,11 @@
                         <div class="mb-2">
                             <span class="badge bg-info"><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">card_membership</span> Rent Perk</span>
                             {% if rent_free_uses and item.id in rent_free_uses %}
+                            {% if rent_free_uses[item.id] == -1 %}
+                            <span class="badge bg-success">Unlimited free uses</span>
+                            {% else %}
                             <span class="badge bg-success">{{ rent_free_uses[item.id] }} free use{{ 's' if rent_free_uses[item.id] != 1 else '' }} remaining</span>
+                            {% endif %}
                             {% endif %}
                         </div>
                         {% endif %}

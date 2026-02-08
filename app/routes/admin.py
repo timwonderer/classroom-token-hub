@@ -1782,7 +1782,6 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
     all_rent_items = RentItem.query.filter(
         RentItem.rent_setting_id.in_(setting_ids),
         RentItem.rent_item_type == 'privilege',
-        RentItem.purchase_duration == 'per_period',
         RentItem.is_available_in_store == True
     ).all()
 
@@ -1940,7 +1939,6 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
     per_period_items = RentItem.query.filter_by(
         rent_setting_id=rent_settings.id,
         rent_item_type='privilege',
-        purchase_duration='per_period',
         is_available_in_store=True
     ).all()
 
@@ -3388,23 +3386,22 @@ def hard_delete_store_item(item_id):
     if _block_rent_linked_store_item(item):
         return redirect(url_for('admin.store_management'))
 
-    # Check if there are any student purchases of this item
+    # Remove any student item records for this store item to avoid FK violations.
+    # Transaction history is preserved separately in the ledger.
     from app.models import StudentItem
-    purchase_count = (
+    deleted_student_items = (
         StudentItem.query
-        .filter(StudentItem.student_id.in_(_student_scope_subquery()))
         .filter(StudentItem.store_item_id == item_id)
-        .count()
+        .delete(synchronize_session=False)
     )
 
-    if purchase_count > 0:
-        flash(f"Cannot permanently delete '{item_name}' because it has {purchase_count} purchase record(s). Please deactivate instead.", "danger")
-        return redirect(url_for('admin.store_management'))
-
-    # Safe to delete - no purchase history
+    # Safe to delete
     db.session.delete(item)
     db.session.commit()
-    flash(f"'{item_name}' has been permanently deleted from the database.", "success")
+    if deleted_student_items:
+        flash(f"'{item_name}' was deleted along with {deleted_student_items} related purchase record(s).", "success")
+    else:
+        flash(f"'{item_name}' has been permanently deleted from the database.", "success")
     return redirect(url_for('admin.store_management'))
 
 
@@ -3443,10 +3440,10 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
             if rent_item.rent_item_type == 'per_use':
                 limit = None
                 if rent_item.use_limit:
-                    duration_note = f"Includes {rent_item.use_limit} uses."
+                    duration_note = f"Includes {rent_item.use_limit} free uses per period."
                 else:
-                    duration_note = "Single use item."
-            elif rent_item.purchase_duration == 'per_period':
+                    duration_note = "Unlimited free uses per period for rent payers."
+            elif rent_item.rent_item_type == 'privilege':
                 limit = 1  # Can only buy once per rent period
                 duration_note = "Valid until next rent payment is due."
             else:  # fallback
@@ -3698,9 +3695,12 @@ def rent_settings():
                 continue
             
             rent_item_type = request.form.get(f'rent_item_type_{idx}', 'privilege') # Default to privilege if missing
-            purchase_duration = request.form.get(f'rent_item_purchase_duration_{idx}')
-            if rent_item_type == 'per_use':
+            if rent_item_type == 'privilege':
+                purchase_duration = 'per_period'
+            elif rent_item_type == 'per_use':
                 purchase_duration = 'per_use'
+            else:
+                purchase_duration = None
             use_limit = None
             if rent_item_type == 'per_use':
                 use_limit_val = request.form.get(f'rent_item_use_limit_{idx}', '').strip()

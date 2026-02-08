@@ -376,6 +376,67 @@
         }
     });
     </script>
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const tabTriggers = Array.from(document.querySelectorAll('[data-bs-toggle="tab"]'));
+        if (!tabTriggers.length || !window.sessionStorage) {
+            return;
+        }
+
+        const storageBase = `tab:${window.location.pathname}`;
+        const navMap = new Map();
+
+        const getTarget = (trigger) => trigger.getAttribute('data-bs-target') || trigger.getAttribute('href');
+
+        tabTriggers.forEach(trigger => {
+            const nav = trigger.closest('.nav');
+            const navId = nav?.id || 'default';
+            const target = getTarget(trigger);
+            if (!target || !target.startsWith('#')) {
+                return;
+            }
+            if (!navMap.has(navId)) {
+                navMap.set(navId, []);
+            }
+            navMap.get(navId).push(trigger);
+            trigger.addEventListener('shown.bs.tab', event => {
+                const shownTarget = getTarget(event.target);
+                if (shownTarget && shownTarget.startsWith('#')) {
+                    sessionStorage.setItem(`${storageBase}:${navId}`, shownTarget);
+                }
+            });
+        });
+
+        const params = new URLSearchParams(window.location.search);
+        const queryTab = params.get('tab');
+        const queryTarget = queryTab ? (queryTab.startsWith('#') ? queryTab : `#${queryTab}`) : null;
+        const handledNavs = new Set();
+
+        if (queryTarget) {
+            navMap.forEach((triggers, navId) => {
+                const match = triggers.find(trigger => getTarget(trigger) === queryTarget);
+                if (match) {
+                    new bootstrap.Tab(match).show();
+                    handledNavs.add(navId);
+                }
+            });
+        }
+
+        navMap.forEach((triggers, navId) => {
+            if (handledNavs.has(navId)) {
+                return;
+            }
+            const storedTarget = sessionStorage.getItem(`${storageBase}:${navId}`);
+            if (!storedTarget) {
+                return;
+            }
+            const match = triggers.find(trigger => getTarget(trigger) === storedTarget);
+            if (match) {
+                new bootstrap.Tab(match).show();
+            }
+        });
+    });
+    </script>
     <!-- Service Worker Registration for PWA -->
     <script>
         if ('serviceWorker' in navigator) {
