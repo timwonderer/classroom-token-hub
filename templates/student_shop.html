@@ -202,9 +202,7 @@
                         <p class="text-muted small mb-2">
                             <strong>Remaining Uses:</strong> {{ student_item.uses_remaining }}
                         </p>
-                        {% endif %}
-
-                        {% if student_item.is_from_bundle and student_item.bundle_remaining is not none %}
+                        {% elif student_item.is_from_bundle and student_item.bundle_remaining is not none %}
                         <p class="text-muted small mb-2">
                             <strong>Remaining Uses:</strong> {{ student_item.bundle_remaining }}
                         </p>

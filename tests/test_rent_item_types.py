@@ -2,7 +2,7 @@ import pytest
 from decimal import Decimal
 from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher
 from app.extensions import db
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 @pytest.fixture
 def teacher_admin(client):
@@ -592,7 +592,8 @@ def test_per_use_free_purchase_from_rent(client, teacher_admin, student_in_class
     rent_granted = StudentItem(
         student_id=student.id, store_item_id=store_item.id,
         status='purchased', uses_remaining=3,
-        purchase_date=datetime.now(timezone.utc)
+        purchase_date=datetime.now(timezone.utc),
+        join_code='JOINCODE123'
     )
     db.session.add(rent_granted)
 
@@ -642,7 +643,8 @@ def test_per_use_charges_when_uses_exhausted(client, teacher_admin, student_in_c
     rent_granted = StudentItem(
         student_id=student.id, store_item_id=store_item.id,
         status='purchased', uses_remaining=0,
-        purchase_date=datetime.now(timezone.utc)
+        purchase_date=datetime.now(timezone.utc),
+        join_code='JOINCODE123'
     )
     db.session.add(rent_granted)
 

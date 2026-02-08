@@ -1,4 +1,4 @@
-<file name=0 path=/Users/timothychang/Documents/GitHub/classroom-economy/docs/development/RENT_ITEM_TYPES_IMPLEMENTATION.md># Rent Item Types Implementation Plan
+# Rent Item Types Implementation Plan
 
 **Feature:** Rent Item Type Extension (Privilege / Per-Use / Hall Pass)
 **Date:** 2026-02-06
@@ -32,10 +32,8 @@ This feature extends the existing itemized rent system by adding three distinct 
 
 **Key rules:**
 - **Must always be listed in the store** (students redeem their free uses there)
-- Paying rent grants free uses up to the limit (or unlimited)
-- Teacher chooses between:
-  - **Unlimited**: Student can redeem from store unlimited times during the rent period
-  - **Set number**: Teacher enters how many free uses per rent period (e.g., 5)
+- Paying rent grants free uses up to the limit (default single-use if left empty)
+- Teacher can set a number of free uses per rent period (e.g., 5)
 - Store item shows a **"Rent Perk"** badge/label in the store UI
 - **Cannot be deleted from the store** — only removable by deleting the rent item itself
 - Teacher sees an alert: "You can customize this item in the store later (immediate, delayed, etc.)"
@@ -65,7 +63,7 @@ This feature extends the existing itemized rent system by adding three distinct 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `rent_item_type` | `String(20)` | `'privilege'` | Item type: `'privilege'`, `'per_use'`, or `'hall_pass'` |
-| `use_limit` | `Integer` | `NULL` | For per_use: number of free uses per period. NULL = unlimited |
+| `use_limit` | `Integer` | `NULL` | For per_use: number of free uses per period. NULL = single-use |
 | `hall_pass_count` | `Integer` | `NULL` | For hall_pass: number of passes to grant/top-off per period |
 
 **Notes:**
@@ -94,31 +92,15 @@ This feature extends the existing itemized rent system by adding three distinct 
 - When a pass is used: decrement `Student.hall_passes` by 1, and if `rent_hall_passes > 0` decrement it too (rent passes consumed first)
 - Top-off calculation: `top_off_amount = hall_pass_count - rent_hall_passes`, add that to `Student.hall_passes`, set `rent_hall_passes = hall_pass_count`
 
-### New Model
+### Per-Use Tracking
 
-#### `RentItemAllocation`
-
-Tracks per-use item allocations per student per rent period.
-
-| Field | Type | Nullable | Description |
-|-------|------|----------|-------------|
-| `id` | `Integer` (PK) | No | Primary key |
-| `student_id` | `Integer` (FK → students) | No | Student receiving the allocation |
-| `rent_item_id` | `Integer` (FK → rent_items) | No | Which rent item this allocation is for |
-| `join_code` | `String(20)` | No | Class period scoping |
-| `coverage_month` | `Integer` | No | Which month this allocation covers |
-| `coverage_year` | `Integer` | No | Which year this allocation covers |
-| `uses_granted` | `Integer` | No | Total free uses granted (from rent payment) |
-| `uses_remaining` | `Integer` | No | How many free uses remain |
-| `created_at` | `DateTime` | No | When allocation was created |
+Per-use free uses are tracked directly on `StudentItem.uses_remaining` for rent-granted items.
 
 **Notes:**
 - Created when a student pays rent and the rent has per_use items
 - `uses_remaining` is decremented each time the student "purchases" the linked store item for free
 - When `uses_remaining` reaches 0, the student pays regular price for subsequent purchases
-- If `uses_granted` is NULL/0 and `use_limit` is NULL on the rent item, it means unlimited (don't track, always free)
-
-**Unique constraint:** `(student_id, rent_item_id, join_code, coverage_month, coverage_year)` — one allocation per item per period per student
+- If `use_limit` is NULL on the rent item, treat it as **single-use** and initialize `uses_remaining = 1`
 
 ---
 
@@ -133,7 +115,7 @@ Tracks per-use item allocations per student per rent period.
 
 **Blocked or deferred changes:**
 - Changing `rent_item_type`
-- Modifying `use_limit` or unlimited toggle
+- Modifying `use_limit`
 - Modifying `hall_pass_count`
 
 **Allowed mid-period changes:**
@@ -152,15 +134,14 @@ Tracks per-use item allocations per student per rent period.
 
 **Rent item form parsing** — New fields per item:
 - `rent_item_type_{index}`: `'privilege'` | `'per_use'` | `'hall_pass'`
-- `rent_item_use_limit_{index}`: Integer (for per_use, when not unlimited)
-- `rent_item_use_unlimited_{index}`: Checkbox (for per_use unlimited toggle)
+- `rent_item_use_limit_{index}`: Integer (for per_use; leave blank for single-use)
 - `rent_item_hall_pass_count_{index}`: Integer (for hall_pass)
 - `rent_item_hall_pass_list_in_store_{index}`: Checkbox (for hall_pass, opt to list in store)
 
 **Logic changes:**
 - When `rent_item_type = 'per_use'`:
   - Force `is_available_in_store = True` (always listed)
-  - Set `use_limit` from form (NULL if unlimited)
+  - Set `use_limit` from form (NULL = single-use)
 - When `rent_item_type = 'hall_pass'`:
   - Set `hall_pass_count` from form
   - Check if hall pass already exists in store (by `item_type='hall_pass'` for this teacher)
@@ -196,7 +177,7 @@ Tracks per-use item allocations per student per rent period.
 #### `POST /student/rent/pay/<period>`
 
 After successful rent payment, add:
-1. **Per-use allocations:** For each `per_use` rent item, create a `RentItemAllocation` record with `uses_remaining = use_limit` (or mark as unlimited)
+1. **Per-use grants:** For each `per_use` rent item, create a `StudentItem` with `uses_remaining = use_limit` (or `1` if `use_limit` is NULL)
 2. **Hall pass top-off:** For each `hall_pass` rent item:
    - Get `StudentBlock.rent_hall_passes` for this join_code
    - Calculate `top_off = hall_pass_count - rent_hall_passes`
@@ -208,9 +189,9 @@ After successful rent payment, add:
 
 **Changes for per_use rent items:**
 - When a student purchases a store item that is `is_rent_linked`:
-  - Check for active `RentItemAllocation` for this student, item, and current coverage period
-  - If allocation exists and `uses_remaining > 0` (or unlimited): purchase is **free** (price = 0), decrement `uses_remaining`
-  - If no allocation or uses exhausted: charge regular store price
+  - Check for an active `StudentItem` for this student + join_code with `uses_remaining > 0`
+  - If a free-use item exists: purchase is **free** (price = 0), decrement `uses_remaining`
+  - If no free-use item or uses exhausted: charge regular store price
 - The "Rent Perk" badge in the store UI indicates the item has free uses from rent
 
 **Changes for hall pass purchases:**
@@ -248,8 +229,7 @@ Wherever hall passes are decremented (in hall pass routes):
    **Per-Use:**
    - Alert: "This item will be listed in the store. You can customize item details in the store later."
    - Price field (store price for when free uses are exhausted)
-   - Use limit toggle: Unlimited / Set Number
-   - Number input (shown when Set Number selected)
+   - Use limit input (leave blank for single-use)
 
    **Hall Pass:**
    - Number of hall passes to grant per rent period
@@ -260,8 +240,8 @@ Wherever hall passes are decremented (in hall pass routes):
 
 **Store item display changes:**
 - If store item has `is_rent_linked = True`: show a **"Rent Perk"** badge on the item card
-- If student has active `RentItemAllocation` with uses remaining: show "X free uses remaining" or "Unlimited uses (rent)"
-- If allocation exhausted: show regular price
+- If student has an active rent-granted `StudentItem` with `uses_remaining`: show "X free uses remaining"
+- If no free-use item or uses exhausted: show regular price
 
 ### `admin_students.html` (Roster)
 
@@ -280,7 +260,7 @@ Wherever hall passes are decremented (in hall pass routes):
 
 ## Migration
 
-**Name:** `add_rent_item_types_and_allocation`
+**Name:** `add_rent_item_types_and_allocation` + `add_uses_remaining_to_student_item`
 
 **Upgrade operations:**
 1. Add `rent_item_type` column to `rent_items` (default `'privilege'`)
@@ -288,7 +268,7 @@ Wherever hall passes are decremented (in hall pass routes):
 3. Add `hall_pass_count` column to `rent_items` (nullable)
 4. Add `is_rent_linked` column to `store_items` (default `False`)
 5. Add `rent_hall_passes` column to `student_blocks` (default `0`)
-6. Create `rent_item_allocations` table
+6. Add `uses_remaining` column to `student_items`
 
 **Data migration:**
 - Existing rent items get `rent_item_type = 'privilege'` (default, no action needed)
@@ -296,7 +276,7 @@ Wherever hall passes are decremented (in hall pass routes):
 - No existing data needs transformation
 
 **Downgrade operations:**
-- Drop `rent_item_allocations` table
+- Drop `uses_remaining` column from `student_items`
 - Drop added columns from `rent_items`, `store_items`, `student_blocks`
 
 ---
@@ -307,7 +287,7 @@ Wherever hall passes are decremented (in hall pass routes):
 
 1. **Model tests:**
    - RentItem creation with each type
-   - RentItemAllocation CRUD
+   - StudentItem `uses_remaining` tracking
    - StudentBlock.rent_hall_passes tracking
 
 2. **Privilege type tests:**
@@ -318,9 +298,9 @@ Wherever hall passes are decremented (in hall pass routes):
 3. **Per-use type tests:**
    - Store item auto-created with `is_rent_linked = True`
    - Allocation created on rent payment
-   - Free purchase when allocation has uses remaining
-   - Regular price when allocation exhausted
-   - Unlimited uses when `use_limit` is NULL
+   - Free purchase when `uses_remaining` exists
+   - Regular price when `uses_remaining` is exhausted
+   - Single-use when `use_limit` is NULL
    - Cannot delete rent-linked store item
    - Can delete after removing from rent settings
 
@@ -331,18 +311,18 @@ Wherever hall passes are decremented (in hall pass routes):
    - Optional store listing when no hall pass exists
 
 5. **Multi-tenancy tests:**
-   - Allocations scoped by join_code
+   - Per-use tracking scoped by join_code
    - Hall pass top-off scoped by join_code
    - Per-use tracking per class period
 
 6. **Integration Tests**
    - Full rent payment flow with mixed item types
-   - Store purchase flow with rent allocation checking
+   - Store purchase flow with rent free-use checking
    - Hall pass usage with rent-granted tracking
    - Rent settings update — changing item types, removing items
 
 10. **Mid-period edit guardrail tests:**  
-   - Editing rent item type after rent payment shows warning and does not alter current allocations  
+   - Editing rent item type after rent payment shows warning and does not alter current free-use grants  
    - Changes apply correctly on next period rollover
 
 ---
@@ -351,12 +331,12 @@ Wherever hall passes are decremented (in hall pass routes):
 
 1. **Teacher changes item type after students paid rent:**  
    Once rent has been paid for a given coverage period (month/year), the `rent_item_type` and its type-specific fields (`use_limit`, `hall_pass_count`) are **locked for that period**.  
-   - Existing allocations, privileges, and hall pass top-offs remain valid until the period ends.  
+   - Existing free-use grants, privileges, and hall pass top-offs remain valid until the period ends.  
    - Any changes made in Rent Settings are queued and only take effect starting with the **next rent period**.  
    - Admin UI should display a warning banner when editing a rent item mid-period:  
      > 'Changes will apply starting next rent period. Current students’ rent benefits will not be altered.'
 
-2. **Student has unlimited per-use allocation but teacher later changes to limited:** Current period keeps unlimited. Next period uses new limit.
+2. **Student has single-use per-use item but teacher later changes to multi-use:** Current period keeps single-use. Next period uses new limit.
 3. **Hall pass top-off when student has 0 passes:** Simply grants the full `hall_pass_count`.
 4. **Incremental rent payment with per-use items:** Allocations are only created when rent is **fully paid** for the period.
 5. **Apply to all blocks:** Item type and settings sync across all blocks (same as current name/price sync behavior).

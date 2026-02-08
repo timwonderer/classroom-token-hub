@@ -767,6 +767,16 @@
                           </div>
                           <small class="text-muted">Allow students to buy this privilege separately (expires next rent due date)</small>
                         </div>
+                        <div class="col-md-6 mb-3" id="purchase_duration_field_{{ loop.index0 }}" style="{% if item.is_available_in_store %}{% else %}display: none;{% endif %}">
+                          <label class="form-label fw-bold">Purchase Duration</label>
+                          <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="rent_item_purchase_duration_{{ loop.index0 }}" id="duration_per_use_{{ loop.index0 }}" value="per_use" {% if item.purchase_duration != 'per_period' %}checked{% endif %}>
+                            <label class="btn btn-outline-secondary" for="duration_per_use_{{ loop.index0 }}">Per Use</label>
+
+                            <input type="radio" class="btn-check" name="rent_item_purchase_duration_{{ loop.index0 }}" id="duration_per_period_{{ loop.index0 }}" value="per_period" {% if item.purchase_duration == 'per_period' %}checked{% endif %}>
+                            <label class="btn btn-outline-secondary" for="duration_per_period_{{ loop.index0 }}">Per Period</label>
+                          </div>
+                        </div>
                       </div>
 
                       <div class="row" id="common_price_field_{{ loop.index0 }}" style="{% if (not item.rent_item_type or item.rent_item_type == 'privilege') and item.is_available_in_store %}{% elif item.rent_item_type == 'per_use' %}{% else %}display: none;{% endif %}">
@@ -1148,6 +1158,16 @@
             </div>
             <small class="text-muted">Allow students to buy this privilege separately (expires next rent due date)</small>
           </div>
+          <div class="col-md-6 mb-3" id="purchase_duration_field_${rentItemCounter}" style="display: none;">
+            <label class="form-label fw-bold">Purchase Duration</label>
+            <div class="btn-group w-100" role="group">
+              <input type="radio" class="btn-check" name="rent_item_purchase_duration_${rentItemCounter}" id="duration_per_use_${rentItemCounter}" value="per_use" checked>
+              <label class="btn btn-outline-secondary" for="duration_per_use_${rentItemCounter}">Per Use</label>
+
+              <input type="radio" class="btn-check" name="rent_item_purchase_duration_${rentItemCounter}" id="duration_per_period_${rentItemCounter}" value="per_period">
+              <label class="btn btn-outline-secondary" for="duration_per_period_${rentItemCounter}">Per Period</label>
+            </div>
+          </div>
         </div>
 
         <div class="row" id="common_price_field_${rentItemCounter}" style="display: none;">
@@ -1237,12 +1257,16 @@
   window.toggleStorePrice = function (index) {
     const checkbox = document.getElementById(`store_available_${index}`);
     const commonPriceField = document.getElementById(`common_price_field_${index}`);
+    const purchaseDurationField = document.getElementById(`purchase_duration_field_${index}`);
     const typePrivilege = document.getElementById(`type_privilege_${index}`);
 
     // Only relevant if type is Privilege
     if (typePrivilege && typePrivilege.checked) {
       if (checkbox && commonPriceField) {
         commonPriceField.style.display = checkbox.checked ? 'flex' : 'none';
+      }
+      if (checkbox && purchaseDurationField) {
+        purchaseDurationField.style.display = checkbox.checked ? 'block' : 'none';
       }
     }
   };

@@ -943,7 +943,7 @@ class RentItem(db.Model):
 
     # New fields for Item Types
     rent_item_type = db.Column(db.String(20), default='privilege', nullable=False) # 'privilege', 'per_use', 'hall_pass'
-    use_limit = db.Column(db.Integer, nullable=True) # NULL = unlimited
+    use_limit = db.Column(db.Integer, nullable=True) # NULL = single-use (default); set to an integer for multi-use limit
     hall_pass_count = db.Column(db.Integer, nullable=True)
 
     # Metadata

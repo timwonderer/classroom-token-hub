@@ -2358,7 +2358,7 @@ def shop():
     # Build free uses remaining map for rent-linked per-use items
     rent_free_uses = {}  # {store_item_id: uses_remaining or -1 for unlimited}
     if student:
-        rent_linked_items = StudentItem.query.filter(
+        rent_linked_items_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
             StudentItem.uses_remaining != None,
             StudentItem.uses_remaining > 0,
@@ -2366,7 +2366,13 @@ def shop():
                 StudentItem.expiry_date.is_(None),
                 StudentItem.expiry_date > utc_now()
             )
-        ).all()
+        )
+        if join_code:
+            rent_linked_items_query = rent_linked_items_query.filter(StudentItem.join_code == join_code)
+        else:
+            rent_linked_items_query = rent_linked_items_query.filter(StudentItem.join_code.is_(None))
+
+        rent_linked_items = rent_linked_items_query.all()
         for si in rent_linked_items:
             if si.store_item_id:
                 rent_free_uses[si.store_item_id] = si.uses_remaining
@@ -2978,8 +2984,17 @@ def rent_pay(period):
             # rent_hall_passes tracks how many of student's current passes came from rent
             student_block = StudentBlock.query.filter_by(
                 student_id=student.id,
-                join_code=join_code
+                period=period
             ).first()
+            if student_block and not student_block.join_code and join_code:
+                student_block.join_code = join_code
+            elif not student_block:
+                student_block = StudentBlock(
+                    student_id=student.id,
+                    period=period,
+                    join_code=join_code
+                )
+                db.session.add(student_block)
 
             current_rent_passes = student_block.rent_hall_passes if student_block else 0
             top_off = max(0, total_grant - current_rent_passes)
@@ -3011,6 +3026,7 @@ def rent_pay(period):
                 StudentItem.student_id == student.id,
                 StudentItem.store_item_id == pu_item.store_item_id,
                 StudentItem.uses_remaining > 0,
+                StudentItem.join_code == join_code if join_code else StudentItem.join_code.is_(None),
                 db.or_(
                     StudentItem.expiry_date.is_(None),
                     StudentItem.expiry_date > utc_now()
@@ -3021,7 +3037,9 @@ def rent_pay(period):
                 # Top-off: reset uses_remaining to the granted amount
                 if pu_item.use_limit:
                     existing.uses_remaining = pu_item.use_limit
-                # If unlimited (use_limit is None), leave as-is
+                else:
+                    existing.uses_remaining = 1
+                # Default to single-use when no limit is configured
                 continue
 
             # Calculate expiry (next rent due date)
@@ -3037,12 +3055,13 @@ def rent_pay(period):
             granted_item = StudentItem(
                 student_id=student.id,
                 store_item_id=pu_item.store_item_id,
+                join_code=join_code,
                 purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status='purchased',
                 is_from_bundle=False,
                 quantity_purchased=1,
-                uses_remaining=pu_item.use_limit  # None means unlimited
+                uses_remaining=pu_item.use_limit or 1
             )
             db.session.add(granted_item)
             per_use_items_granted += 1

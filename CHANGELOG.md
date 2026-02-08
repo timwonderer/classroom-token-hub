@@ -11,12 +11,12 @@ and this project follows semantic versioning principles.
 ### Added
 - **Rent Item Types (Privilege / Per-Use / Hall Pass)** - Extended itemized rent with three distinct item types
   - **Privilege**: Shows as a badge on the roster when rent is paid; optionally listed in store for individual purchase
-  - **Per-Use**: Grants free store redemptions (limited or unlimited) when rent is paid; always listed in store with "Rent Perk" badge; cannot be deleted from store (only via rent settings)
+  - **Per-Use**: Grants free store redemptions when rent is paid (single-use by default, or limited uses when set); always listed in store with "Rent Perk" badge; cannot be deleted from store (only via rent settings)
   - **Hall Pass**: Tops off student hall passes when rent is paid using source-tracking model (rent-granted vs purchased passes tracked separately via `StudentBlock.rent_hall_passes`)
   - **Mid-period edit guardrail**: Once any student has paid rent for the current period, item type, use limits, and hall pass counts are locked; only cosmetic changes (name, description, price) are allowed
   - **Store integration**: Per-use items marked `is_rent_linked` on `StoreItem`, preventing accidental deletion; admin store shows "Rent Perk" badge with disabled delete buttons for linked items
   - **Multi-use item tracking**: Added `uses_remaining` to `StudentItem` for per-use rent items with limited uses
-  - **Free uses from rent**: When rent is fully paid, per-use items automatically grant a free `StudentItem` with `uses_remaining` set; students can redeem these at no cost via the store
+  - **Free uses from rent**: When rent is fully paid, per-use items grant a free `StudentItem` with `uses_remaining` set (default 1); students can redeem these at no cost via the store
   - **Free purchase flow**: Store purchase route checks for active rent-granted uses before charging; shows "Free use (rent perk)" message
   - **Student shop indicators**: Rent-linked items show free uses remaining badge; "Included in your rent!" only shown for privilege-type items
   - **Models**: Added `rent_item_type`, `use_limit`, `hall_pass_count` to `RentItem`; `is_rent_linked` to `StoreItem`; `rent_hall_passes` to `StudentBlock`; `uses_remaining` to `StudentItem`

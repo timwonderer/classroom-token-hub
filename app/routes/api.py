@@ -260,7 +260,7 @@ def purchase_item():
     # Check if student has free uses remaining from rent (per-use rent items)
     if item.is_rent_linked and quantity == 1:
         # Look for an active StudentItem with uses_remaining for this store item
-        active_rent_item = StudentItem.query.filter(
+        rent_item_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
             StudentItem.store_item_id == item.id,
             StudentItem.uses_remaining > 0,
@@ -268,7 +268,13 @@ def purchase_item():
                 StudentItem.expiry_date.is_(None),
                 StudentItem.expiry_date > utc_now()
             )
-        ).first()
+        )
+        if join_code:
+            rent_item_query = rent_item_query.filter(StudentItem.join_code == join_code)
+        else:
+            rent_item_query = rent_item_query.filter(StudentItem.join_code.is_(None))
+
+        active_rent_item = rent_item_query.first()
 
         if active_rent_item:
             # Free use from rent - decrement uses_remaining and log it
@@ -462,9 +468,9 @@ def purchase_item():
                         # This is a fallback for backwards compatibility
                         delta = _get_period_delta(rent_setting)
                         expiry_date = _add_period(now, delta)
-            elif rent_item.rent_item_type == 'per_use' and rent_item.use_limit:
-                # Set multi-use limit
-                uses_remaining = rent_item.use_limit
+            elif rent_item.rent_item_type == 'per_use':
+                # Set per-use limit (default to single-use when not specified)
+                uses_remaining = rent_item.use_limit or 1
 
         # Fall back to standard auto_expiry for delayed items
         if expiry_date is None and item.item_type == 'delayed' and item.auto_expiry_days:
@@ -483,6 +489,7 @@ def purchase_item():
             new_student_item = StudentItem(
                 student_id=student.id,
                 store_item_id=item.id,
+                join_code=join_code,
                 purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
@@ -498,6 +505,7 @@ def purchase_item():
             new_student_item = StudentItem(
                 student_id=student.id,
                 store_item_id=item.id,
+                join_code=join_code,
                 purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
@@ -512,6 +520,7 @@ def purchase_item():
                 new_student_item = StudentItem(
                     student_id=student.id,
                     store_item_id=item.id,
+                    join_code=join_code,
                     purchase_date=utc_now(),
                     expiry_date=expiry_date,
                     status=student_item_status,
@@ -671,9 +680,9 @@ def use_item():
 
             student_item.redemption_date = utc_now()
             if student_item.redemption_details:
-                student_item.redemption_details += f"\n---\n{details} (Use {student_item.uses_remaining + 1})"
+                student_item.redemption_details += f"\n---\n{details} ({student_item.uses_remaining} uses remaining)"
             else:
-                student_item.redemption_details = f"{details} (Use {student_item.uses_remaining + 1})"
+                student_item.redemption_details = f"{details} ({student_item.uses_remaining} uses remaining)"
         else:
             # Regular item - mark as processing
             student_item.status = 'processing'
@@ -780,10 +789,20 @@ def handle_hall_pass_action(pass_id, action):
         if should_deduct:
             student.hall_passes -= 1
             # Decrement rent_hall_passes first (rent-granted passes consumed before purchased)
+            block_period = log_entry.period or student.block
             student_block = StudentBlock.query.filter_by(
                 student_id=student.id,
-                join_code=log_entry.join_code
+                period=block_period
             ).first()
+            if student_block and not student_block.join_code and log_entry.join_code:
+                student_block.join_code = log_entry.join_code
+            elif not student_block:
+                student_block = StudentBlock(
+                    student_id=student.id,
+                    period=block_period,
+                    join_code=log_entry.join_code
+                )
+                db.session.add(student_block)
             if student_block and student_block.rent_hall_passes > 0:
                 student_block.rent_hall_passes -= 1
 
