@@ -4,6 +4,12 @@
 {% block title %}Store Management{% endblock %}
 {% block page_icon %}storefront{% endblock %}
 {% set custom_full_guide = true %}
+
+{# Helper macro to display class label with fallback #}
+{% macro class_label(block) -%}
+{{ class_labels_by_block.get(block|upper, block|upper) }}
+{%- endmacro %}
+
 {% block page_header_actions %}
   <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#storeGuide" aria-controls="storeGuide">
     <span class="material-symbols-outlined">quick_reference_all</span> <span>Quick Tips</span>
