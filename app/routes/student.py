@@ -1175,7 +1175,10 @@ def dashboard():
                     payments.append(payment)
 
             total_paid = sum(p.amount_paid for p in payments) if payments else Decimal('0.00')
-            late_fee = rent_settings.late_fee if rent_is_active and now > grace_end_date_for_status else Decimal('0.00')
+            paid_by_grace = _total_paid_by_grace(payments, grace_end_date_for_status)
+            late_fee = Decimal('0.00')
+            if rent_is_active and now > grace_end_date_for_status and paid_by_grace < rent_settings.rent_amount:
+                late_fee = rent_settings.late_fee
             total_due = rent_settings.rent_amount + late_fee if rent_is_active else Decimal('0.00')
             is_paid = total_paid >= total_due if rent_is_active else False
 
@@ -2348,7 +2351,6 @@ def shop():
             per_period_items = RentItem.query.filter_by(
                 rent_setting_id=rent_settings.id,
                 rent_item_type='privilege',
-                purchase_duration='per_period',
                 is_available_in_store=True
             ).all()
 
@@ -2361,7 +2363,10 @@ def shop():
         rent_linked_items_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
             StudentItem.uses_remaining != None,
-            StudentItem.uses_remaining > 0,
+            db.or_(
+                StudentItem.uses_remaining > 0,
+                StudentItem.uses_remaining == -1
+            ),
             db.or_(
                 StudentItem.expiry_date.is_(None),
                 StudentItem.expiry_date > utc_now()
@@ -2521,6 +2526,18 @@ def _add_rent_period(dt, delta):
     return dt + delta
 
 
+def _total_paid_by_grace(payments, grace_end_date):
+    """Sum payments made on or before the grace end date."""
+    if not payments or not grace_end_date:
+        return Decimal('0.00')
+    grace_end_date = ensure_utc(grace_end_date)
+    return sum(
+        (p.amount_paid for p in payments
+         if p.payment_date and ensure_utc(p.payment_date) <= grace_end_date),
+        Decimal('0.00')
+    )
+
+
 def _calculate_rent_coverage_due_date(settings, reference_date=None):
     """
     Return the most recently passed due date for coverage tracking.
@@ -2649,8 +2666,9 @@ def rent():
 
     total_paid = sum(p.amount_paid for p in payments) if payments else Decimal('0.00')
 
+    paid_by_grace = _total_paid_by_grace(payments, grace_end_date_for_status)
     late_fee = Decimal('0.00')
-    if rent_is_active and now > grace_end_date_for_status:
+    if rent_is_active and now > grace_end_date_for_status and paid_by_grace < settings.rent_amount:
         late_fee = settings.late_fee
 
     total_due = settings.rent_amount + late_fee if rent_is_active else Decimal('0.00')
@@ -2811,7 +2829,8 @@ def rent_pay(period):
     grace_end_date_for_payment = grace_end_date
     if payment_due_date and payment_due_date != due_date:
         grace_end_date_for_payment = payment_due_date + timedelta(days=settings.grace_period_days)
-    is_late = now > grace_end_date_for_payment
+    paid_by_grace = _total_paid_by_grace(existing_payments, grace_end_date_for_payment)
+    is_late = now > grace_end_date_for_payment and paid_by_grace < settings.rent_amount
 
     # Calculate late fee if applicable
     late_fee = Decimal('0.00')
@@ -3025,7 +3044,10 @@ def rent_pay(period):
             existing = StudentItem.query.filter(
                 StudentItem.student_id == student.id,
                 StudentItem.store_item_id == pu_item.store_item_id,
-                StudentItem.uses_remaining > 0,
+                db.or_(
+                    StudentItem.uses_remaining > 0,
+                    StudentItem.uses_remaining == -1
+                ),
                 StudentItem.join_code == join_code if join_code else StudentItem.join_code.is_(None),
                 db.or_(
                     StudentItem.expiry_date.is_(None),
@@ -3034,12 +3056,11 @@ def rent_pay(period):
             ).first()
 
             if existing:
-                # Top-off: reset uses_remaining to the granted amount
+                # Top-off: reset uses_remaining to the granted amount (or unlimited)
                 if pu_item.use_limit:
                     existing.uses_remaining = pu_item.use_limit
                 else:
-                    existing.uses_remaining = 1
-                # Default to single-use when no limit is configured
+                    existing.uses_remaining = -1
                 continue
 
             # Calculate expiry (next rent due date)
@@ -3061,7 +3082,7 @@ def rent_pay(period):
                 status='purchased',
                 is_from_bundle=False,
                 quantity_purchased=1,
-                uses_remaining=pu_item.use_limit or 1
+                uses_remaining=pu_item.use_limit if pu_item.use_limit else -1
             )
             db.session.add(granted_item)
             per_use_items_granted += 1
