@@ -730,6 +730,31 @@
                       </div>
 
                       <div class="row">
+                        <div class="col-md-12 mb-3">
+                          <label class="form-label fw-bold">Item Type</label>
+                          <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="rent_item_type_{{ loop.index0 }}" id="type_privilege_{{ loop.index0 }}" value="privilege" {% if not item.rent_item_type or item.rent_item_type == 'privilege' %}checked{% endif %} onchange="toggleItemType({{ loop.index0 }})">
+                            <label class="btn btn-outline-primary" for="type_privilege_{{ loop.index0 }}">
+                              <i class="bi bi-star me-1"></i> Privilege
+                            </label>
+
+                            <input type="radio" class="btn-check" name="rent_item_type_{{ loop.index0 }}" id="type_per_use_{{ loop.index0 }}" value="per_use" {% if item.rent_item_type == 'per_use' %}checked{% endif %} onchange="toggleItemType({{ loop.index0 }})">
+                            <label class="btn btn-outline-success" for="type_per_use_{{ loop.index0 }}">
+                              <i class="bi bi-box-seam me-1"></i> Per-Use Item
+                            </label>
+
+                            <input type="radio" class="btn-check" name="rent_item_type_{{ loop.index0 }}" id="type_hall_pass_{{ loop.index0 }}" value="hall_pass" {% if item.rent_item_type == 'hall_pass' %}checked{% endif %} onchange="toggleItemType({{ loop.index0 }})">
+                            <label class="btn btn-outline-secondary" for="type_hall_pass_{{ loop.index0 }}">
+                              <i class="bi bi-ticket-perforated me-1"></i> Hall Pass
+                            </label>
+                          </div>
+                          <small class="text-muted d-block mt-2" id="type_desc_{{ loop.index0 }}">
+                            {% if item.rent_item_type == 'per_use' %}Consumable item (e.g. Pencil, Snack). Always available in store.{% elif item.rent_item_type == 'hall_pass' %}Adds to student hall pass balance upon rent payment.{% else %}Standard rent benefit (e.g. Desk, Locker).{% endif %}
+                          </small>
+                        </div>
+                      </div>
+
+                      <div class="row" id="privilege_options_{{ loop.index0 }}" style="{% if item.rent_item_type and item.rent_item_type != 'privilege' %}display: none;{% endif %}">
                         <div class="col-md-6 mb-3">
                           <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox"
@@ -737,47 +762,42 @@
                               {% if item.is_available_in_store %}checked{% endif %}
                               onchange="toggleStorePrice({{ loop.index0 }})">
                             <label class="form-check-label fw-bold" for="store_available_{{ loop.index0 }}">
-                              Available in Store (single purchase)
+                              Available in Store
                             </label>
                           </div>
-                          <small class="text-muted">Allow students to buy this item separately in the store</small>
+                          <small class="text-muted">Allow students to buy this privilege separately (expires next rent due date)</small>
                         </div>
+                        <div class="col-md-6 mb-3" id="purchase_duration_field_{{ loop.index0 }}" style="{% if item.is_available_in_store %}{% else %}display: none;{% endif %}">
+                          <label class="form-label fw-bold">Purchase Duration</label>
+                          <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="rent_item_purchase_duration_{{ loop.index0 }}" id="duration_per_use_{{ loop.index0 }}" value="per_use" {% if item.purchase_duration != 'per_period' %}checked{% endif %}>
+                            <label class="btn btn-outline-secondary" for="duration_per_use_{{ loop.index0 }}">Per Use</label>
 
-                        <div class="col-md-6 mb-3 store-price-field" id="store_price_field_{{ loop.index0 }}"
-                          style="{% if not item.is_available_in_store %}display: none;{% endif %}">
-                          <label class="form-label fw-bold">Store Price ($) <span class="text-danger">*</span></label>
-                          <input type="number" step="0.01" min="0" class="form-control"
-                            name="rent_item_store_price_{{ loop.index0 }}" value="{{ item.store_price or '' }}"
-                            placeholder="Price if purchased separately">
-                          <small class="text-muted">Set higher than rent value to incentivize rent payment</small>
+                            <input type="radio" class="btn-check" name="rent_item_purchase_duration_{{ loop.index0 }}" id="duration_per_period_{{ loop.index0 }}" value="per_period" {% if item.purchase_duration == 'per_period' %}checked{% endif %}>
+                            <label class="btn btn-outline-secondary" for="duration_per_period_{{ loop.index0 }}">Per Period</label>
+                          </div>
                         </div>
                       </div>
 
-                      <div class="row store-price-field" id="store_duration_field_{{ loop.index0 }}"
-                        style="{% if not item.is_available_in_store %}display: none;{% endif %}">
-                        <div class="col-md-12 mb-3">
-                          <label class="form-label fw-bold">Purchase Duration</label>
-                          <div class="btn-group w-100" role="group">
-                            <input type="radio" class="btn-check" name="rent_item_purchase_duration_{{ loop.index0 }}"
-                              id="duration_per_use_{{ loop.index0 }}" value="per_use" {% if not item.purchase_duration
-                              or item.purchase_duration=='per_use' %}checked{% endif %}>
-                            <label class="btn btn-outline-primary" for="duration_per_use_{{ loop.index0 }}">
-                              <i class="bi bi-arrow-repeat me-1"></i> Per Use
-                            </label>
+                      <div class="row" id="common_price_field_{{ loop.index0 }}" style="{% if (not item.rent_item_type or item.rent_item_type == 'privilege') and item.is_available_in_store %}{% elif item.rent_item_type == 'per_use' %}{% else %}display: none;{% endif %}">
+                        <div class="col-md-6 mb-3">
+                          <label class="form-label fw-bold">Store Price ($) <span class="text-danger">*</span></label>
+                          <input type="number" step="0.01" min="0" class="form-control"
+                            name="rent_item_store_price_{{ loop.index0 }}" value="{{ item.store_price or '' }}"
+                            placeholder="Price">
+                        </div>
+                        <div class="col-md-6 mb-3" id="use_limit_field_{{ loop.index0 }}" style="{% if item.rent_item_type != 'per_use' %}display: none;{% endif %}">
+                          <label class="form-label fw-bold">Uses Per Purchase</label>
+                          <input type="number" min="1" class="form-control" name="rent_item_use_limit_{{ loop.index0 }}" value="{{ item.use_limit or '' }}" placeholder="1 (Leave empty for single use)">
+                          <small class="text-muted">How many times can it be used?</small>
+                        </div>
+                      </div>
 
-                            <input type="radio" class="btn-check" name="rent_item_purchase_duration_{{ loop.index0 }}"
-                              id="duration_per_period_{{ loop.index0 }}" value="per_period" {% if
-                              item.purchase_duration=='per_period' %}checked{% endif %}>
-                            <label class="btn btn-outline-success" for="duration_per_period_{{ loop.index0 }}">
-                              <i class="bi bi-calendar-check me-1"></i> Per Rent Period
-                            </label>
-                          </div>
-                          <small class="text-muted d-block mt-2">
-                            <strong>Per Use:</strong> Student must buy each time they want to use it (unlimited
-                            purchases)<br>
-                            <strong>Per Rent Period:</strong> Student buys once and can use until next rent is due
-                            (expires when rent comes due)
-                          </small>
+                      <div class="row" id="hall_pass_options_{{ loop.index0 }}" style="{% if item.rent_item_type != 'hall_pass' %}display: none;{% endif %}">
+                        <div class="col-md-6 mb-3">
+                          <label class="form-label fw-bold">Passes Granted <span class="text-danger">*</span></label>
+                          <input type="number" min="1" class="form-control" name="rent_item_hall_pass_count_{{ loop.index0 }}" value="{{ item.hall_pass_count or 1 }}">
+                          <small class="text-muted">Number of hall passes added when rent is paid</small>
                         </div>
                       </div>
                     </div>
@@ -1104,41 +1124,69 @@
         </div>
 
         <div class="row">
+          <div class="col-md-12 mb-3">
+            <label class="form-label fw-bold">Item Type</label>
+            <div class="btn-group w-100" role="group">
+              <input type="radio" class="btn-check" name="rent_item_type_${rentItemCounter}" id="type_privilege_${rentItemCounter}" value="privilege" checked onchange="toggleItemType(${rentItemCounter})">
+              <label class="btn btn-outline-primary" for="type_privilege_${rentItemCounter}">
+                <i class="bi bi-star me-1"></i> Privilege
+              </label>
+
+              <input type="radio" class="btn-check" name="rent_item_type_${rentItemCounter}" id="type_per_use_${rentItemCounter}" value="per_use" onchange="toggleItemType(${rentItemCounter})">
+              <label class="btn btn-outline-success" for="type_per_use_${rentItemCounter}">
+                <i class="bi bi-box-seam me-1"></i> Per-Use Item
+              </label>
+
+              <input type="radio" class="btn-check" name="rent_item_type_${rentItemCounter}" id="type_hall_pass_${rentItemCounter}" value="hall_pass" onchange="toggleItemType(${rentItemCounter})">
+              <label class="btn btn-outline-secondary" for="type_hall_pass_${rentItemCounter}">
+                <i class="bi bi-ticket-perforated me-1"></i> Hall Pass
+              </label>
+            </div>
+            <small class="text-muted d-block mt-2" id="type_desc_${rentItemCounter}">
+              Standard rent benefit (e.g. Desk, Locker).
+            </small>
+          </div>
+        </div>
+
+        <div class="row" id="privilege_options_${rentItemCounter}">
           <div class="col-md-6 mb-3">
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" name="rent_item_store_available_${rentItemCounter}" id="store_available_${rentItemCounter}" onchange="toggleStorePrice(${rentItemCounter})">
               <label class="form-check-label fw-bold" for="store_available_${rentItemCounter}">
-                Available in Store (single purchase)
+                Available in Store
               </label>
             </div>
-            <small class="text-muted">Allow students to buy this item separately in the store</small>
+            <small class="text-muted">Allow students to buy this privilege separately (expires next rent due date)</small>
           </div>
-
-          <div class="col-md-6 mb-3 store-price-field" id="store_price_field_${rentItemCounter}" style="display: none;">
-            <label class="form-label fw-bold">Store Price ($) <span class="text-danger">*</span></label>
-            <input type="number" step="0.01" min="0" class="form-control" name="rent_item_store_price_${rentItemCounter}" placeholder="Price if purchased separately">
-            <small class="text-muted">Set higher than rent value to incentivize rent payment</small>
-          </div>
-        </div>
-
-        <div class="row store-price-field" id="store_duration_field_${rentItemCounter}" style="display: none;">
-          <div class="col-md-12 mb-3">
+          <div class="col-md-6 mb-3" id="purchase_duration_field_${rentItemCounter}" style="display: none;">
             <label class="form-label fw-bold">Purchase Duration</label>
             <div class="btn-group w-100" role="group">
               <input type="radio" class="btn-check" name="rent_item_purchase_duration_${rentItemCounter}" id="duration_per_use_${rentItemCounter}" value="per_use" checked>
-              <label class="btn btn-outline-primary" for="duration_per_use_${rentItemCounter}">
-                <i class="bi bi-arrow-repeat me-1"></i> Per Use
-              </label>
+              <label class="btn btn-outline-secondary" for="duration_per_use_${rentItemCounter}">Per Use</label>
 
               <input type="radio" class="btn-check" name="rent_item_purchase_duration_${rentItemCounter}" id="duration_per_period_${rentItemCounter}" value="per_period">
-              <label class="btn btn-outline-success" for="duration_per_period_${rentItemCounter}">
-                <i class="bi bi-calendar-check me-1"></i> Per Rent Period
-              </label>
+              <label class="btn btn-outline-secondary" for="duration_per_period_${rentItemCounter}">Per Period</label>
             </div>
-            <small class="text-muted d-block mt-2">
-              <strong>Per Use:</strong> Student must buy each time they want to use it (unlimited purchases)<br>
-              <strong>Per Rent Period:</strong> Student buys once and can use until next rent is due (expires when rent comes due)
-            </small>
+          </div>
+        </div>
+
+        <div class="row" id="common_price_field_${rentItemCounter}" style="display: none;">
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Store Price ($) <span class="text-danger">*</span></label>
+            <input type="number" step="0.01" min="0" class="form-control" name="rent_item_store_price_${rentItemCounter}" placeholder="Price">
+          </div>
+          <div class="col-md-6 mb-3" id="use_limit_field_${rentItemCounter}" style="display: none;">
+            <label class="form-label fw-bold">Uses Per Purchase</label>
+            <input type="number" min="1" class="form-control" name="rent_item_use_limit_${rentItemCounter}" placeholder="1 (Leave empty for single use)">
+            <small class="text-muted">How many times can it be used?</small>
+          </div>
+        </div>
+
+        <div class="row" id="hall_pass_options_${rentItemCounter}" style="display: none;">
+          <div class="col-md-6 mb-3">
+            <label class="form-label fw-bold">Passes Granted <span class="text-danger">*</span></label>
+            <input type="number" min="1" class="form-control" name="rent_item_hall_pass_count_${rentItemCounter}" value="1">
+            <small class="text-muted">Number of hall passes added when rent is paid</small>
           </div>
         </div>
       </div>
@@ -1175,15 +1223,51 @@
     updatePreventPurchaseLabel();
   };
 
+  window.toggleItemType = function (index) {
+    const typePrivilege = document.getElementById(`type_privilege_${index}`);
+    const typePerUse = document.getElementById(`type_per_use_${index}`);
+    const typeHallPass = document.getElementById(`type_hall_pass_${index}`);
+
+    const privilegeOptions = document.getElementById(`privilege_options_${index}`);
+    const commonPriceField = document.getElementById(`common_price_field_${index}`);
+    const useLimitField = document.getElementById(`use_limit_field_${index}`);
+    const hallPassOptions = document.getElementById(`hall_pass_options_${index}`);
+    const typeDesc = document.getElementById(`type_desc_${index}`);
+
+    // Hide all first
+    if(privilegeOptions) privilegeOptions.style.display = 'none';
+    if(commonPriceField) commonPriceField.style.display = 'none';
+    if(useLimitField) useLimitField.style.display = 'none';
+    if(hallPassOptions) hallPassOptions.style.display = 'none';
+
+    if (typePrivilege && typePrivilege.checked) {
+      if(privilegeOptions) privilegeOptions.style.display = 'flex';
+      if(typeDesc) typeDesc.textContent = "Standard rent benefit (e.g. Desk, Locker).";
+      toggleStorePrice(index);
+    } else if (typePerUse && typePerUse.checked) {
+      if(commonPriceField) commonPriceField.style.display = 'flex';
+      if(useLimitField) useLimitField.style.display = 'block';
+      if(typeDesc) typeDesc.textContent = "Consumable item (e.g. Pencil, Snack). Always available in store.";
+    } else if (typeHallPass && typeHallPass.checked) {
+      if(hallPassOptions) hallPassOptions.style.display = 'flex';
+      if(typeDesc) typeDesc.textContent = "Adds to student hall pass balance upon rent payment.";
+    }
+  };
+
   window.toggleStorePrice = function (index) {
     const checkbox = document.getElementById(`store_available_${index}`);
-    const priceField = document.getElementById(`store_price_field_${index}`);
-    const durationField = document.getElementById(`store_duration_field_${index}`);
+    const commonPriceField = document.getElementById(`common_price_field_${index}`);
+    const purchaseDurationField = document.getElementById(`purchase_duration_field_${index}`);
+    const typePrivilege = document.getElementById(`type_privilege_${index}`);
 
-    if (checkbox) {
-      const isVisible = checkbox.checked ? 'block' : 'none';
-      if (priceField) priceField.style.display = isVisible;
-      if (durationField) durationField.style.display = isVisible;
+    // Only relevant if type is Privilege
+    if (typePrivilege && typePrivilege.checked) {
+      if (checkbox && commonPriceField) {
+        commonPriceField.style.display = checkbox.checked ? 'flex' : 'none';
+      }
+      if (checkbox && purchaseDurationField) {
+        purchaseDurationField.style.display = checkbox.checked ? 'block' : 'none';
+      }
     }
   };
 

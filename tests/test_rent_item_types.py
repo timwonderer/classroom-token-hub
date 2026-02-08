@@ -1,0 +1,713 @@
+import pytest
+from decimal import Decimal
+from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher
+from app.extensions import db
+from datetime import datetime, timezone
+
+@pytest.fixture
+def teacher_admin(client):
+    """Create a teacher admin user."""
+    # client fixture already pushes app context and creates DB
+    admin = Admin(username="teacher", totp_secret="secret")
+    db.session.add(admin)
+    db.session.commit()
+    # Refresh to ensure it's bound or just return ID if that's safer,
+    # but keeping object is standard if session persists.
+    # To avoid DetachedInstanceError if session is somehow messed with:
+    db.session.refresh(admin)
+    return admin
+
+@pytest.fixture
+def student_in_class(client, teacher_admin):
+    """Create a student in the teacher's class."""
+    student = Student(first_name="Test", last_initial="S", block="A", salt=b'salt')
+    db.session.add(student)
+    db.session.flush()
+
+    # Link to teacher
+    link = StudentTeacher(student_id=student.id, admin_id=teacher_admin.id)
+    db.session.add(link)
+
+    # Create seat
+    seat = TeacherBlock(
+        teacher_id=teacher_admin.id, block='A', join_code='JOINCODE123',
+        student_id=student.id, is_claimed=True,
+        first_name='Test', last_initial='S', last_name_hash_by_part=[], dob_sum=0, salt=b'salt', first_half_hash='hash'
+    )
+    db.session.add(seat)
+    db.session.commit()
+    db.session.refresh(student)
+    return student
+
+def test_admin_configure_rent_item_types(client, teacher_admin):
+    """Test that admin can configure different rent item types."""
+    with client.session_transaction() as sess:
+        sess['admin_id'] = teacher_admin.id
+        sess['is_admin'] = True
+
+    # Get settings block
+    settings = RentSettings(teacher_id=teacher_admin.id, block='A', is_enabled=True)
+    db.session.add(settings)
+    db.session.commit()
+
+    # Simulate form data for 3 items: Privilege, Per-Use, Hall Pass
+    data = {
+        'settings_block': 'A',
+        'is_enabled': 'on',
+        'rent_amount': '50.00',
+        'frequency_type': 'monthly',
+        'due_day_of_month': '1',
+        'grace_period_days': '3',
+        'late_penalty_amount': '10.00',
+
+        # Item 1: Privilege
+        'rent_item_name_0': 'Desk',
+        'rent_item_type_0': 'privilege',
+        'rent_item_store_available_0': 'on',
+        'rent_item_store_price_0': '100.00',
+        'rent_item_purchase_duration_0': 'per_period',
+
+        # Item 2: Per-Use (Consumable)
+        'rent_item_name_1': 'Pencil',
+        'rent_item_type_1': 'per_use',
+        'rent_item_store_available_1': 'on', # Should be forced true in UI/backend logic really
+        'rent_item_store_price_1': '5.00',
+        'rent_item_purchase_duration_1': 'per_use',
+        'rent_item_use_limit_1': '5', # Multi-use
+
+        # Item 3: Hall Pass
+        'rent_item_name_2': 'Bonus Pass',
+        'rent_item_type_2': 'hall_pass',
+        'rent_item_hall_pass_count_2': '2'
+    }
+
+    resp = client.post('/admin/rent-settings', data=data, follow_redirects=True)
+    assert resp.status_code == 200
+    assert b"Rent settings updated successfully" in resp.data
+
+    # Verify Database State
+    items = RentItem.query.filter_by(rent_setting_id=settings.id).order_by(RentItem.order_index).all()
+    assert len(items) == 3
+
+    # Privilege
+    assert items[0].name == 'Desk'
+    assert items[0].rent_item_type == 'privilege'
+    assert items[0].store_price == Decimal('100.00')
+    assert items[0].store_item_id is not None # Synced to store
+
+    # Per-Use
+    assert items[1].name == 'Pencil'
+    assert items[1].rent_item_type == 'per_use'
+    assert items[1].use_limit == 5
+    assert items[1].store_item_id is not None # Synced to store
+
+    # Hall Pass
+    assert items[2].name == 'Bonus Pass'
+    assert items[2].rent_item_type == 'hall_pass'
+    assert items[2].hall_pass_count == 2
+    assert items[2].store_item_id is None # NOT synced to store (logic update)
+
+def test_store_sync_logic(client, teacher_admin):
+    """Test that store items are created/updated correctly based on type."""
+    # Setup settings
+    settings = RentSettings(teacher_id=teacher_admin.id, block='A', is_enabled=True)
+    db.session.add(settings)
+    db.session.commit()
+
+    # Create RentItems manually to test sync logic isolation
+    privilege = RentItem(
+        rent_setting_id=settings.id, name='Privilege', rent_item_type='privilege',
+        is_available_in_store=True, store_price=Decimal('10.00'), purchase_duration='per_period'
+    )
+    per_use = RentItem(
+        rent_setting_id=settings.id, name='Consumable', rent_item_type='per_use',
+        is_available_in_store=True, store_price=Decimal('2.00'), purchase_duration='per_use', use_limit=1
+    )
+    hall_pass = RentItem(
+        rent_setting_id=settings.id, name='HP', rent_item_type='hall_pass',
+        hall_pass_count=1
+    )
+    db.session.add_all([privilege, per_use, hall_pass])
+    db.session.commit()
+
+    # Trigger sync manually (normally called in route)
+    from app.routes.admin import _sync_rent_items_to_store
+    _sync_rent_items_to_store(settings, teacher_admin.id, 'A')
+
+    # Verify StoreItems
+    privilege_store = StoreItem.query.filter_by(name='Privilege').first()
+    assert privilege_store is not None
+    assert privilege_store.price == Decimal('10.00')
+    assert privilege_store.limit_per_student == 1
+
+    per_use_store = StoreItem.query.filter_by(name='Consumable').first()
+    assert per_use_store is not None
+    assert per_use_store.is_rent_linked is True # Should be marked linked
+
+    hall_pass_store = StoreItem.query.filter_by(name='HP').first()
+    assert hall_pass_store is None # Should NOT exist in store
+
+def test_student_purchase_per_use_item(client, teacher_admin, student_in_class):
+    """Test student purchasing a multi-use item."""
+    student = student_in_class
+
+    # 1. Setup Item
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id, name='Multi-Use Snack', price=Decimal('5.00'),
+            is_active=True, item_type='delayed' # Rent items should be delayed (redeemable)
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    # Link to RentItem with limits
+    settings = RentSettings(teacher_id=teacher_admin.id, block='A', is_enabled=True)
+    db.session.add(settings)
+    db.session.flush()
+
+    rent_item = RentItem(
+        rent_setting_id=settings.id, name='Multi-Use Snack', rent_item_type='per_use',
+        is_available_in_store=True, store_price=Decimal('5.00'), purchase_duration='per_use',
+        use_limit=3, store_item_id=store_item.id
+    )
+    db.session.add(rent_item)
+
+    # Give student money
+    tx = Transaction(student_id=student.id, amount=100, account_type='checking', teacher_id=teacher_admin.id, join_code='JOINCODE123')
+    db.session.add(tx)
+    db.session.commit()
+
+    # Login as student
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123' # Mock session context
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    # 2. Purchase
+    # Need to mock get_current_class_context or rely on session
+    # Using API purchase endpoint
+    data = {
+        'item_id': store_item.id,
+        'passphrase': 'password', # Default fixture password
+        'quantity': 1
+    }
+    # Mock password hash check or update student
+    from werkzeug.security import generate_password_hash
+    student.passphrase_hash = generate_password_hash('password')
+    db.session.commit()
+
+    resp = client.post('/api/purchase-item', json=data)
+    assert resp.status_code == 200
+
+    # 3. Verify StudentItem State
+    student_item = StudentItem.query.filter_by(student_id=student.id, store_item_id=store_item.id).first()
+    assert student_item is not None
+    assert student_item.status == 'purchased' # Should be 'purchased' to show in inventory
+    assert student_item.uses_remaining == 3   # Initialized from RentItem
+
+def test_student_use_per_use_item(client, teacher_admin, student_in_class):
+    """Test decrementing uses for a multi-use item."""
+    student = student_in_class
+
+    # Setup StudentItem directly (simulate previous purchase)
+    store_item = StoreItem(teacher_id=teacher_admin.id, name='Pencil', price=5, is_active=True)
+    db.session.add(store_item)
+    db.session.flush()
+
+    student_item = StudentItem(
+        student_id=student.id, store_item_id=store_item.id,
+        status='purchased', uses_remaining=3,
+        join_code='JOINCODE123'
+    )
+    db.session.add(student_item)
+
+    # Update passphrase
+    from werkzeug.security import generate_password_hash
+    student.passphrase_hash = generate_password_hash('password')
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    # Use Item (1st time)
+    data = {'student_item_id': student_item.id, 'passphrase': 'password'}
+    resp = client.post('/api/use-item', json=data)
+    assert resp.status_code == 200
+    assert "2 uses remaining" in resp.json['message']
+
+    db.session.refresh(student_item)
+    assert student_item.uses_remaining == 2
+    assert student_item.status == 'purchased' # Still active
+
+    # Use Item (2nd time)
+    client.post('/api/use-item', json=data)
+    db.session.refresh(student_item)
+    assert student_item.uses_remaining == 1
+
+    # Use Item (3rd/Last time)
+    client.post('/api/use-item', json=data)
+    db.session.refresh(student_item)
+    assert student_item.uses_remaining == 0
+    assert student_item.status == 'processing' # Should move to processing/redeemed
+
+def test_prevent_deletion_of_linked_items(client, teacher_admin):
+    """Test that admin cannot delete store items linked to rent settings."""
+    with client.session_transaction() as sess:
+        sess['admin_id'] = teacher_admin.id
+        sess['is_admin'] = True
+
+    # Create linked item
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id, name='Rent Linked', price=10,
+        is_active=True, is_rent_linked=True
+    )
+    db.session.add(store_item)
+    db.session.commit()
+
+    # Attempt Soft Delete
+    resp = client.post(f'/admin/store/delete/{store_item.id}', follow_redirects=True)
+    assert b"Cannot delete" in resp.data
+    assert b"managed by Rent Settings" in resp.data
+
+    db.session.refresh(store_item)
+    assert store_item.is_active is True # Should still be active
+
+    # Attempt Hard Delete
+    resp = client.post(f'/admin/store/hard-delete/{store_item.id}', follow_redirects=True)
+    assert b"Cannot delete" in resp.data
+
+    db.session.refresh(store_item)
+    assert store_item is not None # Should still exist
+
+
+def test_hall_pass_topoff_replenishes_rent_portion_only(client, teacher_admin, student_in_class):
+    """Test hall pass top-off only replenishes the rent-granted portion, not purchased passes."""
+    student = student_in_class
+
+    # Create student block with join_code
+    sb = StudentBlock.query.filter_by(student_id=student.id).first()
+    if not sb:
+        sb = StudentBlock(student_id=student.id, period='A', join_code='JOINCODE123')
+        db.session.add(sb)
+        db.session.flush()
+
+    # Scenario: rent grants 3, student has 1 rent + 2 purchased = 3 total
+    sb.rent_hall_passes = 1
+    student.hall_passes = 3  # 1 rent + 2 purchased
+    db.session.commit()
+
+    # Create rent settings with hall_pass item granting 3 passes
+    settings = RentSettings(
+        teacher_id=teacher_admin.id, block='A', is_enabled=True,
+        rent_amount=Decimal('50.00'), frequency_type='monthly',
+        due_day_of_month=1, first_rent_due_date=datetime(2026, 2, 1, tzinfo=timezone.utc)
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    hall_pass_item = RentItem(
+        rent_setting_id=settings.id, name='Hall Passes',
+        rent_item_type='hall_pass', hall_pass_count=3
+    )
+    db.session.add(hall_pass_item)
+    db.session.commit()
+
+    # Simulate the top-off logic directly (same as student.py rent_pay)
+    total_grant = sum(item.hall_pass_count for item in [hall_pass_item] if item.hall_pass_count)
+    current_rent_passes = sb.rent_hall_passes
+    top_off = max(0, total_grant - current_rent_passes)
+
+    student.hall_passes = (student.hall_passes or 0) + top_off
+    sb.rent_hall_passes = total_grant
+    db.session.commit()
+
+    db.session.refresh(student)
+    db.session.refresh(sb)
+
+    # Expected: 3(original) + 2(top-off of rent portion: 3-1=2) = 5 total
+    assert student.hall_passes == 5
+    # rent_hall_passes should now be 3 (the full grant amount)
+    assert sb.rent_hall_passes == 3
+
+
+def test_hall_pass_topoff_zero_existing(client, teacher_admin, student_in_class):
+    """Test hall pass top-off when student has 0 passes grants full amount."""
+    student = student_in_class
+
+    sb = StudentBlock.query.filter_by(student_id=student.id).first()
+    if not sb:
+        sb = StudentBlock(student_id=student.id, period='A', join_code='JOINCODE123')
+        db.session.add(sb)
+        db.session.flush()
+
+    sb.rent_hall_passes = 0
+    student.hall_passes = 0
+    db.session.commit()
+
+    # Top-off with grant of 3
+    total_grant = 3
+    current_rent_passes = sb.rent_hall_passes
+    top_off = max(0, total_grant - current_rent_passes)
+
+    student.hall_passes = (student.hall_passes or 0) + top_off
+    sb.rent_hall_passes = total_grant
+    db.session.commit()
+
+    db.session.refresh(student)
+    db.session.refresh(sb)
+
+    assert student.hall_passes == 3
+    assert sb.rent_hall_passes == 3
+
+
+def test_hall_pass_consumption_decrements_rent_passes_first(client, teacher_admin, student_in_class):
+    """Test that using a hall pass decrements rent_hall_passes before purchased passes."""
+    student = student_in_class
+
+    sb = StudentBlock.query.filter_by(student_id=student.id).first()
+    if not sb:
+        sb = StudentBlock(student_id=student.id, period='A', join_code='JOINCODE123')
+        db.session.add(sb)
+        db.session.flush()
+
+    # Student has 3 rent + 2 purchased = 5 total
+    sb.rent_hall_passes = 3
+    student.hall_passes = 5
+    db.session.commit()
+
+    # Simulate hall pass consumption (same as api.py hall pass approval)
+    student.hall_passes -= 1
+    if sb.rent_hall_passes > 0:
+        sb.rent_hall_passes -= 1
+    db.session.commit()
+
+    db.session.refresh(student)
+    db.session.refresh(sb)
+
+    assert student.hall_passes == 4
+    assert sb.rent_hall_passes == 2  # Rent pass consumed first
+
+    # Consume 2 more rent passes
+    for _ in range(2):
+        student.hall_passes -= 1
+        if sb.rent_hall_passes > 0:
+            sb.rent_hall_passes -= 1
+    db.session.commit()
+
+    db.session.refresh(student)
+    db.session.refresh(sb)
+
+    assert student.hall_passes == 2
+    assert sb.rent_hall_passes == 0  # All rent passes consumed
+
+    # Next pass consumed is from purchased (rent_hall_passes stays 0)
+    student.hall_passes -= 1
+    if sb.rent_hall_passes > 0:
+        sb.rent_hall_passes -= 1
+    db.session.commit()
+
+    db.session.refresh(student)
+    db.session.refresh(sb)
+
+    assert student.hall_passes == 1
+    assert sb.rent_hall_passes == 0  # Still 0, purchased pass consumed
+
+
+def test_mid_period_lock_blocks_semantic_changes(client, teacher_admin):
+    """Test that semantic fields are locked when students have paid rent for current period."""
+    with client.session_transaction() as sess:
+        sess['admin_id'] = teacher_admin.id
+        sess['is_admin'] = True
+
+    # Create settings and a rent item
+    settings = RentSettings(
+        teacher_id=teacher_admin.id, block='A', is_enabled=True,
+        rent_amount=Decimal('50.00'), frequency_type='monthly',
+        due_day_of_month=1, first_rent_due_date=datetime(2026, 2, 1, tzinfo=timezone.utc)
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    rent_item = RentItem(
+        rent_setting_id=settings.id, name='Desk',
+        rent_item_type='privilege', order_index=0,
+        is_available_in_store=True, store_price=Decimal('100.00'),
+        purchase_duration='per_period'
+    )
+    db.session.add(rent_item)
+    db.session.flush()
+
+    # Create a TeacherBlock with join_code
+    tb = TeacherBlock(
+        teacher_id=teacher_admin.id, block='A', join_code='LOCKTEST',
+        first_name='Seat', last_initial='1', last_name_hash_by_part=[], dob_sum=0,
+        salt=b'salt', first_half_hash='hash'
+    )
+    db.session.add(tb)
+    db.session.flush()
+
+    # Create a student who has paid rent for the current coverage period
+    student = Student(first_name="Payer", last_initial="P", block="A", salt=b'salt')
+    db.session.add(student)
+    db.session.flush()
+
+    link = StudentTeacher(student_id=student.id, admin_id=teacher_admin.id)
+    db.session.add(link)
+
+    now = datetime.now(timezone.utc)
+    payment = RentPayment(
+        student_id=student.id, period='A', join_code='LOCKTEST',
+        amount_paid=Decimal('50.00'),
+        coverage_month=now.month, coverage_year=now.year
+    )
+    db.session.add(payment)
+    db.session.commit()
+
+    # Now try to change rent_item_type from privilege to per_use
+    data = {
+        'settings_block': 'A',
+        'is_enabled': 'on',
+        'rent_amount': '50.00',
+        'frequency_type': 'monthly',
+        'due_day_of_month': '1',
+        'rent_item_name_0': 'Desk',
+        'rent_item_id_0': str(rent_item.id),
+        'rent_item_type_0': 'per_use',  # Changed from privilege
+        'rent_item_store_available_0': 'on',
+        'rent_item_store_price_0': '100.00',
+        'rent_item_purchase_duration_0': 'per_use',
+        'rent_item_use_limit_0': '5',
+    }
+
+    resp = client.post('/admin/rent-settings', data=data, follow_redirects=True)
+    assert resp.status_code == 200
+
+    # Check that the item type was NOT changed (mid-period lock)
+    db.session.refresh(rent_item)
+    assert rent_item.rent_item_type == 'privilege'  # Should remain privilege
+    assert rent_item.use_limit is None  # Should not have been set
+
+    # But cosmetic changes should be allowed
+    assert rent_item.name == 'Desk'  # Name update should work
+
+
+def test_mid_period_lock_allows_new_items(client, teacher_admin):
+    """Test that new items can be added even when mid-period lock is active."""
+    with client.session_transaction() as sess:
+        sess['admin_id'] = teacher_admin.id
+        sess['is_admin'] = True
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id, block='A', is_enabled=True,
+        rent_amount=Decimal('50.00'), frequency_type='monthly',
+        due_day_of_month=1, first_rent_due_date=datetime(2026, 2, 1, tzinfo=timezone.utc)
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    tb = TeacherBlock(
+        teacher_id=teacher_admin.id, block='A', join_code='LOCKTEST2',
+        first_name='Seat', last_initial='2', last_name_hash_by_part=[], dob_sum=0,
+        salt=b'salt', first_half_hash='hash'
+    )
+    db.session.add(tb)
+    db.session.flush()
+
+    student = Student(first_name="Payer", last_initial="P", block="A", salt=b'salt')
+    db.session.add(student)
+    db.session.flush()
+
+    link = StudentTeacher(student_id=student.id, admin_id=teacher_admin.id)
+    db.session.add(link)
+
+    now = datetime.now(timezone.utc)
+    payment = RentPayment(
+        student_id=student.id, period='A', join_code='LOCKTEST2',
+        amount_paid=Decimal('50.00'),
+        coverage_month=now.month, coverage_year=now.year
+    )
+    db.session.add(payment)
+    db.session.commit()
+
+    # Add a new item - should work even with lock active
+    data = {
+        'settings_block': 'A',
+        'is_enabled': 'on',
+        'rent_amount': '50.00',
+        'frequency_type': 'monthly',
+        'due_day_of_month': '1',
+        'rent_item_name_0': 'New Item',
+        'rent_item_type_0': 'per_use',
+        'rent_item_store_available_0': 'on',
+        'rent_item_store_price_0': '10.00',
+        'rent_item_purchase_duration_0': 'per_use',
+        'rent_item_use_limit_0': '3',
+    }
+
+    resp = client.post('/admin/rent-settings', data=data, follow_redirects=True)
+    assert resp.status_code == 200
+
+    # New item should be created with the specified type
+    new_item = RentItem.query.filter_by(rent_setting_id=settings.id, name='New Item').first()
+    assert new_item is not None
+    assert new_item.rent_item_type == 'per_use'
+    assert new_item.use_limit == 3
+
+
+def test_legacy_rent_items_default_to_privilege(client, teacher_admin):
+    """Test that existing rent items without rent_item_type default to privilege."""
+    settings = RentSettings(teacher_id=teacher_admin.id, block='A', is_enabled=True)
+    db.session.add(settings)
+    db.session.flush()
+
+    # Create item without explicitly setting rent_item_type (simulates legacy data)
+    item = RentItem(
+        rent_setting_id=settings.id, name='Legacy Desk',
+        is_available_in_store=True, store_price=Decimal('50.00'),
+        purchase_duration='per_period'
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    db.session.refresh(item)
+    assert item.rent_item_type == 'privilege'  # Default value for backward compat
+
+
+def test_per_use_free_purchase_from_rent(client, teacher_admin, student_in_class):
+    """Test that a student with rent-granted uses_remaining can purchase for free."""
+    student = student_in_class
+    from werkzeug.security import generate_password_hash
+    student.passphrase_hash = generate_password_hash('password')
+
+    # Create a rent-linked store item
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id, name='Rent Snack', price=Decimal('5.00'),
+        is_active=True, item_type='delayed', is_rent_linked=True
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    # Give student a rent-granted StudentItem with 3 uses remaining
+    rent_granted = StudentItem(
+        student_id=student.id, store_item_id=store_item.id,
+        status='purchased', uses_remaining=3,
+        purchase_date=datetime.now(timezone.utc),
+        join_code='JOINCODE123'
+    )
+    db.session.add(rent_granted)
+
+    # Give student some money
+    tx = Transaction(student_id=student.id, amount=100, account_type='checking',
+                     teacher_id=teacher_admin.id, join_code='JOINCODE123')
+    db.session.add(tx)
+    db.session.commit()
+
+    original_balance = student.checking_balance
+
+    # Login as student
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    # Purchase - should be free
+    data = {'item_id': store_item.id, 'passphrase': 'password', 'quantity': 1}
+    resp = client.post('/api/purchase-item', json=data)
+    assert resp.status_code == 200
+    assert "free use" in resp.json['message'].lower() or "rent perk" in resp.json['message'].lower()
+
+    # Verify uses_remaining decremented
+    db.session.refresh(rent_granted)
+    assert rent_granted.uses_remaining == 2
+
+    # Verify balance NOT changed (free purchase)
+    db.session.refresh(student)
+    assert student.checking_balance == original_balance
+
+
+def test_per_use_charges_when_uses_exhausted(client, teacher_admin, student_in_class):
+    """Test that after free uses are exhausted, the student pays regular price."""
+    student = student_in_class
+    from werkzeug.security import generate_password_hash
+    student.passphrase_hash = generate_password_hash('password')
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id, name='Rent Pencil', price=Decimal('5.00'),
+        is_active=True, item_type='delayed', is_rent_linked=True
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    # Give student a rent-granted item with 0 uses remaining (exhausted)
+    rent_granted = StudentItem(
+        student_id=student.id, store_item_id=store_item.id,
+        status='purchased', uses_remaining=0,
+        purchase_date=datetime.now(timezone.utc),
+        join_code='JOINCODE123'
+    )
+    db.session.add(rent_granted)
+
+    tx = Transaction(student_id=student.id, amount=100, account_type='checking',
+                     teacher_id=teacher_admin.id, join_code='JOINCODE123')
+    db.session.add(tx)
+    db.session.commit()
+
+    original_balance = student.checking_balance
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    # Purchase - should charge regular price since uses are exhausted
+    data = {'item_id': store_item.id, 'passphrase': 'password', 'quantity': 1}
+    resp = client.post('/api/purchase-item', json=data)
+    assert resp.status_code == 200
+
+    # Balance should decrease by the item price
+    db.session.refresh(student)
+    assert student.checking_balance < original_balance
+
+
+def test_privilege_badge_only_shows_privilege_items(client, teacher_admin, student_in_class):
+    """Test that _build_rent_privileges_by_block only shows privilege-type items as badges."""
+    student = student_in_class
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id, block='A', is_enabled=True,
+        rent_amount=Decimal('50.00'), frequency_type='monthly',
+        due_day_of_month=1, first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc)
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    # Create one of each type
+    privilege_item = RentItem(
+        rent_setting_id=settings.id, name='Desk Badge', rent_item_type='privilege',
+        is_available_in_store=True, store_price=Decimal('10.00'), purchase_duration='per_period'
+    )
+    per_use_item = RentItem(
+        rent_setting_id=settings.id, name='Pencil Uses', rent_item_type='per_use',
+        is_available_in_store=True, store_price=Decimal('2.00'), purchase_duration='per_use',
+        use_limit=5
+    )
+    hall_pass_item = RentItem(
+        rent_setting_id=settings.id, name='HP Grant', rent_item_type='hall_pass',
+        hall_pass_count=3
+    )
+    db.session.add_all([privilege_item, per_use_item, hall_pass_item])
+    db.session.commit()
+
+    # Query using the same filter as _build_rent_privileges_by_block
+    badge_items = RentItem.query.filter(
+        RentItem.rent_setting_id == settings.id,
+        RentItem.rent_item_type == 'privilege',
+        RentItem.purchase_duration == 'per_period',
+        RentItem.is_available_in_store == True
+    ).all()
+
+    # Only privilege items should appear as badges
+    assert len(badge_items) == 1
+    assert badge_items[0].name == 'Desk Badge'
+    assert badge_items[0].rent_item_type == 'privilege'

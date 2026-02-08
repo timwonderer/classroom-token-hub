@@ -257,6 +257,49 @@ def purchase_item():
                             "message": "You cannot make purchases while late on rent. Please pay your rent first."
                         }), 403
 
+    # Check if student has free uses remaining from rent (per-use rent items)
+    if item.is_rent_linked and quantity == 1:
+        # Look for an active StudentItem with uses_remaining for this store item
+        rent_item_query = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.store_item_id == item.id,
+            StudentItem.uses_remaining > 0,
+            db.or_(
+                StudentItem.expiry_date.is_(None),
+                StudentItem.expiry_date > utc_now()
+            )
+        )
+        if join_code:
+            rent_item_query = rent_item_query.filter(StudentItem.join_code == join_code)
+        else:
+            rent_item_query = rent_item_query.filter(StudentItem.join_code.is_(None))
+
+        active_rent_item = rent_item_query.first()
+
+        if active_rent_item:
+            # Free use from rent - decrement uses_remaining and log it
+            active_rent_item.uses_remaining -= 1
+            active_rent_item.redemption_date = utc_now()
+
+            # Create a $0 transaction to log the free use
+            free_use_tx = Transaction(
+                student_id=student.id,
+                teacher_id=teacher_id,
+                join_code=join_code,
+                amount=0.0,
+                account_type='checking',
+                type='purchase',
+                description=f"Free use (rent perk): {item.name}"
+            )
+            db.session.add(free_use_tx)
+            db.session.commit()
+
+            remaining = active_rent_item.uses_remaining
+            if remaining > 0:
+                return jsonify({"status": "success", "message": f"Free use of {item.name} (rent perk)! {remaining} free uses remaining."})
+            else:
+                return jsonify({"status": "success", "message": f"Free use of {item.name} (rent perk)! No more free uses remaining."})
+
     # Calculate price (with bulk discount if applicable)
     unit_price = item.price
     if (item.bulk_discount_enabled and
@@ -402,26 +445,32 @@ def purchase_item():
         # Create the student's item(s)
         expiry_date = None
 
-        # Check if this is a rent item with "per_period" duration
+        # Check if this is a rent item
         from app.models import RentItem, RentSettings
         rent_item = RentItem.query.filter_by(store_item_id=item.id).first()
-        if rent_item and rent_item.purchase_duration == 'per_period':
-            # Calculate NEXT rent due date and set as expiry
-            rent_setting = RentSettings.query.get(rent_item.rent_setting_id)
-            if rent_setting and rent_setting.is_enabled:
-                now = utc_now()
+        uses_remaining = None
 
-                if rent_setting.first_rent_due_date:
-                    current_due, next_due = _calculate_due_dates(rent_setting, now)
+        if rent_item:
+            if rent_item.purchase_duration == 'per_period':
+                # Calculate NEXT rent due date and set as expiry
+                rent_setting = RentSettings.query.get(rent_item.rent_setting_id)
+                if rent_setting and rent_setting.is_enabled:
+                    now = utc_now()
 
-                    if current_due and next_due:
-                        # Align expiry to the next scheduled due date
-                        expiry_date = next_due
-                else:
-                    # No first_rent_due_date set, use simple calculation from now
-                    # This is a fallback for backwards compatibility
-                    delta = _get_period_delta(rent_setting)
-                    expiry_date = _add_period(now, delta)
+                    if rent_setting.first_rent_due_date:
+                        current_due, next_due = _calculate_due_dates(rent_setting, now)
+
+                        if current_due and next_due:
+                            # Align expiry to the next scheduled due date
+                            expiry_date = next_due
+                    else:
+                        # No first_rent_due_date set, use simple calculation from now
+                        # This is a fallback for backwards compatibility
+                        delta = _get_period_delta(rent_setting)
+                        expiry_date = _add_period(now, delta)
+            elif rent_item.rent_item_type == 'per_use':
+                # Set per-use limit (default to single-use when not specified)
+                uses_remaining = rent_item.use_limit or 1
 
         # Fall back to standard auto_expiry for delayed items
         if expiry_date is None and item.item_type == 'delayed' and item.auto_expiry_days:
@@ -440,12 +489,14 @@ def purchase_item():
             new_student_item = StudentItem(
                 student_id=student.id,
                 store_item_id=item.id,
+                join_code=join_code,
                 purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
                 is_from_bundle=True,
                 bundle_remaining=item.bundle_quantity * quantity,  # Total uses = bundle_quantity * number of bundles purchased
-                quantity_purchased=quantity
+                quantity_purchased=quantity,
+                uses_remaining=uses_remaining
             )
             db.session.add(new_student_item)
         elif item.is_bundle and item.bundle_quantity is None:
@@ -454,11 +505,13 @@ def purchase_item():
             new_student_item = StudentItem(
                 student_id=student.id,
                 store_item_id=item.id,
+                join_code=join_code,
                 purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
                 is_from_bundle=False,
-                quantity_purchased=quantity
+                quantity_purchased=quantity,
+                uses_remaining=uses_remaining
             )
             db.session.add(new_student_item)
         else:
@@ -467,11 +520,13 @@ def purchase_item():
                 new_student_item = StudentItem(
                     student_id=student.id,
                     store_item_id=item.id,
+                    join_code=join_code,
                     purchase_date=utc_now(),
                     expiry_date=expiry_date,
                     status=student_item_status,
                     is_from_bundle=False,
-                    quantity_purchased=1
+                    quantity_purchased=1,
+                    uses_remaining=uses_remaining
                 )
                 db.session.add(new_student_item)
 
@@ -612,6 +667,22 @@ def use_item():
                 student_item.redemption_details += f"\n---\n{details}"
             else:
                 student_item.redemption_details = details
+        elif student_item.uses_remaining is not None:
+            # Multi-use item (Rent Per-Use with limit > 1)
+            student_item.uses_remaining -= 1
+            if student_item.uses_remaining <= 0:
+                # Last use - mark as processing (if requires approval) or completed/redeemed
+                # Assuming rent per-use items are 'delayed' type (request redemption)
+                student_item.status = 'processing'
+            else:
+                # Still has uses remaining - keep status as 'purchased' so it remains in "My Items"
+                pass
+
+            student_item.redemption_date = utc_now()
+            if student_item.redemption_details:
+                student_item.redemption_details += f"\n---\n{details} ({student_item.uses_remaining} uses remaining)"
+            else:
+                student_item.redemption_details = f"{details} ({student_item.uses_remaining} uses remaining)"
         else:
             # Regular item - mark as processing
             student_item.status = 'processing'
@@ -639,6 +710,8 @@ def use_item():
 
         if student_item.is_from_bundle:
             return jsonify({"status": "success", "message": f"You have used 1 from your bundle of {student_item.store_item.name}. {student_item.bundle_remaining} uses remaining."})
+        elif student_item.uses_remaining is not None and student_item.uses_remaining > 0:
+            return jsonify({"status": "success", "message": f"You have used {student_item.store_item.name}. {student_item.uses_remaining} uses remaining."})
         else:
             return jsonify({"status": "success", "message": f"You have requested to use {student_item.store_item.name}. Awaiting admin approval."})
 
@@ -715,6 +788,23 @@ def handle_hall_pass_action(pass_id, action):
         # Only deduct hall pass for regular reasons (not Office/Summons/Done for the day)
         if should_deduct:
             student.hall_passes -= 1
+            # Decrement rent_hall_passes first (rent-granted passes consumed before purchased)
+            block_period = log_entry.period or student.block
+            student_block = StudentBlock.query.filter_by(
+                student_id=student.id,
+                period=block_period
+            ).first()
+            if student_block and not student_block.join_code and log_entry.join_code:
+                student_block.join_code = log_entry.join_code
+            elif not student_block:
+                student_block = StudentBlock(
+                    student_id=student.id,
+                    period=block_period,
+                    join_code=log_entry.join_code
+                )
+                db.session.add(student_block)
+            if student_block and student_block.rent_hall_passes > 0:
+                student_block.rent_hall_passes -= 1
 
         db.session.commit()
         return jsonify({"status": "success", "message": "Pass approved.", "pass_number": pass_number})

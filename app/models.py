@@ -622,6 +622,9 @@ class StudentBlock(db.Model):
     # This locks them out until 11:59 PM same day
     done_for_day_date = db.Column(db.Date, nullable=True)
 
+    # Tracks how many of the student's hall passes came from rent (for top-off calculation)
+    rent_hall_passes = db.Column(db.Integer, default=0, nullable=False)
+
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
 
@@ -757,6 +760,9 @@ class StoreItem(db.Model):
     # Redemption prompt (for delayed use items)
     redemption_prompt = db.Column(db.Text, nullable=True)  # Optional prompt shown to students when redeeming delayed items
 
+    # Rent Linked
+    is_rent_linked = db.Column(db.Boolean, default=False, nullable=False)
+
     # Relationships
     teacher = db.relationship('Admin', backref=db.backref('store_items', lazy='dynamic'))
     student_items = db.relationship('StudentItem', backref='store_item', lazy=True)
@@ -819,6 +825,9 @@ class StudentItem(db.Model):
     is_from_bundle = db.Column(db.Boolean, default=False, nullable=False)
     bundle_remaining = db.Column(db.Integer, nullable=True) # remaining uses in bundle
     quantity_purchased = db.Column(db.Integer, default=1, nullable=False) # quantity purchased (for bulk discounts)
+
+    # Multi-use item tracking
+    uses_remaining = db.Column(db.Integer, nullable=True) # For per-use items with > 1 use limit
 
     # Relationships
     student = db.relationship('Student', backref=db.backref('items', lazy='dynamic'))
@@ -932,6 +941,11 @@ class RentItem(db.Model):
     purchase_duration = db.Column(db.String(20), default='per_use')  # 'per_use' or 'per_period'
     store_item_id = db.Column(db.Integer, db.ForeignKey('store_items.id'), nullable=True)
 
+    # New fields for Item Types
+    rent_item_type = db.Column(db.String(20), default='privilege', nullable=False) # 'privilege', 'per_use', 'hall_pass'
+    use_limit = db.Column(db.Integer, nullable=True) # NULL = single-use (default); set to an integer for multi-use limit
+    hall_pass_count = db.Column(db.Integer, nullable=True)
+
     # Metadata
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
@@ -939,6 +953,8 @@ class RentItem(db.Model):
     # Relationships
     rent_setting = db.relationship('RentSettings', backref=db.backref('rent_items', lazy='dynamic', cascade='all, delete-orphan'))
     store_item = db.relationship('StoreItem', backref='rent_item_source', foreign_keys=[store_item_id])
+
+
 
 
 # -------------------- INSURANCE MODELS --------------------
@@ -1938,7 +1954,7 @@ class AnalyticsSnapshot(db.Model):
     join_code = db.Column(db.String(20), nullable=False, index=True)
     
     # Time window
-    window_type = db.Column(db.String(20), nullable=False)  # 'week', 'pay_cycle', 'rent_cycle', 'custom'
+    window_type = db.Column(db.String(20), nullable=False)  # 'week', 'month', 'pay_cycle', 'rent_cycle' (see analytics.ALLOWED_WINDOW_TYPES)
     window_start = db.Column(db.DateTime(timezone=True), nullable=False)
     window_end = db.Column(db.DateTime(timezone=True), nullable=False)
     

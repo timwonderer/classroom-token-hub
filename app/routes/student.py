@@ -2344,15 +2344,38 @@ def shop():
                     db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
                 ).first() is not None
 
-            # Get all per-period rent items
+            # Get privilege-type per-period rent items (only these show "Included in your rent!")
             per_period_items = RentItem.query.filter_by(
                 rent_setting_id=rent_settings.id,
+                rent_item_type='privilege',
                 purchase_duration='per_period',
                 is_available_in_store=True
             ).all()
 
-            # Collect store item IDs
+            # Collect store item IDs (only privilege items get the "Included in your rent!" badge)
             per_period_rent_item_ids = {item.store_item_id for item in per_period_items if item.store_item_id}
+
+    # Build free uses remaining map for rent-linked per-use items
+    rent_free_uses = {}  # {store_item_id: uses_remaining or -1 for unlimited}
+    if student:
+        rent_linked_items_query = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.uses_remaining != None,
+            StudentItem.uses_remaining > 0,
+            db.or_(
+                StudentItem.expiry_date.is_(None),
+                StudentItem.expiry_date > utc_now()
+            )
+        )
+        if join_code:
+            rent_linked_items_query = rent_linked_items_query.filter(StudentItem.join_code == join_code)
+        else:
+            rent_linked_items_query = rent_linked_items_query.filter(StudentItem.join_code.is_(None))
+
+        rent_linked_items = rent_linked_items_query.all()
+        for si in rent_linked_items:
+            if si.store_item_id:
+                rent_free_uses[si.store_item_id] = si.uses_remaining
 
     # Calculate class size for collective goals (count claimed seats in this class)
     from app.models import TeacherBlock
@@ -2365,6 +2388,7 @@ def shop():
 
     return render_template('student_shop.html', student=student, items=items, student_items=student_items,
                          has_paid_rent=has_paid_rent, per_period_rent_item_ids=per_period_rent_item_ids,
+                         rent_free_uses=rent_free_uses,
                          class_size=class_size, current_block=current_block)
 
 
@@ -2942,6 +2966,106 @@ def rent_pay(period):
     # Check if overdraft fee should be charged (after overdraft protection)
     fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=teacher_id, join_code=join_code)
 
+    # Award Hall Passes if rent is fully paid (top-off model)
+    passes_awarded = 0
+    # Only award if this payment completes full rent (not already fully paid)
+    if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
+        from app.models import RentItem
+        hall_pass_items = RentItem.query.filter_by(
+            rent_setting_id=settings.id,
+            rent_item_type='hall_pass'
+        ).all()
+
+        # Calculate total grant from all hall_pass rent items
+        total_grant = sum(item.hall_pass_count for item in hall_pass_items if item.hall_pass_count)
+
+        if total_grant > 0:
+            # Top-off logic: only replenish rent-granted portion
+            # rent_hall_passes tracks how many of student's current passes came from rent
+            student_block = StudentBlock.query.filter_by(
+                student_id=student.id,
+                period=period
+            ).first()
+            if student_block and not student_block.join_code and join_code:
+                student_block.join_code = join_code
+            elif not student_block:
+                student_block = StudentBlock(
+                    student_id=student.id,
+                    period=period,
+                    join_code=join_code
+                )
+                db.session.add(student_block)
+
+            current_rent_passes = student_block.rent_hall_passes if student_block else 0
+            top_off = max(0, total_grant - current_rent_passes)
+
+            if top_off > 0:
+                student.hall_passes = (student.hall_passes or 0) + top_off
+                passes_awarded = top_off
+                db.session.add(student)
+
+            # Update rent_hall_passes to reflect the new grant level
+            if student_block:
+                student_block.rent_hall_passes = total_grant
+
+    # Grant per-use free uses if rent is fully paid
+    per_use_items_granted = 0
+    if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
+        from app.models import RentItem
+        per_use_items = RentItem.query.filter_by(
+            rent_setting_id=settings.id,
+            rent_item_type='per_use'
+        ).all()
+
+        for pu_item in per_use_items:
+            if not pu_item.store_item_id:
+                continue
+
+            # Check if student already has an active (non-expired) StudentItem with uses_remaining for this store item
+            existing = StudentItem.query.filter(
+                StudentItem.student_id == student.id,
+                StudentItem.store_item_id == pu_item.store_item_id,
+                StudentItem.uses_remaining > 0,
+                StudentItem.join_code == join_code if join_code else StudentItem.join_code.is_(None),
+                db.or_(
+                    StudentItem.expiry_date.is_(None),
+                    StudentItem.expiry_date > utc_now()
+                )
+            ).first()
+
+            if existing:
+                # Top-off: reset uses_remaining to the granted amount
+                if pu_item.use_limit:
+                    existing.uses_remaining = pu_item.use_limit
+                else:
+                    existing.uses_remaining = 1
+                # Default to single-use when no limit is configured
+                continue
+
+            # Calculate expiry (next rent due date)
+            expiry_date = None
+            if settings.first_rent_due_date:
+                from app.routes.api import _calculate_due_dates
+                now_ts = utc_now()
+                current_due, next_due = _calculate_due_dates(settings, now_ts)
+                if next_due:
+                    expiry_date = next_due
+
+            # Grant a free StudentItem with uses_remaining
+            granted_item = StudentItem(
+                student_id=student.id,
+                store_item_id=pu_item.store_item_id,
+                join_code=join_code,
+                purchase_date=utc_now(),
+                expiry_date=expiry_date,
+                status='purchased',
+                is_from_bundle=False,
+                quantity_purchased=1,
+                uses_remaining=pu_item.use_limit or 1
+            )
+            db.session.add(granted_item)
+            per_use_items_granted += 1
+
     # Commit all transactions together
     db.session.commit()
 
@@ -2954,9 +3078,15 @@ def rent_pay(period):
         if new_remaining > 0:
             flash(f"Partial payment of ${payment_amount:.2f} successful! Remaining balance: ${new_remaining:.2f}", "success")
         else:
-            flash(f"Final payment of ${payment_amount:.2f} successful! Rent for Period {period} is now fully paid.", "success")
+            msg = f"Final payment of ${payment_amount:.2f} successful! Rent for Period {period} is now fully paid."
+            if passes_awarded > 0:
+                msg += f" You received {passes_awarded} hall passes!"
+            flash(msg, "success")
     else:
-        flash(f"Rent payment for Period {period} (${payment_amount:.2f}) successful!", "success")
+        msg = f"Rent payment for Period {period} (${payment_amount:.2f}) successful!"
+        if passes_awarded > 0:
+            msg += f" You received {passes_awarded} hall passes!"
+        flash(msg, "success")
 
     return redirect(url_for('student.rent'))
 

@@ -1781,6 +1781,7 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
     setting_ids = [rs.id for rs in all_rent_settings]
     all_rent_items = RentItem.query.filter(
         RentItem.rent_setting_id.in_(setting_ids),
+        RentItem.rent_item_type == 'privilege',
         RentItem.purchase_duration == 'per_period',
         RentItem.is_available_in_store == True
     ).all()
@@ -1938,6 +1939,7 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
 
     per_period_items = RentItem.query.filter_by(
         rent_setting_id=rent_settings.id,
+        rent_item_type='privilege',
         purchase_duration='per_period',
         is_available_in_store=True
     ).all()
@@ -3361,6 +3363,11 @@ def delete_store_item(item_id):
     """Deactivate a store item (soft delete)."""
     admin_id = session.get("admin_id")
     item = StoreItem.query.filter_by(id=item_id, teacher_id=admin_id).first_or_404()
+
+    # Prevent deletion if linked to rent settings
+    if _block_rent_linked_store_item(item):
+        return redirect(url_for('admin.store_management'))
+
     # To preserve history, we'll just deactivate it instead of a hard delete
     # A hard delete would be: db.session.delete(item)
     item.is_active = False
@@ -3376,6 +3383,10 @@ def hard_delete_store_item(item_id):
     admin_id = session.get("admin_id")
     item = StoreItem.query.filter_by(id=item_id, teacher_id=admin_id).first_or_404()
     item_name = item.name
+
+    # Prevent deletion if linked to rent settings
+    if _block_rent_linked_store_item(item):
+        return redirect(url_for('admin.store_management'))
 
     # Check if there are any student purchases of this item
     from app.models import StudentItem
@@ -3399,6 +3410,13 @@ def hard_delete_store_item(item_id):
 
 # -------------------- RENT SETTINGS --------------------
 
+def _block_rent_linked_store_item(item: StoreItem) -> bool:
+    """Return True if store item is rent-linked and deletion should be blocked."""
+    if item.is_rent_linked:
+        flash(f"Cannot delete '{item.name}' because it is managed by Rent Settings. Please remove it from Rent Settings instead.", "error")
+        return True
+    return False
+
 def _sync_rent_items_to_store(rent_settings, teacher_id, block):
     """
     Sync rent items with store items.
@@ -3413,13 +3431,26 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
     rent_items = RentItem.query.filter_by(rent_setting_id=rent_settings.id).all()
 
     for rent_item in rent_items:
+        # Skip store sync for hall passes
+        if rent_item.rent_item_type == 'hall_pass':
+            continue
+
         if rent_item.is_available_in_store and rent_item.store_price:
             # Determine purchase limit based on duration type
-            if rent_item.purchase_duration == 'per_period':
+            limit = None
+            duration_note = ""
+
+            if rent_item.rent_item_type == 'per_use':
+                limit = None
+                if rent_item.use_limit:
+                    duration_note = f"Includes {rent_item.use_limit} uses."
+                else:
+                    duration_note = "Single use item."
+            elif rent_item.purchase_duration == 'per_period':
                 limit = 1  # Can only buy once per rent period
                 duration_note = "Valid until next rent payment is due."
-            else:  # per_use
-                limit = None  # Unlimited purchases
+            else:  # fallback
+                limit = None
                 duration_note = "Purchase each time you need to use it."
 
             base_desc = rent_item.description or f"Single purchase alternative to rent. By paying rent (${rent_settings.rent_amount:.2f}), you get access to this and other items included in rent."
@@ -3442,6 +3473,8 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                     StoreItem.name == rent_item.name
                 ).first()
 
+            is_per_use = (rent_item.rent_item_type == 'per_use')
+
             if store_item:
                 # Update existing store item
                 store_item.name = rent_item.name
@@ -3449,20 +3482,25 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                 store_item.price = rent_item.store_price
                 store_item.limit_per_student = limit
                 store_item.is_active = True
+                # Only mark linked for per-use rent items
+                store_item.is_rent_linked = is_per_use
 
                 # Link this rent_item to the store_item if not already linked
                 if not rent_item.store_item_id:
                     rent_item.store_item_id = store_item.id
             else:
                 # Create new store item only if it doesn't exist
+                # Rent items should be 'delayed' (redeemable) to allow use tracking
+                # especially for multi-use items or privileges valid for a period
                 store_item = StoreItem(
                     teacher_id=teacher_id,
                     name=rent_item.name,
                     description=description,
                     price=rent_item.store_price,
-                    item_type='immediate',
+                    item_type='delayed',
                     limit_per_student=limit,
-                    is_active=True
+                    is_active=True,
+                    is_rent_linked=is_per_use
                 )
                 db.session.add(store_item)
                 db.session.flush()  # Get the store_item.id
@@ -3584,6 +3622,17 @@ def rent_settings():
     if request.method == 'POST':
         apply_to_all = request.form.get('apply_to_all') == 'true'
         blocks_to_update = teacher_blocks if apply_to_all else [settings_block]
+        join_code_map = {}
+        blocks_with_rows = set()
+        if blocks_to_update:
+            join_code_rows = db.session.query(TeacherBlock.block, TeacherBlock.join_code).filter(
+                TeacherBlock.teacher_id == admin_id,
+                TeacherBlock.block.in_(blocks_to_update)
+            ).all()
+            for block, join_code in join_code_rows:
+                blocks_with_rows.add(block)
+                if join_code and not join_code_map.get(block):
+                    join_code_map[block] = join_code
 
         for block in blocks_to_update:
             # Get or create settings for this class
@@ -3648,14 +3697,41 @@ def rent_settings():
             if not name:
                 continue
             
+            rent_item_type = request.form.get(f'rent_item_type_{idx}', 'privilege') # Default to privilege if missing
+            purchase_duration = request.form.get(f'rent_item_purchase_duration_{idx}')
+            if rent_item_type == 'per_use':
+                purchase_duration = 'per_use'
+            use_limit = None
+            if rent_item_type == 'per_use':
+                use_limit_val = request.form.get(f'rent_item_use_limit_{idx}', '').strip()
+                if use_limit_val and use_limit_val.isdigit():
+                    use_limit = int(use_limit_val)
+
+            hall_pass_count = None
+            if rent_item_type == 'hall_pass':
+                hall_pass_val = request.form.get(f'rent_item_hall_pass_count_{idx}', '').strip()
+                if hall_pass_val and hall_pass_val.isdigit():
+                    hall_pass_count = int(hall_pass_val)
+
+            # Logic changes based on type
+            is_available = request.form.get(f'rent_item_store_available_{idx}') == 'on'
+            if rent_item_type == 'per_use':
+                is_available = True  # Always available in store for per_use items
+            elif rent_item_type == 'hall_pass':
+                # Hall passes are not typically listed in store via this mechanism
+                pass
+
             item_data = {
                 'id': request.form.get(f'rent_item_id_{idx}'),
                 'name': name,
                 'description': request.form.get(f'rent_item_description_{idx}', '').strip(),
-                'is_available': request.form.get(f'rent_item_store_available_{idx}') == 'on',
+                'is_available': is_available,
                 'store_price_str': request.form.get(f'rent_item_store_price_{idx}', '').strip(),
-                'purchase_duration': request.form.get(f'rent_item_purchase_duration_{idx}', 'per_use'),
-                'order_index': int(idx)
+                'purchase_duration': purchase_duration,
+                'order_index': int(idx),
+                'rent_item_type': rent_item_type,
+                'use_limit': use_limit,
+                'hall_pass_count': hall_pass_count
             }
             
             # Validation logic reuse
@@ -3691,33 +3767,68 @@ def rent_settings():
 
             existing_items = block_settings.rent_items.all()
             existing_map = {}
-            
+
             # For the original block, we map by ID to preserve precise identity
             # For other blocks, we map by Name to attempt to sync updates across classes
             if block == settings_block:
                 existing_map = {str(item.id): item for item in existing_items}
             else:
                 existing_map = {item.name: item for item in existing_items}
-            
+
             processed_items = set()
+
+            # Mid-period lock: detect if any student has paid rent for current coverage period
+            mid_period_locked = False
+            block_join_code = join_code_map.get(block)
+            if block in blocks_with_rows:
+                from app.routes.student import _calculate_rent_coverage_due_date
+                now = utc_now()
+                coverage_due = _calculate_rent_coverage_due_date(block_settings, now)
+                if coverage_due:
+                    paid_query = RentPayment.query.filter_by(
+                        period=block,
+                        coverage_month=coverage_due.month,
+                        coverage_year=coverage_due.year
+                    )
+                    if block_join_code:
+                        paid_query = paid_query.filter(
+                            db.or_(RentPayment.join_code == block_join_code, RentPayment.join_code.is_(None))
+                        )
+                    else:
+                        paid_query = paid_query.filter(RentPayment.join_code.is_(None))
+                    paid_count = paid_query.count()
+                    if paid_count > 0:
+                        mid_period_locked = True
 
             for item_data in parsed_items:
                 target_item = None
-                
+
                 # Try to find matching existing item
                 if block == settings_block:
                     target_item = existing_map.get(item_data['id'])
                 else:
                     target_item = existing_map.get(item_data['name'])
-                
+
                 if target_item:
-                    # Update existing
+                    # Update existing - always allow cosmetic fields
                     target_item.name = item_data['name']
                     target_item.description = item_data['description'] if item_data['description'] else None
                     target_item.order_index = item_data['order_index']
-                    target_item.is_available_in_store = item_data['is_available']
                     target_item.store_price = item_data['store_price']
-                    target_item.purchase_duration = item_data['purchase_duration']
+                    if item_data['purchase_duration'] is not None:
+                        target_item.purchase_duration = item_data['purchase_duration']
+
+                    if mid_period_locked:
+                        # Semantic fields locked: rent_item_type, use_limit, hall_pass_count
+                        # Only allow is_available_in_store change for privilege items
+                        if target_item.rent_item_type == 'privilege':
+                            target_item.is_available_in_store = item_data['is_available']
+                    else:
+                        # No lock - update all fields freely
+                        target_item.is_available_in_store = item_data['is_available']
+                        target_item.rent_item_type = item_data['rent_item_type']
+                        target_item.use_limit = item_data['use_limit']
+                        target_item.hall_pass_count = item_data['hall_pass_count']
                     processed_items.add(target_item)
                 else:
                     # Create new
@@ -3728,7 +3839,10 @@ def rent_settings():
                         order_index=item_data['order_index'],
                         is_available_in_store=item_data['is_available'],
                         store_price=item_data['store_price'],
-                        purchase_duration=item_data['purchase_duration']
+                        purchase_duration=item_data['purchase_duration'] or 'per_use',
+                        rent_item_type=item_data['rent_item_type'],
+                        use_limit=item_data['use_limit'],
+                        hall_pass_count=item_data['hall_pass_count']
                     )
                     db.session.add(new_item)
                     # No need to add to processed_items as it's new
@@ -3744,9 +3858,13 @@ def rent_settings():
                     db.session.delete(item)
             
             db.session.commit()
-            
+
             # Sync to store
             _sync_rent_items_to_store(block_settings, admin_id, block)
+
+            if mid_period_locked and block == settings_block:
+                flash("Some changes are locked because students have already paid rent this period. "
+                      "Item type, use limits, and hall pass counts will apply next period.", "warning")
 
         if apply_to_all:
             flash(f"Rent settings applied to all {len(blocks_to_update)} classes!", "success")
