@@ -3248,6 +3248,9 @@ def store_management():
     # Populate blocks choices from teacher's students
     blocks = _get_teacher_blocks()
     form.blocks.choices = [(block, f"Period {block}") for block in blocks]
+    
+    # Build class_labels_by_block dictionary for template
+    class_labels_by_block = _get_class_labels_for_blocks(admin_id, blocks)
 
     if form.validate_on_submit():
         new_item = StoreItem(
@@ -3324,7 +3327,8 @@ def store_management():
 
     return render_template('admin_store.html', form=form, items=items, current_page="store",
                          total_items=total_items, active_items=active_items, total_purchases=total_purchases,
-                         pending_redemptions=pending_redemptions, recent_purchases=recent_purchases)
+                         pending_redemptions=pending_redemptions, recent_purchases=recent_purchases,
+                         class_labels_by_block=class_labels_by_block)
 
 
 @admin_bp.route('/store/edit/<int:item_id>', methods=['GET', 'POST'])
