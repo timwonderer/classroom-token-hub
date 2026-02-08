@@ -394,7 +394,7 @@ def _check_onboarding_redirect():
     if not onboarding:
         # Check if teacher has any existing students - if so, they're a legacy teacher
         # and we should skip onboarding for them
-        admin = Admin.query.get(admin_id)
+        admin = db.session.get(Admin, admin_id)
         if admin and admin.has_assigned_students:
             # Legacy teacher - create completed onboarding record
             onboarding = TeacherOnboarding(
@@ -556,21 +556,21 @@ def dashboard():
     pending_redemptions_count = (
         StudentItem.query
         .join(Student, StudentItem.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(StudentItem.status == 'processing')
         .count()
     )
     pending_hall_passes_count = (
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(HallPassLog.status == 'pending')
         .count()
     )
     pending_insurance_claims_count = (
         InsuranceClaim.query
         .join(Student, InsuranceClaim.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(InsuranceClaim.status == 'pending')
         .count()
     )
@@ -580,7 +580,7 @@ def dashboard():
     recent_redemptions = (
         StudentItem.query
         .join(Student, StudentItem.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(StudentItem.status == 'processing')
         .order_by(StudentItem.redemption_date.desc())
         .limit(5)
@@ -589,7 +589,7 @@ def dashboard():
     recent_hall_passes = (
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(HallPassLog.status == 'pending')
         .order_by(HallPassLog.request_time.desc())
         .limit(5)
@@ -598,7 +598,7 @@ def dashboard():
     recent_insurance_claims = (
         InsuranceClaim.query
         .join(Student, InsuranceClaim.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(InsuranceClaim.status == 'pending')
         .order_by(InsuranceClaim.filed_date.desc())
         .limit(5)
@@ -609,8 +609,8 @@ def dashboard():
     demo_ids_subq = db.session.query(DemoStudent.student_id).subquery()
     recent_transactions = (
         Transaction.query
-        .filter(Transaction.student_id.in_(student_ids_subq))
-        .filter(~Transaction.student_id.in_(demo_ids_subq))
+        .filter(Transaction.student_id.in_(sa.select(student_ids_subq)))
+        .filter(~Transaction.student_id.in_(sa.select(demo_ids_subq)))
         .filter_by(is_void=False)
         .order_by(Transaction.timestamp.desc())
         .limit(5)
@@ -618,8 +618,8 @@ def dashboard():
     )
     total_transactions_today = (
         Transaction.query
-        .filter(Transaction.student_id.in_(student_ids_subq))
-        .filter(~Transaction.student_id.in_(demo_ids_subq))
+        .filter(Transaction.student_id.in_(sa.select(student_ids_subq)))
+        .filter(~Transaction.student_id.in_(sa.select(demo_ids_subq)))
         .filter(
             Transaction.timestamp >= utc_now().replace(hour=0, minute=0, second=0, microsecond=0),
             Transaction.is_void == False,
@@ -635,7 +635,7 @@ def dashboard():
             Student.last_initial
         )
         .join(Student, TapEvent.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .order_by(TapEvent.timestamp.desc())
         .limit(5)
         .all()
@@ -667,7 +667,7 @@ def dashboard():
         next_payroll_date = now_utc + timedelta(days=days_until_friday)
 
     # Check for missing recovery setup (legacy accounts)
-    current_admin = Admin.query.get(session['admin_id'])
+    current_admin = db.session.get(Admin, session['admin_id'])
     show_recovery_setup = current_admin and current_admin.dob_sum_hash is None
 
     # Prompt legacy teachers to upgrade insurance policies to the new tiered design
@@ -731,7 +731,7 @@ def give_bonus_all():
     teacher_blocks = (
         TeacherBlock.query
         .filter(
-            TeacherBlock.student_id.in_(student_ids_subquery),
+            TeacherBlock.student_id.in_(sa.select(student_ids_subquery)),
             TeacherBlock.teacher_id == current_admin_id,
             TeacherBlock.is_claimed.is_(True)
         )
@@ -1274,7 +1274,7 @@ def recover():
             return render_template("admin_recover.html", form=form)
 
         teacher_id = list(teacher_ids)[0]
-        teacher = Admin.query.get(teacher_id)
+        teacher = db.session.get(Admin, teacher_id)
 
         if not teacher or not teacher.dob_sum_hash:
             flash("Teacher account not configured for recovery.", "error")
@@ -1375,7 +1375,7 @@ def recovery_status():
         flash("No active recovery request found.", "error")
         return redirect(url_for('admin.recover'))
 
-    recovery_request = RecoveryRequest.query.get(recovery_request_id)
+    recovery_request = db.session.get(RecoveryRequest, recovery_request_id)
     if not recovery_request:
         flash("Recovery request not found.", "error")
         session.pop('recovery_request_id', None)
@@ -1421,7 +1421,7 @@ def reset_credentials():
         flash("No active recovery request found.", "error")
         return redirect(url_for('admin.recover'))
 
-    recovery_request = RecoveryRequest.query.get(recovery_request_id)
+    recovery_request = db.session.get(RecoveryRequest, recovery_request_id)
     if not recovery_request or recovery_request.status != 'pending':
         flash("Invalid or expired recovery request.", "error")
         return redirect(url_for('admin.recover'))
@@ -1536,12 +1536,12 @@ def confirm_reset():
         flash("Invalid recovery session.", "error")
         return redirect(url_for('admin.recover'))
 
-    recovery_request = RecoveryRequest.query.get(recovery_request_id)
+    recovery_request = db.session.get(RecoveryRequest, recovery_request_id)
     if not recovery_request:
         flash("Invalid recovery session.", "error")
         return redirect(url_for('admin.recover'))
 
-    teacher = Admin.query.get(recovery_request.admin_id)
+    teacher = db.session.get(Admin, recovery_request.admin_id)
     if not teacher:
         flash("Invalid recovery session.", "error")
         return redirect(url_for('admin.recover'))
@@ -1590,7 +1590,7 @@ def save_recovery_progress():
         flash("No active recovery request found.", "error")
         return redirect(url_for('admin.recover'))
 
-    recovery_request = RecoveryRequest.query.get(recovery_request_id)
+    recovery_request = db.session.get(RecoveryRequest, recovery_request_id)
     if not recovery_request or recovery_request.status != 'pending':
         flash("Invalid or expired recovery request.", "error")
         return redirect(url_for('admin.recover'))
@@ -1670,7 +1670,7 @@ def resume_credentials():
 @admin_required
 def setup_recovery():
     """Prompt legacy teachers to set up account recovery (date of birth)."""
-    admin = Admin.query.get(session['admin_id'])
+    admin = db.session.get(Admin, session['admin_id'])
 
     if request.method == 'POST':
         dob_sum_str = request.form.get('dob_sum', '').strip()
@@ -2709,13 +2709,14 @@ def delete_block():
         current_app.logger.info(f"Deleted {unclaimed_deleted} unclaimed TeacherBlock entries for block {block}")
 
         # Final commit (keep ORM instances from expiring to avoid stale access in tests)
-        original_expire_on_commit = db.session.expire_on_commit
-        db.session.expire_on_commit = False
+        db_session = db.session()
+        original_expire_on_commit = db_session.expire_on_commit
+        db_session.expire_on_commit = False
         try:
             db.session.commit()
             db.session.expunge_all()
         finally:
-            db.session.expire_on_commit = original_expire_on_commit
+            db_session.expire_on_commit = original_expire_on_commit
         current_app.logger.info(f"Successfully deleted block {block}")
         
         return jsonify({
@@ -3298,7 +3299,7 @@ def store_management():
     total_purchases = (
         StudentItem.query
         .join(Student, StudentItem.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .count()
     )
 
@@ -3307,7 +3308,7 @@ def store_management():
         StudentItem.query
         .options(joinedload(StudentItem.student), joinedload(StudentItem.store_item))
         .join(Student, StudentItem.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(StudentItem.status == 'processing')
         .order_by(StudentItem.redemption_date.desc())
         .limit(10)
@@ -3319,7 +3320,7 @@ def store_management():
         StudentItem.query
         .options(joinedload(StudentItem.student), joinedload(StudentItem.store_item))
         .join(Student, StudentItem.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .order_by(StudentItem.purchase_date.desc())
         .limit(10)
         .all()
@@ -3461,7 +3462,7 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
 
             # Check if this rent_item already has a store_item_id
             if rent_item.store_item_id:
-                store_item = StoreItem.query.get(rent_item.store_item_id)
+                store_item = db.session.get(StoreItem, rent_item.store_item_id)
 
             # If no store_item yet, check if a rent-linked one exists for this teacher+name.
             # Only consider store items already linked to a RentItem to avoid
@@ -3522,7 +3523,7 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
 
         elif rent_item.store_item_id:
             # Remove this block's visibility for the store item
-            store_item = StoreItem.query.get(rent_item.store_item_id)
+            store_item = db.session.get(StoreItem, rent_item.store_item_id)
             if store_item and block:
                 StoreItemBlock.query.filter_by(
                     store_item_id=store_item.id,
@@ -3856,7 +3857,7 @@ def rent_settings():
                 if item not in processed_items:
                     # If this item had a linked store item, deactivate it
                     if item.store_item_id:
-                        store_item = StoreItem.query.get(item.store_item_id)
+                        store_item = db.session.get(StoreItem, item.store_item_id)
                         if store_item:
                             store_item.is_active = False
                     db.session.delete(item)
@@ -3882,7 +3883,7 @@ def rent_settings():
     current_year = utc_now().year
     paid_this_month = (
         RentPayment.query
-        .filter(RentPayment.student_id.in_(student_ids_subq))
+        .filter(RentPayment.student_id.in_(sa.select(student_ids_subq)))
         .filter_by(period_month=current_month, period_year=current_year)
         .count()
     )
@@ -3892,7 +3893,7 @@ def rent_settings():
     active_waivers = (
         RentWaiver.query
         .join(Student, RentWaiver.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(RentWaiver.waiver_end_date >= now)
         .all()
     )
@@ -4568,14 +4569,14 @@ def delete_insurance_policy(policy_id):
     active_enrollments = StudentInsurance.query.filter(
         StudentInsurance.policy_id == policy_id,
         StudentInsurance.status == 'active',
-        StudentInsurance.student_id.in_(student_ids_subq),
+        StudentInsurance.student_id.in_(sa.select(student_ids_subq)),
     ).count()
 
     # Check for pending claims within scope
     pending_claims = InsuranceClaim.query.filter(
         InsuranceClaim.policy_id == policy_id,
         InsuranceClaim.status == 'pending',
-        InsuranceClaim.student_id.in_(student_ids_subq),
+        InsuranceClaim.student_id.in_(sa.select(student_ids_subq)),
     ).count()
 
     if not force_delete and (active_enrollments > 0 or pending_claims > 0):
@@ -4588,20 +4589,20 @@ def delete_insurance_policy(policy_id):
             cancelled_count = StudentInsurance.query.filter(
                 StudentInsurance.policy_id == policy_id,
                 StudentInsurance.status == 'active',
-                StudentInsurance.student_id.in_(student_ids_subq),
+                StudentInsurance.student_id.in_(sa.select(student_ids_subq)),
             ).update({'status': 'cancelled'}, synchronize_session=False)
             flash(f"Cancelled {cancelled_count} active enrollments.", "info")
 
         # Delete all claims for this policy
         claims_deleted = InsuranceClaim.query.filter(
             InsuranceClaim.policy_id == policy_id,
-            InsuranceClaim.student_id.in_(student_ids_subq),
+            InsuranceClaim.student_id.in_(sa.select(student_ids_subq)),
         ).delete(synchronize_session=False)
 
         # Delete all enrollments for this policy
         enrollments_deleted = StudentInsurance.query.filter(
             StudentInsurance.policy_id == policy_id,
-            StudentInsurance.student_id.in_(student_ids_subq),
+            StudentInsurance.student_id.in_(sa.select(student_ids_subq)),
         ).delete(synchronize_session=False)
 
         # Delete the policy itself
@@ -4637,7 +4638,7 @@ def mass_remove_policy(policy_id):
         count = StudentInsurance.query.filter(
             StudentInsurance.policy_id == policy_id,
             StudentInsurance.status == 'active',
-            StudentInsurance.student_id.in_(student_ids_subq)
+            StudentInsurance.student_id.in_(sa.select(student_ids_subq))
         ).update({'status': 'cancelled'}, synchronize_session=False)
     else:
         # Cancel for specific students
@@ -4646,7 +4647,7 @@ def mass_remove_policy(policy_id):
             count = StudentInsurance.query.filter(
                 StudentInsurance.policy_id == policy_id,
                 StudentInsurance.student_id.in_(student_ids),
-                StudentInsurance.student_id.in_(student_ids_subq),
+                StudentInsurance.student_id.in_(sa.select(student_ids_subq)),
                 StudentInsurance.status == 'active'
             ).update({'status': 'cancelled'}, synchronize_session=False)
         except ValueError:
@@ -4671,7 +4672,7 @@ def view_student_policy(enrollment_id):
         StudentInsurance.query
         .join(Student, StudentInsurance.student_id == Student.id)
         .filter(StudentInsurance.id == enrollment_id)
-        .filter(Student.id.in_(_student_scope_subquery()))
+        .filter(Student.id.in_(sa.select(_student_scope_subquery())))
         .first_or_404()
     )
 
@@ -4695,13 +4696,13 @@ def process_claim(claim_id):
         InsuranceClaim.query
         .join(Student, InsuranceClaim.student_id == Student.id)
         .filter(InsuranceClaim.id == claim_id)
-        .filter(Student.id.in_(_student_scope_subquery()))
+        .filter(Student.id.in_(sa.select(_student_scope_subquery())))
         .first_or_404()
     )
     form = AdminClaimProcessForm(obj=claim)
 
     # Get enrollment details
-    enrollment = StudentInsurance.query.get(claim.student_insurance_id)
+    enrollment = db.session.get(StudentInsurance, claim.student_insurance_id)
 
     def _get_period_bounds():
         now = utc_now()
@@ -4873,7 +4874,7 @@ def process_claim(claim_id):
                 transaction_description += f" linked to transaction #{claim.transaction_id}"
 
             # CRITICAL FIX: Get join_code from the student's insurance enrollment
-            student_insurance = StudentInsurance.query.get(claim.student_insurance_id)
+            student_insurance = db.session.get(StudentInsurance, claim.student_insurance_id)
             join_code = student_insurance.join_code if student_insurance else None
 
             transaction = Transaction(
@@ -4926,7 +4927,7 @@ def void_transaction(transaction_id):
         Transaction.query
         .join(Student, Transaction.student_id == Student.id)
         .filter(Transaction.id == transaction_id)
-        .filter(Student.id.in_(_student_scope_subquery()))
+        .filter(Student.id.in_(sa.select(_student_scope_subquery())))
         .first_or_404()
     )
     tx.is_void = True
@@ -4972,7 +4973,7 @@ def hall_pass():
     pending_requests = (
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(HallPassLog.status == 'pending')
         .order_by(HallPassLog.request_time.asc())
         .all()
@@ -4980,7 +4981,7 @@ def hall_pass():
     approved_queue = (
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(HallPassLog.status == 'approved')
         .order_by(HallPassLog.decision_time.asc())
         .all()
@@ -4988,7 +4989,7 @@ def hall_pass():
     out_of_class = (
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(HallPassLog.status == 'left')
         .order_by(HallPassLog.left_time.asc())
         .all()
@@ -4997,7 +4998,7 @@ def hall_pass():
     # Get available periods/blocks from teacher's students
     available_periods = (
         db.session.query(Student.block)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .distinct()
         .order_by(Student.block)
         .all()
@@ -5202,7 +5203,7 @@ def payroll_history():
     current_app.logger.info(f"Date filters: start={start_date_str}, end={end_date_str}")
 
     query = Transaction.query.filter(
-        Transaction.student_id.in_(student_ids_subq),
+        Transaction.student_id.in_(sa.select(student_ids_subq)),
         Transaction.type == "payroll",
     )
 
@@ -5426,7 +5427,7 @@ def payroll():
     
     recent_payrolls = (
         Transaction.query
-        .filter(Transaction.student_id.in_(student_ids_subq))
+        .filter(Transaction.student_id.in_(sa.select(student_ids_subq)))
         .filter(Transaction.join_code.in_(my_join_codes))  # Fix: Scope by join_code (source of truth)
         .filter_by(type='payroll')
         .order_by(Transaction.timestamp.desc())
@@ -5511,7 +5512,7 @@ def payroll():
     # Payroll history for History tab (all transaction types, not just payroll)
     payroll_history_transactions = (
         Transaction.query
-        .filter(Transaction.student_id.in_(student_ids_subq))
+        .filter(Transaction.student_id.in_(sa.select(student_ids_subq)))
         .filter(Transaction.type.in_(['payroll', 'reward', 'fine', 'manual_payment']))
         .order_by(Transaction.timestamp.desc())
         .limit(100)
@@ -5990,7 +5991,7 @@ def void_payroll_transaction(transaction_id):
             Transaction.query
             .join(Student, Transaction.student_id == Student.id)
             .filter(Transaction.id == transaction_id)
-            .filter(Student.id.in_(_student_scope_subquery()))
+            .filter(Student.id.in_(sa.select(_student_scope_subquery())))
             .first_or_404()
         )
 
@@ -6025,7 +6026,7 @@ def void_transactions_bulk():
                 Transaction.query
                 .join(Student, Transaction.student_id == Student.id)
                 .filter(Transaction.id == int(tx_id))
-                .filter(Student.id.in_(student_ids_subq))
+                .filter(Student.id.in_(sa.select(student_ids_subq)))
                 .first()
             )
             if transaction and not transaction.is_void:
@@ -6310,7 +6311,7 @@ def attendance_log():
     # Get distinct periods from TapEvents for this admin's students
     periods_query = (
         db.session.query(TapEvent.period)
-        .filter(TapEvent.student_id.in_(student_ids_subq))
+        .filter(TapEvent.student_id.in_(sa.select(student_ids_subq)))
         .filter(TapEvent.is_deleted.is_not(True))
         .distinct()
         .order_by(TapEvent.period)
@@ -7045,7 +7046,7 @@ def banking():
     query = (
         db.session.query(Transaction, Student)
         .join(Student, Transaction.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
     )
 
     # Apply filters
@@ -7145,7 +7146,7 @@ def banking():
     transaction_types = (
         db.session.query(Transaction.type)
         .join(Student, Transaction.student_id == Student.id)
-        .filter(Student.id.in_(student_ids_subq))
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(Transaction.type.isnot(None))
         .distinct()
         .all()
@@ -8497,7 +8498,9 @@ def passkey_register_start():
     """
     try:
         admin_id = session.get('admin_id')
-        admin = Admin.query.get_or_404(admin_id)
+        admin = db.session.get(Admin, admin_id)
+        if not admin:
+            abort(404)
 
         # Generate registration token using official SDK
         user_id = f"admin_{admin.id}"
@@ -8624,7 +8627,7 @@ def passkey_auth_finish():
             return jsonify({"error": "Invalid user ID format"}), 401
 
         # Verify admin exists
-        admin = Admin.query.get(admin_id)
+        admin = db.session.get(Admin, admin_id)
         if not admin:
             return jsonify({"error": "Admin not found"}), 401
 
@@ -8809,7 +8812,7 @@ def resolve_issue(issue_id):
         # Apply resolution based on action type
         if action_type == 'reverse_transaction' and issue.related_transaction_id:
             # Void the transaction
-            transaction = Transaction.query.get(issue.related_transaction_id)
+            transaction = db.session.get(Transaction, issue.related_transaction_id)
             if transaction and transaction.student_id == issue.student_id:
                 before_value = f"is_void={transaction.is_void}"
                 transaction.is_void = True

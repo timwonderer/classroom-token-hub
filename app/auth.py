@@ -11,6 +11,7 @@ from functools import wraps
 
 import sqlalchemy as sa
 from flask import session, flash, redirect, url_for, request, current_app, jsonify
+from app.extensions import db
 
 
 # -------------------- SESSION CONFIGURATION --------------------
@@ -314,7 +315,7 @@ def get_logged_in_student():
     """
     # Import here to avoid circular imports
     from app.models import Student
-    return Student.query.get(session['student_id']) if 'student_id' in session else None
+    return db.session.get(Student, session['student_id']) if 'student_id' in session else None
 
 
 def get_current_admin():
@@ -325,7 +326,7 @@ def get_current_admin():
     if not admin_id:
         return None
     from app.models import Admin  # Imported lazily to avoid circular import
-    return Admin.query.get(admin_id)
+    return db.session.get(Admin, admin_id)
 
 
 def ensure_admin_join_code(admin_id):
@@ -369,7 +370,7 @@ def get_admin_student_query(include_unassigned=True):
 
     if session.get("is_system_admin"):
         demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
-        return Student.query.filter(~Student.id.in_(demo_ids_subq))
+        return Student.query.filter(~Student.id.in_(sa.select(demo_ids_subq)))
 
     admin = get_current_admin()
     if not admin:
@@ -388,8 +389,8 @@ def get_admin_student_query(include_unassigned=True):
     # This caused multi-tenancy leaks when teacher_id had stale data
     demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
     return Student.query.filter(
-        Student.id.in_(shared_student_ids),
-        ~Student.id.in_(demo_ids_subq)
+        Student.id.in_(sa.select(shared_student_ids)),
+        ~Student.id.in_(sa.select(demo_ids_subq))
     )
 
 

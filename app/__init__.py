@@ -573,7 +573,7 @@ def create_app():
 
             admin_id = session.get('admin_id')
             if admin_id:
-                admin = Admin.query.get(admin_id)
+                admin = db.session.get(Admin, admin_id)
                 return {'current_admin': admin}
             return {'current_admin': None}
         except Exception as e:
@@ -589,7 +589,7 @@ def create_app():
 
             sysadmin_id = session.get('sysadmin_id')
             if sysadmin_id:
-                sysadmin = SystemAdmin.query.get(sysadmin_id)
+                sysadmin = db.session.get(SystemAdmin, sysadmin_id)
                 return {'current_sysadmin': sysadmin}
             return {'current_sysadmin': None}
         except Exception as e:
