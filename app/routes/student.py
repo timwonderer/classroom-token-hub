@@ -2360,7 +2360,7 @@ def shop():
     # Build free uses remaining map for rent-linked per-use items
     rent_free_uses = {}  # {store_item_id: uses_remaining or -1 for unlimited}
     if student:
-    rent_linked_items_query = StudentItem.query.filter(
+        rent_linked_items_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
             StudentItem.uses_remaining != None,
             db.or_(
@@ -2368,8 +2368,8 @@ def shop():
                 StudentItem.uses_remaining == -1
             ),
             db.or_(
-                StudentItem.expiry_date.is_(None),
-                StudentItem.expiry_date > utc_now()
+            StudentItem.expiry_date.is_(None),
+            StudentItem.expiry_date > utc_now()
             )
         )
         if join_code:

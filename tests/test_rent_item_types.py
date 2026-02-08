@@ -202,7 +202,7 @@ def test_student_purchase_per_use_item(client, teacher_admin, student_in_class):
     student_item = StudentItem.query.filter_by(student_id=student.id, store_item_id=store_item.id).first()
     assert student_item is not None
     assert student_item.status == 'purchased' # Should be 'purchased' to show in inventory
-    assert student_item.uses_remaining == 3   # Initialized from RentItem
+    assert student_item.uses_remaining is None  # Paid purchases are single-use, not rent free uses
 
 def test_student_use_per_use_item(client, teacher_admin, student_in_class):
     """Test decrementing uses for a multi-use item."""
