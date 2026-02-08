@@ -22,6 +22,7 @@ from app.utils.time import utc_now
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from sqlalchemy import and_, or_, true
+import sqlalchemy as sa
 
 from app.extensions import db
 from app.models import (
@@ -148,8 +149,8 @@ class AnalyticsEngine:
 
         return (
             query
-            .filter(Student.id.in_(scoped_student_ids))
-            .filter(~Student.id.in_(demo_student_ids))
+            .filter(Student.id.in_(sa.select(scoped_student_ids)))
+            .filter(~Student.id.in_(sa.select(demo_student_ids)))
             .distinct(Student.id)
             .all()
         )

@@ -14,6 +14,7 @@ from dateutil.relativedelta import relativedelta
 
 from flask import Blueprint, request, jsonify, session, current_app
 from sqlalchemy import func, or_
+import sqlalchemy as sa
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from werkzeug.security import check_password_hash
 
@@ -924,13 +925,13 @@ def get_active_hall_passes():
         student_ids_subquery = (
             Student.query.with_entities(Student.id)
             .filter(
-                Student.id.in_(shared_student_ids)
+                Student.id.in_(sa.select(shared_student_ids))
             )
             .subquery()
         )
 
         # Add teacher scoping filter
-        query = query.filter(HallPassLog.student_id.in_(student_ids_subquery))
+        query = query.filter(HallPassLog.student_id.in_(sa.select(student_ids_subquery)))
 
     # Get the last 10 students who have left class
     recent_passes = query.order_by(HallPassLog.left_time.desc()).limit(10).all()
@@ -1377,8 +1378,8 @@ def get_hall_pass_queue():
     student_ids_subquery = (
         Student.query.with_entities(Student.id)
         .filter(
-            Student.id.in_(shared_student_ids),
-            ~Student.id.in_(demo_student_ids)
+            Student.id.in_(sa.select(shared_student_ids)),
+            ~Student.id.in_(sa.select(demo_student_ids))
         )
         .subquery()
     )
@@ -1388,7 +1389,7 @@ def get_hall_pass_queue():
     queue = HallPassLog.query.filter(
         HallPassLog.status == 'approved',
         HallPassLog.decision_time >= today_start_db,
-        HallPassLog.student_id.in_(student_ids_subquery)
+        HallPassLog.student_id.in_(sa.select(student_ids_subquery))
     ).order_by(HallPassLog.decision_time.asc()).all()
 
     # Get count of students currently out from today (status = 'left')
@@ -1396,7 +1397,7 @@ def get_hall_pass_queue():
     currently_out_count = HallPassLog.query.filter(
         HallPassLog.status == 'left',
         HallPassLog.left_time >= today_start_db,
-        HallPassLog.student_id.in_(student_ids_subquery)
+        HallPassLog.student_id.in_(sa.select(student_ids_subquery))
     ).count()
 
     # Helper function to ensure times are marked as UTC
@@ -1512,7 +1513,7 @@ def hall_pass_history():
         # Build query with tenant scoping
         query = (
             HallPassLog.query
-            .filter(HallPassLog.student_id.in_(student_ids_subquery))
+            .filter(HallPassLog.student_id.in_(sa.select(student_ids_subquery)))
         )
 
         # Apply filters

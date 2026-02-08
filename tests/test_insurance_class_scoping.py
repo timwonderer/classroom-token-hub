@@ -88,10 +88,21 @@ def students_in_two_classes(client, teacher_with_two_classes):
     sb_a = StudentBlock(
         student_id=student_a.id,
         join_code="JOINA123",
-        checking_balance=100.0,
-        savings_balance=0.0
+        period="A"
     )
     db.session.add(sb_a)
+
+    # Add transaction to set balance
+    from app.models import Transaction
+    db.session.add(Transaction(
+        student_id=student_a.id,
+        teacher_id=teacher.id,
+        join_code="JOINA123",
+        amount=100.0,
+        type="deposit",
+        description="Initial balance",
+        account_type="checking"
+    ))
 
     # Student in Period B
     student_b = Student(
@@ -113,10 +124,20 @@ def students_in_two_classes(client, teacher_with_two_classes):
     sb_b = StudentBlock(
         student_id=student_b.id,
         join_code="JOINB456",
-        checking_balance=200.0,
-        savings_balance=0.0
+        period="B"
     )
     db.session.add(sb_b)
+
+    # Add transaction to set balance
+    db.session.add(Transaction(
+        student_id=student_b.id,
+        teacher_id=teacher.id,
+        join_code="JOINB456",
+        amount=200.0,
+        type="deposit",
+        description="Initial balance",
+        account_type="checking"
+    ))
 
     db.session.commit()
     return {'student_a': student_a, 'student_b': student_b}
