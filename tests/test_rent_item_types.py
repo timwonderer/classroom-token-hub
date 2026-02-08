@@ -777,7 +777,7 @@ def test_late_fee_only_when_unpaid_by_grace(client, teacher_admin, student_in_cl
     # So total due = rent_amount only (no late fee)
     late_fee = Decimal('0.00')
     if now > grace_end_date and paid_by_grace < settings.rent_amount:
-        late_fee = settings.late_fee
+        late_fee = settings.late_penalty_amount
     
     # Since we're testing with now > grace_end_date scenario, let's adjust
     # Actually, we need to test what happens when we check AFTER grace period
@@ -786,7 +786,7 @@ def test_late_fee_only_when_unpaid_by_grace(client, teacher_admin, student_in_cl
     # At this point, since paid_by_grace >= rent_amount, no late fee
     late_fee = Decimal('0.00')
     if future_now > grace_end_date and paid_by_grace < settings.rent_amount:
-        late_fee = settings.late_fee
+        late_fee = settings.late_penalty_amount
     
     assert late_fee == Decimal('0.00'), "Late fee should not apply when paid in full by grace deadline"
     
@@ -829,7 +829,7 @@ def test_late_fee_only_when_unpaid_by_grace(client, teacher_admin, student_in_cl
     # Since only $6 paid by grace (< $10), late fee SHOULD apply when checked after grace
     late_fee2 = Decimal('0.00')
     if future_now > grace_end_date and paid_by_grace2 < settings.rent_amount:
-        late_fee2 = settings.late_fee
+        late_fee2 = settings.late_penalty_amount
     
     assert late_fee2 == Decimal('2.00'), "Late fee should apply when not paid in full by grace deadline"
     
@@ -877,6 +877,6 @@ def test_late_fee_only_when_unpaid_by_grace(client, teacher_admin, student_in_cl
     # Since nothing paid by grace, late fee applies
     late_fee3 = Decimal('0.00')
     if future_now > grace_end_date and paid_by_grace3 < settings.rent_amount:
-        late_fee3 = settings.late_fee
+        late_fee3 = settings.late_penalty_amount
     
     assert late_fee3 == Decimal('2.00'), "Late fee should apply when payment is after grace deadline"
