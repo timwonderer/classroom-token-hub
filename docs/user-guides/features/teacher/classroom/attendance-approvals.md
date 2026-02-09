@@ -18,11 +18,7 @@ Use the Attendance Log to control student taps and review records that drive pay
 Go to **Classroom > Attendance**.
 
 ## Control attendance taps
-You can enable or pause Start Work and Break or Done taps per class period.
-
-Typical reasons to pause:
-- A class is not meeting today.
-- You want to prevent late taps after a cutoff.
+You can enable or pause Start Work and Break or Done taps per class period. This is useful if a class is not meeting or if you want to prevent late taps after a cutoff.
 
 ## Review attendance history
 Use filters to narrow by class, event type, and date range. The table shows the latest events with totals for start and end taps.
