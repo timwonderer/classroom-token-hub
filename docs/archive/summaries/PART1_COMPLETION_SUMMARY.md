@@ -42,13 +42,13 @@ Part 1 documentation updates have been successfully completed with comprehensive
 
 ### 2. Feature Documentation (2 comprehensive guides created)
 
-✅ **docs/features/analytics/interpreting-analytics.md** (16KB, ~800 lines)
+✅ **docs/user-guides/features/analytics/interpreting-analytics.md** (16KB, ~800 lines)
 - Complete metrics explanation
 - Action playbooks for 5 common scenarios
 - Best practices and privacy guidelines
 - Troubleshooting section
 
-✅ **docs/features/rent/itemization-guide.md** (18KB, ~580 lines)
+✅ **docs/user-guides/features/rent/itemization-guide.md** (18KB, ~580 lines)
 - Complete setup walkthrough
 - Purchase duration options and strategies
 - Example setups (basic, advanced, premium)
@@ -72,12 +72,12 @@ Part 1 documentation updates have been successfully completed with comprehensive
 
 ### 4. Diagnostic Guides (2 quick-reference guides created)
 
-✅ **docs/diagnostics/teacher-analytics.md** (7KB, ~400 lines)
+✅ **docs/user-guides/diagnostics/teacher-analytics.md** (7KB, ~400 lines)
 - Dashboard troubleshooting
 - Metrics accuracy issues
 - Performance problems
 
-✅ **docs/diagnostics/teacher-rent-itemization.md** (9KB, ~450 lines)
+✅ **docs/user-guides/diagnostics/teacher-rent-itemization.md** (9KB, ~450 lines)
 - Store sync issues
 - Privilege badge problems
 - Student confusion scenarios
@@ -127,10 +127,10 @@ modified:   docs/archive/releases/RELEASE_NOTES_v1.7.0.md
 modified:   docs/technical-reference/database_schema.md
 modified:   docs/PWA_ICON_REQUIREMENTS.md
 modified:   docs/user-guides/teacher_manual.md
-new file:   docs/features/analytics/interpreting-analytics.md
-new file:   docs/features/rent/itemization-guide.md
-new file:   docs/diagnostics/teacher-analytics.md
-new file:   docs/diagnostics/teacher-rent-itemization.md
+new file:   docs/user-guides/features/analytics/interpreting-analytics.md
+new file:   docs/user-guides/features/rent/itemization-guide.md
+new file:   docs/user-guides/diagnostics/teacher-analytics.md
+new file:   docs/user-guides/diagnostics/teacher-rent-itemization.md
 new file:   DOCUMENTATION_UPDATE_PLAN.md
 new file:   PART1_COMPLETION_SUMMARY.md
 ```

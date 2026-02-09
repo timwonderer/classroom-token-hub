@@ -77,7 +77,7 @@ The incident-postmortem-and-reorganization branch implements significant improve
   ```
 
 #### ⚠️ INFO: Additional Documentation Directories
-- **Found:** diagnostics/, features/, ai/, fixes/, legal/
+- **Found:** user-guides/diagnostics/, user-guides/features/, ai/, fixes/, user-guides/legal/
 - **Status:** Not mentioned in playbook but appear to serve valid purposes
 - **Recommendation:** Document these in playbook or consolidate if appropriate
 
@@ -307,8 +307,8 @@ ln -s docs/development/DEPRECATED_SYMBOLS.txt deprecated_symbols.txt
 **Current:** 27 files/folders at root
 **Target:** < 15 per playbook
 **Candidates for Consolidation:**
-- ATTRIBUTION.md → docs/legal/
-- COMMERCIAL.md → docs/legal/
+- ATTRIBUTION.md → docs/user-guides/legal/
+- COMMERCIAL.md → docs/user-guides/legal/
 - codebase_organization_documentation_hygiene_playbook.md → docs/development/
 
 ---

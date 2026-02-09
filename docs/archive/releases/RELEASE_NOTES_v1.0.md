@@ -263,7 +263,7 @@ Development continues with planned features for future releases:
 - Custom condition builder for advanced rules
 - Parent portal (optional, privacy-controlled)
 
-See [../../development/DEVELOPMENT.md](../../development/DEVELOPMENT.md) for the complete roadmap.
+See [../../DEVELOPMENT.md](../../DEVELOPMENT.md) for the complete roadmap.
 
 ---
 
@@ -288,10 +288,10 @@ For technical questions, bug reports, or feature requests, please open an issue 
 - **Documentation:** [docs/README.md](../../README.md)
 - **Student Guide:** [docs/user-guides/student_guide.md](../../user-guides/student_guide.md)
 - **Teacher Manual:** [docs/user-guides/teacher_manual.md](../../user-guides/teacher_manual.md)
-- **Development Priorities:** [../../development/DEVELOPMENT.md](../../development/DEVELOPMENT.md)
+- **Development Priorities:** [../../DEVELOPMENT.md](../../DEVELOPMENT.md)
 - **Security Audits:** [docs/security/](../../security/)
 - **Changelog:** [../../CHANGELOG.md](../../CHANGELOG.md)
-- **Project History:** [../../project/PROJECT_HISTORY.md](../../project/PROJECT_HISTORY.md)
+- **Project History:** [../../PROJECT_HISTORY.md](../../PROJECT_HISTORY.md)
 
 ---
 

@@ -168,23 +168,34 @@ pytest tests/
 ```
 docs/
 ├── README.md                  # Documentation index
-├── user-guides/              # For teachers and students
+├── user-guides/               # Teachers and students
+│   ├── README.md
 │   ├── teacher_manual.md
-│   └── student_guide.md
-├── technical-reference/      # Architecture, database, API
+│   ├── student_guide.md
+│   ├── economy_guide.md
+│   ├── diagnostics/
+│   ├── features/
+│   └── legal/
+├── technical-reference/       # Architecture, database, API
 │   ├── architecture.md
 │   ├── database_schema.md
-│   └── ECONOMY_SPECIFICATION.md
-├── operations/               # Deployment, maintenance
-│   ├── DEPLOYMENT.md
-│   └── MULTI_TENANCY_FIX_DEPLOYMENT.md
-├── security/                 # Security audits
+│   ├── api_reference.md
+│   ├── analytics-specification.md
+│   └── economy-specification.md
+├── operations/                # Deployment and maintenance
+│   ├── README.md
+│   ├── Deployment_Guide.md
+│   ├── README_GITHUB_PAGES.md
+│   └── GITHUB_PAGES_SETUP.md
+├── security/                  # Security audits
 │   ├── CRITICAL_SAME_TEACHER_LEAK.md
 │   └── MULTI_TENANCY_AUDIT.md
-├── development/              # Dev guides
-│   ├── DEPRECATED_CODE_PATTERNS.md
+├── development/               # Dev guides and policies
+│   ├── codebase_organization_documentation_hygiene_playbook.md
+│   ├── SCHEMA_CHANGE_MD.md
+│   ├── migration-specifications.md
 │   └── TESTING_SUMMARY.md
-└── archive/                  # Historical docs
+└── archive/                   # Historical docs
 ```
 
 ---

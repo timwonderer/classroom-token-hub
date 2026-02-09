@@ -110,7 +110,7 @@ classroom-economy/
 - Database schema: `docs/technical-reference/database_schema.md`
 - API reference: `docs/technical-reference/api_reference.md`
 - Timezone handling: `docs/technical-reference/TIMEZONE_HANDLING.md`
-- Diagnostics for user-visible behavior: `docs/diagnostics/student.md`, `docs/diagnostics/teacher.md`
+- Diagnostics for user-visible behavior: `docs/user-guides/diagnostics/student.md`, `docs/user-guides/diagnostics/teacher.md`
 
 ## Full Documentation
 

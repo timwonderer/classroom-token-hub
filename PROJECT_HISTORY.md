@@ -1,312 +1,249 @@
-# Classroom Token Hub - Project History & Philosophy
+# Classroom Token Hub — Design Principles, Philosophy, and Memory
 
-**Document Purpose:** This document preserves the history, philosophy, and key milestones of Classroom Token Hub's development journey.
+## Document Purpose
 
-**Last Updated:** 2025-12-04
+This document preserves the design philosophy, guiding principles, and formative lessons of Classroom Token Hub.  
+*It is not a changelog. It is a record of decisions that survived real classrooms.*
 
----
+For chronological releases and versioned changes, see [CHANGELOG.md](CHANGELOG.md).
 
-## Project Vision & Philosophy
+## Project Vision
 
-### Core Mission
+Classroom Token Hub exists to teach financial literacy and systems thinking through lived participation in a simulated classroom economy.
 
-**Classroom Token Hub** was created to teach students financial literacy through hands-on experience in a simulated classroom economy. The platform transforms abstract financial concepts into tangible, interactive learning experiences where students earn, save, spend, and manage virtual currency tied to real classroom participation.
+Students do not merely learn about money.  
+They earn it, lose it, insure against risk, misjudge trade-offs, recover from mistakes, and gradually understand consequences.
 
-### Educational Philosophy
+The system treats money not as a reward mechanism, but as a constraint system. It is a real-time experiment that exposes how incentives shape behavior over time.
 
-The project is built on several core educational principles:
+## Educational Philosophy
 
-1. **Learning by Doing** - Students don't just read about money management; they practice it daily through attendance tracking, payroll systems, savings/checking accounts, and purchasing decisions.
+This project is grounded in several beliefs that are treated as non-negotiable:
 
-2. **Real-World Simulation** - Features like insurance policies, rent payments, interest calculations, and transaction histories mirror actual financial systems students will encounter in adult life.
+- Experience comes before explanation  
+Students understand systems after they feel them. Abstraction follows experience, not the other way around.
+- Consequences teach faster than warnings  
+Missed time, poor planning, and unmanaged risk are more instructive than reminders or lectures.
+- Fairness is responsiveness, not sameness  
+The system accounts for reality without pretending all students start from identical conditions.
+- Agency without guardrails collapses systems  
+Freedom is meaningful only when bounded.
+- Simulations must bind their designers  
+If teachers are exempt from the system, the simulation lies.
 
-3. **Teacher Empowerment** - The platform provides teachers with powerful tools to customize their classroom economies while maintaining security and data integrity.
+These beliefs were not theoretical. They were learned through failure.
 
-4. **Student Privacy** - All personally identifiable information (PII) is encrypted at rest, ensuring student data remains protected while still enabling rich classroom interactions.
+## Design Tensions We Actively Manage
 
-### Design Principles
+Classroom Token Hub does not resolve classroom tensions. It contains them.
 
-#### Join Code as Source of Truth
+- Authentic simulation vs. emotional safety
+- Student agency vs. exploitability
+- Teacher authority vs. system transparency
+- Real consequences vs. recoverability
 
-A fundamental architectural principle emerged during multi-tenancy development:
+Every major feature exists because one of these tensions was mishandled once—and deliberately redesigned.
 
-> **"The class join code should be the absolute source of truth for how students are associated with a class."**
+## Design Evolution & Key Milestones
 
-This principle ensures:
-- Students can participate in multiple class economies simultaneously
-- Data remains isolated between different class periods/sections
-- Teachers can share students without data leakage between economies
-- Class switching is seamless and deterministic
+The system hardened over time through specific turning points.
 
-#### Security-First Development
+### From “Classroom Economy” to “Classroom Token Hub”
 
-From the beginning, the project prioritized security:
-- Encrypted PII at the database level
-- TOTP two-factor authentication for all admin accounts
-- Salted and peppered password hashing
-- CSRF protection on all forms
-- Cloudflare Turnstile integration for bot protection
-- Comprehensive input validation and sanitization
+The original project behaved like an activity layered on top of class routines.  
+The rename marked a shift toward a persistent, interconnected system—a hub rather than a gimmick.
 
-#### Educational Use Only
+### Join Code as Source of Truth
 
-Released under the **PolyForm Noncommercial License 1.0.0**, the project is explicitly designed for educational and nonprofit use. This licensing choice reflects the project's commitment to serving students and educators without commercialization.
+Early designs tied students too closely to teacher accounts or static rosters.  
+This failed under real classroom conditions.
 
----
+The join code became the absolute source of truth, enabling:
 
-## Architectural Evolution
+- Deterministic class membership
+- Safe multi-class participation
+- Strict data isolation
+- Predictable recovery from errors
 
-### Phase 1: Monolithic Foundation (Pre-Refactor)
+This decision reshaped the entire data model.
 
-The project initially began as a monolithic Flask application in a single `app.py` file that grew to over 4,500 lines. This early phase focused on:
-- Basic student and teacher account management
-- Simple token earning through attendance
-- Manual transaction tracking
-- Classroom store with basic items
+### Classroom Wage Index (CWI)
 
-### Phase 2: Modular Blueprint Refactor
+Unregulated classroom economies inflate, collapse, or become meaningless.
 
-As complexity grew, the application was refactored into a modern Blueprint-based architecture:
+CWI was introduced as a macro-level stabilizer to prevent runaway wages, distorted prices, and silent inequity.  
+The system learned to regulate itself.
 
-**New Structure:**
+### Insurance Systems
+
+Attendance is not purely a moral choice.  
+Life interferes.
+
+Insurance was added when it became clear that punishment disguised as realism was neither accurate nor educational.
+
+
+## Architectural Philosophy
+
+The architecture reflects the pedagogy.
+
+- Blueprint isolation mirrors classroom section isolation
+- Explicit models enable auditable economic rules
+- Minimal hidden state builds student trust
+- Reversibility and logging reinforce accountability
+
+The system avoids “magic.” If something happens, it can be traced, explained, and—when appropriate—undone.
+
 ```
 app/
 ├── __init__.py          # Application factory
-├── models.py            # SQLAlchemy models (34 classes)
-├── auth.py              # Authentication decorators & helpers
-├── routes/
-│   ├── admin.py         # Teacher dashboard (5,176 lines)
-│   ├── student.py       # Student portal (2,648 lines)
-│   ├── system_admin.py  # System admin interface (1,088 lines)
-│   ├── api.py           # REST API (2,096 lines)
-│   └── main.py          # Public routes (187 lines)
-└── utils/               # Utility modules
-    ├── encryption.py
-    ├── claim_credentials.py
-    ├── join_code.py
-    └── [other helpers]
+├── models.py            # Explicit economic state
+├── auth.py              # Access boundaries
+├── routes/              # Feature-scoped systems
+└── utils/               # Shared constraints
 ```
 
-This refactor:
-- Separated concerns into logical modules
-- Made the codebase more maintainable
-- Enabled parallel development on different features
-- Improved testability
+Complexity is allowed. Ambiguity is not.
 
-### Phase 3: Feature Expansion
+## Design Anti-Goals
 
-The platform evolved from basic token tracking to a comprehensive classroom economy system:
+(Features We Intentionally Do Not Build or Display)
 
-**Financial Systems:**
-- Automated payroll with configurable schedules
-- Checking and savings accounts with interest calculations
-- Transaction audit trails with void/refund capabilities
-- Store items with bundles, discounts, and expiration dates
+The system is defined as much by what it refuses to show as by what it includes.  
+The following absences are deliberate.
 
-**Advanced Features:**
-- Insurance system (policies, enrollments, claims)
-- Rent collection with waivers and late fees
-- Hall pass management with time tracking
-- Tap-in/tap-out attendance system
-- Student-to-student transfers
+### 1. No XP Bars, Streaks, or Level-Ups
 
-**Administrative Tools:**
-- Bulk student roster uploads via CSV
-- Join-code-based student claiming
-- System admin portal for platform management
-- Error logging and user reporting systems
-- Feature flags for gradual rollout
+We do not include:
 
-### Phase 4: Multi-Tenancy & Security Hardening
+- Experience points
+- Participation streaks
+- Leveling systems
 
-A major architectural initiative focused on proper multi-tenancy:
+Instead: earned wages, time-based pay, and explicit costs tied to decisions.
 
-**Problem Identified:** Students could see and interact with data from multiple teachers' classes simultaneously, violating the "join code as source of truth" principle.
+### 2. No Perfect Attendance Bonuses
 
-**Solutions Implemented:**
-- Added `StudentTeacher` many-to-many relationship table
-- Created `TeacherBlock` model for unclaimed roster seats
-- Implemented scoped query helpers in `auth.py`
-- Refactored all transaction queries to filter by `teacher_id`
-- Added class-switching interface for multi-enrolled students
+We do not display:
 
-**Security Audits Conducted:**
-- PII audit and encryption verification
-- Access control and secrets review
-- Source code vulnerability assessment
-- Network vulnerability scanning
-- Input/output validation audit
+- Attendance streak rewards
+- Automatic bonuses for uninterrupted presence
 
-Results: All audits passed with recommendations implemented.
+Instead: insurance systems, partial pay, and recovery paths.
 
-### Phase 5: Known Architectural Debt
+### 3. No Invisible Teacher Overrides
 
-**Critical Issue Identified (November 2025):**
+We do not allow:
 
-Despite multi-tenancy fixes, a P0 data isolation issue remains:
+- Silent balance edits
+- Hidden forgiveness
+- Unlogged interventions
 
-> **Same-Teacher Multi-Period Data Leak:** Students enrolled in multiple periods with the same teacher see aggregated data across all periods instead of period-specific data.
+Instead: explicit transactions, reversals, and audit trails. Teacher actions is visible to students because trust is the first step in making a system work.
 
-**Root Cause:** The `Transaction` table (and related models) track `teacher_id` but not the specific `join_code` or `block`, causing data aggregation across different class periods taught by the same teacher.
+### 4. No Behavior Scores or Compliance Metrics
 
-**Status:** Documented in `docs/security/CRITICAL_SAME_TEACHER_LEAK.md` but **not yet fixed**. This is considered a **blocker for 1.0 release**.
+We do not calculate:
 
-**Required Solution:** Add `join_code` column to Transaction, StudentItem, StudentInsurance, RentPayment, and HallPassLog tables, then refactor all queries to scope by join_code instead of teacher_id alone.
+- Engagement scores
+- Effort ratings
+- Participation grades
 
----
+Instead: actions, outcomes, and room for human interpretation.
 
-## Key Technical Milestones
+### 5. No AI Judgments of Student Intent
 
-### Database Evolution
+We do not show:
 
-**Initial Schema:** Simple Student, Admin, Transaction tables
+- Motivation predictions
+- Effort classifications
+- Character inferences
 
-**Current Schema:** 34 model classes including:
-- Multi-tenancy support (StudentTeacher, TeacherBlock)
-- Financial products (StoreItem, InsurancePolicy, RentSettings)
-- Activity tracking (TapEvent, HallPassLog, PayrollReward)
-- System management (ErrorLog, UserReport, DeletionRequest)
+Instead: neutral logs that support teacher-led conversations.
 
-**Migration Count:** 73 Alembic migration files managing schema evolution
+### 6. No Unlimited Configuration Knobs
 
-### Testing Infrastructure
+We do not expose:
 
-**Test Suite Growth:**
-- 47 comprehensive test files
-- Coverage includes: admin auth, student features, financial transactions, insurance, deletion cascades, hall passes, multi-tenancy, legacy compatibility
-- Uses pytest with in-memory SQLite for fast execution
-- Foreign key constraint testing enabled
+- Arbitrary wage overrides
+- Per-student economic exceptions
+- Infinite economy sliders
 
-### Deployment Evolution
+Instead: guardrailed configuration that preserves coherence.
 
-**Development:** Local Flask development server
+### 7. No Frictionless Shortcuts
 
-**Staging:** Supabase PostgreSQL with GitHub Actions CI/CD
+We do not provide:
 
-**Production:** DigitalOcean droplet with:
-- PostgreSQL database
-- Gunicorn WSGI server with gevent workers
-- Redis for rate limiting and caching
-- Cloudflare for DNS and bot protection
-- UptimeRobot for monitoring
-- Automated GitHub Actions deployment pipeline
+- Auto-approval flows
+- One-click late forgiveness
+- Bulk overrides without review
 
----
+Instead: deliberate processes that require acknowledgment and choice.
 
-## Notable Bug Fixes & Improvements
+### 8. No Leaderboards or Public Rankings
 
-### Join Code System Overhaul
+We do not display:
 
-**Problem:** Join codes could collide across teachers, and the claiming system had race conditions.
+- Top earners
+- Lowest balances
+- Competitive rankings
 
-**Solution:** Implemented collision detection, unique constraints, and atomic claiming operations. Documented in `docs/archive/JOIN_CODE_FIX_SUMMARY.md`.
+Instead: private balances and individual decision paths.
 
-### Migration Chain Consolidation
+### 9. No Neutral-System Claim
 
-**Problem:** Parallel development created multiple migration heads and merge conflicts.
+We do not claim:
 
-**Solution:** Created systematic merge migration strategy with validation checks in CI/CD pipeline. Documented in `docs/development/MIGRATION_GUIDE.md`.
+- Value neutrality
+- Bias-free incentives
+- Objective fairness
 
-### Duplicate Data Cleanup
+Instead: visible assumptions that can be discussed and critiqued.
 
-**Problem:** Race conditions and legacy code created duplicate student records.
+### 10. No Direct Student-to-System Support Tickets
 
-Solution: Developed cleanup scripts with dry-run capabilities, comprehensive logging, and validation. The Flask-context version (`cleanup_duplicates_flask.py`) is preserved, while the obsolete version was removed.
+We do not allow:
 
-### Timezone Handling
+- Students to submit tickets directly
+- Automated escalation from student complaints
+- Appeals that bypass the teacher
 
-**Problem:** Mixed use of naive and timezone-aware datetimes caused payroll and rent calculation errors.
+The teacher is the first stop.
 
-**Solution:** Standardized on UTC storage with user-timezone conversion at display time. Comprehensive guide in `docs/technical-reference/TIMEZONE_HANDLING.md`.
+Instead:
 
-### Deprecated Code Pattern Updates
+- Students raise issues to teachers
+- Teachers triage and submit tickets when appropriate
+- Tickets represent vetted system issues, not raw frustration
 
-**Ongoing:** Migration from deprecated Python and SQLAlchemy patterns:
-- `datetime.utcnow()` → `datetime.now(datetime.UTC)` (45+ occurrences)
-- `Query.get()` → `db.session.get()` (20+ occurrences)
-- SQLAlchemy subquery warnings resolution
+This preserves teacher authority and protects student privacy. 
 
----
+## Security & Ethics
 
-## Community & Collaboration
+Security is a prerequisite, not an enhancement.
 
-### AI-Assisted Development
+- Encrypted PII at rest
+- Strong authentication for privileged accounts
+- CSRF protection and input validation
+- Bot mitigation
+- Strict data minimization
 
-The project embraces AI assistance as a development tool. The `.claude/AGENTS.md` file provides guidelines for AI agents (like Claude, GitHub Copilot, etc.) to contribute effectively while maintaining code quality and security standards.
+The system assumes curiosity and welcomes student pushing system assumptions.
 
-### Open Source But Noncommercial
+## Educational Use Only
 
-The project welcomes contributions from educators, developers, and security researchers under the noncommercial license. See `CONTRIBUTING.md` for contribution guidelines.
+Classroom Token Hub is licensed under the PolyForm Noncommercial License 1.0.0.
 
----
+This project exists to serve classrooms, not markets.
 
-## Looking Forward: Version 1.0
+## In Reflection
 
-### Release Criteria
+The system you are looking at today is conceptualized, designed, built, tested, maintained, and updated by a full-time high school teacher who lives by the motto *“I will just make it myself.”*
 
-To reach version 1.0, the project must achieve:
+Becoming an app developer was never part of the plan, but rather a side project that has “gone out of hand.” Every feature and design you see today was a product of countless 500 errors, tears, students’ incessant “Mr., it’s not working!”, and, of course, the satisfaction of seeing the puzzle pieces click into place.
 
-1. ✅ **Core Feature Completeness**
-   - Multi-tenancy support
-   - Complete financial systems (payroll, store, insurance, rent)
-   - Comprehensive admin and student interfaces
-   - System admin portal
+This project would not have been possible without the best beta testers in the world: real students. Every impatient double click, negative deposit, “what if I do this instead?”, and middle-of-the-night transaction exposed bugs and vulnerabilities that would have remained silent for now, but would fail loudly in production.
 
-2. ✅ **Security Hardening**
-   - PII encryption
-   - TOTP authentication
-   - Security audits completed
-   - Input validation comprehensive
+Classroom Token Hub was created to fill the void of a platform that simulates an economy more realistically than what is available on the market. It also functions as a classroom management tool that teaches students personal responsibility. Most of all, it respects data privacy and security like no other. The friction you experience when creating, claiming, and resetting accounts was intentional. Classroom Token Hub does not ask, “How can we defend ourselves?” It was designed to anticipate, “What if the bad actor gets in?”
 
-3. ❌ **Critical Bug Resolution** **(BLOCKER)**
-   - Same-teacher multi-period data leak must be fixed
-   - All P0 security issues resolved
-
-4. ✅ **Documentation**
-   - User guides for students and teachers
-   - Technical reference documentation
-   - API documentation
-   - Operations guides
-
-5. ⚠️ **Code Quality** **(IN PROGRESS)**
-   - Remove deprecated patterns
-   - Clean up debug statements
-   - Consolidate duplicate scripts
-   - Comprehensive test coverage
-
-6. ✅ **Production Readiness**
-   - CI/CD pipeline operational
-   - Monitoring and alerting configured
-   - Backup and restore procedures documented
-   - Deployment automation complete
-
-### Post-1.0 Vision
-
-After achieving version 1.0, the project roadmap includes:
-
-- **Enhanced Analytics:** Dashboard visualizations for student progress and class economy health
-- **Mobile Experience:** Responsive design improvements and potential native app
-- **Gamification:** Achievement badges, leaderboards (opt-in), and progress tracking
-- **Parent Portal:** Optional parent view of student financial activity
-- **Curriculum Integration:** Pre-built lesson plans and financial literacy modules
-- **Multi-Language Support:** Internationalization for broader educational reach
-
----
-
-## Conclusion
-
-Classroom Token Hub represents a commitment to practical financial education through technology. From its monolithic origins to its current modular architecture, every evolution has been guided by the needs of real students and teachers using the platform daily.
-
-The journey to version 1.0 has been one of continuous improvement, security hardening, and feature expansion. While critical work remains (particularly the same-teacher data isolation issue), the project has established solid foundations in architecture, security, testing, and deployment.
-
-The project's success is measured not in lines of code or technical complexity, but in the number of students who gain confidence managing money, understanding transactions, and making informed financial decisions—skills they'll carry with them long after leaving the classroom.
-
----
-
-**For detailed technical history, see:**
-- `docs/archive/` - Historical bug fixes and feature summaries
-- `CHANGELOG.md` - Version history and release notes
-- `docs/security/` - Security audit reports
-- `docs/operations/` - Deployment and operational history
-
-**Last Updated:** 2025-12-04
+Welcome to the Classroom Economy System, reimagined.

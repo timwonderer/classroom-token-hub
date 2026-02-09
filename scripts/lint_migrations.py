@@ -23,7 +23,7 @@ Exit Codes:
     2: Warnings found but no errors
 
 Reference:
-    See MIGRATION_COMPLIANCE_REVIEW.md for detailed findings.
+    See docs/development/MIGRATION_COMPLIANCE_REVIEW.md for detailed findings.
 """
 
 import re
@@ -218,7 +218,7 @@ Examples:
 
 For more information, see:
   - docs/development/MIGRATION_BEST_PRACTICES.md
-  - MIGRATION_COMPLIANCE_REVIEW.md
+  - docs/development/MIGRATION_COMPLIANCE_REVIEW.md
         """
     )
     parser.add_argument(
@@ -322,7 +322,7 @@ For more information, see:
         print("  1. Add idempotency helpers from migrations/migration_template.py.mako")
         print("  2. Wrap CREATE operations in existence checks")
         print("  3. See MIGRATION_BEST_PRACTICES.md for examples")
-        print("\nOr see MIGRATION_COMPLIANCE_REVIEW.md for full audit report")
+        print("\nOr see docs/development/MIGRATION_COMPLIANCE_REVIEW.md for full audit report")
         sys.exit(1)
     elif total_warnings > 0:
         print(f"\n{'='*70}")

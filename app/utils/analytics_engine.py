@@ -1,7 +1,7 @@
 """
 Analytics Engine for Classroom Economy
 
-Implements analytics computation per docs/technical-reference/Class-economy-analytics-specs.md.
+Implements analytics computation per docs/technical-reference/analytics-specification.md.
 
 Core Principles:
 - All monetary metrics are CWI-relative (not absolute)

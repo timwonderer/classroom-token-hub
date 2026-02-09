@@ -97,7 +97,7 @@ All technical details verified against codebase:
 ### 4. Clean, Consistent, Logical Structure  GOOD (with issues)
 
 #### What's Excellent
-- **Clear categorization**: diagnostics/, user-guides/, technical-reference/, operations/, security/
+- **Clear categorization**: user-guides/diagnostics/, user-guides/, technical-reference/, operations/, security/
 - **Consistent frontmatter**: YAML metadata with title, roles, last-updated
 - **Archive system**: Historical docs properly separated in archive/
 - **Diagnostic index pattern**: student.md → student-login.md, student-classes.md, etc.
@@ -135,7 +135,7 @@ Others use "Key fields" list:
 
 ##### Issue 3: Misplaced Files  MEDIUM PRIORITY
 - `docs/ai/CLAUDE.md` should be in `.claude/` or root (per project conventions)
-- `docs/Deployment_Guide.md` should be in `docs/operations/` for consistency
+- `docs/operations/Deployment_Guide.md` should be in `docs/operations/` for consistency
 
 ##### Issue 4: Duplicate Documentation Risk  LOW PRIORITY
 - `MIGRATION_GUIDE.md` in development/
@@ -187,7 +187,7 @@ Despite being under size limit, this file tries to serve 3 purposes:
 3. Explaining interest mechanics (reference)
 
 **Recommendation:** Break into focused docs:
-- `diagnostics/student-transfers.md` (1-2KB) - "Can't transfer? Check these..."
+- `user-guides/diagnostics/student-transfers.md` (1-2KB) - "Can't transfer? Check these..."
 - `guides/saving-strategies.md` (3-4KB) - Goal-based saving tips
 - `technical-reference/interest-calculation.md` (2-3KB) - How interest works
 
@@ -207,22 +207,22 @@ Despite being under size limit, this file tries to serve 3 purposes:
 
 **Line 47:**
 ```markdown
-[Deployment Guide](Deployment_Guide.md)
+[Deployment Guide](operations/Deployment_Guide.md)
 ```
 **Issue:** Path is correct but inconsistent with operations/ directory structure
-**Recommendation:** Move `Deployment_Guide.md` to `operations/deployment.md`
+**Recommendation:** Move `operations/Deployment_Guide.md` to `operations/deployment.md`
 
-#### 2. features/banking/transferring-money.md
+#### 2. user-guides/features/banking/transferring-money.md
 **Line 82:**
 ```markdown
-[Understanding Savings](/docs/features/banking/understanding-savings)
+[Understanding Savings](/docs/user-guides/features/banking/understanding-savings)
 ```
 **Issue:** File does not exist
 **Fix:** Create file OR remove link
 
 **Line 156:**
 ```markdown
-[Student Buying Guide](/docs/features/store/student-buying)
+[Student Buying Guide](/docs/user-guides/features/store/student-buying)
 ```
 **Issue:** File does not exist
 **Fix:** Create file OR remove link
@@ -256,8 +256,8 @@ roles: [student, teacher]
 
 ###  Issue 2: Missing Referenced Files
 Files that are linked but don't exist:
-- `docs/features/banking/understanding-savings.md`
-- `docs/features/store/student-buying.md`
+- `docs/user-guides/features/banking/understanding-savings.md`
+- `docs/user-guides/features/store/student-buying.md`
 
 **Options:**
 1. Create the files (add to backlog)
@@ -426,7 +426,7 @@ Historical docs properly separated:
 - [ ] Standardize database_schema.md table formatting
 - [ ] Add rate limiting section to api_reference.md
 - [ ] Restructure transferring-money.md into diagnostic + guides
-- [ ] Move Deployment_Guide.md to operations/
+- [ ] Move operations/Deployment_Guide.md to operations/
 
 ### Month 1 (Enhancement)
 - [ ] Create missing guide files (understanding-savings, student-buying)

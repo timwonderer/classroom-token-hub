@@ -8,6 +8,10 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+- _No changes yet._
+
+## [1.8.0] - 2026-02-09
+
 ### Added
 - **Rent Item Types (Privilege / Per-Use / Hall Pass)** - Extended itemized rent with three distinct item types
   - **Privilege**: Shows as a badge on the roster when rent is paid; optionally listed in store for individual purchase
@@ -55,6 +59,7 @@ and this project follows semantic versioning principles.
 
 ### Changed
 - **Redundant Check Removal** - Simplified `_add_period` utility function in `app/routes/api.py` by removing a redundant `isinstance` check.
+- **Documentation Update Plan Retired** - Removed `docs/development/DOCUMENTATION_UPDATE_PLAN.md` after v1.7 documentation updates were completed and tracked.
 
 ### Security
 - **Hardened Grafana Proxy XSS Protection** - Improved content-type filtering to prevent XSS attacks (#897)
@@ -372,7 +377,7 @@ and this project follows semantic versioning principles.
 ### Documentation
 - Reorganized documentation structure for improved navigation
 - **Developer Documentation Updates** - Updated development tracking documentation to reflect current status
-  - Updated `docs/development/DEVELOPMENT.md` to reflect v1.6.0 status (was showing 1.4.0)
+  - Updated `DEVELOPMENT.md` to reflect v1.6.0 status (was showing 1.4.0)
   - Added v1.5.0 and v1.6.0 release summaries to Recent Releases section
   - Updated target version from 1.5.0 to 1.7.0
   - Updated `IMPLEMENTATION_PROGRESS.md` to mark sysadmin routes and templates as completed (were incorrectly marked as pending)
@@ -380,7 +385,7 @@ and this project follows semantic versioning principles.
   - Updated Next Steps with current implementation status (85% complete)
   - Added specific guidance for remaining work (tests, user docs, technical docs)
 - **Comprehensive Documentation Accuracy Fixes** - Corrected 10 inaccuracies found in user-facing documentation
-  - **Store Items (docs/features/store/creating-items.md)**:
+  - **Store Items (docs/user-guides/features/store/creating-items.md)**:
     - Fixed tier system documentation to reflect actual implementation (Basic/Standard/Premium/Luxury based on % of CWI, not Tier 1/2/3 with dollar amounts)
     - Corrected default state - items are created as active by default, not inactive
     - Removed non-existent image upload feature documentation
@@ -392,13 +397,13 @@ and this project follows semantic versioning principles.
     - Removed confusing "if available" language for collective goals (feature is fully available)
     - Removed misleading "Use images" tip from Tips for Success section (feature doesn't exist)
     - Fixed contradictory troubleshooting text about daily limits (clarified to use inventory and per-student limits)
-  - **Payroll (docs/features/payroll/running-payroll.md)**:
+  - **Payroll (docs/user-guides/features/payroll/running-payroll.md)**:
     - Removed non-existent automatic payroll feature documentation (entire section)
     - Added guidance for manual payroll scheduling and consistency
     - Clarified that break time IS paid (system does not exclude breaks from hours worked)
     - Added Q&A explaining how to handle unpaid breaks if desired
     - Updated all automatic payroll references to reflect manual-only operation
-  - **Banking (docs/features/banking/transferring-money.md)**:
+  - **Banking (docs/user-guides/features/banking/transferring-money.md)**:
     - Removed non-existent transfer limits documentation (daily limits, min/max transfer amounts)
     - Simplified to only document actual rules (no negative balances)
 
@@ -745,7 +750,7 @@ The project is ready for version 1.0 release. All critical blockers have been re
 
 ### Added (2025-12-11)
 - **DEVELOPMENT.md** — Unified development priorities document consolidating all TODO files and roadmap
-- **docs/technical-reference/ECONOMY_SPECIFICATION.md** — Financial system specification (moved from root)
+- **docs/technical-reference/economy-specification.md** — Financial system specification (moved from root)
 - **docs/development/ECONOMY_BALANCE_CHECKER.md** — CWI implementation guide (moved from root)
 
 ### Changed (2025-12-11)

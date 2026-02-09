@@ -27,18 +27,16 @@ docs_bp = Blueprint('docs', __name__, url_prefix='/docs')
 DOCS_ROOT = Path(__file__).parent.parent.parent / 'docs'
 
 # Directories excluded from user-facing search (internal documentation only)
-EXCLUDED_DIRECTORIES = {'security', 'archive', 'ai'}
+EXCLUDED_DIRECTORIES = {'security', 'archive'}
 
 # Friendly category names for search results
 CATEGORY_MAP = {
     'user-guides': 'User Guides',
-    'diagnostics': 'Diagnostics',
-    'features': 'Features',
     'technical-reference': 'Technical Reference',
-    'project': 'Project',
     'development': 'Development',
     'operations': 'Operations',
-    'legal': 'Legal & Licensing'
+    'security': 'Security',
+    'archive': 'Archive'
 }
 
 # HTML sanitization configuration for rendered markdown
@@ -421,6 +419,8 @@ def search():
 
                 # Skip excluded directories (internal docs)
                 if rel_path.parts and rel_path.parts[0] in EXCLUDED_DIRECTORIES:
+                    continue
+                if 'ai' in rel_path.parts:
                     continue
 
                 content = doc_file.read_text(encoding='utf-8')
