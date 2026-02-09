@@ -112,7 +112,6 @@ def test_delete_pending_student_wrong_teacher(client):
     
     # Verify TeacherBlock still exists
     assert db.session.get(TeacherBlock, tb_id) is not None
-    assert db.session.get(TeacherBlock, tb_id) is not None
 
 
 def test_delete_pending_student_already_claimed(client):
