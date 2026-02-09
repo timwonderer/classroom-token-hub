@@ -149,11 +149,11 @@ def test_bulk_delete_legacy_unclaimed_students_by_block(client):
     
     # Verify block A students are deleted
     for student_id in student_ids:
-        assert Student.query.get(student_id) is None
+        assert db.session.get(Student, student_id) is None
         assert StudentTeacher.query.filter_by(student_id=student_id).first() is None
     
     # Verify block B student is NOT deleted
-    assert Student.query.get(other_student_id) is not None
+    assert db.session.get(Student, other_student_id) is not None
 
 
 def test_bulk_delete_legacy_unclaimed_students_skips_claimed(client):
@@ -186,10 +186,10 @@ def test_bulk_delete_legacy_unclaimed_students_skips_claimed(client):
     
     # Verify unclaimed students are deleted
     for student_id in unclaimed_ids:
-        assert Student.query.get(student_id) is None
+        assert db.session.get(Student, student_id) is None
     
     # Verify claimed student is NOT deleted
-    assert Student.query.get(claimed_id) is not None
+    assert db.session.get(Student, claimed_id) is not None
 
 
 def test_bulk_delete_legacy_unclaimed_students_wrong_teacher(client):
@@ -217,7 +217,7 @@ def test_bulk_delete_legacy_unclaimed_students_wrong_teacher(client):
     assert data["deleted_count"] == 0  # Should not delete any
     
     # Verify student still exists
-    assert Student.query.get(student_id) is not None
+    assert db.session.get(Student, student_id) is not None
 
 
 def test_bulk_delete_mixed_unclaimed_types(client):
@@ -263,9 +263,9 @@ def test_bulk_delete_mixed_unclaimed_types(client):
     
     # Verify all are deleted
     for tb_id in tb_ids:
-        assert TeacherBlock.query.get(tb_id) is None
+        assert db.session.get(TeacherBlock, tb_id) is None
     for student_id in student_ids:
-        assert Student.query.get(student_id) is None
+        assert db.session.get(Student, student_id) is None
 
 
 def test_block_deletion_with_improved_transactions(client):
@@ -305,7 +305,7 @@ def test_block_deletion_with_improved_transactions(client):
     
     # Verify all students are deleted
     for student_id in student_ids:
-        assert Student.query.get(student_id) is None
+        assert db.session.get(Student, student_id) is None
         assert StudentTeacher.query.filter_by(student_id=student_id).first() is None
     
     # Verify transactions are deleted

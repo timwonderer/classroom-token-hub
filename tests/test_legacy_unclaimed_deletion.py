@@ -112,7 +112,7 @@ def test_delete_legacy_unclaimed_student(client):
     assert b"Successfully deleted" in response.data or b"deleted" in response.data.lower()
     
     # Verify Student is deleted
-    assert Student.query.get(student_id) is None
+    assert db.session.get(Student, student_id) is None
     
     # Verify StudentTeacher association is deleted
     assert StudentTeacher.query.filter_by(student_id=student_id).first() is None
@@ -160,9 +160,9 @@ def test_delete_block_removes_student_teacher_associations(client):
     assert "3" in data["message"]  # Should delete 3 students
     
     # Verify all block B students are deleted
-    assert Student.query.get(student1_id) is None
-    assert Student.query.get(student2_id) is None
-    assert Student.query.get(student3_id) is None
+    assert db.session.get(Student, student1_id) is None
+    assert db.session.get(Student, student2_id) is None
+    assert db.session.get(Student, student3_id) is None
     
     # Verify StudentTeacher associations are deleted
     assert StudentTeacher.query.filter_by(student_id=student1_id).first() is None
@@ -173,7 +173,7 @@ def test_delete_block_removes_student_teacher_associations(client):
     assert Transaction.query.filter_by(student_id=student1_id).first() is None
     
     # Verify block C student is NOT deleted
-    assert Student.query.get(other_student_id) is not None
+    assert db.session.get(Student, other_student_id) is not None
     assert StudentTeacher.query.filter_by(student_id=other_student_id).first() is not None
 
 
@@ -213,7 +213,7 @@ def test_delete_block_with_shared_students(client):
     
     # The student should be deleted (since we delete all students in the block)
     # This is the current behavior - block deletion removes students entirely
-    assert Student.query.get(student_id) is None
+    assert db.session.get(Student, student_id) is None
     
     # All StudentTeacher associations should be deleted
     assert StudentTeacher.query.filter_by(student_id=student_id).first() is None
@@ -246,7 +246,7 @@ def test_bulk_delete_students_removes_associations(client):
     
     # Verify all students are deleted
     for student_id in student_ids:
-        assert Student.query.get(student_id) is None
+        assert db.session.get(Student, student_id) is None
         assert StudentTeacher.query.filter_by(student_id=student_id).first() is None
 
 
@@ -271,5 +271,5 @@ def test_delete_student_without_confirmation(client):
     assert b"cancelled" in response.data.lower() or b"cancel" in response.data.lower()
     
     # Verify student is NOT deleted
-    assert Student.query.get(student_id) is not None
+    assert db.session.get(Student, student_id) is not None
     assert StudentTeacher.query.filter_by(student_id=student_id).first() is not None

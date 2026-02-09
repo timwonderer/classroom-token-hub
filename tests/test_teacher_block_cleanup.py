@@ -114,10 +114,10 @@ def test_delete_student_removes_teacher_block(client):
     assert response.status_code == 200
     
     # Verify student is deleted
-    assert Student.query.get(student_id) is None
+    assert db.session.get(Student, student_id) is None
     
     # Verify TeacherBlock is also deleted
-    assert TeacherBlock.query.get(teacher_block_id) is None
+    assert db.session.get(TeacherBlock, teacher_block_id) is None
 
 
 def test_bulk_delete_students_removes_teacher_blocks(client):
@@ -143,12 +143,12 @@ def test_bulk_delete_students_removes_teacher_blocks(client):
     assert response.status_code == 200
     
     # Verify students are deleted
-    assert Student.query.get(student1_id) is None
-    assert Student.query.get(student2_id) is None
+    assert db.session.get(Student, student1_id) is None
+    assert db.session.get(Student, student2_id) is None
     
     # Verify TeacherBlocks are also deleted
-    assert TeacherBlock.query.get(tb1_id) is None
-    assert TeacherBlock.query.get(tb2_id) is None
+    assert db.session.get(TeacherBlock, tb1_id) is None
+    assert db.session.get(TeacherBlock, tb2_id) is None
 
 
 def test_delete_block_removes_teacher_blocks(client):
@@ -211,7 +211,7 @@ def test_sysadmin_delete_period_removes_teacher_blocks(client):
     assert response.status_code == 200
     
     # Verify TeacherBlock for block Y is deleted
-    assert TeacherBlock.query.get(tb_id) is None
+    assert db.session.get(TeacherBlock, tb_id) is None
 
 
 def test_sysadmin_delete_teacher_removes_teacher_blocks(client):
@@ -241,5 +241,5 @@ def test_sysadmin_delete_teacher_removes_teacher_blocks(client):
     assert response.status_code == 200
     
     # Verify TeacherBlocks are deleted
-    assert TeacherBlock.query.get(tb1_id) is None
-    assert TeacherBlock.query.get(tb2_id) is None
+    assert db.session.get(TeacherBlock, tb1_id) is None
+    assert db.session.get(TeacherBlock, tb2_id) is None

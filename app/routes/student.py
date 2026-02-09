@@ -728,7 +728,7 @@ def create_username():
     if not student_id:
         flash("Please claim your account first.", "setup")
         return redirect(url_for('student.claim_account'))
-    student = Student.query.get(student_id)
+    student = db.session.get(Student, student_id)
     if not student or student.has_completed_setup:
         flash("Invalid or already setup account.", "setup")
         return redirect(url_for('student.login'))
@@ -773,7 +773,7 @@ def setup_pin_passphrase():
     if not student_id or not username:
         flash("Please complete previous steps.", "setup")
         return redirect(url_for('student.claim_account'))
-    student = Student.query.get(student_id)
+    student = db.session.get(Student, student_id)
     if not student or student.has_completed_setup:
         flash("Invalid or already setup account.", "setup")
         return redirect(url_for('student.login'))
@@ -1859,7 +1859,7 @@ def purchase_insurance(policy_id):
     join_code = context['join_code']
     teacher_id = context['teacher_id']
 
-    policy = InsurancePolicy.query.get_or_404(policy_id)
+    policy = db.get_or_404(InsurancePolicy, policy_id)
 
     # FIX: Verify policy belongs to CURRENT teacher only
     if policy.teacher_id != teacher_id:
@@ -2010,7 +2010,7 @@ def purchase_insurance(policy_id):
 def cancel_insurance(enrollment_id):
     """Cancel insurance policy."""
     student = get_logged_in_student()
-    enrollment = StudentInsurance.query.get_or_404(enrollment_id)
+    enrollment = db.get_or_404(StudentInsurance, enrollment_id)
 
     # Verify ownership
     if enrollment.student_id != student.id:
@@ -2257,7 +2257,7 @@ def file_claim(policy_id):
 def view_policy(enrollment_id):
     """View policy details and claims history."""
     student = get_logged_in_student()
-    enrollment = StudentInsurance.query.get_or_404(enrollment_id)
+    enrollment = db.get_or_404(StudentInsurance, enrollment_id)
 
     # Verify ownership
     if enrollment.student_id != student.id:
@@ -3353,7 +3353,7 @@ def switch_class(join_code):
     session['current_join_code'] = join_code
 
     # Get teacher name for response
-    teacher = Admin.query.get(seat.teacher_id)
+    teacher = db.session.get(Admin, seat.teacher_id)
     teacher_name = teacher.username if teacher else "Unknown"
 
     # Get block/period info
@@ -3384,7 +3384,7 @@ def switch_period(teacher_id):
 
     # Get teacher name for flash message
     from app.models import Admin
-    teacher = Admin.query.get(teacher_id)
+    teacher = db.session.get(Admin, teacher_id)
     if teacher:
         flash(f"Switched to {teacher.username}'s class")
 
@@ -3608,7 +3608,7 @@ def verify_recovery(code_id):
 
     # Get the recovery code request
     from app.models import StudentRecoveryCode, RecoveryRequest
-    recovery_code = StudentRecoveryCode.query.get_or_404(code_id)
+    recovery_code = db.get_or_404(StudentRecoveryCode, code_id)
 
     # Verify this is for the logged-in student
     if recovery_code.student_id != student.id:
@@ -3678,7 +3678,7 @@ def dismiss_recovery(code_id):
 
     # Get the recovery code request
     from app.models import StudentRecoveryCode
-    recovery_code = StudentRecoveryCode.query.get_or_404(code_id)
+    recovery_code = db.get_or_404(StudentRecoveryCode, code_id)
 
     # Verify this is for the logged-in student
     if recovery_code.student_id != student.id:

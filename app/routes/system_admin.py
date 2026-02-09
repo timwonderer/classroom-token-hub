@@ -210,7 +210,7 @@ def passkey_register_start():
     """
     try:
         sysadmin_id = session.get("sysadmin_id")
-        admin = SystemAdmin.query.get_or_404(sysadmin_id)
+        admin = db.get_or_404(SystemAdmin, sysadmin_id)
 
         # Generate registration token using official SDK
         user_id = f"sysadmin_{admin.id}"
@@ -337,7 +337,7 @@ def passkey_auth_finish():
             return jsonify({"error": "Invalid user ID format"}), 401
 
         # Verify system admin exists
-        admin = SystemAdmin.query.get(sysadmin_id)
+        admin = db.session.get(SystemAdmin, sysadmin_id)
         if not admin:
             return jsonify({"error": "Admin not found"}), 401
 
@@ -423,7 +423,7 @@ def passkey_delete(credential_id):
 def passkey_settings():
     """Passkey management page."""
     sysadmin_id = session.get("sysadmin_id")
-    admin = SystemAdmin.query.get_or_404(sysadmin_id)
+    admin = db.get_or_404(SystemAdmin, sysadmin_id)
     credentials = SystemAdminCredential.query.filter_by(sysadmin_id=sysadmin_id).order_by(SystemAdminCredential.created_at.desc()).all()
 
     return render_template("system_admin_passkey_settings.html",
@@ -712,7 +712,7 @@ def reset_teacher_totp(admin_id):
     Reset a teacher's TOTP secret and return the new setup details (JSON).
     This allows recovery of lost accounts.
     """
-    admin = Admin.query.get_or_404(admin_id)
+    admin = db.get_or_404(Admin, admin_id)
 
     try:
         # Generate new secret
@@ -757,7 +757,7 @@ def delete_admin(admin_id):
     Delete an admin account and all students created under that teacher.
     This is a permanent action that cascades to all student data.
     """
-    admin = Admin.query.get_or_404(admin_id)
+    admin = db.get_or_404(Admin, admin_id)
 
     try:
         # SECURITY FIX: Only use StudentTeacher table, NOT deprecated teacher_id
@@ -1006,7 +1006,7 @@ def delete_period(admin_id, period):
         flash("Invalid period format", "error")
         return redirect(url_for('sysadmin.teacher_overview'))
     
-    admin = Admin.query.get_or_404(admin_id)
+    admin = db.get_or_404(Admin, admin_id)
 
     # Check authorization using helper function
     authorized, pending_request = _check_deletion_authorization(admin, 'period', period)
@@ -1090,7 +1090,7 @@ def delete_teacher(admin_id):
 
     Students maintain access unless they have no other teachers.
     """
-    admin = Admin.query.get_or_404(admin_id)
+    admin = db.get_or_404(Admin, admin_id)
 
     # Check authorization using helper function
     authorized, pending_request = _check_deletion_authorization(admin, 'account', None)
@@ -1218,7 +1218,7 @@ def user_reports():
 @system_admin_required
 def view_user_report(report_id):
     """View details of a specific user report."""
-    report = UserReport.query.get_or_404(report_id)
+    report = db.get_or_404(UserReport, report_id)
     
     return render_template(
         'sysadmin_user_report_detail.html',
@@ -1232,7 +1232,7 @@ def view_user_report(report_id):
 @system_admin_required
 def update_user_report(report_id):
     """Update the status and notes of a user report."""
-    report = UserReport.query.get_or_404(report_id)
+    report = db.get_or_404(UserReport, report_id)
     
     # Get form data
     new_status = request.form.get('status')
@@ -1265,7 +1265,7 @@ def update_user_report(report_id):
 @system_admin_required
 def send_reward_to_reporter(report_id):
     """Send a reward to a student who submitted a bug report."""
-    report = UserReport.query.get_or_404(report_id)
+    report = db.get_or_404(UserReport, report_id)
     
     # Verify this is a student report with a linked student
     if report.user_type != 'student' or not report._student_id:
@@ -1289,7 +1289,7 @@ def send_reward_to_reporter(report_id):
         return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
     
     # Get the student
-    student = Student.query.get(report._student_id)
+    student = db.session.get(Student, report._student_id)
     if not student:
         flash("Student not found. Cannot send reward.", "error")
         return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
@@ -1380,7 +1380,7 @@ def grafana_auth_check():
     session["last_activity"] = utc_now().isoformat()
 
     # Verify the sysadmin still exists
-    sysadmin = SystemAdmin.query.get(session.get('sysadmin_id'))
+    sysadmin = db.session.get(SystemAdmin, session.get('sysadmin_id'))
     if not sysadmin:
         # Admin was deleted but session still exists
         session.clear()
@@ -1444,7 +1444,7 @@ def grafana_proxy(path):
 
         # Add the authenticated user header for Grafana
         # Fetch admin to get username (Grafana auth proxy expects username, not ID)
-        admin = SystemAdmin.query.get(session.get('sysadmin_id'))
+        admin = db.session.get(SystemAdmin, session.get('sysadmin_id'))
         if not admin:
             # Stale session - admin was deleted
             flash("Authentication failed: user not found.", "error")
