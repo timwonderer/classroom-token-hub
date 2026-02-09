@@ -17,6 +17,10 @@ This directory contains all user-facing documentation.
 
 Feature walkthroughs live under `features/`:
 
+- [Teacher Feature Guides](features/teacher/index.md)
+- [Student Feature Guides](features/student/index.md)
+
+Legacy deep dives:
 - [Analytics](features/analytics/interpreting-analytics.md)
 - [Banking](features/banking/transferring-money.md)
 - [Payroll](features/payroll/running-payroll.md)

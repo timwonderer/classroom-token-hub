@@ -6,7 +6,7 @@ roles: [teacher]
 
 # Teacher Manual (Quick Index)
 
-This page is now a shortcut list. Each link is a short diagnostic checklist to answer: "Is this a bug, or a rule?"
+This page is a shortcut list. Use diagnostics for fast troubleshooting and feature guides for step-by-step tasks.
 
 ## Start here
 - [Teacher Diagnostics Index](/docs/user-guides/diagnostics/teacher)
@@ -24,6 +24,15 @@ This page is now a shortcut list. Each link is a short diagnostic checklist to a
 - [Analytics dashboard not loading or showing wrong data](/docs/user-guides/diagnostics/teacher-analytics) **(v1.7+)**
 - [Rent itemization or privilege badges not working](/docs/user-guides/diagnostics/teacher-rent-itemization) **(v1.7+)**
 
-## Feature Guides (v1.7+)
-- [Interpreting Analytics Dashboard](/docs/user-guides/features/analytics/interpreting-analytics) - Complete guide to system health metrics
-- [Rent Itemization Setup](/docs/user-guides/features/rent/itemization-guide) - How to set up itemized rent with store alternatives
+## Feature Guides (Structured by Section)
+- [Teacher Feature Guides Index](/docs/user-guides/features/teacher/index)
+- [Classroom Setup and Students](/docs/user-guides/features/teacher/classroom/class-setup)
+- [Attendance and Payroll](/docs/user-guides/features/teacher/economy/payroll-run)
+- [Store and Redemptions](/docs/user-guides/features/teacher/economy/store-items)
+- [Economy Health and Analytics](/docs/user-guides/features/teacher/economy/economy-health)
+- [Rent and Insurance](/docs/user-guides/features/teacher/bills/rent-settings)
+- [Settings and Feature Toggles](/docs/user-guides/features/teacher/settings/personalization)
+
+## Legacy Deep Dives
+- [Interpreting Analytics Dashboard](/docs/user-guides/features/analytics/interpreting-analytics)
+- [Rent Itemization Setup](/docs/user-guides/features/rent/itemization-guide)

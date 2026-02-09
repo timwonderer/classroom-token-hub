@@ -88,11 +88,12 @@
                         <span class="material-symbols-outlined" style="font-size: 3rem; color: #28a745;">auto_awesome</span>
                     </div>
                     <h3 class="card-title h5 text-center">Feature Guides</h3>
-                    <p class="card-text text-muted">In-depth guides for each major feature of the system.</p>
+                    <p class="card-text text-muted">Focused, role-based guides for each major feature.</p>
                     <ul>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/features/payroll/running-payroll') }}" class="text-decoration-none">Payroll Management</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/features/store/creating-items') }}" class="text-decoration-none">Store & Items</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/features/banking/transferring-money') }}" class="text-decoration-none">Banking & Transfers</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/features/teacher/index') }}" class="text-decoration-none">Teacher Feature Guides</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/features/student/index') }}" class="text-decoration-none">Student Feature Guides</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/features/payroll/running-payroll') }}" class="text-decoration-none">Payroll Deep Dive</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/features/store/creating-items') }}" class="text-decoration-none">Store Deep Dive</a></li>
                         <li><a href="{{ url_for('docs.view_doc', doc_path='user-guides/economy_guide') }}" class="text-decoration-none">Economy Design Guide</a></li>
                     </ul>
                 </div>
