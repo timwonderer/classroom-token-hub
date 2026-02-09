@@ -26,9 +26,7 @@ Go to **Classroom > Students** and open the **Class Roster** tab.
 Each class section has a join code. Students must enter the join code when claiming or adding the class.
 
 ## Keep roster data aligned
-The roster fields you enter are the exact values students must use to claim accounts.
-
-Key fields:
+The roster fields you enter are the exact values students must use to claim accounts. The key fields are:
 - First name
 - Last name
 - Date of birth
