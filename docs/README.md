@@ -27,6 +27,10 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 - **[Teacher Diagnostics Index](user-guides/diagnostics/teacher.md)** - Feature settings, students, payroll, store, rent, announcements.
 - **[Classroom Economy Guide](user-guides/economy_guide.md)** - Pricing ranges and balance checks.
 
+### Feature Guides (Structured by Role)
+- **[Teacher Feature Guides](user-guides/features/teacher/index.md)** - Classroom, economy, bills, and settings in focused pages.
+- **[Student Feature Guides](user-guides/features/student/index.md)** - Account, work, store, bills, and support in focused pages.
+
 ### Quick References
 - **[Architecture Guide](technical-reference/architecture.md)** - Stack, project layout, patterns, and security posture.
 - **[Database Schema](technical-reference/database_schema.md)** - Current models and relationships.
@@ -50,6 +54,7 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 - **Why can't I log in?** -> [Student Login Diagnostics](user-guides/diagnostics/student-login.md)
 - **Why can't students claim accounts?** -> [Teacher Students Diagnostics](user-guides/diagnostics/teacher-students.md)
 - **Why didn't payroll run?** -> [Teacher Payroll Diagnostics](user-guides/diagnostics/teacher-attendance-payroll.md)
+- **Where are the feature guides?** -> [Teacher Feature Guides](user-guides/features/teacher/index.md)
 - **What's the database structure?** -> [Database Schema](technical-reference/database_schema.md)
 - **How does the economy system work?** -> [Classroom Economy Guide](user-guides/economy_guide.md)
 
@@ -70,6 +75,8 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 |----------|----------|---------|--------------|
 | [Student Diagnostics Index](user-guides/diagnostics/student.md) | Students | Fast diagnostic entry point | 2026-01-03 |
 | [Teacher Diagnostics Index](user-guides/diagnostics/teacher.md) | Teachers | Fast diagnostic entry point | 2026-01-03 |
+| [Teacher Feature Guides](user-guides/features/teacher/index.md) | Teachers | Structured feature documentation | 2026-02-09 |
+| [Student Feature Guides](user-guides/features/student/index.md) | Students | Structured feature documentation | 2026-02-09 |
 | [Architecture Guide](technical-reference/architecture.md) | Developers | System architecture and patterns | 2025-11-23 |
 | [Database Schema](technical-reference/database_schema.md) | Developers | Current models and relationships | 2025-11-23 |
 | [API Reference](technical-reference/api_reference.md) | Developers | REST API documentation | 2025-11-23 |
