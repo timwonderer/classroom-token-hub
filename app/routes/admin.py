@@ -7352,7 +7352,7 @@ def deletion_requests():
 @admin_required
 def help_support():
     """Redirects to the admin help and support documentation."""
-    return redirect(url_for('docs.view_doc', doc_path='diagnostics/teacher'))
+    return redirect(url_for('docs.view_doc', doc_path='user-guides/diagnostics/teacher'))
 
     if request.method == 'POST':
         # Handle bug report submission

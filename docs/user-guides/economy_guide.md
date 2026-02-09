@@ -107,4 +107,4 @@ If students are consistently broke, lower rent or fines, reduce utilities, or ra
 
 ## For developers and tooling
 
-For automated tooling and balancing rules, see the [Economy Specification](../technical-reference/ECONOMY_SPECIFICATION).
+For automated tooling and balancing rules, see the [Economy Specification](../technical-reference/economy-specification).

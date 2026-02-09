@@ -29,16 +29,25 @@
 │   └── rules/                # Detailed rule files
 ├── docs/
 │   ├── README.md             # Documentation index
-│   ├── DEPLOYMENT.md         # Deployment guide
 │   ├── user-guides/          # For end users
+│   │   ├── README.md
 │   │   ├── teacher_manual.md
-│   │   └── student_guide.md
+│   │   ├── student_guide.md
+│   │   ├── economy_guide.md
+│   │   ├── diagnostics/
+│   │   ├── features/
+│   │   └── legal/
 │   ├── technical-reference/  # For developers
 │   │   ├── architecture.md
 │   │   ├── database_schema.md
-│   │   └── ECONOMY_SPECIFICATION.md
-│   ├── operations/           # For deployment and maintenance
+│   │   ├── api_reference.md
+│   │   ├── analytics-specification.md
+│   │   └── economy-specification.md
+│   ├── operations/           # Deployment and maintenance
 │   │   ├── README.md
+│   │   ├── Deployment_Guide.md
+│   │   ├── README_GITHUB_PAGES.md
+│   │   ├── GITHUB_PAGES_SETUP.md
 │   │   ├── CLEANUP_DUPLICATES.md
 │   │   ├── DEMO_SESSIONS.md
 │   │   ├── DIGITALOCEAN_CLOUDFLARE_SETUP.md
@@ -46,14 +55,14 @@
 │   │   ├── PII_AUDIT.md
 │   │   ├── SECURITY_AUDIT_2025.md
 │   │   ├── SECURITY_IMPROVEMENTS_IMPLEMENTATION.md
-│   │   └── UPTIMEROBOT_SETUP.md
+│   │   └── PULSETIC_SETUP.md
 │   ├── security/             # Security audits and reports
 │   │   ├── CRITICAL_SAME_TEACHER_LEAK.md
 │   │   └── MULTI_TENANCY_AUDIT.md
 │   ├── development/          # Development guides
-│   │   ├── DEPRECATED_CODE_PATTERNS.md
-│   │   ├── MIGRATION_BEST_PRACTICES.md
-│   │   ├── TEMPLATE_REDESIGN_RECOMMENDATIONS.md
+│   │   ├── codebase_organization_documentation_hygiene_playbook.md
+│   │   ├── SCHEMA_CHANGE_MD.md
+│   │   ├── migration-specifications.md
 │   │   ├── TESTING_SUMMARY.md
 │   │   └── SEEDING_INSTRUCTIONS.md
 │   └── archive/              # Historical documents
@@ -431,7 +440,7 @@ Use proper markdown:
 **Files:**
 - `architecture.md` - System architecture
 - `database_schema.md` - Database structure
-- `ECONOMY_SPECIFICATION.md` - Financial system spec
+- `economy-specification.md` - Financial system spec
 
 **Update When:**
 - New models added

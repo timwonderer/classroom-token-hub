@@ -1,7 +1,7 @@
 """
 Analytics routes for teachers.
 
-Implements the analytics dashboard per Class-economy-analytics-specs.md.
+Implements the analytics dashboard per analytics-specification.md.
 
 Key Principles:
 - System health metrics always visible (5-second readability)

@@ -24,4 +24,4 @@ def test_help_support_page_renders(client):
     response = client.get("/admin/help-support", follow_redirects=False)
 
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/docs/diagnostics/teacher")
+    assert response.headers["Location"].endswith("/docs/user-guides/diagnostics/teacher")
