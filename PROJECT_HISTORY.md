@@ -5,7 +5,7 @@
 This document preserves the design philosophy, guiding principles, and formative lessons of Classroom Token Hub.  
 *It is not a changelog. It is a record of decisions that survived real classrooms.*
 
-For chronological releases and versioned changes, see CHANGELOG.md￼.
+For chronological releases and versioned changes, see [CHANGELOG.md](CHANGELOG.md).
 
 ## Project Vision
 
