@@ -747,6 +747,11 @@ def approve_redemption():
     if not student_item or student_item.status != 'processing':
         return jsonify({"status": "error", "message": "Invalid or already processed item."}), 404
 
+    # SECURITY: Verify the current admin owns the store item
+    current_admin = get_current_admin()
+    if not current_admin or student_item.store_item.teacher_id != current_admin.id:
+        return jsonify({"status": "error", "message": "Unauthorized."}), 403
+
     try:
         student_item.status = 'completed'
 
@@ -765,6 +770,77 @@ def approve_redemption():
     except SQLAlchemyError as e:
         db.session.rollback()
         current_app.logger.error(f"Redemption approval failed for student_item {student_item_id}: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": "An error occurred."}), 500
+
+
+@api_bp.route('/reject-redemption', methods=['POST'])
+@admin_required
+def reject_redemption():
+    data = request.get_json()
+    student_item_id = data.get('student_item_id')
+
+    student_item = db.session.get(StudentItem, student_item_id)
+    if not student_item or student_item.status != 'processing':
+        return jsonify({"status": "error", "message": "Invalid or already processed item."}), 404
+
+    # SECURITY: Verify the current admin owns the store item
+    current_admin = get_current_admin()
+    if not current_admin or student_item.store_item.teacher_id != current_admin.id:
+        return jsonify({"status": "error", "message": "Unauthorized."}), 403
+
+    try:
+        # 1. Determine Refund Amount from original purchase transaction
+        # Look up the actual amount paid (handles price changes and bulk discounts)
+        purchase_tx = Transaction.query.filter_by(
+            student_id=student_item.student_id,
+            type='purchase',
+        ).filter(
+            Transaction.join_code == student_item.join_code,
+            Transaction.description.like(f"Purchase: {student_item.store_item.name}%")
+        ).order_by(Transaction.timestamp.desc()).first()
+
+        if purchase_tx and purchase_tx.amount is not None:
+            refund_amount = abs(purchase_tx.amount)
+        else:
+            # Fallback to current store price if purchase transaction not found
+            refund_amount = student_item.store_item.price
+
+        # 2. Refund the student
+        # Create refund transaction
+        # CRITICAL: Use join_code from student_item for proper scoping
+        refund_tx = Transaction(
+            student_id=student_item.student_id,
+            teacher_id=student_item.store_item.teacher_id,
+            join_code=student_item.join_code,
+            amount=refund_amount,
+            account_type='checking',
+            type='refund',
+            description=f"Refund: {student_item.store_item.name} (Redemption Rejected)"
+        )
+        db.session.add(refund_tx)
+
+        # 3. Clean up the 'redemption' transaction ($0 log) created during request
+        # Scope by join_code in addition to student/type/description for accuracy
+        redemption_tx = Transaction.query.filter_by(
+            student_id=student_item.student_id,
+            type='redemption',
+            join_code=student_item.join_code,
+        ).filter(
+            Transaction.description.like(f"Used: {student_item.store_item.name}%")
+        ).order_by(Transaction.timestamp.desc()).first()
+
+        if redemption_tx:
+            db.session.delete(redemption_tx)
+
+        # 4. Remove the item from student's inventory
+        db.session.delete(student_item)
+
+        db.session.commit()
+        return jsonify({"status": "success", "message": "Redemption rejected and refunded."})
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Redemption rejection failed for student_item {student_item_id}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred."}), 500
 
 
