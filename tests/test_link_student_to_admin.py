@@ -88,7 +88,7 @@ def test_link_student_claims_existing_seat(client):
     _link_student_to_admin(student, admin.id)
     db.session.commit()
 
-    refreshed = TeacherBlock.query.get(existing.id)
+    refreshed = db.session.get(TeacherBlock, existing.id)
     assert refreshed.is_claimed is True
     # Should not create a duplicate record for the same student/block
     assert TeacherBlock.query.filter_by(teacher_id=admin.id, block="C").count() == 1

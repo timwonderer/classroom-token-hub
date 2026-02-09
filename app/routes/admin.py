@@ -1699,7 +1699,7 @@ def setup_recovery():
 def settings():
     """Teacher account settings - configure display name and class labels."""
     admin_id = session.get("admin_id")
-    admin = Admin.query.get_or_404(admin_id)
+    admin = db.get_or_404(Admin, admin_id)
 
     if request.method == 'POST':
         # Update display name
@@ -6046,7 +6046,7 @@ def void_transactions_bulk():
 def payroll_apply_reward(reward_id):
     """Apply a reward to selected students."""
     try:
-        reward = PayrollReward.query.get_or_404(reward_id)
+        reward = db.get_or_404(PayrollReward, reward_id)
         student_ids = request.form.getlist('student_ids')
 
         if not student_ids:
@@ -6094,7 +6094,7 @@ def payroll_apply_reward(reward_id):
 def payroll_apply_fine(fine_id):
     """Apply a fine to selected students."""
     try:
-        fine = PayrollFine.query.get_or_404(fine_id)
+        fine = db.get_or_404(PayrollFine, fine_id)
         student_ids = request.form.getlist('student_ids')
 
         if not student_ids:
@@ -8711,7 +8711,7 @@ def passkey_delete(passkey_id):
 def passkey_settings():
     """Passkey management page."""
     admin_id = session.get('admin_id')
-    admin = Admin.query.get_or_404(admin_id)
+    admin = db.get_or_404(Admin, admin_id)
     credentials = AdminCredential.query.filter_by(admin_id=admin_id).order_by(AdminCredential.created_at.desc()).all()
 
     return render_template('admin_passkey_settings.html',

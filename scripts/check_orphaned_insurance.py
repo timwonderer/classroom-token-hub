@@ -47,7 +47,7 @@ def main():
         print("\n⚠️  These policies are invisible in the admin panel!")
         print("To fix: Assign them to a teacher or delete them using:")
         print("  python3 -c 'from app import create_app, db; from app.models import InsurancePolicy; app=create_app(); ")
-        print("           app.app_context().push(); policy=InsurancePolicy.query.get(ID); ")
+        print("           app.app_context().push(); policy=db.session.get(InsurancePolicy, ID); ")
         print("           policy.teacher_id=TEACHER_ID; db.session.commit()'")
 
 if __name__ == "__main__":

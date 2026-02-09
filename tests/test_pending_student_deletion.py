@@ -83,7 +83,7 @@ def test_delete_single_pending_student(client):
     assert "Charlie C." in data["message"]
     
     # Verify TeacherBlock is deleted
-    assert TeacherBlock.query.get(tb_id) is None
+    assert db.session.get(TeacherBlock, tb_id) is None
 
 
 def test_delete_pending_student_wrong_teacher(client):
@@ -111,7 +111,8 @@ def test_delete_pending_student_wrong_teacher(client):
     assert "not found or access denied" in data["message"]
     
     # Verify TeacherBlock still exists
-    assert TeacherBlock.query.get(tb_id) is not None
+    assert db.session.get(TeacherBlock, tb_id) is not None
+    assert db.session.get(TeacherBlock, tb_id) is not None
 
 
 def test_delete_pending_student_already_claimed(client):
@@ -178,7 +179,7 @@ def test_delete_pending_student_already_claimed(client):
     assert "already been claimed" in data["message"]
     
     # Verify TeacherBlock still exists
-    assert TeacherBlock.query.get(tb_id) is not None
+    assert db.session.get(TeacherBlock, tb_id) is not None
 
 
 def test_bulk_delete_pending_students_by_ids(client):
@@ -208,7 +209,7 @@ def test_bulk_delete_pending_students_by_ids(client):
     
     # Verify all TeacherBlocks are deleted
     for tb_id in tb_ids:
-        assert TeacherBlock.query.get(tb_id) is None
+        assert db.session.get(TeacherBlock, tb_id) is None
 
 
 def test_bulk_delete_pending_students_by_block(client):
@@ -245,12 +246,12 @@ def test_bulk_delete_pending_students_by_block(client):
     assert "Block F" in data["message"]
     
     # Verify block F TeacherBlocks are deleted
-    assert TeacherBlock.query.get(pending1_id) is None
-    assert TeacherBlock.query.get(pending2_id) is None
-    assert TeacherBlock.query.get(pending3_id) is None
+    assert db.session.get(TeacherBlock, pending1_id) is None
+    assert db.session.get(TeacherBlock, pending2_id) is None
+    assert db.session.get(TeacherBlock, pending3_id) is None
     
     # Verify block G TeacherBlock still exists
-    assert TeacherBlock.query.get(pending_other_id) is not None
+    assert db.session.get(TeacherBlock, pending_other_id) is not None
 
 
 def test_bulk_delete_skips_claimed_students(client):
@@ -320,8 +321,8 @@ def test_bulk_delete_skips_claimed_students(client):
     assert data["deleted_count"] == 1  # Only the unclaimed one
     
     # Verify unclaimed is deleted, claimed still exists
-    assert TeacherBlock.query.get(pending1.id) is None
-    assert TeacherBlock.query.get(claimed_tb.id) is not None
+    assert db.session.get(TeacherBlock, pending1.id) is None
+    assert db.session.get(TeacherBlock, claimed_tb.id) is not None
 
 
 def test_bulk_delete_by_block_only_deletes_unclaimed(client):
@@ -395,11 +396,11 @@ def test_bulk_delete_by_block_only_deletes_unclaimed(client):
     assert data["deleted_count"] == 2  # Only unclaimed ones
     
     # Verify unclaimed are deleted
-    assert TeacherBlock.query.get(pending1_id) is None
-    assert TeacherBlock.query.get(pending2_id) is None
+    assert db.session.get(TeacherBlock, pending1_id) is None
+    assert db.session.get(TeacherBlock, pending2_id) is None
     
     # Verify claimed still exists
-    assert TeacherBlock.query.get(claimed_tb_id) is not None
+    assert db.session.get(TeacherBlock, claimed_tb_id) is not None
 
 
 def test_delete_pending_student_no_id_provided(client):

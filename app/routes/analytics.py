@@ -252,7 +252,7 @@ def dashboard():
     ).order_by(AnalyticsEvent.event_date.desc()).limit(10).all()
     
     # Get teacher info for display
-    teacher = Admin.query.get(teacher_id)
+    teacher = db.session.get(Admin, teacher_id)
     current_class = next((c for c in available_classes if c['join_code'] == join_code), None)
     
     return render_template(

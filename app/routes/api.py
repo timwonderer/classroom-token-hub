@@ -459,7 +459,7 @@ def purchase_item():
         if rent_item:
             if rent_item.rent_item_type == 'privilege':
                 # Calculate NEXT rent due date and set as expiry
-                rent_setting = RentSettings.query.get(rent_item.rent_setting_id)
+                rent_setting = db.session.get(RentSettings, rent_item.rent_setting_id)
                 if rent_setting and rent_setting.is_enabled:
                     now = utc_now()
 
@@ -637,7 +637,7 @@ def use_item():
         return jsonify({"status": "error", "message": "Incorrect passphrase."}), 403
 
     # 2. Get the student's item
-    student_item = StudentItem.query.get(student_item_id)
+    student_item = db.session.get(StudentItem, student_item_id)
 
     if not student_item or student_item.student_id != student.id:
         return jsonify({"status": "error", "message": "Invalid item."}), 404
@@ -743,7 +743,7 @@ def approve_redemption():
     data = request.get_json()
     student_item_id = data.get('student_item_id')
 
-    student_item = StudentItem.query.get(student_item_id)
+    student_item = db.session.get(StudentItem, student_item_id)
     if not student_item or student_item.status != 'processing':
         return jsonify({"status": "error", "message": "Invalid or already processed item."}), 404
 
@@ -773,7 +773,7 @@ def approve_redemption():
 @api_bp.route('/hall-pass/<int:pass_id>/<string:action>', methods=['POST'])
 @admin_required
 def handle_hall_pass_action(pass_id, action):
-    log_entry = HallPassLog.query.get_or_404(pass_id)
+    log_entry = db.get_or_404(HallPassLog, pass_id)
     student = log_entry.student
     now = utc_now()
 
@@ -899,7 +899,7 @@ def get_active_hall_passes():
     # If teacher_id is provided, validate and scope the query
     if teacher_id:
         # Validate teacher exists
-        teacher = Admin.query.get(teacher_id)
+        teacher = db.session.get(Admin, teacher_id)
         if not teacher:
             return jsonify({
                 "status": "error",
@@ -1177,7 +1177,7 @@ def hall_pass_terminal_return():
 def cancel_hall_pass(pass_id):
     """Allow students to cancel their pending hall pass request"""
     student = get_logged_in_student()
-    log_entry = HallPassLog.query.get_or_404(pass_id)
+    log_entry = db.get_or_404(HallPassLog, pass_id)
 
     # Verify this pass belongs to the logged-in student
     if log_entry.student_id != student.id:
@@ -1206,7 +1206,7 @@ def checkout_hall_pass():
     if not pass_id:
         return jsonify({"status": "error", "message": "Pass ID is required."}), 400
     
-    log_entry = HallPassLog.query.get_or_404(pass_id)
+    log_entry = db.get_or_404(HallPassLog, pass_id)
     
     # Verify this pass belongs to the logged-in student
     if log_entry.student_id != student.id:
@@ -1261,7 +1261,7 @@ def checkin_hall_pass():
     if not pass_id:
         return jsonify({"status": "error", "message": "Pass ID is required."}), 400
     
-    log_entry = HallPassLog.query.get_or_404(pass_id)
+    log_entry = db.get_or_404(HallPassLog, pass_id)
     
     # Verify this pass belongs to the logged-in student
     if log_entry.student_id != student.id:
@@ -1326,7 +1326,7 @@ def get_hall_pass_queue():
         }), 400
     
     # Validate teacher exists
-    teacher = Admin.query.get(teacher_id)
+    teacher = db.session.get(Admin, teacher_id)
     if not teacher:
         return jsonify({
             "status": "error",
@@ -2321,7 +2321,7 @@ def delete_tap_entry(event_id):
     from app.models import TapEvent
     from app.auth import get_student_for_admin
 
-    event = TapEvent.query.get(event_id)
+    event = db.session.get(TapEvent, event_id)
     if not event:
         return jsonify({"error": "Tap entry not found"}), 404
 

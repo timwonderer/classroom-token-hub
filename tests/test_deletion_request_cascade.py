@@ -123,12 +123,12 @@ def test_delete_teacher_cascades_deletion_requests(client):
     assert b"deleted" in response.data or b"Teacher" in response.data
     
     # Verify teacher is deleted
-    assert Admin.query.get(teacher_id) is None
+    assert db.session.get(Admin, teacher_id) is None
     
     # Verify all DeletionRequest records are cascade deleted (not set to NULL)
-    assert DeletionRequest.query.get(period_request_id) is None
-    assert DeletionRequest.query.get(account_request_id) is None
-    assert DeletionRequest.query.get(another_period_request_id) is None
+    assert db.session.get(DeletionRequest, period_request_id) is None
+    assert db.session.get(DeletionRequest, account_request_id) is None
+    assert db.session.get(DeletionRequest, another_period_request_id) is None
     
     # Verify no orphaned DeletionRequest records with NULL admin_id exist
     orphaned_requests = DeletionRequest.query.filter(
@@ -160,4 +160,4 @@ def test_delete_teacher_with_no_deletion_requests(client):
     )
     
     assert response.status_code == 200
-    assert Admin.query.get(teacher_id) is None
+    assert db.session.get(Admin, teacher_id) is None

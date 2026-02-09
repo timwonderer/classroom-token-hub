@@ -98,10 +98,10 @@ def test_delete_teacher_cleans_up_links(client):
     assert resp.status_code == 200
     
     # Verify Teacher Gone
-    assert Admin.query.get(teacher_id) is None
+    assert db.session.get(Admin, teacher_id) is None
 
     # Verify Student Still Exists (because linked to survivor_teacher)
-    s = Student.query.get(student_id)
+    s = db.session.get(Student, student_id)
     assert s is not None
     
     # Verify link to deleted teacher is gone

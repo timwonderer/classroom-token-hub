@@ -264,5 +264,5 @@ class TestAnnouncementMultiTenancy:
         db.session.commit()
 
         # Verify announcement is deleted
-        deleted_announcement = Announcement.query.get(announcement_id)
+        deleted_announcement = db.session.get(Announcement, announcement_id)
         assert deleted_announcement is None

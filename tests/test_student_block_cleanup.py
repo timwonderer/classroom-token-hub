@@ -106,10 +106,10 @@ def test_delete_student_removes_student_block(client):
     assert response.status_code == 200
     
     # Verify student is deleted
-    assert Student.query.get(student_id) is None
+    assert db.session.get(Student, student_id) is None
     
     # Verify StudentBlock is also deleted
-    assert StudentBlock.query.get(student_block_id) is None
+    assert db.session.get(StudentBlock, student_block_id) is None
 
 
 def test_bulk_delete_students_removes_student_blocks(client):
@@ -135,12 +135,12 @@ def test_bulk_delete_students_removes_student_blocks(client):
     assert response.status_code == 200
     
     # Verify students are deleted
-    assert Student.query.get(student1_id) is None
-    assert Student.query.get(student2_id) is None
+    assert db.session.get(Student, student1_id) is None
+    assert db.session.get(Student, student2_id) is None
     
     # Verify StudentBlocks are also deleted
-    assert StudentBlock.query.get(sb1_id) is None
-    assert StudentBlock.query.get(sb2_id) is None
+    assert db.session.get(StudentBlock, sb1_id) is None
+    assert db.session.get(StudentBlock, sb2_id) is None
 
 
 def test_delete_block_removes_student_blocks(client):
@@ -164,8 +164,8 @@ def test_delete_block_removes_student_blocks(client):
     assert response.status_code == 200
     
     # Verify all StudentBlocks for students in block X are deleted
-    assert StudentBlock.query.get(sb1_id) is None
-    assert StudentBlock.query.get(sb2_id) is None
+    assert db.session.get(StudentBlock, sb1_id) is None
+    assert db.session.get(StudentBlock, sb2_id) is None
 
 
 def test_bulk_delete_legacy_unclaimed_removes_student_blocks(client):
@@ -216,10 +216,10 @@ def test_bulk_delete_legacy_unclaimed_removes_student_blocks(client):
     assert response.status_code == 200
     
     # Verify student is deleted
-    assert Student.query.get(student_id) is None
+    assert db.session.get(Student, student_id) is None
     
     # Verify StudentBlock is also deleted
-    assert StudentBlock.query.get(student_block_id) is None
+    assert db.session.get(StudentBlock, student_block_id) is None
 
 
 def test_sysadmin_delete_admin_removes_student_blocks(client):
@@ -249,5 +249,5 @@ def test_sysadmin_delete_admin_removes_student_blocks(client):
     assert response.status_code == 200
     
     # Verify StudentBlocks are deleted
-    assert StudentBlock.query.get(sb1_id) is None
-    assert StudentBlock.query.get(sb2_id) is None
+    assert db.session.get(StudentBlock, sb1_id) is None
+    assert db.session.get(StudentBlock, sb2_id) is None
