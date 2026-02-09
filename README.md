@@ -2,7 +2,7 @@
 
 An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.
 
-**Version:** 1.7.1
+**Version:** 1.8.0
 
 ---
 
@@ -12,7 +12,7 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Version 1.7.1 Released! This maintenance release fixes critical Decimal calculation errors in student dashboards, interest calculations, and analytics. Major features from v1.7.0 include a comprehensive analytics dashboard with system health metrics, flexible rent itemization with store integration, enhanced mobile navigation with PWA support, and visual privilege badges for rent items. See [RELEASE_NOTES_v1.7.1.md](docs/archive/releases/RELEASE_NOTES_v1.7.1.md) for full details.
+**Project Status:** Version 1.8.0 Released! This release adds rent item types (privilege, per-use, hall pass), coverage period tracking for rent payments, and stability fixes for rent/store/insurance flows. See [RELEASE_NOTES_v1.8.0.md](docs/archive/releases/RELEASE_NOTES_v1.8.0.md) for full details.
 
 ---
 
