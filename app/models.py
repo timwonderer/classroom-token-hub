@@ -596,6 +596,12 @@ class Transaction(db.Model):
     # All times stored as UTC
     date_funds_available = db.Column(db.DateTime(timezone=True), default=utc_now)
 
+    # Reversal tracking (Double Entry Bookkeeping)
+    # Points to the transaction being reversed.
+    # If this field is set, this transaction is a "Counter-Transaction".
+    original_transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True)
+    original_transaction = db.relationship('Transaction', remote_side=[id], backref=db.backref('reversals', lazy='dynamic'))
+
     # Relationship to track which teacher created this transaction
     teacher = db.relationship('Admin', backref=db.backref('transactions', lazy='dynamic'))
 
