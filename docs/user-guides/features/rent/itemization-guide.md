@@ -8,7 +8,7 @@ audience: teachers
 # Rent Itemization Guide
 
 **Audience:** Teachers
-**Version:** 1.7.0+
+**Version:** 1.8.0+
 **Route:** `/admin/settings/rent`
 
 ---
@@ -66,13 +66,11 @@ If not already enabled:
 - **Description:** Brief explanation of what this provides
 - **Base Value:** Dollar amount this item represents in rent
 
-**Store Integration (Optional):**
-- **Available in Store:** Toggle ON to offer as store alternative
-- **Custom Store Price:** Set à la carte price (usually higher than base value)
-
-**Purchase Duration:**
-- **Per Use:** Student buys each time (unlimited purchases)
-- **Per Rent Period:** Buy once, lasts until next rent due
+**Item Type:**
+Select one of the three item types:
+1. **Privilege:** Ongoing benefits (Desk, Locker). Can be available in store.
+2. **Per-Use:** Consumable goods or services (Pencil, Phone Call). Always in store.
+3. **Hall Pass:** Adds to student's hall pass balance upon rent payment.
 
 4. Click **Save Item**
 
@@ -129,62 +127,93 @@ If not already enabled:
 
 ---
 
-## Purchase Duration Options
+## Item Types & Duration Options
 
-### Per Use Items
+### 1. Privilege Items
 
-**What It Means:** Student must buy every time they want to use it
-
-**Best For:**
-- Consumables (paper, supplies, pencils)
-- One-time privileges (extra bathroom pass, laptop charger)
-- Items that naturally expire with use
-
-**Settings:**
-- Unlimited purchases allowed
-- No expiration date
-- Student can buy multiple times
-
-**Example:**
-```
-Item: Extra Supplies Pack
-Base Value: $5
-Store Price: $7
-Duration: Per Use
-
-Student buys supplies pack → Uses it → Can buy again next time
-```
-
-### Per Rent Period Items
-
-**What It Means:** Student buys once, can use until next rent is due
+**What It Means:** Ongoing benefit valid for the rent period.
 
 **Best For:**
 - Desk/chair/locker access
 - Textbook rental
-- Long-term privileges
 - Classroom amenities
 
 **Settings:**
-- Limit 1 purchase per student
-- Expires when next rent payment due
-- Acts like mini-rent for that item
+- **Available in Store:** Toggle ON to offer as store alternative
+- **Store Price:** À la carte price
+- **Duration:** Valid until next rent due date
 
 **Example:**
 ```
 Item: Locker Access
+Type: Privilege
 Base Value: $10
 Store Price: $15
-Duration: Per Rent Period
 
-Student buys locker access → Gets privilege badge → Lasts until next rent cycle
+Student buys locker access → Gets privilege badge → Lasts until next rent due date
 ```
 
-**Expiration Logic:**
-- If rent is due monthly on the 1st
-- Student buys locker access on January 5th
-- Access expires February 1st (next rent due date)
-- Student must buy again or pay full rent
+### 2. Per-Use Items
+
+**What It Means:** Consumable item or one-time service.
+
+**Best For:**
+- Consumables (paper, supplies, pencils)
+- One-time services (print worksheet, phone call home)
+- Late work passes
+
+**Settings:**
+- **Store Price:** Required (always available in store)
+- **Free Uses Per Period:** (Optional) Rent payers get X free uses per rent cycle
+- **Duration:** Per use (consumable)
+
+**Example:**
+```
+Item: Extra Pencil
+Type: Per-Use
+Base Value: $1
+Store Price: $2
+Free Uses: 5
+
+Rent payer gets 5 free pencils. Non-payer buys for $2 each.
+```
+
+### 3. Hall Pass Items
+
+**What It Means:** Adds hall passes to student balance.
+
+**Best For:**
+- Bathroom passes
+- Water fountain trips
+- Locker visits
+
+**Settings:**
+- **Passes Granted:** Number of passes added when rent is paid
+- **Duration:** Added to balance (no expiration)
+
+**Example:**
+```
+Item: Bathroom Pass Bundle
+Type: Hall Pass
+Base Value: $5
+Passes Granted: 3
+
+Paying rent adds 3 passes to student's balance.
+```
+
+---
+
+## Coverage Tracking
+
+**How It Works:**
+Rent payments now cover a specific date range (Coverage Period).
+- **Start Date:** Last due date (or payment date)
+- **End Date:** Next due date
+
+**Privileges & Access:**
+- Students are considered "Rent Active" only within their paid coverage period.
+- Privileges expire automatically when the coverage period ends.
+- Store alternatives for privileges are also valid only until the next rent due date.
 
 ---
 
@@ -192,7 +221,7 @@ Student buys locker access → Gets privilege badge → Lasts until next rent cy
 
 ### How Auto-Sync Works
 
-When you mark an item "Available in Store":
+When you mark an item "Available in Store" (or use Per-Use type):
 
 1. **Store Item Created Automatically:**
    - Name, description, price copied over
@@ -207,7 +236,7 @@ When you mark an item "Available in Store":
 
 3. **Purchase Limits Set:**
    - Per Use items: No limit
-   - Per Rent Period items: Limit 1, expires automatically
+   - Privilege items: Limit 1, expires automatically
 
 ### Student Store Experience
 
@@ -278,13 +307,16 @@ Rent Amount: $40/month
 
 Items:
 1. Desk Access
-   - Base: $15 | Store: $20 | Per Rent Period
+   - Type: Privilege
+   - Base: $15 | Store: $20
 
 2. Chair Use
-   - Base: $15 | Store: $20 | Per Rent Period
+   - Type: Privilege
+   - Base: $15 | Store: $20
 
-3. Supply Cabinet Access
-   - Base: $10 | Store: $15 | Per Month
+3. Hall Pass Bundle
+   - Type: Hall Pass
+   - Base: $10 | Passes: 4
 
 Total Base Value: $40
 Total À La Carte: $55 (38% premium)
@@ -301,16 +333,20 @@ Rent Amount: $60/month
 
 Items:
 1. Desk & Chair
-   - Base: $25 | Store: $35 | Per Rent Period
+   - Type: Privilege
+   - Base: $25 | Store: $35
 
 2. Locker
-   - Base: $20 | Store: $28 | Per Rent Period
+   - Type: Privilege
+   - Base: $20 | Store: $28
 
 3. Textbook Rental
-   - Base: $10 | Store: $15 | Per Rent Period
+   - Type: Privilege
+   - Base: $10 | Store: $15
 
 4. Supply Pack (consumable)
-   - Base: $5 | Store: $7 | Per Use
+   - Type: Per-Use
+   - Base: $5 | Store: $2 | Free Uses: 3
 
 Total Base Value: $60
 Total À La Carte (excl. supplies): $78
@@ -321,37 +357,6 @@ Savings: $18 + supplies as needed
 - Mix of long-term and per-use items
 - Students understand different types of costs
 - Teaches difference between fixed and variable expenses
-
-### Premium Setup: Luxury Classroom
-
-```
-Rent Amount: $100/month
-
-Items:
-1. Premium Desk (standing desk)
-   - Base: $30 | Store: $45 | Per Rent Period
-
-2. Ergonomic Chair
-   - Base: $25 | Store: $38 | Per Rent Period
-
-3. Locker XL
-   - Base: $20 | Store: $30 | Per Rent Period
-
-4. Technology Package (iPad access)
-   - Base: $15 | Store: $25 | Per Rent Period
-
-5. Unlimited Supplies
-   - Base: $10 | Store: N/A | Per Rent Period
-
-Total Base Value: $100
-Total À La Carte: $138
-Savings: $38
-```
-
-**Educational Goals:**
-- Teaches value of premium options
-- Demonstrates quality vs. cost tradeoffs
-- Students see luxury has price but also value
 
 ---
 
@@ -377,7 +382,7 @@ Savings: $38
 - Physical classroom resources (desk, locker, chair)
 - Access privileges (textbook, technology, supplies)
 - Consumables (paper, pencils, materials)
-- Optional upgrades (premium desk, extra storage)
+- Hall Pass bundles (adds value to rent)
 
 **Avoid:**
 - Public goods everyone needs (whiteboard access)
@@ -458,21 +463,10 @@ Your Monthly Rent: $50 due on the 1st
 What Your Rent Covers:
 ✓ Desk Access ($20)
 ✓ Chair ($15)
-✓ Locker ($10)
+✓ Hall Pass Bundle (4 passes)
 ✓ Supplies ($5)
 
 Total Value: $50
-
-💡 Pro Tip:
-If you pay rent, you get everything included!
-If you buy items separately from the store:
-- Desk: $25 (+ $5)
-- Chair: $20 (+ $5)
-- Locker: $15 (+ $5)
-- Supplies: $7 (+ $2)
-Total à la carte: $67 (+ $17 more!)
-
-Pay rent to save $17!
 ```
 
 ### What Students See in Store
@@ -487,9 +481,9 @@ you can buy them individually here.
 📅 Valid until next rent payment (Feb 1)
 ✅ Included in rent | OR buy separately
 
-[Chair] $20
-📅 Valid until next rent payment (Feb 1)
-✅ Included in rent | OR buy separately
+[Extra Pencil] $2
+📦 Per-Use Item
+✅ 5 Free Uses remaining
 ```
 
 ### Privilege Badges (Teacher View)
@@ -506,83 +500,6 @@ John's Rent Privileges:
 
 - Green = Included in rent payment
 - Blue = Purchased separately from store
-
----
-
-## Advanced Configurations
-
-### Progressive Rent
-
-Create different "rent tiers" using store items:
-
-**Basic Rent: $40**
-- Standard desk
-- Standard chair
-- Basic locker
-
-**Premium Upgrades (Store):**
-- Standing desk upgrade: +$15
-- Ergonomic chair upgrade: +$10
-- Locker XL upgrade: +$8
-
-Students pay base rent, can upgrade components individually.
-
-### Seasonal Items
-
-Add/remove items based on time of year:
-
-**Fall:** Include textbook rental
-**Winter:** Add coat hook access
-**Spring:** Include outdoor seating option
-
-### Experiment With Models
-
-Test different setups and use analytics to see what works:
-
-- All items per-rent-period vs. mix of durations
-- High vs. low premium on store prices
-- Many small items vs. few large items
-- Required vs. all-optional items
-
----
-
-## Real-World Connections
-
-### Teaching Concepts
-
-**Itemized Rent Teaches:**
-- **Bundling:** Multiple services for one price (like cable/internet packages)
-- **À La Carte Pricing:** Pay only for what you use (like streaming services)
-- **Value Perception:** Understanding what you're actually getting
-- **Rent vs. Own:** Fixed costs for guaranteed access
-- **Trade-offs:** Convenience vs. cost control
-
-**Discussion Questions:**
-- "Is it better to pay rent or buy items separately? Why?"
-- "How is this like real utilities (water, electricity)?"
-- "What if you only need 1-2 items - still pay rent?"
-- "How do businesses use bundle pricing?"
-
-### Real-World Examples
-
-**Apartment Rent:**
-- Unit cost ($1000)
-- Water included
-- Electric separate
-- Internet separate
-= Total housing cost higher than base rent
-
-**Gym Membership:**
-- Monthly fee ($50)
-- Access to all equipment
-- Classes included
-- Personal training extra
-= Bundle vs. paying per visit
-
-**Streaming Services:**
-- Netflix ($15/month) - all content
-- Buy movies individually ($5 each)
-= Bundle better if watch 4+ movies
 
 ---
 
@@ -605,6 +522,6 @@ Have questions or suggestions about rent itemization?
 
 ---
 
-**Last Updated:** 2026-01-09
-**Version:** 1.7.0
-**Feature Status:** MVP - Automatic pricing calculator coming in future release
+**Last Updated:** 2026-02-09
+**Version:** 1.8.0
+**Feature Status:** Production
