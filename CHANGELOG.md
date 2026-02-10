@@ -8,7 +8,11 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
-- _No changes yet._
+### Fixed
+- **P0: Duplicate auto-tap-out events causing payroll overpayment** - Added idempotency check to prevent race conditions when multiple sources (student browser polling, scheduled job, admin dashboard) call auto-tap-out logic simultaneously. Previously, duplicate "Daily limit reached" tap-out events would be created, causing payroll to count the same session multiple times and resulting in massive overpayment. Now checks if a daily limit tap-out already exists before creating a new one. Includes cleanup script (`cleanup_duplicate_tapouts.py`) to fix existing duplicate records. See `DUPLICATE_TAPOUT_BUG_REPORT.md` for full details.
+- **Void redemption creating transactions without join_code** - Fixed `/api/reject-redemption` endpoint creating refund transactions with `join_code=NULL` when voiding redemptions for legacy StudentItem records. Added fallback logic to resolve join_code from TeacherBlock or current session when StudentItem.join_code is NULL, preventing balance fix warnings for teachers. This resolves the "Fix Student Balances" alert appearing after voiding old redemptions.
+- **Void transaction CSRF 400 error** - Fixed student detail page void transaction button failing with 400 error. Added missing X-CSRFToken header to fetch request in `voidTransaction()` JavaScript function. Teachers can now successfully void transactions from student detail pages.
+- **P0: Rent payment applied to wrong period with bill preview enabled** - Fixed critical bug where students with unpaid overdue rent were allowed to pre-pay for future periods instead of paying overdue amounts first. When bill preview was enabled with a long preview period (e.g., 30 days), the system incorrectly classified overdue students as being in "preview period" for next month's rent. This caused payments to be recorded for the wrong coverage period (next month instead of current/overdue month), preventing students from receiving rent benefits even after paying. Now verifies current coverage period is fully paid before allowing preview period payments. Students must pay oldest overdue period first, and benefits are granted immediately when current period is paid. Also fixed rent page to display correct period being paid for with OVERDUE badge when applicable.
 
 ## [1.8.0] - 2026-02-09
 
