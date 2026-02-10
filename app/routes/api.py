@@ -2599,9 +2599,6 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                 # If limit reached or exceeded, auto-tap-out
                 if today_attendance >= daily_limit:
                     hours_limit = daily_limit / 3600.0
-                    current_app.logger.info(
-                        f"Auto-tapping out student {student.id} from {period_upper} - daily limit of {hours_limit} hours reached (total: {today_attendance/3600:.2f}h)"
-                    )
 
                     # Prioritize join_code from the active event we are closing
                     join_code = latest_event.join_code
@@ -2614,6 +2611,29 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                             f"Unable to resolve join_code for student {student.id} in period {period_upper} for auto-tap-out. TapEvent ID is {latest_event.id}."
                         )
                         continue
+
+                    # IDEMPOTENCY CHECK: Check if we already created a daily limit tap-out today
+                    # This prevents duplicate tap-outs from race conditions (multiple browser tabs, scheduled job, etc.)
+                    existing_limit_tapout = TapEvent.query.filter(
+                        TapEvent.student_id == student.id,
+                        TapEvent.period == period_upper,
+                        TapEvent.status == "inactive",
+                        TapEvent.timestamp >= start_of_day_utc,
+                        TapEvent.timestamp < end_of_day_utc,
+                        TapEvent.reason.like(f"Daily limit%"),  # Matches "Daily limit (X.Xh) reached"
+                        TapEvent.is_deleted == False
+                    ).first()
+
+                    if existing_limit_tapout:
+                        current_app.logger.debug(
+                            f"Skipping duplicate auto-tap-out for student {student.id} in {period_upper} - "
+                            f"daily limit tap-out already exists at {existing_limit_tapout.timestamp}"
+                        )
+                        continue  # Skip creating duplicate
+
+                    current_app.logger.info(
+                        f"Auto-tapping out student {student.id} from {period_upper} - daily limit of {hours_limit} hours reached (total: {today_attendance/3600:.2f}h)"
+                    )
 
                     # Calculate when they SHOULD have been tapped out (at exactly the limit)
                     # If they've been active for 90 minutes and limit is 75, tap them out 15 minutes ago

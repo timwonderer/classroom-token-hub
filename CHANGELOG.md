@@ -8,7 +8,8 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
-- _No changes yet._
+### Fixed
+- **P0: Duplicate auto-tap-out events causing payroll overpayment** - Added idempotency check to prevent race conditions when multiple sources (student browser polling, scheduled job, admin dashboard) call auto-tap-out logic simultaneously. Previously, duplicate "Daily limit reached" tap-out events would be created, causing payroll to count the same session multiple times and resulting in massive overpayment. Now checks if a daily limit tap-out already exists before creating a new one. Includes cleanup script (`cleanup_duplicate_tapouts.py`) to fix existing duplicate records. See `DUPLICATE_TAPOUT_BUG_REPORT.md` for full details.
 
 ## [1.8.0] - 2026-02-09
 
