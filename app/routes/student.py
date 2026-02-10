@@ -2348,18 +2348,11 @@ def shop():
                     db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
                 ).all()
 
-                valid_payments = []
-                for payment in coverage_payments:
-                    txn = Transaction.query.filter(
-                        Transaction.student_id == student.id,
-                        Transaction.type == 'Rent Payment',
-                        db.or_(Transaction.join_code == join_code, Transaction.join_code.is_(None)),
-                        Transaction.timestamp >= payment.payment_date - timedelta(seconds=5),
-                        Transaction.timestamp <= payment.payment_date + timedelta(seconds=5),
-                        Transaction.amount == -payment.amount_paid
-                    ).first()
-                    if txn and not txn.is_void:
-                        valid_payments.append(payment)
+                valid_payments = _filter_valid_rent_payments(
+                    coverage_payments,
+                    student.id,
+                    join_code
+                )
 
                 if valid_payments:
                     total_paid = sum(p.amount_paid for p in valid_payments)
@@ -2559,6 +2552,57 @@ def _total_paid_by_grace(payments, grace_end_date):
     )
 
 
+def _filter_valid_rent_payments(payments, student_id, join_code):
+    """Return payments that have a matching, non-void rent transaction."""
+    if not payments:
+        return []
+
+    payment_dates = [p.payment_date for p in payments if p.payment_date]
+    if not payment_dates:
+        return []
+
+    min_payment_date = min(payment_dates)
+    max_payment_date = max(payment_dates)
+    window_start = min_payment_date - timedelta(seconds=5)
+    window_end = max_payment_date + timedelta(seconds=5)
+
+    payment_amounts = {-(p.amount_paid) for p in payments}
+
+    txn_query = Transaction.query.filter(
+        Transaction.student_id == student_id,
+        Transaction.type == 'Rent Payment',
+        Transaction.timestamp >= window_start,
+        Transaction.timestamp <= window_end,
+        Transaction.amount.in_(payment_amounts)
+    )
+    if join_code:
+        txn_query = txn_query.filter(Transaction.join_code == join_code)
+    else:
+        txn_query = txn_query.filter(Transaction.join_code.is_(None))
+
+    candidate_txns = txn_query.all()
+    txns_by_amount = {}
+    for txn in candidate_txns:
+        txns_by_amount.setdefault(txn.amount, []).append(txn)
+
+    used_txn_ids = set()
+    valid_payments = []
+    for payment in payments:
+        candidates = txns_by_amount.get(-payment.amount_paid, [])
+        for txn in candidates:
+            if txn.id in used_txn_ids or txn.is_void:
+                continue
+            if not txn.timestamp or not payment.payment_date:
+                continue
+            if abs((ensure_utc(txn.timestamp) - ensure_utc(payment.payment_date)).total_seconds()) > 5:
+                continue
+            used_txn_ids.add(txn.id)
+            valid_payments.append(payment)
+            break
+
+    return valid_payments
+
+
 def _calculate_rent_coverage_due_date(settings, reference_date=None):
     """
     Return the most recently passed due date for coverage tracking.
@@ -2665,19 +2709,11 @@ def rent():
             or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
         ).all()
 
-        # Filter out voided transactions
-        valid_payments = []
-        for payment in current_coverage_payments:
-            txn = Transaction.query.filter(
-                Transaction.student_id == student.id,
-                Transaction.type == 'Rent Payment',
-                or_(Transaction.join_code == join_code, Transaction.join_code.is_(None)),
-                Transaction.timestamp >= payment.payment_date - timedelta(seconds=5),
-                Transaction.timestamp <= payment.payment_date + timedelta(seconds=5),
-                Transaction.amount == -payment.amount_paid
-            ).first()
-            if txn and not txn.is_void:
-                valid_payments.append(payment)
+        valid_payments = _filter_valid_rent_payments(
+            current_coverage_payments,
+            student.id,
+            join_code
+        )
 
         if valid_payments:
             total_paid_current = sum(p.amount_paid for p in valid_payments)
@@ -2868,19 +2904,11 @@ def rent_pay(period):
             or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
         ).all()
 
-        # Filter out voided transactions
-        valid_payments = []
-        for payment in current_coverage_payments:
-            txn = Transaction.query.filter(
-                Transaction.student_id == student.id,
-                Transaction.type == 'Rent Payment',
-                or_(Transaction.join_code == join_code, Transaction.join_code.is_(None)),
-                Transaction.timestamp >= payment.payment_date - timedelta(seconds=5),
-                Transaction.timestamp <= payment.payment_date + timedelta(seconds=5),
-                Transaction.amount == -payment.amount_paid
-            ).first()
-            if txn and not txn.is_void:
-                valid_payments.append(payment)
+        valid_payments = _filter_valid_rent_payments(
+            current_coverage_payments,
+            student.id,
+            join_code
+        )
 
         if valid_payments:
             total_paid = sum(p.amount_paid for p in valid_payments)

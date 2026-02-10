@@ -799,13 +799,18 @@ def reject_redemption():
     try:
         # 1. Determine Refund Amount from original purchase transaction
         # Look up the actual amount paid (handles price changes and bulk discounts)
-        purchase_txs = Transaction.query.filter_by(
+        purchase_tx_query = Transaction.query.filter_by(
             student_id=student_item.student_id,
+            teacher_id=student_item.store_item.teacher_id,
             type='purchase',
-            join_code=student_item.join_code,
         ).filter(
             Transaction.description.like(f"Purchase: {student_item.store_item.name}%")
-        ).all()
+        )
+        if student_item.join_code:
+            purchase_tx_query = purchase_tx_query.filter(
+                Transaction.join_code == student_item.join_code
+            )
+        purchase_txs = purchase_tx_query.all()
 
         purchase_tx = None
         if purchase_txs:
@@ -846,26 +851,29 @@ def reject_redemption():
         # CRITICAL: Use join_code from student_item for proper scoping
         # CRITICAL FIX: Handle legacy StudentItems without join_code
         refund_join_code = student_item.join_code
+        if not refund_join_code and purchase_tx and purchase_tx.join_code:
+            refund_join_code = purchase_tx.join_code
+
         if not refund_join_code:
-            # Legacy StudentItem without join_code - resolve from current session
-            from app.utils.attendance_helpers import get_join_code_for_student_period
-            # Get student's block/period (StudentItems don't store period, so we need to infer)
+            # Legacy StudentItem without join_code - resolve from student blocks
             student = db.session.get(Student, student_item.student_id)
             teacher_id = student_item.store_item.teacher_id
 
-            # Try to resolve join_code from TeacherBlock using first student period
             if student and student.block:
                 student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
                 if student_blocks:
-                    # Use first block as fallback
                     refund_join_code = get_join_code_for_student_period(
                         student.id, student_blocks[0], teacher_id
                     )
 
-            if not refund_join_code:
-                # Ultimate fallback: use current_join_code from session if available
-                refund_join_code = session.get('current_join_code')
+        if not refund_join_code:
+            current_app.logger.error(
+                f"Unable to resolve join_code for legacy StudentItem {student_item.id} "
+                "during refund. Aborting to avoid unscoped transaction."
+            )
+            return jsonify({"status": "error", "message": "Unable to resolve class for refund."}), 400
 
+        if refund_join_code != student_item.join_code:
             current_app.logger.warning(
                 f"Legacy StudentItem {student_item.id} missing join_code. "
                 f"Resolved to: {refund_join_code} for refund transaction."
@@ -2679,7 +2687,6 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                     db.session.add(tap_out_event)
 
                     # Lock the student for the rest of the day in this period
-                    from app.models import StudentBlock
                     student_block = StudentBlock.query.filter_by(
                         student_id=student.id,
                         period=period_upper

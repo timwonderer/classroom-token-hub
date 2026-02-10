@@ -12,10 +12,9 @@ Usage:
 """
 
 import argparse
-from datetime import datetime, timezone
+from datetime import datetime
 from app import create_app, db
 from app.models import TapEvent
-from sqlalchemy import func
 
 
 def find_duplicate_tapouts(student_id=None):
