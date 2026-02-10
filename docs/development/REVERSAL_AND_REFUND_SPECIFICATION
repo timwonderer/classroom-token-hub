@@ -1,0 +1,283 @@
+# Monetary Reversals & Refunds Specification
+
+## Purpose
+
+This document defines the **authoritative rules** for reversing, refunding, or otherwise counteracting any action that moves money within the Classroom Economy system.
+
+This spec exists to ensure:
+
+* Ledger integrity (no money disappears)
+* Idempotency (no duplicate reversals)
+* Clear authority and due process
+* Predictable failure behavior under error conditions
+
+All subsystems that move money **must** comply with this specification.
+
+---
+
+## Core Principle (Non‑Negotiable)
+
+**Money is never erased.**
+
+Any reversal, refund, or correction is represented as a **new counter‑transaction** that references the original transaction. Historical records are immutable.
+
+---
+
+## Definitions
+
+* **Monetary Action**: Any operation that credits or debits a student account.
+* **Original Transaction**: The initial monetary event being reversed.
+* **Counter‑Transaction**: A new transaction that offsets a prior transaction.
+* **Reversible**: Eligible for a counter‑transaction under defined conditions.
+* **Idempotent**: An operation that can be safely retried without duplicating effects.
+
+---
+
+## Authority Model
+
+| Actor    | Allowed Actions                                                                                                    |
+| -------- | ------------------------------------------------------------------------------------------------------------------ |
+| Student  | May **request** review via ticket only. Never executes monetary changes.                                           |
+| Teacher  | May initiate and execute reversals **with or without a student ticket**, depending on transaction type and policy. |
+| System   | May issue automatic, rule‑based monetary actions only.                                                             |
+| Sysadmin | May issue corrective monetary actions for system‑level errors under defined constraints.                           |
+
+**Authority Notes:**
+
+* Student tickets are **required only when mandated by transaction policy**.
+* Teacher‑ or sysadmin‑initiated reversals without a student ticket are limited to explicitly defined scenarios (e.g., system error, overpayment, redemption rejection).
+* No actor may silently modify balances.
+
+---
+
+## Reversal Preconditions (Global)
+
+A monetary reversal **may only proceed** if all conditions below are met:
+
+* The original transaction exists
+* The transaction belongs to the same join_code scope
+* The transaction has not already been reversed
+* The transaction type is marked reversible under this spec
+* **If required by transaction policy**, an upstream artifact exists (e.g., student ticket)
+
+If any condition fails, the reversal request must fail safely.
+
+---
+
+## Idempotency Rules
+
+* Each original transaction may be reversed **at most once**
+* Counter‑transactions must reference the original transaction ID
+* Duplicate reversal attempts must be no‑ops with a warning log
+
+---
+
+## Ordering Guarantees
+
+When performing a reversal, the system must follow this order:
+
+1. Validate reversibility and preconditions
+2. Log reversal intent
+3. Update non‑monetary state (e.g., deactivate item effects)
+4. Execute counter‑transaction (refund / offset)
+5. Log finalized reversal
+
+At no point may money be refunded before state reconciliation.
+
+---
+
+## Transaction Categories & Reversibility
+
+### Payroll
+
+* **Type**: System‑generated
+* **Reversible**: ⚠️ Conditional (Correction Only)
+* **Constraints**:
+
+  * Teacher or sysadmin initiated
+  * Allowed **only** for system error (e.g., overpayment due to bug or race condition)
+  * Creates a corrective counter‑transaction (no deletion of original payroll entry)
+  * Must reference incident or ticket ID
+
+### Manual Bonus / Fine
+
+* **Type**: Teacher‑initiated
+* **Reversible**: ✅ Yes
+* **Constraints**: Requires ticket or documented rationale
+
+### Bank Transfer (Student‑Initiated)
+
+* **Reversible**: ❌ No
+* **Rationale**: User‑initiated transfers are final
+
+### Overdraft Fee
+
+* **Type**: System‑generated
+* **Reversible**: ⚠️ Conditional
+* **Constraints**: Teacher‑initiated; ticket optional (system error or discretionary forgiveness)
+
+### Interest Payout
+
+* **Type**: System‑generated
+* **Reversible**: ❌ No
+* **Rationale**: Periodic settlement is final
+
+### Rent
+
+* **Type**: System‑generated
+* **Reversible**: ❌ No
+
+### Rent Late Fee
+
+* **Type**: System‑generated
+* **Reversible**: ⚠️ Conditional
+* **Constraints**: Teacher discretion + ticket
+
+### Insurance Premium
+
+* **Type**: System‑generated
+* **Reversible**: ❌ No
+
+### Insurance Monetary Payout
+
+* **Type**: System‑generated
+* **Reversible**: ❌ No
+
+### Insurance Transaction‑Based Reimbursement
+
+* **Type**: Conditional system action
+* **Reversible**: ❌ No
+
+### Store Purchase
+
+* **Type**: Student‑initiated
+* **Reversible**: ⚠️ Conditional
+* **Constraints**: Student ticket required; teacher executes refund
+
+### Redemption Rejection (Refund)
+
+* **Type**: Teacher‑initiated
+* **Reversible**: ✅ Yes
+* **Constraints**:
+
+  * No student ticket required
+  * Item effects must be deactivated
+  * Refund amount equals original purchase price
+
+### Bug Bounty
+
+* **Type**: Sysadmin‑initiated
+* **Reversible**: ❌ No
+* **Constraints**:
+
+  * Only available if class is marked "eligible for bug bounty"
+  * Incentive payouts are final once issued
+
+---
+
+## Dispute & Ticketing Semantics (UI Contract)
+
+This section defines how **transaction disputability** must be surfaced in the student and teacher interfaces. The UI **must not imply rights or actions that the system does not allow**.
+
+### Transaction Disputability States
+
+Each transaction type must declare exactly one of the following states:
+
+1. **Disputable**
+
+   * Student may file a support ticket
+   * Ticket may result in a valid reversal or correction
+   * Example: store purchase, overdraft fee
+
+2. **Final but Explainable**
+
+   * Student may view an explanation of the transaction
+   * Ticket submission is disabled by default
+   * Optional escalation may be offered (non‑default)
+   * Example: rent, payroll (non‑error cases), interest
+
+3. **Non‑Actionable**
+
+   * No ticket or escalation available
+   * UI must clearly indicate that the transaction is final
+   * Example: bug bounty, finalized insurance payouts
+
+### Student Interface Requirements
+
+* The transaction action icon must reflect the transaction’s disputability state
+* The icon **must not always imply "Report an Issue"**
+* If a transaction is not disputable, the UI must:
+
+  * Disable the report action, or
+  * Replace it with an informational tooltip or explanation panel
+
+Students must never be invited to submit tickets for transactions that cannot result in action.
+
+### Teacher Interface Requirements
+
+* Resolution options shown to teachers **must be constrained by transaction type**
+* The resolution action dropdown must only display outcomes permitted by this spec
+* Teachers must never be presented with actions that would violate economic rules
+
+The system, not the teacher, is responsible for enforcing allowable outcomes.
+
+### Ticket Semantics
+
+* A ticket represents a **claim**, not a guarantee of reversal
+* Ticket existence does not imply disputability
+* Ticket requirements are governed by transaction policy, not user intent
+
+---
+
+## Refund Amount Rules
+
+* Refunds must equal the **original transaction amount**
+* Refund values are not editable by teachers
+* Partial refunds are not supported unless explicitly defined in future specs
+
+---
+
+## Logging Requirements
+
+Every reversal must log:
+
+* Original transaction ID
+* Counter‑transaction ID
+* Join code
+* Actor (teacher, system, or sysadmin)
+* Reversal basis (enum)
+* Optional note (only when basis = Other)
+* Timestamp
+
+---
+
+## Failure Modes (Allowed Worst Case)
+
+The system must guarantee:
+
+* No double refunds
+* No money credited without a corresponding log
+* If failure occurs mid‑process, safest failure is:
+
+  > State updated, money not yet refunded
+
+The inverse state is not allowed.
+
+---
+
+## Future Extensions (Out of Scope)
+
+* Partial refunds
+* Appeal escalation layers
+* Automated reversal audits
+* Parent‑initiated disputes
+
+These features must comply with this spec if implemented.
+
+---
+
+## Final Note
+
+This document is intentionally conservative.
+
+Any feature that violates this spec is considered **economically unsafe** and must not be deployed.
