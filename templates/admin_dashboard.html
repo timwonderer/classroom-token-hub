@@ -6,13 +6,15 @@
 <!-- Personalized Greeting -->
 <div class="mb-4 text-center">
     <p class="p fw-bold text-primary mb-1 dashboard-greeting" id="dashboard-greeting">
-        <span class="fw-light">Hi,</span> {{ current_admin.get_display_name() }} <a href="{{ url_for('admin.settings') }}" class="text-decoration-none" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Click here to change your display name">
+        <span class="fw-light">Hi,</span> {{ current_admin.get_display_name() }} <a
+            href="{{ url_for('admin.settings') }}" class="text-decoration-none" data-bs-toggle="tooltip"
+            data-bs-placement="top" data-bs-title="Click here to change your display name">
             <span class="material-symbols-outlined align-top fs-6 dashboard-greeting-info">info</span>
         </a>
     </p>
-    
-        
- 
+
+
+
 </div>
 
 {% if show_recovery_setup %}
@@ -20,9 +22,11 @@
     <span class="material-symbols-outlined me-3 fs-3">warning</span>
     <div>
         <h5 class="alert-heading fw-bold mb-1">Action Required: Setup Account Recovery</h5>
-        <p class="mb-0">Your account recovery details are missing or outdated. Please update your date of birth to enable student-assisted recovery.</p>
+        <p class="mb-0">Your account recovery details are missing or outdated. Please update your date of birth to
+            enable student-assisted recovery.</p>
     </div>
-    <a href="{{ url_for('admin.setup_recovery') }}" class="btn btn-warning text-dark fw-medium ms-auto text-nowrap">Setup Now</a>
+    <a href="{{ url_for('admin.setup_recovery') }}"
+        class="btn btn-warning text-dark fw-medium ms-auto text-nowrap">Setup Now</a>
 </div>
 {% endif %}
 {% if show_insurance_tier_prompt %}
@@ -30,10 +34,12 @@
     <span class="material-symbols-outlined me-3 fs-3">shield</span>
     <div class="me-3">
         <h5 class="alert-heading fw-bold mb-1">Update insurance to the new tiered design</h5>
-        <p class="mb-0">Your existing policies use the legacy setup. Group them into tiers so students see the modern plan layout.</p>
+        <p class="mb-0">Your existing policies use the legacy setup. Group them into tiers so students see the modern
+            plan layout.</p>
     </div>
     <div class="ms-auto d-flex align-items-center gap-2 flex-wrap">
-        <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-info fw-medium text-white">Review policies</a>
+        <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-info fw-medium text-white">Review
+            policies</a>
         <span class="text-muted small">One-time prompt for legacy policies</span>
     </div>
 </div>
@@ -64,7 +70,8 @@
                     </div>
                     <span class="text-secondary fw-medium">Total Economy Value</span>
                     <subtitle>
-                        <a href="#" class="text-secondary ms-2" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="Sum of all student account balances">
+                        <a href="#" class="text-secondary ms-2" data-bs-toggle="tooltip" data-bs-placement="top"
+                            data-bs-title="Sum of all student account balances">
                             <span class="material-symbols-outlined align-top fs-6">info</span>
                         </a>
                 </div>
@@ -109,7 +116,8 @@
                     </div>
                     <span class="text-secondary fw-medium">Next Payroll</span>
                 </div>
-                <h5 class="fw-bold mb-1 text-dark local-timestamp" data-format="MMM D" data-timestamp="{{ format_utc_iso(next_payroll_date) }}">
+                <h5 class="fw-bold mb-1 text-dark local-timestamp" data-format="MMM D"
+                    data-timestamp="{{ format_utc_iso(next_payroll_date) }}">
                     {{ next_payroll_date.strftime('%b %d') }}
                 </h5>
                 <div class="text-secondary small">Est: ${{ "{:,.0f}".format(total_payroll_estimate) }}</div>
@@ -123,44 +131,51 @@
     <h5 class="text-secondary fw-bold mb-3 small text-uppercase">Quick Actions</h5>
     <div class="row g-3">
         <div class="col-6 col-md-3">
-            <a href="{{ url_for('admin.attendance_log') }}" class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
+            <a href="{{ url_for('admin.attendance_log') }}"
+                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
                 <span class="material-symbols-outlined fs-3 text-primary">fact_check</span>
                 <span class="fw-medium">Attendance</span>
             </a>
         </div>
         <div class="col-6 col-md-3">
-            <a href="{{ url_for('admin.payroll') }}" class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
+            <a href="{{ url_for('admin.payroll') }}"
+                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
                 <span class="material-symbols-outlined fs-3 text-success">payments</span>
                 <span class="fw-medium">Run Payroll</span>
             </a>
         </div>
         <div class="col-6 col-md-3">
-            <a href="{{ url_for('admin.store_management') }}" class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
+            <a href="{{ url_for('admin.store_management') }}"
+                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
                 <span class="material-symbols-outlined fs-3 text-warning">storefront</span>
                 <span class="fw-medium">Store</span>
             </a>
         </div>
         <div class="col-6 col-md-3">
-            <a href="{{ url_for('admin.students') }}" class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
+            <a href="{{ url_for('admin.students') }}"
+                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
                 <span class="material-symbols-outlined fs-3 text-info">group_add</span>
                 <span class="fw-medium">Manage Students</span>
             </a>
         </div>
         <!-- Enforce Limits (Admin Only Action) -->
         <div class="col-6 col-md-3">
-            <button id="enforceLimitsBtn" class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
+            <button id="enforceLimitsBtn"
+                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
                 <span class="material-symbols-outlined fs-3 text-danger">timer_off</span>
                 <span class="fw-medium">Enforce Limits</span>
             </button>
         </div>
         <div class="col-6 col-md-3">
-            <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
+            <a href="{{ url_for('admin.insurance_management') }}"
+                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
                 <span class="material-symbols-outlined fs-3 text-success">shield</span>
                 <span class="fw-medium">Insurance</span>
             </a>
         </div>
         <div class="col-6 col-md-3">
-            <a href="{{ url_for('admin.hall_pass') }}" class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
+            <a href="{{ url_for('admin.hall_pass') }}"
+                class="btn btn-white w-100 p-3 h-100 shadow-sm border-0 d-flex flex-column align-items-center gap-2">
                 <span class="material-symbols-outlined fs-3 text-info">door_open</span>
                 <span class="fw-medium">Hall Passes</span>
             </a>
@@ -183,22 +198,30 @@
             <ul class="nav nav-pills nav-fill mb-3" id="pendingActionsTabs" role="tablist">
                 {% if pending_redemptions_count > 0 %}
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="redemptions-tab" data-bs-toggle="tab" data-bs-target="#redemptions" type="button" role="tab">
-                        <i class="bi bi-gift me-1"></i>Redemptions <span class="badge bg-danger ms-1">{{ pending_redemptions_count }}</span>
+                    <button class="nav-link active" id="redemptions-tab" data-bs-toggle="tab"
+                        data-bs-target="#redemptions" type="button" role="tab">
+                        <i class="bi bi-gift me-1"></i>Redemptions <span class="badge bg-danger ms-1">{{
+                            pending_redemptions_count }}</span>
                     </button>
                 </li>
                 {% endif %}
                 {% if pending_hall_passes_count > 0 %}
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link {% if pending_redemptions_count == 0 %}active{% endif %}" id="hall-passes-tab" data-bs-toggle="tab" data-bs-target="#hall-passes" type="button" role="tab">
-                        <i class="bi bi-door-open me-1"></i>Hall Passes <span class="badge bg-danger ms-1">{{ pending_hall_passes_count }}</span>
+                    <button class="nav-link {% if pending_redemptions_count == 0 %}active{% endif %}"
+                        id="hall-passes-tab" data-bs-toggle="tab" data-bs-target="#hall-passes" type="button"
+                        role="tab">
+                        <i class="bi bi-door-open me-1"></i>Hall Passes <span class="badge bg-danger ms-1">{{
+                            pending_hall_passes_count }}</span>
                     </button>
                 </li>
                 {% endif %}
                 {% if pending_insurance_claims_count > 0 %}
                 <li class="nav-item" role="presentation">
-                    <button class="nav-link {% if pending_redemptions_count == 0 and pending_hall_passes_count == 0 %}active{% endif %}" id="claims-tab" data-bs-toggle="tab" data-bs-target="#claims" type="button" role="tab">
-                        <i class="bi bi-shield-check me-1"></i>Claims <span class="badge bg-danger ms-1">{{ pending_insurance_claims_count }}</span>
+                    <button
+                        class="nav-link {% if pending_redemptions_count == 0 and pending_hall_passes_count == 0 %}active{% endif %}"
+                        id="claims-tab" data-bs-toggle="tab" data-bs-target="#claims" type="button" role="tab">
+                        <i class="bi bi-shield-check me-1"></i>Claims <span class="badge bg-danger ms-1">{{
+                            pending_insurance_claims_count }}</span>
                     </button>
                 </li>
                 {% endif %}
@@ -210,42 +233,58 @@
                 <div class="tab-pane fade show active" id="redemptions" role="tabpanel">
                     <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
                         {% for req in recent_redemptions %}
-                        <div class="list-group-item px-0 d-flex justify-content-between align-items-center border-0 py-3">
+                        <div
+                            class="list-group-item px-0 d-flex justify-content-between align-items-center border-0 py-3">
                             <div>
-                                <strong>{{ student_lookup.get(req.student_id).full_name if student_lookup.get(req.student_id) else 'Unknown' }}</strong>
+                                <strong>{{ student_lookup.get(req.student_id).full_name if
+                                    student_lookup.get(req.student_id) else 'Unknown' }}</strong>
                                 <br>
                                 <small class="text-muted">{{ req.store_item.name }}</small>
                                 {% if req.redemption_details %}
-                                    <br><div class="small text-muted">{{ req.redemption_details | markdown }}</div>
+                                <br>
+                                <div class="small text-muted">{{ req.redemption_details | markdown }}</div>
                                 {% endif %}
                             </div>
-                            <button class="btn btn-sm btn-success approve-redemption-btn" data-student-item-id="{{ req.id }}">
-                                <i class="bi bi-check-circle me-1"></i>Approve
-                            </button>
+                            <div class="d-flex gap-2">
+                                <button class="btn btn-sm btn-outline-danger reject-redemption-btn"
+                                    data-student-item-id="{{ req.id }}" data-bs-toggle="tooltip"
+                                    title="Refund and remove" aria-label="Refund and remove">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
+                                <button class="btn btn-sm btn-success approve-redemption-btn"
+                                    data-student-item-id="{{ req.id }}">
+                                    <i class="bi bi-check-circle me-1"></i>Approve
+                                </button>
+                            </div>
                         </div>
                         {% endfor %}
                     </div>
                     {% if pending_redemptions_count > 5 %}
-                        <div class="mt-2 text-center">
-                            <small class="text-muted">Showing 5 of {{ pending_redemptions_count }} pending redemptions</small>
-                        </div>
+                    <div class="mt-2 text-center">
+                        <small class="text-muted">Showing 5 of {{ pending_redemptions_count }} pending
+                            redemptions</small>
+                    </div>
                     {% endif %}
                 </div>
                 {% endif %}
 
                 <!-- Hall Passes Tab -->
                 {% if pending_hall_passes_count > 0 %}
-                <div class="tab-pane fade {% if pending_redemptions_count == 0 %}show active{% endif %}" id="hall-passes" role="tabpanel">
+                <div class="tab-pane fade {% if pending_redemptions_count == 0 %}show active{% endif %}"
+                    id="hall-passes" role="tabpanel">
                     <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
                         {% for pass in recent_hall_passes %}
-                        <div class="list-group-item px-0 d-flex justify-content-between align-items-center border-0 py-3">
+                        <div
+                            class="list-group-item px-0 d-flex justify-content-between align-items-center border-0 py-3">
                             <div>
-                                <strong>{{ student_lookup.get(pass.student_id).full_name if student_lookup.get(pass.student_id) else 'Unknown' }}</strong>
+                                <strong>{{ student_lookup.get(pass.student_id).full_name if
+                                    student_lookup.get(pass.student_id) else 'Unknown' }}</strong>
                                 <br>
                                 <small class="text-muted"><i class="bi bi-signpost me-1"></i>{{ pass.reason }}</small>
                                 <br>
                                 <small class="text-muted">
-                                    <span class="local-timestamp" data-timestamp="{{ format_utc_iso(pass.request_time) }}"></span>
+                                    <span class="local-timestamp"
+                                        data-timestamp="{{ format_utc_iso(pass.request_time) }}"></span>
                                 </small>
                             </div>
                             <div>
@@ -257,29 +296,35 @@
                         {% endfor %}
                     </div>
                     {% if pending_hall_passes_count > 5 %}
-                        <div class="mt-2 text-center">
-                            <small class="text-muted">Showing 5 of {{ pending_hall_passes_count }} pending hall passes</small>
-                        </div>
+                    <div class="mt-2 text-center">
+                        <small class="text-muted">Showing 5 of {{ pending_hall_passes_count }} pending hall
+                            passes</small>
+                    </div>
                     {% endif %}
                 </div>
                 {% endif %}
 
                 <!-- Insurance Claims Tab -->
                 {% if pending_insurance_claims_count > 0 %}
-                <div class="tab-pane fade {% if pending_redemptions_count == 0 and pending_hall_passes_count == 0 %}show active{% endif %}" id="claims" role="tabpanel">
+                <div class="tab-pane fade {% if pending_redemptions_count == 0 and pending_hall_passes_count == 0 %}show active{% endif %}"
+                    id="claims" role="tabpanel">
                     <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto;">
                         {% for claim in recent_insurance_claims %}
-                        <div class="list-group-item px-0 d-flex justify-content-between align-items-center border-0 py-3">
+                        <div
+                            class="list-group-item px-0 d-flex justify-content-between align-items-center border-0 py-3">
                             <div>
-                                <strong>{{ student_lookup.get(claim.student_id).full_name if student_lookup.get(claim.student_id) else 'Unknown' }}</strong>
+                                <strong>{{ student_lookup.get(claim.student_id).full_name if
+                                    student_lookup.get(claim.student_id) else 'Unknown' }}</strong>
                                 <br>
-                                <small class="text-muted">{{ claim.description[:50] }}{% if claim.description|length > 50 %}...{% endif %}</small>
+                                <small class="text-muted">{{ claim.description[:50] }}{% if claim.description|length >
+                                    50 %}...{% endif %}</small>
                                 {% if claim.claim_amount %}
-                                    <br><small class="text-success">${{ "%.2f"|format(claim.claim_amount) }}</small>
+                                <br><small class="text-success">${{ "%.2f"|format(claim.claim_amount) }}</small>
                                 {% endif %}
                                 <br>
                                 <small class="text-muted">
-                                    <span class="local-timestamp" data-timestamp="{{ format_utc_iso(claim.filed_date) }}"></span>
+                                    <span class="local-timestamp"
+                                        data-timestamp="{{ format_utc_iso(claim.filed_date) }}"></span>
                                 </small>
                             </div>
                             <div>
@@ -291,9 +336,10 @@
                         {% endfor %}
                     </div>
                     {% if pending_insurance_claims_count > 5 %}
-                        <div class="mt-2 text-center">
-                            <small class="text-muted">Showing 5 of {{ pending_insurance_claims_count }} pending claims</small>
-                        </div>
+                    <div class="mt-2 text-center">
+                        <small class="text-muted">Showing 5 of {{ pending_insurance_claims_count }} pending
+                            claims</small>
+                    </div>
                     {% endif %}
                 </div>
                 {% endif %}
@@ -307,58 +353,61 @@
     <!-- Recent Activity -->
     <div class="col-12 col-xl-8">
         <div class="card border-0 shadow-sm h-100">
-            <div class="card-header bg-transparent border-0 pt-4 px-4 pb-0 d-flex justify-content-between align-items-center">
+            <div
+                class="card-header bg-transparent border-0 pt-4 px-4 pb-0 d-flex justify-content-between align-items-center">
                 <h5 class="fw-bold mb-0 text-dark">Recent Transactions</h5>
-                <a href="{{ url_for('admin.transactions') }}" class="btn btn-sm btn-link text-decoration-none">View All</a>
+                <a href="{{ url_for('admin.transactions') }}" class="btn btn-sm btn-link text-decoration-none">View
+                    All</a>
             </div>
             <div class="card-body p-0">
                 {% if recent_transactions %}
-                    <div class="table-responsive">
-                        <table class="table table-hover table-clean mb-0 align-middle">
-                            <thead class="text-secondary small">
-                                <tr>
-                                    <th class="ps-4 fw-medium border-0">Student</th>
-                                    <th class="fw-medium border-0">Action</th>
-                                    <th class="fw-medium border-0 text-end pe-4">Amount</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for tx in recent_transactions %}
-                                <tr>
-                                    <td class="ps-4">
-                                        <div class="d-flex align-items-center">
-                                            {% set student = student_lookup.get(tx.student_id) %}
-                                            <div class="avatar-circle bg-light text-primary me-2 small fw-bold">
-                                                {{ student.first_name[0] if student else '?' }}
+                <div class="table-responsive">
+                    <table class="table table-hover table-clean mb-0 align-middle">
+                        <thead class="text-secondary small">
+                            <tr>
+                                <th class="ps-4 fw-medium border-0">Student</th>
+                                <th class="fw-medium border-0">Action</th>
+                                <th class="fw-medium border-0 text-end pe-4">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tx in recent_transactions %}
+                            <tr>
+                                <td class="ps-4">
+                                    <div class="d-flex align-items-center">
+                                        {% set student = student_lookup.get(tx.student_id) %}
+                                        <div class="avatar-circle bg-light text-primary me-2 small fw-bold">
+                                            {{ student.first_name[0] if student else '?' }}
+                                        </div>
+                                        <div>
+                                            <div class="fw-medium text-dark">
+                                                {{ student.full_name if student else 'Unknown' }}
                                             </div>
-                                            <div>
-                                                <div class="fw-medium text-dark">
-                                                    {{ student.full_name if student else 'Unknown' }}
-                                                </div>
-                                                <div class="small text-secondary local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}">
-                                                    {{ tx.timestamp.strftime('%H:%M') }}
-                                                </div>
+                                            <div class="small text-secondary local-timestamp"
+                                                data-timestamp="{{ format_utc_iso(tx.timestamp) }}">
+                                                {{ tx.timestamp.strftime('%H:%M') }}
                                             </div>
                                         </div>
-                                    </td>
-                                    <td>
-                                        <span class="d-block text-dark">{{ tx.description }}</span>
-                                    </td>
-                                    <td class="text-end pe-4">
-                                        <span class="fw-bold {{ 'text-success' if tx.amount > 0 else 'text-danger' }}">
-                                            {{ "+" if tx.amount > 0 else "" }}{{ "{:.2f}".format(tx.amount) }}
-                                        </span>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="d-block text-dark">{{ tx.description }}</span>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <span class="fw-bold {{ 'text-success' if tx.amount > 0 else 'text-danger' }}">
+                                        {{ "+" if tx.amount > 0 else "" }}{{ "{:.2f}".format(tx.amount) }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
                 {% else %}
-                    <div class="text-center py-5">
-                        <span class="material-symbols-outlined">unknown_document</span>
-                        <p class="text-secondary">No recent activity found.</p>
-                    </div>
+                <div class="text-center py-5">
+                    <span class="material-symbols-outlined">unknown_document</span>
+                    <p class="text-secondary">No recent activity found.</p>
+                </div>
                 {% endif %}
             </div>
         </div>
@@ -372,34 +421,37 @@
             </div>
             <div class="card-body p-0">
                 {% if recent_logs %}
-                    <div class="list-group list-group-flush">
-                        {% for log in recent_logs %}
-                        <div class="list-group-item px-4 py-3 border-0 d-flex align-items-center">
-                            <div class="me-3">
-                                {% if log.status == 'active' %}
-                                <span class="badge bg-success-subtle text-success rounded-pill p-2"><span class="material-symbols-outlined fs-6 align-bottom">login</span></span>
-                                {% else %}
-                                <span class="badge bg-secondary-subtle text-secondary rounded-pill p-2"><span class="material-symbols-outlined fs-6 align-bottom">logout</span></span>
-                                {% endif %}
+                <div class="list-group list-group-flush">
+                    {% for log in recent_logs %}
+                    <div class="list-group-item px-4 py-3 border-0 d-flex align-items-center">
+                        <div class="me-3">
+                            {% if log.status == 'active' %}
+                            <span class="badge bg-success-subtle text-success rounded-pill p-2"><span
+                                    class="material-symbols-outlined fs-6 align-bottom">login</span></span>
+                            {% else %}
+                            <span class="badge bg-secondary-subtle text-secondary rounded-pill p-2"><span
+                                    class="material-symbols-outlined fs-6 align-bottom">logout</span></span>
+                            {% endif %}
+                        </div>
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between">
+                                <span class="fw-medium text-dark">{{ log.student_name }}</span>
+                                <span class="small text-secondary local-timestamp"
+                                    data-timestamp="{{ format_utc_iso(log.timestamp) }}">
+                                    {{ log.timestamp.strftime('%H:%M') }}
+                                </span>
                             </div>
-                            <div class="flex-grow-1">
-                                <div class="d-flex justify-content-between">
-                                    <span class="fw-medium text-dark">{{ log.student_name }}</span>
-                                    <span class="small text-secondary local-timestamp" data-timestamp="{{ format_utc_iso(log.timestamp) }}">
-                                        {{ log.timestamp.strftime('%H:%M') }}
-                                    </span>
-                                </div>
-                                <div class="small text-secondary">
-                                    {{ log.status|title }} • Period {{ log.period }}
-                                </div>
+                            <div class="small text-secondary">
+                                {{ log.status|title }} • Period {{ log.period }}
                             </div>
                         </div>
-                        {% endfor %}
                     </div>
+                    {% endfor %}
+                </div>
                 {% else %}
-                    <div class="text-center py-5 text-muted">
-                        <small>No attendance logs today.</small>
-                    </div>
+                <div class="text-center py-5 text-muted">
+                    <small>No attendance logs today.</small>
+                </div>
                 {% endif %}
                 <div class="p-3 text-center border-top">
                     <a href="{{ url_for('admin.attendance_log') }}" class="btn btn-sm btn-light w-100">View All</a>
@@ -414,7 +466,7 @@
 <script>
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]')
     const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl))
-    document.getElementById('enforceLimitsBtn').addEventListener('click', async function() {
+    document.getElementById('enforceLimitsBtn').addEventListener('click', async function () {
         const btn = this;
         const originalContent = btn.innerHTML;
         btn.disabled = true;
@@ -445,11 +497,23 @@
             toastEl.setAttribute('role', 'alert');
             toastEl.setAttribute('aria-live', 'assertive');
             toastEl.setAttribute('aria-atomic', 'true');
-            toastEl.innerHTML = `
-                <div class="d-flex">
-                    <div class="toast-body">${data.message}</div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-                </div>`;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'd-flex';
+
+            const toastBody = document.createElement('div');
+            toastBody.className = 'toast-body';
+            toastBody.textContent = data.message;
+
+            const closeButton = document.createElement('button');
+            closeButton.type = 'button';
+            closeButton.className = 'btn-close btn-close-white me-2 m-auto';
+            closeButton.setAttribute('data-bs-dismiss', 'toast');
+            closeButton.setAttribute('aria-label', 'Close');
+
+            wrapper.appendChild(toastBody);
+            wrapper.appendChild(closeButton);
+            toastEl.appendChild(wrapper);
             toastContainer.appendChild(toastEl);
             new bootstrap.Toast(toastEl).show();
 
@@ -460,6 +524,135 @@
             btn.disabled = false;
             btn.innerHTML = originalContent;
         }
+    });
+
+    // Helper to get or create toast container
+    function getOrCreateToastContainer() {
+        let container = document.getElementById('flashToastContainer');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'flashToastContainer';
+            container.className = 'position-fixed bottom-0 end-0 p-3';
+            container.style.zIndex = '1050';
+            document.body.appendChild(container);
+        }
+        return container;
+    }
+
+    // Helper to show a toast notification
+    function showToast(message, type = 'success') {
+        const container = getOrCreateToastContainer();
+        const toastEl = document.createElement('div');
+        toastEl.className = `toast align-items-center text-bg-${type} border-0`;
+        toastEl.setAttribute('role', 'alert');
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'd-flex';
+
+        const toastBody = document.createElement('div');
+        toastBody.className = 'toast-body';
+        toastBody.textContent = message;
+
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'btn-close btn-close-white me-2 m-auto';
+        closeButton.setAttribute('data-bs-dismiss', 'toast');
+        closeButton.setAttribute('aria-label', 'Close');
+
+        wrapper.appendChild(toastBody);
+        wrapper.appendChild(closeButton);
+        toastEl.appendChild(wrapper);
+        container.appendChild(toastEl);
+        new bootstrap.Toast(toastEl).show();
+    }
+
+    // Helper to update counters after action
+    function updatePendingCounters(type) {
+        // Update the pending actions stat card
+        const pendingCard = document.querySelector('.icon-circle.bg-warning');
+        if (pendingCard) {
+            const statElement = pendingCard.closest('.card-body').querySelector('h2');
+            if (statElement) {
+                const currentCount = parseInt(statElement.textContent) || 0;
+                if (currentCount > 0) statElement.textContent = currentCount - 1;
+            }
+        }
+
+        if (type === 'redemptions') {
+            const redemptionsTabBadge = document.querySelector('#redemptions-tab .badge');
+            if (redemptionsTabBadge) {
+                const currentRedCount = parseInt(redemptionsTabBadge.textContent) || 0;
+                redemptionsTabBadge.textContent = currentRedCount - 1;
+
+                if (currentRedCount - 1 <= 0) {
+                    // Hide tab if no more redemptions
+                    const tabLi = document.querySelector('#redemptions-tab').closest('li');
+                    if (tabLi) tabLi.remove();
+
+                    // If no redemptions left, show empty state in tab content immediately
+                    const redemptionsPane = document.querySelector('#redemptions');
+                    if (redemptionsPane) {
+                        redemptionsPane.innerHTML = `
+                            <div class="text-center text-muted py-4">
+                                <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                                <p class="mb-0 mt-2">No pending redemptions</p>
+                            </div>
+                        `;
+                    }
+                }
+            }
+        }
+    }
+
+    // Handle redemption rejection
+    document.querySelectorAll(".reject-redemption-btn").forEach(button => {
+        button.addEventListener("click", () => {
+            if (!confirm("Are you sure you want to reject this redemption? The item will be removed and the student will be refunded.")) {
+                return;
+            }
+
+            const studentItemId = button.dataset.studentItemId;
+            const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+            const icon = button.innerHTML;
+
+            // Disable button and show loading state
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+            fetch('/api/reject-redemption', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ student_item_id: studentItemId })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // Remove the item from the list with a fade effect
+                        const listItem = button.closest('.list-group-item');
+                        listItem.style.transition = 'opacity 0.3s';
+                        listItem.style.opacity = '0';
+                        setTimeout(() => {
+                            listItem.remove();
+                            updatePendingCounters('redemptions');
+                            showToast('Redemption rejected and refunded.', 'success');
+
+                        }, 300);
+                    } else {
+                        showToast('Rejection failed: ' + data.message, 'danger');
+                        button.disabled = false;
+                        button.innerHTML = icon;
+                    }
+                })
+                .catch(error => {
+                    console.error('Rejection error:', error);
+                    showToast('An unexpected error occurred.', 'danger');
+                    button.disabled = false;
+                    button.innerHTML = icon;
+                });
+        });
     });
 
     // Handle redemption approval
@@ -480,82 +673,30 @@
                 },
                 body: JSON.stringify({ student_item_id: studentItemId })
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    // Remove the item from the list with a fade effect
-                    const listItem = button.closest('.list-group-item');
-                    listItem.style.transition = 'opacity 0.3s';
-                    listItem.style.opacity = '0';
-                    setTimeout(() => {
-                        listItem.remove();
-
-                        // Update the pending actions stat card
-                        const pendingCard = document.querySelector('.icon-circle.bg-warning');
-                        if (pendingCard) {
-                            const statElement = pendingCard.closest('.card-body').querySelector('h2');
-                            if (statElement) {
-                                const currentCount = parseInt(statElement.textContent);
-                                statElement.textContent = currentCount - 1;
-                            }
-                        }
-
-                        // Update the redemptions tab badge
-                        const redemptionsTabBadge = document.querySelector('#redemptions-tab .badge');
-                        if (redemptionsTabBadge) {
-                            const currentRedCount = parseInt(redemptionsTabBadge.textContent);
-                            redemptionsTabBadge.textContent = currentRedCount - 1;
-
-                            if (currentRedCount - 1 === 0) {
-                                // Hide tab if no more redemptions
-                                document.querySelector('#redemptions-tab').closest('li').remove();
-                            }
-                        }
-
-                        // Show empty state if no more items in this tab
-                        const redemptionsTab = document.querySelector('#redemptions .list-group');
-                        if (redemptionsTab && redemptionsTab.children.length === 0) {
-                            document.querySelector('#redemptions').innerHTML = `
-                                <div class="text-center text-muted py-4">
-                                    <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
-                                    <p class="mb-0 mt-2">No pending redemptions</p>
-                                </div>
-                            `;
-                        }
-
-                        // Show success toast
-                        const toastContainer = document.getElementById('flashToastContainer') || (() => {
-                            const container = document.createElement('div');
-                            container.id = 'flashToastContainer';
-                            container.className = 'position-fixed bottom-0 end-0 p-3';
-                            container.style.zIndex = '1050';
-                            document.body.appendChild(container);
-                            return container;
-                        })();
-
-                        const toastEl = document.createElement('div');
-                        toastEl.className = 'toast align-items-center text-bg-success border-0';
-                        toastEl.setAttribute('role', 'alert');
-                        toastEl.innerHTML = `
-                            <div class="d-flex">
-                                <div class="toast-body">Redemption approved successfully!</div>
-                                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-                            </div>`;
-                        toastContainer.appendChild(toastEl);
-                        new bootstrap.Toast(toastEl).show();
-                    }, 300);
-                } else {
-                    alert('Approval failed: ' + data.message);
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // Remove the item from the list with a fade effect
+                        const listItem = button.closest('.list-group-item');
+                        listItem.style.transition = 'opacity 0.3s';
+                        listItem.style.opacity = '0';
+                        setTimeout(() => {
+                            listItem.remove();
+                            updatePendingCounters('redemptions');
+                            showToast('Redemption approved successfully!', 'success');
+                        }, 300);
+                    } else {
+                        showToast('Approval failed: ' + data.message, 'danger');
+                        button.disabled = false;
+                        button.innerHTML = '<i class="bi bi-check-circle me-1"></i>Approve';
+                    }
+                })
+                .catch(error => {
+                    console.error('Approval error:', error);
+                    showToast('An unexpected error occurred.', 'danger');
                     button.disabled = false;
                     button.innerHTML = '<i class="bi bi-check-circle me-1"></i>Approve';
-                }
-            })
-            .catch(error => {
-                console.error('Approval error:', error);
-                alert('An unexpected error occurred.');
-                button.disabled = false;
-                button.innerHTML = '<i class="bi bi-check-circle me-1"></i>Approve';
-            });
+                });
         });
     });
 </script>

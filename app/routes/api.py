@@ -740,12 +740,20 @@ def use_item():
 @api_bp.route('/approve-redemption', methods=['POST'])
 @admin_required
 def approve_redemption():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     student_item_id = data.get('student_item_id')
+
+    if not student_item_id:
+        return jsonify({"status": "error", "message": "Missing student item ID."}), 400
 
     student_item = db.session.get(StudentItem, student_item_id)
     if not student_item or student_item.status != 'processing':
         return jsonify({"status": "error", "message": "Invalid or already processed item."}), 404
+
+    # SECURITY: Verify the current admin owns the store item
+    current_admin = get_current_admin()
+    if not current_admin or student_item.store_item.teacher_id != current_admin.id:
+        return jsonify({"status": "error", "message": "Unauthorized."}), 403
 
     try:
         student_item.status = 'completed'
@@ -754,7 +762,9 @@ def approve_redemption():
         redemption_tx = Transaction.query.filter_by(
             student_id=student_item.student_id,
             type='redemption',
-            description=f"Used: {student_item.store_item.name}"
+            join_code=student_item.join_code,
+        ).filter(
+            Transaction.description.like(f"Used: {student_item.store_item.name}%")
         ).order_by(Transaction.timestamp.desc()).first()
 
         if redemption_tx:
@@ -765,6 +775,119 @@ def approve_redemption():
     except SQLAlchemyError as e:
         db.session.rollback()
         current_app.logger.error(f"Redemption approval failed for student_item {student_item_id}: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": "An error occurred."}), 500
+
+
+@api_bp.route('/reject-redemption', methods=['POST'])
+@admin_required
+def reject_redemption():
+    data = request.get_json(silent=True) or {}
+    student_item_id = data.get('student_item_id')
+
+    if not student_item_id:
+        return jsonify({"status": "error", "message": "Missing student item ID."}), 400
+
+    student_item = db.session.get(StudentItem, student_item_id)
+    if not student_item or student_item.status != 'processing':
+        return jsonify({"status": "error", "message": "Invalid or already processed item."}), 404
+
+    # SECURITY: Verify the current admin owns the store item
+    current_admin = get_current_admin()
+    if not current_admin or student_item.store_item.teacher_id != current_admin.id:
+        return jsonify({"status": "error", "message": "Unauthorized."}), 403
+
+    try:
+        # 1. Determine Refund Amount from original purchase transaction
+        # Look up the actual amount paid (handles price changes and bulk discounts)
+        purchase_txs = Transaction.query.filter_by(
+            student_id=student_item.student_id,
+            type='purchase',
+            join_code=student_item.join_code,
+        ).filter(
+            Transaction.description.like(f"Purchase: {student_item.store_item.name}%")
+        ).all()
+
+        purchase_tx = None
+        if purchase_txs:
+            if student_item.purchase_date:
+                target_ts = ensure_utc(student_item.purchase_date)
+
+                def _distance(tx):
+                    if not tx.timestamp:
+                        return float('inf')
+                    return abs((ensure_utc(tx.timestamp) - target_ts).total_seconds())
+
+                purchase_tx = min(purchase_txs, key=_distance)
+            else:
+                purchase_tx = max(
+                    purchase_txs,
+                    key=lambda tx: ensure_utc(tx.timestamp) if tx.timestamp else datetime.min.replace(tzinfo=timezone.utc)
+                )
+
+        if purchase_tx and purchase_tx.amount is not None:
+            total_amount = abs(purchase_tx.amount)
+            quantity = 1
+            if purchase_tx.description:
+                match = re.search(r'\(x(\d+)\)', purchase_tx.description)
+                if match:
+                    try:
+                        parsed_qty = int(match.group(1))
+                        if parsed_qty > 0:
+                            quantity = parsed_qty
+                    except ValueError:
+                        pass
+            refund_amount = total_amount / quantity
+        else:
+            # Fallback to current store price if purchase transaction not found
+            refund_amount = student_item.store_item.price
+
+        # 2. Refund the student
+        # Create refund transaction
+        # CRITICAL: Use join_code from student_item for proper scoping
+        refund_tx = Transaction(
+            student_id=student_item.student_id,
+            teacher_id=student_item.store_item.teacher_id,
+            join_code=student_item.join_code,
+            amount=refund_amount,
+            account_type='checking',
+            type='refund',
+            description=f"Refund: {student_item.store_item.name} (Redemption Rejected)"
+        )
+        db.session.add(refund_tx)
+
+        # 3. Clean up the 'redemption' transaction ($0 log) created during request
+        # Scope by join_code in addition to student/type/description for accuracy
+        redemption_query = Transaction.query.filter_by(
+            student_id=student_item.student_id,
+            type='redemption',
+            join_code=student_item.join_code,
+        ).filter(
+            Transaction.description.like(f"Used: {student_item.store_item.name}%")
+        )
+
+        redemption_date = getattr(student_item, "redemption_date", None)
+        if redemption_date is not None:
+            window_start = redemption_date - timedelta(minutes=10)
+            window_end = redemption_date + timedelta(minutes=10)
+            redemption_query = redemption_query.filter(
+                Transaction.timestamp >= window_start,
+                Transaction.timestamp <= window_end,
+            )
+
+        redemption_tx = redemption_query.order_by(Transaction.timestamp.desc()).first()
+
+        if redemption_tx:
+            db.session.delete(redemption_tx)
+
+        # 4. Remove the item from student's inventory
+        db.session.delete(student_item)
+
+        db.session.commit()
+        return jsonify({"status": "success", "message": "Redemption rejected and refunded."})
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        current_app.logger.error(f"Redemption rejection failed for student_item {student_item_id}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred."}), 500
 
 
