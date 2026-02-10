@@ -844,10 +844,37 @@ def reject_redemption():
         # 2. Refund the student
         # Create refund transaction
         # CRITICAL: Use join_code from student_item for proper scoping
+        # CRITICAL FIX: Handle legacy StudentItems without join_code
+        refund_join_code = student_item.join_code
+        if not refund_join_code:
+            # Legacy StudentItem without join_code - resolve from current session
+            from app.utils.attendance_helpers import get_join_code_for_student_period
+            # Get student's block/period (StudentItems don't store period, so we need to infer)
+            student = db.session.get(Student, student_item.student_id)
+            teacher_id = student_item.store_item.teacher_id
+
+            # Try to resolve join_code from TeacherBlock using first student period
+            if student and student.block:
+                student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
+                if student_blocks:
+                    # Use first block as fallback
+                    refund_join_code = get_join_code_for_student_period(
+                        student.id, student_blocks[0], teacher_id
+                    )
+
+            if not refund_join_code:
+                # Ultimate fallback: use current_join_code from session if available
+                refund_join_code = session.get('current_join_code')
+
+            current_app.logger.warning(
+                f"Legacy StudentItem {student_item.id} missing join_code. "
+                f"Resolved to: {refund_join_code} for refund transaction."
+            )
+
         refund_tx = Transaction(
             student_id=student_item.student_id,
             teacher_id=student_item.store_item.teacher_id,
-            join_code=student_item.join_code,
+            join_code=refund_join_code,  # Now guaranteed to have a value
             amount=refund_amount,
             account_type='checking',
             type='refund',
