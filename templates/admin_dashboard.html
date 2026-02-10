@@ -248,7 +248,7 @@
                             <div class="d-flex gap-2">
                                 <button class="btn btn-sm btn-outline-danger reject-redemption-btn"
                                     data-student-item-id="{{ req.id }}" data-bs-toggle="tooltip"
-                                    title="Refund and remove">
+                                    title="Refund and remove" aria-label="Refund and remove">
                                     <i class="bi bi-x-circle"></i>
                                 </button>
                                 <button class="btn btn-sm btn-success approve-redemption-btn"
@@ -497,11 +497,23 @@
             toastEl.setAttribute('role', 'alert');
             toastEl.setAttribute('aria-live', 'assertive');
             toastEl.setAttribute('aria-atomic', 'true');
-            toastEl.innerHTML = `
-                <div class="d-flex">
-                    <div class="toast-body">${data.message}</div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-                </div>`;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'd-flex';
+
+            const toastBody = document.createElement('div');
+            toastBody.className = 'toast-body';
+            toastBody.textContent = data.message;
+
+            const closeButton = document.createElement('button');
+            closeButton.type = 'button';
+            closeButton.className = 'btn-close btn-close-white me-2 m-auto';
+            closeButton.setAttribute('data-bs-dismiss', 'toast');
+            closeButton.setAttribute('aria-label', 'Close');
+
+            wrapper.appendChild(toastBody);
+            wrapper.appendChild(closeButton);
+            toastEl.appendChild(wrapper);
             toastContainer.appendChild(toastEl);
             new bootstrap.Toast(toastEl).show();
 
@@ -533,11 +545,23 @@
         const toastEl = document.createElement('div');
         toastEl.className = `toast align-items-center text-bg-${type} border-0`;
         toastEl.setAttribute('role', 'alert');
-        toastEl.innerHTML = `
-            <div class="d-flex">
-                <div class="toast-body">${message}</div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
-            </div>`;
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'd-flex';
+
+        const toastBody = document.createElement('div');
+        toastBody.className = 'toast-body';
+        toastBody.textContent = message;
+
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'btn-close btn-close-white me-2 m-auto';
+        closeButton.setAttribute('data-bs-dismiss', 'toast');
+        closeButton.setAttribute('aria-label', 'Close');
+
+        wrapper.appendChild(toastBody);
+        wrapper.appendChild(closeButton);
+        toastEl.appendChild(wrapper);
         container.appendChild(toastEl);
         new bootstrap.Toast(toastEl).show();
     }
@@ -617,14 +641,14 @@
 
                         }, 300);
                     } else {
-                        alert('Rejection failed: ' + data.message);
+                        showToast('Rejection failed: ' + data.message, 'danger');
                         button.disabled = false;
                         button.innerHTML = icon;
                     }
                 })
                 .catch(error => {
                     console.error('Rejection error:', error);
-                    alert('An unexpected error occurred.');
+                    showToast('An unexpected error occurred.', 'danger');
                     button.disabled = false;
                     button.innerHTML = icon;
                 });
@@ -662,14 +686,14 @@
                             showToast('Redemption approved successfully!', 'success');
                         }, 300);
                     } else {
-                        alert('Approval failed: ' + data.message);
+                        showToast('Approval failed: ' + data.message, 'danger');
                         button.disabled = false;
                         button.innerHTML = '<i class="bi bi-check-circle me-1"></i>Approve';
                     }
                 })
                 .catch(error => {
                     console.error('Approval error:', error);
-                    alert('An unexpected error occurred.');
+                    showToast('An unexpected error occurred.', 'danger');
                     button.disabled = false;
                     button.innerHTML = '<i class="bi bi-check-circle me-1"></i>Approve';
                 });
