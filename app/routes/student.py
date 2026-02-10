@@ -2629,14 +2629,17 @@ def rent():
         rent_is_active = True
 
     # Calculate which coverage period we're checking for (pre-paid system)
+    # CRITICAL FIX: Determine which due date to show for payment (matches payment route logic)
     if is_preview_period:
         coverage_month = due_date.month
         coverage_year = due_date.year
         grace_end_date_for_status = grace_end_date
+        payment_due_date = due_date  # Paying for upcoming period
     else:
         coverage_month = coverage_due_date.month if coverage_due_date else due_date.month
         coverage_year = coverage_due_date.year if coverage_due_date else due_date.year
         grace_end_date_for_status = (coverage_due_date + timedelta(days=settings.grace_period_days)) if coverage_due_date else grace_end_date
+        payment_due_date = coverage_due_date if coverage_due_date else due_date  # Paying for overdue/current period
 
     period_status = {}
 
@@ -2721,7 +2724,9 @@ def rent():
                           checking_balance=checking_balance,
                           savings_balance=savings_balance,
                           due_date=due_date,
+                          payment_due_date=payment_due_date,  # CRITICAL FIX: Show correct period being paid for
                           grace_end_date=grace_end_date,
+                          grace_end_date_for_status=grace_end_date_for_status,  # Add grace date for the payment period
                           preview_start_date=preview_start_date,
                           payment_history=payment_history,
                           rent_items=rent_items,
