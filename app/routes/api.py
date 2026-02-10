@@ -2588,7 +2588,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
         # Check if student is currently active in this period (TapEvent uses uppercase)
         latest_event = (
             TapEvent.query
-            .filter_by(student_id=student.id, period=period_upper)
+            .filter_by(student_id=student.id, period=period_upper, is_deleted=False)
             .order_by(TapEvent.timestamp.desc())
             .first()
         )
@@ -2677,6 +2677,22 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                         join_code=join_code
                     )
                     db.session.add(tap_out_event)
+
+                    # Lock the student for the rest of the day in this period
+                    from app.models import StudentBlock
+                    student_block = StudentBlock.query.filter_by(
+                        student_id=student.id,
+                        period=period_upper
+                    ).first()
+                    if not student_block:
+                        student_block = StudentBlock(
+                            student_id=student.id,
+                            period=period_upper,
+                            tap_enabled=True,
+                            join_code=join_code
+                        )
+                        db.session.add(student_block)
+                    student_block.done_for_day_date = today_pacific
 
     # Commit all auto-tap-outs at once if requested
     if commit:
