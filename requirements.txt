@@ -45,7 +45,7 @@ zope.event==5.0
 # breaking changes (transitive dep for gevent) before upgrading from 7.2 to 8.2
 zope.interface==7.2
 python-dateutil==2.9.0.post0
-cryptography==46.0.5
+cryptography==46.0.3
 Flask-WTF==1.2.2
 python-dotenv==1.2.1
 

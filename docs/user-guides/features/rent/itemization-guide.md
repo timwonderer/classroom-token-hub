@@ -503,6 +503,83 @@ John's Rent Privileges:
 
 ---
 
+## Real-World Connections
+
+### Teaching Concepts
+
+**Itemized Rent Teaches:**
+- **Bundling:** Multiple services for one price (like cable/internet packages)
+- **À La Carte Pricing:** Pay only for what you use (like streaming services)
+- **Value Perception:** Understanding what you're actually getting
+- **Rent vs. Own:** Fixed costs for guaranteed access
+- **Trade-offs:** Convenience vs. cost control
+
+**Discussion Questions:**
+- "Is it better to pay rent or buy items separately? Why?"
+- "How is this like real utilities (water, electricity)?"
+- "What if you only need 1-2 items - still pay rent?"
+- "How do businesses use bundle pricing?"
+
+### Real-World Examples
+
+**Apartment Rent:**
+- Unit cost ($1000)
+- Water included
+- Electric separate
+- Internet separate
+= Total housing cost higher than base rent
+
+**Gym Membership:**
+- Monthly fee ($50)
+- Access to all equipment
+- Classes included
+- Personal training extra
+= Bundle vs. paying per visit
+
+**Streaming Services:**
+- Netflix ($15/month) - all content
+- Buy movies individually ($5 each)
+= Bundle better if watch 4+ movies
+
+---
+
+## Advanced Configurations
+
+### Progressive Rent
+
+Create different "rent tiers" using store items:
+
+**Basic Rent: $40**
+- Standard desk
+- Standard chair
+- Basic locker
+
+**Premium Upgrades (Store):**
+- Standing desk upgrade: +$15
+- Ergonomic chair upgrade: +$10
+- Locker XL upgrade: +$8
+
+Students pay base rent, can upgrade components individually.
+
+### Seasonal Items
+
+Add/remove items based on time of year:
+
+**Fall:** Include textbook rental
+**Winter:** Add coat hook access
+**Spring:** Include outdoor seating option
+
+### Experiment With Models
+
+Test different setups and use analytics to see what works:
+
+- All items per-rent-period vs. mix of durations
+- High vs. low premium on store prices
+- Many small items vs. few large items
+- Required vs. all-optional items
+
+---
+
 ## Related Documentation
 
 - [Managing Rent Settings](managing-rent.md) - Complete rent configuration guide
