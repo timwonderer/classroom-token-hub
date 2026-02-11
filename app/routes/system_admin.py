@@ -1487,13 +1487,16 @@ def grafana_proxy(path):
         # Allowlist of safe MIME type prefixes that are permitted to be streamed.
         # Everything else (including HTML/XML or missing/unknown types) is blocked.
         # Note: image/svg+xml is explicitly blocked above before this check.
+        javascript_mime_types = (
+            'application/javascript',
+            'text/javascript',
+        )
         safe_mime_prefixes = (
             'image/',              # images (png, jpeg, gif, etc.) - SVG blocked above
             'text/plain',          # plain text
             'text/css',            # stylesheets
             'application/json',    # JSON APIs
-            'application/javascript',
-            'text/javascript',
+            *javascript_mime_types,
             'application/octet-stream',
             'application/pdf',
             'text/csv',
@@ -1506,6 +1509,22 @@ def grafana_proxy(path):
                 f"for path: {normalized_path}"
             )
             # Avoid returning upstream content directly to prevent reflected XSS
+            return Response(
+                "Unable to display this Grafana content via proxy due to security restrictions. "
+                "Please access the Grafana dashboard directly.",
+                status=502,
+                mimetype='text/plain'
+            )
+
+        # Restrict executable JavaScript responses to static asset paths only.
+        # This preserves Grafana front-end assets while reducing script-reflection risk.
+        if (
+            mime_type in javascript_mime_types
+            and not normalized_path.startswith(('public/', 'static/'))
+        ):
+            current_app.logger.warning(
+                f"Blocked proxied Grafana JavaScript response for non-static path: {normalized_path}"
+            )
             return Response(
                 "Unable to display this Grafana content via proxy due to security restrictions. "
                 "Please access the Grafana dashboard directly.",
@@ -1532,6 +1551,8 @@ def grafana_proxy(path):
         ]
 
         response = Response(resp.iter_content(chunk_size=8192), resp.status_code, response_headers)
+        # Prevent MIME sniffing to reduce the chance of script execution from mislabeled payloads.
+        response.headers['X-Content-Type-Options'] = 'nosniff'
         return response
 
     except requests.exceptions.ConnectionError:
