@@ -169,6 +169,37 @@ def check_idempotency(filepath):
 
     return visitor.errors
 
+
+def check_redemption_audit_log_safety(filepath):
+    """
+    Enforce append-only migration guardrails for redemption_audit_logs.
+    """
+    with open(filepath, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    lower_content = content.lower()
+    errors = []
+
+    # Block raw SQL touching redemption_audit_logs entirely.
+    if "op.execute" in lower_content and "redemption_audit_logs" in lower_content:
+        errors.append(
+            f"❌ Forbidden raw SQL on redemption_audit_logs in {filepath.name}. "
+            "Use structured Alembic operations and avoid op.execute for this table."
+        )
+
+    destructive_patterns = [
+        r"op\.drop_table\(\s*['\"]redemption_audit_logs['\"]",
+        r"op\.drop_column\(\s*['\"]redemption_audit_logs['\"]",
+        r"op\.alter_column\(\s*['\"]redemption_audit_logs['\"]",
+    ]
+    for pattern in destructive_patterns:
+        if re.search(pattern, content, re.IGNORECASE):
+            errors.append(
+                f"❌ Forbidden non-append migration operation on redemption_audit_logs in {filepath.name}."
+            )
+
+    return errors
+
 # List of legacy migrations that are known to violate new idempotency rules
 # (unguarded add_column/create_index). These are whitelisted to prevent CI failure.
 LEGACY_MIGRATIONS = {
@@ -233,6 +264,10 @@ def validate_migrations():
                         errors.append(issue)
                     else:
                         warnings.append(issue)
+
+                safety_issues = check_redemption_audit_log_safety(filepath)
+                for issue in safety_issues:
+                    errors.append(issue)
 
         except Exception as e:
             errors.append(f"❌ Error parsing {filepath.name}: {e}")
