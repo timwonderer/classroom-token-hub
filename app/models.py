@@ -8,6 +8,7 @@ Times are stored as UTC in the database.
 from datetime import timezone, timedelta
 from decimal import Decimal, InvalidOperation
 import enum
+import uuid
 
 import sqlalchemy as sa
 from sqlalchemy.ext.hybrid import hybrid_property
@@ -831,6 +832,46 @@ class StudentItem(db.Model):
 
     # Relationships
     student = db.relationship('Student', backref=db.backref('items', lazy='dynamic'))
+
+
+class RedemptionAuditAction(enum.Enum):
+    REQUEST = 'request'
+    APPROVED = 'approved'
+    REJECTED = 'rejected'
+
+
+class RedemptionAuditSource(enum.Enum):
+    LIVE = 'live'
+
+
+class RedemptionAuditLog(db.Model):
+    __tablename__ = 'redemption_audit_logs'
+
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    student_item_id = db.Column(db.Integer, db.ForeignKey('student_items.id'), nullable=True, index=True)
+    student_display_name = db.Column(db.String(120), nullable=False)
+    class_display_label = db.Column(db.String(120), nullable=False)
+    action = db.Column(
+        db.Enum(RedemptionAuditAction, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        index=True,
+    )
+    notes = db.Column(db.Text, nullable=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True, index=True)
+    timestamp = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, index=True)
+    source = db.Column(
+        db.Enum(RedemptionAuditSource, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=RedemptionAuditSource.LIVE,
+        index=True,
+    )
+
+    student_item = db.relationship('StudentItem', backref=db.backref('redemption_audit_logs', lazy='dynamic'))
+    teacher = db.relationship('Admin', backref=db.backref('redemption_audit_logs', lazy='dynamic'))
+
+    __table_args__ = (
+        db.Index('ix_redemption_audit_logs_teacher_timestamp', 'teacher_id', 'timestamp'),
+    )
 
 
 # -------------------- RENT SETTINGS MODEL --------------------
