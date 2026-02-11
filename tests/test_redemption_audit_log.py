@@ -8,7 +8,9 @@ from werkzeug.security import generate_password_hash
 from app.extensions import db
 from app.models import (
     Admin,
+    RedemptionAuditAction,
     RedemptionAuditLog,
+    RedemptionAuditSource,
     StoreItem,
     Student,
     StudentItem,
@@ -112,17 +114,17 @@ def test_request_approve_reject_write_audit_rows(client, teacher_admin, student_
     assert use_resp.status_code == 200
     assert use_resp.json['status'] == 'success'
 
-    request_rows = RedemptionAuditLog.query.filter_by(student_item_id=student_item.id, action='request').all()
+    request_rows = RedemptionAuditLog.query.filter_by(student_item_id=student_item.id, action=RedemptionAuditAction.REQUEST).all()
     assert len(request_rows) == 1
     assert request_rows[0].notes == 'approve note'
-    assert request_rows[0].source.value == 'live'
+    assert request_rows[0].source == RedemptionAuditSource.LIVE
 
     _login_admin(client, teacher_admin.id)
     approve_resp = client.post('/api/approve-redemption', json={'student_item_id': student_item.id})
     assert approve_resp.status_code == 200
     assert approve_resp.json['status'] == 'success'
 
-    approved_rows = RedemptionAuditLog.query.filter_by(student_item_id=student_item.id, action='approved').all()
+    approved_rows = RedemptionAuditLog.query.filter_by(student_item_id=student_item.id, action=RedemptionAuditAction.APPROVED).all()
     assert len(approved_rows) == 1
 
     # Separate reject flow
@@ -140,7 +142,7 @@ def test_request_approve_reject_write_audit_rows(client, teacher_admin, student_
     assert reject_resp.status_code == 200
     assert reject_resp.json['status'] == 'success'
 
-    rejected_rows = RedemptionAuditLog.query.filter_by(action='rejected').all()
+    rejected_rows = RedemptionAuditLog.query.filter_by(action=RedemptionAuditAction.REJECTED).all()
     assert len(rejected_rows) == 1
     assert rejected_rows[0].notes is not None
     assert 'reject me' in rejected_rows[0].notes

@@ -805,7 +805,7 @@ def use_item():
         else:
             return jsonify({"status": "success", "message": f"You have requested to use {student_item.store_item.name}. Awaiting admin approval."})
 
-    except SQLAlchemyError as e:
+    except (SQLAlchemyError, RuntimeError, ValueError) as e:
         db.session.rollback()
         current_app.logger.error(f"Item use failed for student {student.id}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred. Please try again."}), 500
@@ -857,7 +857,7 @@ def approve_redemption():
 
         db.session.commit()
         return jsonify({"status": "success", "message": "Redemption approved."})
-    except SQLAlchemyError as e:
+    except (SQLAlchemyError, RuntimeError, ValueError) as e:
         db.session.rollback()
         current_app.logger.error(f"Redemption approval failed for student_item {student_item_id}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred."}), 500
@@ -981,7 +981,7 @@ def reject_redemption():
         db.session.commit()
         return jsonify({"status": "success", "message": "Redemption rejected and refunded."})
 
-    except SQLAlchemyError as e:
+    except (SQLAlchemyError, RuntimeError, ValueError) as e:
         db.session.rollback()
         current_app.logger.error(f"Redemption rejection failed for student_item {student_item_id}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred."}), 500

@@ -852,7 +852,11 @@ class RedemptionAuditLog(db.Model):
     student_display_name = db.Column(db.String(120), nullable=False)
     class_display_label = db.Column(db.String(120), nullable=False)
     action = db.Column(
-        db.Enum(RedemptionAuditAction, values_callable=lambda x: [e.value for e in x]),
+        db.Enum(
+            RedemptionAuditAction,
+            values_callable=lambda x: [e.value for e in x],
+            name='redemption_audit_action_enum',
+        ),
         nullable=False,
         index=True,
     )
@@ -860,7 +864,11 @@ class RedemptionAuditLog(db.Model):
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True, index=True)
     timestamp = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, index=True)
     source = db.Column(
-        db.Enum(RedemptionAuditSource, values_callable=lambda x: [e.value for e in x]),
+        db.Enum(
+            RedemptionAuditSource,
+            values_callable=lambda x: [e.value for e in x],
+            name='redemption_audit_source_enum',
+        ),
         nullable=False,
         default=RedemptionAuditSource.LIVE,
         index=True,
