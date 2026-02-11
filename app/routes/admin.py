@@ -41,7 +41,8 @@ from app.models import (
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
-    DemoStudent, Announcement, AdminCredential
+    DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
+    RedemptionAuditSource
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
 from app.forms import (
@@ -3326,10 +3327,158 @@ def store_management():
         .all()
     )
 
+    # -------------------- Redemption Audit (live + inferred legacy adapter) --------------------
+    audit_student = request.args.get('audit_student', '').strip()
+    audit_class = request.args.get('audit_class', '').strip()
+    audit_action = request.args.get('audit_action', '').strip()
+    audit_start_date = request.args.get('audit_start_date', '').strip()
+    audit_end_date = request.args.get('audit_end_date', '').strip()
+    audit_page = max(1, request.args.get('audit_page', 1, type=int))
+    audit_per_page = 25
+
+    join_code_label_map = {}
+    teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
+    for tb in teacher_blocks:
+        if tb.join_code and tb.join_code not in join_code_label_map:
+            join_code_label_map[tb.join_code] = tb.get_class_label()
+
+    parsed_audit_action = None
+    if audit_action:
+        try:
+            parsed_audit_action = RedemptionAuditAction(audit_action)
+        except ValueError:
+            flash("Invalid audit action filter.", "warning")
+
+    audit_start_dt = None
+    audit_end_dt = None
+    date_filter_valid = True
+    try:
+        if audit_start_date:
+            audit_start_dt = datetime.strptime(audit_start_date, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+        if audit_end_date:
+            audit_end_dt = datetime.strptime(audit_end_date, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1)
+    except ValueError:
+        flash("Invalid date format. Please use YYYY-MM-DD.", "warning")
+        date_filter_valid = False
+
+    live_query = RedemptionAuditLog.query.filter(
+        RedemptionAuditLog.teacher_id == admin_id,
+        RedemptionAuditLog.source == RedemptionAuditSource.LIVE,
+    )
+    if audit_student:
+        live_query = live_query.filter(RedemptionAuditLog.student_display_name.ilike(f"%{audit_student}%"))
+    if audit_class:
+        live_query = live_query.filter(RedemptionAuditLog.class_display_label == audit_class)
+    if parsed_audit_action:
+        live_query = live_query.filter(RedemptionAuditLog.action == parsed_audit_action)
+    if date_filter_valid:
+        if audit_start_dt:
+            live_query = live_query.filter(RedemptionAuditLog.timestamp >= audit_start_dt)
+        if audit_end_dt:
+            live_query = live_query.filter(RedemptionAuditLog.timestamp < audit_end_dt)
+
+    live_rows = live_query.order_by(RedemptionAuditLog.timestamp.desc()).limit(5000).all()
+    live_keys = {
+        (row.student_item_id, row.action.value if hasattr(row.action, 'value') else row.action)
+        for row in live_rows
+    }
+
+    inferred_query = (
+        StudentItem.query
+        .options(joinedload(StudentItem.student), joinedload(StudentItem.store_item))
+        .join(Student, StudentItem.student_id == Student.id)
+        .join(StoreItem, StudentItem.store_item_id == StoreItem.id)
+        .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .filter(StoreItem.teacher_id == admin_id)
+        .filter(StudentItem.status.in_(['processing', 'completed']))
+    )
+    if audit_student:
+        matching_student_ids = [
+            s.id for s in _scoped_students().all()
+            if audit_student.lower() in s.full_name.lower()
+        ]
+        if matching_student_ids:
+            inferred_query = inferred_query.filter(StudentItem.student_id.in_(matching_student_ids))
+        else:
+            inferred_query = inferred_query.filter(sa.false())
+
+    inferred_items = inferred_query.all()
+    inferred_rows = []
+    for si in inferred_items:
+        if si.status == 'processing':
+            inferred_action = 'request'
+            inferred_ts = si.redemption_date or si.purchase_date
+        elif si.status == 'completed':
+            inferred_action = 'approved'
+            inferred_ts = si.redemption_date or si.purchase_date
+        else:
+            continue
+
+        if (si.id, inferred_action) in live_keys:
+            continue
+
+        class_label = join_code_label_map.get(si.join_code)
+        if not class_label:
+            class_label = class_labels_by_block.get((si.student.block or '').upper(), si.student.block or 'Unknown Class')
+
+        row = {
+            'student_item_id': si.id,
+            'student_display_name': si.student.full_name if si.student else 'Unknown Student',
+            'class_display_label': class_label,
+            'action': inferred_action,
+            'notes': si.redemption_details,
+            'timestamp': inferred_ts,
+            'source': 'inferred_legacy',
+        }
+
+        if audit_class and row['class_display_label'] != audit_class:
+            continue
+        if parsed_audit_action and row['action'] != parsed_audit_action.value:
+            continue
+        if date_filter_valid:
+            if audit_start_dt and (not row['timestamp'] or ensure_utc(row['timestamp']) < audit_start_dt):
+                continue
+            if audit_end_dt and (not row['timestamp'] or ensure_utc(row['timestamp']) >= audit_end_dt):
+                continue
+        inferred_rows.append(row)
+
+    live_serialized = [{
+        'student_item_id': row.student_item_id,
+        'student_display_name': row.student_display_name,
+        'class_display_label': row.class_display_label,
+        'action': row.action.value if hasattr(row.action, 'value') else row.action,
+        'notes': row.notes,
+        'timestamp': row.timestamp,
+        'source': row.source.value if hasattr(row.source, 'value') else row.source,
+    } for row in live_rows]
+
+    audit_rows_all = live_serialized + inferred_rows
+    audit_rows_all.sort(key=lambda r: ensure_utc(r['timestamp']) if r['timestamp'] else datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+
+    audit_total = len(audit_rows_all)
+    audit_total_pages = max(1, math.ceil(audit_total / audit_per_page)) if audit_total else 1
+    if audit_page > audit_total_pages:
+        audit_page = audit_total_pages
+    audit_start_idx = (audit_page - 1) * audit_per_page
+    audit_end_idx = audit_start_idx + audit_per_page
+    audit_rows = audit_rows_all[audit_start_idx:audit_end_idx]
+
+    audit_class_options = sorted(set(class_labels_by_block.values()))
+
     return render_template('admin_store.html', form=form, items=items, current_page="store",
                          total_items=total_items, active_items=active_items, total_purchases=total_purchases,
                          pending_redemptions=pending_redemptions, recent_purchases=recent_purchases,
-                         class_labels_by_block=class_labels_by_block)
+                         class_labels_by_block=class_labels_by_block,
+                         audit_rows=audit_rows,
+                         audit_total=audit_total,
+                         audit_page=audit_page,
+                         audit_total_pages=audit_total_pages,
+                         audit_class_options=audit_class_options,
+                         audit_student=audit_student,
+                         audit_class=audit_class,
+                         audit_action=audit_action,
+                         audit_start_date=audit_start_date,
+                         audit_end_date=audit_end_date)
 
 
 @admin_bp.route('/store/edit/<int:item_id>', methods=['GET', 'POST'])

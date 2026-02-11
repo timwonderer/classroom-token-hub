@@ -22,7 +22,8 @@ from app.extensions import db, limiter
 from app.models import (
     Student, StoreItem, StudentItem, Transaction, TapEvent,
     HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
-    StudentTeacher, TeacherBlock, StudentBlock, DemoStudent
+    StudentTeacher, TeacherBlock, StudentBlock, DemoStudent,
+    RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
 from app.routes.student import get_current_class_context, get_current_teacher_id, get_rent_settings_for_context
@@ -98,6 +99,55 @@ def _calculate_due_dates(rent_setting, now):
         next_due = _add_period(next_due, delta)
 
     return (current_due, next_due)
+
+
+def _resolve_class_display_label(teacher_id, join_code, fallback_block=None):
+    """
+    Resolve a stable class display label snapshot for audit logging.
+    """
+    if join_code:
+        seat = TeacherBlock.query.filter_by(teacher_id=teacher_id, join_code=join_code).first()
+        if seat:
+            label = seat.get_class_label()
+            if label:
+                return label
+            if seat.block:
+                return seat.block
+    return fallback_block or "Unknown Class"
+
+
+def _append_redemption_audit_log(*, student_item, student, teacher_id, action, notes, guard_state, fallback_block=None):
+    """
+    Append exactly one live redemption audit log row for this request path.
+
+    Must be called before redemption state mutations.
+    """
+    if guard_state.get('inserted'):
+        raise RuntimeError("Duplicate redemption audit insertion attempt in single request path")
+
+    action_map = {
+        'request': RedemptionAuditAction.REQUEST,
+        'approved': RedemptionAuditAction.APPROVED,
+        'rejected': RedemptionAuditAction.REJECTED,
+    }
+    if action not in action_map:
+        raise ValueError(f"Unsupported redemption audit action: {action}")
+
+    student_name = student.full_name if student else "Unknown Student"
+    join_code = getattr(student_item, 'join_code', None)
+    class_label = _resolve_class_display_label(teacher_id, join_code, fallback_block=fallback_block)
+
+    db.session.add(RedemptionAuditLog(
+        student_item_id=student_item.id if student_item else None,
+        student_display_name=student_name,
+        class_display_label=class_label,
+        action=action_map[action],
+        notes=notes if notes else None,
+        teacher_id=teacher_id,
+        timestamp=utc_now(),
+        source=RedemptionAuditSource.LIVE,
+    ))
+    guard_state['inserted'] = True
 
 
 # -------------------- TIPS API --------------------
@@ -658,8 +708,36 @@ def use_item():
         db.session.commit()
         return jsonify({"status": "error", "message": "This item has expired."}), 400
 
+    # Get context up front for audit snapshots and transaction scoping.
+    context = get_current_class_context()
+    teacher_id_for_audit = (
+        context['teacher_id'] if context else
+        (student_item.store_item.teacher_id if student_item.store_item else None)
+    )
+    fallback_block = context.get('block') if context else student.block
+
+    # Request action happens when item transitions into admin approval workflow.
+    will_create_request = (
+        not student_item.is_from_bundle and (
+            student_item.uses_remaining is None or
+            (student_item.uses_remaining != -1 and student_item.uses_remaining <= 1)
+        )
+    )
+
     # 3. Mark as processing and create redemption transaction
     try:
+        audit_guard = {'inserted': False}
+        if will_create_request:
+            _append_redemption_audit_log(
+                student_item=student_item,
+                student=student,
+                teacher_id=teacher_id_for_audit,
+                action='request',
+                notes=details,
+                guard_state=audit_guard,
+                fallback_block=fallback_block,
+            )
+
         # Handle bundle items differently
         if student_item.is_from_bundle:
             # Decrement bundle_remaining
@@ -702,10 +780,6 @@ def use_item():
 
         # CRITICAL FIX v2: Create a redemption transaction with join_code
         # This is a $0 transaction to log the redemption event
-        # Get context from current session
-        from app.routes.student import get_current_class_context
-        context = get_current_class_context()
-
         if context:
             redemption_tx = Transaction(
                 student_id=student.id,
@@ -731,7 +805,7 @@ def use_item():
         else:
             return jsonify({"status": "success", "message": f"You have requested to use {student_item.store_item.name}. Awaiting admin approval."})
 
-    except SQLAlchemyError as e:
+    except (SQLAlchemyError, RuntimeError, ValueError) as e:
         db.session.rollback()
         current_app.logger.error(f"Item use failed for student {student.id}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred. Please try again."}), 500
@@ -756,6 +830,17 @@ def approve_redemption():
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
 
     try:
+        audit_guard = {'inserted': False}
+        _append_redemption_audit_log(
+            student_item=student_item,
+            student=student_item.student,
+            teacher_id=current_admin.id,
+            action='approved',
+            notes=student_item.redemption_details,
+            guard_state=audit_guard,
+            fallback_block=student_item.student.block if student_item.student else None,
+        )
+
         student_item.status = 'completed'
 
         # Find the corresponding 'redemption' transaction and update its description
@@ -772,7 +857,7 @@ def approve_redemption():
 
         db.session.commit()
         return jsonify({"status": "success", "message": "Redemption approved."})
-    except SQLAlchemyError as e:
+    except (SQLAlchemyError, RuntimeError, ValueError) as e:
         db.session.rollback()
         current_app.logger.error(f"Redemption approval failed for student_item {student_item_id}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred."}), 500
@@ -797,6 +882,17 @@ def reject_redemption():
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
 
     try:
+        audit_guard = {'inserted': False}
+        _append_redemption_audit_log(
+            student_item=student_item,
+            student=student_item.student,
+            teacher_id=current_admin.id,
+            action='rejected',
+            notes=student_item.redemption_details,
+            guard_state=audit_guard,
+            fallback_block=student_item.student.block if student_item.student else None,
+        )
+
         # 1. Determine Refund Amount from original purchase transaction
         # Look up the actual amount paid (handles price changes and bulk discounts)
         purchase_tx_query = Transaction.query.filter_by(
@@ -920,7 +1016,7 @@ def reject_redemption():
         db.session.commit()
         return jsonify({"status": "success", "message": "Redemption rejected and refunded."})
 
-    except SQLAlchemyError as e:
+    except (SQLAlchemyError, RuntimeError, ValueError) as e:
         db.session.rollback()
         current_app.logger.error(f"Redemption rejection failed for student_item {student_item_id}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred."}), 500
