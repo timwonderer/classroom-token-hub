@@ -41,7 +41,8 @@ from app.models import (
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
-    DemoStudent, Announcement, AdminCredential, RedemptionAuditLog
+    DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
+    RedemptionAuditSource
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
 from app.forms import (
@@ -3341,30 +3342,42 @@ def store_management():
         if tb.join_code and tb.join_code not in join_code_label_map:
             join_code_label_map[tb.join_code] = tb.get_class_label()
 
+    parsed_audit_action = None
+    if audit_action:
+        try:
+            parsed_audit_action = RedemptionAuditAction(audit_action)
+        except ValueError:
+            flash("Invalid audit action filter.", "warning")
+
+    audit_start_dt = None
+    audit_end_dt = None
+    date_filter_valid = True
+    try:
+        if audit_start_date:
+            audit_start_dt = datetime.strptime(audit_start_date, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+        if audit_end_date:
+            audit_end_dt = datetime.strptime(audit_end_date, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1)
+    except ValueError:
+        flash("Invalid date format. Please use YYYY-MM-DD.", "warning")
+        date_filter_valid = False
+
     live_query = RedemptionAuditLog.query.filter(
         RedemptionAuditLog.teacher_id == admin_id,
-        RedemptionAuditLog.source == 'live',
+        RedemptionAuditLog.source == RedemptionAuditSource.LIVE,
     )
     if audit_student:
         live_query = live_query.filter(RedemptionAuditLog.student_display_name.ilike(f"%{audit_student}%"))
     if audit_class:
         live_query = live_query.filter(RedemptionAuditLog.class_display_label == audit_class)
-    if audit_action:
-        live_query = live_query.filter(RedemptionAuditLog.action == audit_action)
-    if audit_start_date:
-        try:
-            start_dt = datetime.strptime(audit_start_date, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-            live_query = live_query.filter(RedemptionAuditLog.timestamp >= start_dt)
-        except ValueError:
-            flash("Invalid audit start date format. Please use YYYY-MM-DD.", "warning")
-    if audit_end_date:
-        try:
-            end_dt = datetime.strptime(audit_end_date, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1)
-            live_query = live_query.filter(RedemptionAuditLog.timestamp < end_dt)
-        except ValueError:
-            flash("Invalid audit end date format. Please use YYYY-MM-DD.", "warning")
+    if parsed_audit_action:
+        live_query = live_query.filter(RedemptionAuditLog.action == parsed_audit_action)
+    if date_filter_valid:
+        if audit_start_dt:
+            live_query = live_query.filter(RedemptionAuditLog.timestamp >= audit_start_dt)
+        if audit_end_dt:
+            live_query = live_query.filter(RedemptionAuditLog.timestamp < audit_end_dt)
 
-    live_rows = live_query.order_by(RedemptionAuditLog.timestamp.desc()).all()
+    live_rows = live_query.order_by(RedemptionAuditLog.timestamp.desc()).limit(5000).all()
     live_keys = {
         (row.student_item_id, row.action.value if hasattr(row.action, 'value') else row.action)
         for row in live_rows
@@ -3377,12 +3390,13 @@ def store_management():
         .join(StoreItem, StudentItem.store_item_id == StoreItem.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(StoreItem.teacher_id == admin_id)
+        .filter(StudentItem.status.in_(['processing', 'completed']))
     )
     if audit_student:
-        matching_student_ids = []
-        for s in _scoped_students().all():
-            if audit_student.lower() in s.full_name.lower():
-                matching_student_ids.append(s.id)
+        matching_student_ids = [
+            s.id for s in _scoped_students().all()
+            if audit_student.lower() in s.full_name.lower()
+        ]
         if matching_student_ids:
             inferred_query = inferred_query.filter(StudentItem.student_id.in_(matching_student_ids))
         else:
@@ -3419,22 +3433,13 @@ def store_management():
 
         if audit_class and row['class_display_label'] != audit_class:
             continue
-        if audit_action and row['action'] != audit_action:
+        if parsed_audit_action and row['action'] != parsed_audit_action.value:
             continue
-        if audit_start_date:
-            try:
-                start_dt = datetime.strptime(audit_start_date, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-                if not row['timestamp'] or ensure_utc(row['timestamp']) < start_dt:
-                    continue
-            except ValueError:
-                pass
-        if audit_end_date:
-            try:
-                end_dt = datetime.strptime(audit_end_date, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1)
-                if not row['timestamp'] or ensure_utc(row['timestamp']) >= end_dt:
-                    continue
-            except ValueError:
-                pass
+        if date_filter_valid:
+            if audit_start_dt and (not row['timestamp'] or ensure_utc(row['timestamp']) < audit_start_dt):
+                continue
+            if audit_end_dt and (not row['timestamp'] or ensure_utc(row['timestamp']) >= audit_end_dt):
+                continue
         inferred_rows.append(row)
 
     live_serialized = [{
