@@ -253,6 +253,8 @@ class Student(db.Model):
     dob_sum = db.Column(db.Integer, nullable=True)
     # Track if student has completed the legacy profile migration
     has_completed_profile_migration = db.Column(db.Boolean, default=False)
+    # Soft-delete flag: archived students cannot log in and are hidden from roster queries.
+    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
     @property
     def full_name(self):
@@ -593,6 +595,10 @@ class Transaction(db.Model):
     account_type = db.Column(db.String(20), default='checking')
     description = db.Column(db.String(255))
     is_void = db.Column(db.Boolean, default=False)
+    # References for compensating/reversal ledger entries.
+    # Stored as IDs to keep compatibility simple across backends/migrations.
+    original_transaction_id = db.Column(db.Integer, nullable=True, index=True)
+    reversal_transaction_id = db.Column(db.Integer, nullable=True, index=True)
     type = db.Column(db.String(50))  # optional field to describe the transaction type
     # All times stored as UTC
     date_funds_available = db.Column(db.DateTime(timezone=True), default=utc_now)

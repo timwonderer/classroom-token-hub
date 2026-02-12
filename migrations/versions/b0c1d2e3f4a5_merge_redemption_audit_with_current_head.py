@@ -4,8 +4,6 @@ Revision ID: b0c1d2e3f4a5
 Revises: 2765a36d76ff, a9b8c7d6e5f4
 Create Date: 2026-02-11 12:20:00.000000
 """
-
-
 # revision identifiers, used by Alembic.
 revision = 'b0c1d2e3f4a5'
 down_revision = ('2765a36d76ff', 'a9b8c7d6e5f4')

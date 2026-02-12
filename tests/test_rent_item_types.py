@@ -1,4 +1,5 @@
 import pytest
+import re
 from decimal import Decimal
 from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher
 from app.extensions import db
@@ -575,7 +576,7 @@ def test_legacy_rent_items_default_to_privilege(client, teacher_admin):
 
 
 def test_per_use_free_purchase_from_rent(client, teacher_admin, student_in_class):
-    """Test that a student with rent-granted uses_remaining can purchase for free."""
+    """Test that a student with rent-granted uses_remaining can purchase for $0."""
     student = student_in_class
     from werkzeug.security import generate_password_hash
     student.passphrase_hash = generate_password_hash('password')
@@ -615,7 +616,7 @@ def test_per_use_free_purchase_from_rent(client, teacher_admin, student_in_class
     data = {'item_id': store_item.id, 'passphrase': 'password', 'quantity': 1}
     resp = client.post('/api/purchase-item', json=data)
     assert resp.status_code == 200
-    assert "free use" in resp.json['message'].lower() or "rent perk" in resp.json['message'].lower()
+    assert "$0" in resp.json['message'] or "rent perk" in resp.json['message'].lower()
 
     # Verify uses_remaining decremented
     db.session.refresh(rent_granted)
@@ -624,6 +625,14 @@ def test_per_use_free_purchase_from_rent(client, teacher_admin, student_in_class
     # Verify balance NOT changed (free purchase)
     db.session.refresh(student)
     assert student.checking_balance == original_balance
+
+    # Verify a purchased item is created and can be used later
+    purchased_items = StudentItem.query.filter_by(
+        student_id=student.id,
+        store_item_id=store_item.id,
+        join_code='JOINCODE123'
+    ).all()
+    assert any(si.uses_remaining is None for si in purchased_items)
 
 
 def test_per_use_charges_when_uses_exhausted(client, teacher_admin, student_in_class):
@@ -668,6 +677,116 @@ def test_per_use_charges_when_uses_exhausted(client, teacher_admin, student_in_c
     # Balance should decrease by the item price
     db.session.refresh(student)
     assert student.checking_balance < original_balance
+
+
+def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin, student_in_class):
+    """When rent is paid, privilege items are included/disabled but per-use items remain purchasable."""
+    student = student_in_class
+    from werkzeug.security import generate_password_hash
+    student.passphrase_hash = generate_password_hash('password')
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    privilege_store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Desk Privilege',
+        price=Decimal('50.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    per_use_store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Pencil Per Use',
+        price=Decimal('3.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add_all([privilege_store_item, per_use_store_item])
+    db.session.flush()
+
+    db.session.add_all([
+        RentItem(
+            rent_setting_id=settings.id,
+            name='Desk Privilege',
+            rent_item_type='privilege',
+            is_available_in_store=True,
+            store_price=Decimal('50.00'),
+            purchase_duration='per_period',
+            store_item_id=privilege_store_item.id,
+        ),
+        RentItem(
+            rent_setting_id=settings.id,
+            name='Pencil Per Use',
+            rent_item_type='per_use',
+            is_available_in_store=True,
+            store_price=Decimal('3.00'),
+            purchase_duration='per_use',
+            use_limit=5,
+            store_item_id=per_use_store_item.id,
+        ),
+    ])
+
+    now = datetime.now(timezone.utc)
+    rent_payment = RentPayment(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=now.month,
+        period_year=now.year,
+        coverage_month=now.month,
+        coverage_year=now.year,
+        payment_date=now,
+    )
+    db.session.add(rent_payment)
+    # _filter_valid_rent_payments requires a matching Transaction within 5 seconds
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent for Period A',
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    html = resp.data.decode('utf-8')
+    privilege_button = re.search(
+        rf'data-item-id="{privilege_store_item.id}"[^>]*>',
+        html,
+        re.DOTALL
+    )
+    assert privilege_button is not None
+    assert 'disabled' in privilege_button.group(0)
+
+    per_use_button = re.search(
+        rf'data-item-id="{per_use_store_item.id}"[^>]*>',
+        html,
+        re.DOTALL
+    )
+    assert per_use_button is not None
+    assert 'disabled' not in per_use_button.group(0)
 
 
 def test_privilege_badge_only_shows_privilege_items(client, teacher_admin, student_in_class):

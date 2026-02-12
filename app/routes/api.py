@@ -331,30 +331,45 @@ def purchase_item():
         active_rent_item = rent_item_query.first()
 
         if active_rent_item:
-            # Free use from rent - decrement uses_remaining unless unlimited (-1)
+            # Free purchase from rent perk - decrement available free uses unless unlimited (-1)
             if active_rent_item.uses_remaining != -1:
                 active_rent_item.uses_remaining -= 1
-            active_rent_item.redemption_date = utc_now()
 
-            # Create a $0 transaction to log the free use
-            free_use_tx = Transaction(
+            # For rent perks, purchasing is $0 and usage is logged later on /use-item.
+            purchase_tx = Transaction(
                 student_id=student.id,
                 teacher_id=teacher_id,
                 join_code=join_code,
                 amount=0.0,
                 account_type='checking',
                 type='purchase',
-                description=f"Free use (rent perk): {item.name}"
+                description=f"Purchase: {item.name} [Rent Perk $0]"
             )
-            db.session.add(free_use_tx)
+            db.session.add(purchase_tx)
+
+            expiry_date = None
+            if item.item_type == 'delayed' and item.auto_expiry_days:
+                expiry_date = utc_now() + timedelta(days=item.auto_expiry_days)
+
+            db.session.add(StudentItem(
+                student_id=student.id,
+                store_item_id=item.id,
+                join_code=join_code,
+                purchase_date=utc_now(),
+                expiry_date=expiry_date,
+                status='purchased',
+                is_from_bundle=False,
+                quantity_purchased=1,
+                uses_remaining=None,
+            ))
             db.session.commit()
 
             remaining = active_rent_item.uses_remaining
             if remaining == -1:
-                return jsonify({"status": "success", "message": f"Free use of {item.name} (rent perk)! Unlimited free uses remaining."})
+                return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk). Unlimited free purchases remaining this period."})
             if remaining > 0:
-                return jsonify({"status": "success", "message": f"Free use of {item.name} (rent perk)! {remaining} free uses remaining."})
-            return jsonify({"status": "success", "message": f"Free use of {item.name} (rent perk)! No more free uses remaining."})
+                return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk). {remaining} free purchase(s) remaining this period."})
+            return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk). No free purchases remaining this period."})
 
     # Calculate price (with bulk discount if applicable)
     unit_price = item.price
@@ -428,7 +443,11 @@ def purchase_item():
 
             purchase_count = total_purchased
         else:
-            purchase_count = StudentItem.query.filter_by(student_id=student.id, store_item_id=item.id).count()
+            purchase_count = StudentItem.query.filter(
+                StudentItem.student_id == student.id,
+                StudentItem.store_item_id == item.id,
+                StudentItem.status.notin_(['voided', 'rejected'])
+            ).count()
         if purchase_count + quantity > item.limit_per_student:
             return jsonify({"status": "error", "message": f"You can only purchase {item.limit_per_student - purchase_count} more of this item."}), 400
 
@@ -619,31 +638,36 @@ def purchase_item():
 
         # --- Collective Item Logic ---
         if item.item_type == 'collective':
-            # SECURITY FIX: Check if all students in the same block AND same join_code have purchased
-            # Must scope by join_code to prevent cross-period data leaks
-            from app.models import StudentBlock
-
-            # Get student IDs in this specific class period (join_code + block combination)
-            student_blocks = StudentBlock.query.filter_by(
-                period=student.block,
-                join_code=join_code
-            ).all()
-            student_ids_in_block = {sb.student_id for sb in student_blocks}
-
+            class_size = TeacherBlock.query.filter_by(
+                teacher_id=teacher_id,
+                join_code=join_code,
+                is_claimed=True,
+            ).count()
             purchased_students_count = db.session.query(func.count(func.distinct(StudentItem.student_id))).filter(
                 StudentItem.store_item_id == item.id,
-                StudentItem.student_id.in_(student_ids_in_block)
-            ).scalar()
+                StudentItem.join_code == join_code,
+                StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
+            ).scalar() or 0
 
-            if purchased_students_count >= len(student_ids_in_block):
-                # Threshold met, update all pending items for this collective goal to processing
+            if item.collective_goal_type == 'fixed':
+                target = int(item.collective_goal_target or 0)
+            else:
+                target = class_size
+
+            if target > 0 and purchased_students_count >= target:
+                # Threshold met for this class: unlock only this class period's pending items
                 StudentItem.query.filter(
                     StudentItem.store_item_id == item.id,
+                    StudentItem.join_code == join_code,
                     StudentItem.status == 'pending'
                 ).update({"status": "processing"})
-                # This flash won't be seen by the user due to the JSON response,
-                # but it's good for logging/debugging. A more robust solution might use websockets.
-                current_app.logger.info(f"Collective goal '{item.name}' for block {student.block} has been met!")
+                current_app.logger.info(
+                    "Collective goal '%s' reached for join_code=%s (%s/%s)",
+                    item.name,
+                    join_code,
+                    purchased_students_count,
+                    target,
+                )
 
         # Commit purchases for both collective and non-collective items
         db.session.commit()
@@ -982,36 +1006,20 @@ def reject_redemption():
             amount=refund_amount,
             account_type='checking',
             type='refund',
+            original_transaction_id=purchase_tx.id if purchase_tx else None,
             description=f"Refund: {student_item.store_item.name} (Redemption Rejected)"
         )
         db.session.add(refund_tx)
+        if purchase_tx:
+            purchase_tx.reversal_transaction_id = refund_tx.id
 
-        # 3. Clean up the 'redemption' transaction ($0 log) created during request
-        # Scope by join_code in addition to student/type/description for accuracy
-        redemption_query = Transaction.query.filter_by(
-            student_id=student_item.student_id,
-            type='redemption',
-            join_code=student_item.join_code,
-        ).filter(
-            Transaction.description.like(f"Used: {student_item.store_item.name}%")
-        )
-
-        redemption_date = getattr(student_item, "redemption_date", None)
-        if redemption_date is not None:
-            window_start = redemption_date - timedelta(minutes=10)
-            window_end = redemption_date + timedelta(minutes=10)
-            redemption_query = redemption_query.filter(
-                Transaction.timestamp >= window_start,
-                Transaction.timestamp <= window_end,
-            )
-
-        redemption_tx = redemption_query.order_by(Transaction.timestamp.desc()).first()
-
-        if redemption_tx:
-            db.session.delete(redemption_tx)
-
-        # 4. Remove the item from student's inventory
-        db.session.delete(student_item)
+        # 3. Mark item as rejected (terminal state) instead of deleting history.
+        student_item.status = 'rejected'
+        student_item.redemption_date = utc_now()
+        if student_item.redemption_details:
+            student_item.redemption_details = f"{student_item.redemption_details}\n---\nStatus: rejected"
+        else:
+            student_item.redemption_details = "Status: rejected"
 
         db.session.commit()
         return jsonify({"status": "success", "message": "Redemption rejected and refunded."})

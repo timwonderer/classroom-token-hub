@@ -2325,6 +2325,7 @@ def shop():
     current_block = context.get('block')
     has_paid_rent = False
     per_period_rent_item_ids = set()
+    rent_item_type_by_store_id = {}
 
     if teacher_id and join_code and current_block:
         rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
@@ -2361,7 +2362,18 @@ def shop():
                     required = rent_settings.rent_amount + (rent_settings.late_fee if late_fee_applies else Decimal('0'))
                     has_paid_rent = total_paid >= required
 
-            # Get privilege-type per-period rent items (only these show "Included in your rent!")
+            rent_store_items = RentItem.query.filter(
+                RentItem.rent_setting_id == rent_settings.id,
+                RentItem.is_available_in_store == True,
+                RentItem.store_item_id.isnot(None),
+            ).all()
+            rent_item_type_by_store_id = {
+                rent_item.store_item_id: rent_item.rent_item_type
+                for rent_item in rent_store_items
+                if rent_item.store_item_id
+            }
+
+            # Get privilege-type per-period rent items (only these are included/disabled).
             per_period_items = RentItem.query.filter_by(
                 rent_setting_id=rent_settings.id,
                 rent_item_type='privilege',
@@ -2405,10 +2417,47 @@ def shop():
             is_claimed=True
         ).count()
 
+    collective_progress = {}
+    collective_items = [item for item in items if item.item_type == 'collective']
+    collective_item_ids = [item.id for item in collective_items]
+    if collective_item_ids and join_code:
+        progress_rows = (
+            db.session.query(
+                StudentItem.store_item_id,
+                db.func.count(db.distinct(StudentItem.student_id)).label('student_count'),
+            )
+            .filter(
+                StudentItem.store_item_id.in_(collective_item_ids),
+                StudentItem.join_code == join_code,
+                StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
+            )
+            .group_by(StudentItem.store_item_id)
+            .all()
+        )
+        progress_counts = {row.store_item_id: int(row.student_count or 0) for row in progress_rows}
+
+        for item in collective_items:
+            if item.collective_goal_type == 'whole_class':
+                target = class_size
+            elif item.collective_goal_type == 'fixed':
+                target = int(item.collective_goal_target or 0)
+            else:
+                target = 0
+            count = progress_counts.get(item.id, 0)
+            collective_progress[item.id] = {
+                'count': count,
+                'target': target,
+                'remaining': max(0, target - count),
+                'percent': min(100, int((count / target) * 100)) if target > 0 else 0,
+                'is_complete': bool(target > 0 and count >= target),
+            }
+
     return render_template('student_shop.html', student=student, items=items, student_items=student_items,
                          has_paid_rent=has_paid_rent, per_period_rent_item_ids=per_period_rent_item_ids,
+                         rent_item_type_by_store_id=rent_item_type_by_store_id,
                          rent_free_uses=rent_free_uses,
-                         class_size=class_size, current_block=current_block)
+                         class_size=class_size, current_block=current_block,
+                         collective_progress=collective_progress)
 
 
 # -------------------- RENT --------------------
@@ -3302,6 +3351,12 @@ def login():
                 if is_json:
                     return jsonify(status="error", message="Invalid credentials"), 401
                 flash("Invalid credentials", "error")
+                return redirect(url_for('student.login', next=request.args.get('next')))
+
+            if not student.is_active:
+                if is_json:
+                    return jsonify(status="error", message="Account is inactive. Contact your teacher."), 403
+                flash("Your account is inactive. Contact your teacher.", "error")
                 return redirect(url_for('student.login', next=request.args.get('next')))
 
             if not student.username_lookup_hash:

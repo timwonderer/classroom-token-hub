@@ -27,7 +27,8 @@
         {% if items %}
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
             {% for item in items %}
-            {% set is_rent_covered = has_paid_rent and item.id in per_period_rent_item_ids %}
+            {% set rent_item_type = rent_item_type_by_store_id.get(item.id) %}
+            {% set is_rent_covered = has_paid_rent and rent_item_type == 'privilege' %}
             <div class="col">
                 <div class="card h-100 {% if item.is_bundle or item.bulk_discount_enabled %}border-primary{% endif %} {% if is_rent_covered %}opacity-50{% endif %}">
                     <div class="card-body d-flex flex-column">
@@ -81,32 +82,30 @@
                         <!-- Collective Goal Progress -->
                         {% if item.item_type == 'collective' and item.collective_goal_type %}
                         <div class="mb-3">
-                            {% set purchases_count = item.student_items|selectattr('status', 'in', ['pending', 'processing', 'purchased', 'redeemed', 'completed'])|list|length %}
+                            {% set progress = collective_progress.get(item.id, {'count': 0, 'target': 0, 'remaining': 0, 'percent': 0, 'is_complete': false}) %}
+                            {% set purchases_count = progress.count %}
+                            {% set target = progress.target %}
                             {% if item.collective_goal_type == 'whole_class' %}
-                                {# Use class_size passed from route (students in same join_code) #}
-                                {% set target = class_size %}
                                 <div class="alert alert-info p-2 mb-2">
                                     <small><strong>Whole Class Goal:</strong> All {{ class_size }} students must purchase!</small>
                                 </div>
                             {% elif item.collective_goal_type == 'fixed' %}
-                                {% set target = item.collective_goal_target %}
                                 <div class="alert alert-info p-2 mb-2">
-                                    <small><strong>Collective Goal:</strong> {{ target }} purchases needed to unlock</small>
+                                    <small><strong>Collective Goal:</strong> {{ target }} students needed to unlock</small>
                                 </div>
                             {% endif %}
                             <div class="progress" style="height: 25px;">
-                                {% set progress_percent = (purchases_count / target * 100) if target > 0 else 0 %}
-                                <div class="progress-bar {% if progress_percent >= 100 %}bg-success{% else %}bg-warning{% endif %}"
+                                <div class="progress-bar {% if progress.is_complete %}bg-success{% else %}bg-warning{% endif %}"
                                      role="progressbar"
-                                     style="width: {{ progress_percent }}%;"
+                                     style="width: {{ progress.percent }}%;"
                                      aria-valuenow="{{ purchases_count }}"
                                      aria-valuemin="0"
                                      aria-valuemax="{{ target }}">
                                     {{ purchases_count }}/{{ target }}
                                 </div>
                             </div>
-                            {% if purchases_count < target %}
-                                <small class="text-muted">{{ target - purchases_count }} more needed!</small>
+                            {% if not progress.is_complete %}
+                                <small class="text-muted">{{ progress.remaining }} more needed!</small>
                             {% else %}
                                 <small class="text-success"><i class="bi bi-check-circle"></i> Goal reached! Item will unlock soon.</small>
                             {% endif %}
