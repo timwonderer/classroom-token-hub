@@ -143,7 +143,7 @@ def test_admin_store_shows_collective_progress(client):
     db.session.flush()
 
     student_a1 = _create_student(teacher, 'Ana', 'JOINADMINA', block='A')
-    student_a2 = _create_student(teacher, 'Bo', 'JOINADMINA', block='A')
+    _create_student(teacher, 'Bo', 'JOINADMINA', block='A')
     db.session.flush()
 
     item = StoreItem(

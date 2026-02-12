@@ -335,7 +335,8 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
 
     # Remove students that no longer belong to any class after this join-code deletion.
     remaining_student_ids_subq = db.session.query(TeacherBlock.student_id).filter(
-        TeacherBlock.student_id.isnot(None)
+        TeacherBlock.student_id.isnot(None),
+        TeacherBlock.join_code != join_code,
     ).subquery()
     orphan_student_ids = (
         db.session.query(Student.id)
