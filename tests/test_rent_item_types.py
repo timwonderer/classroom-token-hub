@@ -692,6 +692,8 @@ def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
         first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
     )
     db.session.add(settings)
     db.session.flush()
@@ -738,7 +740,7 @@ def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin
     ])
 
     now = datetime.now(timezone.utc)
-    db.session.add(RentPayment(
+    rent_payment = RentPayment(
         student_id=student.id,
         period='A',
         join_code='JOINCODE123',
@@ -747,6 +749,18 @@ def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin
         period_year=now.year,
         coverage_month=now.month,
         coverage_year=now.year,
+        payment_date=now,
+    )
+    db.session.add(rent_payment)
+    # _filter_valid_rent_payments requires a matching Transaction within 5 seconds
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent for Period A',
     ))
     db.session.commit()
 
@@ -758,7 +772,6 @@ def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin
     resp = client.get('/student/shop')
     assert resp.status_code == 200
     html = resp.data.decode('utf-8')
-
     privilege_button = re.search(
         rf'data-item-id="{privilege_store_item.id}"[^>]*>',
         html,

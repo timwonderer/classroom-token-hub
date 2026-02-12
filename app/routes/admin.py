@@ -41,8 +41,8 @@ from app.models import (
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
-    DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, Issue, IssueResolutionAction,
-    AnalyticsSnapshot, AnalyticsEvent
+    DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
+    RedemptionAuditSource, Issue, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
 from app.forms import (
@@ -328,9 +328,12 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
     ).delete(synchronize_session=False)
 
     if class_blocks and scoped_student_ids:
+        # Only delete legacy StudentBlocks (no join_code) that match the period names.
+        # StudentBlocks with a join_code were already handled by the join_code deletion above.
         StudentBlock.query.filter(
             StudentBlock.student_id.in_(scoped_student_ids),
             StudentBlock.period.in_(class_blocks),
+            StudentBlock.join_code.is_(None),
         ).delete(synchronize_session=False)
 
     # Remove students that no longer belong to any class after this join-code deletion.
@@ -3522,16 +3525,23 @@ def store_management():
         if tb.join_code and tb.join_code not in join_code_label_map:
             join_code_label_map[tb.join_code] = tb.get_class_label()
 
+    parsed_audit_action = None
+    if audit_action:
+        try:
+            parsed_audit_action = RedemptionAuditAction(audit_action)
+        except ValueError:
+            flash("Invalid audit action filter.", "warning")
+
     live_query = RedemptionAuditLog.query.filter(
         RedemptionAuditLog.teacher_id == admin_id,
-        RedemptionAuditLog.source == 'live',
+        RedemptionAuditLog.source == RedemptionAuditSource.LIVE,
     )
     if audit_student:
         live_query = live_query.filter(RedemptionAuditLog.student_display_name.ilike(f"%{audit_student}%"))
     if audit_class:
         live_query = live_query.filter(RedemptionAuditLog.class_display_label == audit_class)
-    if audit_action:
-        live_query = live_query.filter(RedemptionAuditLog.action == audit_action)
+    if parsed_audit_action:
+        live_query = live_query.filter(RedemptionAuditLog.action == parsed_audit_action)
     if audit_start_date:
         try:
             start_dt = datetime.strptime(audit_start_date, '%Y-%m-%d').replace(tzinfo=timezone.utc)
@@ -3545,7 +3555,7 @@ def store_management():
         except ValueError:
             flash("Invalid audit end date format. Please use YYYY-MM-DD.", "warning")
 
-    live_rows = live_query.order_by(RedemptionAuditLog.timestamp.desc()).all()
+    live_rows = live_query.order_by(RedemptionAuditLog.timestamp.desc()).limit(5000).all()
     live_keys = {
         (row.student_item_id, row.action.value if hasattr(row.action, 'value') else row.action)
         for row in live_rows
@@ -3600,7 +3610,7 @@ def store_management():
 
         if audit_class and row['class_display_label'] != audit_class:
             continue
-        if audit_action and row['action'] != audit_action:
+        if parsed_audit_action and row['action'] != parsed_audit_action.value:
             continue
         if audit_start_date:
             try:
