@@ -391,6 +391,28 @@
                 <div><strong>Limit per student:</strong> {{ item.limit_per_student if item.limit_per_student is not none else 'None' }}</div>
               </div>
 
+              {% if item.item_type == 'collective' %}
+              <div class="mb-3">
+                <div class="text-muted small mb-2"><strong>Collective Progress</strong></div>
+                {% set progress_rows = collective_progress_by_item.get(item.id, []) %}
+                {% if progress_rows %}
+                  {% for row in progress_rows %}
+                  <div class="mb-2">
+                    <div class="d-flex justify-content-between small">
+                      <span>{{ row.class_label }}</span>
+                      <span>{{ row.count }}/{{ row.target }}</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                      <div class="progress-bar {% if row.is_complete %}bg-success{% else %}bg-warning{% endif %}" role="progressbar" style="width: {{ row.percent }}%;" aria-valuenow="{{ row.count }}" aria-valuemin="0" aria-valuemax="{{ row.target }}"></div>
+                    </div>
+                  </div>
+                  {% endfor %}
+                {% else %}
+                  <div class="small text-muted">No class progress yet.</div>
+                {% endif %}
+              </div>
+              {% endif %}
+
               <div class="mt-auto">
                 <div class="text-muted small mb-2"><strong>Active In</strong></div>
                 <div class="d-flex flex-wrap gap-1">

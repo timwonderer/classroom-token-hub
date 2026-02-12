@@ -41,7 +41,8 @@ from app.models import (
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
-    DemoStudent, Announcement, AdminCredential, RedemptionAuditLog
+    DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, Issue, IssueResolutionAction,
+    AnalyticsSnapshot, AnalyticsEvent
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
 from app.forms import (
@@ -175,6 +176,179 @@ def _student_scope_subquery(include_unassigned=True):
         .with_entities(Student.id)
         .subquery()
     )
+
+
+def _join_code_exists(join_code):
+    """Return True when a class economy identified by join_code still exists."""
+    if not join_code:
+        return False
+    return TeacherBlock.query.filter_by(join_code=join_code).first() is not None
+
+
+def _assert_transaction_deletion_allowed(join_code, *, join_code_deletion=False):
+    """
+    Guardrail: transactions are immutable while class join code exists.
+
+    Hard transaction deletion is only allowed from join-code destruction workflow.
+    """
+    if not join_code_deletion and _join_code_exists(join_code):
+        raise AssertionError(
+            f"Refusing to delete transactions for active join code '{join_code}'. "
+            "Use archive/deactivate flows instead."
+        )
+
+
+def _archive_student(student):
+    """Soft-delete a student account while preserving all financial/audit history."""
+    student.is_active = False
+
+
+def _delete_transactions_for_join_code(join_code, *, join_code_deletion=False):
+    """Hard-delete transactions scoped to join_code (join-code destruction only)."""
+    _assert_transaction_deletion_allowed(join_code, join_code_deletion=join_code_deletion)
+    return Transaction.query.filter_by(join_code=join_code).delete(synchronize_session=False)
+
+
+def _hard_delete_join_code_scope(join_code, teacher_id):
+    """
+    Permanently remove records scoped to a destroyed join code.
+
+    Scope is strict to the provided join_code.
+    """
+    if not join_code:
+        raise ValueError("join_code is required for class deletion")
+
+    scoped_student_ids = [
+        sid for (sid,) in db.session.query(TeacherBlock.student_id)
+        .filter(
+            TeacherBlock.join_code == join_code,
+            TeacherBlock.student_id.isnot(None),
+        )
+        .distinct()
+        .all()
+    ]
+    student_item_ids_subq = (
+        db.session.query(StudentItem.id)
+        .filter(StudentItem.join_code == join_code)
+        .subquery()
+    )
+    insurance_ids_subq = (
+        db.session.query(StudentInsurance.id)
+        .filter(StudentInsurance.join_code == join_code)
+        .subquery()
+    )
+    tx_ids_subq = (
+        db.session.query(Transaction.id)
+        .filter(Transaction.join_code == join_code)
+        .subquery()
+    )
+    issue_ids_subq = (
+        db.session.query(Issue.id)
+        .filter(Issue.join_code == join_code)
+        .subquery()
+    )
+    class_blocks = [
+        block for (block,) in db.session.query(TeacherBlock.block).filter(
+            TeacherBlock.teacher_id == teacher_id,
+            TeacherBlock.join_code == join_code,
+            TeacherBlock.block.isnot(None),
+        ).distinct().all()
+    ]
+
+    # Class-scoped records
+    RedemptionAuditLog.query.filter(
+        RedemptionAuditLog.student_item_id.in_(sa.select(student_item_ids_subq))
+    ).delete(synchronize_session=False)
+    StudentItem.query.filter(StudentItem.join_code == join_code).delete(synchronize_session=False)
+    TapEvent.query.filter(TapEvent.join_code == join_code).delete(synchronize_session=False)
+    HallPassLog.query.filter(HallPassLog.join_code == join_code).delete(synchronize_session=False)
+    RentPayment.query.filter(RentPayment.join_code == join_code).delete(synchronize_session=False)
+    StudentBlock.query.filter(StudentBlock.join_code == join_code).delete(synchronize_session=False)
+    AnalyticsSnapshot.query.filter(AnalyticsSnapshot.join_code == join_code).delete(synchronize_session=False)
+    AnalyticsEvent.query.filter(AnalyticsEvent.join_code == join_code).delete(synchronize_session=False)
+    Announcement.query.filter(
+        Announcement.teacher_id == teacher_id,
+        Announcement.join_code == join_code,
+    ).delete(synchronize_session=False)
+
+    # Issue data tied to this class
+    IssueResolutionAction.query.filter(
+        IssueResolutionAction.issue_id.in_(sa.select(issue_ids_subq))
+    ).delete(synchronize_session=False)
+    Issue.query.filter(Issue.join_code == join_code).delete(synchronize_session=False)
+
+    # Insurance data tied to this class or class-scoped transactions
+    InsuranceClaim.query.filter(
+        sa.or_(
+            InsuranceClaim.student_insurance_id.in_(sa.select(insurance_ids_subq)),
+            InsuranceClaim.transaction_id.in_(sa.select(tx_ids_subq)),
+        )
+    ).delete(synchronize_session=False)
+    StudentInsurance.query.filter(StudentInsurance.join_code == join_code).delete(synchronize_session=False)
+
+    # Financial ledger (only here)
+    _delete_transactions_for_join_code(join_code, join_code_deletion=True)
+
+    # Remove store items tied only to this class block scope.
+    if class_blocks:
+        store_item_ids_for_blocks = (
+            db.session.query(StoreItemBlock.store_item_id)
+            .group_by(StoreItemBlock.store_item_id)
+            .having(sa.func.count() > 0)
+            .having(sa.func.sum(sa.case((StoreItemBlock.block.in_(class_blocks), 1), else_=0)) == sa.func.count())
+            .subquery()
+        )
+        deletable_store_item_ids = (
+            db.session.query(StoreItem.id)
+            .filter(
+                StoreItem.teacher_id == teacher_id,
+                StoreItem.id.in_(sa.select(store_item_ids_for_blocks)),
+            )
+            .subquery()
+        )
+        class_item_student_ids = (
+            db.session.query(StudentItem.id)
+            .filter(StudentItem.store_item_id.in_(sa.select(deletable_store_item_ids)))
+            .subquery()
+        )
+        RedemptionAuditLog.query.filter(
+            RedemptionAuditLog.student_item_id.in_(sa.select(class_item_student_ids))
+        ).delete(synchronize_session=False)
+        StudentItem.query.filter(
+            StudentItem.store_item_id.in_(sa.select(deletable_store_item_ids))
+        ).delete(synchronize_session=False)
+        StoreItem.query.filter(
+            StoreItem.id.in_(sa.select(deletable_store_item_ids))
+        ).delete(synchronize_session=False)
+
+    # Seats/ownership for this class
+    TeacherBlock.query.filter(
+        TeacherBlock.teacher_id == teacher_id,
+        TeacherBlock.join_code == join_code
+    ).delete(synchronize_session=False)
+
+    if class_blocks and scoped_student_ids:
+        StudentBlock.query.filter(
+            StudentBlock.student_id.in_(scoped_student_ids),
+            StudentBlock.period.in_(class_blocks),
+        ).delete(synchronize_session=False)
+
+    # Remove students that no longer belong to any class after this join-code deletion.
+    remaining_student_ids_subq = db.session.query(TeacherBlock.student_id).filter(
+        TeacherBlock.student_id.isnot(None)
+    ).subquery()
+    orphan_student_ids = (
+        db.session.query(Student.id)
+        .filter(Student.id.in_(scoped_student_ids))
+        .filter(~Student.id.in_(sa.select(remaining_student_ids_subq)))
+        .subquery()
+    )
+    StudentTeacher.query.filter(
+        StudentTeacher.student_id.in_(sa.select(orphan_student_ids))
+    ).delete(synchronize_session=False)
+    Student.query.filter(
+        Student.id.in_(sa.select(orphan_student_ids))
+    ).delete(synchronize_session=False)
 
 
 def _sanitize_csv_field(value):
@@ -2544,59 +2718,43 @@ def edit_student():
     return redirect(url_for('admin.students'))
 
 
+@admin_bp.route('/student/archive', methods=['GET', 'POST'])
 @admin_bp.route('/student/delete', methods=['GET', 'POST'])
 @admin_required
 def delete_student():
-    """Delete a student and all associated data."""
+    """Archive a student account while preserving class financial history."""
     current_app.logger.info(f"Delete student route accessed. Method: {request.method}, Form data: {dict(request.form)}")
 
     # If GET request, show error and redirect (for debugging)
     if request.method == 'GET':
-        flash("Delete student must be accessed via POST request.", "error")
+        flash("Archive student must be accessed via POST request.", "error")
         return redirect(url_for('admin.students'))
 
     student_id = request.form.get('student_id', type=int)
     confirmation = request.form.get('confirmation', '').strip()
 
     if not student_id:
-        current_app.logger.error("No student_id provided in delete request")
+        current_app.logger.error("No student_id provided in archive request")
         flash("Error: No student ID provided.", "error")
         return redirect(url_for('admin.students'))
 
     if confirmation != 'DELETE':
-        current_app.logger.info(f"Delete cancelled: confirmation '{confirmation}' != 'DELETE'")
-        flash("Deletion cancelled: confirmation text did not match.", "warning")
+        current_app.logger.info(f"Archive cancelled: confirmation '{confirmation}' != 'DELETE'")
+        flash("Archive cancelled: confirmation text did not match.", "warning")
         return redirect(url_for('admin.students'))
 
     student = _get_student_or_404(student_id)
     student_name = student.full_name
 
     try:
-        # Delete associated records (cascade should handle this, but being explicit)
-        Transaction.query.filter_by(student_id=student.id).delete()
-        TapEvent.query.filter_by(student_id=student.id).delete()
-        StudentItem.query.filter_by(student_id=student.id).delete()
-        RentPayment.query.filter_by(student_id=student.id).delete()
-        StudentInsurance.query.filter_by(student_id=student.id).delete()
-        HallPassLog.query.filter_by(student_id=student.id).delete()
-        
-        # Delete StudentTeacher associations
-        StudentTeacher.query.filter_by(student_id=student.id).delete()
-
-        # Delete TeacherBlock entries for this student
-        TeacherBlock.query.filter_by(student_id=student.id).delete()
-
-        # Delete StudentBlock entries for this student
-        StudentBlock.query.filter_by(student_id=student.id).delete()
-
-        # Delete the student
-        db.session.delete(student)
+        _archive_student(student)
         db.session.commit()
+        flash(f"Archived {student_name}. Account access is now disabled and history is preserved.", "success")
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error deleting student {student_name}", exc_info=True)
-        flash(f"Cannot delete student due to internal error", "error")
+        current_app.logger.error(f"Error archiving student {student_name}", exc_info=True)
+        flash(f"Cannot archive student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
 
@@ -2604,7 +2762,7 @@ def delete_student():
 @admin_bp.route('/students/bulk-delete', methods=['POST'])
 @admin_required
 def bulk_delete_students():
-    """Delete multiple students at once."""
+    """Archive multiple students at once while preserving ledger history."""
     data = request.get_json()
     student_ids = data.get('student_ids', [])
 
@@ -2612,48 +2770,28 @@ def bulk_delete_students():
         return jsonify({"status": "error", "message": "No students selected."}), 400
 
     try:
-        deleted_count = 0
+        archived_count = 0
         for student_id in student_ids:
             student = _get_student_or_404(student_id)
             if student:
-                # Delete associated records
-                Transaction.query.filter_by(student_id=student.id).delete()
-                TapEvent.query.filter_by(student_id=student.id).delete()
-                StudentItem.query.filter_by(student_id=student.id).delete()
-                RentPayment.query.filter_by(student_id=student.id).delete()
-                RentWaiver.query.filter_by(student_id=student.id).delete()
-                StudentInsurance.query.filter_by(student_id=student.id).delete()
-                InsuranceClaim.query.filter_by(student_id=student.id).delete()
-                HallPassLog.query.filter_by(student_id=student.id).delete()
-                
-                # Delete StudentTeacher associations
-                StudentTeacher.query.filter_by(student_id=student.id).delete()
-
-                # Delete TeacherBlock entries for this student
-                TeacherBlock.query.filter_by(student_id=student.id).delete()
-
-                # Delete StudentBlock entries for this student
-                StudentBlock.query.filter_by(student_id=student.id).delete()
-
-                # Delete the student
-                db.session.delete(student)
-                deleted_count += 1
+                _archive_student(student)
+                archived_count += 1
 
         db.session.commit()
         return jsonify({
             "status": "success",
-            "message": f"Successfully deleted {deleted_count} student(s) and all associated data."
+            "message": f"Successfully archived {archived_count} student(s). Financial and issue history was preserved."
         })
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error deleting students: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": "An error occurred while deleting students. Please try again."}), 500
+        current_app.logger.error(f"Error archiving students: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": "An error occurred while archiving students. Please try again."}), 500
 
 
 @admin_bp.route('/students/delete-block', methods=['POST'])
 @admin_required
 def delete_block():
-    """Delete all students in a specific block."""
+    """Backwards-compatible block deletion wrapper that resolves to join-code deletion."""
     data = request.get_json()
     block = data.get('block', '').strip().upper()
     current_admin_id = session.get('admin_id')
@@ -2662,71 +2800,70 @@ def delete_block():
         return jsonify({"status": "error", "message": "No block specified."}), 400
 
     try:
-        # Get all students in this block that the current admin can access
-        students = _scoped_students().filter_by(block=block).all()
-        student_ids = [s.id for s in students]
-        deleted_count = len(students)
-        
-        current_app.logger.info(f"Deleting block {block} with {deleted_count} students (IDs: {student_ids})")
+        join_codes = [
+            code for (code,) in db.session.query(TeacherBlock.join_code).filter(
+                TeacherBlock.teacher_id == current_admin_id,
+                TeacherBlock.block == block,
+                TeacherBlock.join_code.isnot(None),
+            ).distinct().all()
+        ]
+        if not join_codes:
+            return jsonify({"status": "success", "message": f"No join code found for Block {block}. Nothing to delete."})
+        if len(join_codes) > 1:
+            return jsonify({
+                "status": "error",
+                "message": f"Block {block} has multiple join codes. Delete by join code explicitly."
+            }), 400
 
-        if deleted_count > 0:
-            # Delete all associated records in bulk where possible to avoid N+1 queries
-            # Using synchronize_session=False to avoid session synchronization issues
-            Transaction.query.filter(Transaction.student_id.in_(student_ids)).delete(synchronize_session=False)
-            TapEvent.query.filter(TapEvent.student_id.in_(student_ids)).delete(synchronize_session=False)
-            StudentItem.query.filter(StudentItem.student_id.in_(student_ids)).delete(synchronize_session=False)
-            RentPayment.query.filter(RentPayment.student_id.in_(student_ids)).delete(synchronize_session=False)
-            RentWaiver.query.filter(RentWaiver.student_id.in_(student_ids)).delete(synchronize_session=False)
-            StudentInsurance.query.filter(StudentInsurance.student_id.in_(student_ids)).delete(synchronize_session=False)
-            InsuranceClaim.query.filter(InsuranceClaim.student_id.in_(student_ids)).delete(synchronize_session=False)
-            HallPassLog.query.filter(HallPassLog.student_id.in_(student_ids)).delete(synchronize_session=False)
-            
-            # Delete StudentTeacher associations
-            StudentTeacher.query.filter(StudentTeacher.student_id.in_(student_ids)).delete(synchronize_session=False)
+        join_code = join_codes[0]
+        _hard_delete_join_code_scope(join_code, current_admin_id)
 
-            # Delete TeacherBlock entries for these students
-            TeacherBlock.query.filter(TeacherBlock.student_id.in_(student_ids)).delete(synchronize_session=False)
-
-            # Delete StudentBlock entries for these students
-            StudentBlock.query.filter(StudentBlock.student_id.in_(student_ids)).delete(synchronize_session=False)
-
-            # Flush to ensure all associated records are deleted before deleting students
-            db.session.flush()
-            
-            # Delete the students themselves (bulk delete to avoid stale ORM state)
-            Student.query.filter(Student.id.in_(student_ids)).delete(synchronize_session=False)
-
-            # Flush student deletions
-            db.session.flush()
-
-        # Also delete unclaimed TeacherBlock entries for this block and teacher
-        unclaimed_deleted = TeacherBlock.query.filter(
+        # Cleanup any residual unclaimed seats in same block for this join code owner.
+        TeacherBlock.query.filter(
             TeacherBlock.teacher_id == current_admin_id,
             TeacherBlock.block == block,
             TeacherBlock.student_id.is_(None)
         ).delete(synchronize_session=False)
-        
-        current_app.logger.info(f"Deleted {unclaimed_deleted} unclaimed TeacherBlock entries for block {block}")
+        db.session.commit()
+        current_app.logger.info(f"Successfully deleted join_code={join_code} for block={block}")
 
-        # Final commit (keep ORM instances from expiring to avoid stale access in tests)
-        db_session = db.session()
-        original_expire_on_commit = db_session.expire_on_commit
-        db_session.expire_on_commit = False
-        try:
-            db.session.commit()
-            db.session.expunge_all()
-        finally:
-            db_session.expire_on_commit = original_expire_on_commit
-        current_app.logger.info(f"Successfully deleted block {block}")
-        
         return jsonify({
             "status": "success",
-            "message": f"Successfully deleted all {deleted_count} student(s) in Block {block} and all associated data."
+            "message": f"Successfully deleted class Block {block} (join code {join_code}) and scoped records."
         })
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting block {block}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred while deleting the block. Please try again."}), 500
+
+
+@admin_bp.route('/join-code/delete', methods=['POST'])
+@admin_bp.route('/join-code', methods=['DELETE'])
+@admin_required
+def delete_join_code():
+    """Hard-delete a class economy and all records scoped to the join code."""
+    data = request.get_json(silent=True) or request.form
+    join_code = (data.get('join_code') or '').strip().upper()
+    current_admin_id = session.get('admin_id')
+
+    if not join_code:
+        return jsonify({"status": "error", "message": "join_code is required."}), 400
+
+    seat = TeacherBlock.query.filter_by(teacher_id=current_admin_id, join_code=join_code).first()
+    if not seat:
+        return jsonify({"status": "error", "message": "Join code not found or access denied."}), 404
+
+    try:
+        _hard_delete_join_code_scope(join_code, current_admin_id)
+        db.session.commit()
+        return jsonify({
+            "status": "success",
+            "message": f"Join code {join_code} and all scoped records were permanently deleted."
+        })
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting join code {join_code}: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": "An error occurred while deleting the join code. Please try again."}), 500
 
 
 @admin_bp.route('/pending-students/delete', methods=['POST'])
@@ -2850,10 +2987,10 @@ def bulk_delete_pending_students():
 @admin_required
 def bulk_delete_legacy_unclaimed_students():
     """
-    Delete multiple legacy unclaimed students (Student records without username_hash) at once.
+    Archive multiple legacy unclaimed students (Student records without username_hash) at once.
     
     Legacy unclaimed students are Student records that exist but don't have a username_hash set yet.
-    This route ensures comprehensive cleanup with no leftover traces.
+    This route disables access while preserving class financial/issue history.
     Accepts a block name to delete all legacy unclaimed students in that block.
     """
     data = request.get_json()
@@ -2875,32 +3012,12 @@ def bulk_delete_legacy_unclaimed_students():
         
         deleted_count = 0
         for student in students:
-            # Delete associated records
-            Transaction.query.filter_by(student_id=student.id).delete()
-            TapEvent.query.filter_by(student_id=student.id).delete()
-            StudentItem.query.filter_by(student_id=student.id).delete()
-            RentPayment.query.filter_by(student_id=student.id).delete()
-            RentWaiver.query.filter_by(student_id=student.id).delete()
-            StudentInsurance.query.filter_by(student_id=student.id).delete()
-            InsuranceClaim.query.filter_by(student_id=student.id).delete()
-            HallPassLog.query.filter_by(student_id=student.id).delete()
-            
-            # Delete StudentTeacher associations
-            StudentTeacher.query.filter_by(student_id=student.id).delete()
-
-            # Delete TeacherBlock entries for this student
-            TeacherBlock.query.filter_by(student_id=student.id).delete()
-
-            # Delete StudentBlock entries for this student
-            StudentBlock.query.filter_by(student_id=student.id).delete()
-
-            # Delete the student
-            db.session.delete(student)
+            _archive_student(student)
             deleted_count += 1
 
         db.session.commit()
         
-        message = f"Successfully deleted {deleted_count} legacy unclaimed student(s) from Block {block}."
+        message = f"Successfully archived {deleted_count} legacy unclaimed student(s) from Block {block}."
 
         return jsonify({
             "status": "success",
@@ -3326,6 +3443,69 @@ def store_management():
         .all()
     )
 
+    collective_progress_by_item = {}
+    collective_items = [item for item in items if item.item_type == 'collective']
+    if collective_items:
+        teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id, is_claimed=True).all()
+        join_code_to_block = {}
+        join_code_to_label = {}
+        class_sizes = {}
+        for seat in teacher_blocks:
+            if not seat.join_code:
+                continue
+            join_code_to_block.setdefault(seat.join_code, (seat.block or '').strip().upper())
+            join_code_to_label.setdefault(seat.join_code, seat.get_class_label())
+            class_sizes[seat.join_code] = class_sizes.get(seat.join_code, 0) + 1
+
+        collective_item_ids = [item.id for item in collective_items]
+        collective_counts = (
+            db.session.query(
+                StudentItem.store_item_id,
+                StudentItem.join_code,
+                db.func.count(db.distinct(StudentItem.student_id)).label('student_count'),
+            )
+            .join(Student, StudentItem.student_id == Student.id)
+            .filter(
+                Student.id.in_(sa.select(student_ids_subq)),
+                StudentItem.store_item_id.in_(collective_item_ids),
+                StudentItem.join_code.isnot(None),
+                StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
+            )
+            .group_by(StudentItem.store_item_id, StudentItem.join_code)
+            .all()
+        )
+        counts_lookup = {
+            (row.store_item_id, row.join_code): int(row.student_count or 0)
+            for row in collective_counts
+        }
+
+        for item in collective_items:
+            if item.blocks_list:
+                applicable_join_codes = [
+                    jc for jc, block in join_code_to_block.items()
+                    if block in {b.strip().upper() for b in item.blocks_list if b}
+                ]
+            else:
+                applicable_join_codes = list(join_code_to_block.keys())
+
+            per_class = []
+            for jc in sorted(applicable_join_codes):
+                count = counts_lookup.get((item.id, jc), 0)
+                if item.collective_goal_type == 'fixed':
+                    target = int(item.collective_goal_target or 0)
+                else:
+                    target = class_sizes.get(jc, 0)
+                per_class.append({
+                    'join_code': jc,
+                    'class_label': join_code_to_label.get(jc, jc),
+                    'count': count,
+                    'target': target,
+                    'remaining': max(0, target - count),
+                    'percent': min(100, int((count / target) * 100)) if target > 0 else 0,
+                    'is_complete': bool(target > 0 and count >= target),
+                })
+            collective_progress_by_item[item.id] = per_class
+
     # -------------------- Redemption Audit (live + inferred legacy adapter) --------------------
     audit_student = request.args.get('audit_student', '').strip()
     audit_class = request.args.get('audit_class', '').strip()
@@ -3464,6 +3644,7 @@ def store_management():
                          total_items=total_items, active_items=active_items, total_purchases=total_purchases,
                          pending_redemptions=pending_redemptions, recent_purchases=recent_purchases,
                          class_labels_by_block=class_labels_by_block,
+                         collective_progress_by_item=collective_progress_by_item,
                          audit_rows=audit_rows,
                          audit_total=audit_total,
                          audit_page=audit_page,
@@ -3505,6 +3686,7 @@ def edit_store_item(item_id):
 
 
 @admin_bp.route('/store/delete/<int:item_id>', methods=['POST'])
+@admin_bp.route('/item/deactivate/<int:item_id>', methods=['POST'])
 @admin_required
 def delete_store_item(item_id):
     """Deactivate a store item (soft delete)."""
@@ -3526,31 +3708,19 @@ def delete_store_item(item_id):
 @admin_bp.route('/store/hard-delete/<int:item_id>', methods=['POST'])
 @admin_required
 def hard_delete_store_item(item_id):
-    """Permanently delete a store item (hard delete)."""
+    """Legacy endpoint: hard item deletion is restricted to join-code deletion workflow."""
     admin_id = session.get("admin_id")
     item = StoreItem.query.filter_by(id=item_id, teacher_id=admin_id).first_or_404()
-    item_name = item.name
 
     # Prevent deletion if linked to rent settings
     if _block_rent_linked_store_item(item):
         return redirect(url_for('admin.store_management'))
 
-    # Remove any student item records for this store item to avoid FK violations.
-    # Transaction history is preserved separately in the ledger.
-    from app.models import StudentItem
-    deleted_student_items = (
-        StudentItem.query
-        .filter(StudentItem.store_item_id == item_id)
-        .delete(synchronize_session=False)
+    flash(
+        f"Hard deletion for '{item.name}' is disabled. Deactivate items instead, "
+        "or delete the class join code for full scoped cleanup.",
+        "error",
     )
-
-    # Safe to delete
-    db.session.delete(item)
-    db.session.commit()
-    if deleted_student_items:
-        flash(f"'{item_name}' was deleted along with {deleted_student_items} related purchase record(s).", "success")
-    else:
-        flash(f"'{item_name}' has been permanently deleted from the database.", "success")
     return redirect(url_for('admin.store_management'))
 
 
@@ -5067,6 +5237,21 @@ def transactions():
 def void_transaction(transaction_id):
     """Void a transaction."""
     is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    def _safe_referrer_redirect():
+        # Safe redirect: validate referrer to prevent open redirects
+        ref = request.referrer or ""
+        potential_url = ref.replace('\\', '')
+        parsed = urlparse(potential_url)
+        if not parsed.scheme and not parsed.netloc:
+            return redirect(potential_url)
+        return redirect(url_for('admin.dashboard'))
+
+    def _void_error(message, status_code=400):
+        if is_json:
+            return jsonify(status="error", message=message), status_code
+        flash(message, "error")
+        return _safe_referrer_redirect()
+
     tx = (
         Transaction.query
         .join(Student, Transaction.student_id == Student.id)
@@ -5074,8 +5259,181 @@ def void_transaction(transaction_id):
         .filter(Student.id.in_(sa.select(_student_scope_subquery())))
         .first_or_404()
     )
-    tx.is_void = True
+
+    if tx.is_void:
+        return _void_error("Transaction is already voided.")
+
     try:
+        if tx.type == 'purchase':
+            purchase_match = re.match(
+                r'^Purchase:\s*(?P<name>.+?)(?:\s+\(x(?P<qty>\d+)\))?(?:\s+\[.*\])?$',
+                (tx.description or '').strip()
+            )
+            if not purchase_match:
+                return _void_error("This purchase transaction cannot be voided automatically.")
+
+            item_name = (purchase_match.group('name') or '').strip()
+            quantity = int(purchase_match.group('qty') or 1)
+
+            store_item = StoreItem.query.filter_by(
+                teacher_id=tx.teacher_id,
+                name=item_name
+            ).first()
+
+            if not store_item:
+                return _void_error("Purchase item record was not found. This transaction cannot be voided.")
+
+            if store_item.item_type == 'immediate':
+                return _void_error("Immediate-use item purchases are not voidable.")
+
+            if store_item.item_type != 'delayed':
+                return _void_error("Only delayed-use item purchases are voidable.")
+
+            matching_items_query = StudentItem.query.filter(
+                StudentItem.student_id == tx.student_id,
+                StudentItem.store_item_id == store_item.id,
+            )
+            if tx.join_code:
+                matching_items_query = matching_items_query.filter(StudentItem.join_code == tx.join_code)
+            else:
+                matching_items_query = matching_items_query.filter(StudentItem.join_code.is_(None))
+
+            matching_items = matching_items_query.all()
+            if not matching_items:
+                return _void_error("No matching student item was found for this purchase.")
+
+            tx_ts = ensure_utc(tx.timestamp) if tx.timestamp else utc_now()
+
+            def _distance(student_item):
+                if not student_item.purchase_date:
+                    return float('inf')
+                return abs((ensure_utc(student_item.purchase_date) - tx_ts).total_seconds())
+
+            matching_items.sort(key=lambda si: (_distance(si), -si.id))
+
+            selected_items = []
+            selected_units = 0
+            for student_item in matching_items:
+                selected_items.append(student_item)
+                selected_units += (student_item.quantity_purchased or 1)
+                if selected_units >= quantity:
+                    break
+
+            if selected_units < quantity:
+                return _void_error("Unable to map this transaction to purchasable student items.")
+
+            used_statuses = {'processing', 'completed', 'redeemed'}
+            if any((student_item.status or '').lower() in used_statuses for student_item in selected_items):
+                return _void_error("Delayed-use item has already been used (redemption requested or completed) and cannot be voided.")
+
+            db.session.add(Transaction(
+                student_id=tx.student_id,
+                teacher_id=tx.teacher_id,
+                join_code=tx.join_code,
+                amount=Decimal('0.00'),
+                account_type=tx.account_type or 'checking',
+                type='void_item_removed',
+                description=f"item removed - {store_item.name}",
+            ))
+
+            for student_item in selected_items:
+                # Preserve item history while removing from active inventory surfaces.
+                student_item.status = 'voided'
+                if not student_item.redemption_date:
+                    student_item.redemption_date = utc_now()
+
+            reversal_tx = Transaction(
+                student_id=tx.student_id,
+                teacher_id=tx.teacher_id,
+                join_code=tx.join_code,
+                amount=abs(tx.amount or Decimal('0.00')),
+                account_type=tx.account_type or 'checking',
+                type='refund',
+                original_transaction_id=tx.id,
+                description=f"Void refund for transaction #{tx.id}: {tx.description}",
+            )
+            db.session.add(reversal_tx)
+            db.session.flush()
+            tx.reversal_transaction_id = reversal_tx.id
+
+        elif tx.type == 'Rent Payment':
+            rent_payments_query = RentPayment.query.filter(
+                RentPayment.student_id == tx.student_id,
+                RentPayment.amount_paid == abs(tx.amount or Decimal('0.00')),
+            )
+            if tx.join_code:
+                rent_payments_query = rent_payments_query.filter(RentPayment.join_code == tx.join_code)
+            else:
+                rent_payments_query = rent_payments_query.filter(RentPayment.join_code.is_(None))
+            rent_payments = rent_payments_query.all()
+
+            if rent_payments:
+                tx_ts = ensure_utc(tx.timestamp) if tx.timestamp else utc_now()
+                matched_rent_payment = min(
+                    rent_payments,
+                    key=lambda p: abs((ensure_utc(p.payment_date or tx.timestamp or utc_now()) - tx_ts).total_seconds())
+                )
+                db.session.delete(matched_rent_payment)
+
+            reversal_tx = Transaction(
+                student_id=tx.student_id,
+                teacher_id=tx.teacher_id,
+                join_code=tx.join_code,
+                amount=abs(tx.amount or Decimal('0.00')),
+                account_type=tx.account_type or 'checking',
+                type='refund',
+                original_transaction_id=tx.id,
+                description=f"Void refund for transaction #{tx.id}: {tx.description}",
+            )
+            db.session.add(reversal_tx)
+            db.session.flush()
+            tx.reversal_transaction_id = reversal_tx.id
+
+        elif tx.type == 'insurance_premium':
+            policy_title = None
+            if tx.description and tx.description.startswith("Insurance premium: "):
+                policy_title = tx.description.replace("Insurance premium: ", "", 1).strip()
+
+            enrollments_query = (
+                StudentInsurance.query
+                .join(InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id)
+                .filter(
+                    StudentInsurance.student_id == tx.student_id,
+                    InsurancePolicy.teacher_id == tx.teacher_id,
+                )
+            )
+            if policy_title:
+                enrollments_query = enrollments_query.filter(InsurancePolicy.title == policy_title)
+            if tx.join_code:
+                enrollments_query = enrollments_query.filter(
+                    or_(StudentInsurance.join_code == tx.join_code, StudentInsurance.join_code.is_(None))
+                )
+            enrollments = enrollments_query.all()
+
+            if enrollments:
+                tx_ts = ensure_utc(tx.timestamp) if tx.timestamp else utc_now()
+                matched_enrollment = min(
+                    enrollments,
+                    key=lambda e: abs((ensure_utc(e.purchase_date or tx.timestamp or utc_now()) - tx_ts).total_seconds())
+                )
+                matched_enrollment.payment_current = False
+                matched_enrollment.days_unpaid = max(1, matched_enrollment.days_unpaid or 0)
+
+            reversal_tx = Transaction(
+                student_id=tx.student_id,
+                teacher_id=tx.teacher_id,
+                join_code=tx.join_code,
+                amount=abs(tx.amount or Decimal('0.00')),
+                account_type=tx.account_type or 'checking',
+                type='refund',
+                original_transaction_id=tx.id,
+                description=f"Void refund for transaction #{tx.id}: {tx.description}",
+            )
+            db.session.add(reversal_tx)
+            db.session.flush()
+            tx.reversal_transaction_id = reversal_tx.id
+
+        tx.is_void = True
         db.session.commit()
         current_app.logger.info(f"Transaction {transaction_id} voided")
     except SQLAlchemyError as e:
@@ -5084,27 +5442,11 @@ def void_transaction(transaction_id):
         if is_json:
             return jsonify(status="error", message="Failed to void transaction"), 500
         flash("Error voiding transaction.", "error")
-        # Safe redirect: validate referrer to prevent open redirects
-        ref = request.referrer or ""
-        potential_url = ref.replace('\\', '')
-        parsed = urlparse(potential_url)
-        if not parsed.scheme and not parsed.netloc:
-            return_url = potential_url
-        else:
-            return_url = url_for('admin.dashboard')
-        return redirect(return_url)
+        return _safe_referrer_redirect()
     if is_json:
         return jsonify(status="success", message="Transaction voided.")
     flash("Transaction voided.", "success")
-    # Safe redirect: validate referrer to prevent open redirects
-    ref = request.referrer or ""
-    potential_url = ref.replace('\\', '')
-    parsed = urlparse(potential_url)
-    if not parsed.scheme and not parsed.netloc:
-        return_url = potential_url
-    else:
-        return_url = url_for('admin.dashboard')
-    return redirect(return_url)
+    return _safe_referrer_redirect()
 
 
 # -------------------- HALL PASS MANAGEMENT --------------------

@@ -31,6 +31,8 @@ def _create_legacy_unclaimed_student(first_name: str, teacher: Admin, block: str
     salt = get_random_salt()
     credential = f"{first_name[0].upper()}2025"
     first_half_hash = hash_hmac(credential.encode(), salt)
+    existing_seat = TeacherBlock.query.filter_by(teacher_id=teacher.id, block=block).first()
+    join_code = existing_seat.join_code if existing_seat else f"JOIN{teacher.id}{block}"
     
     student = Student(
         first_name=first_name,
@@ -42,10 +44,23 @@ def _create_legacy_unclaimed_student(first_name: str, teacher: Admin, block: str
         username_hash=None,  # Legacy - no username yet
     )
     db.session.add(student)
-    db.session.commit()
+    db.session.flush()
     
     # Create StudentTeacher association
     db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(TeacherBlock(
+        teacher_id=teacher.id,
+        block=block,
+        first_name=first_name,
+        last_initial=first_name[0].upper(),
+        last_name_hash_by_part=[],
+        dob_sum=2025,
+        salt=salt,
+        first_half_hash=first_half_hash,
+        join_code=join_code,
+        is_claimed=False,
+        student_id=student.id,
+    ))
     db.session.commit()
     
     return student
@@ -57,6 +72,8 @@ def _create_claimed_student(first_name: str, username: str, teacher: Admin, bloc
     credential = f"{first_name[0].upper()}2025"
     first_half_hash = hash_hmac(credential.encode(), salt)
     username_hash = hash_hmac(username.encode(), salt)
+    existing_seat = TeacherBlock.query.filter_by(teacher_id=teacher.id, block=block).first()
+    join_code = existing_seat.join_code if existing_seat else f"JOIN{teacher.id}{block}"
     
     student = Student(
         first_name=first_name,
@@ -68,10 +85,23 @@ def _create_claimed_student(first_name: str, username: str, teacher: Admin, bloc
         username_hash=username_hash
     )
     db.session.add(student)
-    db.session.commit()
+    db.session.flush()
     
     # Create StudentTeacher association
     db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(TeacherBlock(
+        teacher_id=teacher.id,
+        block=block,
+        first_name=first_name,
+        last_initial=first_name[0].upper(),
+        last_name_hash_by_part=[],
+        dob_sum=2025,
+        salt=salt,
+        first_half_hash=first_half_hash,
+        join_code=join_code,
+        is_claimed=True,
+        student_id=student.id,
+    ))
     db.session.commit()
     
     return student
@@ -92,7 +122,7 @@ def _login_admin(client, admin: Admin, secret: str):
 
 
 def test_delete_legacy_unclaimed_student(client):
-    """Teachers can delete legacy unclaimed students via the delete_student route."""
+    """Teachers archive legacy unclaimed students via the student archive route."""
     teacher, secret = _create_admin("teacher-legacy1")
     legacy_student = _create_legacy_unclaimed_student("Alice", teacher, "A")
     
@@ -109,13 +139,15 @@ def test_delete_legacy_unclaimed_student(client):
     )
     
     assert response.status_code == 200
-    assert b"Successfully deleted" in response.data or b"deleted" in response.data.lower()
-    
-    # Verify Student is deleted
-    assert db.session.get(Student, student_id) is None
-    
-    # Verify StudentTeacher association is deleted
-    assert StudentTeacher.query.filter_by(student_id=student_id).first() is None
+    assert b"archived" in response.data.lower()
+
+    # Verify Student is archived (not deleted)
+    refreshed = db.session.get(Student, student_id)
+    assert refreshed is not None
+    assert refreshed.is_active is False
+
+    # Verify StudentTeacher association is preserved
+    assert StudentTeacher.query.filter_by(student_id=student_id).first() is not None
 
 
 def test_delete_block_removes_student_teacher_associations(client):
@@ -136,9 +168,11 @@ def test_delete_block_removes_student_teacher_associations(client):
     other_student_id = other_student.id
     
     # Add some transactions to verify they're deleted too
+    join_code_b = TeacherBlock.query.filter_by(teacher_id=teacher.id, block="B").first().join_code
     db.session.add(Transaction(
         student_id=student1.id,
         teacher_id=teacher.id,
+        join_code=join_code_b,
         amount=100,
         description="Test transaction",
         account_type="checking"
@@ -157,7 +191,6 @@ def test_delete_block_removes_student_teacher_associations(client):
     assert response.status_code == 200
     data = response.get_json()
     assert data["status"] == "success"
-    assert "3" in data["message"]  # Should delete 3 students
     
     # Verify all block B students are deleted
     assert db.session.get(Student, student1_id) is None
@@ -220,7 +253,7 @@ def test_delete_block_with_shared_students(client):
 
 
 def test_bulk_delete_students_removes_associations(client):
-    """Bulk student deletion should properly remove StudentTeacher associations."""
+    """Bulk student deletion endpoint now archives and preserves ownership associations."""
     teacher, secret = _create_admin("teacher-bulk1")
     
     # Create multiple students
@@ -242,12 +275,12 @@ def test_bulk_delete_students_removes_associations(client):
     assert response.status_code == 200
     data = response.get_json()
     assert data["status"] == "success"
-    assert "3" in data["message"]  # Should delete 3 students
-    
-    # Verify all students are deleted
+    assert "3" in data["message"]  # Should archive 3 students
+
+    # Verify all students are archived
     for student_id in student_ids:
-        assert db.session.get(Student, student_id) is None
-        assert StudentTeacher.query.filter_by(student_id=student_id).first() is None
+        assert db.session.get(Student, student_id).is_active is False
+        assert StudentTeacher.query.filter_by(student_id=student_id).first() is not None
 
 
 def test_delete_student_without_confirmation(client):

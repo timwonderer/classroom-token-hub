@@ -116,12 +116,10 @@ def test_reject_redemption_refunds_student(client, teacher_admin, student_in_cla
     # Balance should be back to initial (100)
     assert student.checking_balance == float(initial_balance)
     
-    # Item should be removed (or status changed to returned/refunded if you kept history, but plan said remove)
-    # Checking if it's deleted as per plan "removed from the student's item list"
-    # Although plan mentioned "removed from database (or marked returned)", let's see implementation.
-    # Ideally soft delete or strict delete. Plan implies removal.
+    # Item should no longer be active in inventory; keep history as rejected.
     item_check = db.session.get(StudentItem, student_item.id)
-    assert item_check is None or item_check.status == 'returned'
+    assert item_check is not None
+    assert item_check.status == 'rejected'
 
     # Verify Refund Transaction
     refund_tx = Transaction.query.filter_by(
@@ -131,6 +129,12 @@ def test_reject_redemption_refunds_student(client, teacher_admin, student_in_cla
     ).first()
     assert refund_tx is not None
     assert "Refund:" in refund_tx.description
+    purchase_tx = Transaction.query.filter_by(
+        student_id=student.id,
+        type='purchase',
+    ).filter(Transaction.description.like('Purchase: Refundable Item%')).first()
+    assert purchase_tx is not None
+    assert refund_tx.original_transaction_id == purchase_tx.id
 
 
 def test_reject_redemption_refunds_single_unit_from_multi_quantity_purchase(client, teacher_admin, student_in_class):
