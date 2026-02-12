@@ -2340,13 +2340,27 @@ def shop():
                 coverage_month = coverage_due_date.month
                 coverage_year = coverage_due_date.year
 
-                has_paid_rent = RentPayment.query.filter(
+                # Check if current coverage period is fully paid (exclude voided transactions)
+                coverage_payments = RentPayment.query.filter(
                     RentPayment.student_id == student.id,
                     RentPayment.period == current_block,
                     RentPayment.coverage_month == coverage_month,
                     RentPayment.coverage_year == coverage_year,
                     db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
-                ).first() is not None
+                ).all()
+
+                valid_payments = _filter_valid_rent_payments(
+                    coverage_payments,
+                    student.id,
+                    join_code
+                )
+
+                if valid_payments:
+                    total_paid = sum(p.amount_paid for p in valid_payments)
+                    grace_for_coverage = coverage_due_date + timedelta(days=rent_settings.grace_period_days)
+                    late_fee_applies = now > grace_for_coverage
+                    required = rent_settings.rent_amount + (rent_settings.late_fee if late_fee_applies else Decimal('0'))
+                    has_paid_rent = total_paid >= required
 
             rent_store_items = RentItem.query.filter(
                 RentItem.rent_setting_id == rent_settings.id,
@@ -2587,6 +2601,57 @@ def _total_paid_by_grace(payments, grace_end_date):
     )
 
 
+def _filter_valid_rent_payments(payments, student_id, join_code):
+    """Return payments that have a matching, non-void rent transaction."""
+    if not payments:
+        return []
+
+    payment_dates = [p.payment_date for p in payments if p.payment_date]
+    if not payment_dates:
+        return []
+
+    min_payment_date = min(payment_dates)
+    max_payment_date = max(payment_dates)
+    window_start = min_payment_date - timedelta(seconds=5)
+    window_end = max_payment_date + timedelta(seconds=5)
+
+    payment_amounts = {-(p.amount_paid) for p in payments}
+
+    txn_query = Transaction.query.filter(
+        Transaction.student_id == student_id,
+        Transaction.type == 'Rent Payment',
+        Transaction.timestamp >= window_start,
+        Transaction.timestamp <= window_end,
+        Transaction.amount.in_(payment_amounts)
+    )
+    if join_code:
+        txn_query = txn_query.filter(Transaction.join_code == join_code)
+    else:
+        txn_query = txn_query.filter(Transaction.join_code.is_(None))
+
+    candidate_txns = txn_query.all()
+    txns_by_amount = {}
+    for txn in candidate_txns:
+        txns_by_amount.setdefault(txn.amount, []).append(txn)
+
+    used_txn_ids = set()
+    valid_payments = []
+    for payment in payments:
+        candidates = txns_by_amount.get(-payment.amount_paid, [])
+        for txn in candidates:
+            if txn.id in used_txn_ids or txn.is_void:
+                continue
+            if not txn.timestamp or not payment.payment_date:
+                continue
+            if abs((ensure_utc(txn.timestamp) - ensure_utc(payment.payment_date)).total_seconds()) > 5:
+                continue
+            used_txn_ids.add(txn.id)
+            valid_payments.append(payment)
+            break
+
+    return valid_payments
+
+
 def _calculate_rent_coverage_due_date(settings, reference_date=None):
     """
     Return the most recently passed due date for coverage tracking.
@@ -2670,22 +2735,58 @@ def rent():
 
     # Check if rent is active (due date has arrived or preview period has started)
     rent_is_active = False
-    is_preview_period = False
+    is_preview_period_candidate = False
     if preview_start_date and now >= preview_start_date:
         rent_is_active = True
-        is_preview_period = now < due_date
+        is_preview_period_candidate = now < due_date
     elif coverage_due_date and now >= coverage_due_date:
         rent_is_active = True
 
+    # CRITICAL FIX: Before allowing preview period, check if current coverage is paid
+    # Students must pay overdue periods before pre-paying for upcoming periods
+    current_coverage_paid = False
+    if is_preview_period_candidate and not coverage_due_date:
+        # No prior coverage period to settle; allow preview payments
+        current_coverage_paid = True
+    elif is_preview_period_candidate and coverage_due_date:
+        # Check if current coverage period is already paid
+        current_coverage_payments = RentPayment.query.filter(
+            RentPayment.student_id == student.id,
+            RentPayment.period == current_block,
+            RentPayment.coverage_month == coverage_due_date.month,
+            RentPayment.coverage_year == coverage_due_date.year,
+            or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
+        ).all()
+
+        valid_payments = _filter_valid_rent_payments(
+            current_coverage_payments,
+            student.id,
+            join_code
+        )
+
+        if valid_payments:
+            total_paid_current = sum(p.amount_paid for p in valid_payments)
+            # Check if fully paid (including late fee if applicable)
+            grace_for_coverage = coverage_due_date + timedelta(days=settings.grace_period_days)
+            late_fee_applies = now > grace_for_coverage
+            required = settings.rent_amount + (settings.late_fee if late_fee_applies else Decimal('0'))
+            current_coverage_paid = total_paid_current >= required
+
+    # Only allow preview period if current coverage is already paid
+    is_preview_period = is_preview_period_candidate and current_coverage_paid
+
     # Calculate which coverage period we're checking for (pre-paid system)
+    # CRITICAL FIX: Determine which due date to show for payment (matches payment route logic)
     if is_preview_period:
         coverage_month = due_date.month
         coverage_year = due_date.year
         grace_end_date_for_status = grace_end_date
+        payment_due_date = due_date  # Paying for upcoming period
     else:
         coverage_month = coverage_due_date.month if coverage_due_date else due_date.month
         coverage_year = coverage_due_date.year if coverage_due_date else due_date.year
         grace_end_date_for_status = (coverage_due_date + timedelta(days=settings.grace_period_days)) if coverage_due_date else grace_end_date
+        payment_due_date = coverage_due_date if coverage_due_date else due_date  # Paying for overdue/current period
 
     period_status = {}
 
@@ -2770,7 +2871,9 @@ def rent():
                           checking_balance=checking_balance,
                           savings_balance=savings_balance,
                           due_date=due_date,
+                          payment_due_date=payment_due_date,  # CRITICAL FIX: Show correct period being paid for
                           grace_end_date=grace_end_date,
+                          grace_end_date_for_status=grace_end_date_for_status,  # Add grace date for the payment period
                           preview_start_date=preview_start_date,
                           payment_history=payment_history,
                           rent_items=rent_items,
@@ -2834,8 +2937,44 @@ def rent_pay(period):
     current_month = now.month
     current_year = now.year
 
+    # CRITICAL FIX: Check if student has paid current coverage period BEFORE allowing preview
+    # If student is overdue, they must pay the overdue period first, not pre-pay for next month
+    current_coverage_paid = False
+    if not coverage_due_date:
+        # No prior coverage period to settle; allow preview payments
+        current_coverage_paid = True
+    else:
+        # Check if current coverage period is already paid
+        current_coverage_payments = RentPayment.query.filter(
+            RentPayment.student_id == student.id,
+            RentPayment.period == period,
+            RentPayment.coverage_month == coverage_due_date.month,
+            RentPayment.coverage_year == coverage_due_date.year,
+            or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
+        ).all()
+
+        valid_payments = _filter_valid_rent_payments(
+            current_coverage_payments,
+            student.id,
+            join_code
+        )
+
+        if valid_payments:
+            total_paid = sum(p.amount_paid for p in valid_payments)
+            # Check if fully paid (including late fee if applicable)
+            grace_for_coverage = coverage_due_date + timedelta(days=settings.grace_period_days)
+            late_fee_applies = now > grace_for_coverage
+            required = settings.rent_amount + (settings.late_fee if late_fee_applies else Decimal('0'))
+            current_coverage_paid = total_paid >= required
+
     # Determine which due date this payment should cover
-    is_preview_period = preview_start_date and now >= preview_start_date and now < due_date
+    # Only allow preview period if current coverage is already paid
+    is_preview_period = (
+        current_coverage_paid and
+        preview_start_date and
+        now >= preview_start_date and
+        now < due_date
+    )
     payment_due_date = due_date if is_preview_period else coverage_due_date
 
     # Calculate coverage period (pre-paid system)

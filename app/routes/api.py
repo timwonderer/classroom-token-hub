@@ -829,7 +829,7 @@ def use_item():
         else:
             return jsonify({"status": "success", "message": f"You have requested to use {student_item.store_item.name}. Awaiting admin approval."})
 
-    except SQLAlchemyError as e:
+    except (SQLAlchemyError, RuntimeError, ValueError) as e:
         db.session.rollback()
         current_app.logger.error(f"Item use failed for student {student.id}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred. Please try again."}), 500
@@ -881,7 +881,7 @@ def approve_redemption():
 
         db.session.commit()
         return jsonify({"status": "success", "message": "Redemption approved."})
-    except SQLAlchemyError as e:
+    except (SQLAlchemyError, RuntimeError, ValueError) as e:
         db.session.rollback()
         current_app.logger.error(f"Redemption approval failed for student_item {student_item_id}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred."}), 500
@@ -919,13 +919,18 @@ def reject_redemption():
 
         # 1. Determine Refund Amount from original purchase transaction
         # Look up the actual amount paid (handles price changes and bulk discounts)
-        purchase_txs = Transaction.query.filter_by(
+        purchase_tx_query = Transaction.query.filter_by(
             student_id=student_item.student_id,
+            teacher_id=student_item.store_item.teacher_id,
             type='purchase',
-            join_code=student_item.join_code,
         ).filter(
             Transaction.description.like(f"Purchase: {student_item.store_item.name}%")
-        ).all()
+        )
+        if student_item.join_code:
+            purchase_tx_query = purchase_tx_query.filter(
+                Transaction.join_code == student_item.join_code
+            )
+        purchase_txs = purchase_tx_query.all()
 
         purchase_tx = None
         if purchase_txs:
@@ -964,10 +969,40 @@ def reject_redemption():
         # 2. Refund the student
         # Create refund transaction
         # CRITICAL: Use join_code from student_item for proper scoping
+        # CRITICAL FIX: Handle legacy StudentItems without join_code
+        refund_join_code = student_item.join_code
+        if not refund_join_code and purchase_tx and purchase_tx.join_code:
+            refund_join_code = purchase_tx.join_code
+
+        if not refund_join_code:
+            # Legacy StudentItem without join_code - resolve from student blocks
+            student = db.session.get(Student, student_item.student_id)
+            teacher_id = student_item.store_item.teacher_id
+
+            if student and student.block:
+                student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
+                if student_blocks:
+                    refund_join_code = get_join_code_for_student_period(
+                        student.id, student_blocks[0], teacher_id
+                    )
+
+        if not refund_join_code:
+            current_app.logger.error(
+                f"Unable to resolve join_code for legacy StudentItem {student_item.id} "
+                "during refund. Aborting to avoid unscoped transaction."
+            )
+            return jsonify({"status": "error", "message": "Unable to resolve class for refund."}), 400
+
+        if refund_join_code != student_item.join_code:
+            current_app.logger.warning(
+                f"Legacy StudentItem {student_item.id} missing join_code. "
+                f"Resolved to: {refund_join_code} for refund transaction."
+            )
+
         refund_tx = Transaction(
             student_id=student_item.student_id,
             teacher_id=student_item.store_item.teacher_id,
-            join_code=student_item.join_code,
+            join_code=refund_join_code,  # Now guaranteed to have a value
             amount=refund_amount,
             account_type='checking',
             type='refund',
@@ -989,7 +1024,7 @@ def reject_redemption():
         db.session.commit()
         return jsonify({"status": "success", "message": "Redemption rejected and refunded."})
 
-    except SQLAlchemyError as e:
+    except (SQLAlchemyError, RuntimeError, ValueError) as e:
         db.session.rollback()
         current_app.logger.error(f"Redemption rejection failed for student_item {student_item_id}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred."}), 500
@@ -2665,7 +2700,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
         # Check if student is currently active in this period (TapEvent uses uppercase)
         latest_event = (
             TapEvent.query
-            .filter_by(student_id=student.id, period=period_upper)
+            .filter_by(student_id=student.id, period=period_upper, is_deleted=False)
             .order_by(TapEvent.timestamp.desc())
             .first()
         )
@@ -2703,9 +2738,6 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                 # If limit reached or exceeded, auto-tap-out
                 if today_attendance >= daily_limit:
                     hours_limit = daily_limit / 3600.0
-                    current_app.logger.info(
-                        f"Auto-tapping out student {student.id} from {period_upper} - daily limit of {hours_limit} hours reached (total: {today_attendance/3600:.2f}h)"
-                    )
 
                     # Prioritize join_code from the active event we are closing
                     join_code = latest_event.join_code
@@ -2718,6 +2750,29 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                             f"Unable to resolve join_code for student {student.id} in period {period_upper} for auto-tap-out. TapEvent ID is {latest_event.id}."
                         )
                         continue
+
+                    # IDEMPOTENCY CHECK: Check if we already created a daily limit tap-out today
+                    # This prevents duplicate tap-outs from race conditions (multiple browser tabs, scheduled job, etc.)
+                    existing_limit_tapout = TapEvent.query.filter(
+                        TapEvent.student_id == student.id,
+                        TapEvent.period == period_upper,
+                        TapEvent.status == "inactive",
+                        TapEvent.timestamp >= start_of_day_utc,
+                        TapEvent.timestamp < end_of_day_utc,
+                        TapEvent.reason.like(f"Daily limit%"),  # Matches "Daily limit (X.Xh) reached"
+                        TapEvent.is_deleted == False
+                    ).first()
+
+                    if existing_limit_tapout:
+                        current_app.logger.debug(
+                            f"Skipping duplicate auto-tap-out for student {student.id} in {period_upper} - "
+                            f"daily limit tap-out already exists at {existing_limit_tapout.timestamp}"
+                        )
+                        continue  # Skip creating duplicate
+
+                    current_app.logger.info(
+                        f"Auto-tapping out student {student.id} from {period_upper} - daily limit of {hours_limit} hours reached (total: {today_attendance/3600:.2f}h)"
+                    )
 
                     # Calculate when they SHOULD have been tapped out (at exactly the limit)
                     # If they've been active for 90 minutes and limit is 75, tap them out 15 minutes ago
@@ -2734,6 +2789,21 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                         join_code=join_code
                     )
                     db.session.add(tap_out_event)
+
+                    # Lock the student for the rest of the day in this period
+                    student_block = StudentBlock.query.filter_by(
+                        student_id=student.id,
+                        period=period_upper
+                    ).first()
+                    if not student_block:
+                        student_block = StudentBlock(
+                            student_id=student.id,
+                            period=period_upper,
+                            tap_enabled=True,
+                            join_code=join_code
+                        )
+                        db.session.add(student_block)
+                    student_block.done_for_day_date = today_pacific
 
     # Commit all auto-tap-outs at once if requested
     if commit:

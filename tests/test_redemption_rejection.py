@@ -210,3 +210,56 @@ def test_reject_redemption_refunds_single_unit_from_multi_quantity_purchase(clie
         amount=Decimal('10.00')
     ).first()
     assert refund_tx is not None
+
+
+def test_reject_redemption_legacy_item_resolves_join_code(client, teacher_admin, student_in_class):
+    """Legacy StudentItem with NULL join_code should refund with purchase join_code."""
+    student = student_in_class
+
+    item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Legacy Item',
+        price=Decimal('12.00'),
+        item_type='delayed',
+        is_active=True
+    )
+    db.session.add(item)
+    db.session.flush()
+
+    purchase_tx = Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='REJECT123',
+        amount=Decimal('-12.00'),
+        account_type='checking',
+        type='purchase',
+        description='Purchase: Legacy Item'
+    )
+    db.session.add(purchase_tx)
+    db.session.flush()
+
+    legacy_item = StudentItem(
+        student_id=student.id,
+        store_item_id=item.id,
+        join_code=None,
+        status='processing',
+        purchase_date=datetime.now(timezone.utc)
+    )
+    db.session.add(legacy_item)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['admin_id'] = teacher_admin.id
+        sess['is_admin'] = True
+
+    resp = client.post('/api/reject-redemption', json={'student_item_id': legacy_item.id})
+    assert resp.status_code == 200
+    assert resp.json['status'] == 'success'
+
+    refund_tx = Transaction.query.filter_by(
+        student_id=student.id,
+        type='refund',
+        amount=Decimal('12.00')
+    ).first()
+    assert refund_tx is not None
+    assert refund_tx.join_code == 'REJECT123'
