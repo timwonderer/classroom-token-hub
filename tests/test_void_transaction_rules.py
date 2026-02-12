@@ -235,6 +235,68 @@ def test_void_delayed_purchase_after_redemption_request_is_not_allowed(client):
     assert purchase_tx.is_void is False
 
 
+def test_void_already_voided_transaction_is_rejected(client):
+    teacher, student = _build_teacher_student('VOIDDBL1')
+
+    delayed_item = StoreItem(
+        teacher_id=teacher.id,
+        name='Double Void Item',
+        price=Decimal('10.00'),
+        item_type='delayed',
+        is_active=True,
+    )
+    db.session.add(delayed_item)
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher.id,
+        join_code='VOIDDBL1',
+        amount=Decimal('100.00'),
+        account_type='checking',
+        type='deposit',
+        description='Initial funds',
+    ))
+    db.session.commit()
+
+    _login_student(client, student.id, 'VOIDDBL1')
+    purchase_resp = client.post('/api/purchase-item', json={
+        'item_id': delayed_item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+    })
+    assert purchase_resp.status_code == 200
+
+    purchase_tx = Transaction.query.filter_by(
+        student_id=student.id,
+        type='purchase',
+    ).filter(Transaction.description.like("Purchase: Double Void Item%")).first()
+    assert purchase_tx is not None
+
+    _login_admin(client, teacher.id)
+    # First void should succeed
+    resp1 = client.post(
+        f'/admin/void-transaction/{purchase_tx.id}',
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+    assert resp1.status_code == 200
+    assert resp1.get_json()['status'] == 'success'
+
+    # Second void of the same transaction should be rejected
+    resp2 = client.post(
+        f'/admin/void-transaction/{purchase_tx.id}',
+        headers={'X-Requested-With': 'XMLHttpRequest'},
+    )
+    assert resp2.status_code == 400
+    assert 'already voided' in resp2.get_json()['message']
+
+    # Verify only one refund was created
+    refund_count = Transaction.query.filter_by(
+        student_id=student.id,
+        type='refund',
+        original_transaction_id=purchase_tx.id,
+    ).count()
+    assert refund_count == 1
+
+
 def test_void_rent_payment_reverts_bill_to_unpaid(client):
     teacher, student = _build_teacher_student('VOIDRNT1')
 
