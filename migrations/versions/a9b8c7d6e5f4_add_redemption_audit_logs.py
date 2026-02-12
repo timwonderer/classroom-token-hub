@@ -108,5 +108,9 @@ def upgrade():
 
 
 def downgrade():
-    # IRREVERSIBLE: redemption_audit_logs is append-only and must not be removed or contracted.
-    pass
+    raise RuntimeError(
+        "Downgrade is not supported for migration a9b8c7d6e5f4. "
+        "The redemption_audit_logs table is append-only and must not be removed or "
+        "contracted. If a downgrade is required, manually drop related indexes and "
+        "enum types before adjusting the Alembic revision."
+    )
