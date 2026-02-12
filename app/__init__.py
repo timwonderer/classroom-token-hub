@@ -220,6 +220,24 @@ def create_app():
         file_handler.addFilter(RequestIdFilter())
         app.logger.addHandler(file_handler)
 
+    # -------------------- DATABASE SAFETY GUARDS --------------------
+    # Prevent accidental connection to the wrong database environment
+    db_url = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    env = app.config.get("ENV")
+
+    # Guard 1: CRITICAL - Prevent running TESTS against Production/Dev DB
+    # If we are in testing mode, we MUST be using a test database (or in-memory sqlite)
+    if env == "testing":
+        is_test_db = "test" in db_url or ":memory:" in db_url
+        if not is_test_db:
+            error_msg = f"🚨 CRITICAL SAFETY GUARD: Attempting to run TESTS against PRODUCTION/DEV database! ({db_url}) 🚨"
+            app.logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+    # Guard 2: WARNING - Warn if running DEVELOPMENT against Test DB
+    if env == "development" and "test" in db_url:
+        app.logger.warning(f"🚨 CONFIGURATION WARNING: Using TEST database ({db_url}) in DEVELOPMENT mode! 🚨")
+
     # -------------------- REQUEST CONTEXT --------------------
     @app.before_request
     def ensure_request_id():

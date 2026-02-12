@@ -29,70 +29,62 @@ from app import app as flask_app, db, Student
 @pytest.fixture
 def app():
     """Provide the Flask app instance for tests."""
+    # Use a separate test database to avoid clashing with dev data
+    test_db_url = os.environ.get(
+        "TEST_DATABASE_URL", 
+        "postgresql://postgres:postgres@localhost:5432/classroom_economy_test"
+    )
+
     flask_app.config.update(
         TESTING=True,
         WTF_CSRF_ENABLED=False,
-        SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
+        SQLALCHEMY_DATABASE_URI=test_db_url,
         ENV="testing",
         SESSION_COOKIE_SECURE=False,
     )
+    
+    # Ensure strict separation - if connection fails, test fails
+    with flask_app.app_context():
+        
+        db.drop_all() 
+        db.create_all()
+        pass
+
     yield flask_app
 
 
 @pytest.fixture
 def client(app):
+    """
+    Test client that creates a fresh database for each test.
+    Ensures isolation between tests.
+    """
     ctx = app.app_context()
     ctx.push()
+    
+    # Create all tables for the test
     db.create_all()
+    
     client = flask_app.test_client()
     yield client
+    
+    # Teardown: Drop all tables after test
+    db.session.remove()
     db.drop_all()
     ctx.pop()
 
 
-# SQLite pragma event listener for foreign key constraints
-# Registered at module level and persists across all tests
-from sqlalchemy import event
-from sqlalchemy.engine import Engine
-
-def _enable_sqlite_foreign_keys(dbapi_conn, connection_record):
-    """Enable foreign key constraints for SQLite connections."""
-    if 'sqlite' in str(type(dbapi_conn)):
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.close()
-
-# Register event listener once at module load time
-# Only applies to SQLite connections, so won't affect other databases
-event.listen(Engine, "connect", _enable_sqlite_foreign_keys)
+# SQLite foreign key support removed as we are now using Postgres for testing
+# to match production environment and prevent "ghost data" issues.
 
 
 @pytest.fixture
-def client_with_fk():
+def client_with_fk(client):
     """
-    Test client with foreign key constraints enabled.
-    Use this fixture for tests that need to verify CASCADE behavior.
+    Alias for client, as Postgres enforces FKs by default.
+    Kept for backward compatibility with existing tests.
     """
-    
-    flask_app.config.update(
-        TESTING=True,
-        WTF_CSRF_ENABLED=False,
-        SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
-        ENV="testing",
-        SESSION_COOKIE_SECURE=False,
-    )
-    ctx = flask_app.app_context()
-    ctx.push()
-    
-    db.create_all()
-    
-    # Foreign key constraints are enabled by the event listener.
-    
-    client = flask_app.test_client()
     yield client
-    
-    db.drop_all()
-    ctx.pop()
 
 
 @pytest.fixture

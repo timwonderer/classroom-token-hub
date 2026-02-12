@@ -2681,6 +2681,14 @@ def edit_student():
                     block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
                     timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
                     join_code = f"B{block_initial}{timestamp_suffix:04d}"
+
+            # CRITICAL FIX: Ensure first_half_hash exists before creating TeacherBlock
+            # Logic: If hash is missing (legacy student), generate it now to prevent NotNullViolation
+            if not student.first_half_hash:
+                claim_hash = compute_primary_claim_hash(student.first_name[:1], student.dob_sum or 0, student.salt)
+                if claim_hash:
+                    student.first_half_hash = claim_hash
+                    current_app.logger.info(f"Generated missing first_half_hash for student {student.id} during edit")
             
             # Student is claimed if they have a username set
             is_claimed = bool(student.username_hash)
@@ -8475,20 +8483,6 @@ def onboarding_status():
                 join_code = first_teacher_block.join_code
                 # Set it in session for future requests
                 session['current_join_code'] = join_code
-
-        teacher_block = TeacherBlock.query.filter_by(
-            teacher_id=admin_id,
-            join_code=join_code
-        ).first()
-
-        if not teacher_block:
-            # No class period selected yet - indicate this so frontend can show appropriate message
-            return jsonify({
-                'status': 'success',
-                'dismissed': False,
-                'no_class_period': True,
-                'completion': {}
-            })
 
         # Get all blocks for this teacher (for account-wide onboarding checks)
         all_teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
