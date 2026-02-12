@@ -1,0 +1,33 @@
+{% extends "student/recovery/layout.html" %}
+
+{% block title %}Recovery Options{% endblock %}
+{% block header %}Recover Account{% endblock %}
+{% block subheader %}How would you like to recover your account?{% endblock %}
+
+{% block content %}
+<div class="d-grid gap-3">
+    <a href="{{ url_for('recovery.credential_lookup') }}"
+        class="btn btn-outline-primary btn-lg p-4 text-start d-flex align-items-center">
+        <span class="material-symbols-outlined fs-1 me-3">lock_reset</span>
+        <div>
+            <div class="fw-bold">Forgot PIN or Passphrase</div>
+            <div class="small text-secondary">I know my username and have a reset code from my teacher.</div>
+        </div>
+    </a>
+
+    <a href="{{ url_for('recovery.account_lookup') }}"
+        class="btn btn-outline-secondary btn-lg p-4 text-start d-flex align-items-center">
+        <span class="material-symbols-outlined fs-1 me-3">person_search</span>
+        <div>
+            <div class="fw-bold">Forgot Username / Link Account</div>
+            <div class="small text-secondary">I need to find my account using my class Join Code.</div>
+        </div>
+    </a>
+</div>
+
+<div class="mt-4 text-center">
+    <p class="text-muted small">
+        Need a reset code? Ask your teacher to generate one for you.
+    </p>
+</div>
+{% endblock %}

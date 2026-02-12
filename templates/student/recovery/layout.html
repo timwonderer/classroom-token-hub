@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}Account Recovery{% endblock %} - Classroom Token Hub</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1a4d47">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
+    <style>
+        body {
+            background-color: var(--background);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .login-container {
+            width: 100%;
+            max-width: 900px;
+            background: white;
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            display: flex;
+            min-height: 600px;
+            border-radius: 1rem;
+        }
+        .login-left {
+            flex: 1;
+            padding: 3rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .login-right {
+            flex: 1;
+            background: var(--primary);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            padding: 3rem;
+            position: relative;
+            overflow: hidden;
+        }
+        .login-right::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+        }
+        .logo-img {
+            width: 300px;
+            margin-bottom: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+        .btn-primary {
+            background: var(--primary);
+            border: none;
+            padding: 0.8rem 1.5rem;
+        }
+        .btn-primary:hover {
+            background: #172740;
+        }
+        .form-control-lg {
+            padding: 0.8rem 1rem;
+        }
+        .back-link {
+            text-decoration: none;
+            color: var(--secondary);
+            display: flex;
+            align-items: center;
+            font-size: 0.9rem;
+            margin-bottom: 2rem;
+        }
+        .back-link:hover {
+            color: var(--primary);
+        }
+    </style>
+</head>
+<body class="student-theme">
+    <div class="login-container">
+        <div class="login-left">
+            <a href="{{ url_for('student.login') }}" class="back-link">
+                <span class="material-symbols-outlined me-1">arrow_back</span>
+                Back to Login
+            </a>
+
+            <div class="mb-4">
+                <h1 class="h3 fw-bold text-primary">{% block header %}Recover Account{% endblock %}</h1>
+                <p class="text-secondary">{% block subheader %}Follow the steps to regain access{% endblock %}</p>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} border-0 shadow-sm d-flex align-items-center mb-4" role="alert">
+                        <span class="material-symbols-outlined fs-5 me-2">
+                            {{ 'error' if category == 'error' else 'check_circle' }}
+                        </span>
+                        <div>{{ message }}</div>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </div>
+        <div class="login-right">
+            <img src="{{ static_url('images/logo_student_transparent_512.png') }}" alt="Student Logo" class="logo-img">
+            <h4 class="fw-bold">Classroom Economy</h4>
+            <p class="text-white-50">Student Portal</p>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
