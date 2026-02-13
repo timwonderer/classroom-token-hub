@@ -165,3 +165,174 @@ def test_admin_store_shows_collective_progress(client):
     assert resp.status_code == 200
     assert b'Collective Progress' in resp.data
     assert b'1/2' in resp.data
+
+
+def test_whole_class_collective_prevents_duplicate_purchase(client):
+    """Test that students can only purchase a whole_class collective item once."""
+    teacher = Admin(username='teacher_whole_class', totp_secret='secret')
+    db.session.add(teacher)
+    db.session.flush()
+
+    student_a1 = _create_student(teacher, 'Dana', 'JOINWHOLE', block='A')
+    student_a2 = _create_student(teacher, 'Eve', 'JOINWHOLE', block='A')
+    db.session.flush()
+
+    item = StoreItem(
+        teacher_id=teacher.id,
+        name='Whole Class Goal Item',
+        price=Decimal('10.00'),
+        item_type='collective',
+        collective_goal_type='whole_class',
+        is_active=True,
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    _login_student(client, student_a1.id, 'JOINWHOLE')
+    
+    # First purchase should succeed
+    resp1 = client.post('/api/purchase-item', json={
+        'item_id': item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+    })
+    assert resp1.status_code == 200
+    
+    # Second purchase by same student should fail
+    resp2 = client.post('/api/purchase-item', json={
+        'item_id': item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+    })
+    assert resp2.status_code == 400
+    json_data = resp2.get_json()
+    assert 'already purchased' in json_data['message'].lower()
+
+
+def test_whole_class_collective_goal_uses_correct_class_size(client):
+    """Test that whole_class collective goals use actual student count, not seat count."""
+    teacher = Admin(username='teacher_class_size', totp_secret='secret')
+    db.session.add(teacher)
+    db.session.flush()
+
+    # Create 2 students for the class
+    student_a1 = _create_student(teacher, 'Frank', 'JOINSIZE', block='A')
+    student_a2 = _create_student(teacher, 'Grace', 'JOINSIZE', block='A')
+    db.session.flush()
+
+    item = StoreItem(
+        teacher_id=teacher.id,
+        name='Whole Class Pizza',
+        price=Decimal('5.00'),
+        item_type='collective',
+        collective_goal_type='whole_class',
+        is_active=True,
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    # First student purchases
+    _login_student(client, student_a1.id, 'JOINSIZE')
+    resp1 = client.post('/api/purchase-item', json={
+        'item_id': item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+    })
+    assert resp1.status_code == 200
+    
+    # Check that the goal shows 1/2
+    resp_shop1 = client.get('/student/shop')
+    assert b'1/2' in resp_shop1.data
+    
+    # Second student purchases - goal should be reached (2/2)
+    _login_student(client, student_a2.id, 'JOINSIZE')
+    resp2 = client.post('/api/purchase-item', json={
+        'item_id': item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+    })
+    assert resp2.status_code == 200
+    
+    # Check all items are now processing (goal reached)
+    items = StudentItem.query.filter_by(store_item_id=item.id, join_code='JOINSIZE').all()
+    assert len(items) == 2
+    assert all(si.status == 'processing' for si in items)
+
+
+def test_collective_progress_with_correct_roster_count_admin(client):
+    """Test that admin view shows correct class size based on actual students."""
+    teacher = Admin(username='teacher_admin_size', totp_secret='secret')
+    db.session.add(teacher)
+    db.session.flush()
+
+    # Create 3 students
+    student_a1 = _create_student(teacher, 'Henry', 'JOINADMIN', block='A')
+    student_a2 = _create_student(teacher, 'Iris', 'JOINADMIN', block='A')
+    student_a3 = _create_student(teacher, 'Jack', 'JOINADMIN', block='A')
+    db.session.flush()
+
+    item = StoreItem(
+        teacher_id=teacher.id,
+        name='Admin Whole Class Item',
+        price=Decimal('5.00'),
+        item_type='collective',
+        collective_goal_type='whole_class',
+        is_active=True,
+    )
+    db.session.add(item)
+    db.session.flush()
+    
+    # One student purchases
+    db.session.add(StudentItem(student_id=student_a1.id, store_item_id=item.id, join_code='JOINADMIN', status='pending'))
+    db.session.commit()
+
+    _login_admin(client, teacher.id)
+    resp = client.get('/admin/store')
+    assert resp.status_code == 200
+    # Should show 1/3 (1 purchase out of 3 students)
+    assert b'1/3' in resp.data
+
+
+def test_fixed_collective_allows_multiple_purchases(client):
+    """Test that fixed collective goals still allow multiple purchases from same student."""
+    teacher = Admin(username='teacher_fixed_multi', totp_secret='secret')
+    db.session.add(teacher)
+    db.session.flush()
+
+    student_a1 = _create_student(teacher, 'Kelly', 'JOINFIXED', block='A')
+    db.session.flush()
+
+    item = StoreItem(
+        teacher_id=teacher.id,
+        name='Fixed Goal Item',
+        price=Decimal('5.00'),
+        item_type='collective',
+        collective_goal_type='fixed',
+        collective_goal_target=3,
+        is_active=True,
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    _login_student(client, student_a1.id, 'JOINFIXED')
+    
+    # First purchase should succeed
+    resp1 = client.post('/api/purchase-item', json={
+        'item_id': item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+    })
+    assert resp1.status_code == 200
+    
+    # Second purchase by same student should also succeed for fixed goals
+    resp2 = client.post('/api/purchase-item', json={
+        'item_id': item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+    })
+    assert resp2.status_code == 200
+    
+    # But progress should only count 1 unique student
+    resp_shop = client.get('/student/shop')
+    assert b'1/3' in resp_shop.data
+

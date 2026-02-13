@@ -2413,14 +2413,16 @@ def shop():
             if si.store_item_id:
                 rent_free_uses[si.store_item_id] = si.uses_remaining
 
-    # Calculate class size for collective goals (count claimed seats in this class)
+    # Calculate class size for collective goals (count unique students in this class)
     from app.models import TeacherBlock
     class_size = 0
     if join_code:
-        class_size = TeacherBlock.query.filter_by(
-            join_code=join_code,
-            is_claimed=True
-        ).count()
+        class_size = db.session.query(func.count(func.distinct(Student.id))).join(
+            TeacherBlock, TeacherBlock.student_id == Student.id
+        ).filter(
+            TeacherBlock.join_code == join_code,
+            TeacherBlock.is_claimed == True,
+        ).scalar() or 0
 
     collective_progress = {}
     collective_items = [item for item in items if item.item_type == 'collective']

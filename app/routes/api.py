@@ -420,6 +420,16 @@ def purchase_item():
     if item.inventory is not None and item.inventory < quantity:
         return jsonify({"status": "error", "message": f"Insufficient stock. Only {item.inventory} available."}), 400
 
+    # For collective items with whole_class goal, enforce one purchase per student
+    if item.item_type == 'collective' and item.collective_goal_type == 'whole_class':
+        existing_purchase = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.store_item_id == item.id,
+            StudentItem.status.notin_(['voided', 'rejected'])
+        ).first()
+        if existing_purchase:
+            return jsonify({"status": "error", "message": "You have already purchased this whole class goal item."}), 400
+
     if item.limit_per_student is not None:
         if item.item_type == 'hall_pass':
             # For hall passes, check transaction history and sum quantities
@@ -638,11 +648,15 @@ def purchase_item():
 
         # --- Collective Item Logic ---
         if item.item_type == 'collective':
-            class_size = TeacherBlock.query.filter_by(
-                teacher_id=teacher_id,
-                join_code=join_code,
-                is_claimed=True,
-            ).count()
+            # Count unique students (not TeacherBlock seats) to get actual class size
+            class_size = db.session.query(func.count(func.distinct(Student.id))).join(
+                TeacherBlock, TeacherBlock.student_id == Student.id
+            ).filter(
+                TeacherBlock.teacher_id == teacher_id,
+                TeacherBlock.join_code == join_code,
+                TeacherBlock.is_claimed == True,
+            ).scalar() or 0
+            
             purchased_students_count = db.session.query(func.count(func.distinct(StudentItem.student_id))).filter(
                 StudentItem.store_item_id == item.id,
                 StudentItem.join_code == join_code,
