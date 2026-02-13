@@ -253,6 +253,16 @@ def purchase_item():
     if not item or not item.is_active:
         return jsonify({"status": "error", "message": "This item is not available."}), 404
 
+    # For collective items with whole_class goal, enforce one purchase per student
+    if item.item_type == 'collective' and item.collective_goal_type == 'whole_class':
+        existing_purchase = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.store_item_id == item.id,
+            StudentItem.status.notin_(['voided', 'rejected'])
+        ).first()
+        if existing_purchase:
+            return jsonify({"status": "error", "message": "You have already purchased this whole class goal item."}), 400
+
     # Check rent late restrictions
     from app.models import RentSettings, RentPayment, RentItem
     from datetime import datetime, timedelta
@@ -419,16 +429,6 @@ def purchase_item():
 
     if item.inventory is not None and item.inventory < quantity:
         return jsonify({"status": "error", "message": f"Insufficient stock. Only {item.inventory} available."}), 400
-
-    # For collective items with whole_class goal, enforce one purchase per student
-    if item.item_type == 'collective' and item.collective_goal_type == 'whole_class':
-        existing_purchase = StudentItem.query.filter(
-            StudentItem.student_id == student.id,
-            StudentItem.store_item_id == item.id,
-            StudentItem.status.notin_(['voided', 'rejected'])
-        ).first()
-        if existing_purchase:
-            return jsonify({"status": "error", "message": "You have already purchased this whole class goal item."}), 400
 
     if item.limit_per_student is not None:
         if item.item_type == 'hall_pass':
