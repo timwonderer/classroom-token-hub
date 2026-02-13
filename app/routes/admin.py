@@ -2604,27 +2604,21 @@ def edit_student():
         if claim_hash:
             student.first_half_hash = claim_hash
 
-    # Handle login reset
+    # Handle account reset — generate recovery code per recovery spec
     reset_login = request.form.get('reset_login') == 'on'
     if reset_login:
-        # Clear login credentials but keep account data
-        student.username_hash = None
-        student.username_lookup_hash = None
-        student.pin_hash = None
-        student.passphrase_hash = None
-        student.has_completed_setup = False
-        
-        # Update TeacherBlock entries to mark them as unclaimed
-        # Keep student_id since the student record still exists
-        TeacherBlock.query.filter_by(
-            student_id=student.id,
-            teacher_id=current_admin_id
-        ).update({
-            'is_claimed': False,
-            'claimed_at': None
-        })
+        import secrets as _secrets
+        code = _secrets.token_hex(4).upper()  # 8-char mixed alphanumeric
+        student.reset_code = code
+        student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+        student.recovery_status = 'to_be_claimed'
 
-        flash(f"{student.full_name}'s login has been reset. They will need to re-claim their account.", "warning")
+        current_app.logger.info(
+            f"Reset code generated for student {student.id} by admin {current_admin_id}"
+        )
+
+        flash(f"Reset code generated for {student.full_name}: {code} — Expires in 10 minutes. "
+              f"Give this code to the student along with their join code.", "warning")
 
     if name_changed or dob_changed:
         TeacherBlock.query.filter_by(
@@ -8498,6 +8492,15 @@ def onboarding_status():
                 join_code = first_teacher_block.join_code
                 # Set it in session for future requests
                 session['current_join_code'] = join_code
+
+        # If still no join_code after auto-discovery, teacher has no class periods
+        if not join_code:
+            return jsonify({
+                'status': 'success',
+                'dismissed': False,
+                'no_class_period': True,
+                'completion': {}
+            })
 
         # Get all blocks for this teacher (for account-wide onboarding checks)
         all_teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()

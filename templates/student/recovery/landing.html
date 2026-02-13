@@ -1,30 +1,18 @@
 {% extends "student/recovery/layout.html" %}
 
-{% block title %}Recovery Options{% endblock %}
+{% block title %}Recover Account{% endblock %}
 {% block header %}Recover Account{% endblock %}
-{% block subheader %}If you can't get back into your account, ask your teacher to generate a reset code before you begin.{% endblock %}
+{% block subheader %}Ask your teacher for a reset code before you begin.{% endblock %}
 
 {% block content %}
 <div class="d-grid gap-3">
-    <a href="{{ url_for('recovery.credential_lookup') }}"
-        class="btn btn-outline-primary btn-lg p-4 text-start d-flex align-items-center">
+    <a href="{{ url_for('recovery.account_lookup') }}"
+        class="btn btn-primary btn-lg p-4 text-start d-flex align-items-center">
         <span class="material-symbols-outlined fs-1 me-3">lock_reset</span>
         <div>
-            <div class="fw-bold">Forgot PIN or Passphrase</div>
-            <div class="small text-secondary">You will need to know your username and the reset code.</div>
-        </div>
-    </a>
-
-    <a href="{{ url_for('recovery.account_lookup') }}"
-        class="btn btn-outline-primary btn-lg p-4 text-start d-flex align-items-center">
-        <span class="material-symbols-outlined fs-1 me-3">person_search</span>
-        <div>
-            <div class="fw-bold">Forgot Username</div>
-            <div class="small text-secondary">You will need to know your join code and reset code.</div>
-            <p class="text-muted mt-2 mb-0" style="font-size:10pt;">This will create a new username, PIN, and passphrase.</p>
+            <div class="fw-bold">Recover My Account</div>
+            <div class="small opacity-75">You will need your class join code and the reset code from your teacher.</div>
         </div>
     </a>
 </div>
-
-
 {% endblock %}

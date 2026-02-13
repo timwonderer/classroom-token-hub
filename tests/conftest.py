@@ -74,16 +74,26 @@ def client(app):
     ctx.pop()
 
 
-# SQLite foreign key support removed as we are now using Postgres for testing
-# to match production environment and prevent "ghost data" issues.
-
-
 @pytest.fixture
 def client_with_fk(client):
     """
-    Alias for client, as Postgres enforces FKs by default.
-    Kept for backward compatibility with existing tests.
+    Enable foreign key enforcement for tests that rely on CASCADE behavior.
+    SQLite requires PRAGMA foreign_keys=ON per connection; PostgreSQL enforces by default.
     """
+    from sqlalchemy import event
+
+    dialect = db.engine.dialect.name
+    if dialect == 'sqlite':
+        @event.listens_for(db.engine, "connect")
+        def _set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
+        # Also enable on the current connection
+        from sqlalchemy import text
+        db.session.execute(text("PRAGMA foreign_keys=ON"))
+
     yield client
 
 

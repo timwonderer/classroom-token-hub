@@ -238,8 +238,44 @@
                             {% endif %}
                         </table>
 
+                        <!-- Active Recovery Code Display -->
+                        {% if student.recovery_status == 'to_be_claimed' and student.reset_code %}
+                        <div class="alert alert-danger mt-3 border-danger shadow-sm">
+                            <h6 class="alert-heading fw-bold">
+                                <i class="bi bi-shield-exclamation me-2"></i>Account Recovery In Progress
+                            </h6>
+                            <p class="mb-2 small">Give this information to the student to recover their account:</p>
+                            <div class="bg-white p-3 rounded border border-danger text-dark">
+                                <div class="row g-2">
+                                    <div class="col-12">
+                                        <div class="small text-muted text-uppercase fw-bold">Reset Code</div>
+                                        <div class="font-monospace fs-4 fw-bold text-danger user-select-all">{{ student.reset_code }}</div>
+                                    </div>
+                                    <div class="col-12">
+                                        <div class="small text-muted text-uppercase fw-bold">Join Code(s)</div>
+                                        {% for block, code in join_codes.items() %}
+                                        <div class="d-flex align-items-center mt-1">
+                                            <span class="badge bg-primary me-2">Block {{ block }}</span>
+                                            <span class="font-monospace fs-5 user-select-all">{{ code }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="col-12 mt-2">
+                                        <div class="small text-muted fst-italic">
+                                            <i class="bi bi-clock me-1"></i>Code expires at
+                                            <span class="utc-timestamp" data-utc="{{ student.reset_code_expires_at.isoformat() if student.reset_code_expires_at else '' }}">
+                                                {{ student.reset_code_expires_at.strftime('%I:%M %p') if student.reset_code_expires_at else 'N/A' }}
+                                            </span>.
+                                            Student must go to the login page and click <strong>"I can't log into my account"</strong>.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
                         <!-- Account Recovery / Setup Information -->
-                        {% if not student.has_completed_setup %}
+                        {% if not student.has_completed_setup and student.recovery_status != 'to_be_claimed' %}
                         <div class="alert alert-warning mt-3 border-warning shadow-sm">
                             <h6 class="alert-heading fw-bold">
                                 <i class="bi bi-exclamation-triangle-fill me-2"></i>Account Recovery / Setup
@@ -796,17 +832,18 @@
                         </div>
                     </div>
 
-                    <!-- Login Management -->
+                    <!-- Account Recovery -->
                     <div class="card border-warning mb-3">
                         <div class="card-header bg-warning bg-opacity-10">
-                            <h6 class="mb-0 text-warning"><i class="bi bi-key me-2"></i>Login Management</h6>
+                            <h6 class="mb-0 text-warning"><i class="bi bi-key me-2"></i>Account Recovery</h6>
                         </div>
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
-                                    <p class="mb-1 fw-bold">Reset Student Login</p>
-                                    <p class="text-muted small mb-0">Forces student to go through account claim process
-                                        again. Account data will be preserved.</p>
+                                    <p class="mb-1 fw-bold">Reset Student Account</p>
+                                    <p class="text-muted small mb-0">Generates a 10-minute reset code. The student
+                                        will use this code to recover their account through the login page. All account
+                                        data is preserved.</p>
                                 </div>
                                 <div class="form-check form-switch">
                                     <input class="form-check-input" type="checkbox" id="edit_reset_login"
@@ -815,8 +852,10 @@
                                 </div>
                             </div>
                             <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" style="display:none;">
-                                <small><i class="bi bi-exclamation-triangle me-2"></i>Student will need to re-claim
-                                    their account using their name and date of birth.</small>
+                                <small><i class="bi bi-exclamation-triangle me-2"></i>A reset code will be generated.
+                                    Give it to the student along with their join code. They will click
+                                    <strong>"I can't log into my account"</strong> on the login page to begin
+                                    recovery.</small>
                             </div>
                         </div>
                     </div>

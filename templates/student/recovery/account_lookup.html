@@ -1,8 +1,8 @@
 {% extends "student/recovery/layout.html" %}
 
-{% block title %}Find Account{% endblock %}
-{% block header %}Find Your Account{% endblock %}
-{% block subheader %}Enter your class details to locate your account.{% endblock %}
+{% block title %}Recover Account{% endblock %}
+{% block header %}Recover Account{% endblock %}
+{% block subheader %}Enter your class join code and the reset code from your teacher.{% endblock %}
 
 {% block content %}
 <form method="POST">
@@ -15,12 +15,12 @@
     </div>
 
     <div class="mb-4">
-        <label class="form-label text-secondary small fw-bold">Teacher Reset Code</label>
+        <label class="form-label text-secondary small fw-bold">Reset Code</label>
         <input type="text" name="reset_code" class="form-control form-control-lg text-uppercase"
             placeholder="8-character code" required autocomplete="off">
         <div class="form-text">Ask your teacher for this code. It expires in 10 minutes.</div>
     </div>
 
-    <button type="submit" class="btn btn-primary w-100 btn-lg">Find Account</button>
+    <button type="submit" class="btn btn-primary w-100 btn-lg">Continue</button>
 </form>
 {% endblock %}
