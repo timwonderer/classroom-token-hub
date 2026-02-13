@@ -2443,8 +2443,23 @@ def student_detail(student_id):
     # Get active rent privileges (per-period items)
     rent_privileges = _get_rent_privileges_for_student(student, teacher_id, join_code)
 
+    # CRITICAL: Fetch Join Codes for student's blocks (for Account Recovery display)
+    join_codes = {}
+    if student.block:
+        for block_part in student.block.split(','):
+            b = block_part.strip().upper()
+            if b:
+                # Find the TeacherBlock for this student + admin + block
+                tb = TeacherBlock.query.filter_by(
+                    teacher_id=teacher_id,
+                    block=b
+                ).first()
+                if tb and tb.join_code:
+                    join_codes[b] = tb.join_code
+
     return render_template('student_detail.html',
                          student=student,
+                         join_codes=join_codes,
                          transactions=transactions,
                          student_items=student_items,
                          latest_tap_event=latest_tap_event,
