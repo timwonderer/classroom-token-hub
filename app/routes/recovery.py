@@ -226,8 +226,10 @@ def verify_identity():
             teacher_block.dob_sum = student.dob_sum or 0
             teacher_block.salt = new_salt
             teacher_block.first_half_hash = student.first_half_hash
-            teacher_block.is_claimed = False
-            teacher_block.claimed_at = None
+            # Keep the seat claimed for this student so they can log in immediately
+            # after completing credential setup without losing class context.
+            teacher_block.is_claimed = True
+            teacher_block.claimed_at = teacher_block.claimed_at or utc_now()
 
         db.session.commit()
 

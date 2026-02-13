@@ -259,6 +259,34 @@ def test_verify_identity_updates_pii_and_clears_credentials(client, recovery_dat
     assert student.recovery_status == 'to_be_claimed'
 
 
+def test_verify_identity_keeps_teacher_block_claimed(client, recovery_data):
+    """Recovery identity update must preserve claimed seat status for login class context."""
+    student = recovery_data["student"]
+    teacher = recovery_data["teacher"]
+
+    student.reset_code = "KEEPCLM1"
+    student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+    student.recovery_status = 'to_be_claimed'
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["recovery_student_id"] = student.id
+        sess["recovery_teacher_id"] = teacher.id
+
+    resp = client.post("/recovery/verify-identity", data={
+        "first_name": "Claimed",
+        "last_name": "Seat",
+        "dob": "2012-01-05",
+    }, follow_redirects=False)
+
+    assert resp.status_code == 302
+
+    seat = TeacherBlock.query.filter_by(student_id=student.id, teacher_id=teacher.id, block='A').first()
+    assert seat is not None
+    assert seat.is_claimed is True
+    assert seat.claimed_at is not None
+
+
 def test_verify_identity_no_new_student_row(client, recovery_data):
     """Recovering an account must not create a new student row."""
     student = recovery_data["student"]

@@ -2456,8 +2456,16 @@ def student_detail(student_id):
                 if teacher_block.join_code:
                     join_codes[teacher_block.block] = teacher_block.join_code
 
+    reset_code_is_active = bool(
+        student.reset_code
+        and student.reset_code_expires_at
+        and ensure_utc(student.reset_code_expires_at) >= utc_now()
+        and student.recovery_status == 'to_be_claimed'
+    )
+
     return render_template('student_detail.html',
                          student=student,
+                         reset_code_is_active=reset_code_is_active,
                          join_codes=join_codes,
                          transactions=transactions,
                          student_items=student_items,
@@ -2734,6 +2742,9 @@ def edit_student():
         db.session.rollback()
         current_app.logger.error(f"Error updating student {student_id}", exc_info=True)
         flash("Error updating student due to internal error", "error")
+
+    if reset_login:
+        return redirect(url_for('admin.student_detail', student_id=student.id))
 
     return redirect(url_for('admin.students'))
 

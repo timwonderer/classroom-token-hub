@@ -239,7 +239,7 @@
                         </table>
 
                         <!-- Active Recovery Code Display -->
-                        {% if student.recovery_status == 'to_be_claimed' and student.reset_code %}
+                        {% if reset_code_is_active %}
                         <div class="alert alert-danger mt-3 border-danger shadow-sm">
                             <h6 class="alert-heading fw-bold">
                                 <i class="bi bi-shield-exclamation me-2"></i>Account Recovery In Progress
