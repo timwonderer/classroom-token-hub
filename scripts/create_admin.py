@@ -14,8 +14,16 @@ from io import BytesIO
 from app import app
 from app.extensions import db
 from app.models import SystemAdmin, Admin
-from app.models import SystemAdmin, Admin
 from app.utils.encryption import encrypt_totp
+
+
+def _mask_secret(secret):
+    """Return a masked version of a secret for safer console display."""
+    if not secret:
+        return "(hidden)"
+    if len(secret) <= 8:
+        return "*" * len(secret)
+    return f"{secret[:4]}{'*' * (len(secret) - 8)}{secret[-4:]}"
 
 def clear_screen():
     """Clear the terminal screen."""
@@ -63,18 +71,13 @@ def create_system_admin(username):
         print()
         print("TOTP Setup Instructions:")
         print("1. Open your authenticator app (Google Authenticator, Authy, etc.)")
-        print("2. Scan the QR code below or manually enter the secret key:")
+        print("2. Scan the QR code below (manual secret entry is hidden by default):")
         print()
-        print(f"   SECRET KEY: {totp_secret}")
+        print(f"   SECRET KEY (masked): {_mask_secret(totp_secret)}")
         print()
         
         # Generate and print QR code
         try:
-            uri = pyotp.start(totp_secret, user=username, issuer_name="Classroom Economy - System", provisioning_uris=True)
-            # PyOTP start returns provisioning URI if provisioning_uris=True? 
-            # No, pyotp.totp.TOTP... let's use standard pyotp usage or just manually build it if needed.
-            # Actually pyotp.totp.TOTP(totp_secret).provisioning_uri(...) is standard.
-            
             uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=username, issuer_name="Classroom Economy - System")
             qr = qrcode.QRCode()
             qr.add_data(uri)
@@ -125,9 +128,9 @@ def create_regular_admin(username):
         print()
         print("TOTP Setup Instructions:")
         print("1. Open your authenticator app (Google Authenticator, Authy, etc.)")
-        print("2. Scan the QR code below or manually enter the secret key:")
+        print("2. Scan the QR code below (manual secret entry is hidden by default):")
         print()
-        print(f"   SECRET KEY: {totp_secret}")
+        print(f"   SECRET KEY (masked): {_mask_secret(totp_secret)}")
         print()
 
         # Generate and print QR code

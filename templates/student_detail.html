@@ -992,29 +992,29 @@
     // Load tap entries button
     document.getElementById('loadTapEntries')?.addEventListener('click', async function () {
         const studentId = {{ student.id }};
-    };
-    const container = document.getElementById('tapEntriesContainer');
-    const btn = this;
+        const container = document.getElementById('tapEntriesContainer');
+        const btn = this;
 
-    btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
+        btn.disabled = true;
+        btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
 
-    try {
-        const response = await fetch(`/api/admin/tap-entries/${studentId}`);
-        const data = await response.json();
+        try {
+            const response = await fetch(`/api/admin/tap-entries/${studentId}`);
+            const data = await response.json();
 
-        if (response.ok) {
-            displayTapEntries(data);
-            container.style.display = 'block';
-        } else {
-            showToast(data.error || 'Failed to load tap entries', true);
+            if (response.ok) {
+                displayTapEntries(data);
+                container.style.display = 'block';
+            } else {
+                showToast(data.error || 'Failed to load tap entries', true);
+            }
+        } catch (error) {
+            showToast('Network error', true);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Reload Tap Entries';
         }
-    } catch (error) {
-        showToast('Network error', true);
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Reload Tap Entries';
-    }
+    });
 
 
     function displayTapEntries(data) {

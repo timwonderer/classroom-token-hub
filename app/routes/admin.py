@@ -2446,16 +2446,15 @@ def student_detail(student_id):
     # CRITICAL: Fetch Join Codes for student's blocks (for Account Recovery display)
     join_codes = {}
     if student.block:
-        for block_part in student.block.split(','):
-            b = block_part.strip().upper()
-            if b:
-                # Find the TeacherBlock for this student + admin + block
-                tb = TeacherBlock.query.filter_by(
-                    teacher_id=teacher_id,
-                    block=b
-                ).first()
-                if tb and tb.join_code:
-                    join_codes[b] = tb.join_code
+        block_parts = [b.strip().upper() for b in student.block.split(',') if b.strip()]
+        if block_parts:
+            teacher_blocks = TeacherBlock.query.filter(
+                TeacherBlock.teacher_id == teacher_id,
+                TeacherBlock.block.in_(block_parts)
+            ).all()
+            for teacher_block in teacher_blocks:
+                if teacher_block.join_code:
+                    join_codes[teacher_block.block] = teacher_block.join_code
 
     return render_template('student_detail.html',
                          student=student,

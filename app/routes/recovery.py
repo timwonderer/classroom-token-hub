@@ -9,8 +9,17 @@ from app.hash_utils import hash_hmac, get_random_salt
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.claim_credentials import compute_primary_claim_hash
 from app.utils.time import utc_now, ensure_utc
+from app.extensions import limiter
 
 recovery_bp = Blueprint('recovery', __name__, url_prefix='/recovery')
+
+
+def _recovery_rate_limit():
+    """Use strict limits in runtime, relaxed limits in test environments."""
+    if current_app.testing:
+        return "1000 per minute"
+    return "10 per minute"
+
 
 # ----------------------------------------------------------------------
 # TEACHER ROUTES
@@ -63,6 +72,7 @@ def landing():
 
 
 @recovery_bp.route('/lookup', methods=['GET', 'POST'])
+@limiter.limit(_recovery_rate_limit)
 def account_lookup():
     """
     Step 2 — Student Enters Join Code + Reset Code.
@@ -111,12 +121,15 @@ def account_lookup():
 
         # Success: store student_id in session for next step
         session['recovery_student_id'] = student.id
+        # Scope the next step to the teacher context validated by join_code lookup.
+        session['recovery_teacher_id'] = linked_block.teacher_id
         return redirect(url_for('recovery.verify_identity'))
 
     return render_template('student/recovery/account_lookup.html')
 
 
 @recovery_bp.route('/verify-identity', methods=['GET', 'POST'])
+@limiter.limit(_recovery_rate_limit)
 def verify_identity():
     """
     Step 3 — Identity Re-Registration.
@@ -130,6 +143,7 @@ def verify_identity():
     (normal credential setup: username, PIN, passphrase).
     """
     student_id = session.get('recovery_student_id')
+    recovery_teacher_id = session.get('recovery_teacher_id')
     if not student_id:
         return redirect(url_for('recovery.account_lookup'))
 
@@ -159,7 +173,7 @@ def verify_identity():
         new_salt = get_random_salt()
 
         student.first_name = first_name
-        student.last_initial = last_name[0].upper()
+        student.last_initial = last_name[0].upper() if last_name else ''
         student.dob_sum = dob_sum
         student.salt = new_salt
 
@@ -182,17 +196,20 @@ def verify_identity():
         student.reset_code_expires_at = None
         student.recovery_status = 'active'
 
-        # Sync PII to TeacherBlock entries for this student
-        TeacherBlock.query.filter_by(student_id=student.id).update({
-            'first_name': student.first_name,
-            'last_initial': student.last_initial,
-            'last_name_hash_by_part': student.last_name_hash_by_part or [],
-            'dob_sum': student.dob_sum or 0,
-            'salt': new_salt,
-            'first_half_hash': student.first_half_hash,
-            'is_claimed': False,
-            'claimed_at': None,
-        })
+        # Sync PII to TeacherBlock rows for this teacher only.
+        teacher_block_query = TeacherBlock.query.filter_by(student_id=student.id)
+        if recovery_teacher_id:
+            teacher_block_query = teacher_block_query.filter_by(teacher_id=recovery_teacher_id)
+
+        for teacher_block in teacher_block_query.all():
+            teacher_block.first_name = student.first_name
+            teacher_block.last_initial = student.last_initial
+            teacher_block.last_name_hash_by_part = student.last_name_hash_by_part or []
+            teacher_block.dob_sum = student.dob_sum or 0
+            teacher_block.salt = new_salt
+            teacher_block.first_half_hash = student.first_half_hash
+            teacher_block.is_claimed = False
+            teacher_block.claimed_at = None
 
         db.session.commit()
 
@@ -201,6 +218,7 @@ def verify_identity():
         # Set session for credential setup flow (Step 4)
         session['claimed_student_id'] = student.id
         session.pop('recovery_student_id', None)
+        session.pop('recovery_teacher_id', None)
 
         flash("Identity verified. Please set up your new username and credentials.", "success")
         return redirect(url_for('student.create_username'))
