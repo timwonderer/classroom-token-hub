@@ -15,14 +15,6 @@ from app.models import SystemAdmin, Admin
 from app.utils.encryption import encrypt_totp
 
 
-def _mask_secret(secret):
-    """Return a masked version of a secret for safer console display."""
-    if not secret:
-        return "(hidden)"
-    if len(secret) <= 8:
-        return "*" * len(secret)
-    return f"{secret[:4]}{'*' * (len(secret) - 8)}{secret[-4:]}"
-
 def clear_screen():
     """Clear the terminal screen."""
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -71,7 +63,7 @@ def create_system_admin(username):
         print("1. Open your authenticator app (Google Authenticator, Authy, etc.)")
         print("2. Scan the QR code below (manual secret entry is hidden by default):")
         print()
-        print(f"   SECRET KEY (masked): {_mask_secret(totp_secret)}")
+        print("   SECRET KEY: [HIDDEN - USE QR CODE]")
         print()
         
         # Generate and print QR code
@@ -128,7 +120,7 @@ def create_regular_admin(username):
         print("1. Open your authenticator app (Google Authenticator, Authy, etc.)")
         print("2. Scan the QR code below (manual secret entry is hidden by default):")
         print()
-        print(f"   SECRET KEY (masked): {_mask_secret(totp_secret)}")
+        print("   SECRET KEY: [HIDDEN - USE QR CODE]")
         print()
 
         # Generate and print QR code
