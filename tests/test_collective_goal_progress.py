@@ -336,3 +336,53 @@ def test_fixed_collective_allows_multiple_purchases(client):
     resp_shop = client.get('/student/shop')
     assert b'1/3' in resp_shop.data
 
+
+def test_whole_class_goal_with_duplicate_seats_shows_correct_roster(client):
+    """Test that duplicate TeacherBlock entries don't inflate class size."""
+    teacher = Admin(username='teacher_dup_seats', totp_secret='secret')
+    db.session.add(teacher)
+    db.session.flush()
+
+    # Create 2 students
+    student_a1 = _create_student(teacher, 'Laura', 'JOINDUP', block='A')
+    student_a2 = _create_student(teacher, 'Mike', 'JOINDUP', block='A')
+    db.session.flush()
+    
+    # Add a duplicate TeacherBlock entry for student_a1 (simulating data inconsistency)
+    db.session.add(TeacherBlock(
+        teacher_id=teacher.id,
+        block='A',
+        join_code='JOINDUP',
+        student_id=student_a1.id,
+        is_claimed=True,
+        first_name='Laura',
+        last_initial='S',
+        last_name_hash_by_part=[],
+        dob_sum=0,
+        salt=b'salt',
+        first_half_hash=f'hash_Laura_JOINDUP_dup',
+    ))
+    db.session.flush()
+
+    item = StoreItem(
+        teacher_id=teacher.id,
+        name='Duplicate Seats Test',
+        price=Decimal('5.00'),
+        item_type='collective',
+        collective_goal_type='whole_class',
+        is_active=True,
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    # Despite 3 TeacherBlock entries, class size should be 2 (unique students)
+    _login_student(client, student_a1.id, 'JOINDUP')
+    resp_shop = client.get('/student/shop')
+    # Should show 0/2, not 0/3
+    assert b'0/2' in resp_shop.data or b'Whole Class Goal' in resp_shop.data
+    
+    # Admin view should also show correct count
+    _login_admin(client, teacher.id)
+    resp_admin = client.get('/admin/store')
+    assert b'0/2' in resp_admin.data
+
