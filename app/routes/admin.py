@@ -2443,8 +2443,22 @@ def student_detail(student_id):
     # Get active rent privileges (per-period items)
     rent_privileges = _get_rent_privileges_for_student(student, teacher_id, join_code)
 
+    # CRITICAL: Fetch Join Codes for student's blocks (for Account Recovery display)
+    join_codes = {}
+    if student.block:
+        block_parts = [b.strip().upper() for b in student.block.split(',') if b.strip()]
+        if block_parts:
+            teacher_blocks = TeacherBlock.query.filter(
+                TeacherBlock.teacher_id == teacher_id,
+                TeacherBlock.block.in_(block_parts)
+            ).all()
+            for teacher_block in teacher_blocks:
+                if teacher_block.join_code:
+                    join_codes[teacher_block.block] = teacher_block.join_code
+
     return render_template('student_detail.html',
                          student=student,
+                         join_codes=join_codes,
                          transactions=transactions,
                          student_items=student_items,
                          latest_tap_event=latest_tap_event,
@@ -2589,27 +2603,21 @@ def edit_student():
         if claim_hash:
             student.first_half_hash = claim_hash
 
-    # Handle login reset
+    # Handle account reset — generate recovery code per recovery spec
     reset_login = request.form.get('reset_login') == 'on'
     if reset_login:
-        # Clear login credentials but keep account data
-        student.username_hash = None
-        student.username_lookup_hash = None
-        student.pin_hash = None
-        student.passphrase_hash = None
-        student.has_completed_setup = False
-        
-        # Update TeacherBlock entries to mark them as unclaimed
-        # Keep student_id since the student record still exists
-        TeacherBlock.query.filter_by(
-            student_id=student.id,
-            teacher_id=current_admin_id
-        ).update({
-            'is_claimed': False,
-            'claimed_at': None
-        })
+        import secrets as _secrets
+        code = _secrets.token_hex(4).upper()  # 8-char mixed alphanumeric
+        student.reset_code = code
+        student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+        student.recovery_status = 'to_be_claimed'
 
-        flash(f"{student.full_name}'s login has been reset. They will need to re-claim their account.", "warning")
+        current_app.logger.info(
+            f"Reset code generated for student {student.id} by admin {current_admin_id}"
+        )
+
+        flash(f"Reset code generated for {student.full_name}: {code} — Expires in 10 minutes. "
+              f"Give this code to the student along with their join code.", "warning")
 
     if name_changed or dob_changed:
         TeacherBlock.query.filter_by(
@@ -2681,6 +2689,14 @@ def edit_student():
                     block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
                     timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
                     join_code = f"B{block_initial}{timestamp_suffix:04d}"
+
+            # CRITICAL FIX: Ensure first_half_hash exists before creating TeacherBlock
+            # Logic: If hash is missing (legacy student), generate it now to prevent NotNullViolation
+            if not student.first_half_hash:
+                claim_hash = compute_primary_claim_hash(student.first_name[:1], student.dob_sum or 0, student.salt)
+                if claim_hash:
+                    student.first_half_hash = claim_hash
+                    current_app.logger.info(f"Generated missing first_half_hash for student {student.id} during edit")
             
             # Student is claimed if they have a username set
             is_claimed = bool(student.username_hash)
@@ -8476,13 +8492,8 @@ def onboarding_status():
                 # Set it in session for future requests
                 session['current_join_code'] = join_code
 
-        teacher_block = TeacherBlock.query.filter_by(
-            teacher_id=admin_id,
-            join_code=join_code
-        ).first()
-
-        if not teacher_block:
-            # No class period selected yet - indicate this so frontend can show appropriate message
+        # If still no join_code after auto-discovery, teacher has no class periods
+        if not join_code:
             return jsonify({
                 'status': 'success',
                 'dismissed': False,

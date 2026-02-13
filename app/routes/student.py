@@ -788,6 +788,11 @@ def setup_pin_passphrase():
         student.pin_hash = generate_password_hash(pin)
         student.passphrase_hash = generate_password_hash(passphrase)
         student.has_completed_setup = True
+        if student.recovery_status == 'to_be_claimed':
+            # Complete recovery only after credentials are successfully re-established.
+            student.reset_code = None
+            student.reset_code_expires_at = None
+            student.recovery_status = 'active'
         db.session.commit()
         # Clear session onboarding keys
         session.pop('claimed_student_id', None)

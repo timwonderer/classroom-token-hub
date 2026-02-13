@@ -256,6 +256,12 @@ class Student(db.Model):
     # Soft-delete flag: archived students cannot log in and are hidden from roster queries.
     is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
+    # Account Recovery Fields
+    reset_code = db.Column(db.String(8), nullable=True, unique=True)  # 8-char alphanumeric code
+    reset_code_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    money_action_cooldown_until = db.Column(db.DateTime(timezone=True), nullable=True)
+    recovery_status = db.Column(db.String(20), default='active', nullable=False)  # active, to_be_claimed, archived
+
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_initial}."
