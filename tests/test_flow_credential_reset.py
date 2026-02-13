@@ -14,7 +14,6 @@ from app.models import Admin, Student, TeacherBlock, StudentBlock, Transaction
 from app.hash_utils import hash_username, hash_username_lookup, get_random_salt
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.claim_credentials import compute_primary_claim_hash
-from app.utils.time import utc_now
 
 
 @pytest.fixture
@@ -155,7 +154,33 @@ def test_credential_reset_flow(client, test_data):
     assert resp.status_code == 302
     assert '/student/create-username' in resp.location
 
-    # ── Step 5: Verify state after identity re-registration ──
+    # Verify identity reset state before credentials are re-established.
+    with client.application.app_context():
+        s = db.session.get(Student, student_id)
+        assert s.has_completed_setup is False
+        assert s.username_hash is None
+        assert s.pin_hash is None
+        assert s.passphrase_hash is None
+        assert s.reset_code is not None
+        assert s.recovery_status == 'to_be_claimed'
+
+    # Complete credential setup so recovery is consumed.
+    resp = client.post('/student/create-username', data={
+        'write_in_word': 'rocket',
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+    assert '/student/setup-pin-passphrase' in resp.location
+
+    resp = client.post('/student/setup-pin-passphrase', data={
+        'pin': '1234',
+        'confirm_pin': '1234',
+        'passphrase': 'new-passphrase-flow',
+        'confirm_passphrase': 'new-passphrase-flow',
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+    assert '/setup-complete' in resp.location
+
+    # ── Step 5: Verify state after full recovery completion ──
     with client.application.app_context():
         s = db.session.get(Student, student_id)
 
@@ -166,11 +191,11 @@ def test_credential_reset_flow(client, test_data):
         assert s.first_name == 'NewFlow'
         assert s.last_initial == 'N'
 
-        # Credentials cleared for re-setup
-        assert s.has_completed_setup is False
-        assert s.username_hash is None
-        assert s.pin_hash is None
-        assert s.passphrase_hash is None
+        # Credentials re-established
+        assert s.has_completed_setup is True
+        assert s.username_hash is not None
+        assert s.pin_hash is not None
+        assert s.passphrase_hash is not None
 
         # Recovery state cleared
         assert s.reset_code is None

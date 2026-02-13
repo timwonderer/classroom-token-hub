@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 import secrets
 
 from app.extensions import db
-from app.models import Student, TeacherBlock, StudentTeacher
+from app.models import Student, TeacherBlock
 from app.auth import admin_required, get_student_for_admin
 from app.hash_utils import hash_hmac, get_random_salt
 from app.utils.name_utils import hash_last_name_parts
@@ -12,6 +12,7 @@ from app.utils.time import utc_now, ensure_utc
 from app.extensions import limiter
 
 recovery_bp = Blueprint('recovery', __name__, url_prefix='/recovery')
+RESET_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 
 
 def _recovery_rate_limit():
@@ -19,6 +20,11 @@ def _recovery_rate_limit():
     if current_app.testing:
         return "1000 per minute"
     return "10 per minute"
+
+
+def _generate_reset_code(length=8):
+    """Generate an uppercase, unambiguous alphanumeric recovery code."""
+    return ''.join(secrets.choice(RESET_CODE_ALPHABET) for _ in range(length))
 
 
 # ----------------------------------------------------------------------
@@ -45,7 +51,7 @@ def generate_reset_code(student_id):
         return redirect(url_for('admin.students'))
 
     # Invalidate any existing reset_code, then generate new one
-    code = secrets.token_hex(4).upper()  # 8-char hex string
+    code = _generate_reset_code(8)
 
     student.reset_code = code
     student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
@@ -94,8 +100,17 @@ def account_lookup():
             flash("Both fields are required.", "error")
             return redirect(url_for('recovery.account_lookup'))
 
-        # Find student by reset_code
-        student = Student.query.filter_by(reset_code=reset_code).first()
+        # Find candidate row by both reset_code and join_code to avoid collisions.
+        linked_block = (
+            TeacherBlock.query
+            .join(Student, Student.id == TeacherBlock.student_id)
+            .filter(
+                TeacherBlock.join_code == join_code,
+                Student.reset_code == reset_code,
+            )
+            .first()
+        )
+        student = db.session.get(Student, linked_block.student_id) if linked_block else None
 
         # Validate all conditions — use a single generic error for security
         valid = True
@@ -106,16 +121,10 @@ def account_lookup():
             valid = False
         elif student.recovery_status != 'to_be_claimed':
             valid = False
-        else:
-            # Verify join_code matches the student record
-            linked_block = TeacherBlock.query.filter_by(
-                student_id=student.id,
-                join_code=join_code
-            ).first()
-            if not linked_block:
-                valid = False
 
         if not valid:
+            session.pop('recovery_student_id', None)
+            session.pop('recovery_teacher_id', None)
             flash("Invalid or expired recovery code.", "error")
             return redirect(url_for('recovery.account_lookup'))
 
@@ -167,6 +176,18 @@ def verify_identity():
         if not student:
             return redirect(url_for('recovery.account_lookup'))
 
+        # Revalidate recovery state in case code expired/regenerated between Step 2 and Step 3.
+        if (
+            student.recovery_status != 'to_be_claimed'
+            or not student.reset_code
+            or not student.reset_code_expires_at
+            or ensure_utc(student.reset_code_expires_at) < utc_now()
+        ):
+            session.pop('recovery_student_id', None)
+            session.pop('recovery_teacher_id', None)
+            flash("Invalid or expired recovery code.", "error")
+            return redirect(url_for('recovery.account_lookup'))
+
         # --- Atomic identity rebinding ---
 
         # Update PII and rotate salt
@@ -191,10 +212,7 @@ def verify_identity():
         student.passphrase_hash = None
         student.has_completed_setup = False
 
-        # Step 5 — Completion: clear recovery state, set status -> active
-        student.reset_code = None
-        student.reset_code_expires_at = None
-        student.recovery_status = 'active'
+        # Keep recovery code/status until credential setup is completed.
 
         # Sync PII to TeacherBlock rows for this teacher only.
         teacher_block_query = TeacherBlock.query.filter_by(student_id=student.id)

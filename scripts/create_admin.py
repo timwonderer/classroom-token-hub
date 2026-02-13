@@ -7,8 +7,6 @@ import sys
 import pyotp
 import qrcode
 import select
-import time
-from io import BytesIO
 
 # Set up Flask app context
 from app import app

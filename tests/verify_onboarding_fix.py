@@ -1,9 +1,7 @@
 
 import os
-import pytest
 from app import create_app, db
-from app.models import Admin, TeacherOnboarding, TeacherBlock
-from flask import session
+from app.models import Admin, TeacherBlock
 
 # Set required environment variables for testing
 os.environ['FLASK_ENV'] = 'testing'
@@ -18,11 +16,7 @@ def test_onboarding_status_no_class_period_fix():
     Verify that onboarding_status no longer returns no_class_period: True
     even when the teacher has no classes.
     """
-    # Create app without arguments
-    try:
-        app = create_app()
-    except TypeError:
-         app = create_app('testing')
+    app = create_app()
     
     with app.app_context():
         # Create tables

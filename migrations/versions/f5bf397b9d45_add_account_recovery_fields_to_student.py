@@ -82,8 +82,8 @@ def upgrade():
         batch_op.add_column(sa.Column('reset_code', sa.String(length=8), nullable=True))
         batch_op.add_column(sa.Column('reset_code_expires_at', sa.DateTime(timezone=True), nullable=True))
         batch_op.add_column(sa.Column('money_action_cooldown_until', sa.DateTime(timezone=True), nullable=True))
-        batch_op.add_column(sa.Column('recovery_status', sa.String(length=20), server_default='none', nullable=False))
-        batch_op.create_index(batch_op.f('ix_students_reset_code'), ['reset_code'], unique=False)
+        batch_op.add_column(sa.Column('recovery_status', sa.String(length=20), server_default='active', nullable=False))
+        batch_op.create_index(batch_op.f('ix_students_reset_code'), ['reset_code'], unique=True)
 
     # ### end Alembic commands ###
 

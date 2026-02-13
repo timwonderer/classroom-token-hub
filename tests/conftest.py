@@ -23,17 +23,22 @@ os.environ.setdefault("PEPPER_KEY", "tKiXIAgaPqsOOhR1PqvdEQo4BelrN5SP3cpWxVYrsHk
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 import pytest
+from sqlalchemy import event, text
 from app import app as flask_app, db, Student
+
+
+def _set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
 
 
 @pytest.fixture
 def app():
     """Provide the Flask app instance for tests."""
-    # Use a separate test database to avoid clashing with dev data
-    test_db_url = os.environ.get(
-        "TEST_DATABASE_URL", 
-        "postgresql://postgres:postgres@localhost:5432/classroom_economy_test"
-    )
+    # Use a separate test database to avoid clashing with dev data.
+    # Prefer TEST_DATABASE_URL if set, otherwise use DATABASE_URL (sqlite in-memory in tests).
+    test_db_url = os.environ.get("TEST_DATABASE_URL", os.environ["DATABASE_URL"])
 
     flask_app.config.update(
         TESTING=True,
@@ -45,10 +50,8 @@ def app():
     
     # Ensure strict separation - if connection fails, test fails
     with flask_app.app_context():
-        
-        db.drop_all() 
+        db.drop_all()
         db.create_all()
-        pass
 
     yield flask_app
 
@@ -80,21 +83,16 @@ def client_with_fk(client):
     Enable foreign key enforcement for tests that rely on CASCADE behavior.
     SQLite requires PRAGMA foreign_keys=ON per connection; PostgreSQL enforces by default.
     """
-    from sqlalchemy import event
-
     dialect = db.engine.dialect.name
     if dialect == 'sqlite':
-        @event.listens_for(db.engine, "connect")
-        def _set_sqlite_pragma(dbapi_connection, connection_record):
-            cursor = dbapi_connection.cursor()
-            cursor.execute("PRAGMA foreign_keys=ON")
-            cursor.close()
+        event.listen(db.engine, "connect", _set_sqlite_pragma)
 
         # Also enable on the current connection
-        from sqlalchemy import text
         db.session.execute(text("PRAGMA foreign_keys=ON"))
 
     yield client
+    if dialect == 'sqlite':
+        event.remove(db.engine, "connect", _set_sqlite_pragma)
 
 
 @pytest.fixture
@@ -112,4 +110,3 @@ def test_student():
     db.session.add(stu)
     db.session.commit()
     return stu
-

@@ -11,11 +11,10 @@ Covers:
   - Security & edge cases from the spec acceptance tests
 """
 import pytest
-from datetime import timedelta, timezone
+from datetime import timedelta
 from app import db
 from app.models import Student, TeacherBlock, Admin, StudentTeacher, Transaction, StudentBlock
 from app.hash_utils import get_random_salt, hash_username
-from app.utils.claim_credentials import compute_primary_claim_hash
 from app.utils.money_guard import check_financial_cooldown
 from app.utils.time import ensure_utc, utc_now
 
@@ -212,13 +211,20 @@ def test_student_lookup_nonexistent_code(client, recovery_data):
 # ------------------------------------------------------------------
 
 def test_verify_identity_updates_pii_and_clears_credentials(client, recovery_data):
-    """PII is replaced, salt rotated, credentials cleared, code consumed."""
+    """PII is replaced and credentials are cleared for re-setup."""
     student = recovery_data["student"]
+    teacher = recovery_data["teacher"]
     old_salt = student.salt
     original_id = student.id
 
+    student.reset_code = "VERIFY11"
+    student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+    student.recovery_status = 'to_be_claimed'
+    db.session.commit()
+
     with client.session_transaction() as sess:
         sess["recovery_student_id"] = student.id
+        sess["recovery_teacher_id"] = teacher.id
 
     resp = client.post("/recovery/verify-identity", data={
         "first_name": "NewFirst",
@@ -248,10 +254,9 @@ def test_verify_identity_updates_pii_and_clears_credentials(client, recovery_dat
     assert student.passphrase_hash is None
     assert student.has_completed_setup is False
 
-    # Recovery state cleared (Step 5 completion)
-    assert student.reset_code is None
-    assert student.reset_code_expires_at is None
-    assert student.recovery_status == 'active'
+    # Recovery remains active until credentials are re-established.
+    assert student.reset_code == "VERIFY11"
+    assert student.recovery_status == 'to_be_claimed'
 
 
 def test_verify_identity_no_new_student_row(client, recovery_data):
@@ -259,6 +264,11 @@ def test_verify_identity_no_new_student_row(client, recovery_data):
     student = recovery_data["student"]
     original_id = student.id
     original_count = Student.query.count()
+
+    student.reset_code = "ROWTEST1"
+    student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+    student.recovery_status = 'to_be_claimed'
+    db.session.commit()
 
     with client.session_transaction() as sess:
         sess["recovery_student_id"] = student.id
@@ -284,9 +294,16 @@ def test_verify_identity_redirects_without_session(client, recovery_data):
 def test_verify_identity_missing_fields(client, recovery_data):
     """All fields required for identity re-registration."""
     student = recovery_data["student"]
+    teacher = recovery_data["teacher"]
+
+    student.reset_code = "MISSFLD1"
+    student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+    student.recovery_status = 'to_be_claimed'
+    db.session.commit()
 
     with client.session_transaction() as sess:
         sess["recovery_student_id"] = student.id
+        sess["recovery_teacher_id"] = teacher.id
 
     resp = client.post("/recovery/verify-identity", data={
         "first_name": "Only",
@@ -329,9 +346,15 @@ def test_recovery_preserves_balance_and_transactions(client, recovery_data):
         student_id=student.id, join_code=join_code
     ).count()
 
+    student.reset_code = "PRESERVE1"
+    student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+    student.recovery_status = 'to_be_claimed'
+    db.session.commit()
+
     # Run recovery
     with client.session_transaction() as sess:
         sess["recovery_student_id"] = student.id
+        sess["recovery_teacher_id"] = teacher.id
 
     client.post("/recovery/verify-identity", data={
         "first_name": "Recovered",
@@ -358,6 +381,7 @@ def test_recovery_preserves_balance_and_transactions(client, recovery_data):
 
 def test_reset_code_invalid_after_use(client, recovery_data):
     """Reset code is single-use — invalid after successful recovery."""
+    teacher = recovery_data["teacher"]
     student = recovery_data["student"]
     join_code = recovery_data["join_code"]
 
@@ -369,11 +393,22 @@ def test_reset_code_invalid_after_use(client, recovery_data):
     # Use the code successfully
     with client.session_transaction() as sess:
         sess["recovery_student_id"] = student.id
+        sess["recovery_teacher_id"] = teacher.id
 
     client.post("/recovery/verify-identity", data={
         "first_name": "Test",
         "last_name": "User",
         "dob": "2010-01-01",
+    }, follow_redirects=True)
+
+    client.post('/student/create-username', data={
+        'write_in_word': 'planet',
+    }, follow_redirects=True)
+    client.post('/student/setup-pin-passphrase', data={
+        'pin': '1234',
+        'confirm_pin': '1234',
+        'passphrase': 'updated-passphrase',
+        'confirm_passphrase': 'updated-passphrase',
     }, follow_redirects=True)
 
     db.session.refresh(student)
