@@ -4,11 +4,17 @@
 {% block title %}Store Management{% endblock %}
 {% block page_icon %}storefront{% endblock %}
 {% set custom_full_guide = true %}
+
+{# Helper macro to display class label with fallback #}
+{% macro class_label(block) -%}
+{{ class_labels_by_block.get(block|upper, block|upper) }}
+{%- endmacro %}
+
 {% block page_header_actions %}
   <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#storeGuide" aria-controls="storeGuide">
     <span class="material-symbols-outlined">quick_reference_all</span> <span>Quick Tips</span>
   </button>
-  <a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-store') }}" class="btn btn-outline-primary d-flex align-items-center gap-2" target="_blank" rel="noopener">
+  <a href="{{ url_for('docs.view_doc', doc_path='user-guides/diagnostics/teacher-store') }}" class="btn btn-outline-primary d-flex align-items-center gap-2" target="_blank" rel="noopener">
     <span class="material-symbols-outlined">menu_book</span> <span>Full Guide</span>
   </a>
 {% endblock %}
@@ -49,7 +55,7 @@
         </h2>
         <div id="storeGuideBasic" class="accordion-collapse collapse mt-2" aria-labelledby="storeGuideHeadingBasic" data-bs-parent="#storeGuideAccordion">
           <div class="accordion-body">
-            <p>Start here to get your store running. Use the Manage Items tab to add and activate items.</p>
+            <p>Start here to get your store running. Use the Add New Item tab to add and activate items.</p>
             <ul class="mb-3">
               <li><strong>Name/description:</strong> What students see in the store.</li>
               <li><strong>Price &amp; tier:</strong> Sets cost and grouping for your pricing structure.</li>
@@ -118,11 +124,11 @@
     <!-- Link to Full Documentation -->
     <div class="mt-4 pt-3 border-top">
       <div class="d-grid gap-2">
-        <a href="{{ url_for('docs.view_doc', doc_path='features/store/creating-items') }}" class="btn btn-primary" target="_blank" rel="noopener">
+        <a href="{{ url_for('docs.view_doc', doc_path='user-guides/features/store/creating-items') }}" class="btn btn-primary" target="_blank" rel="noopener">
           <span class="material-symbols-outlined" style="vertical-align: middle;">menu_book</span>
           Read Full Store Guide
         </a>
-        <a href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher-store') }}" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">
+        <a href="{{ url_for('docs.view_doc', doc_path='user-guides/diagnostics/teacher-store') }}" class="btn btn-outline-secondary btn-sm" target="_blank" rel="noopener">
           <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 1rem;">description</span>
           Teacher Manual: Store Section
         </a>
@@ -148,8 +154,18 @@
     </button>
   </li>
   <li class="nav-item" role="presentation">
+    <button class="nav-link" id="add-tab" data-bs-toggle="tab" data-bs-target="#add-item" type="button" role="tab">
+      <i class="bi bi-plus-circle me-1"></i>Add New Item
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
     <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">
       <i class="bi bi-clock-history me-1"></i>Purchase History
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="audit-tab" data-bs-toggle="tab" data-bs-target="#audit" type="button" role="tab">
+      <i class="bi bi-journal-text me-1"></i>Redemption Audit
     </button>
   </li>
 </ul>
@@ -191,7 +207,7 @@
           </div>
           <div class="card-body">
             <div class="d-grid gap-2">
-              <button class="btn btn-outline-primary" onclick="document.getElementById('manage-tab').click()">
+              <button class="btn btn-outline-primary" onclick="document.getElementById('add-tab').click()">
                 <i class="bi bi-plus-circle me-2"></i>Add New Item
               </button>
               <button class="btn btn-outline-info" onclick="document.getElementById('history-tab').click()">
@@ -235,9 +251,16 @@
                   {% endif %}
                 </td>
                 <td>
-                  <button class="btn btn-sm btn-success approve-redemption-btn" data-student-item-id="{{ student_item.id }}">
-                    <i class="bi bi-check-circle me-1"></i>Approve
-                  </button>
+                  <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-outline-danger reject-redemption-btn"
+                      data-student-item-id="{{ student_item.id }}"
+                      title="Refund and remove" aria-label="Refund and remove">
+                      <i class="bi bi-x-circle"></i>
+                    </button>
+                    <button class="btn btn-sm btn-success approve-redemption-btn" data-student-item-id="{{ student_item.id }}">
+                      <i class="bi bi-check-circle me-1"></i>Approve
+                    </button>
+                  </div>
                 </td>
               </tr>
               {% endfor %}
@@ -245,7 +268,7 @@
           </table>
         </div>
         <div class="text-center mt-3">
-          <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-primary">View All Pending Items</a>
+          <a href="{{ url_for('admin.store_management') }}#overview" class="btn btn-outline-primary">View All Pending Items</a>
         </div>
         {% else %}
         <div class="text-center text-muted py-3">
@@ -315,8 +338,132 @@
 
   <!-- MANAGE ITEMS TAB -->
   <div class="tab-pane fade" id="manage" role="tabpanel">
+    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-3 g-3">
+      {% if items %}
+        {% for item in items %}
+        <div class="col">
+          <div class="card shadow-sm h-100">
+            <div class="card-header bg-light d-flex justify-content-between align-items-start">
+              <div>
+                <h5 class="mb-1">{{ item.name }}</h5>
+                <div class="text-muted small">
+                  ${{ "%.2f"|format(item.price) }} · {{ item.item_type.replace('_', ' ')|title }}
+                </div>
+              </div>
+              <div class="text-end">
+                <span class="badge {{ 'bg-success' if item.is_active else 'bg-secondary' }}">{{ 'Active' if item.is_active else 'Inactive' }}</span>
+                {% if item.is_rent_linked %}
+                  <span class="badge bg-info">Rent Perk</span>
+                {% endif %}
+              </div>
+            </div>
+            <div class="card-body d-flex flex-column">
+              <p class="text-muted small mb-3">
+                {{ item.description|striptags|truncate(160) if item.description else 'No description provided.' }}
+              </p>
+
+              {% if item.is_rent_linked %}
+              <div class="mb-2">
+                <span class="badge bg-info">Rent Perk</span>
+                <span class="text-muted small ms-1">Managed by rent settings</span>
+              </div>
+              {% endif %}
+
+              <div class="d-flex flex-wrap gap-1 mb-2">
+                {% if item.tier %}
+                  <span class="badge
+                    {% if item.tier == 'basic' %}bg-secondary
+                    {% elif item.tier == 'standard' %}bg-primary
+                    {% elif item.tier == 'premium' %}bg-warning text-dark
+                    {% elif item.tier == 'luxury' %}bg-danger
+                    {% endif %}">{{ item.tier|title }}</span>
+                {% endif %}
+                {% if item.is_bundle %}
+                  <span class="badge bg-warning text-dark">{{ item.bundle_quantity }} bundle</span>
+                {% endif %}
+                {% if item.bulk_discount_enabled %}
+                  <span class="badge bg-success">{{ item.bulk_discount_percentage }}% off {{ item.bulk_discount_quantity }}+</span>
+                {% endif %}
+              </div>
+
+              <div class="text-muted small mb-3">
+                <div><strong>Inventory:</strong> {{ item.inventory if item.inventory is not none else 'Unlimited' }}</div>
+                <div><strong>Limit per student:</strong> {{ item.limit_per_student if item.limit_per_student is not none else 'None' }}</div>
+              </div>
+
+              {% if item.item_type == 'collective' %}
+              <div class="mb-3">
+                <div class="text-muted small mb-2"><strong>Collective Progress</strong></div>
+                {% set progress_rows = collective_progress_by_item.get(item.id, []) %}
+                {% if progress_rows %}
+                  {% for row in progress_rows %}
+                  <div class="mb-2">
+                    <div class="d-flex justify-content-between small">
+                      <span>{{ row.class_label }}</span>
+                      <span>{{ row.count }}/{{ row.target }}</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                      <div class="progress-bar {% if row.is_complete %}bg-success{% else %}bg-warning{% endif %}" role="progressbar" style="width: {{ row.percent }}%;" aria-valuenow="{{ row.count }}" aria-valuemin="0" aria-valuemax="{{ row.target }}"></div>
+                    </div>
+                  </div>
+                  {% endfor %}
+                {% else %}
+                  <div class="small text-muted">No class progress yet.</div>
+                {% endif %}
+              </div>
+              {% endif %}
+
+              <div class="mt-auto">
+                <div class="text-muted small mb-2"><strong>Active In</strong></div>
+                <div class="d-flex flex-wrap gap-1">
+                  {% if item.blocks_list %}
+                    {% for block in item.blocks_list %}
+                      <span class="badge bg-light text-dark border">{{ class_label(block) }}</span>
+                    {% endfor %}
+                  {% else %}
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">All Classes</span>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+            <div class="card-footer bg-transparent border-0 pt-0">
+              <div class="btn-group btn-group-sm" role="group">
+                <a href="{{ url_for('admin.edit_store_item', item_id=item.id) }}" class="btn btn-outline-primary" title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                {% if item.is_rent_linked %}
+                <button class="btn btn-outline-warning" disabled title="Managed by Rent Settings">
+                  <i class="bi bi-eye-slash"></i>
+                </button>
+                <button class="btn btn-outline-danger" disabled title="Remove from Rent Settings to delete">
+                  <i class="bi bi-trash"></i>
+                </button>
+                {% else %}
+                <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#deactivateItemModal" data-item-id="{{ item.id }}" data-item-name="{{ item.name }}" title="Deactivate">
+                  <i class="bi bi-eye-slash"></i>
+                </button>
+                <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteItemModal" data-item-id="{{ item.id }}" data-item-name="{{ item.name }}" title="Delete Permanently">
+                  <i class="bi bi-trash"></i>
+                </button>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="col">
+          <div class="alert alert-info mb-0">
+            <i class="bi bi-info-circle me-2"></i>No store items yet. Use the Add New Item tab to get started.
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ADD NEW ITEM TAB -->
+  <div class="tab-pane fade" id="add-item" role="tabpanel">
     <div class="row">
-      <!-- Add/Edit Item Form -->
       <div class="col-lg-12 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white">
@@ -521,84 +668,6 @@
           </div>
         </div>
       </div>
-
-      <!-- Existing Items Table -->
-      <div class="col-lg-12">
-        <div class="card shadow">
-          <div class="card-header bg-secondary text-white">
-            <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>All Store Items</h5>
-          </div>
-          <div class="card-body">
-            <div class="table-responsive">
-              <table class="table table-striped table-hover">
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Price</th>
-                    <th>Type</th>
-                    <th>Tier</th>
-                    <th>Inventory</th>
-                    <th>Bundle</th>
-                    <th>Discount</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for item in items %}
-                  <tr>
-                    <td><strong>{{ item.name }}</strong></td>
-                    <td>${{ "%.2f"|format(item.price) }}</td>
-                    <td><span class="badge bg-info">{{ item.item_type.replace('_', ' ')|title }}</span></td>
-                    <td>
-                      {% if item.tier %}
-                        <span class="badge
-                          {% if item.tier == 'basic' %}bg-secondary
-                          {% elif item.tier == 'standard' %}bg-primary
-                          {% elif item.tier == 'premium' %}bg-warning text-dark
-                          {% elif item.tier == 'luxury' %}bg-danger
-                          {% endif %}">{{ item.tier|title }}</span>
-                      {% else %}
-                        <span class="text-muted">-</span>
-                      {% endif %}
-                    </td>
-                    <td>{{ item.inventory if item.inventory is not none else 'Unlimited' }}</td>
-                    <td>
-                      {% if item.is_bundle %}
-                        <span class="badge bg-warning text-dark">{{ item.bundle_quantity }} items</span>
-                      {% else %}
-                        <span class="text-muted">-</span>
-                      {% endif %}
-                    </td>
-                    <td>
-                      {% if item.bulk_discount_enabled %}
-                        <span class="badge bg-success">{{ item.bulk_discount_percentage }}% off {{ item.bulk_discount_quantity }}+</span>
-                      {% else %}
-                        <span class="text-muted">-</span>
-                      {% endif %}
-                    </td>
-                    <td><span class="badge {{ 'bg-success' if item.is_active else 'bg-secondary' }}">{{ 'Active' if item.is_active else 'Inactive' }}</span></td>
-                    <td>
-                      <div class="btn-group btn-group-sm" role="group">
-                        <a href="{{ url_for('admin.edit_store_item', item_id=item.id) }}" class="btn btn-outline-primary" title="Edit">
-                          <i class="bi bi-pencil"></i>
-                        </a>
-                        <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#deactivateItemModal" data-item-id="{{ item.id }}" data-item-name="{{ item.name }}" title="Deactivate">
-                          <i class="bi bi-eye-slash"></i>
-                        </button>
-                        <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteItemModal" data-item-id="{{ item.id }}" data-item-name="{{ item.name }}" title="Delete Permanently">
-                          <i class="bi bi-trash"></i>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -664,6 +733,116 @@
       </div>
     </div>
   </div>
+
+  <!-- REDEMPTION AUDIT TAB -->
+  <div class="tab-pane fade" id="audit" role="tabpanel">
+    <div class="card shadow">
+      <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>Redemption Audit Log</h5>
+      </div>
+      <div class="card-body">
+        <form method="GET" action="{{ url_for('admin.store_management') }}" class="mb-4">
+          <div class="row g-3">
+            <div class="col-md-3">
+              <label for="audit_student" class="form-label fw-bold">Student</label>
+              <input type="text" class="form-control form-control-sm" id="audit_student" name="audit_student" value="{{ audit_student or '' }}" placeholder="Search by name">
+            </div>
+            <div class="col-md-3">
+              <label for="audit_class" class="form-label fw-bold">Class</label>
+              <select class="form-select form-select-sm" id="audit_class" name="audit_class">
+                <option value="">All classes</option>
+                {% for cls in audit_class_options %}
+                  <option value="{{ cls }}" {% if audit_class == cls %}selected{% endif %}>{{ cls }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label for="audit_action" class="form-label fw-bold">Action</label>
+              <select class="form-select form-select-sm" id="audit_action" name="audit_action">
+                <option value="">All actions</option>
+                <option value="request" {% if audit_action == 'request' %}selected{% endif %}>Request</option>
+                <option value="approved" {% if audit_action == 'approved' %}selected{% endif %}>Approved</option>
+                <option value="rejected" {% if audit_action == 'rejected' %}selected{% endif %}>Rejected</option>
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label for="audit_start_date" class="form-label fw-bold">From</label>
+              <input type="date" class="form-control form-control-sm" id="audit_start_date" name="audit_start_date" value="{{ audit_start_date or '' }}">
+            </div>
+            <div class="col-md-2">
+              <label for="audit_end_date" class="form-label fw-bold">To</label>
+              <input type="date" class="form-control form-control-sm" id="audit_end_date" name="audit_end_date" value="{{ audit_end_date or '' }}">
+            </div>
+          </div>
+          <div class="mt-3">
+            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>Apply Filters</button>
+            <a href="{{ url_for('admin.store_management') }}#audit" class="btn btn-outline-secondary btn-sm">Clear</a>
+            <span class="ms-3 text-muted">Showing {{ audit_rows|length }} of {{ audit_total|default(0) }} row(s)</span>
+          </div>
+        </form>
+
+        <div class="table-responsive">
+          <table class="table table-striped table-sm">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Class</th>
+                <th>Date</th>
+                <th>Action</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if audit_rows %}
+                {% for row in audit_rows %}
+                <tr>
+                  <td>{{ row.student_display_name }}</td>
+                  <td>{{ row.class_display_label }}</td>
+                  <td>
+                    {% if row.timestamp %}
+                      <span class="local-timestamp" data-timestamp="{{ format_utc_iso(row.timestamp) }}"></span>
+                    {% else %}
+                      <span class="text-muted">N/A</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <span class="badge bg-secondary">{{ row.action|title }}</span>
+                    {% if row.source == 'inferred_legacy' %}
+                      <span class="badge bg-warning text-dark">Legacy</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ row.notes if row.notes else '—' }}</td>
+                </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td colspan="5" class="text-center text-muted">No audit records found.</td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if audit_total_pages > 1 %}
+        <nav aria-label="Audit pagination">
+          <ul class="pagination pagination-sm justify-content-center mt-3">
+            <li class="page-item {% if audit_page <= 1 %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('admin.store_management', audit_page=audit_page-1, audit_student=audit_student, audit_class=audit_class, audit_action=audit_action, audit_start_date=audit_start_date, audit_end_date=audit_end_date) }}#audit">Previous</a>
+            </li>
+            {% for p in range(1, audit_total_pages + 1) %}
+            <li class="page-item {% if p == audit_page %}active{% endif %}">
+              <a class="page-link" href="{{ url_for('admin.store_management', audit_page=p, audit_student=audit_student, audit_class=audit_class, audit_action=audit_action, audit_start_date=audit_start_date, audit_end_date=audit_end_date) }}#audit">{{ p }}</a>
+            </li>
+            {% endfor %}
+            <li class="page-item {% if audit_page >= audit_total_pages %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for('admin.store_management', audit_page=audit_page+1, audit_student=audit_student, audit_class=audit_class, audit_action=audit_action, audit_start_date=audit_start_date, audit_end_date=audit_end_date) }}#audit">Next</a>
+            </li>
+          </ul>
+        </nav>
+        {% endif %}
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Deactivate Item Modal -->
@@ -702,7 +881,7 @@
           <i class="bi bi-exclamation-triangle me-2"></i><strong>Warning!</strong> This action cannot be undone.
         </div>
         <p>Are you sure you want to permanently delete <strong id="modalDeleteItemName"></strong>?</p>
-        <p class="text-muted small">This will completely remove the item from the database. If students have purchased this item, deletion will be blocked to preserve history.</p>
+        <p class="text-muted small">This will completely remove the item from the database and delete related purchase records. Transaction history will remain in the ledger.</p>
       </div>
       <div class="modal-footer">
         <form id="deleteItemForm" method="POST">
@@ -816,6 +995,89 @@
     updateCollectiveGoalTypeVisibility();
   }
 
+  function getOrCreateToastContainer() {
+    let container = document.getElementById('flashToastContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'flashToastContainer';
+      container.className = 'position-fixed bottom-0 end-0 p-3';
+      container.style.zIndex = '1050';
+      document.body.appendChild(container);
+    }
+    return container;
+  }
+
+  function showToast(message, type = 'success') {
+    const container = getOrCreateToastContainer();
+    const toastEl = document.createElement('div');
+    toastEl.className = `toast align-items-center text-bg-${type} border-0`;
+    toastEl.setAttribute('role', 'alert');
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'd-flex';
+
+    const toastBody = document.createElement('div');
+    toastBody.className = 'toast-body';
+    toastBody.textContent = message;
+
+    const closeButton = document.createElement('button');
+    closeButton.type = 'button';
+    closeButton.className = 'btn-close btn-close-white me-2 m-auto';
+    closeButton.setAttribute('data-bs-dismiss', 'toast');
+    closeButton.setAttribute('aria-label', 'Close');
+
+    wrapper.appendChild(toastBody);
+    wrapper.appendChild(closeButton);
+    toastEl.appendChild(wrapper);
+    container.appendChild(toastEl);
+    new bootstrap.Toast(toastEl).show();
+  }
+
+  // Reject redemption requests from overview tab
+  document.querySelectorAll(".reject-redemption-btn").forEach(button => {
+    button.addEventListener("click", () => {
+      if (!confirm("Are you sure you want to reject this redemption? The item will be removed and the student will be refunded.")) {
+        return;
+      }
+
+      const studentItemId = button.dataset.studentItemId;
+      const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+      button.disabled = true;
+      const originalHtml = button.innerHTML;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+      fetch('/api/reject-redemption', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken
+        },
+        body: JSON.stringify({ student_item_id: studentItemId })
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === 'success') {
+          const row = button.closest('tr');
+          row.style.transition = 'opacity 0.3s';
+          row.style.opacity = '0';
+          setTimeout(() => row.remove(), 300);
+          showToast('Redemption rejected and refunded.', 'success');
+        } else {
+          showToast('Rejection failed: ' + data.message, 'danger');
+          button.disabled = false;
+          button.innerHTML = originalHtml;
+        }
+      })
+      .catch(error => {
+        console.error('Rejection error:', error);
+        showToast('An unexpected error occurred.', 'danger');
+        button.disabled = false;
+        button.innerHTML = originalHtml;
+      });
+    });
+  });
+
   // Approve redemption requests from overview tab
   document.querySelectorAll(".approve-redemption-btn").forEach(button => {
     button.addEventListener("click", () => {
@@ -842,35 +1104,16 @@
           row.style.transition = 'opacity 0.3s';
           row.style.opacity = '0';
           setTimeout(() => row.remove(), 300);
-
-          const toastContainer = document.getElementById('flashToastContainer') || (() => {
-            const container = document.createElement('div');
-            container.id = 'flashToastContainer';
-            container.className = 'position-fixed bottom-0 end-0 p-3';
-            container.style.zIndex = '1050';
-            document.body.appendChild(container);
-            return container;
-          })();
-
-          const toastEl = document.createElement('div');
-          toastEl.className = 'toast align-items-center text-bg-success border-0';
-          toastEl.setAttribute('role', 'alert');
-          toastEl.innerHTML = `
-            <div class=\"d-flex\">
-              <div class=\"toast-body\">Redemption approved successfully!</div>
-              <button type=\"button\" class=\"btn-close btn-close-white me-2 m-auto\" data-bs-dismiss=\"toast\"></button>
-            </div>`;
-          toastContainer.appendChild(toastEl);
-          new bootstrap.Toast(toastEl).show();
+          showToast('Redemption approved successfully!', 'success');
         } else {
-          alert('Approval failed: ' + data.message);
+          showToast('Approval failed: ' + data.message, 'danger');
           button.disabled = false;
           button.innerHTML = originalHtml;
         }
       })
       .catch(error => {
         console.error('Approval error:', error);
-        alert('An unexpected error occurred.');
+        showToast('An unexpected error occurred.', 'danger');
         button.disabled = false;
         button.innerHTML = originalHtml;
       });

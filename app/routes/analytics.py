@@ -1,7 +1,7 @@
 """
 Analytics routes for teachers.
 
-Implements the analytics dashboard per Class-economy-analytics-specs.md.
+Implements the analytics dashboard per analytics-specification.md.
 
 Key Principles:
 - System health metrics always visible (5-second readability)
@@ -12,6 +12,7 @@ Key Principles:
 """
 
 from datetime import datetime, timedelta, timezone
+from app.utils.time import utc_now
 from flask import Blueprint, session, jsonify, request, flash, redirect, url_for
 from sqlalchemy import desc
 
@@ -165,7 +166,7 @@ def get_time_window(
     Returns:
         Tuple of (window_start, window_end)
     """
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     anchored_end = _anchor_window_end(now)
     
     if window_type == 'week':
@@ -251,7 +252,7 @@ def dashboard():
     ).order_by(AnalyticsEvent.event_date.desc()).limit(10).all()
     
     # Get teacher info for display
-    teacher = Admin.query.get(teacher_id)
+    teacher = db.session.get(Admin, teacher_id)
     current_class = next((c for c in available_classes if c['join_code'] == join_code), None)
     
     return render_template(
@@ -493,7 +494,7 @@ def student_drill_down(student_id):
         enrollment_start = student.created_at
 
     if enrollment_start is not None:
-        now_utc = datetime.now(timezone.utc)
+        now_utc = utc_now()
         # Ensure timezone-aware arithmetic
         if getattr(enrollment_start, "tzinfo", None) is None:
             enrollment_start_utc = enrollment_start.replace(tzinfo=timezone.utc)
@@ -528,7 +529,7 @@ def student_drill_down(student_id):
         deviation = 0
     
     # Get recent transactions (last 30 days)
-    thirty_days_ago = datetime.now(timezone.utc) - timedelta(days=30)
+    thirty_days_ago = utc_now() - timedelta(days=30)
     recent_transactions = Transaction.query.filter(
         Transaction.student_id == student_id,
         Transaction.join_code == join_code,

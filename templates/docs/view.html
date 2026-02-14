@@ -59,22 +59,22 @@
                         <!-- Diagnostics / User Guides -->
                         <div class="accordion-item">
                             <h2 class="accordion-header">
-                                <button class="accordion-button {% if not doc_path.startswith('diagnostics') %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#diagnosticsCollapse" aria-expanded="{% if doc_path.startswith('diagnostics') %}true{% else %}false{% endif %}">
+                                <button class="accordion-button {% if not doc_path.startswith('user-guides/diagnostics') %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#diagnosticsCollapse" aria-expanded="{% if doc_path.startswith('user-guides/diagnostics') %}true{% else %}false{% endif %}">
                                     <span class="material-symbols-outlined me-2">quick_reference</span>
                                     Diagnostics
                                 </button>
                             </h2>
-                            <div id="diagnosticsCollapse" class="accordion-collapse collapse {% if doc_path.startswith('diagnostics') %}show{% endif %}">
+                            <div id="diagnosticsCollapse" class="accordion-collapse collapse {% if doc_path.startswith('user-guides/diagnostics') %}show{% endif %}">
                                 <div class="accordion-body p-0">
                                     <ul class="nav flex-column">
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path.startswith('diagnostics/student') %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='diagnostics/student') }}">
+                                            <a class="nav-link {% if doc_path.startswith('user-guides/diagnostics/student') %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/diagnostics/student') }}">
                                                 <span class="material-symbols-outlined me-2" style="font-size: 1rem;">school</span>
                                                 For Students
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path.startswith('diagnostics/teacher') %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='diagnostics/teacher') }}">
+                                            <a class="nav-link {% if doc_path.startswith('user-guides/diagnostics/teacher') %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/diagnostics/teacher') }}">
                                                 <span class="material-symbols-outlined me-2" style="font-size: 1rem;">person</span>
                                                 For Teachers
                                             </a>
@@ -87,28 +87,28 @@
                         <!-- Feature Guides -->
                         <div class="accordion-item">
                             <h2 class="accordion-header">
-                                <button class="accordion-button {% if not (doc_path.startswith('features') or doc_path == 'user-guides/economy_guide') %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#featuresCollapse" aria-expanded="{% if doc_path.startswith('features') or doc_path == 'user-guides/economy_guide' %}true{% else %}false{% endif %}">
+                                <button class="accordion-button {% if not (doc_path.startswith('user-guides/features') or doc_path == 'user-guides/economy_guide') %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#featuresCollapse" aria-expanded="{% if doc_path.startswith('user-guides/features') or doc_path == 'user-guides/economy_guide' %}true{% else %}false{% endif %}">
                                     <span class="material-symbols-outlined me-2">auto_awesome</span>
                                     Feature Guides
                                 </button>
                             </h2>
-                            <div id="featuresCollapse" class="accordion-collapse collapse {% if doc_path.startswith('features') or doc_path == 'user-guides/economy_guide' %}show{% endif %}">
+                            <div id="featuresCollapse" class="accordion-collapse collapse {% if doc_path.startswith('user-guides/features') or doc_path == 'user-guides/economy_guide' %}show{% endif %}">
                                 <div class="accordion-body p-0">
                                     <ul class="nav flex-column">
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'features/payroll/running-payroll' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='features/payroll/running-payroll') }}">
+                                            <a class="nav-link {% if doc_path == 'user-guides/features/payroll/running-payroll' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/payroll/running-payroll') }}">
                                                 <span class="material-symbols-outlined me-2" style="font-size: 1rem;">receipt_long</span>
                                                 Payroll
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'features/store/creating-items' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='features/store/creating-items') }}">
+                                            <a class="nav-link {% if doc_path == 'user-guides/features/store/creating-items' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/store/creating-items') }}">
                                                 <span class="material-symbols-outlined me-2" style="font-size: 1rem;">store</span>
                                                 Store & Items
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'features/banking/transferring-money' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='features/banking/transferring-money') }}">
+                                            <a class="nav-link {% if doc_path == 'user-guides/features/banking/transferring-money' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='user-guides/features/banking/transferring-money') }}">
                                                 <span class="material-symbols-outlined me-2" style="font-size: 1rem;">account_balance</span>
                                                 Banking & Transfers
                                             </a>
@@ -146,7 +146,7 @@
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'technical-reference/ECONOMY_SPECIFICATION' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/ECONOMY_SPECIFICATION') }}">
+                                            <a class="nav-link {% if doc_path == 'technical-reference/economy-specification' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='technical-reference/economy-specification') }}">
                                                 Economy Spec
                                             </a>
                                         </li>
@@ -163,12 +163,12 @@
                         <!-- Reference & Project Info -->
                         <div class="accordion-item">
                             <h2 class="accordion-header">
-                                <button class="accordion-button {% if not (doc_path in ['CHANGELOG', 'Deployment_Guide', 'project/PROJECT_HISTORY'] or doc_path.startswith('development/') or doc_path.startswith('operations/')) %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#projectCollapse" aria-expanded="{% if doc_path in ['CHANGELOG', 'Deployment_Guide', 'project/PROJECT_HISTORY'] or doc_path.startswith('development/') or doc_path.startswith('operations/') %}true{% else %}false{% endif %}">
+                                <button class="accordion-button {% if not (doc_path in ['CHANGELOG', 'operations/Deployment_Guide'] or doc_path.startswith('development/') or doc_path.startswith('operations/')) %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#projectCollapse" aria-expanded="{% if doc_path in ['CHANGELOG', 'operations/Deployment_Guide'] or doc_path.startswith('development/') or doc_path.startswith('operations/') %}true{% else %}false{% endif %}">
                                     <span class="material-symbols-outlined me-2">folder</span>
                                     Reference & Project
                                 </button>
                             </h2>
-                            <div id="projectCollapse" class="accordion-collapse collapse {% if doc_path in ['CHANGELOG', 'Deployment_Guide', 'project/PROJECT_HISTORY'] or doc_path.startswith('development/') or doc_path.startswith('operations/') %}show{% endif %}">
+                            <div id="projectCollapse" class="accordion-collapse collapse {% if doc_path in ['CHANGELOG', 'operations/Deployment_Guide'] or doc_path.startswith('development/') or doc_path.startswith('operations/') %}show{% endif %}">
                                 <div class="accordion-body p-0">
                                     <ul class="nav flex-column">
                                         <li class="nav-item">
@@ -177,17 +177,17 @@
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'Deployment_Guide' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='Deployment_Guide') }}">
+                                            <a class="nav-link {% if doc_path == 'operations/Deployment_Guide' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='operations/Deployment_Guide') }}">
                                                 Deployment
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'project/PROJECT_HISTORY' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='project/PROJECT_HISTORY') }}">
+                                            <a class="nav-link" href="https://github.com/timwonderer/classroom-economy/blob/main/PROJECT_HISTORY.md" target="_blank" rel="noopener">
                                                 Project History
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'development/DEVELOPMENT' %}active{% endif %}" href="{{ url_for('docs.view_doc', doc_path='development/DEVELOPMENT') }}">
+                                            <a class="nav-link" href="https://github.com/timwonderer/classroom-economy/blob/main/DEVELOPMENT.md" target="_blank" rel="noopener">
                                                 Development
                                             </a>
                                         </li>

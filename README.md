@@ -2,7 +2,7 @@
 
 An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.
 
-**Version:** 1.7.1
+**Version:** 1.8.0
 
 ---
 
@@ -12,7 +12,7 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Version 1.7.1 Released! This maintenance release fixes critical Decimal calculation errors in student dashboards, interest calculations, and analytics. Major features from v1.7.0 include a comprehensive analytics dashboard with system health metrics, flexible rent itemization with store integration, enhanced mobile navigation with PWA support, and visual privilege badges for rent items. See [RELEASE_NOTES_v1.7.1.md](docs/archive/releases/RELEASE_NOTES_v1.7.1.md) for full details.
+**Project Status:** Version 1.8.0 Released! This release adds rent item types (privilege, per-use, hall pass), coverage period tracking for rent payments, and stability fixes for rent/store/insurance flows. See [RELEASE_NOTES_v1.8.0.md](docs/archive/releases/RELEASE_NOTES_v1.8.0.md) for full details.
 
 ---
 
@@ -169,7 +169,7 @@ An interactive banking and classroom management platform for teaching students a
 - **[Architecture Guide](docs/technical-reference/architecture.md)** — System design and patterns
 - **[Database Schema](docs/technical-reference/database_schema.md)** — Up-to-date database reference
 - **[API Reference](docs/technical-reference/api_reference.md)** — REST API documentation
-- **[Development Priorities](docs/development/DEVELOPMENT.md)** — Current priorities, roadmap, and tasks
+- **[Development Priorities](DEVELOPMENT.md)** — Current priorities, roadmap, and tasks
 - **[Changelog](CHANGELOG.md)** — Version history and notable changes
 
 ### Deployment & Operations
@@ -266,7 +266,7 @@ python scripts/seed_dummy_students.py # Seed test data
 
 ## Roadmap
 
-Active development priorities and the path to version 1.0 are tracked in [docs/development/DEVELOPMENT.md](docs/development/DEVELOPMENT.md).
+Active development priorities and the path to version 1.0 are tracked in [DEVELOPMENT.md](DEVELOPMENT.md).
 
 **Version 1.0 Status:** All critical blockers (P0 and P1) have been resolved! The platform is ready for staging deployment and final validation before production release.
 
@@ -288,7 +288,7 @@ We welcome contributions! Please see [.github/CONTRIBUTING.md](.github/CONTRIBUT
 
 **Before contributing:**
 1. Review the [Architecture Guide](docs/technical-reference/architecture.md)
-2. Check [docs/development/DEVELOPMENT.md](docs/development/DEVELOPMENT.md) for current priorities
+2. Check [DEVELOPMENT.md](DEVELOPMENT.md) for current priorities
 3. Ensure all tests pass
 4. Follow the existing code style
 
@@ -314,11 +314,11 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 **Full License:** See [LICENSE](LICENSE) for complete terms
 
-**Commercial Use Policy:** See [COMMERCIAL.md](COMMERCIAL.md) for detailed guidance on permitted and prohibited commercial activities
+**Commercial Use Policy:** See [docs/user-guides/legal/commercial.md](docs/user-guides/legal/commercial.md) for detailed guidance on permitted and prohibited commercial activities
 
-**Third-Party Attributions:** See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for open-source dependencies and services
+**Third-Party Attributions:** See [docs/user-guides/legal/third-party-notices.md](docs/user-guides/legal/third-party-notices.md) for open-source dependencies and services
 
-**Project Philosophy:** See [ATTRIBUTION.md](ATTRIBUTION.md) for the project's ethical foundations
+**Project Philosophy:** See [docs/user-guides/legal/attribution.md](docs/user-guides/legal/attribution.md) for the project's ethical foundations
 
 ---
 
@@ -334,4 +334,4 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 Built for educators and students to make learning about finance engaging and practical.
 
-**Last Updated:** 2026-01-09
+**Last Updated:** 2026-02-09

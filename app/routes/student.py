@@ -19,6 +19,7 @@ from sqlalchemy import or_, func, select, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
 import pytz
+from dateutil.relativedelta import relativedelta
 
 from app.extensions import db, limiter
 from app.models import (
@@ -45,19 +46,14 @@ from app.utils.help_content import HELP_ARTICLES
 from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
 from app.attendance import get_all_block_statuses
 from app.payroll import get_pay_rate_for_block
+from app.utils.time import utc_now, ensure_utc, normalize_for_db
 
 # Create blueprint
 student_bp = Blueprint('student', __name__, url_prefix='/student')
 
 # -------------------- DATETIME HELPERS --------------------
 
-def normalize_to_utc(dt):
-    """Ensure datetime objects are timezone-aware in UTC for safe comparisons."""
-    if not dt:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
+
 
 
 # -------------------- PERIOD SELECTION HELPERS --------------------
@@ -424,7 +420,7 @@ def complete_profile():
             year = int(dob_year)
             
             # Validate ranges
-            current_year = datetime.now().year
+            current_year = utc_now().year
             if not (1 <= month <= 12):
                 flash("Invalid month.", "error")
                 return redirect(url_for('student.complete_profile'))
@@ -455,7 +451,7 @@ def complete_profile():
             month_names = ['', 'January', 'February', 'March', 'April', 'May', 'June',
                           'July', 'August', 'September', 'October', 'November', 'December']
             dob_display = f"{month_names[month]} {day}, {year}"
-            current_year = datetime.now().year
+            current_year = utc_now().year
             max_birth_year = current_year - 5
             
             return render_template(
@@ -529,7 +525,7 @@ def complete_profile():
                 return redirect(url_for('student.complete_profile'))
     
     # GET request - show form
-    current_year = datetime.now().year
+    current_year = utc_now().year
     max_birth_year = current_year - 5  # Students should be at least 5 years old
     
     return render_template(
@@ -674,7 +670,7 @@ def claim_account():
             # Student already exists - link this seat to existing student
             matched_seat.student_id = existing_student.id
             matched_seat.is_claimed = True
-            matched_seat.claimed_at = datetime.now(timezone.utc)
+            matched_seat.claimed_at = utc_now()
 
             # Create StudentTeacher link
             existing_link = StudentTeacher.query.filter_by(
@@ -736,7 +732,7 @@ def claim_account():
                 # Link this seat to the existing student
                 matched_seat.student_id = existing_by_hash.id
                 matched_seat.is_claimed = True
-                matched_seat.claimed_at = datetime.now(timezone.utc)
+                matched_seat.claimed_at = utc_now()
 
                 # Create StudentTeacher link if not exists
                 existing_link = StudentTeacher.query.filter_by(
@@ -774,7 +770,7 @@ def claim_account():
         # Link seat to student
         matched_seat.student_id = new_student.id
         matched_seat.is_claimed = True
-        matched_seat.claimed_at = datetime.now(timezone.utc)
+        matched_seat.claimed_at = utc_now()
 
         # Create StudentTeacher link
         link = StudentTeacher(
@@ -803,7 +799,7 @@ def create_username():
     if not student_id:
         flash("Please claim your account first.", "setup")
         return redirect(url_for('student.claim_account'))
-    student = Student.query.get(student_id)
+    student = db.session.get(Student, student_id)
     if not student or student.has_completed_setup:
         flash("Invalid or already setup account.", "setup")
         return redirect(url_for('student.login'))
@@ -848,7 +844,7 @@ def setup_pin_passphrase():
     if not student_id or not username:
         flash("Please complete previous steps.", "setup")
         return redirect(url_for('student.claim_account'))
-    student = Student.query.get(student_id)
+    student = db.session.get(Student, student_id)
     if not student or student.has_completed_setup:
         flash("Invalid or already setup account.", "setup")
         return redirect(url_for('student.login'))
@@ -863,6 +859,11 @@ def setup_pin_passphrase():
         student.pin_hash = generate_password_hash(pin)
         student.passphrase_hash = generate_password_hash(passphrase)
         student.has_completed_setup = True
+        if student.recovery_status == 'to_be_claimed':
+            # Complete recovery only after credentials are successfully re-established.
+            student.reset_code = None
+            student.reset_code_expires_at = None
+            student.recovery_status = 'active'
         db.session.commit()
         # Clear session onboarding keys
         session.pop('claimed_student_id', None)
@@ -1054,7 +1055,7 @@ def add_class():
         # Link the seat to the existing student
         matched_seat.student_id = student.id
         matched_seat.is_claimed = True
-        matched_seat.claimed_at = datetime.now(timezone.utc)
+        matched_seat.claimed_at = utc_now()
 
         # Create StudentTeacher link if it doesn't exist
         if not existing_link:
@@ -1198,8 +1199,9 @@ def dashboard():
     rent_status = None
     rent_settings = get_rent_settings_for_context(context)
     if rent_settings and rent_settings.is_enabled and student.is_rent_enabled:
-        now = datetime.now()
+        now = utc_now()
         due_date, grace_end_date = _calculate_rent_deadlines(rent_settings, now)
+        coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
 
         preview_start_date = None
         if rent_settings.bill_preview_enabled and rent_settings.bill_preview_days:
@@ -1210,20 +1212,29 @@ def dashboard():
         if preview_start_date and now >= preview_start_date:
             rent_is_active = True
             is_preview_period = now < due_date
-        elif now >= due_date:
+        elif coverage_due_date and now >= coverage_due_date:
             rent_is_active = True
 
         rent_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
-        current_month = now.month
-        current_year = now.year
+
+        # Calculate coverage period for pre-paid system
+        if is_preview_period:
+            coverage_month = due_date.month
+            coverage_year = due_date.year
+            grace_end_date_for_status = grace_end_date
+        else:
+            coverage_month = coverage_due_date.month if coverage_due_date else due_date.month
+            coverage_year = coverage_due_date.year if coverage_due_date else due_date.year
+            grace_end_date_for_status = (coverage_due_date + timedelta(days=rent_settings.grace_period_days)) if coverage_due_date else grace_end_date
 
         all_paid = True
         for period in rent_blocks:
-            all_payments_for_period = RentPayment.query.filter_by(
-                student_id=student.id,
-                period=period,
-                period_month=current_month,
-                period_year=current_year
+            all_payments_for_period = RentPayment.query.filter(
+                RentPayment.student_id == student.id,
+                RentPayment.period == period,
+                RentPayment.coverage_month == coverage_month,
+                RentPayment.coverage_year == coverage_year,
+                or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
             ).all()
 
             payments = []
@@ -1240,7 +1251,10 @@ def dashboard():
                     payments.append(payment)
 
             total_paid = sum(p.amount_paid for p in payments) if payments else Decimal('0.00')
-            late_fee = rent_settings.late_fee if rent_is_active and now > grace_end_date else Decimal('0.00')
+            paid_by_grace = _total_paid_by_grace(payments, grace_end_date_for_status)
+            late_fee = Decimal('0.00')
+            if rent_is_active and now > grace_end_date_for_status and paid_by_grace < rent_settings.rent_amount:
+                late_fee = rent_settings.late_fee
             total_due = rent_settings.rent_amount + late_fee if rent_is_active else Decimal('0.00')
             is_paid = total_paid >= total_due if rent_is_active else False
 
@@ -1255,7 +1269,7 @@ def dashboard():
         }
 
     tz = pytz.timezone('America/Los_Angeles')
-    local_now = datetime.now(tz)
+    local_now = utc_now().astimezone(tz)
     # --- DASHBOARD DEBUG LOGGING ---
     current_app.logger.info(f"DASHBOARD DEBUG: Student {student.id} - Block states:")
     for blk, blk_state in period_states.items():
@@ -1268,7 +1282,7 @@ def dashboard():
     # --- Calculate remaining session time for frontend timer ---
     login_time = datetime.fromisoformat(session['login_time'])
     expiry_time = login_time + timedelta(minutes=SESSION_TIMEOUT_MINUTES)
-    session_remaining_seconds = max(0, int((expiry_time - datetime.now(timezone.utc)).total_seconds()))
+    session_remaining_seconds = max(0, int((expiry_time - utc_now()).total_seconds()))
 
     # --- Get feature settings for this student ---
     feature_settings = get_feature_settings_for_student()
@@ -1282,21 +1296,16 @@ def dashboard():
         StudentRecoveryCode.dismissed == False,
         StudentRecoveryCode.code_hash == None,  # Not yet verified
         RecoveryRequest.status == 'pending',
-        RecoveryRequest.expires_at > datetime.now(timezone.utc)
+        RecoveryRequest.expires_at > utc_now()
     ).first()
 
     # --- Calculate weekly/monthly analytics ---
     from app.models import TapEvent
-    now_utc = datetime.now(timezone.utc)
+    now_utc = utc_now()
     week_start = now_utc - timedelta(days=now_utc.weekday())  # Monday of current week
     month_start = now_utc.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-    def _as_utc(ts):
-        if not ts:
-            return None
-        if ts.tzinfo is None:
-            return ts.replace(tzinfo=timezone.utc)
-        return ts.astimezone(timezone.utc)
+
 
     # Days tapped in this week
     tap_events_this_week = TapEvent.query.filter(
@@ -1307,7 +1316,7 @@ def dashboard():
     ).all()
 
     # Calculate unique days and total minutes
-    unique_days_tapped = len(set(_as_utc(event.timestamp).date() for event in tap_events_this_week if event.status == 'active'))
+    unique_days_tapped = len(set(ensure_utc(event.timestamp).date() for event in tap_events_this_week if event.status == 'active'))
 
     # Calculate total minutes this week
     total_minutes_this_week = 0
@@ -1315,7 +1324,7 @@ def dashboard():
 
     for event in sorted(tap_events_this_week, key=lambda e: e.timestamp):
         period = event.period
-        event_ts = _as_utc(event.timestamp)
+        event_ts = ensure_utc(event.timestamp)
         if event.status == 'active':
             active_sessions[period] = event_ts
         elif event.status == 'inactive' and period in active_sessions:
@@ -1329,7 +1338,7 @@ def dashboard():
         total_minutes_this_week += duration
 
     def _occurred_after(ts, start):
-        ts_utc = _as_utc(ts)
+        ts_utc = ensure_utc(ts)
         return ts_utc is not None and ts_utc >= start
 
     # Earnings this week/month
@@ -1361,13 +1370,12 @@ def dashboard():
     # Get active announcements for this student
     # Include: class-specific, system-wide, all students, and teacher's all classes
     from app.models import Announcement
-    from sqlalchemy import or_
 
     announcements = Announcement.query.filter(
         Announcement.is_active.is_(True),
         or_(
             Announcement.expires_at.is_(None),
-            Announcement.expires_at > datetime.now(timezone.utc)
+            Announcement.expires_at > utc_now()
         ),
         or_(
             # Class-specific announcements
@@ -1489,7 +1497,7 @@ def payroll():
             ("2 hours", round(pay_rate_per_minute * 120, 2)),
             ("4 hours", round(pay_rate_per_minute * 240, 2)),
         ],
-        now=datetime.now(timezone.utc)
+        now=utc_now()
     )
 
 
@@ -1703,16 +1711,11 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
     """
     from app.models import BankingSettings, _quantize_currency
 
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     this_month = now.month
     this_year = now.year
 
-    def _as_utc(dt):
-        if dt is None:
-            return None
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
+
 
     # Get banking settings for current teacher
     teacher_id = get_current_teacher_id()
@@ -1727,7 +1730,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
 
     # Check if interest was already applied this month
     for tx in student.transactions:
-        tx_timestamp = _as_utc(tx.timestamp)
+        tx_timestamp = ensure_utc(tx.timestamp)
         if (
             tx.account_type == 'savings'
             and tx.description == "Monthly Savings Interest"
@@ -1740,7 +1743,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
     for tx in student.transactions:
         if tx.account_type != 'savings' or "Transfer" not in (tx.description or ""):
             continue
-        tx_timestamp = _as_utc(tx.timestamp)
+        tx_timestamp = ensure_utc(tx.timestamp)
         if tx_timestamp and tx_timestamp.date() == now.date():
             return
 
@@ -1776,7 +1779,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
             # Exclude interest transactions from principal calculation
             if tx.type == 'Interest' or 'Interest' in (tx.description or ''):
                 continue
-            available_at = _as_utc(tx.date_funds_available)
+            available_at = ensure_utc(tx.date_funds_available)
             if available_at and (now - available_at).days >= 30:
                 eligible_balance += _quantize_currency(tx.amount)
 
@@ -1816,13 +1819,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
 @login_required
 def insurance_marketplace():
     """Insurance marketplace - browse and manage policies."""
-    def normalize_to_utc(dt):
-        """Ensure datetime objects are timezone-aware in UTC for safe comparisons."""
-        if not dt:
-            return None
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
+
 
     # Check if insurance feature is enabled
     if not is_feature_enabled('insurance'):
@@ -1838,7 +1835,7 @@ def insurance_marketplace():
         return redirect(url_for('student.dashboard'))
 
     teacher_id = context['teacher_id']
-    now_utc = datetime.now(timezone.utc)
+    now_utc = utc_now()
 
     # FIX: Get student's active policies scoped to current class only
     my_policies = StudentInsurance.query.join(
@@ -1880,7 +1877,7 @@ def insurance_marketplace():
             ).order_by(StudentInsurance.cancel_date.desc()).first()
 
             if cancelled and cancelled.cancel_date:
-                cancel_dt = normalize_to_utc(cancelled.cancel_date)
+                cancel_dt = ensure_utc(cancelled.cancel_date)
                 days_since_cancel = (now_utc - cancel_dt).days
                 if days_since_cancel < policy.repurchase_wait_days:
                     can_purchase[policy.id] = False
@@ -1916,8 +1913,8 @@ def insurance_marketplace():
     enrolled_tiers = set()
     for enrollment in my_policies:
         # Normalize dates for safe comparisons in templates
-        enrollment.coverage_start_date = normalize_to_utc(enrollment.coverage_start_date)
-        enrollment.cancel_date = normalize_to_utc(enrollment.cancel_date)
+        enrollment.coverage_start_date = ensure_utc(enrollment.coverage_start_date)
+        enrollment.cancel_date = ensure_utc(enrollment.cancel_date)
         if enrollment.policy.tier_category_id:
             enrolled_tiers.add(enrollment.policy.tier_category_id)
 
@@ -1949,7 +1946,7 @@ def purchase_insurance(policy_id):
     teacher_id = context['teacher_id']
     membership_id = context.get('membership_id')
 
-    policy = InsurancePolicy.query.get_or_404(policy_id)
+    policy = db.get_or_404(InsurancePolicy, policy_id)
 
     # FIX: Verify policy belongs to CURRENT teacher only
     if policy.teacher_id != teacher_id:
@@ -1982,7 +1979,7 @@ def purchase_insurance(policy_id):
 
         # Check for cooldown period (temporary restriction)
         if policy.enable_repurchase_cooldown and cancelled.cancel_date:
-            days_since_cancel = (datetime.now(timezone.utc) - cancelled.cancel_date).days
+            days_since_cancel = (utc_now() - cancelled.cancel_date).days
             if days_since_cancel < policy.repurchase_wait_days:
                 flash(f"You must wait {policy.repurchase_wait_days - days_since_cancel} more days before repurchasing this policy.", "warning")
                 return redirect(url_for('student.student_insurance'))
@@ -2047,10 +2044,10 @@ def purchase_insurance(policy_id):
         student_id=student.id,
         policy_id=policy.id,
         status='active',
-        purchase_date=datetime.now(timezone.utc),
-        last_payment_date=datetime.now(timezone.utc),
-        next_payment_due=datetime.now(timezone.utc) + timedelta(days=30),  # Simplified
-        coverage_start_date=datetime.now(timezone.utc) + timedelta(days=policy.waiting_period_days),
+        purchase_date=utc_now(),
+        last_payment_date=utc_now(),
+        next_payment_due=utc_now() + timedelta(days=30),  # Simplified
+        coverage_start_date=utc_now() + timedelta(days=policy.waiting_period_days),
         payment_current=True
     )
     db.session.add(enrollment)
@@ -2103,7 +2100,7 @@ def purchase_insurance(policy_id):
 def cancel_insurance(enrollment_id):
     """Cancel insurance policy."""
     student = get_logged_in_student()
-    enrollment = StudentInsurance.query.get_or_404(enrollment_id)
+    enrollment = db.get_or_404(StudentInsurance, enrollment_id)
 
     # Verify ownership
     if enrollment.student_id != student.id:
@@ -2111,7 +2108,7 @@ def cancel_insurance(enrollment_id):
         return redirect(url_for('student.student_insurance'))
 
     enrollment.status = 'cancelled'
-    enrollment.cancel_date = datetime.now(timezone.utc)
+    enrollment.cancel_date = utc_now()
 
     db.session.commit()
     flash(f"Insurance policy '{enrollment.policy.title}' has been cancelled.", "info")
@@ -2138,13 +2135,13 @@ def file_claim(policy_id):
     policy = enrollment.policy
     form = InsuranceClaimForm()
     if policy.claim_type == 'transaction_monetary' and not form.incident_date.data:
-        form.incident_date.data = datetime.now(timezone.utc).date()
+        form.incident_date.data = utc_now().date()
 
     # Validation errors
     errors = []
 
     def _get_period_bounds():
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         if policy.max_claims_period == 'year':
             return (
                 now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
@@ -2166,9 +2163,9 @@ def file_claim(policy_id):
         return period_start, period_end
 
     # Normalize coverage dates for safe comparisons
-    enrollment.coverage_start_date = normalize_to_utc(enrollment.coverage_start_date)
-    enrollment.cancel_date = normalize_to_utc(enrollment.cancel_date)
-    now_utc = datetime.now(timezone.utc)
+    enrollment.coverage_start_date = ensure_utc(enrollment.coverage_start_date)
+    enrollment.cancel_date = ensure_utc(enrollment.cancel_date)
+    now_utc = utc_now()
 
     # Check if coverage has started
     if not enrollment.coverage_start_date or enrollment.coverage_start_date > now_utc:
@@ -2269,13 +2266,13 @@ def file_claim(policy_id):
                 flash("This transaction already has a claim. Each transaction can only be claimed once.", "danger")
                 return redirect(url_for('student.file_claim', policy_id=policy_id))
 
-            incident_date_value = normalize_to_utc(selected_transaction.timestamp)
+            incident_date_value = ensure_utc(selected_transaction.timestamp)
             claim_amount_value = abs(selected_transaction.amount)
             transaction_id_value = selected_transaction.id
 
             days_since_incident = (now_utc - incident_date_value).days
         else:
-            incident_date_value = normalize_to_utc(datetime.combine(form.incident_date.data, datetime.min.time()))
+            incident_date_value = ensure_utc(datetime.combine(form.incident_date.data, datetime.min.time()))
             days_since_incident = (now_utc - incident_date_value).days
 
         if policy.claim_type == 'non_monetary':
@@ -2350,7 +2347,7 @@ def file_claim(policy_id):
 def view_policy(enrollment_id):
     """View policy details and claims history."""
     student = get_logged_in_student()
-    enrollment = StudentInsurance.query.get_or_404(enrollment_id)
+    enrollment = db.get_or_404(StudentInsurance, enrollment_id)
 
     # Verify ownership
     if enrollment.student_id != student.id:
@@ -2363,9 +2360,9 @@ def view_policy(enrollment_id):
     ).all()
 
     # Normalize dates for safe comparisons in template
-    enrollment.coverage_start_date = normalize_to_utc(enrollment.coverage_start_date)
-    enrollment.cancel_date = normalize_to_utc(enrollment.cancel_date)
-    now_utc = datetime.now(timezone.utc)
+    enrollment.coverage_start_date = ensure_utc(enrollment.coverage_start_date)
+    enrollment.cancel_date = ensure_utc(enrollment.cancel_date)
+    now_utc = utc_now()
 
     return render_template('student_view_policy.html',
                           student=student,
@@ -2396,11 +2393,12 @@ def shop():
 
     teacher_id = context['teacher_id']
 
-    now = datetime.now(timezone.utc)
+    now = utc_now()
+    now_db = normalize_for_db(now)
     items = StoreItem.query.filter(
         StoreItem.teacher_id == teacher_id,
         StoreItem.is_active == True,
-        or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now)
+        or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now_db)
     ).order_by(StoreItem.name).all()
 
     # FIX: Fetch student's purchased items scoped to current teacher's store
@@ -2417,28 +2415,88 @@ def shop():
     current_block = context.get('block')
     has_paid_rent = False
     per_period_rent_item_ids = set()
+    rent_item_type_by_store_id = {}
 
     if teacher_id and join_code and current_block:
         rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
         if rent_settings and rent_settings.is_enabled:
-            now = datetime.now(timezone.utc)
-            has_paid_rent = RentPayment.query.filter(
-                RentPayment.student_id == student.id,
-                RentPayment.period == current_block,
-                RentPayment.period_month == now.month,
-                RentPayment.period_year == now.year,
-                db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
-            ).first() is not None
+            now = utc_now()
 
-            # Get all per-period rent items
+            # Calculate current coverage period (pre-paid system)
+            coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
+
+            
+            if coverage_due_date:
+                coverage_month = coverage_due_date.month
+                coverage_year = coverage_due_date.year
+
+                # Check if current coverage period is fully paid (exclude voided transactions)
+                coverage_payments = RentPayment.query.filter(
+                    RentPayment.student_id == student.id,
+                    RentPayment.period == current_block,
+                    RentPayment.coverage_month == coverage_month,
+                    RentPayment.coverage_year == coverage_year,
+                    db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                ).all()
+
+                valid_payments = _filter_valid_rent_payments(
+                    coverage_payments,
+                    student.id,
+                    join_code
+                )
+
+                if valid_payments:
+                    total_paid = sum(p.amount_paid for p in valid_payments)
+                    grace_for_coverage = coverage_due_date + timedelta(days=rent_settings.grace_period_days)
+                    late_fee_applies = now > grace_for_coverage
+                    required = rent_settings.rent_amount + (rent_settings.late_fee if late_fee_applies else Decimal('0'))
+                    has_paid_rent = total_paid >= required
+
+            rent_store_items = RentItem.query.filter(
+                RentItem.rent_setting_id == rent_settings.id,
+                RentItem.is_available_in_store == True,
+                RentItem.store_item_id.isnot(None),
+            ).all()
+            rent_item_type_by_store_id = {
+                rent_item.store_item_id: rent_item.rent_item_type
+                for rent_item in rent_store_items
+                if rent_item.store_item_id
+            }
+
+            # Get privilege-type per-period rent items (only these are included/disabled).
             per_period_items = RentItem.query.filter_by(
                 rent_setting_id=rent_settings.id,
-                purchase_duration='per_period',
+                rent_item_type='privilege',
                 is_available_in_store=True
             ).all()
 
-            # Collect store item IDs
+            # Collect store item IDs (only privilege items get the "Included in your rent!" badge)
             per_period_rent_item_ids = {item.store_item_id for item in per_period_items if item.store_item_id}
+
+    # Build free uses remaining map for rent-linked per-use items
+    rent_free_uses = {}  # {store_item_id: uses_remaining or -1 for unlimited}
+    if student:
+        rent_linked_items_query = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.uses_remaining != None,
+            db.or_(
+                StudentItem.uses_remaining > 0,
+                StudentItem.uses_remaining == -1
+            ),
+            db.or_(
+                StudentItem.expiry_date.is_(None),
+                StudentItem.expiry_date > utc_now()
+            )
+        )
+        if join_code:
+            rent_linked_items_query = rent_linked_items_query.filter(StudentItem.join_code == join_code)
+        else:
+            rent_linked_items_query = rent_linked_items_query.filter(StudentItem.join_code.is_(None))
+
+        rent_linked_items = rent_linked_items_query.all()
+        for si in rent_linked_items:
+            if si.store_item_id:
+                rent_free_uses[si.store_item_id] = si.uses_remaining
 
     # Calculate class size for collective goals (count claimed seats in this class)
     from app.models import TeacherBlock
@@ -2449,9 +2507,47 @@ def shop():
             is_claimed=True
         ).count()
 
+    collective_progress = {}
+    collective_items = [item for item in items if item.item_type == 'collective']
+    collective_item_ids = [item.id for item in collective_items]
+    if collective_item_ids and join_code:
+        progress_rows = (
+            db.session.query(
+                StudentItem.store_item_id,
+                db.func.count(db.distinct(StudentItem.student_id)).label('student_count'),
+            )
+            .filter(
+                StudentItem.store_item_id.in_(collective_item_ids),
+                StudentItem.join_code == join_code,
+                StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
+            )
+            .group_by(StudentItem.store_item_id)
+            .all()
+        )
+        progress_counts = {row.store_item_id: int(row.student_count or 0) for row in progress_rows}
+
+        for item in collective_items:
+            if item.collective_goal_type == 'whole_class':
+                target = class_size
+            elif item.collective_goal_type == 'fixed':
+                target = int(item.collective_goal_target or 0)
+            else:
+                target = 0
+            count = progress_counts.get(item.id, 0)
+            collective_progress[item.id] = {
+                'count': count,
+                'target': target,
+                'remaining': max(0, target - count),
+                'percent': min(100, int((count / target) * 100)) if target > 0 else 0,
+                'is_complete': bool(target > 0 and count >= target),
+            }
+
     return render_template('student_shop.html', student=student, items=items, student_items=student_items,
                          has_paid_rent=has_paid_rent, per_period_rent_item_ids=per_period_rent_item_ids,
-                         class_size=class_size, current_block=current_block)
+                         rent_item_type_by_store_id=rent_item_type_by_store_id,
+                         rent_free_uses=rent_free_uses,
+                         class_size=class_size, current_block=current_block,
+                         collective_progress=collective_progress)
 
 
 # -------------------- RENT --------------------
@@ -2475,11 +2571,11 @@ def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, 
 
 def _calculate_rent_deadlines(settings, reference_date=None):
     """Return the due date and grace end date for the active month."""
-    reference_date = reference_date or datetime.now()
+    reference_date = ensure_utc(reference_date) if reference_date else utc_now()
 
     # If first_rent_due_date is set and we haven't reached it yet, return it
     if settings.first_rent_due_date:
-        first_due = settings.first_rent_due_date
+        first_due = ensure_utc(settings.first_rent_due_date)
         # If we're before the first due date, return the first due date
         if reference_date < first_due:
             grace_end_date = first_due + timedelta(days=settings.grace_period_days)
@@ -2494,7 +2590,7 @@ def _calculate_rent_deadlines(settings, reference_date=None):
             target_month = (first_due.month + months_diff - 1) % 12 + 1
             last_day_of_month = monthrange(target_year, target_month)[1]
             due_day = min(first_due.day, last_day_of_month)
-            due_date = datetime(target_year, target_month, due_day)
+            due_date = datetime(target_year, target_month, due_day, tzinfo=timezone.utc)
         else:
             # Calculate due date based on frequency
             freq_delta = None
@@ -2522,10 +2618,7 @@ def _calculate_rent_deadlines(settings, reference_date=None):
 
                     last_day_of_month = monthrange(target_year, target_month)[1]
                     due_day = min(first_due.day, last_day_of_month)
-                    due_date = datetime(target_year, target_month, due_day)
-                    # Preserve timezone if first_due had one
-                    if first_due.tzinfo:
-                        due_date = due_date.replace(tzinfo=first_due.tzinfo)
+                    due_date = datetime(target_year, target_month, due_day, tzinfo=timezone.utc)
 
             if freq_delta:
                 # Calculate periods passed for fixed time deltas
@@ -2533,24 +2626,20 @@ def _calculate_rent_deadlines(settings, reference_date=None):
                 periods = time_diff // freq_delta
                 due_date = first_due + (periods * freq_delta)
 
+            use_fallback = False
             if not freq_delta and settings.frequency_type != 'custom':
                 # Fallback for unknown frequency types
                 use_fallback = True
             elif settings.frequency_type == 'custom' and settings.custom_frequency_unit not in ['days', 'weeks', 'months']:
                  # Fallback for unknown custom units
                 use_fallback = True
-            else:
-                use_fallback = False
 
             if use_fallback:
                 current_year = reference_date.year
                 current_month = reference_date.month
                 last_day_of_month = monthrange(current_year, current_month)[1]
                 due_day = min(settings.due_day_of_month, last_day_of_month)
-                due_date = datetime(current_year, current_month, due_day)
-                # Preserve timezone if first_due had one
-                if first_due.tzinfo:
-                    due_date = due_date.replace(tzinfo=first_due.tzinfo)
+                due_date = datetime(current_year, current_month, due_day, tzinfo=timezone.utc)
 
     else:
         # No first_rent_due_date set, use traditional monthly logic
@@ -2558,10 +2647,137 @@ def _calculate_rent_deadlines(settings, reference_date=None):
         current_month = reference_date.month
         last_day_of_month = monthrange(current_year, current_month)[1]
         due_day = min(settings.due_day_of_month, last_day_of_month)
-        due_date = datetime(current_year, current_month, due_day)
+        due_date = datetime(current_year, current_month, due_day, tzinfo=timezone.utc)
 
     grace_end_date = due_date + timedelta(days=settings.grace_period_days)
     return due_date, grace_end_date
+
+
+def _get_rent_period_delta(settings):
+    """Return a timedelta/relativedelta representing one rent period."""
+    if settings.frequency_type == 'daily':
+        return timedelta(days=1)
+    if settings.frequency_type == 'weekly':
+        return timedelta(weeks=1)
+    if settings.frequency_type == 'monthly':
+        return relativedelta(months=1)
+    if settings.frequency_type == 'custom':
+        unit = getattr(settings, 'custom_frequency_unit', None)
+        value = getattr(settings, 'custom_frequency_value', None) or 1
+        if unit == 'days':
+            return timedelta(days=value)
+        if unit == 'weeks':
+            return timedelta(weeks=value)
+        if unit == 'months':
+            return relativedelta(months=value)
+    # Fallback to monthly behavior
+    return relativedelta(months=1)
+
+
+def _add_rent_period(dt, delta):
+    """Add a timedelta or relativedelta to dt."""
+    return dt + delta
+
+
+def _total_paid_by_grace(payments, grace_end_date):
+    """Sum payments made on or before the grace end date."""
+    if not payments or not grace_end_date:
+        return Decimal('0.00')
+    grace_end_date = ensure_utc(grace_end_date)
+    return sum(
+        (p.amount_paid for p in payments
+         if p.payment_date and ensure_utc(p.payment_date) <= grace_end_date),
+        Decimal('0.00')
+    )
+
+
+def _filter_valid_rent_payments(payments, student_id, join_code):
+    """Return payments that have a matching, non-void rent transaction."""
+    if not payments:
+        return []
+
+    payment_dates = [p.payment_date for p in payments if p.payment_date]
+    if not payment_dates:
+        return []
+
+    min_payment_date = min(payment_dates)
+    max_payment_date = max(payment_dates)
+    window_start = min_payment_date - timedelta(seconds=5)
+    window_end = max_payment_date + timedelta(seconds=5)
+
+    payment_amounts = {-(p.amount_paid) for p in payments}
+
+    txn_query = Transaction.query.filter(
+        Transaction.student_id == student_id,
+        Transaction.type == 'Rent Payment',
+        Transaction.timestamp >= window_start,
+        Transaction.timestamp <= window_end,
+        Transaction.amount.in_(payment_amounts)
+    )
+    if join_code:
+        txn_query = txn_query.filter(Transaction.join_code == join_code)
+    else:
+        txn_query = txn_query.filter(Transaction.join_code.is_(None))
+
+    candidate_txns = txn_query.all()
+    txns_by_amount = {}
+    for txn in candidate_txns:
+        txns_by_amount.setdefault(txn.amount, []).append(txn)
+
+    used_txn_ids = set()
+    valid_payments = []
+    for payment in payments:
+        candidates = txns_by_amount.get(-payment.amount_paid, [])
+        for txn in candidates:
+            if txn.id in used_txn_ids or txn.is_void:
+                continue
+            if not txn.timestamp or not payment.payment_date:
+                continue
+            if abs((ensure_utc(txn.timestamp) - ensure_utc(payment.payment_date)).total_seconds()) > 5:
+                continue
+            used_txn_ids.add(txn.id)
+            valid_payments.append(payment)
+            break
+
+    return valid_payments
+
+
+def _calculate_rent_coverage_due_date(settings, reference_date=None):
+    """
+    Return the most recently passed due date for coverage tracking.
+
+    If we're before the current due date, this returns the previous due date.
+    """
+    reference_date = ensure_utc(reference_date) if reference_date else utc_now()
+    if settings.first_rent_due_date:
+        first_due = ensure_utc(settings.first_rent_due_date)
+        if first_due and reference_date < first_due:
+            return None
+    current_due_date, _ = _calculate_rent_deadlines(settings, reference_date)
+    if not current_due_date:
+        return None
+
+    if reference_date >= current_due_date:
+        return current_due_date
+
+    # If we're before the current due date, compute the previous due date.
+    # For monthly settings without a first_rent_due_date, compute the prior
+    # month explicitly to preserve the configured day-of-month.
+    if settings.frequency_type == 'monthly' and not settings.first_rent_due_date:
+        prev_year = current_due_date.year
+        prev_month = current_due_date.month - 1
+        if prev_month == 0:
+            prev_month = 12
+            prev_year -= 1
+
+        _, last_day = monthrange(prev_year, prev_month)
+        due_day = settings.due_day_of_month or last_day
+        due_day = min(due_day, last_day)
+        return datetime(prev_year, prev_month, due_day, tzinfo=timezone.utc)
+
+    delta = _get_rent_period_delta(settings)
+    return current_due_date - delta
+
 
 
 @student_bp.route('/rent')
@@ -2596,10 +2812,11 @@ def rent():
     student_blocks = [current_block]
 
     # Calculate rent status for each period
-    now = datetime.now()
+    now = utc_now()
 
     # Calculate due dates
     due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
 
     # Calculate preview start date if preview is enabled
     preview_start_date = None
@@ -2608,23 +2825,67 @@ def rent():
 
     # Check if rent is active (due date has arrived or preview period has started)
     rent_is_active = False
-    is_preview_period = False
+    is_preview_period_candidate = False
     if preview_start_date and now >= preview_start_date:
         rent_is_active = True
-        is_preview_period = now < due_date
-    elif now >= due_date:
+        is_preview_period_candidate = now < due_date
+    elif coverage_due_date and now >= coverage_due_date:
         rent_is_active = True
-    current_month = now.month
-    current_year = now.year
+
+    # CRITICAL FIX: Before allowing preview period, check if current coverage is paid
+    # Students must pay overdue periods before pre-paying for upcoming periods
+    current_coverage_paid = False
+    if is_preview_period_candidate and not coverage_due_date:
+        # No prior coverage period to settle; allow preview payments
+        current_coverage_paid = True
+    elif is_preview_period_candidate and coverage_due_date:
+        # Check if current coverage period is already paid
+        current_coverage_payments = RentPayment.query.filter(
+            RentPayment.student_id == student.id,
+            RentPayment.period == current_block,
+            RentPayment.coverage_month == coverage_due_date.month,
+            RentPayment.coverage_year == coverage_due_date.year,
+            or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
+        ).all()
+
+        valid_payments = _filter_valid_rent_payments(
+            current_coverage_payments,
+            student.id,
+            join_code
+        )
+
+        if valid_payments:
+            total_paid_current = sum(p.amount_paid for p in valid_payments)
+            # Check if fully paid (including late fee if applicable)
+            grace_for_coverage = coverage_due_date + timedelta(days=settings.grace_period_days)
+            late_fee_applies = now > grace_for_coverage
+            required = settings.rent_amount + (settings.late_fee if late_fee_applies else Decimal('0'))
+            current_coverage_paid = total_paid_current >= required
+
+    # Only allow preview period if current coverage is already paid
+    is_preview_period = is_preview_period_candidate and current_coverage_paid
+
+    # Calculate which coverage period we're checking for (pre-paid system)
+    # CRITICAL FIX: Determine which due date to show for payment (matches payment route logic)
+    if is_preview_period:
+        coverage_month = due_date.month
+        coverage_year = due_date.year
+        grace_end_date_for_status = grace_end_date
+        payment_due_date = due_date  # Paying for upcoming period
+    else:
+        coverage_month = coverage_due_date.month if coverage_due_date else due_date.month
+        coverage_year = coverage_due_date.year if coverage_due_date else due_date.year
+        grace_end_date_for_status = (coverage_due_date + timedelta(days=settings.grace_period_days)) if coverage_due_date else grace_end_date
+        payment_due_date = coverage_due_date if coverage_due_date else due_date  # Paying for overdue/current period
 
     period_status = {}
 
-    # Get all payments for the current period this month (supports incremental payments)
+    # Get all payments that COVER the current period (pre-paid system)
     all_payments_for_period = RentPayment.query.filter(
         RentPayment.student_id == student.id,
         RentPayment.period == current_block,
-        RentPayment.period_month == current_month,
-        RentPayment.period_year == current_year,
+        RentPayment.coverage_month == coverage_month,
+        RentPayment.coverage_year == coverage_year,
         or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
     ).all()
 
@@ -2645,13 +2906,14 @@ def rent():
 
     total_paid = sum(p.amount_paid for p in payments) if payments else Decimal('0.00')
 
+    paid_by_grace = _total_paid_by_grace(payments, grace_end_date_for_status)
     late_fee = Decimal('0.00')
-    if rent_is_active and now > grace_end_date:
+    if rent_is_active and now > grace_end_date_for_status and paid_by_grace < settings.rent_amount:
         late_fee = settings.late_fee
 
     total_due = settings.rent_amount + late_fee if rent_is_active else Decimal('0.00')
     is_paid = total_paid >= total_due if rent_is_active else False
-    is_late = now > grace_end_date and not is_paid if rent_is_active else False
+    is_late = now > grace_end_date_for_status and not is_paid if rent_is_active else False
     remaining_amount = max(Decimal('0.00'), total_due - total_paid) if rent_is_active else Decimal('0.00')
 
     period_status[current_block] = {
@@ -2699,7 +2961,9 @@ def rent():
                           checking_balance=checking_balance,
                           savings_balance=savings_balance,
                           due_date=due_date,
+                          payment_due_date=payment_due_date,  # CRITICAL FIX: Show correct period being paid for
                           grace_end_date=grace_end_date,
+                          grace_end_date_for_status=grace_end_date_for_status,  # Add grace date for the payment period
                           preview_start_date=preview_start_date,
                           payment_history=payment_history,
                           rent_items=rent_items,
@@ -2737,10 +3001,11 @@ def rent_pay(period):
         flash("Invalid period.", "error")
         return redirect(url_for('student.rent'))
 
-    now = datetime.now()
+    now = utc_now()
 
     # Calculate due dates and preview period
     due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
     preview_start_date = None
     if settings.bill_preview_enabled and settings.bill_preview_days:
         preview_start_date = due_date - timedelta(days=settings.bill_preview_days)
@@ -2748,7 +3013,7 @@ def rent_pay(period):
     rent_is_active = False
     if preview_start_date and now >= preview_start_date:
         rent_is_active = True
-    elif now >= due_date:
+    elif coverage_due_date and now >= coverage_due_date:
         rent_is_active = True
 
     if not rent_is_active:
@@ -2763,15 +3028,59 @@ def rent_pay(period):
     current_month = now.month
     current_year = now.year
 
+    # CRITICAL FIX: Check if student has paid current coverage period BEFORE allowing preview
+    # If student is overdue, they must pay the overdue period first, not pre-pay for next month
+    current_coverage_paid = False
+    if not coverage_due_date:
+        # No prior coverage period to settle; allow preview payments
+        current_coverage_paid = True
+    else:
+        # Check if current coverage period is already paid
+        current_coverage_payments = RentPayment.query.filter(
+            RentPayment.student_id == student.id,
+            RentPayment.period == period,
+            RentPayment.coverage_month == coverage_due_date.month,
+            RentPayment.coverage_year == coverage_due_date.year,
+            or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
+        ).all()
+
+        valid_payments = _filter_valid_rent_payments(
+            current_coverage_payments,
+            student.id,
+            join_code
+        )
+
+        if valid_payments:
+            total_paid = sum(p.amount_paid for p in valid_payments)
+            # Check if fully paid (including late fee if applicable)
+            grace_for_coverage = coverage_due_date + timedelta(days=settings.grace_period_days)
+            late_fee_applies = now > grace_for_coverage
+            required = settings.rent_amount + (settings.late_fee if late_fee_applies else Decimal('0'))
+            current_coverage_paid = total_paid >= required
+
+    # Determine which due date this payment should cover
+    # Only allow preview period if current coverage is already paid
+    is_preview_period = (
+        current_coverage_paid and
+        preview_start_date and
+        now >= preview_start_date and
+        now < due_date
+    )
+    payment_due_date = due_date if is_preview_period else coverage_due_date
+
+    # Calculate coverage period (pre-paid system)
+    coverage_month = payment_due_date.month
+    coverage_year = payment_due_date.year
+
     checking_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
     savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
 
-    # Get all existing payments for this period this month
+    # Get all existing payments that cover this period
     all_payments = RentPayment.query.filter(
         RentPayment.student_id == student.id,
         RentPayment.period == period,
-        RentPayment.period_month == current_month,
-        RentPayment.period_year == current_year,
+        RentPayment.coverage_month == coverage_month,
+        RentPayment.coverage_year == coverage_year,
         or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
     ).all()
 
@@ -2796,7 +3105,11 @@ def rent_pay(period):
 
     # Calculate if late and total amount due
     due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
-    is_late = now > grace_end_date
+    grace_end_date_for_payment = grace_end_date
+    if payment_due_date and payment_due_date != due_date:
+        grace_end_date_for_payment = payment_due_date + timedelta(days=settings.grace_period_days)
+    paid_by_grace = _total_paid_by_grace(existing_payments, grace_end_date_for_payment)
+    is_late = now > grace_end_date_for_payment and paid_by_grace < settings.rent_amount
 
     # Calculate late fee if applicable
     late_fee = Decimal('0.00')
@@ -2908,7 +3221,7 @@ def rent_pay(period):
         else:
             late_fee_for_this_payment = late_fee
 
-    # Record rent payment
+    # Record rent payment with coverage period (pre-paid system)
     payment = RentPayment(
         student_id=student.id,
         period=period,
@@ -2916,6 +3229,8 @@ def rent_pay(period):
         amount_paid=payment_amount,
         period_month=current_month,
         period_year=current_year,
+        coverage_month=coverage_month,
+        coverage_year=coverage_year,
         was_late=is_late,
         late_fee_charged=late_fee_for_this_payment
     )
@@ -2952,6 +3267,108 @@ def rent_pay(period):
     # Check if overdraft fee should be charged (after overdraft protection)
     fee_charged, fee_amount = _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=teacher_id, join_code=join_code)
 
+    # Award Hall Passes if rent is fully paid (top-off model)
+    passes_awarded = 0
+    # Only award if this payment completes full rent (not already fully paid)
+    if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
+        from app.models import RentItem
+        hall_pass_items = RentItem.query.filter_by(
+            rent_setting_id=settings.id,
+            rent_item_type='hall_pass'
+        ).all()
+
+        # Calculate total grant from all hall_pass rent items
+        total_grant = sum(item.hall_pass_count for item in hall_pass_items if item.hall_pass_count)
+
+        if total_grant > 0:
+            # Top-off logic: only replenish rent-granted portion
+            # rent_hall_passes tracks how many of student's current passes came from rent
+            student_block = StudentBlock.query.filter_by(
+                student_id=student.id,
+                period=period
+            ).first()
+            if student_block and not student_block.join_code and join_code:
+                student_block.join_code = join_code
+            elif not student_block:
+                student_block = StudentBlock(
+                    student_id=student.id,
+                    period=period,
+                    join_code=join_code
+                )
+                db.session.add(student_block)
+
+            current_rent_passes = student_block.rent_hall_passes if student_block else 0
+            top_off = max(0, total_grant - current_rent_passes)
+
+            if top_off > 0:
+                student.hall_passes = (student.hall_passes or 0) + top_off
+                passes_awarded = top_off
+                db.session.add(student)
+
+            # Update rent_hall_passes to reflect the new grant level
+            if student_block:
+                student_block.rent_hall_passes = total_grant
+
+    # Grant per-use free uses if rent is fully paid
+    per_use_items_granted = 0
+    if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
+        from app.models import RentItem
+        per_use_items = RentItem.query.filter_by(
+            rent_setting_id=settings.id,
+            rent_item_type='per_use'
+        ).all()
+
+        for pu_item in per_use_items:
+            if not pu_item.store_item_id:
+                continue
+
+            # Check if student already has an active (non-expired) StudentItem with uses_remaining for this store item
+            existing = StudentItem.query.filter(
+                StudentItem.student_id == student.id,
+                StudentItem.store_item_id == pu_item.store_item_id,
+                db.or_(
+                    StudentItem.uses_remaining > 0,
+                    StudentItem.uses_remaining == -1
+                ),
+                StudentItem.join_code == join_code if join_code else StudentItem.join_code.is_(None),
+                db.or_(
+                    StudentItem.expiry_date.is_(None),
+                    StudentItem.expiry_date > utc_now()
+                )
+            ).first()
+
+            if existing:
+                # Top-off: reset uses_remaining to the granted amount (or unlimited)
+                if pu_item.use_limit:
+                    existing.uses_remaining = pu_item.use_limit
+                else:
+                    existing.uses_remaining = -1
+                continue
+
+            # Calculate expiry (next rent due date)
+            expiry_date = None
+            if settings.first_rent_due_date:
+                from app.routes.api import _calculate_due_dates
+                now_ts = utc_now()
+                current_due, next_due = _calculate_due_dates(settings, now_ts)
+                if next_due:
+                    expiry_date = next_due
+
+            # Grant a free StudentItem with uses_remaining
+            granted_item = StudentItem(
+                student_id=student.id,
+                store_item_id=pu_item.store_item_id,
+                join_code=join_code,
+                purchase_date=utc_now(),
+                expiry_date=expiry_date,
+                status='purchased',
+                is_from_bundle=False,
+                quantity_purchased=1,
+                uses_remaining=pu_item.use_limit if pu_item.use_limit else -1
+            )
+            db.session.add(granted_item)
+            per_use_items_granted += 1
+
     # Commit all transactions together
     db.session.commit()
 
@@ -2964,9 +3381,15 @@ def rent_pay(period):
         if new_remaining > 0:
             flash(f"Partial payment of ${payment_amount:.2f} successful! Remaining balance: ${new_remaining:.2f}", "success")
         else:
-            flash(f"Final payment of ${payment_amount:.2f} successful! Rent for Period {period} is now fully paid.", "success")
+            msg = f"Final payment of ${payment_amount:.2f} successful! Rent for Period {period} is now fully paid."
+            if passes_awarded > 0:
+                msg += f" You received {passes_awarded} hall passes!"
+            flash(msg, "success")
     else:
-        flash(f"Rent payment for Period {period} (${payment_amount:.2f}) successful!", "success")
+        msg = f"Rent payment for Period {period} (${payment_amount:.2f}) successful!"
+        if passes_awarded > 0:
+            msg += f" You received {passes_awarded} hall passes!"
+        flash(msg, "success")
 
     return redirect(url_for('student.rent'))
 
@@ -3024,6 +3447,12 @@ def login():
                 flash("Invalid credentials", "error")
                 return redirect(url_for('student.login', next=request.args.get('next')))
 
+            if not student.is_active:
+                if is_json:
+                    return jsonify(status="error", message="Account is inactive. Contact your teacher."), 403
+                flash("Your account is inactive. Contact your teacher.", "error")
+                return redirect(url_for('student.login', next=request.args.get('next')))
+
             if not student.username_lookup_hash:
                 student.username_lookup_hash = lookup_hash
                 db.session.commit()
@@ -3047,7 +3476,7 @@ def login():
 
 
         session['student_id'] = student.id
-        session['login_time'] = datetime.now(timezone.utc).isoformat()
+        session['login_time'] = utc_now().isoformat()
         session['last_activity'] = session['login_time']
 
 
@@ -3059,7 +3488,7 @@ def login():
         next_url = request.args.get('next')
         if not is_safe_url(next_url):
             return redirect(url_for('student.dashboard'))
-        return redirect(next_url or url_for('student.dashboard'))
+        return redirect(next_url or url_for('student.dashboard'))  # nosec # Safe: validated by is_safe_url()
 
     # Always display CTA to claim/create account for first-time users
     setup_cta = True
@@ -3089,7 +3518,7 @@ def demo_login(session_id):
             return redirect(url_for('admin.dashboard'))
 
         # Check if session has expired
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         expires_at = demo_session.expires_at
         if not isinstance(expires_at, datetime):
             # If missing or invalid, refresh expiry to 10 minutes from now to avoid false immediate expiry
@@ -3136,7 +3565,7 @@ def demo_login(session_id):
 
         # Set student session variables
         session['student_id'] = student.id
-        session['login_time'] = datetime.now(timezone.utc).isoformat()
+        session['login_time'] = utc_now().isoformat()
         session['last_activity'] = session['login_time']
         session['is_demo'] = True
         session['demo_session_id'] = session_id
@@ -3175,7 +3604,7 @@ def logout():
             demo_session = DemoStudent.query.filter_by(session_id=demo_session_id).first()
             if demo_session:
                 demo_session.is_active = False
-                demo_session.ended_at = datetime.now(timezone.utc)
+                demo_session.ended_at = utc_now()
 
                 cleanup_demo_student_data(demo_session)
 
@@ -3212,7 +3641,7 @@ def switch_class(join_code):
     session['current_join_code'] = join_code
 
     # Get teacher name for response
-    teacher = Admin.query.get(seat.teacher_id)
+    teacher = db.session.get(Admin, seat.teacher_id)
     teacher_name = teacher.username if teacher else "Unknown"
 
     # Get block/period info
@@ -3243,7 +3672,7 @@ def switch_period(teacher_id):
 
     # Get teacher name for flash message
     from app.models import Admin
-    teacher = Admin.query.get(teacher_id)
+    teacher = db.session.get(Admin, teacher_id)
     if teacher:
         flash(f"Switched to {teacher.username}'s class")
 
@@ -3467,7 +3896,7 @@ def verify_recovery(code_id):
 
     # Get the recovery code request
     from app.models import StudentRecoveryCode, RecoveryRequest
-    recovery_code = StudentRecoveryCode.query.get_or_404(code_id)
+    recovery_code = db.get_or_404(StudentRecoveryCode, code_id)
 
     # Verify this is for the logged-in student
     if recovery_code.student_id != student.id:
@@ -3485,7 +3914,7 @@ def verify_recovery(code_id):
     if expires_at and expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
 
-    if expires_at < datetime.now(timezone.utc):
+    if expires_at < utc_now():
         flash("This recovery request has expired.", "error")
         return redirect(url_for('student.dashboard'))
 
@@ -3511,7 +3940,7 @@ def verify_recovery(code_id):
 
         # Hash and store the code
         recovery_code.code_hash = hash_hmac(code.encode(), b'')
-        recovery_code.verified_at = datetime.now(timezone.utc)
+        recovery_code.verified_at = utc_now()
         db.session.commit()
 
         current_app.logger.info(f"Student {student.id} verified recovery request {recovery_code.recovery_request_id}")
@@ -3537,7 +3966,7 @@ def dismiss_recovery(code_id):
 
     # Get the recovery code request
     from app.models import StudentRecoveryCode
-    recovery_code = StudentRecoveryCode.query.get_or_404(code_id)
+    recovery_code = db.get_or_404(StudentRecoveryCode, code_id)
 
     # Verify this is for the logged-in student
     if recovery_code.student_id != student.id:

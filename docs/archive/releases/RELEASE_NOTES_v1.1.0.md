@@ -175,7 +175,7 @@ The improved Economy Health page now shows:
 - Updated ../../CHANGELOG.md with all changes
 - Added economy health tips to teacher manual
 - Documented analytics calculations
-- Updated ../../development/DEVELOPMENT.md roadmap
+- Updated ../../DEVELOPMENT.md roadmap
 
 ---
 

@@ -98,8 +98,8 @@ When creating new operational documentation:
 
 ## Related Documentation
 
-- **[Deployment Guide](../Deployment_Guide.md)** - Initial setup and deployment procedures
-- **[Migration Guide](../development/MIGRATION_GUIDE.md)** - Database schema migrations
+- **[Deployment Guide](Deployment_Guide.md)** - Initial setup and deployment procedures
+- **[Migration Specifications](../development/migration-specifications.md)** - Database schema migrations
 - **[System Admin Design](../development/SYSADMIN_INTERFACE_DESIGN.md)** - Admin interface features
 
 ## Emergency Procedures
@@ -108,10 +108,10 @@ For critical issues:
 
 1. Check the relevant operational guide in this directory
 2. Review error logs via the System Admin portal
-3. Consult the [Troubleshooting section](../README.md#troubleshooting) in main docs
+3. Consult the [Teacher Diagnostics Index](../user-guides/diagnostics/teacher.md) for troubleshooting checklists
 4. Review recent changes in [CHANGELOG.md](../CHANGELOG.md)
 
 ---
 
-**Last Updated:** 2025-11-28
+**Last Updated:** 2026-02-09
 **Maintained by:** Project maintainers and operations team

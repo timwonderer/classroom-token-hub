@@ -34,12 +34,12 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -54,7 +54,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Check PR Classification
         id: check_classification
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const body = context.payload.pull_request.body || "";
@@ -67,9 +67,12 @@ jobs:
             let found = false;
             let checkedCount = 0;
             
-            // Look for checked boxes like [x] EXPAND
+            // Look for checked boxes like [x] EXPAND or [x] **EXPAND**
+            // Accept both with and without bold markers for flexibility
             classifications.forEach(type => {
-              const regex = new RegExp(`- \\[[xX]\\] \\*\\*${type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\*\\*`);
+              const escapedType = type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              // Match with or without bold markers (**), and allow any text after
+              const regex = new RegExp(`- \\[[xX]\\] (\\*\\*)?${escapedType}(\\*\\*)?`);
               if (regex.test(body)) {
                 found = type;
                 checkedCount++;
@@ -189,7 +192,7 @@ jobs:
       # -----------------------------------------------------------
       - name: Post Gate Status
         if: always()
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const classification = '${{ steps.check_classification.outputs.classification }}';

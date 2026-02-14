@@ -14,6 +14,7 @@ from dateutil.relativedelta import relativedelta
 
 from flask import Blueprint, request, jsonify, session, current_app
 from sqlalchemy import func, or_
+import sqlalchemy as sa
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from werkzeug.security import check_password_hash
 
@@ -21,13 +22,15 @@ from app.extensions import db, limiter
 from app.models import (
     Student, StoreItem, StudentItem, Transaction, TapEvent,
     HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
-    StudentTeacher, TeacherBlock, StudentBlock, DemoStudent
+    StudentTeacher, TeacherBlock, StudentBlock, DemoStudent,
+    RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource
 )
 from app.auth import login_required, admin_required, membership_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
 from app.routes.student import get_current_class_context, get_current_teacher_id, get_rent_settings_for_context
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
+from app.utils.time import utc_now, ensure_utc, normalize_for_db
 
 # Import external modules
 from app.attendance import (
@@ -44,13 +47,7 @@ api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 # -------------------- Rent Helpers --------------------
 
-def _ensure_aware(dt):
-    """Ensure datetime is timezone-aware in UTC."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
+
 
 
 def _get_period_delta(rent_setting):
@@ -75,8 +72,6 @@ def _get_period_delta(rent_setting):
 
 def _add_period(dt, delta):
     """Add a timedelta or relativedelta to dt."""
-    if isinstance(delta, relativedelta):
-        return dt + delta
     return dt + delta
 
 
@@ -85,7 +80,7 @@ def _calculate_due_dates(rent_setting, now):
     Calculate the current and next due dates for a rent setting based on the provided time.
     Returns (current_due, next_due). If first due date is not set, returns (None, None).
     """
-    first_due = _ensure_aware(rent_setting.first_rent_due_date)
+    first_due = ensure_utc(rent_setting.first_rent_due_date)
     if not first_due:
         return (None, None)
 
@@ -104,6 +99,55 @@ def _calculate_due_dates(rent_setting, now):
         next_due = _add_period(next_due, delta)
 
     return (current_due, next_due)
+
+
+def _resolve_class_display_label(teacher_id, join_code, fallback_block=None):
+    """
+    Resolve a stable class display label snapshot for audit logging.
+    """
+    if join_code:
+        seat = TeacherBlock.query.filter_by(teacher_id=teacher_id, join_code=join_code).first()
+        if seat:
+            label = seat.get_class_label()
+            if label:
+                return label
+            if seat.block:
+                return seat.block
+    return fallback_block or "Unknown Class"
+
+
+def _append_redemption_audit_log(*, student_item, student, teacher_id, action, notes, guard_state, fallback_block=None):
+    """
+    Append exactly one live redemption audit log row for this request path.
+
+    Must be called before redemption state mutations.
+    """
+    if guard_state.get('inserted'):
+        raise RuntimeError("Duplicate redemption audit insertion attempt in single request path")
+
+    action_map = {
+        'request': RedemptionAuditAction.REQUEST,
+        'approved': RedemptionAuditAction.APPROVED,
+        'rejected': RedemptionAuditAction.REJECTED,
+    }
+    if action not in action_map:
+        raise ValueError(f"Unsupported redemption audit action: {action}")
+
+    student_name = student.full_name if student else "Unknown Student"
+    join_code = getattr(student_item, 'join_code', None)
+    class_label = _resolve_class_display_label(teacher_id, join_code, fallback_block=fallback_block)
+
+    db.session.add(RedemptionAuditLog(
+        student_item_id=student_item.id if student_item else None,
+        student_display_name=student_name,
+        class_display_label=class_label,
+        action=action_map[action],
+        notes=notes if notes else None,
+        teacher_id=teacher_id,
+        timestamp=utc_now(),
+        source=RedemptionAuditSource.LIVE,
+    ))
+    guard_state['inserted'] = True
 
 
 # -------------------- TIPS API --------------------
@@ -228,24 +272,28 @@ def purchase_item():
     rent_settings = get_rent_settings_for_context(context)
     if rent_settings and rent_settings.is_enabled and rent_settings.prevent_purchase_when_late:
         # Check if student is late on rent
-        now = datetime.now(timezone.utc)
-        current_month = now.month
-        current_year = now.year
+        now = utc_now()
 
-        current_due, next_due = _calculate_due_dates(rent_settings, now)
+        from app.routes.student import _calculate_rent_coverage_due_date
+        coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
 
-        if current_due:
-            grace_end_date = current_due + timedelta(days=rent_settings.grace_period_days)
+        if coverage_due_date:
+            grace_end_date = coverage_due_date + timedelta(days=rent_settings.grace_period_days)
+
+            # Pre-paid system: use the most recently passed due date
+            # as the coverage period so we match payments that COVER this cycle.
+            coverage_month = coverage_due_date.month
+            coverage_year = coverage_due_date.year
 
             # Check if past grace period
             if now > grace_end_date:
-                # Check if rent is paid for current period
+                # Check if rent is paid for current coverage period
                 current_block = context.get('block', '').strip().upper()
                 total_paid = db.session.query(db.func.sum(RentPayment.amount_paid)).filter(
                     RentPayment.student_id == student.id,
                     RentPayment.period == current_block,
-                    RentPayment.period_month == current_month,
-                    RentPayment.period_year == current_year,
+                    RentPayment.coverage_month == coverage_month,
+                    RentPayment.coverage_year == coverage_year,
                     db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
                 ).scalar() or 0
 
@@ -271,6 +319,69 @@ def purchase_item():
                             "status": "error",
                             "message": "You cannot make purchases while late on rent. Please pay your rent first."
                         }), 403
+
+    # Check if student has free uses remaining from rent (per-use rent items)
+    if item.is_rent_linked and quantity == 1:
+        # Look for an active StudentItem with uses_remaining for this store item
+        rent_item_query = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.store_item_id == item.id,
+            db.or_(
+                StudentItem.uses_remaining > 0,
+                StudentItem.uses_remaining == -1
+            ),
+            db.or_(
+                StudentItem.expiry_date.is_(None),
+                StudentItem.expiry_date > utc_now()
+            )
+        )
+        if join_code:
+            rent_item_query = rent_item_query.filter(StudentItem.join_code == join_code)
+        else:
+            rent_item_query = rent_item_query.filter(StudentItem.join_code.is_(None))
+
+        active_rent_item = rent_item_query.first()
+
+        if active_rent_item:
+            # Free purchase from rent perk - decrement available free uses unless unlimited (-1)
+            if active_rent_item.uses_remaining != -1:
+                active_rent_item.uses_remaining -= 1
+
+            # For rent perks, purchasing is $0 and usage is logged later on /use-item.
+            purchase_tx = Transaction(
+                student_id=student.id,
+                teacher_id=teacher_id,
+                join_code=join_code,
+                amount=0.0,
+                account_type='checking',
+                type='purchase',
+                description=f"Purchase: {item.name} [Rent Perk $0]"
+            )
+            db.session.add(purchase_tx)
+
+            expiry_date = None
+            if item.item_type == 'delayed' and item.auto_expiry_days:
+                expiry_date = utc_now() + timedelta(days=item.auto_expiry_days)
+
+            db.session.add(StudentItem(
+                student_id=student.id,
+                store_item_id=item.id,
+                join_code=join_code,
+                purchase_date=utc_now(),
+                expiry_date=expiry_date,
+                status='purchased',
+                is_from_bundle=False,
+                quantity_purchased=1,
+                uses_remaining=None,
+            ))
+            db.session.commit()
+
+            remaining = active_rent_item.uses_remaining
+            if remaining == -1:
+                return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk). Unlimited free purchases remaining this period."})
+            if remaining > 0:
+                return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk). {remaining} free purchase(s) remaining this period."})
+            return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk). No free purchases remaining this period."})
 
     # Calculate price (with bulk discount if applicable)
     unit_price = item.price
@@ -348,7 +459,11 @@ def purchase_item():
 
             purchase_count = total_purchased
         else:
-            purchase_count = StudentItem.query.filter_by(student_id=student.id, store_item_id=item.id).count()
+            purchase_count = StudentItem.query.filter(
+                StudentItem.student_id == student.id,
+                StudentItem.store_item_id == item.id,
+                StudentItem.status.notin_(['voided', 'rejected'])
+            ).count()
         if purchase_count + quantity > item.limit_per_student:
             return jsonify({"status": "error", "message": f"You can only purchase {item.limit_per_student - purchase_count} more of this item."}), 400
 
@@ -424,30 +539,34 @@ def purchase_item():
         # Create the student's item(s)
         expiry_date = None
 
-        # Check if this is a rent item with "per_period" duration
+        # Check if this is a rent item
         from app.models import RentItem, RentSettings
         rent_item = RentItem.query.filter_by(store_item_id=item.id).first()
-        if rent_item and rent_item.purchase_duration == 'per_period':
-            # Calculate NEXT rent due date and set as expiry
-            rent_setting = RentSettings.query.get(rent_item.rent_setting_id)
-            if rent_setting and rent_setting.is_enabled:
-                now = datetime.now(timezone.utc)
+        uses_remaining = None
 
-                if rent_setting.first_rent_due_date:
-                    current_due, next_due = _calculate_due_dates(rent_setting, now)
+        if rent_item:
+            if rent_item.rent_item_type == 'privilege':
+                # Calculate NEXT rent due date and set as expiry
+                rent_setting = db.session.get(RentSettings, rent_item.rent_setting_id)
+                if rent_setting and rent_setting.is_enabled:
+                    now = utc_now()
 
-                    if current_due and next_due:
-                        # Align expiry to the next scheduled due date
-                        expiry_date = next_due
-                else:
-                    # No first_rent_due_date set, use simple calculation from now
-                    # This is a fallback for backwards compatibility
-                    delta = _get_period_delta(rent_setting)
-                    expiry_date = _add_period(now, delta)
+                    if rent_setting.first_rent_due_date:
+                        current_due, next_due = _calculate_due_dates(rent_setting, now)
+
+                        if current_due and next_due:
+                            # Align expiry to the next scheduled due date
+                            expiry_date = next_due
+                    else:
+                        # No first_rent_due_date set, use simple calculation from now
+                        # This is a fallback for backwards compatibility
+                        delta = _get_period_delta(rent_setting)
+                        expiry_date = _add_period(now, delta)
+            # For per-use rent items, do not set uses_remaining on paid purchases.
 
         # Fall back to standard auto_expiry for delayed items
         if expiry_date is None and item.item_type == 'delayed' and item.auto_expiry_days:
-            expiry_date = datetime.now(timezone.utc) + timedelta(days=item.auto_expiry_days)
+            expiry_date = utc_now() + timedelta(days=item.auto_expiry_days)
 
         student_item_status = 'purchased'
         if item.item_type == 'immediate':
@@ -462,12 +581,14 @@ def purchase_item():
             new_student_item = StudentItem(
                 student_id=student.id,
                 store_item_id=item.id,
-                purchase_date=datetime.now(timezone.utc),
+                join_code=join_code,
+                purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
                 is_from_bundle=True,
                 bundle_remaining=item.bundle_quantity * quantity,  # Total uses = bundle_quantity * number of bundles purchased
-                quantity_purchased=quantity
+                quantity_purchased=quantity,
+                uses_remaining=uses_remaining
             )
             db.session.add(new_student_item)
         elif item.is_bundle and item.bundle_quantity is None:
@@ -476,11 +597,13 @@ def purchase_item():
             new_student_item = StudentItem(
                 student_id=student.id,
                 store_item_id=item.id,
-                purchase_date=datetime.now(timezone.utc),
+                join_code=join_code,
+                purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
                 is_from_bundle=False,
-                quantity_purchased=quantity
+                quantity_purchased=quantity,
+                uses_remaining=uses_remaining
             )
             db.session.add(new_student_item)
         else:
@@ -489,11 +612,13 @@ def purchase_item():
                 new_student_item = StudentItem(
                     student_id=student.id,
                     store_item_id=item.id,
-                    purchase_date=datetime.now(timezone.utc),
+                    join_code=join_code,
+                    purchase_date=utc_now(),
                     expiry_date=expiry_date,
                     status=student_item_status,
                     is_from_bundle=False,
-                    quantity_purchased=1
+                    quantity_purchased=1,
+                    uses_remaining=uses_remaining
                 )
                 db.session.add(new_student_item)
 
@@ -534,31 +659,36 @@ def purchase_item():
 
         # --- Collective Item Logic ---
         if item.item_type == 'collective':
-            # SECURITY FIX: Check if all students in the same block AND same join_code have purchased
-            # Must scope by join_code to prevent cross-period data leaks
-            from app.models import StudentBlock
-
-            # Get student IDs in this specific class period (join_code + block combination)
-            student_blocks = StudentBlock.query.filter_by(
-                period=student.block,
-                join_code=join_code
-            ).all()
-            student_ids_in_block = {sb.student_id for sb in student_blocks}
-
+            class_size = TeacherBlock.query.filter_by(
+                teacher_id=teacher_id,
+                join_code=join_code,
+                is_claimed=True,
+            ).count()
             purchased_students_count = db.session.query(func.count(func.distinct(StudentItem.student_id))).filter(
                 StudentItem.store_item_id == item.id,
-                StudentItem.student_id.in_(student_ids_in_block)
-            ).scalar()
+                StudentItem.join_code == join_code,
+                StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
+            ).scalar() or 0
 
-            if purchased_students_count >= len(student_ids_in_block):
-                # Threshold met, update all pending items for this collective goal to processing
+            if item.collective_goal_type == 'fixed':
+                target = int(item.collective_goal_target or 0)
+            else:
+                target = class_size
+
+            if target > 0 and purchased_students_count >= target:
+                # Threshold met for this class: unlock only this class period's pending items
                 StudentItem.query.filter(
                     StudentItem.store_item_id == item.id,
+                    StudentItem.join_code == join_code,
                     StudentItem.status == 'pending'
                 ).update({"status": "processing"})
-                # This flash won't be seen by the user due to the JSON response,
-                # but it's good for logging/debugging. A more robust solution might use websockets.
-                current_app.logger.info(f"Collective goal '{item.name}' for block {student.block} has been met!")
+                current_app.logger.info(
+                    "Collective goal '%s' reached for join_code=%s (%s/%s)",
+                    item.name,
+                    join_code,
+                    purchased_students_count,
+                    target,
+                )
 
         # Commit purchases for both collective and non-collective items
         db.session.commit()
@@ -602,7 +732,7 @@ def use_item():
         return jsonify({"status": "error", "message": "Incorrect passphrase."}), 403
 
     # 2. Get the student's item
-    student_item = StudentItem.query.get(student_item_id)
+    student_item = db.session.get(StudentItem, student_item_id)
 
     if not student_item or student_item.student_id != student.id:
         return jsonify({"status": "error", "message": "Invalid item."}), 404
@@ -618,36 +748,83 @@ def use_item():
             return jsonify({"status": "error", "message": "This item has already been used or is not available."}), 400
 
     # Check expiry
-    if student_item.expiry_date and datetime.now(timezone.utc) > student_item.expiry_date:
+    if student_item.expiry_date and utc_now() > student_item.expiry_date:
         student_item.status = 'expired'
         db.session.commit()
         return jsonify({"status": "error", "message": "This item has expired."}), 400
 
+    # Get context up front for audit snapshots and transaction scoping.
+    context = get_current_class_context()
+    teacher_id_for_audit = (
+        context['teacher_id'] if context else
+        (student_item.store_item.teacher_id if student_item.store_item else None)
+    )
+    fallback_block = context.get('block') if context else student.block
+
+    # Request action happens when item transitions into admin approval workflow.
+    will_create_request = (
+        not student_item.is_from_bundle and (
+            student_item.uses_remaining is None or
+            (student_item.uses_remaining != -1 and student_item.uses_remaining <= 1)
+        )
+    )
+
     # 3. Mark as processing and create redemption transaction
     try:
+        audit_guard = {'inserted': False}
+        if will_create_request:
+            _append_redemption_audit_log(
+                student_item=student_item,
+                student=student,
+                teacher_id=teacher_id_for_audit,
+                action='request',
+                notes=details,
+                guard_state=audit_guard,
+                fallback_block=fallback_block,
+            )
+
         # Handle bundle items differently
         if student_item.is_from_bundle:
             # Decrement bundle_remaining
             student_item.bundle_remaining -= 1
             if student_item.bundle_remaining == 0:
                 student_item.status = 'redeemed'  # All uses consumed
-            student_item.redemption_date = datetime.now(timezone.utc)
+            student_item.redemption_date = utc_now()
             if student_item.redemption_details:
                 student_item.redemption_details += f"\n---\n{details}"
             else:
                 student_item.redemption_details = details
+        elif student_item.uses_remaining is not None:
+            # Multi-use item (Rent Per-Use with limit > 1) or unlimited (-1)
+            # Don't decrement if unlimited
+            if student_item.uses_remaining != -1:
+                student_item.uses_remaining -= 1
+                if student_item.uses_remaining <= 0:
+                    # Last use - mark as processing (if requires approval) or completed/redeemed
+                    # Assuming rent per-use items are 'delayed' type (request redemption)
+                    student_item.status = 'processing'
+                else:
+                    # Still has uses remaining - keep status as 'purchased' so it remains in "My Items"
+                    pass
+
+            student_item.redemption_date = utc_now()
+            if student_item.uses_remaining == -1:
+                uses_msg = "unlimited uses remaining"
+            else:
+                uses_msg = f"{student_item.uses_remaining} uses remaining"
+            
+            if student_item.redemption_details:
+                student_item.redemption_details += f"\n---\n{details} ({uses_msg})"
+            else:
+                student_item.redemption_details = f"{details} ({uses_msg})"
         else:
             # Regular item - mark as processing
             student_item.status = 'processing'
-            student_item.redemption_date = datetime.now(timezone.utc)
+            student_item.redemption_date = utc_now()
             student_item.redemption_details = details
 
         # CRITICAL FIX v2: Create a redemption transaction with join_code
         # This is a $0 transaction to log the redemption event
-        # Get context from current session
-        from app.routes.student import get_current_class_context
-        context = get_current_class_context()
-
         if context:
             membership_id = context.get('membership_id')
             # Verify membership exists (Audit Anchor requirement)
@@ -671,10 +848,17 @@ def use_item():
 
         if student_item.is_from_bundle:
             return jsonify({"status": "success", "message": f"You have used 1 from your bundle of {student_item.store_item.name}. {student_item.bundle_remaining} uses remaining."})
+        elif student_item.uses_remaining is not None:
+            if student_item.uses_remaining == -1:
+                return jsonify({"status": "success", "message": f"You have used {student_item.store_item.name}. Unlimited uses remaining."})
+            elif student_item.uses_remaining > 0:
+                return jsonify({"status": "success", "message": f"You have used {student_item.store_item.name}. {student_item.uses_remaining} uses remaining."})
+            else:
+                return jsonify({"status": "success", "message": f"You have requested to use {student_item.store_item.name}. Awaiting admin approval."})
         else:
             return jsonify({"status": "success", "message": f"You have requested to use {student_item.store_item.name}. Awaiting admin approval."})
 
-    except SQLAlchemyError as e:
+    except (SQLAlchemyError, RuntimeError, ValueError) as e:
         db.session.rollback()
         current_app.logger.error(f"Item use failed for student {student.id}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred. Please try again."}), 500
@@ -683,21 +867,42 @@ def use_item():
 @api_bp.route('/approve-redemption', methods=['POST'])
 @admin_required
 def approve_redemption():
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     student_item_id = data.get('student_item_id')
 
-    student_item = StudentItem.query.get(student_item_id)
+    if not student_item_id:
+        return jsonify({"status": "error", "message": "Missing student item ID."}), 400
+
+    student_item = db.session.get(StudentItem, student_item_id)
     if not student_item or student_item.status != 'processing':
         return jsonify({"status": "error", "message": "Invalid or already processed item."}), 404
 
+    # SECURITY: Verify the current admin owns the store item
+    current_admin = get_current_admin()
+    if not current_admin or student_item.store_item.teacher_id != current_admin.id:
+        return jsonify({"status": "error", "message": "Unauthorized."}), 403
+
     try:
+        audit_guard = {'inserted': False}
+        _append_redemption_audit_log(
+            student_item=student_item,
+            student=student_item.student,
+            teacher_id=current_admin.id,
+            action='approved',
+            notes=student_item.redemption_details,
+            guard_state=audit_guard,
+            fallback_block=student_item.student.block if student_item.student else None,
+        )
+
         student_item.status = 'completed'
 
         # Find the corresponding 'redemption' transaction and update its description
         redemption_tx = Transaction.query.filter_by(
             student_id=student_item.student_id,
             type='redemption',
-            description=f"Used: {student_item.store_item.name}"
+            join_code=student_item.join_code,
+        ).filter(
+            Transaction.description.like(f"Used: {student_item.store_item.name}%")
         ).order_by(Transaction.timestamp.desc()).first()
 
         if redemption_tx:
@@ -705,9 +910,152 @@ def approve_redemption():
 
         db.session.commit()
         return jsonify({"status": "success", "message": "Redemption approved."})
-    except SQLAlchemyError as e:
+    except (SQLAlchemyError, RuntimeError, ValueError) as e:
         db.session.rollback()
         current_app.logger.error(f"Redemption approval failed for student_item {student_item_id}: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": "An error occurred."}), 500
+
+
+@api_bp.route('/reject-redemption', methods=['POST'])
+@admin_required
+def reject_redemption():
+    data = request.get_json(silent=True) or {}
+    student_item_id = data.get('student_item_id')
+
+    if not student_item_id:
+        return jsonify({"status": "error", "message": "Missing student item ID."}), 400
+
+    student_item = db.session.get(StudentItem, student_item_id)
+    if not student_item or student_item.status != 'processing':
+        return jsonify({"status": "error", "message": "Invalid or already processed item."}), 404
+
+    # SECURITY: Verify the current admin owns the store item
+    current_admin = get_current_admin()
+    if not current_admin or student_item.store_item.teacher_id != current_admin.id:
+        return jsonify({"status": "error", "message": "Unauthorized."}), 403
+
+    try:
+        audit_guard = {'inserted': False}
+        _append_redemption_audit_log(
+            student_item=student_item,
+            student=student_item.student,
+            teacher_id=current_admin.id,
+            action='rejected',
+            notes=student_item.redemption_details,
+            guard_state=audit_guard,
+            fallback_block=student_item.student.block if student_item.student else None,
+        )
+
+        # 1. Determine Refund Amount from original purchase transaction
+        # Look up the actual amount paid (handles price changes and bulk discounts)
+        purchase_tx_query = Transaction.query.filter_by(
+            student_id=student_item.student_id,
+            teacher_id=student_item.store_item.teacher_id,
+            type='purchase',
+        ).filter(
+            Transaction.description.like(f"Purchase: {student_item.store_item.name}%")
+        )
+        if student_item.join_code:
+            purchase_tx_query = purchase_tx_query.filter(
+                Transaction.join_code == student_item.join_code
+            )
+        purchase_txs = purchase_tx_query.all()
+
+        purchase_tx = None
+        if purchase_txs:
+            if student_item.purchase_date:
+                target_ts = ensure_utc(student_item.purchase_date)
+
+                def _distance(tx):
+                    if not tx.timestamp:
+                        return float('inf')
+                    return abs((ensure_utc(tx.timestamp) - target_ts).total_seconds())
+
+                purchase_tx = min(purchase_txs, key=_distance)
+            else:
+                purchase_tx = max(
+                    purchase_txs,
+                    key=lambda tx: ensure_utc(tx.timestamp) if tx.timestamp else datetime.min.replace(tzinfo=timezone.utc)
+                )
+
+        if purchase_tx and purchase_tx.amount is not None:
+            total_amount = abs(purchase_tx.amount)
+            quantity = 1
+            if purchase_tx.description:
+                match = re.search(r'\(x(\d+)\)', purchase_tx.description)
+                if match:
+                    try:
+                        parsed_qty = int(match.group(1))
+                        if parsed_qty > 0:
+                            quantity = parsed_qty
+                    except ValueError:
+                        pass
+            refund_amount = total_amount / quantity
+        else:
+            # Fallback to current store price if purchase transaction not found
+            refund_amount = student_item.store_item.price
+
+        # 2. Refund the student
+        # Create refund transaction
+        # CRITICAL: Use join_code from student_item for proper scoping
+        # CRITICAL FIX: Handle legacy StudentItems without join_code
+        refund_join_code = student_item.join_code
+        if not refund_join_code and purchase_tx and purchase_tx.join_code:
+            refund_join_code = purchase_tx.join_code
+
+        if not refund_join_code:
+            # Legacy StudentItem without join_code - resolve from student blocks
+            student = db.session.get(Student, student_item.student_id)
+            teacher_id = student_item.store_item.teacher_id
+
+            if student and student.block:
+                student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
+                if student_blocks:
+                    refund_join_code = get_join_code_for_student_period(
+                        student.id, student_blocks[0], teacher_id
+                    )
+
+        if not refund_join_code:
+            current_app.logger.error(
+                f"Unable to resolve join_code for legacy StudentItem {student_item.id} "
+                "during refund. Aborting to avoid unscoped transaction."
+            )
+            return jsonify({"status": "error", "message": "Unable to resolve class for refund."}), 400
+
+        if refund_join_code != student_item.join_code:
+            current_app.logger.warning(
+                f"Legacy StudentItem {student_item.id} missing join_code. "
+                f"Resolved to: {refund_join_code} for refund transaction."
+            )
+
+        refund_tx = Transaction(
+            student_id=student_item.student_id,
+            teacher_id=student_item.store_item.teacher_id,
+            join_code=refund_join_code,  # Now guaranteed to have a value
+            amount=refund_amount,
+            account_type='checking',
+            type='refund',
+            original_transaction_id=purchase_tx.id if purchase_tx else None,
+            description=f"Refund: {student_item.store_item.name} (Redemption Rejected)"
+        )
+        db.session.add(refund_tx)
+        if purchase_tx:
+            purchase_tx.reversal_transaction_id = refund_tx.id
+
+        # 3. Mark item as rejected (terminal state) instead of deleting history.
+        student_item.status = 'rejected'
+        student_item.redemption_date = utc_now()
+        if student_item.redemption_details:
+            student_item.redemption_details = f"{student_item.redemption_details}\n---\nStatus: rejected"
+        else:
+            student_item.redemption_details = "Status: rejected"
+
+        db.session.commit()
+        return jsonify({"status": "success", "message": "Redemption rejected and refunded."})
+
+    except (SQLAlchemyError, RuntimeError, ValueError) as e:
+        db.session.rollback()
+        current_app.logger.error(f"Redemption rejection failed for student_item {student_item_id}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred."}), 500
 
 
@@ -716,25 +1064,24 @@ def approve_redemption():
 @api_bp.route('/hall-pass/<int:pass_id>/<string:action>', methods=['POST'])
 @admin_required
 def handle_hall_pass_action(pass_id, action):
-    log_entry = HallPassLog.query.get_or_404(pass_id)
+    log_entry = db.get_or_404(HallPassLog, pass_id)
     student = log_entry.student
-    today = datetime.now(timezone.utc).date()
-    now = datetime.now(timezone.utc)
-    
+    now = utc_now()
+
     # Audit Anchor: Determine who is acting
     from app.auth import get_membership
-    admin_id = session.get('admin_id') 
+    admin_id = session.get('admin_id')
     # Logic: Admin is acting on a specific hall pass associated with log_entry.join_code
     # We must find the admin's membership in that specific class economy
     actor_membership = get_membership(join_code=log_entry.join_code, admin_id=admin_id)
-    
+
     if actor_membership:
         log_entry.actor_membership_id = actor_membership.id
     else:
         # Fallback or error? For now, log warning if admin has no membership in this class
         # This occurs if a system admin acts, or if data is inconsistent
         if not session.get('is_system_admin'):
-             current_app.logger.warning(f"Admin {admin_id} acting on HallPass {pass_id} without membership in {log_entry.join_code}")
+            current_app.logger.warning(f"Admin {admin_id} acting on HallPass {pass_id} without membership in {log_entry.join_code}")
 
     if action == 'approve':
         if log_entry.status != 'pending':
@@ -763,6 +1110,23 @@ def handle_hall_pass_action(pass_id, action):
         # Only deduct hall pass for regular reasons (not Office/Summons/Done for the day)
         if should_deduct:
             student.hall_passes -= 1
+            # Decrement rent_hall_passes first (rent-granted passes consumed before purchased)
+            block_period = log_entry.period or student.block
+            student_block = StudentBlock.query.filter_by(
+                student_id=student.id,
+                period=block_period
+            ).first()
+            if student_block and not student_block.join_code and log_entry.join_code:
+                student_block.join_code = log_entry.join_code
+            elif not student_block:
+                student_block = StudentBlock(
+                    student_id=student.id,
+                    period=block_period,
+                    join_code=log_entry.join_code
+                )
+                db.session.add(student_block)
+            if student_block and student_block.rent_hall_passes > 0:
+                student_block.rent_hall_passes -= 1
 
         db.session.commit()
         return jsonify({"status": "success", "message": "Pass approved.", "pass_number": pass_number})
@@ -846,7 +1210,7 @@ def get_active_hall_passes():
     # Fallback: Scope by teacher_id (legacy)
     elif teacher_id:
         # Validate teacher exists
-        teacher = Admin.query.get(teacher_id)
+        teacher = db.session.get(Admin, teacher_id)
         if not teacher:
             return jsonify({
                 "status": "error",
@@ -872,13 +1236,13 @@ def get_active_hall_passes():
         student_ids_subquery = (
             Student.query.with_entities(Student.id)
             .filter(
-                Student.id.in_(shared_student_ids)
+                Student.id.in_(sa.select(shared_student_ids))
             )
             .subquery()
         )
 
         # Add teacher scoping filter
-        query = query.filter(HallPassLog.student_id.in_(student_ids_subquery))
+        query = query.filter(HallPassLog.student_id.in_(sa.select(student_ids_subquery)))
 
     else:
         # SECURITY: Require either join_code or teacher_id to prevent global data leak
@@ -972,10 +1336,18 @@ def _get_default_timezone():
 def _check_simultaneous_pass_limit(log_entry):
     """Validate destination settings and simultaneous pass limits."""
     teacher_block = TeacherBlock.query.filter_by(join_code=log_entry.join_code).first()
-    if not teacher_block:
+    teacher_id = teacher_block.teacher_id if teacher_block else None
+    if not teacher_id:
+        # Fallback for legacy data: derive teacher from StudentTeacher link
+        teacher_id = (
+            StudentTeacher.query.with_entities(StudentTeacher.admin_id)
+            .filter(StudentTeacher.student_id == log_entry.student_id)
+            .scalar()
+        )
+    if not teacher_id:
         return None
 
-    settings = HallPassSettings.query.filter_by(teacher_id=teacher_block.teacher_id, block=None).first()
+    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
     if not settings:
         return None
 
@@ -994,16 +1366,17 @@ def _check_simultaneous_pass_limit(log_entry):
     # Check simultaneous limit
     if pass_type_config and pass_type_config.get('simultaneous_limit') is not None:
         user_tz = _get_default_timezone()
-        now_user_tz = datetime.now(user_tz)
+        now_user_tz = utc_now().astimezone(user_tz)
         today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
-        today_start_utc = today_start_user_tz.astimezone(pytz.utc).replace(tzinfo=None)
+        today_start_utc = today_start_user_tz.astimezone(pytz.utc)
+        today_start_db = normalize_for_db(today_start_utc)
 
         # Count currently out students for THIS destination from today (excluding this student)
         currently_out = HallPassLog.query.filter(
             HallPassLog.status == 'left',
             HallPassLog.reason == log_entry.reason,
             HallPassLog.join_code == log_entry.join_code,
-            HallPassLog.left_time >= today_start_utc,
+            HallPassLog.left_time >= today_start_db,
             HallPassLog.id != log_entry.id  # Exclude current pass
         ).count()
 
@@ -1044,7 +1417,7 @@ def hall_pass_terminal_use():
         return limit_response
 
     # Mark as left and create tap-out event
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     log_entry.status = 'left'
     log_entry.left_time = now
 
@@ -1091,7 +1464,7 @@ def hall_pass_terminal_return():
         return jsonify({"status": "error", "message": f"Student is not currently out. Status: {log_entry.status}"}), 400
 
     # Mark as returned and create tap-in event
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     log_entry.status = 'returned'
     log_entry.return_time = now
 
@@ -1124,7 +1497,7 @@ def hall_pass_terminal_return():
 def cancel_hall_pass(pass_id):
     """Allow students to cancel their pending hall pass request"""
     student = get_logged_in_student()
-    log_entry = HallPassLog.query.get_or_404(pass_id)
+    log_entry = db.get_or_404(HallPassLog, pass_id)
 
     # Verify this pass belongs to the logged-in student
     if log_entry.student_id != student.id:
@@ -1136,7 +1509,7 @@ def cancel_hall_pass(pass_id):
 
     # Mark as rejected (or create a new 'cancelled' status if preferred)
     log_entry.status = 'rejected'
-    log_entry.decision_time = datetime.now(timezone.utc)
+    log_entry.decision_time = utc_now()
 
     db.session.commit()
     return jsonify({"status": "success", "message": "Hall pass request cancelled."})
@@ -1153,7 +1526,7 @@ def checkout_hall_pass():
     if not pass_id:
         return jsonify({"status": "error", "message": "Pass ID is required."}), 400
     
-    log_entry = HallPassLog.query.get_or_404(pass_id)
+    log_entry = db.get_or_404(HallPassLog, pass_id)
     
     # Verify this pass belongs to the logged-in student
     if log_entry.student_id != student.id:
@@ -1168,7 +1541,7 @@ def checkout_hall_pass():
         return limit_response
     
     # Mark as left and create tap-out event
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     log_entry.status = 'left'
     log_entry.left_time = now
     
@@ -1208,7 +1581,7 @@ def checkin_hall_pass():
     if not pass_id:
         return jsonify({"status": "error", "message": "Pass ID is required."}), 400
     
-    log_entry = HallPassLog.query.get_or_404(pass_id)
+    log_entry = db.get_or_404(HallPassLog, pass_id)
     
     # Verify this pass belongs to the logged-in student
     if log_entry.student_id != student.id:
@@ -1219,7 +1592,7 @@ def checkin_hall_pass():
         return jsonify({"status": "error", "message": f"You are not currently checked out. Status: {log_entry.status}"}), 400
     
     # Mark as returned and create tap-in event
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     log_entry.status = 'returned'
     log_entry.return_time = now
     
@@ -1286,13 +1659,14 @@ def get_hall_pass_queue():
         user_tz = pytz.timezone('America/Los_Angeles')
 
     # Get current time in user's timezone
-    now_user_tz = datetime.now(user_tz)
+    now_user_tz = utc_now().astimezone(user_tz)
 
     # Get start of today (midnight) in user's timezone
     today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
 
     # Convert to UTC for database comparison (database stores times in UTC)
-    today_start_utc = today_start_user_tz.astimezone(pytz.utc).replace(tzinfo=None)
+    today_start_utc = today_start_user_tz.astimezone(pytz.utc)
+    today_start_db = normalize_for_db(today_start_utc)
 
     # Query logs scoped to JOIN_CODE
     base_query = HallPassLog.query.filter_by(join_code=join_code)
@@ -1311,9 +1685,9 @@ def get_hall_pass_queue():
         HallPassLog.status == 'left',
         HallPassLog.created_at >= today_start_utc
     ).all()
-    
+
     currently_out_count = len(currently_out_logs)
-    
+
     # Format queue data
     queue_data = []
     for log in queue_logs:
@@ -1399,7 +1773,7 @@ def hall_pass_settings():
             return jsonify({"status": "error", "message": "Queue limit must be between 1 and 50"}), 400
         settings.queue_limit = queue_limit
 
-    settings.updated_at = datetime.now(timezone.utc)
+    settings.updated_at = utc_now()
     db.session.commit()
 
     return jsonify({
@@ -1441,7 +1815,7 @@ def hall_pass_history():
         # Build query with tenant scoping
         query = (
             HallPassLog.query
-            .filter(HallPassLog.student_id.in_(student_ids_subquery))
+            .filter(HallPassLog.student_id.in_(sa.select(student_ids_subquery)))
         )
 
         # Apply filters
@@ -1605,7 +1979,7 @@ def save_hall_pass_setup():
         else:
             settings.queue_enabled = hall_pass_enabled
             settings.pass_types = pass_types
-            settings.updated_at = datetime.now(timezone.utc)
+            settings.updated_at = utc_now()
 
         db.session.commit()
 
@@ -1691,7 +2065,7 @@ def attendance_history():
                 # Parse date and treat as UTC midnight (start of day)
                 start_datetime = datetime.strptime(start_date, '%Y-%m-%d')
                 start_datetime = start_datetime.replace(tzinfo=timezone.utc)
-                query = query.filter(TapEvent.timestamp >= start_datetime)
+                query = query.filter(TapEvent.timestamp >= normalize_for_db(start_datetime))
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid start date format"}), 400
 
@@ -1700,7 +2074,7 @@ def attendance_history():
                 # Parse date and treat as UTC end of day (23:59:59)
                 end_datetime = datetime.strptime(end_date, '%Y-%m-%d')
                 end_datetime = end_datetime.replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
-                query = query.filter(TapEvent.timestamp <= end_datetime)
+                query = query.filter(TapEvent.timestamp <= normalize_for_db(end_datetime))
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid end date format"}), 400
 
@@ -1835,7 +2209,7 @@ def handle_tap():
         )
         return jsonify({"error": "Unable to resolve class context for this period."}), 400
 
-    now = datetime.now(timezone.utc)
+    now = utc_now()
 
     # --- Check if tap is enabled for this student in this period ---
     from app.models import StudentBlock
@@ -1940,16 +2314,17 @@ def handle_tap():
                 except pytz.UnknownTimeZoneError:
                     user_tz = pytz.timezone('America/Los_Angeles')
 
-                now_user_tz = datetime.now(user_tz)
+                now_user_tz = utc_now().astimezone(user_tz)
                 today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
-                today_start_utc = today_start_user_tz.astimezone(pytz.utc).replace(tzinfo=None)
+                today_start_utc = today_start_user_tz.astimezone(pytz.utc)
+                today_start_db = normalize_for_db(today_start_utc)
 
                 # Count approved (waiting) passes for THIS destination from today
                 queue_count = HallPassLog.query.filter(
                     HallPassLog.status == 'approved',
                     HallPassLog.reason == reason,
                     HallPassLog.join_code == join_code,
-                    HallPassLog.decision_time >= today_start_utc
+                    HallPassLog.decision_time >= today_start_db
                 ).count()
 
                 # Count currently out students for THIS destination from today
@@ -1957,7 +2332,7 @@ def handle_tap():
                     HallPassLog.status == 'left',
                     HallPassLog.reason == reason,
                     HallPassLog.join_code == join_code,
-                    HallPassLog.left_time >= today_start_utc
+                    HallPassLog.left_time >= today_start_db
                 ).count()
 
                 total_in_queue = queue_count + out_count
@@ -2248,7 +2623,7 @@ def delete_tap_entry(event_id):
     from app.models import TapEvent
     from app.auth import get_student_for_admin
 
-    event = TapEvent.query.get(event_id)
+    event = db.session.get(TapEvent, event_id)
     if not event:
         return jsonify({"error": "Tap entry not found"}), 404
 
@@ -2259,7 +2634,7 @@ def delete_tap_entry(event_id):
 
     # Mark as deleted
     event.is_deleted = True
-    event.deleted_at = datetime.now(timezone.utc)
+    event.deleted_at = utc_now()
     event.deleted_by = admin.id
 
     db.session.commit()
@@ -2339,16 +2714,11 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
     from app.attendance import calculate_period_attendance_utc_range
 
     # Helper function to ensure UTC timezone-aware datetime
-    def _as_utc(dt):
-        if dt is None:
-            return None
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
+
 
     # Keep original case for settings lookup, but uppercase for TapEvent queries
     student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
-    now_utc = datetime.now(timezone.utc)
+    now_utc = utc_now()
 
     # Use Pacific timezone for daily reset
     pacific = pytz.timezone('America/Los_Angeles')
@@ -2370,7 +2740,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
         # Check if student is currently active in this period (TapEvent uses uppercase)
         latest_event = (
             TapEvent.query
-            .filter_by(student_id=student.id, period=period_upper)
+            .filter_by(student_id=student.id, period=period_upper, is_deleted=False)
             .order_by(TapEvent.timestamp.desc())
             .first()
         )
@@ -2398,7 +2768,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
 
                 # Add current active session time
                 # Convert to UTC-aware datetime to prevent TypeError
-                last_tap_in_utc = _as_utc(latest_event.timestamp)
+                last_tap_in_utc = ensure_utc(latest_event.timestamp)
 
                 # Only add active session time if tapped in today (within Pacific day boundaries)
                 if start_of_day_utc <= last_tap_in_utc < end_of_day_utc:
@@ -2408,9 +2778,6 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                 # If limit reached or exceeded, auto-tap-out
                 if today_attendance >= daily_limit:
                     hours_limit = daily_limit / 3600.0
-                    current_app.logger.info(
-                        f"Auto-tapping out student {student.id} from {period_upper} - daily limit of {hours_limit} hours reached (total: {today_attendance/3600:.2f}h)"
-                    )
 
                     # Prioritize join_code from the active event we are closing
                     join_code = latest_event.join_code
@@ -2423,6 +2790,29 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                             f"Unable to resolve join_code for student {student.id} in period {period_upper} for auto-tap-out. TapEvent ID is {latest_event.id}."
                         )
                         continue
+
+                    # IDEMPOTENCY CHECK: Check if we already created a daily limit tap-out today
+                    # This prevents duplicate tap-outs from race conditions (multiple browser tabs, scheduled job, etc.)
+                    existing_limit_tapout = TapEvent.query.filter(
+                        TapEvent.student_id == student.id,
+                        TapEvent.period == period_upper,
+                        TapEvent.status == "inactive",
+                        TapEvent.timestamp >= start_of_day_utc,
+                        TapEvent.timestamp < end_of_day_utc,
+                        TapEvent.reason.like(f"Daily limit%"),  # Matches "Daily limit (X.Xh) reached"
+                        TapEvent.is_deleted == False
+                    ).first()
+
+                    if existing_limit_tapout:
+                        current_app.logger.debug(
+                            f"Skipping duplicate auto-tap-out for student {student.id} in {period_upper} - "
+                            f"daily limit tap-out already exists at {existing_limit_tapout.timestamp}"
+                        )
+                        continue  # Skip creating duplicate
+
+                    current_app.logger.info(
+                        f"Auto-tapping out student {student.id} from {period_upper} - daily limit of {hours_limit} hours reached (total: {today_attendance/3600:.2f}h)"
+                    )
 
                     # Calculate when they SHOULD have been tapped out (at exactly the limit)
                     # If they've been active for 90 minutes and limit is 75, tap them out 15 minutes ago
@@ -2439,6 +2829,21 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                         join_code=join_code
                     )
                     db.session.add(tap_out_event)
+
+                    # Lock the student for the rest of the day in this period
+                    student_block = StudentBlock.query.filter_by(
+                        student_id=student.id,
+                        period=period_upper
+                    ).first()
+                    if not student_block:
+                        student_block = StudentBlock(
+                            student_id=student.id,
+                            period=period_upper,
+                            tap_enabled=True,
+                            join_code=join_code
+                        )
+                        db.session.add(student_block)
+                    student_block.done_for_day_date = today_pacific
 
     # Commit all auto-tap-outs at once if requested
     if commit:
@@ -2483,7 +2888,7 @@ def set_timezone():
     """Store user's timezone in session for datetime formatting"""
     # Allow access if user is logged in as student OR admin
     is_authenticated = False
-    now = datetime.now(timezone.utc)
+    now = utc_now()
 
     # Check Admin Session
     if session.get('is_admin') and session.get('admin_id'):
@@ -2630,7 +3035,7 @@ def create_demo_student():
             join_code=join_code,
             student_id=demo_student.id,
             is_claimed=True,
-            claimed_at=datetime.now(timezone.utc)
+            claimed_at=utc_now()
         )
         db.session.add(demo_seat)
 
@@ -2690,7 +3095,7 @@ def create_demo_student():
             admin_id=admin_id,
             student_id=demo_student.id,
             session_id=demo_session_id,
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+            expires_at=utc_now() + timedelta(minutes=10),
             config_checking_balance=checking_balance,
             config_savings_balance=savings_balance,
             config_hall_passes=hall_passes,

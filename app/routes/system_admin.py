@@ -13,6 +13,7 @@ import base64
 import qrcode
 import requests
 from datetime import datetime, timedelta, timezone
+from app.utils.time import utc_now
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app, jsonify, Response
@@ -89,7 +90,7 @@ def _check_deletion_authorization(admin, request_type=None, join_code=None, peri
     pending_request = query.first()
 
     # Check inactivity
-    inactivity_threshold = datetime.now(timezone.utc) - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
+    inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
     is_inactive = False
     if admin.last_login:
         last_login = admin.last_login
@@ -149,14 +150,14 @@ def auth_check():
         last_activity = datetime.fromisoformat(last_activity_str)
         if last_activity.tzinfo is None:
             last_activity = last_activity.replace(tzinfo=timezone.utc)
-        if (datetime.now(timezone.utc) - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+        if (utc_now() - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
             session.pop("is_system_admin", None)
             session.pop("sysadmin_id", None)
             session.pop("last_activity", None)
             raise Unauthorized("Session expired")
 
     # Update activity to keep session alive.
-    session["last_activity"] = datetime.now(timezone.utc).isoformat()
+    session["last_activity"] = utc_now().isoformat()
     return ("", 204)
 
 @sysadmin_bp.route('/login', methods=['GET', 'POST'])
@@ -178,14 +179,14 @@ def login():
             if totp.verify(totp_code, valid_window=1):
                 session["is_system_admin"] = True
                 session["sysadmin_id"] = admin.id
-                session['last_activity'] = datetime.now(timezone.utc).isoformat()
+                session['last_activity'] = utc_now().isoformat()
                 # Establish global maintenance bypass for subsequent role testing.
                 session['maintenance_global_bypass'] = True
                 flash("System admin login successful.")
                 next_url = request.args.get("next")
                 if not is_safe_url(next_url):
                     return redirect(url_for("sysadmin.dashboard"))
-                return redirect(next_url or url_for("sysadmin.dashboard"))
+                return redirect(next_url or url_for("sysadmin.dashboard"))  # nosec # Safe: validated by is_safe_url()
         flash("Invalid credentials or TOTP.", "error")
         return redirect(url_for("sysadmin.login"))
     return render_template("system_admin_login.html", form=form)
@@ -215,7 +216,7 @@ def passkey_register_start():
     """
     try:
         sysadmin_id = session.get("sysadmin_id")
-        admin = SystemAdmin.query.get_or_404(sysadmin_id)
+        admin = db.get_or_404(SystemAdmin, sysadmin_id)
 
         # Generate registration token using official SDK
         user_id = f"sysadmin_{admin.id}"
@@ -342,12 +343,12 @@ def passkey_auth_finish():
             return jsonify({"error": "Invalid user ID format"}), 401
 
         # Verify system admin exists
-        admin = SystemAdmin.query.get(sysadmin_id)
+        admin = db.session.get(SystemAdmin, sysadmin_id)
         if not admin:
             return jsonify({"error": "Admin not found"}), 401
 
         # Update credential last_used timestamp
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         credential_id = verified_user.credential_id
         if credential_id:
             credential = SystemAdminCredential.query.filter_by(credential_id=credential_id).first()
@@ -428,7 +429,7 @@ def passkey_delete(credential_id):
 def passkey_settings():
     """Passkey management page."""
     sysadmin_id = session.get("sysadmin_id")
-    admin = SystemAdmin.query.get_or_404(sysadmin_id)
+    admin = db.get_or_404(SystemAdmin, sysadmin_id)
     credentials = SystemAdminCredential.query.filter_by(sysadmin_id=sysadmin_id).order_by(SystemAdminCredential.created_at.desc()).all()
 
     return render_template("system_admin_passkey_settings.html",
@@ -717,13 +718,14 @@ def reset_teacher_totp(admin_id):
     Reset a teacher's TOTP secret and return the new setup details (JSON).
     This allows recovery of lost accounts.
     """
-    admin = Admin.query.get_or_404(admin_id)
+    admin = db.get_or_404(Admin, admin_id)
 
     try:
         # Generate new secret
         new_secret = pyotp.random_base32()
         admin.totp_secret = encrypt_totp(new_secret)  # Encrypt before storing
         db.session.commit()
+        stored_secret = admin.totp_secret
 
         # Generate QR code
         totp_uri = pyotp.totp.TOTP(new_secret).provisioning_uri(
@@ -740,14 +742,18 @@ def reset_teacher_totp(admin_id):
         return jsonify({
             "status": "success",
             "message": f"TOTP secret reset for {admin.username}",
-            "totp_secret": new_secret,
+            "totp_secret": stored_secret,
+            "totp_secret_plain": new_secret,
             "qr_code": qr_b64,
             "username": admin.username
         })
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error resetting TOTP for admin {admin_id}: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({
+            "status": "error",
+            "message": "An internal error occurred while resetting the TOTP secret."
+        }), 500
 
 
 @sysadmin_bp.route('/admins/<int:admin_id>/delete', methods=['POST'])
@@ -757,7 +763,7 @@ def delete_admin(admin_id):
     Delete an admin account and all students created under that teacher.
     This is a permanent action that cascades to all student data.
     """
-    admin = Admin.query.get_or_404(admin_id)
+    admin = db.get_or_404(Admin, admin_id)
 
     try:
         # SECURITY FIX: Only use StudentTeacher table, NOT deprecated teacher_id
@@ -834,7 +840,7 @@ def manage_teachers():
         code = (form.code.data.strip() if form.code.data else None) or secrets.token_urlsafe(8)
         current_app.logger.info(f"Creating invite code: {repr(code)} (length: {len(code)})")
         expiry_days = request.form.get('expiry_days', 30, type=int)
-        expires_at = datetime.now(timezone.utc) + timedelta(days=expiry_days)
+        expires_at = utc_now() + timedelta(days=expiry_days)
         invite = AdminInviteCode(code=code, expires_at=expires_at)
         db.session.add(invite)
         db.session.commit()
@@ -876,7 +882,7 @@ def teacher_overview():
     teachers = Admin.query.order_by(Admin.username.asc()).all()
     
     # Define inactivity threshold (6 months)
-    inactivity_threshold = datetime.now(timezone.utc) - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
+    inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
 
     # Batch query: Get all teacher-student relationships in one query
     # Uses StudentTeacher table only (Multi-Teacher Hardening)
@@ -1003,8 +1009,12 @@ def delete_period(admin_id, period):
     if not period or len(period) > 20:  # Increased to 20 to accommodate join_codes
         flash("Invalid period parameter", "error")
         return redirect(url_for('sysadmin.teacher_overview'))
+    # Sanitize period to prevent SQL injection (allow only alphanumeric, spaces, hyphens, underscores)
+    if not re.match(r'^[a-zA-Z0-9\s\-_]+$', period):
+        flash("Invalid period format", "error")
+        return redirect(url_for('sysadmin.teacher_overview'))
 
-    admin = Admin.query.get_or_404(admin_id)
+    admin = db.get_or_404(Admin, admin_id)
 
     # Try to resolve as join_code first (new architecture)
     teacher_block = TeacherBlock.query.filter_by(
@@ -1104,7 +1114,7 @@ def delete_period(admin_id, period):
         # Mark any pending deletion requests for this period as approved
         if pending_request:
             pending_request.status = DeletionRequestStatus.APPROVED
-            pending_request.resolved_at = datetime.now(timezone.utc)
+            pending_request.resolved_at = utc_now()
             pending_request.resolved_by = session.get('sysadmin_id')
 
         db.session.commit()
@@ -1135,7 +1145,7 @@ def delete_teacher(admin_id):
 
     Students maintain access unless they have no other teachers.
     """
-    admin = Admin.query.get_or_404(admin_id)
+    admin = db.get_or_404(Admin, admin_id)
 
     # Check authorization using helper function
     authorized, pending_request = _check_deletion_authorization(admin, 'account', None)
@@ -1263,7 +1273,7 @@ def user_reports():
 @system_admin_required
 def view_user_report(report_id):
     """View details of a specific user report."""
-    report = UserReport.query.get_or_404(report_id)
+    report = db.get_or_404(UserReport, report_id)
     
     return render_template(
         'sysadmin_user_report_detail.html',
@@ -1277,7 +1287,7 @@ def view_user_report(report_id):
 @system_admin_required
 def update_user_report(report_id):
     """Update the status and notes of a user report."""
-    report = UserReport.query.get_or_404(report_id)
+    report = db.get_or_404(UserReport, report_id)
     
     # Get form data
     new_status = request.form.get('status')
@@ -1292,7 +1302,7 @@ def update_user_report(report_id):
     # Update report
     report.status = new_status
     report.admin_notes = admin_notes if admin_notes else None
-    report.reviewed_at = datetime.now(timezone.utc)
+    report.reviewed_at = utc_now()
     report.reviewed_by_sysadmin_id = session.get('sysadmin_id')
     
     try:
@@ -1310,7 +1320,7 @@ def update_user_report(report_id):
 @system_admin_required
 def send_reward_to_reporter(report_id):
     """Send a reward to a student who submitted a bug report."""
-    report = UserReport.query.get_or_404(report_id)
+    report = db.get_or_404(UserReport, report_id)
     
     # Verify this is a student report with a linked student
     if report.user_type != 'student' or not report._student_id:
@@ -1334,7 +1344,7 @@ def send_reward_to_reporter(report_id):
         return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
     
     # Get the student
-    student = Student.query.get(report._student_id)
+    student = db.session.get(Student, report._student_id)
     if not student:
         flash("Student not found. Cannot send reward.", "error")
         return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
@@ -1370,16 +1380,16 @@ def send_reward_to_reporter(report_id):
             amount=reward_amount,
             account_type='checking',
             description=f"Bug Report Reward (Report #{report_id})",
-            timestamp=datetime.now(timezone.utc),
+            timestamp=utc_now(),
             is_void=False
         )
         db.session.add(transaction)
         
         # Update report
         report.reward_amount = reward_amount
-        report.reward_sent_at = datetime.now(timezone.utc)
+        report.reward_sent_at = utc_now()
         report.status = 'rewarded'
-        report.reviewed_at = datetime.now(timezone.utc)
+        report.reviewed_at = utc_now()
         report.reviewed_by_sysadmin_id = session.get('sysadmin_id')
         
         db.session.commit()
@@ -1417,15 +1427,15 @@ def grafana_auth_check():
         last_activity = datetime.fromisoformat(last_activity_str)
         if last_activity.tzinfo is None:
             last_activity = last_activity.replace(tzinfo=timezone.utc)
-        if (datetime.now(timezone.utc) - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+        if (utc_now() - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
             session.clear()
             return Response('Unauthorized: Session expired', 401)
 
     # Update activity to keep session alive
-    session["last_activity"] = datetime.now(timezone.utc).isoformat()
+    session["last_activity"] = utc_now().isoformat()
 
     # Verify the sysadmin still exists
-    sysadmin = SystemAdmin.query.get(session.get('sysadmin_id'))
+    sysadmin = db.session.get(SystemAdmin, session.get('sysadmin_id'))
     if not sysadmin:
         # Admin was deleted but session still exists
         session.clear()
@@ -1489,7 +1499,7 @@ def grafana_proxy(path):
 
         # Add the authenticated user header for Grafana
         # Fetch admin to get username (Grafana auth proxy expects username, not ID)
-        admin = SystemAdmin.query.get(session.get('sysadmin_id'))
+        admin = db.session.get(SystemAdmin, session.get('sysadmin_id'))
         if not admin:
             # Stale session - admin was deleted
             flash("Authentication failed: user not found.", "error")
@@ -1508,31 +1518,20 @@ def grafana_proxy(path):
             stream=True
         )
 
-        # Before streaming, check content type to avoid reflecting potentially unsafe HTML/XML/SVG
+        # Before streaming, check content type to avoid reflecting potentially unsafe content
         # that could contain XSS payloads. Use case-insensitive comparison since MIME types
         # are case-insensitive per RFC 2045.
         content_type = resp.headers.get('Content-Type', '').lower().strip()
 
-        # List of dangerous MIME types that could execute scripts or contain XSS
-        dangerous_mime_types = (
-            'text/html',
-            'application/xhtml+xml',
-            'text/xml',
-            'application/xml',
-            'image/svg+xml',  # SVG can contain JavaScript
-            'text/xsl',       # XSL transformations can be dangerous
-            'application/xslt+xml',
-        )
+        # Split on semicolon to handle parameters like "application/json; charset=utf-8"
+        mime_type = content_type.split(';')[0].strip() if content_type else ''
 
-        # Block if Content-Type indicates dangerous content
-        # Split on semicolon to handle parameters like "text/html; charset=utf-8"
-        mime_type = content_type.split(';')[0].strip()
-        if mime_type in dangerous_mime_types:
+        # Explicitly block SVG first - SVG can contain embedded JavaScript and poses XSS risks
+        if mime_type == 'image/svg+xml':
             current_app.logger.warning(
                 f"Blocked proxied Grafana response with dangerous content type: {content_type} "
                 f"for path: {normalized_path}"
             )
-            # Avoid returning upstream HTML/XML/SVG directly to prevent reflected XSS
             return Response(
                 "Unable to display this Grafana content via proxy due to security restrictions. "
                 "Please access the Grafana dashboard directly.",
@@ -1540,12 +1539,75 @@ def grafana_proxy(path):
                 mimetype='text/plain'
             )
 
-        # Create streaming response for non-HTML content
-        excluded_headers = ['content-encoding', 'content-length', 'transfer-encoding', 'connection']
-        response_headers = [(name, value) for name, value in resp.raw.headers.items()
-                           if name.lower() not in excluded_headers]
+        # Allowlist of safe MIME type prefixes that are permitted to be streamed.
+        # Everything else (including HTML/XML or missing/unknown types) is blocked.
+        # Note: image/svg+xml is explicitly blocked above before this check.
+        javascript_mime_types = (
+            'application/javascript',
+            'text/javascript',
+        )
+        safe_mime_prefixes = (
+            'image/',              # images (png, jpeg, gif, etc.) - SVG blocked above
+            'text/plain',          # plain text
+            'text/css',            # stylesheets
+            'application/json',    # JSON APIs
+            *javascript_mime_types,
+            'application/octet-stream',
+            'application/pdf',
+            'text/csv',
+        )
+
+        # Block if Content-Type is missing or not in the allowlist of safe prefixes
+        if not mime_type or not any(mime_type.startswith(prefix) for prefix in safe_mime_prefixes):
+            current_app.logger.warning(
+                f"Blocked proxied Grafana response with potentially unsafe content type: {content_type or 'none'} "
+                f"for path: {normalized_path}"
+            )
+            # Avoid returning upstream content directly to prevent reflected XSS
+            return Response(
+                "Unable to display this Grafana content via proxy due to security restrictions. "
+                "Please access the Grafana dashboard directly.",
+                status=502,
+                mimetype='text/plain'
+            )
+
+        # Restrict executable JavaScript responses to static asset paths only.
+        # This preserves Grafana front-end assets while reducing script-reflection risk.
+        if (
+            mime_type in javascript_mime_types
+            and not normalized_path.startswith(('public/', 'static/'))
+        ):
+            current_app.logger.warning(
+                f"Blocked proxied Grafana JavaScript response for non-static path: {normalized_path}"
+            )
+            return Response(
+                "Unable to display this Grafana content via proxy due to security restrictions. "
+                "Please access the Grafana dashboard directly.",
+                status=502,
+                mimetype='text/plain'
+            )
+
+        # Create streaming response for allowed content types
+        # Security: Use allowlist for headers instead of blocklist to prevent XSS via reflected headers
+        # Only pass through specific, known-safe headers that are necessary for proper content delivery
+        allowed_headers = {
+            'content-type',          # Required for browser to interpret content correctly
+            'content-disposition',   # For file downloads
+            'cache-control',         # Caching behavior
+            'expires',               # Cache expiration
+            'last-modified',         # Conditional requests
+            'etag',                  # Conditional requests
+            'content-security-policy',  # Security policy (if Grafana sets it)
+        }
+
+        response_headers = [
+            (name, value) for name, value in resp.raw.headers.items()
+            if name.lower() in allowed_headers
+        ]
 
         response = Response(resp.iter_content(chunk_size=8192), resp.status_code, response_headers)
+        # Prevent MIME sniffing to reduce the chance of script execution from mislabeled payloads.
+        response.headers['X-Content-Type-Options'] = 'nosniff'
         return response
 
     except requests.exceptions.ConnectionError:
@@ -1687,7 +1749,7 @@ def announcement_edit(announcement_id):
             announcement.priority = form.priority.data
             announcement.is_active = form.is_active.data
             announcement.expires_at = form.expires_at.data
-            announcement.updated_at = datetime.now(timezone.utc)
+            announcement.updated_at = utc_now()
 
             db.session.commit()
 
@@ -1744,7 +1806,7 @@ def announcement_toggle(announcement_id):
 
     try:
         announcement.is_active = not announcement.is_active
-        announcement.updated_at = datetime.now(timezone.utc)
+        announcement.updated_at = utc_now()
         db.session.commit()
 
         return jsonify({
@@ -1853,7 +1915,7 @@ def resolve_escalated_issue(issue_id):
     try:
         old_status = issue.status
         issue.status = 'developer_resolved'
-        issue.sysadmin_resolved_at = datetime.now(timezone.utc)
+        issue.sysadmin_resolved_at = utc_now()
         issue.sysadmin_notes = resolution_note
         issue.sysadmin_id = session.get('sysadmin_id')
         issue.eligible_for_reward = eligible_for_reward

@@ -26,6 +26,63 @@ and this project follows semantic versioning principles.
   - `purchase_item`: Uses join_code for StoreItem and BankingSettings lookups
   - `get_active_hall_passes`: Now requires join_code or teacher_id (prevents global data leak)
 
+### Fixed
+- **P0: Duplicate auto-tap-out events causing payroll overpayment** - Added idempotency check to prevent race conditions when multiple sources (student browser polling, scheduled job, admin dashboard) call auto-tap-out logic simultaneously. Previously, duplicate "Daily limit reached" tap-out events would be created, causing payroll to count the same session multiple times and resulting in massive overpayment. Now checks if a daily limit tap-out already exists before creating a new one. Includes cleanup script (`cleanup_duplicate_tapouts.py`) to fix existing duplicate records. See `DUPLICATE_TAPOUT_BUG_REPORT.md` for full details.
+- **Void redemption creating transactions without join_code** - Fixed `/api/reject-redemption` endpoint creating refund transactions with `join_code=NULL` when voiding redemptions for legacy StudentItem records. Added fallback logic to resolve join_code from TeacherBlock or current session when StudentItem.join_code is NULL, preventing balance fix warnings for teachers. This resolves the "Fix Student Balances" alert appearing after voiding old redemptions.
+- **Void transaction CSRF 400 error** - Fixed student detail page void transaction button failing with 400 error. Added missing X-CSRFToken header to fetch request in `voidTransaction()` JavaScript function. Teachers can now successfully void transactions from student detail pages.
+- **P0: Rent payment applied to wrong period with bill preview enabled** - Fixed critical bug where students with unpaid overdue rent were allowed to pre-pay for future periods instead of paying overdue amounts first. When bill preview was enabled with a long preview period (e.g., 30 days), the system incorrectly classified overdue students as being in "preview period" for next month's rent. This caused payments to be recorded for the wrong coverage period (next month instead of current/overdue month), preventing students from receiving rent benefits even after paying. Now verifies current coverage period is fully paid before allowing preview period payments. Students must pay oldest overdue period first, and benefits are granted immediately when current period is paid. Also fixed rent page to display correct period being paid for with OVERDUE badge when applicable.
+
+## [1.8.0] - 2026-02-09
+
+### Added
+- **Rent Item Types (Privilege / Per-Use / Hall Pass)** - Extended itemized rent with three distinct item types
+  - **Privilege**: Shows as a badge on the roster when rent is paid; optionally listed in store for individual purchase
+  - **Per-Use**: Grants free store redemptions when rent is paid (single-use by default, or limited uses when set); always listed in store with "Rent Perk" badge; cannot be deleted from store (only via rent settings)
+  - **Hall Pass**: Tops off student hall passes when rent is paid using source-tracking model (rent-granted vs purchased passes tracked separately via `StudentBlock.rent_hall_passes`)
+  - **Mid-period edit guardrail**: Once any student has paid rent for the current period, item type, use limits, and hall pass counts are locked; only cosmetic changes (name, description, price) are allowed
+  - **Store integration**: Per-use items marked `is_rent_linked` on `StoreItem`, preventing accidental deletion; admin store shows "Rent Perk" badge with disabled delete buttons for linked items
+  - **Multi-use item tracking**: Added `uses_remaining` to `StudentItem` for per-use rent items with limited uses
+  - **Free uses from rent**: When rent is fully paid, per-use items grant a free `StudentItem` with `uses_remaining` set (default 1); students can redeem these at no cost via the store
+  - **Free purchase flow**: Store purchase route checks for active rent-granted uses before charging; shows "Free use (rent perk)" message
+  - **Student shop indicators**: Rent-linked items show free uses remaining badge; "Included in your rent!" only shown for privilege-type items
+  - **Models**: Added `rent_item_type`, `use_limit`, `hall_pass_count` to `RentItem`; `is_rent_linked` to `StoreItem`; `rent_hall_passes` to `StudentBlock`; `uses_remaining` to `StudentItem`
+  - **Migrations**: `c2d9cf951ddc`, `9b0e06f05fcf`, `2765a36d76ff` (all idempotent)
+- **Pre-paid Rent Coverage Period Tracking** - Rent payments now explicitly track which period they cover
+  - Added `coverage_month` and `coverage_year` columns to `RentPayment` model
+  - Paying rent on the due date (e.g., 1/28) now covers the student from 1/29 to the next due date (2/28)
+  - All rent privilege checks, purchase blocking, dashboard status, and shop indicators use coverage-based lookups
+  - Itemized rent item purchases (`per_period` duration) follow the same coverage period
+  - **Migration**: `a1b2c3d4e5f6` adds columns with backfill from existing `period_month`/`period_year`
+
+### Fixed
+- **Privilege Badges Showing Non-Privilege Rent Items** - Fixed roster badge display to only show privilege-type rent items, not per-use or hall pass items
+  - **Issue**: `_build_rent_privileges_by_block()` and `_get_rent_privileges_for_student()` filtered by `purchase_duration='per_period'` but not `rent_item_type='privilege'`, causing per-use and hall pass items to incorrectly appear as roster badges
+  - **Solution**: Added `rent_item_type='privilege'` filter to both functions and the student shop "Included in your rent!" indicator
+- **Insurance Class Selector Not Filtering Data** - Fixed multi-tenancy scoping issue where insurance management page showed all classes' data regardless of selected class
+  - **Issue**: The "Viewing Insurance For" dropdown on the Insurance Management page did not filter policies, enrollments, or claims. Teachers with multiple class periods saw all insurance data aggregated together instead of scoped to the selected period.
+  - **Root Cause**:
+    - `InsurancePolicy` queries filtered only by `teacher_id`, not by `InsurancePolicyBlock.block`
+    - `StudentInsurance` enrollments were not filtered by `join_code`
+    - `InsuranceClaim` queries did not include `join_code` filtering
+  - **Solution**:
+    - Added `InsurancePolicyBlock` join to filter policies by selected block (or show policies available to all blocks)
+    - Added `join_code` lookup from `TeacherBlock` for the selected period
+    - Added `join_code` filter to all `StudentInsurance` and `InsuranceClaim` queries
+  - **Impact**: Teachers now see only the insurance policies, enrollments, and claims for the currently selected class period
+- **Store Purchase Blocked After Rent Paid Across Month Boundary** - Fixed rent-check logic using wrong month/year when verifying rent payments
+  - **Issue**: `purchase_item()` used `now.month`/`now.year` instead of `current_due.month`/`current_due.year` when querying `RentPayment`. When a rent due date fell in January but the purchase check ran in February (past the grace period), the query looked for February payments and found none, incorrectly blocking the student.
+  - **Solution**: All rent lookups now use `coverage_month`/`coverage_year` derived from the due date, not the wall-clock time
+- **Issue Ticket Filing Fails With "An error occurred"** - Fixed Decimal serialization error in issue context snapshots
+  - **Issue**: `create_context_snapshot()` stored raw `Decimal` objects (balances, transaction amounts) in a dict destined for a `db.JSON` column. Python's `json` module cannot serialize `Decimal`, causing a `TypeError` caught by the generic exception handler.
+  - **Solution**: Convert all `Decimal` values to `float` before storing in the context snapshot
+- **Duplicate Store Items When Applying Rent to All Periods** - Fixed `_sync_rent_items_to_store` creating duplicate store items
+  - **Issue**: When a teacher applied rent settings to multiple blocks, each block created its own store item copy instead of sharing one item with block visibility
+  - **Solution**: Look up existing store items by `teacher_id` + `name` before creating new ones; use `StoreItemBlock` to add block visibility without replacing existing associations
+
+### Changed
+- **Redundant Check Removal** - Simplified `_add_period` utility function in `app/routes/api.py` by removing a redundant `isinstance` check.
+- **Documentation Update Plan Retired** - Removed `docs/development/DOCUMENTATION_UPDATE_PLAN.md` after v1.7 documentation updates were completed and tracked.
+
 ### Security
 - **Hall Pass Data Leak Fix** - `get_active_hall_passes` API now requires explicit scoping parameter to prevent returning global hall pass data across all classes
 - **Hardened Grafana Proxy XSS Protection** - Improved content-type filtering to prevent XSS attacks (#897)
@@ -343,7 +400,7 @@ and this project follows semantic versioning principles.
 ### Documentation
 - Reorganized documentation structure for improved navigation
 - **Developer Documentation Updates** - Updated development tracking documentation to reflect current status
-  - Updated `docs/development/DEVELOPMENT.md` to reflect v1.6.0 status (was showing 1.4.0)
+  - Updated `DEVELOPMENT.md` to reflect v1.6.0 status (was showing 1.4.0)
   - Added v1.5.0 and v1.6.0 release summaries to Recent Releases section
   - Updated target version from 1.5.0 to 1.7.0
   - Updated `IMPLEMENTATION_PROGRESS.md` to mark sysadmin routes and templates as completed (were incorrectly marked as pending)
@@ -351,7 +408,7 @@ and this project follows semantic versioning principles.
   - Updated Next Steps with current implementation status (85% complete)
   - Added specific guidance for remaining work (tests, user docs, technical docs)
 - **Comprehensive Documentation Accuracy Fixes** - Corrected 10 inaccuracies found in user-facing documentation
-  - **Store Items (docs/features/store/creating-items.md)**:
+  - **Store Items (docs/user-guides/features/store/creating-items.md)**:
     - Fixed tier system documentation to reflect actual implementation (Basic/Standard/Premium/Luxury based on % of CWI, not Tier 1/2/3 with dollar amounts)
     - Corrected default state - items are created as active by default, not inactive
     - Removed non-existent image upload feature documentation
@@ -363,13 +420,13 @@ and this project follows semantic versioning principles.
     - Removed confusing "if available" language for collective goals (feature is fully available)
     - Removed misleading "Use images" tip from Tips for Success section (feature doesn't exist)
     - Fixed contradictory troubleshooting text about daily limits (clarified to use inventory and per-student limits)
-  - **Payroll (docs/features/payroll/running-payroll.md)**:
+  - **Payroll (docs/user-guides/features/payroll/running-payroll.md)**:
     - Removed non-existent automatic payroll feature documentation (entire section)
     - Added guidance for manual payroll scheduling and consistency
     - Clarified that break time IS paid (system does not exclude breaks from hours worked)
     - Added Q&A explaining how to handle unpaid breaks if desired
     - Updated all automatic payroll references to reflect manual-only operation
-  - **Banking (docs/features/banking/transferring-money.md)**:
+  - **Banking (docs/user-guides/features/banking/transferring-money.md)**:
     - Removed non-existent transfer limits documentation (daily limits, min/max transfer amounts)
     - Simplified to only document actual rules (no negative balances)
 
@@ -716,7 +773,7 @@ The project is ready for version 1.0 release. All critical blockers have been re
 
 ### Added (2025-12-11)
 - **DEVELOPMENT.md** — Unified development priorities document consolidating all TODO files and roadmap
-- **docs/technical-reference/ECONOMY_SPECIFICATION.md** — Financial system specification (moved from root)
+- **docs/technical-reference/economy-specification.md** — Financial system specification (moved from root)
 - **docs/development/ECONOMY_BALANCE_CHECKER.md** — CWI implementation guide (moved from root)
 
 ### Changed (2025-12-11)

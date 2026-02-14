@@ -342,7 +342,7 @@ None - This is a feature and UI-focused release with no schema changes
 - `../../CHANGELOG.md` - Updated with all v1.4.0 changes
 - `../../ai/CLAUDE.md` - Updated version to 1.4.0
 - `README.md` - Updated project status for v1.4.0
-- `../../development/DEVELOPMENT.md` - Updated current version
+- `../../DEVELOPMENT.md` - Updated current version
 
 ---
 
@@ -412,7 +412,7 @@ After upgrading to v1.4.0, test the following:
 - [Full Changelog](../../CHANGELOG.md#140---2025-12-27)
 - [Version 1.3.0 Release Notes](RELEASE_NOTES_v1.3.0.md)
 - [Project README](../../README.md)
-- [Development Priorities](../../development/DEVELOPMENT.md)
+- [Development Priorities](../../DEVELOPMENT.md)
 
 ---
 

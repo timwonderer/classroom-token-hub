@@ -1,7 +1,7 @@
 """
 Analytics Engine for Classroom Economy
 
-Implements analytics computation per docs/technical-reference/Class-economy-analytics-specs.md.
+Implements analytics computation per docs/technical-reference/analytics-specification.md.
 
 Core Principles:
 - All monetary metrics are CWI-relative (not absolute)
@@ -18,9 +18,11 @@ Per spec section 4.2:
 """
 
 from datetime import datetime, timezone
+from app.utils.time import utc_now
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from sqlalchemy import and_, or_, true
+import sqlalchemy as sa
 
 from app.extensions import db
 from app.models import (
@@ -28,6 +30,7 @@ from app.models import (
     RentSettings, AnalyticsSnapshot, AnalyticsAlert, TeacherBlock,
     StudentTeacher
 )
+from app.models import DemoStudent
 from app.utils.economy_balance import EconomyBalanceChecker
 import logging
 
@@ -138,7 +141,21 @@ class AnalyticsEngine:
 
         scoped_student_ids = teacherblock_ids.union(studentblock_ids).subquery()
 
-        return query.filter(Student.id.in_(scoped_student_ids)).distinct(Student.id).all()
+        demo_student_ids = (
+            DemoStudent.query.with_entities(DemoStudent.student_id)
+            .filter(DemoStudent.admin_id == self.teacher_id)
+            .subquery()
+        )
+
+        return (
+            query
+            .filter(Student.id.in_(sa.select(scoped_student_ids)))
+            .filter(~Student.id.in_(sa.select(demo_student_ids)))
+            # NOTE: DISTINCT ON is PostgreSQL-specific.
+            # This analytics query is intentionally Postgres-only.
+            .distinct(Student.id)
+            .all()
+        )
     
     def _get_cwi(self) -> float:
         """Calculate current CWI for this class."""
@@ -615,13 +632,13 @@ class AnalyticsEngine:
                     what_changed=alert_data['what_changed'],
                     why_it_matters=alert_data['why_it_matters'],
                     suggested_action=alert_data.get('suggested_action'),
-                    created_at=datetime.now(timezone.utc)
+                    created_at=utc_now()
                 )
                 db.session.add(alert)
             elif existing_alert.resolved_at:
                 # If alert was previously resolved, re-activate it
                 existing_alert.resolved_at = None
-                existing_alert.created_at = datetime.now(timezone.utc)
+                existing_alert.created_at = utc_now()
 
         # Resolve alerts from this window that no longer apply
         stale_alerts = AnalyticsAlert.query.filter(
@@ -664,5 +681,5 @@ class AnalyticsEngine:
             return snapshot
         
         # Create new snapshot
-        is_complete = window_end <= datetime.now(timezone.utc)
+        is_complete = window_end <= utc_now()
         return self.create_snapshot(window_type, window_start, window_end, is_complete)

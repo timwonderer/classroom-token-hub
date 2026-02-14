@@ -1,0 +1,109 @@
+"""remove_unused_rent_item_allocation_model
+
+Revision ID: 2765a36d76ff
+Revises: 9b0e06f05fcf
+Create Date: 2026-02-06 15:44:58.401510
+
+"""
+from alembic import op
+import sqlalchemy as sa
+
+
+# ============================================================================
+# IDEMPOTENCY HELPERS (REQUIRED)
+# ============================================================================
+
+def table_exists(table_name):
+    """Check if a table exists."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
+
+def column_exists(table_name, column_name):
+    """Check if a column exists in a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        columns = [col['name'] for col in inspector.get_columns(table_name)]
+        return column_name in columns
+    except Exception:
+        return False
+
+def index_exists(table_name, index_name):
+    """Check if an index exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
+        return index_name in indexes
+    except Exception:
+        return False
+
+def foreign_key_exists(table_name, fk_name):
+    """Check if a foreign key exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        fks = [fk['name'] for fk in inspector.get_foreign_keys(table_name)]
+        return fk_name in fks
+    except Exception:
+        return False
+
+def get_foreign_keys_by_column(table_name, column_name):
+    """
+    Get foreign key constraints that reference a specific column.
+
+    Use this instead of hardcoding FK names in downgrade.
+    """
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        return [
+            fk for fk in inspector.get_foreign_keys(table_name)
+            if column_name in fk['constrained_columns']
+        ]
+    except Exception:
+        return []
+
+# ============================================================================
+# MIGRATION FUNCTIONS
+# ============================================================================
+
+# revision identifiers, used by Alembic.
+revision = '2765a36d76ff'
+down_revision = '9b0e06f05fcf'
+branch_labels = None
+depends_on = None
+
+
+def upgrade():
+    if table_exists('rent_item_allocations'):
+        if index_exists('rent_item_allocations', 'ix_rent_allocations_student_period'):
+            with op.batch_alter_table('rent_item_allocations', schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f('ix_rent_allocations_student_period'))
+        if index_exists('rent_item_allocations', 'ix_rent_item_allocations_join_code'):
+            with op.batch_alter_table('rent_item_allocations', schema=None) as batch_op:
+                batch_op.drop_index(batch_op.f('ix_rent_item_allocations_join_code'))
+        op.drop_table('rent_item_allocations')
+
+
+def downgrade():
+    if not table_exists('rent_item_allocations'):
+        op.create_table('rent_item_allocations',
+            sa.Column('id', sa.INTEGER(), nullable=False),
+            sa.Column('student_id', sa.INTEGER(), nullable=False),
+            sa.Column('rent_item_id', sa.INTEGER(), nullable=False),
+            sa.Column('join_code', sa.VARCHAR(length=20), nullable=False),
+            sa.Column('coverage_month', sa.INTEGER(), nullable=False),
+            sa.Column('coverage_year', sa.INTEGER(), nullable=False),
+            sa.Column('uses_granted', sa.INTEGER(), nullable=True),
+            sa.Column('uses_remaining', sa.INTEGER(), nullable=True),
+            sa.Column('created_at', sa.DATETIME(), nullable=True),
+            sa.ForeignKeyConstraint(['rent_item_id'], ['rent_items.id'], ),
+            sa.ForeignKeyConstraint(['student_id'], ['students.id'], ),
+            sa.PrimaryKeyConstraint('id'),
+            sa.UniqueConstraint('student_id', 'rent_item_id', 'join_code', 'coverage_month', 'coverage_year', name=op.f('uq_rent_allocation_period'))
+        )
+        with op.batch_alter_table('rent_item_allocations', schema=None) as batch_op:
+            batch_op.create_index(batch_op.f('ix_rent_item_allocations_join_code'), ['join_code'], unique=False)
+            batch_op.create_index(batch_op.f('ix_rent_allocations_student_period'), ['student_id', 'join_code', 'coverage_month', 'coverage_year'], unique=False)

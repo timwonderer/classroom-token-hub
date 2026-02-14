@@ -273,7 +273,7 @@ class TestAnnouncementMultiTenancy:
         assert len(announcements_b) == 1
         assert announcements_b[0].title == 'Announcement for Block B'
 
-    def test_announcement_cascade_delete(self, client, test_teacher, teacher_block):
+    def test_announcement_cascade_delete(self, client_with_fk, test_teacher, teacher_block):
         """Test that announcements are deleted when teacher is deleted."""
         announcement = Announcement(
             teacher_id=test_teacher.id,
@@ -291,6 +291,6 @@ class TestAnnouncementMultiTenancy:
         db.session.delete(test_teacher)
         db.session.commit()
 
-        # Verify announcement is deleted
-        deleted_announcement = Announcement.query.get(announcement_id)
-        assert deleted_announcement is None
+        # Verify announcement was CASCADE-deleted at the database level
+        remaining = Announcement.query.filter_by(id=announcement_id).count()
+        assert remaining == 0

@@ -6,6 +6,7 @@ Contains periodic tasks that run in the background to maintain system state.
 
 import logging
 from datetime import datetime, timezone
+from app.utils.time import utc_now
 
 
 def enforce_daily_limits_job():
@@ -93,7 +94,7 @@ def cleanup_expired_demo_sessions_job():
     logger.info("Starting demo session cleanup job")
 
     try:
-        now = datetime.now(timezone.utc)
+        now = utc_now()
 
         # Find all active demo sessions that have expired
         expired_sessions = DemoStudent.query.filter(

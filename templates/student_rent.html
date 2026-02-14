@@ -148,8 +148,15 @@
         {% endif %}
 
         <div class="mb-3">
-            <p class="mb-1 text-muted"><strong>Due Date:</strong></p>
-            <p class="mb-0">{{ due_date.strftime('%B %d, %Y') }}</p>
+            <p class="mb-1 text-muted"><strong>{% if status.is_late %}Overdue Since:{% elif status.is_preview_period %}Upcoming Due Date:{% else %}Due Date:{% endif %}</strong></p>
+            <p class="mb-0">
+                {{ payment_due_date.strftime('%B %d, %Y') }}
+                {% if status.is_late %}
+                    <span class="badge bg-danger ms-2">OVERDUE</span>
+                {% elif status.is_preview_period %}
+                    <span class="badge bg-info ms-2">Preview Period</span>
+                {% endif %}
+            </p>
         </div>
 
         <hr>
@@ -158,7 +165,7 @@
         {% if not status.rent_is_active %}
         <div class="alert alert-info mb-0">
             <strong>Not Yet Due</strong>
-            <br>Rent will be due starting {{ due_date.strftime('%B %d, %Y') }}
+            <br>Rent will be due starting {{ payment_due_date.strftime('%B %d, %Y') }}
         </div>
         {% else %}
         {% if status.is_preview_period and not status.is_paid %}
@@ -180,14 +187,14 @@
         </div>
         {% if status.is_late %}
         <div class="alert alert-danger mb-3">
-            <strong>Late!</strong> Grace period ended on {{ grace_end_date.strftime('%B %d, %Y') }}.
+            <strong>Late!</strong> Grace period ended on {{ grace_end_date_for_status.strftime('%B %d, %Y') }}.
             <br>Late fee of <strong>${{ "%.2f"|format(status.late_fee) }}</strong> has been added to total.
         </div>
         {% endif %}
         {% elif status.is_late %}
         <div class="alert alert-danger mb-3">
-            <strong>Late!</strong> Grace period ended on {{ grace_end_date.strftime('%B %d, %Y') }}.
-            <br>A late fee of <strong>${{ "%.2f"|format(settings.late_fee) }}</strong> will be added.
+            <strong>Late!</strong> Grace period ended on {{ grace_end_date_for_status.strftime('%B %d, %Y') }}.
+            <br>A late fee of <strong>${{ "%.2f"|format(settings.late_fee) }}</strong> has been added.
         </div>
         <div class="mb-3">
             <p class="text-muted"><strong>Total Amount Due:</strong></p>
@@ -198,7 +205,7 @@
         </div>
         {% else %}
         <div class="alert alert-info mb-3">
-            <strong>Grace Period:</strong> Pay by {{ grace_end_date.strftime('%B %d, %Y') }} to avoid late fee.
+            <strong>Grace Period:</strong> Pay by {{ grace_end_date_for_status.strftime('%B %d, %Y') }} to avoid late fee.
         </div>
         {% endif %}
 

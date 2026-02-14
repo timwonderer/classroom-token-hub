@@ -6,10 +6,12 @@ Contains session management helpers, authentication decorators, and timeout logi
 
 import urllib.parse
 from datetime import datetime, timedelta, timezone
+from app.utils.time import utc_now
 from functools import wraps
 
 import sqlalchemy as sa
 from flask import session, flash, redirect, url_for, request, current_app, jsonify
+from app.extensions import db
 
 
 # -------------------- SESSION CONFIGURATION --------------------
@@ -81,7 +83,7 @@ def login_required(f):
                     return redirect(url_for('admin.dashboard'))
 
                 login_time = datetime.fromisoformat(login_time_str)
-                if (datetime.now(timezone.utc) - login_time) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+                if (utc_now() - login_time) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
                     demo_session_id = session.get('demo_session_id')
 
                     try:
@@ -133,7 +135,7 @@ def login_required(f):
 
                 from app.models import DemoStudent  # Imported lazily to avoid circular import
                 demo_session = DemoStudent.query.filter_by(session_id=demo_session_id).first()
-                now = datetime.now(timezone.utc)
+                now = utc_now()
 
                 expires_at = None
                 if demo_session and isinstance(demo_session.expires_at, datetime):
@@ -188,7 +190,7 @@ def login_required(f):
                         return redirect(url_for('admin.dashboard'))
 
             # Update admin's last activity
-            session['last_activity'] = datetime.now(timezone.utc).isoformat()
+            session['last_activity'] = utc_now().isoformat()
             return f(*args, **kwargs)
 
         # Regular student authentication check
@@ -198,7 +200,7 @@ def login_required(f):
                 return jsonify({"status": "error", "error": "User not logged in or session expired"}), 401
             next_path = _get_safe_next_path()
             encoded_next = urllib.parse.quote(next_path, safe="")
-            return redirect(f"{url_for('student.login')}?next={encoded_next}")
+            return redirect(f"{url_for('student.login')}?next={encoded_next}")  # nosec # Safe: validated by _get_safe_next_path()
 
         # Enforce strict 10-minute timeout from login time
         login_time_str = session.get('login_time')
@@ -214,7 +216,7 @@ def login_required(f):
             return redirect(url_for('student.login'))
 
         login_time = datetime.fromisoformat(login_time_str)
-        if (datetime.now(timezone.utc) - login_time) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+        if (utc_now() - login_time) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
             # Clear student-specific keys but preserve CSRF token
             session.pop('student_id', None)
             session.pop('login_time', None)
@@ -225,10 +227,20 @@ def login_required(f):
             flash("Session expired. Please log in again.")
             next_path = _get_safe_next_path()
             encoded_next = urllib.parse.quote(next_path, safe="")
-            return redirect(f"{url_for('student.login')}?next={encoded_next}")
+            return redirect(f"{url_for('student.login')}?next={encoded_next}")  # nosec # Safe: validated by _get_safe_next_path()
 
         # Continue to update last_activity for other potential uses, but it no longer controls the timeout
-        session['last_activity'] = datetime.now(timezone.utc).isoformat()
+        student = get_logged_in_student()
+        if not student:
+            session.pop('student_id', None)
+            session.pop('login_time', None)
+            session.pop('last_activity', None)
+            if request.path.startswith('/api/'):
+                return jsonify({"status": "error", "error": "Account is inactive. Contact your teacher."}), 403
+            flash("Your account is inactive. Contact your teacher.", "error")
+            return redirect(url_for('student.login'))
+
+        session['last_activity'] = utc_now().isoformat()
         return f(*args, **kwargs)
     return decorated_function
 
@@ -247,7 +259,7 @@ def admin_required(f):
             flash("You must be an admin to view this page.")
             next_path = _get_safe_next_path()
             encoded_next = urllib.parse.quote(next_path, safe="")
-            return redirect(f"{url_for('admin.login')}?next={encoded_next}")
+            return redirect(f"{url_for('admin.login')}?next={encoded_next}")  # nosec # Safe: validated by _get_safe_next_path()
 
         admin = get_current_admin()
         if not admin:
@@ -257,9 +269,9 @@ def admin_required(f):
             flash("Admin session is invalid. Please log in again.")
             next_path = _get_safe_next_path()
             encoded_next = urllib.parse.quote(next_path, safe="")
-            return redirect(f"{url_for('admin.login')}?next={encoded_next}")
+            return redirect(f"{url_for('admin.login')}?next={encoded_next}")  # nosec # Safe: validated by _get_safe_next_path()
 
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         last_activity = session.get('last_activity')
 
         if last_activity:
@@ -290,7 +302,7 @@ def system_admin_required(f):
             flash("System administrator access required.")
             return redirect(url_for('sysadmin.login', next=request.path))
         last_activity = session.get('last_activity')
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         if last_activity:
             last_activity = datetime.fromisoformat(last_activity)
             if now - last_activity > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
@@ -313,7 +325,12 @@ def get_logged_in_student():
     """
     # Import here to avoid circular imports
     from app.models import Student
-    return Student.query.get(session['student_id']) if 'student_id' in session else None
+    if 'student_id' not in session:
+        return None
+    student = db.session.get(Student, session['student_id'])
+    if not student or not getattr(student, "is_active", True):
+        return None
+    return student
 
 
 def get_current_admin():
@@ -324,7 +341,7 @@ def get_current_admin():
     if not admin_id:
         return None
     from app.models import Admin  # Imported lazily to avoid circular import
-    return Admin.query.get(admin_id)
+    return db.session.get(Admin, admin_id)
 
 
 def ensure_admin_join_code(admin_id):
@@ -368,7 +385,10 @@ def get_admin_student_query(include_unassigned=True):
 
     if session.get("is_system_admin"):
         demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
-        return Student.query.filter(~Student.id.in_(demo_ids_subq))
+        return Student.query.filter(
+            Student.is_active.is_(True),
+            ~Student.id.in_(sa.select(demo_ids_subq))
+        )
 
     admin = get_current_admin()
     if not admin:
@@ -387,8 +407,9 @@ def get_admin_student_query(include_unassigned=True):
     # This caused multi-tenancy leaks when teacher_id had stale data
     demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
     return Student.query.filter(
-        Student.id.in_(shared_student_ids),
-        ~Student.id.in_(demo_ids_subq)
+        Student.is_active.is_(True),
+        Student.id.in_(sa.select(shared_student_ids)),
+        ~Student.id.in_(sa.select(demo_ids_subq))
     )
 
 

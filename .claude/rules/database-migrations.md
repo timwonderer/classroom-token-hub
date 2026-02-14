@@ -11,6 +11,9 @@
 3. **NEVER edit old migrations after they're merged to main**
 4. **ALWAYS review auto-generated migrations** before committing
 5. **NEVER skip migrations** - each schema change needs its own migration
+6. **ALWAYS include idempotency helpers** in every migration (table_exists, column_exists, index_exists, foreign_key_exists)
+7. **NEVER use hardcoded constraint names** - discover dynamically via inspection
+8. **ALWAYS check existence before CREATE operations** (tables, columns, indexes, foreign keys)
 
 ---
 
@@ -79,7 +82,65 @@ flask db migrate -m "Add email field to Student model"
 
 This creates a new file in `migrations/versions/` with a random ID like `abc123def456_add_email_field_to_student_model.py`
 
-### Step 5: IMMEDIATELY Verify the Migration
+### Step 5: Copy Idempotency Helpers (CRITICAL - NEW REQUIREMENT)
+
+**⚠️ MANDATORY:** Every migration MUST include idempotency helpers to prevent deployment failures.
+
+**Copy the helper functions from `migrations/migration_template.py.mako`:**
+
+```python
+def table_exists(table_name):
+    """Check if a table exists."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
+
+def column_exists(table_name, column_name):
+    """Check if a column exists in a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        columns = [col['name'] for col in inspector.get_columns(table_name)]
+        return column_name in columns
+    except Exception:
+        return False
+
+def index_exists(table_name, index_name):
+    """Check if an index exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
+        return index_name in indexes
+    except Exception:
+        return False
+
+def foreign_key_exists(table_name, fk_name):
+    """Check if a foreign key exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        fks = [fk['name'] for fk in inspector.get_foreign_keys(table_name)]
+        return fk_name in fks
+    except Exception:
+        return False
+
+def get_foreign_keys_by_column(table_name, column_name):
+    """Get FKs for a column (for downgrade without hardcoded names)."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        return [
+            fk for fk in inspector.get_foreign_keys(table_name)
+            if column_name in fk['constrained_columns']
+        ]
+    except Exception:
+        return []
+```
+
+**Why this is critical:** See docs/development/MIGRATION_COMPLIANCE_REVIEW.md for details on the 40+ non-idempotent migrations that cause deployment failures.
+
+### Step 6: IMMEDIATELY Verify the Migration
 
 **Open the generated migration file and check:**
 
@@ -102,25 +163,52 @@ down_revision = 'xyz789...'  # Should match your current revision
 - Go back to Step 0 and sync with main again
 - Someone else created a migration while you were working
 
-### Step 6: Review the Generated Migration
+### Step 7: Review and Wrap Generated Operations
 
-**IMPORTANT:** Alembic auto-generates migrations but they're not always perfect. YOU MUST REVIEW.
+**IMPORTANT:** Alembic auto-generates migrations but they're not always perfect. YOU MUST REVIEW AND WRAP IN EXISTENCE CHECKS.
 
-Open the generated file and check:
+Open the generated file and modify:
 
-✅ **Verify the upgrade() function is correct**
+✅ **Wrap all CREATE operations in existence checks**
+
+**BEFORE (Auto-generated - UNSAFE):**
 ```python
 def upgrade():
-    # Should match your model changes
+    # NOT IDEMPOTENT - will fail if column exists
     op.add_column('student', sa.Column('email', sa.String(length=255), nullable=True))
 ```
 
-✅ **Verify the downgrade() function reverses the change**
+**AFTER (Your responsibility - SAFE):**
+```python
+def upgrade():
+    # IDEMPOTENT - safe to run multiple times
+    if not column_exists('student', 'email'):
+        op.add_column('student', sa.Column('email', sa.String(length=255), nullable=True))
+        print("✅ Added email column to student")
+    else:
+        print("⚠️  Column 'email' already exists on 'student', skipping...")
+```
+
+✅ **Wrap downgrade operations too**
 ```python
 def downgrade():
-    # Should undo the upgrade
-    op.drop_column('student', 'email')
+    # Check before dropping
+    if column_exists('student', 'email'):
+        op.drop_column('student', 'email')
+        print("❌ Dropped email column from student")
+    else:
+        print("⚠️  Column 'email' does not exist on 'student', skipping...")
 ```
+
+**Required Patterns:**
+
+| Operation | Required Check |
+|-----------|----------------|
+| `op.create_table(...)` | `if not table_exists("table_name"):` |
+| `op.add_column(...)` | `if not column_exists("table", "column"):` |
+| `op.create_index(...)` | `if not index_exists("table", "index"):` |
+| `op.create_foreign_key(...)` | `if not foreign_key_exists("table", "fk"):` |
+| `op.drop_constraint(...)` | Use `get_foreign_keys_by_column()`, not hardcoded names |
 
 ✅ **Check for data migrations if needed**
 ```python
@@ -143,7 +231,23 @@ def upgrade():
     op.alter_column('transaction', 'join_code', nullable=False)
 ```
 
-### Step 7: Test the Upgrade
+### Step 8: Run Migration Linter
+
+**⚠️ NEW REQUIREMENT:** Validate migration before committing.
+
+```bash
+python scripts/lint_migrations.py migrations/versions/abc123def456_*.py
+```
+
+This checks for:
+- Missing idempotency helpers
+- Unsafe CREATE operations without existence checks
+- Hardcoded constraint names
+- Other best practice violations
+
+**If linting fails:** Fix the issues before proceeding. See `docs/development/migration-specifications.md` for examples.
+
+### Step 9: Test the Upgrade
 
 ```bash
 flask db upgrade
@@ -154,7 +258,7 @@ flask db upgrade
 - Database schema matches your model
 - Verify with `psql` or database client if needed
 
-### Step 8: Test the Downgrade
+### Step 10: Test the Downgrade
 
 ```bash
 flask db downgrade
@@ -165,7 +269,7 @@ flask db downgrade
 - No data loss (if data migration involved, check carefully)
 - Database returns to previous state
 
-### Step 9: Re-upgrade for Development
+### Step 11: Re-upgrade for Development
 
 ```bash
 flask db upgrade
@@ -173,7 +277,7 @@ flask db upgrade
 
 Your database should now be at the latest version.
 
-### Step 10: Verify Single Head (CRITICAL)
+### Step 12: Verify Single Head (CRITICAL)
 
 ```bash
 flask db heads  # MUST still show exactly 1 head
@@ -186,7 +290,7 @@ flask db heads  # MUST still show exactly 1 head
 bash scripts/check-migration-heads.sh
 ```
 
-### Step 11: Run Tests
+### Step 13: Run Tests
 
 ```bash
 pytest tests/
@@ -194,7 +298,7 @@ pytest tests/
 
 **All tests must pass** before committing the migration.
 
-### Step 12: Commit
+### Step 14: Commit
 
 ```bash
 git add app/models.py migrations/versions/abc123def456_*.py
@@ -514,6 +618,9 @@ flask db downgrade --sql
 # Generate migration
 flask db migrate -m "Description"
 
+# Lint migration (NEW - REQUIRED)
+python scripts/lint_migrations.py migrations/versions/abc123*.py
+
 # Apply migrations
 flask db upgrade
 
@@ -531,6 +638,9 @@ flask db merge heads -m "Merge description"
 
 # Show SQL without executing
 flask db upgrade --sql
+
+# Check migration heads (detect multiple heads early)
+bash scripts/check-migration-heads.sh
 ```
 
 ---
@@ -544,16 +654,25 @@ Every time you change database schema:
 3. ✅ **Note current revision:** `flask db current`
 4. ✅ Modify model in `app/models.py`
 5. ✅ Generate migration: `flask db migrate -m "clear description"`
-6. ✅ **IMMEDIATELY verify `down_revision` matches Step 3**
-7. ✅ Review generated migration file
-8. ✅ Test upgrade: `flask db upgrade`
-9. ✅ Test downgrade: `flask db downgrade`
-10. ✅ Re-upgrade: `flask db upgrade`
-11. ✅ **Verify single head:** `flask db heads` (still must show exactly 1)
-12. ✅ Run tests: `pytest tests/`
-13. ✅ Commit model + migration together
-14. ✅ Update `docs/technical-reference/database_schema.md` if significant change
-15. ✅ Update `CHANGELOG.md`
+6. ✅ **COPY IDEMPOTENCY HELPERS** from `migrations/migration_template.py.mako`
+7. ✅ **IMMEDIATELY verify `down_revision` matches Step 3**
+8. ✅ **WRAP ALL CREATE OPERATIONS** in existence checks (column_exists, table_exists, etc.)
+9. ✅ Review generated migration file
+10. ✅ **RUN MIGRATION LINTER:** `python scripts/lint_migrations.py migrations/versions/abc*.py`
+11. ✅ Test upgrade: `flask db upgrade`
+12. ✅ Test downgrade: `flask db downgrade`
+13. ✅ Re-upgrade: `flask db upgrade`
+14. ✅ **Verify single head:** `flask db heads` (still must show exactly 1)
+15. ✅ Run tests: `pytest tests/`
+16. ✅ Commit model + migration together
+17. ✅ Update `docs/technical-reference/database_schema.md` if significant change
+18. ✅ Update `CHANGELOG.md`
+
+**NEW REQUIREMENTS (2026-02-04):**
+- All migrations MUST include idempotency helpers
+- All CREATE operations MUST check existence first
+- Migration linter MUST pass before committing
+- See `docs/development/MIGRATION_COMPLIANCE_REVIEW.md` for full audit report
 
 ---
 

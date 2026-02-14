@@ -1,8 +1,8 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-01-09
-**Current Version:** 1.7.0
-**Target:** 1.8.0 Future Enhancements
+**Last Updated:** 2026-02-09
+**Current Version:** 1.8.0
+**Target:** 1.9.0 Future Enhancements
 
 ---
 
@@ -21,7 +21,28 @@
 
 ---
 
+## In Progress (Unreleased)
+
+- Fixed student recovery identity updates to preserve claimed class seats, preventing post-claim "No class selected" errors on next login.
+- Updated teacher reset flow to redirect to Student Detail after generating a reset code, where the active code remains visible until expiration.
+- Improved mobile responsiveness for student recovery pages by tightening spacing and collapsing the right panel on small screens.
+
+---
+
 ## Recent Releases
+
+### ✅ Version 1.8.0 - February 9, 2026
+
+**Major feature release focused on rent item types, coverage tracking, and stability fixes:**
+
+#### 🎯 Key Accomplishments
+- ✅ **Rent Item Types** - Added privilege, per-use, and hall pass rent item types with store integration and usage tracking
+- ✅ **Pre-Paid Rent Coverage Tracking** - Rent payments now record coverage period and drive all rent checks
+- ✅ **Store & Rent Stability Fixes** - Fixed duplicate rent-linked store items and rent purchase blocking across month boundaries
+- ✅ **Insurance Class Scoping** - Fixed insurance management filters to respect selected class period
+- ✅ **Security Hardening** - Improved Grafana proxy content-type filtering to prevent XSS
+
+See [RELEASE_NOTES_v1.8.0.md](docs/archive/releases/RELEASE_NOTES_v1.8.0.md) for full details.
 
 ### ✅ Version 1.7.0 - January 9, 2026
 
@@ -33,6 +54,7 @@
 - ✅ **Mobile Navigation** - Full navigation menu accessible on mobile and PWA
 - ✅ **Rent Privilege Badges** - Visual indicators for active rent privileges
 - ✅ **Purchase Duration Options** - Per-use vs per-period choices for rent items
+- ✅ **Code Quality Improvement** - Simplified redundant logic in `_add_period` utility function
 - ✅ **Enhanced Purchase Restrictions** - Dynamic behavior based on rent itemization
 - ✅ **ToS Acknowledgment** - Compliance modal during admin signup
 - ✅ **Issue Resolution Improvements** - EasyMDE form fixes and zero-value event display
@@ -111,7 +133,7 @@ See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for
 
 ---
 
-## Development Priorities (v1.3)
+## Development Priorities (v1.9)
 
 ### 🟠 HIGH PRIORITY
 
@@ -141,6 +163,13 @@ See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for
 - [ ] Create runbook for schema changes affecting tenancy or payroll
 - [ ] Document pre/post checks for migrations with maintenance mode
 - [ ] Establish migration validation checklist
+
+#### 4. Migration Compliance Re-Audit
+**Status:** Pending
+
+**Tasks:**
+- [ ] Re-audit migrations for idempotency compliance
+- [ ] Update `docs/development/MIGRATION_COMPLIANCE_REVIEW.md` with current status and findings
 
 ### 🟡 MEDIUM PRIORITY
 
@@ -570,7 +599,7 @@ When ready to finalize multi-teacher model:
 - **[Database Schema](docs/technical-reference/database_schema.md)** - Data models and relationships
 - **[API Reference](docs/technical-reference/api_reference.md)** - REST endpoints
 - **[Timezone Handling](docs/technical-reference/TIMEZONE_HANDLING.md)** - UTC storage and conversion
-- **[Economy Specification](docs/technical-reference/ECONOMY_SPECIFICATION.md)** - Financial system ratios and rules
+- **[Economy Specification](docs/technical-reference/economy-specification.md)** - Financial system ratios and rules
 
 ### Development Guides
 - **[Economy Balance Checker](docs/development/ECONOMY_BALANCE_CHECKER.md)** - CWI implementation guide

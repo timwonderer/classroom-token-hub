@@ -1,130 +1,203 @@
-# Migration Specifications
+# Database Migration Specifications
 
-This document consolidates all policies, best practices, and guides related to database migrations, schema changes, and deprecation patterns for the Classroom Economy application.
-
----
-
-# Table of Contents
-
-1. [Schema Change Policy](#1-schema-change-policy)
-   - [Schema Change Gate](#schema-change-gate)
-   - [Schema Contraction & Destructive Migration Policy](#schema-contraction--destructive-migration-policy)
-2. [Migration Best Practices](#2-migration-best-practices)
-   - [Core Principle: Idempotency](#core-principle-migrations-must-be-idempotent)
-   - [Required Checks](#required-checks-before-schema-changes)
-   - [Downgrade Functions](#downgrade-functions)
-   - [Testing & Review](#migration-review-checklist)
-3. [Migration Guide & Troubleshooting](#3-migration-guide--troubleshooting)
-   - [Branch Consolidation & Multiple Heads](#branch-consolidation--multiple-heads)
-   - [Verification Commands](#verification-commands)
-4. [Deprecation Standards](#4-deprecation-standards)
-   - [Deprecated Symbols Registry](#deprecated-symbols-registry)
-   - [Deprecated Code Patterns](#deprecated-code-patterns)
+> [!IMPORTANT]
+> This is the **Single Source of Truth** for all database migration policies, best practices, and workflows in the Classroom Economy project. All contributors must adhere to these standards.
 
 ---
 
-# 1. Schema Change Policy
+## 1. The Golden Rules
 
-## Schema Change Gate
+1.  **NEVER modify `app/models.py` without creating a migration.**
+2.  **ALWAYS test migrations before committing** (upgrade AND downgrade).
+3.  **NEVER edit old migrations after they're merged to main.**
+4.  **ALWAYS review auto-generated migrations** before committing.
+5.  **NEVER skip migrations** - each schema change needs its own migration.
+6.  **ALWAYS include idempotency helpers** in every migration (`table_exists`, `column_exists`, etc.).
+7.  **NEVER use hardcoded constraint names** - discover dynamically via inspection.
+8.  **ALWAYS check existence before CREATE operations** (tables, columns, indexes, foreign keys).
 
-**Purpose:**  
-This gate is **PR‑blocking by design**. A schema-affecting PR that does not explicitly pass this gate **MUST NOT** be merged.
+---
 
-### When This Gate Applies
+## 2. Migration Best Practices
 
-This gate is REQUIRED if a pull request includes **any** of the following:
+### Core Principle: Migrations Must Be Idempotent
 
-- Dropping or renaming a column
-- Dropping or renaming a table
-- Removing or changing foreign keys
-- Replacing one-to-one or one-to-many relations with association tables
-- Removing model attributes that map to existing database columns
+**Idempotent migrations** can be run multiple times without causing errors or data corruption. This is critical because:
+1.  Schema changes may have been applied manually in production to fix urgent issues.
+2.  Previous migration runs may have partially completed before failing.
+3.  The same migration may exist in multiple branches that get merged.
 
-### PR Classification (Required)
+### Required Idempotency Helpers
 
-Every schema-affecting PR MUST declare **exactly one** classification at the top of the PR description:
+Every migration MUST include these helper functions to enable safe existence checks:
 
-- [ ] **EXPAND** – Additive, backward-compatible (no removals)
-- [ ] **CONTRACT (CODE ONLY)** – Model attribute removal, DB schema unchanged
-- [ ] **CONTRACT (DATABASE)** – Destructive migration only
+```python
+def table_exists(table_name):
+    """Check if a table exists."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
 
-### Mandatory Checklist (PR-Blocking)
+def column_exists(table_name, column_name):
+    """Check if a column exists in a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        columns = [col['name'] for col in inspector.get_columns(table_name)]
+        return column_name in columns
+    except Exception:
+        return False
 
-#### Expand / Contract Compliance
-- [ ] This PR represents **only one phase** of Expand / Contract
-- [ ] No destructive DB changes are included in EXPAND or CONTRACT (CODE ONLY)
-- [ ] CONTRACT (DATABASE) PR contains **no unrelated code changes**
+def index_exists(table_name, index_name):
+    """Check if an index exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
+        return index_name in indexes
+    except Exception:
+        return False
 
-#### Model & Runtime Safety
-- [ ] Legacy attributes removed from models (if applicable)
-- [ ] Application boots and runs without legacy attributes
-- [ ] No runtime access to deprecated attributes remains
+def foreign_key_exists(table_name, fk_name):
+    """Check if a foreign key exists on a table."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        fks = [fk['name'] for fk in inspector.get_foreign_keys(table_name)]
+        return fk_name in fks
+    except Exception:
+        return False
 
-#### Deprecated Symbol Audit
-- [ ] All deprecated attributes/columns are listed explicitly
-- [ ] No deprecated symbols appear in application code
-- [ ] Any allowlisted exceptions (tests/migrations) are documented
+def get_foreign_keys_by_column(table_name, column_name):
+    """Get FKs for a column (for downgrade without hardcoded names)."""
+    conn = op.get_bind()
+    inspector = sa.inspect(conn)
+    try:
+        return [
+            fk for fk in inspector.get_foreign_keys(table_name)
+            if column_name in fk['constrained_columns']
+        ]
+    except Exception:
+        return []
+```
 
-#### Migration Robustness
-- [ ] No constraint names are hardcoded
-- [ ] Constraints are discovered dynamically via inspection
-- [ ] Migrations are idempotent where feasible
+### Usage Patterns
 
-#### Migration Rehearsal
-- [ ] Migration rehearsed on production-like clone
-- [ ] `upgrade` succeeds
-- [ ] `downgrade` succeeds **or** migration declared irreversible
-- **If rehearsal not performed:**
-    - [ ] PR labeled **UNSAFE: NO MIGRATION REHEARSAL**
+#### Upgrade Safety
+```python
+def upgrade():
+    # IDEMPOTENT - Safe to run multiple times
+    if not column_exists('student', 'email'):
+        op.add_column('student', sa.Column('email', sa.String(length=255), nullable=True))
+        print("✅ Added email column to student")
+    else:
+        print("⚠️  Column 'email' already exists on 'student', skipping...")
+```
 
-#### Testing Requirements
-- [ ] No tests were fixed mechanically
-- [ ] Tests affected by schema change were re-evaluated for intent
-- **Mandatory workflows verified:**
-    - [ ] Account claiming
-    - [ ] Money transfer
-    - [ ] Student creation / association
-    - [ ] Admin / teacher-scoped operations
+#### Downgrade Safety
+```python
+def downgrade():
+    # Check before dropping
+    if column_exists('student', 'email'):
+        op.drop_column('student', 'email')
+        print("❌ Dropped email column from student")
+    else:
+        print("⚠️  Column 'email' does not exist on 'student', skipping...")
+```
 
-## Schema Contraction & Destructive Migration Policy
+---
 
-> [!WARNING]
-> All destructive schema changes (column/table removal, relationship deletion, FK removal) MUST adhere to this policy.
+## 3. Implementation Guidelines
 
-### Governing Principle
+### Migration Naming Conventions
+Use descriptive names that clearly state changes:
 
-Schema deletion is not a refactor. It is a *high-risk operational change*. Therefore, destructive schema changes require staged compatibility windows designed to surface hidden dependencies **early, loudly, and reversibly**.
+- **Add Column:** `flask db migrate -m "Add join_code to Transaction table"`
+- **Create Table:** `flask db migrate -m "Create RecoveryRequest table"`
+- **Remove Column:** `flask db migrate -m "Remove deprecated field from StoreItem"`
+- **Renaming:** `flask db migrate -m "Rename student_id to user_id in Transaction"`
+- **Relationship:** `flask db migrate -m "Add foreign key between Student and Teacher"`
 
-### Mandatory Pattern: Expand and Contract
+### Common Scenarios
 
-All schema element removal MUST follow a minimum three-release sequence.
+#### 1. Adding a Required Field to Existing Table
+**Problem:** Cannot add `nullable=False` to a table with existing data.
+**Solution:**
+1.  Add column as `nullable=True`.
+2.  Backfill data (UPDATE).
+3.  Alter column to `nullable=False`.
 
-#### Phase 1: Expand (Release N)
-*Goal: Decouple application logic from the legacy schema element.*
-- New schema elements exist alongside the legacy element.
-- Application reads/writes to the new schema.
-- Legacy schema element remains present and populated.
-- **NO destructive migrations permitted.**
+```python
+def upgrade():
+    # 1. Add nullable
+    if not column_exists('student', 'email'):
+        op.add_column('student', sa.Column('email', sa.String(255), nullable=True))
+    
+    # 2. Backfill
+    op.execute("UPDATE student SET email = 'default@example.com' WHERE email IS NULL")
+    
+    # 3. Make required
+    op.alter_column('student', 'email', nullable=False)
+```
 
-#### Phase 2: Contract Code (Release N+1)
-*Goal: Prove runtime independence from the legacy schema.*
-- The legacy attribute/column is removed from the SQLAlchemy model definition.
-- The database column remains physically present.
-- The application must operate fully without the attribute.
-- Any hidden usage must fail loudly.
+#### 2. Renaming a Column
+```python
+def upgrade():
+    op.alter_column('transaction', 'student_id', new_column_name='user_id')
 
-#### Phase 3: Contract Database (Release N+2)
-*Goal: Permanent cleanup of unused schema.*
-- A migration drops the legacy column/table.
-- This migration MUST be isolated (no unrelated changes).
-- `down_revision` MUST align exactly with the expected migration head.
+def downgrade():
+    op.alter_column('transaction', 'user_id', new_column_name='student_id')
+```
 
-### Migration Robustness Requirements
+#### 3. Data Migration
+When transforming existing data:
+```python
+def upgrade():
+    op.add_column('student', sa.Column('full_name', sa.String(255)))
+    
+    connection = op.get_bind()
+    connection.execute("""
+        UPDATE student
+        SET full_name = first_name || ' ' || last_initial
+    """)
+```
 
-#### Constraint Name Agnosticism
-**Rule:** Migrations MUST NOT assume constraint names. Constraints MUST be discovered dynamically via database inspection.
+---
 
-*Compliant pattern:*
+## 4. Policy Standards
+
+### Schema Change Gate
+This gate is **PR‑blocking**.
+
+**Applies when:**
+- Dropping/Renaming columns or tables
+- Removing/Changing Foreign Keys
+- Replacing relations
+
+**PR Classification:**
+- [ ] **EXPAND** – Additive, backward-compatible
+- [ ] **CONTRACT (CODE ONLY)** – Model attribute removal
+- [ ] **CONTRACT (DATABASE)** – Destructive migration
+
+### Schema Contraction Policy ("Expand and Contract")
+
+**Phase 1: Expand (Release N)**
+- New elements exist alongside legacy.
+- Application supports both.
+- NO destructive migrations.
+
+**Phase 2: Contract Code (Release N+1)**
+- Legacy removed from Code models.
+- DB column remains.
+- Application operates without legacy.
+
+**Phase 3: Contract Database (Release N+2)**
+- Migration drops legacy column/table.
+- Isolated migration.
+
+### Constraint Name Agnosticism
+**Rule:** NEVER use hardcoded constraint names.
+**Pattern:**
 ```python
 from sqlalchemy import inspect
 bind = op.get_bind()
@@ -136,122 +209,45 @@ for fk in inspector.get_foreign_keys('students'):
 
 ---
 
-# 2. Migration Best Practices
+## 5. Workflows
 
-This section outlines best practices for creating safe, idempotent migrations.
+### Standard Cycle
+1.  **Sync:** `git fetch origin main && git merge origin/main`
+2.  **Verify Head:** `flask db heads` (Must be 1)
+3.  **Code:** Modify `app/models.py`
+4.  **Generate:** `flask db migrate -m "Description"`
+5.  **Review & Guard:**
+    - Verify `down_revision`
+    - **Add Idempotency Helpers**
+    - Wrap `op` calls in existence checks
+6.  **Lint:** `python scripts/lint_migrations.py`
+7.  **Test:** `flask db upgrade` → `flask db downgrade` → `flask db upgrade`
+8.  **Commit:** Git allowlist model and migration files
 
-## Core Principle: Migrations Must Be Idempotent
+### Fixing "Multiple Heads"
+1.  `flask db merge heads -m "Merge migration heads"`
+2.  Review generated merge file.
+3.  `flask db upgrade`
+4.  Test and commit.
 
-**Idempotent migrations** can be run multiple times without causing errors. This prevents failures when:
-1. Schema changes were applied manually.
-2. Previous runs failed partially.
-3. Migrations from different branches are merged.
-
-## Required Checks Before Schema Changes
-
-### 1. Check if Columns Exist Before Adding
-```python
-def column_exists(table_name, column_name):
-    conn = op.get_bind()
-    inspector = sa.inspect(conn)
-    columns = [col['name'] for col in inspector.get_columns(table_name)]
-    return column_name in columns
-
-def upgrade():
-    if not column_exists('table_name', 'column_name'):
-        with op.batch_alter_table('table_name', schema=None) as batch_op:
-            batch_op.add_column(sa.Column('column_name', sa.Integer()))
-```
-
-### 2. Check if Foreign Keys Exist
-```python
-def foreign_key_exists(table_name, fk_name):
-    conn = op.get_bind()
-    inspector = sa.inspect(conn)
-    foreign_keys = [fk['name'] for fk in inspector.get_foreign_keys(table_name)]
-    return fk_name in foreign_keys
-```
-
-### 3. Check if Indexes Exist
-```python
-def index_exists(table_name, index_name):
-    conn = op.get_bind()
-    inspector = sa.inspect(conn)
-    indexes = [idx['name'] for idx in inspector.get_indexes(table_name)]
-    return index_name in indexes
-```
-
-## Downgrade Functions
-Downgrade functions should also be idempotent and check for existence before dropping.
-
-## Migration Review Checklist
-- [ ] All `add_column` calls check if column exists first.
-- [ ] All `create_foreign_key` calls check if FK exists first.
-- [ ] All `create_index` calls check if index exists first.
-- [ ] Downgrade function mirrors upgrade with existence checks.
-- [ ] Migration handles ENUM types correctly (PostgreSQL).
+### Deployment Checklist
+- [ ] Migrations tested locally (upgrade + downgrade)
+- [ ] Idempotency verified
+- [ ] Staging rehearsal complete
+- [ ] Backup plan ready
 
 ---
 
-# 3. Migration Guide & Troubleshooting
+## 6. Deprecation Standards
 
-## Branch Consolidation & Multiple Heads
+**Registry:** `docs/development/DEPRECATED_SYMBOLS.txt`
 
-### The "Multiple Heads" Issue
-If multiple branches create migrations from the same base, Alembic sees "multiple heads".
-**Solution:** Create a **merge migration** using `flask db merge heads`.
-
-### Common Commands
-
-```bash
-flask db current          # Show current migration
-flask db history          # Show migration history
-flask db upgrade          # Apply pending migrations
-flask db downgrade <rev>  # Rollback to specific revision
-```
-
-## Verification Commands
-
-After upgrading, verify changes in the database:
-
-```sql
--- Verify migration history
-SELECT * FROM alembic_version;
-```
+**Deprecated Patterns:**
+- `datetime.utcnow()` → `datetime.now(datetime.UTC)`
+- `Query.get()` → `db.session.get(Model, id)`
 
 ---
 
-# 4. Deprecation Standards
-
-## Deprecated Symbols Registry
-
-This registry tracks symbols that are **explicitly prohibited** from appearing in application code.
-
-The authoritative, machine-enforced list lives in:
-`docs/development/DEPRECATED_SYMBOLS.txt`
-
-### Current Deprecated Symbols
-| Symbol | Reason | Status |
-|------|--------|--------|
-| `teacher_id` | Legacy single-tenant coupling replaced by StudentTeacher association | Active |
-
-## Deprecated Code Patterns
-
-### 1. `datetime.utcnow()` (Python 3.12+)
-**Issue:** Deprecated in favor of `datetime.now(datetime.UTC)`.
-**Fix:**
-```python
-from datetime import datetime, UTC
-timestamp = datetime.now(UTC)
-```
-
-### 2. `Query.get()` (SQLAlchemy 2.0+)
-**Issue:** Deprecated in favor of `session.get(Model, id)`.
-**Fix:**
-```python
-# OLD
-student = Student.query.get(student_id)
-# NEW
-from app.extensions import db
-student = db.session.get(Student, student_id)
-```
+## 7. Resources
+- [Alembic Documentation](https://alembic.sqlalchemy.org/)
+- [SQLAlchemy Inspector API](https://docs.sqlalchemy.org/en/20/core/reflection.html)

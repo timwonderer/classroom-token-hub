@@ -6,13 +6,34 @@ import os
 import sys
 import pyotp
 import qrcode
-from io import BytesIO
+import select
 
 # Set up Flask app context
 from app import app
 from app.extensions import db
 from app.models import SystemAdmin, Admin
 from app.utils.encryption import encrypt_totp
+
+
+def clear_screen():
+    """Clear the terminal screen."""
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+def wait_and_clear(timeout=60):
+    """Wait for user input or timeout, then clear screen."""
+    print(f"\nExample: Press Enter to clear screen (auto-clears in {timeout}s)...")
+    # Use select for timeout on stdin (Unix only, works on Mac)
+    # For cross-platform we might need threading, but Mac is target OS.
+    if os.name != 'nt':
+        rlist, _, _ = select.select([sys.stdin], [], [], timeout)
+        if rlist:
+            sys.stdin.readline()
+    else:
+        # Fallback for Windows (simple input, no timeout)
+        input("Press Enter to clear screen...")
+    
+    clear_screen()
+    print("🔒 Screen cleared for security.")
 
 def create_system_admin(username):
     """Create a system admin account."""
@@ -40,12 +61,25 @@ def create_system_admin(username):
         print()
         print("TOTP Setup Instructions:")
         print("1. Open your authenticator app (Google Authenticator, Authy, etc.)")
-        print("2. Scan the QR code or manually enter the secret key")
+        print("2. Scan the QR code below (manual secret entry is hidden by default):")
+        print()
+        print("   SECRET KEY: [HIDDEN - USE QR CODE]")
+        print()
+        
+        # Generate and print QR code
+        try:
+            uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=username, issuer_name="Classroom Economy - System")
+            qr = qrcode.QRCode()
+            qr.add_data(uri)
+            qr.make(fit=True)
+            qr.print_ascii(invert=True)
+        except Exception as e:
+            print(f"   (Could not generate QR code: {e})")
+
         print()
         print("   IMPORTANT: The TOTP secret is sensitive information.")
-        print("   For security reasons, retrieve it from secure storage or the database.")
-        print("   The secret is encrypted in the database and should only be")
-        print("   accessed through secure administrative channels.")
+        print("   This is the ONLY time you will see the unencrypted secret.")
+        print("   If you lose it, you will need to regenerate it.")
         print()
         print(f"   Account: {username}")
         print("   Issuer: Classroom Economy - System")
@@ -53,6 +87,8 @@ def create_system_admin(username):
         print("3. Store the TOTP secret securely (e.g., password manager).")
         print()
         print("=" * 70)
+
+        wait_and_clear()
 
         return True
 
@@ -82,12 +118,25 @@ def create_regular_admin(username):
         print()
         print("TOTP Setup Instructions:")
         print("1. Open your authenticator app (Google Authenticator, Authy, etc.)")
-        print("2. Scan the QR code or manually enter the secret key")
+        print("2. Scan the QR code below (manual secret entry is hidden by default):")
+        print()
+        print("   SECRET KEY: [HIDDEN - USE QR CODE]")
+        print()
+
+        # Generate and print QR code
+        try:
+            uri = pyotp.totp.TOTP(totp_secret).provisioning_uri(name=username, issuer_name="Classroom Economy")
+            qr = qrcode.QRCode()
+            qr.add_data(uri)
+            qr.make(fit=True)
+            qr.print_ascii(invert=True)
+        except Exception as e:
+            print(f"   (Could not generate QR code: {e})")
+
         print()
         print("   IMPORTANT: The TOTP secret is sensitive information.")
-        print("   For security reasons, retrieve it from secure storage or the database.")
-        print("   The secret is encrypted in the database and should only be")
-        print("   accessed through secure administrative channels.")
+        print("   This is the ONLY time you will see the unencrypted secret.")
+        print("   If you lose it, you will need to regenerate it.")
         print()
         print(f"   Account: {username}")
         print("   Issuer: Classroom Economy")
@@ -95,6 +144,8 @@ def create_regular_admin(username):
         print("3. Store the TOTP secret securely (e.g., password manager).")
         print()
         print("=" * 70)
+
+        wait_and_clear()
 
         return True
 

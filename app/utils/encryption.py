@@ -14,6 +14,7 @@ from cryptography.fernet import Fernet, InvalidToken
 class PIIEncryptedType(TypeDecorator):
     """Custom AES encryption for PII fields using Fernet."""
     impl = LargeBinary
+    cache_ok = True
 
     def __init__(self, key_env_var, *args, **kwargs):
         key = os.getenv(key_env_var)

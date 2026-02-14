@@ -8,11 +8,13 @@ logging, Jinja filters, and registers blueprints.
 import os
 import logging
 import urllib.parse
+import uuid
 import pytz
 from datetime import datetime, date, timezone
 from logging.handlers import RotatingFileHandler
 
-from flask import Flask, request, render_template, session, g, url_for
+from flask import Flask, request, render_template, session, g, url_for, has_request_context
+from werkzeug.exceptions import HTTPException
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -48,6 +50,10 @@ def url_encode_filter(s):
 
 def nl2br_filter(s):
     """Convert newlines to <br> tags for HTML display."""
+    # TODO: [DEPENDABOT PR #463] MarkupSafe 3.x introduces breaking changes:
+    # - soft_str and soft_unicode removed (deprecated since 2.0)
+    # - Markup.striptags() behavior may differ
+    # - Review Jinja2 compatibility before upgrading from 2.1.5 to 3.0.3
     from markupsafe import Markup
     if s is None:
         return ''
@@ -91,6 +97,56 @@ def format_datetime(value, fmt='%Y-%m-%d %I:%M %p'):
 
 
 # -------------------- APPLICATION FACTORY --------------------
+
+REQUEST_ID_HEADERS = ("X-Request-Id", "X-Correlation-Id")
+
+
+class RequestIdFilter(logging.Filter):
+    def filter(self, record):
+        if not hasattr(record, "request_id"):
+            if has_request_context():
+                record.request_id = getattr(g, "request_id", "-")
+            else:
+                record.request_id = "-"
+        return True
+
+
+def _get_request_id():
+    for header in REQUEST_ID_HEADERS:
+        header_value = request.headers.get(header)
+        if not header_value:
+            continue
+        header_value = header_value.strip()
+        if 0 < len(header_value) <= 128:
+            return header_value
+    return uuid.uuid4().hex
+
+
+def register_error_handlers(app):
+    @app.errorhandler(Exception)
+    def handle_unhandled_exception(e):
+        if isinstance(e, HTTPException):
+            return e
+
+        app.logger.exception(
+            "Unhandled exception",
+            extra={
+                "route": request.path,
+                "method": request.method,
+                "request_id": getattr(g, "request_id", None),
+            },
+        )
+
+        # Content-aware error response
+        if request.accept_mimetypes.best == "application/json":
+            return {"error": "Internal Server Error"}, 500
+
+        # Just in case rendering the template fails
+        try:
+            return render_template("error_500.html"), 500
+        except Exception:
+            return "Internal Server Error", 500
+
 
 def create_app():
     """
@@ -143,12 +199,13 @@ def create_app():
     log_level = getattr(logging, log_level_name, logging.INFO)
     log_format = os.getenv(
         "LOG_FORMAT",
-        "[%(asctime)s] %(levelname)s in %(module)s: %(message)s",
+        "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s]: %(message)s",
     )
 
     stream_handler = logging.StreamHandler()
     stream_handler.setLevel(log_level)
     stream_handler.setFormatter(logging.Formatter(log_format))
+    stream_handler.addFilter(RequestIdFilter())
 
     app.logger.setLevel(log_level)
     # Prevent duplicate log entries by clearing handlers first
@@ -160,7 +217,41 @@ def create_app():
         file_handler = RotatingFileHandler(log_file, maxBytes=1_000_000, backupCount=5)
         file_handler.setLevel(log_level)
         file_handler.setFormatter(logging.Formatter(log_format))
+        file_handler.addFilter(RequestIdFilter())
         app.logger.addHandler(file_handler)
+
+    # -------------------- DATABASE SAFETY GUARDS --------------------
+    # Prevent accidental connection to the wrong database environment
+    db_url = app.config.get("SQLALCHEMY_DATABASE_URI", "")
+    env = app.config.get("ENV")
+
+    # Guard 1: CRITICAL - Prevent running TESTS against Production/Dev DB
+    # If we are in testing mode, we MUST be using a test database (or in-memory sqlite)
+    if env == "testing":
+        is_test_db = "test" in db_url or ":memory:" in db_url
+        if not is_test_db:
+            error_msg = f"🚨 CRITICAL SAFETY GUARD: Attempting to run TESTS against PRODUCTION/DEV database! ({db_url}) 🚨"
+            app.logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+    # Guard 2: WARNING - Warn if running DEVELOPMENT against Test DB
+    if env == "development" and "test" in db_url:
+        app.logger.warning(f"🚨 CONFIGURATION WARNING: Using TEST database ({db_url}) in DEVELOPMENT mode! 🚨")
+
+    # -------------------- REQUEST CONTEXT --------------------
+    @app.before_request
+    def ensure_request_id():
+        g.request_id = _get_request_id()
+
+    @app.after_request
+    def attach_request_id_header(response):
+        request_id = getattr(g, "request_id", None)
+        if request_id:
+            response.headers.setdefault("X-Request-Id", request_id)
+        return response
+
+    # -------------------- ERROR HANDLERS --------------------
+    register_error_handlers(app)
 
     # -------------------- JINJA2 FILTERS AND GLOBALS --------------------
     app.jinja_env.filters['url_encode'] = url_encode_filter
@@ -500,7 +591,7 @@ def create_app():
 
             admin_id = session.get('admin_id')
             if admin_id:
-                admin = Admin.query.get(admin_id)
+                admin = db.session.get(Admin, admin_id)
                 return {'current_admin': admin}
             return {'current_admin': None}
         except Exception as e:
@@ -516,7 +607,7 @@ def create_app():
 
             sysadmin_id = session.get('sysadmin_id')
             if sysadmin_id:
-                sysadmin = SystemAdmin.query.get(sysadmin_id)
+                sysadmin = db.session.get(SystemAdmin, sysadmin_id)
                 return {'current_sysadmin': sysadmin}
             return {'current_sysadmin': None}
         except Exception as e:
@@ -531,6 +622,7 @@ def create_app():
     from app.routes.admin import admin_bp
     from app.routes.docs import docs_bp
     from app.routes.analytics import analytics_bp
+    from app.routes.recovery import recovery_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(api_bp)
@@ -539,6 +631,7 @@ def create_app():
     app.register_blueprint(admin_bp)
     app.register_blueprint(docs_bp)
     app.register_blueprint(analytics_bp)
+    app.register_blueprint(recovery_bp)
 
     # -------------------- SECURITY HEADERS --------------------
     @app.after_request

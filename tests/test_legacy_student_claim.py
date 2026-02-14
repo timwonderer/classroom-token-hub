@@ -138,7 +138,7 @@ def test_new_student_can_claim_in_legacy_class(client):
         f"Should redirect to create-username, got {claim_response.location}"
     
     # Verify the seat was claimed
-    new_seat_after = TeacherBlock.query.get(new_seat.id)
+    new_seat_after = db.session.get(TeacherBlock, new_seat.id)
     assert new_seat_after.is_claimed, "Seat should be marked as claimed"
     assert new_seat_after.student_id is not None, "Seat should be linked to a student"
 
@@ -247,13 +247,13 @@ def test_claim_succeeds_when_seat_uses_last_initial_hash(client):
     assert response.status_code == 302
     assert "/student/create-username" in response.location
 
-    refreshed_seat = TeacherBlock.query.get(seat.id)
+    refreshed_seat = db.session.get(TeacherBlock, seat.id)
     expected_hash = hash_hmac("B2030".encode(), salt)
 
     assert refreshed_seat.is_claimed is True
     assert refreshed_seat.first_half_hash == expected_hash
 
-    student = Student.query.get(refreshed_seat.student_id)
+    student = db.session.get(Student, refreshed_seat.student_id)
     assert student is not None
     assert student.first_half_hash == expected_hash
     assert StudentTeacher.query.filter_by(student_id=student.id, admin_id=teacher.id).count() == 1
@@ -303,8 +303,8 @@ def test_students_page_normalizes_legacy_claim_hashes(client):
     response = client.get("/admin/students")
     assert response.status_code == 200
 
-    updated_seat = TeacherBlock.query.get(seat.id)
-    updated_student = Student.query.get(student.id)
+    updated_seat = db.session.get(TeacherBlock, seat.id)
+    updated_student = db.session.get(Student, student.id)
 
     expected_seat_hash = compute_primary_claim_hash("A", 2035, seat_salt)
     expected_student_hash = compute_primary_claim_hash("A", 2035, student_salt)
