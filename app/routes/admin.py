@@ -321,6 +321,24 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
             StoreItem.id.in_(sa.select(deletable_store_item_ids))
         ).delete(synchronize_session=False)
 
+    # Clean up orphaned StoreItemBlock entries for the deleted class blocks
+    # This handles items that are visible to multiple classes
+    if class_blocks:
+        deletable_block_entries = (
+            db.session.query(StoreItemBlock.store_item_id, StoreItemBlock.block)
+            .join(StoreItem, StoreItemBlock.store_item_id == StoreItem.id)
+            .filter(
+                StoreItem.teacher_id == teacher_id,
+                StoreItemBlock.block.in_(class_blocks)
+            )
+            .subquery()
+        )
+        StoreItemBlock.query.filter(
+            sa.tuple_(StoreItemBlock.store_item_id, StoreItemBlock.block).in_(
+                sa.select(deletable_block_entries)
+            )
+        ).delete(synchronize_session=False)
+
     # Seats/ownership for this class
     TeacherBlock.query.filter(
         TeacherBlock.teacher_id == teacher_id,

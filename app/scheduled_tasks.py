@@ -129,6 +129,137 @@ def cleanup_expired_demo_sessions_job():
         logger.error(f"Demo session cleanup job failed: {e}", exc_info=True)
 
 
+def database_maintenance_job():
+    """
+    Scheduled job that performs nightly database maintenance tasks.
+    Runs at 2 AM UTC to clean up orphaned entries and maintain data integrity.
+    """
+    # Import here to avoid circular imports
+    from app.models import StoreItemBlock, TeacherBlock, StoreItem
+    from app.extensions import db
+
+    logger = logging.getLogger('scheduled_tasks')
+    logger.info("Starting nightly database maintenance job")
+
+    total_cleaned = 0
+
+    try:
+        # Task 1: Clean up orphaned StoreItemBlock entries
+        # These are blocks that reference classes that no longer exist
+        logger.info("Checking for orphaned StoreItemBlock entries...")
+        
+        # Get all unique store item blocks
+        all_store_blocks = db.session.query(
+            StoreItemBlock.store_item_id,
+            StoreItemBlock.block
+        ).distinct().all()
+        
+        orphaned_store_blocks = []
+        
+        for store_item_id, block in all_store_blocks:
+            # Get the teacher_id for this store item
+            store_item = db.session.get(StoreItem, store_item_id)
+            if not store_item:
+                # Store item doesn't exist, this is orphaned
+                orphaned_store_blocks.append((store_item_id, block))
+                continue
+            
+            # Check if a TeacherBlock exists for this teacher and block
+            teacher_block_exists = TeacherBlock.query.filter_by(
+                teacher_id=store_item.teacher_id,
+                block=block
+            ).first() is not None
+            
+            if not teacher_block_exists:
+                orphaned_store_blocks.append((store_item_id, block))
+        
+        if orphaned_store_blocks:
+            logger.info(f"Found {len(orphaned_store_blocks)} orphaned StoreItemBlock entries")
+            for store_item_id, block in orphaned_store_blocks:
+                try:
+                    deleted = StoreItemBlock.query.filter_by(
+                        store_item_id=store_item_id,
+                        block=block
+                    ).delete()
+                    total_cleaned += deleted
+                except Exception as e:
+                    logger.error(f"Error deleting StoreItemBlock({store_item_id}, {block}): {e}")
+                    db.session.rollback()
+                    continue
+            
+            db.session.commit()
+            logger.info(f"Cleaned up {len(orphaned_store_blocks)} orphaned StoreItemBlock entries")
+        else:
+            logger.info("No orphaned StoreItemBlock entries found")
+
+        # Task 2: Backfill join_code on legacy records
+        # Migrate old records that only have teacher_id/block to use join_code
+        logger.info("Checking for legacy records missing join_code...")
+        
+        from app.models import StudentItem, Transaction, StudentInsurance, RentPayment, Issue
+        
+        backfilled_count = 0
+        
+        # Backfill StudentItem records
+        legacy_student_items = StudentItem.query.filter(
+            StudentItem.join_code.is_(None)
+        ).limit(100).all()  # Process in batches to avoid long-running transactions
+        
+        for item in legacy_student_items:
+            try:
+                if item.student and item.student.block:
+                    # Find the join_code for this student's block
+                    student_blocks = [b.strip().upper() for b in item.student.block.split(',') if b.strip()]
+                    if student_blocks:
+                        # Use the first block to find join_code
+                        teacher_block = TeacherBlock.query.filter_by(
+                            student_id=item.student_id,
+                            block=student_blocks[0]
+                        ).first()
+                        
+                        if teacher_block and teacher_block.join_code:
+                            item.join_code = teacher_block.join_code
+                            backfilled_count += 1
+            except Exception as e:
+                logger.error(f"Error backfilling StudentItem {item.id}: {e}")
+                continue
+        
+        # Backfill Transaction records
+        legacy_transactions = Transaction.query.filter(
+            Transaction.join_code.is_(None)
+        ).limit(100).all()
+        
+        for tx in legacy_transactions:
+            try:
+                if tx.student and tx.student.block:
+                    student_blocks = [b.strip().upper() for b in tx.student.block.split(',') if b.strip()]
+                    if student_blocks:
+                        teacher_block = TeacherBlock.query.filter_by(
+                            student_id=tx.student_id,
+                            block=student_blocks[0]
+                        ).first()
+                        
+                        if teacher_block and teacher_block.join_code:
+                            tx.join_code = teacher_block.join_code
+                            backfilled_count += 1
+            except Exception as e:
+                logger.error(f"Error backfilling Transaction {tx.id}: {e}")
+                continue
+        
+        if backfilled_count > 0:
+            db.session.commit()
+            logger.info(f"Backfilled join_code on {backfilled_count} legacy records")
+            total_cleaned += backfilled_count
+        else:
+            logger.info("No legacy records found needing join_code backfill")
+        
+        logger.info(f"Database maintenance completed. Total entries processed: {total_cleaned}")
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Database maintenance job failed: {e}", exc_info=True)
+
+
 def init_scheduled_tasks(app):
     """
     Initialize and start scheduled tasks.
@@ -149,6 +280,11 @@ def init_scheduled_tasks(app):
     def run_cleanup_demo_sessions():
         with app.app_context():
             cleanup_expired_demo_sessions_job()
+
+    # Wrapper function that runs the database_maintenance_job with Flask app context
+    def run_database_maintenance():
+        with app.app_context():
+            database_maintenance_job()
 
     if not scheduler.running:
         # Add the auto tap-out enforcement job to run every hour
@@ -173,7 +309,19 @@ def init_scheduled_tasks(app):
             max_instances=1  # Prevent overlapping executions
         )
 
+        # Add the database maintenance job to run nightly at 2 AM UTC
+        scheduler.add_job(
+            func=run_database_maintenance,
+            trigger='cron',
+            hour=2,
+            minute=0,
+            id='database_maintenance',
+            name='Nightly database maintenance',
+            replace_existing=True,
+            max_instances=1  # Prevent overlapping executions
+        )
+
         scheduler.start()
-        logger.info("Scheduled tasks initialized. Auto tap-out will run every hour, demo cleanup every 5 minutes.")
+        logger.info("Scheduled tasks initialized: auto tap-out (hourly), demo cleanup (5 min), database maintenance (2 AM UTC daily)")
     else:
         logger.info("Scheduler already running")
