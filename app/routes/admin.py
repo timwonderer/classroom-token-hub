@@ -4702,23 +4702,23 @@ def insurance_management():
 
     # Filter students by selected block
     if settings_block:
-        # Use SQL LIKE for more efficient filtering (case-insensitive, match whole block)
-        block_pattern = f'%,{settings_block},%'  # for matching in the middle
-        block_pattern_start = f'{settings_block},%'  # for matching at the start
-        block_pattern_end = f'%,{settings_block}'  # for matching at the end
-        block_pattern_exact = f'{settings_block}'  # for exact match
+        scoped_student_ids_by_block = [
+            sid for (sid,) in (
+                db.session.query(TeacherBlock.student_id)
+                .filter(
+                    TeacherBlock.teacher_id == admin_id,
+                    TeacherBlock.block == settings_block,
+                    TeacherBlock.student_id.isnot(None),
+                )
+                .distinct()
+                .all()
+            )
+        ]
         students_in_block = (
             _scoped_students()
-            .filter(
-                sa.or_(
-                    sa.func.lower(Student.block) == settings_block.lower(),
-                    sa.func.lower(Student.block).like(f'{settings_block.lower()},%'),
-                    sa.func.lower(Student.block).like(f'%,{settings_block.lower()},%'),
-                    sa.func.lower(Student.block).like(f'%,{settings_block.lower()}')
-                )
-            )
+            .filter(Student.id.in_(scoped_student_ids_by_block))
             .all()
-        )
+        ) if scoped_student_ids_by_block else []
     else:
         students_in_block = _scoped_students().all()
 
@@ -4732,9 +4732,7 @@ def insurance_management():
     pending_claims_count = 0
 
     if student_ids_in_block and selected_join_code:
-        # Primary: strict join_code isolation.
-        # Legacy fallback: include enrollments with NULL join_code only when policy is visible
-        # in the selected block and the student is in that block.
+        # Persistently backfill legacy NULL join_code insurance enrollments for this class context.
         policy_visible_in_selected_block = sa.or_(
             InsurancePolicy.id.in_(
                 db.session.query(InsurancePolicyBlock.policy_id).filter(
@@ -4743,29 +4741,38 @@ def insurance_management():
             ),
             ~sa.exists().where(InsurancePolicyBlock.policy_id == InsurancePolicy.id),
         )
-        enrollment_scope_filter = sa.or_(
-            StudentInsurance.join_code == selected_join_code,
-            sa.and_(
-                StudentInsurance.join_code.is_(None),
-                policy_visible_in_selected_block,
-            ),
+        legacy_enrollments = (
+            StudentInsurance.query
+            .join(InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id)
+            .filter(StudentInsurance.student_id.in_(student_ids_in_block))
+            .filter(InsurancePolicy.teacher_id == current_teacher_id)
+            .filter(StudentInsurance.join_code.is_(None))
+            .filter(policy_visible_in_selected_block)
+            .all()
         )
+        if legacy_enrollments:
+            for enrollment in legacy_enrollments:
+                enrollment.join_code = selected_join_code
+            db.session.flush()
+            db.session.commit()
+            current_app.logger.info(
+                "Backfilled %s legacy insurance enrollments to join_code=%s for teacher=%s block=%s",
+                len(legacy_enrollments), selected_join_code, current_teacher_id, settings_block
+            )
 
         active_enrollments = (
             StudentInsurance.query
             .join(Student, StudentInsurance.student_id == Student.id)
-            .join(InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id)
             .filter(Student.id.in_(student_ids_in_block))
-            .filter(enrollment_scope_filter)
+            .filter(StudentInsurance.join_code == selected_join_code)
             .filter(StudentInsurance.status == 'active')
             .all()
         )
         cancelled_enrollments = (
             StudentInsurance.query
             .join(Student, StudentInsurance.student_id == Student.id)
-            .join(InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id)
             .filter(Student.id.in_(student_ids_in_block))
-            .filter(enrollment_scope_filter)
+            .filter(StudentInsurance.join_code == selected_join_code)
             .filter(StudentInsurance.status == 'cancelled')
             .all()
         )
@@ -4774,18 +4781,16 @@ def insurance_management():
         claims = (
             InsuranceClaim.query
             .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
-            .join(InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id)
             .filter(StudentInsurance.student_id.in_(student_ids_in_block))
-            .filter(enrollment_scope_filter)
+            .filter(StudentInsurance.join_code == selected_join_code)
             .order_by(InsuranceClaim.filed_date.desc())
             .all()
         )
         pending_claims_count = (
             InsuranceClaim.query
             .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
-            .join(InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id)
             .filter(StudentInsurance.student_id.in_(student_ids_in_block))
-            .filter(enrollment_scope_filter)
+            .filter(StudentInsurance.join_code == selected_join_code)
             .filter(InsuranceClaim.status == 'pending')
             .count()
         )
