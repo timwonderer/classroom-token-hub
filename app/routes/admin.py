@@ -7806,17 +7806,17 @@ def deletion_requests():
             if teacher_block:
                 # It's a join_code - use it directly
                 join_code = teacher_block.join_code
-                period = teacher_block.block_name  # Keep for legacy display
+                period = teacher_block.block  # Keep legacy period field populated
             else:
-                # It might be a legacy period string - look up by block_name
+                # It might be a legacy period string - look up by block
                 teacher_block = TeacherBlock.query.filter_by(
                     teacher_id=admin_id,
-                    block_name=join_code_or_period
+                    block=join_code_or_period
                 ).first()
 
                 if teacher_block:
                     join_code = teacher_block.join_code
-                    period = teacher_block.block_name
+                    period = teacher_block.block
                 else:
                     # Fallback: treat as legacy period string without join_code
                     period = join_code_or_period
@@ -7893,10 +7893,16 @@ def deletion_requests():
         DeletionRequest.status.in_([DeletionRequestStatus.APPROVED, DeletionRequestStatus.REJECTED])
     ).order_by(DeletionRequest.resolved_at.desc()).limit(10).all()
 
-    # Get teacher's class periods for the dropdown using join-code architecture
-    # Returns list of tuples: (join_code, display_name)
+    # Get unique class periods for dropdown using join-code architecture.
+    # Returns list of tuples: (join_code, class_label_or_block)
     teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
-    periods = [(tb.join_code, tb.display_name or tb.block_name) for tb in teacher_blocks]
+    unique_periods = {}
+    for tb in teacher_blocks:
+        if not tb.join_code:
+            continue
+        if tb.join_code not in unique_periods:
+            unique_periods[tb.join_code] = tb.class_label or tb.block
+    periods = [(join_code, label) for join_code, label in unique_periods.items()]
 
     return render_template(
         'admin_deletion_requests.html',
