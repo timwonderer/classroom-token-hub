@@ -572,6 +572,7 @@ def purchase_insurance_for_student(student, policy, join_code, teacher, past_wai
     student_insurance = StudentInsurance(
         student_id=student.id,
         policy_id=policy.id,
+        join_code=join_code,
         status='active',
         purchase_date=purchase_date,
         last_payment_date=purchase_date,

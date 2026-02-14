@@ -4732,20 +4732,40 @@ def insurance_management():
     pending_claims_count = 0
 
     if student_ids_in_block and selected_join_code:
-        # Filter enrollments by join_code to ensure proper class isolation
+        # Primary: strict join_code isolation.
+        # Legacy fallback: include enrollments with NULL join_code only when policy is visible
+        # in the selected block and the student is in that block.
+        policy_visible_in_selected_block = sa.or_(
+            InsurancePolicy.id.in_(
+                db.session.query(InsurancePolicyBlock.policy_id).filter(
+                    InsurancePolicyBlock.block == settings_block.upper()
+                )
+            ),
+            ~sa.exists().where(InsurancePolicyBlock.policy_id == InsurancePolicy.id),
+        )
+        enrollment_scope_filter = sa.or_(
+            StudentInsurance.join_code == selected_join_code,
+            sa.and_(
+                StudentInsurance.join_code.is_(None),
+                policy_visible_in_selected_block,
+            ),
+        )
+
         active_enrollments = (
             StudentInsurance.query
             .join(Student, StudentInsurance.student_id == Student.id)
+            .join(InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id)
             .filter(Student.id.in_(student_ids_in_block))
-            .filter(StudentInsurance.join_code == selected_join_code)
+            .filter(enrollment_scope_filter)
             .filter(StudentInsurance.status == 'active')
             .all()
         )
         cancelled_enrollments = (
             StudentInsurance.query
             .join(Student, StudentInsurance.student_id == Student.id)
+            .join(InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id)
             .filter(Student.id.in_(student_ids_in_block))
-            .filter(StudentInsurance.join_code == selected_join_code)
+            .filter(enrollment_scope_filter)
             .filter(StudentInsurance.status == 'cancelled')
             .all()
         )
@@ -4754,16 +4774,18 @@ def insurance_management():
         claims = (
             InsuranceClaim.query
             .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
+            .join(InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id)
             .filter(StudentInsurance.student_id.in_(student_ids_in_block))
-            .filter(StudentInsurance.join_code == selected_join_code)
+            .filter(enrollment_scope_filter)
             .order_by(InsuranceClaim.filed_date.desc())
             .all()
         )
         pending_claims_count = (
             InsuranceClaim.query
             .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
+            .join(InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id)
             .filter(StudentInsurance.student_id.in_(student_ids_in_block))
-            .filter(StudentInsurance.join_code == selected_join_code)
+            .filter(enrollment_scope_filter)
             .filter(InsuranceClaim.status == 'pending')
             .count()
         )
