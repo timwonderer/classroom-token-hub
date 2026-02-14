@@ -41,19 +41,26 @@ def upgrade():
                 ondelete='CASCADE'
             )
 
-        # Backfill join_code from TeacherBlock based on admin_id and period match
-        # For period deletion requests, match on teacher_id + block_name
+        # Backfill join_code from TeacherBlock based on admin_id + period.
+        # Support both legacy column name (block_name) and current schema (block).
         conn = op.get_bind()
-        conn.execute(text("""
-            UPDATE deletion_requests dr
-            SET join_code = tb.join_code
-            FROM teacher_blocks tb
-            WHERE dr.request_type = 'period'
-              AND dr.period IS NOT NULL
-              AND dr.admin_id = tb.teacher_id
-              AND dr.period = tb.block_name
-              AND dr.join_code IS NULL
-        """))
+        teacher_block_period_col = None
+        if column_exists('teacher_blocks', 'block'):
+            teacher_block_period_col = 'block'
+        elif column_exists('teacher_blocks', 'block_name'):
+            teacher_block_period_col = 'block_name'
+
+        if teacher_block_period_col:
+            conn.execute(text(f"""
+                UPDATE deletion_requests dr
+                SET join_code = tb.join_code
+                FROM teacher_blocks tb
+                WHERE dr.request_type = 'period'
+                  AND dr.period IS NOT NULL
+                  AND dr.admin_id = tb.teacher_id
+                  AND dr.period = tb.{teacher_block_period_col}
+                  AND dr.join_code IS NULL
+            """))
 
         # Note: Account deletion requests (request_type='account') keep join_code as NULL
         # since they're not scoped to a specific class period

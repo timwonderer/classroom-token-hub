@@ -8829,16 +8829,20 @@ def api_economy_analyze():
         # Get or create checker
         checker = EconomyBalanceChecker(admin_id, block)
 
-        # Get current settings from database - filter by block if provided
+        # Get current settings from database.
+        # Prefer block-specific settings, but fall back to global active settings.
+        payroll_settings = None
         if block:
             payroll_settings = PayrollSettings.query.filter_by(
                 teacher_id=admin_id,
                 block=block,
                 is_active=True
             ).first()
-        else:
+
+        if not payroll_settings:
             payroll_settings = PayrollSettings.query.filter_by(
                 teacher_id=admin_id,
+                block=None,
                 is_active=True
             ).first()
 
