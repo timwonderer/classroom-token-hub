@@ -4730,6 +4730,8 @@ def insurance_management():
     cancelled_enrollments = []
     claims = []
     pending_claims_count = 0
+    policy_enrollment_counts = {policy.id: 0 for policy in policies}
+    policy_pending_claim_counts = {policy.id: 0 for policy in policies}
 
     if student_ids_in_block and selected_join_code:
         # Persistently backfill legacy NULL join_code insurance enrollments for this class context.
@@ -4795,6 +4797,47 @@ def insurance_management():
             .count()
         )
 
+        if policies:
+            policy_ids = [policy.id for policy in policies]
+            enrollment_rows = (
+                db.session.query(
+                    StudentInsurance.policy_id,
+                    sa.func.count(StudentInsurance.id)
+                )
+                .filter(StudentInsurance.policy_id.in_(policy_ids))
+                .filter(StudentInsurance.student_id.in_(student_ids_in_block))
+                .filter(StudentInsurance.join_code == selected_join_code)
+                .filter(StudentInsurance.status == 'active')
+                .group_by(StudentInsurance.policy_id)
+                .all()
+            )
+            policy_enrollment_counts.update({pid: count for pid, count in enrollment_rows})
+
+            pending_claim_rows = (
+                db.session.query(
+                    InsuranceClaim.policy_id,
+                    sa.func.count(InsuranceClaim.id)
+                )
+                .join(StudentInsurance, InsuranceClaim.student_insurance_id == StudentInsurance.id)
+                .filter(InsuranceClaim.policy_id.in_(policy_ids))
+                .filter(StudentInsurance.student_id.in_(student_ids_in_block))
+                .filter(StudentInsurance.join_code == selected_join_code)
+                .filter(InsuranceClaim.status == 'pending')
+                .group_by(InsuranceClaim.policy_id)
+                .all()
+            )
+            policy_pending_claim_counts.update({pid: count for pid, count in pending_claim_rows})
+    else:
+        # Fallback for contexts without a selected join code.
+        policy_enrollment_counts.update({
+            policy.id: policy.student_policies.filter_by(status='active').count()
+            for policy in policies
+        })
+        policy_pending_claim_counts.update({
+            policy.id: policy.claims.filter_by(status='pending').count()
+            for policy in policies
+        })
+
     return render_template('admin_insurance.html',
                           form=form,
                           policies=policies,
@@ -4806,7 +4849,9 @@ def insurance_management():
                           next_tier_category_id=next_tier_category_id,
                           teacher_blocks=teacher_blocks,
                           settings_block=settings_block,
-                          class_labels_by_block=class_labels_by_block)
+                          class_labels_by_block=class_labels_by_block,
+                          policy_enrollment_counts=policy_enrollment_counts,
+                          policy_pending_claim_counts=policy_pending_claim_counts)
 
 
 @admin_bp.route('/insurance/edit/<int:policy_id>', methods=['GET', 'POST'])

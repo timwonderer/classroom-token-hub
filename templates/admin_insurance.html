@@ -221,15 +221,15 @@
                     {{ 'Active' if policy.is_active else 'Inactive' }}
                   </span>
                 </td>
-                <td>{{ policy.student_policies.filter_by(status='active').count() }} students</td>
+                <td>{{ policy_enrollment_counts.get(policy.id, 0) }} students</td>
                 <td>
                   <a href="{{ url_for('admin.edit_insurance_policy', policy_id=policy.id) }}" class="btn btn-sm btn-outline-primary mb-1">
                     <i class="bi bi-pencil"></i> Edit
                   </a>
-                  <button class="btn btn-sm btn-outline-warning mb-1" data-bs-toggle="modal" data-bs-target="#massRemoveModal" data-policy-id="{{ policy.id }}" data-policy-title="{{ policy.title }}" data-active-count="{{ policy.student_policies.filter_by(status='active').count() }}">
+                  <button class="btn btn-sm btn-outline-warning mb-1" data-bs-toggle="modal" data-bs-target="#massRemoveModal" data-policy-id="{{ policy.id }}" data-policy-title="{{ policy.title }}" data-active-count="{{ policy_enrollment_counts.get(policy.id, 0) }}">
                     <i class="bi bi-person-dash"></i> Mass Remove
                   </button>
-                  <button class="btn btn-sm btn-outline-danger mb-1" data-bs-toggle="modal" data-bs-target="#deletePolicyModal" data-policy-id="{{ policy.id }}" data-policy-title="{{ policy.title }}" data-active-count="{{ policy.student_policies.filter_by(status='active').count() }}" data-pending-claims="{{ policy.claims.filter_by(status='pending').count() }}">
+                  <button class="btn btn-sm btn-outline-danger mb-1" data-bs-toggle="modal" data-bs-target="#deletePolicyModal" data-policy-id="{{ policy.id }}" data-policy-title="{{ policy.title }}" data-active-count="{{ policy_enrollment_counts.get(policy.id, 0) }}" data-pending-claims="{{ policy_pending_claim_counts.get(policy.id, 0) }}">
                     <i class="bi bi-trash"></i> Delete
                   </button>
                 </td>
