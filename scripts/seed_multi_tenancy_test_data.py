@@ -318,7 +318,8 @@ def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, joi
     last_name_hash = hash_last_name_parts(last_name, salt)
 
     # Login + auth credentials for seeded accounts
-    pin_credential = f"{first_name[0].upper()}{dob_sum}"
+    # PIN must be numeric-only.
+    pin_credential = f"{dob_sum}"
     passphrase_credential = f"{first_name.lower()}-{last_name.lower()}-{dob_sum}"
 
     # Reuse existing student if already created in a previous partial run
