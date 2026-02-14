@@ -3480,13 +3480,30 @@ def store_management():
         teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id, is_claimed=True).all()
         join_code_to_block = {}
         join_code_to_label = {}
+        
+        # Count unique students per join_code instead of TeacherBlock seats
         class_sizes = {}
+        class_size_query = (
+            db.session.query(
+                TeacherBlock.join_code,
+                db.func.count(db.func.distinct(Student.id)).label('student_count')
+            )
+            .join(Student, TeacherBlock.student_id == Student.id)
+            .filter(
+                TeacherBlock.teacher_id == admin_id,
+                TeacherBlock.is_claimed == True,
+                TeacherBlock.join_code.isnot(None)
+            )
+            .group_by(TeacherBlock.join_code)
+            .all()
+        )
+        class_sizes = {row.join_code: int(row.student_count or 0) for row in class_size_query}
+        
         for seat in teacher_blocks:
             if not seat.join_code:
                 continue
             join_code_to_block.setdefault(seat.join_code, (seat.block or '').strip().upper())
             join_code_to_label.setdefault(seat.join_code, seat.get_class_label())
-            class_sizes[seat.join_code] = class_sizes.get(seat.join_code, 0) + 1
 
         collective_item_ids = [item.id for item in collective_items]
         collective_counts = (
