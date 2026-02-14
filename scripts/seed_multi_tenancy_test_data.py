@@ -13,7 +13,7 @@ Outputs credentials to console (not to file, to avoid security issues).
 import os
 import sys
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -286,6 +286,17 @@ def resolve_period_join_code(teacher, block):
         join_code = generate_join_code()
         if not ClassEconomy.query.filter_by(join_code=join_code).first():
             return join_code
+
+
+def derive_dob_from_sum(dob_sum):
+    """
+    Derive a deterministic test DOB that matches stored dob_sum.
+
+    Uses 01/01/(dob_sum-2), so month + day + year == dob_sum.
+    """
+    year = max(1900, dob_sum - 2)
+    derived = date(year, 1, 1)
+    return derived
 
 
 def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, join_code):
@@ -794,6 +805,7 @@ def seed_database():
         student_creds = {
             'name': f"{first_name} {last_name}",
             'dob_sum': dob_sum,
+            'dob': derive_dob_from_sum(dob_sum).strftime('%Y-%m-%d'),
             'enrollments': []
         }
 
@@ -906,6 +918,7 @@ def seed_database():
 
     for student_cred in credentials['students']:
         print(f"\n{student_cred['name']}")
+        print(f"  DOB: {student_cred['dob']}")
         print(f"  DOB Sum: {student_cred['dob_sum']}")
         print(f"  Account Status: {student_cred['account_status']}")
         print(f"  Needs Claim: {'Yes' if student_cred['needs_claim'] else 'No'}")
