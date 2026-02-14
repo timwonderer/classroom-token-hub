@@ -2417,7 +2417,7 @@ def shop():
     from app.models import TeacherBlock
     class_size = 0
     if join_code:
-        class_size = db.session.query(func.count(func.distinct(Student.id))).join(
+        class_size = db.session.query(db.func.count(db.func.distinct(Student.id))).join(
             TeacherBlock, TeacherBlock.student_id == Student.id
         ).filter(
             TeacherBlock.join_code == join_code,

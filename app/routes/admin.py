@@ -3486,7 +3486,7 @@ def store_management():
         class_size_query = (
             db.session.query(
                 TeacherBlock.join_code,
-                func.count(func.distinct(Student.id)).label('student_count')
+                db.func.count(db.func.distinct(Student.id)).label('student_count')
             )
             .join(Student, TeacherBlock.student_id == Student.id)
             .filter(

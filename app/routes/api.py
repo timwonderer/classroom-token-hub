@@ -253,11 +253,12 @@ def purchase_item():
     if not item or not item.is_active:
         return jsonify({"status": "error", "message": "This item is not available."}), 404
 
-    # For collective items with whole_class goal, enforce one purchase per student
+    # For collective items with whole_class goal, enforce one purchase per student per class
     if item.item_type == 'collective' and item.collective_goal_type == 'whole_class':
         existing_purchase = StudentItem.query.filter(
             StudentItem.student_id == student.id,
             StudentItem.store_item_id == item.id,
+            StudentItem.join_code == join_code,
             StudentItem.status.notin_(['voided', 'rejected'])
         ).first()
         if existing_purchase:
@@ -649,7 +650,7 @@ def purchase_item():
         # --- Collective Item Logic ---
         if item.item_type == 'collective':
             # Count unique students (not TeacherBlock seats) to get actual class size
-            class_size = db.session.query(func.count(func.distinct(Student.id))).join(
+            class_size = db.session.query(db.func.count(db.func.distinct(Student.id))).join(
                 TeacherBlock, TeacherBlock.student_id == Student.id
             ).filter(
                 TeacherBlock.teacher_id == teacher_id,
@@ -657,7 +658,7 @@ def purchase_item():
                 TeacherBlock.is_claimed == True,
             ).scalar() or 0
             
-            purchased_students_count = db.session.query(func.count(func.distinct(StudentItem.student_id))).filter(
+            purchased_students_count = db.session.query(db.func.count(db.func.distinct(StudentItem.student_id))).filter(
                 StudentItem.store_item_id == item.id,
                 StudentItem.join_code == join_code,
                 StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),

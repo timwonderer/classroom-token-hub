@@ -386,3 +386,51 @@ def test_whole_class_goal_with_duplicate_seats_shows_correct_roster(client):
     resp_admin = client.get('/admin/store')
     assert b'0/2' in resp_admin.data
 
+
+def test_whole_class_collective_allows_purchase_per_class_for_same_teacher(client):
+    """Students in different classes (join_codes) with the same teacher can each purchase once."""
+    teacher = Admin(username='teacher_whole_class_multi', totp_secret='secret')
+    db.session.add(teacher)
+    db.session.flush()
+
+    # Create student in two different classes (join_codes) for the same teacher
+    student_class1 = _create_student(teacher, 'Nina', 'JOINMULTI1', block='A')
+    student_class2 = _create_student(teacher, 'Nina', 'JOINMULTI2', block='B')
+    db.session.flush()
+
+    item = StoreItem(
+        teacher_id=teacher.id,
+        name='Whole Class Multi-Class Item',
+        price=Decimal('10.00'),
+        item_type='collective',
+        collective_goal_type='whole_class',
+        is_active=True,
+    )
+    db.session.add(item)
+    db.session.commit()
+
+    # Student in first class purchases successfully
+    _login_student(client, student_class1.id, 'JOINMULTI1')
+    resp1 = client.post('/api/purchase-item', json={
+        'item_id': item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+    })
+    assert resp1.status_code == 200
+
+    # Student in second class (different join_code) should also be able to purchase
+    _login_student(client, student_class2.id, 'JOINMULTI2')
+    resp2 = client.post('/api/purchase-item', json={
+        'item_id': item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+    })
+    assert resp2.status_code == 200
+
+    # Ensure one purchase recorded per class (per join_code)
+    items_class1 = StudentItem.query.filter_by(store_item_id=item.id, join_code='JOINMULTI1').all()
+    items_class2 = StudentItem.query.filter_by(store_item_id=item.id, join_code='JOINMULTI2').all()
+    assert len(items_class1) == 1
+    assert len(items_class2) == 1
+
+
