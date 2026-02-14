@@ -28,7 +28,7 @@ from app.extensions import db
 from app.models import (
     Admin, Student, TeacherBlock, StudentTeacher, Transaction,
     StoreItem, InsurancePolicy, StudentInsurance, InsuranceClaim,
-    PayrollSettings, RentSettings
+    PayrollSettings, RentSettings, ClassEconomy, ClassMembership
 )
 from app.utils.join_code import generate_join_code
 from app.hash_utils import get_random_salt, hash_username, hash_username_lookup
@@ -172,6 +172,10 @@ INSURANCE_TEMPLATES = [
 
 def create_teacher(username, totp_secret=None):
     """Create a teacher account with TOTP secret."""
+    existing = Admin.query.filter_by(username=username).first()
+    if existing:
+        return existing
+
     if not totp_secret:
         totp_secret = pyotp.random_base32()
 
@@ -184,6 +188,104 @@ def create_teacher(username, totp_secret=None):
     db.session.add(teacher)
     db.session.flush()
     return teacher
+
+
+def ensure_class_economy(join_code, teacher=None, display_name=None):
+    """Ensure ClassEconomy exists for join_code and return it."""
+    economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+    if economy:
+        if display_name and not economy.display_name:
+            economy.display_name = display_name
+        if teacher and not economy.created_by_admin_id:
+            economy.created_by_admin_id = teacher.id
+        return economy
+
+    economy = ClassEconomy(
+        join_code=join_code,
+        display_name=display_name,
+        created_by_admin_id=teacher.id if teacher else None,
+        status='active',
+    )
+    db.session.add(economy)
+    db.session.flush()
+    return economy
+
+
+def ensure_admin_membership(join_code, teacher):
+    """Ensure teacher has admin membership for class economy."""
+    membership = ClassMembership.query.filter_by(
+        join_code=join_code,
+        admin_id=teacher.id,
+    ).first()
+    if membership:
+        if membership.role != 'admin':
+            membership.role = 'admin'
+        if membership.status != 'active':
+            membership.status = 'active'
+        return membership
+
+    membership = ClassMembership(
+        join_code=join_code,
+        admin_id=teacher.id,
+        role='admin',
+        status='active',
+    )
+    db.session.add(membership)
+    db.session.flush()
+    return membership
+
+
+def ensure_student_membership(join_code, student):
+    """Ensure student has active membership for class economy."""
+    membership = ClassMembership.query.filter_by(
+        join_code=join_code,
+        student_id=student.id,
+    ).first()
+    if membership:
+        if membership.role != 'student':
+            membership.role = 'student'
+        if membership.status != 'active':
+            membership.status = 'active'
+        return membership
+
+    membership = ClassMembership(
+        join_code=join_code,
+        student_id=student.id,
+        role='student',
+        status='active',
+    )
+    db.session.add(membership)
+    db.session.flush()
+    return membership
+
+
+def resolve_period_join_code(teacher, block):
+    """Reuse existing join_code for a teacher/block when present, else generate a new one."""
+    existing_seat = TeacherBlock.query.filter_by(
+        teacher_id=teacher.id,
+        block=block,
+    ).filter(TeacherBlock.join_code.isnot(None)).order_by(TeacherBlock.id.asc()).first()
+    if existing_seat:
+        return existing_seat.join_code
+
+    existing_payroll = PayrollSettings.query.filter_by(
+        teacher_id=teacher.id,
+        block=block,
+    ).filter(PayrollSettings.join_code.isnot(None)).order_by(PayrollSettings.id.asc()).first()
+    if existing_payroll:
+        return existing_payroll.join_code
+
+    existing_rent = RentSettings.query.filter_by(
+        teacher_id=teacher.id,
+        block=block,
+    ).filter(RentSettings.join_code.isnot(None)).order_by(RentSettings.id.asc()).first()
+    if existing_rent:
+        return existing_rent.join_code
+
+    while True:
+        join_code = generate_join_code()
+        if not ClassEconomy.query.filter_by(join_code=join_code).first():
+            return join_code
 
 
 def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, join_code):
@@ -207,49 +309,74 @@ def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, joi
     # Password credential is first_initial + dob_sum
     password_credential = f"{first_name[0].upper()}{dob_sum}"
 
-    # Create student
-    student = Student(
-        first_name=first_name,
-        last_initial=last_initial,
-        block=block,
-        salt=salt,
-        first_half_hash=first_half_hash,
-        username_hash=username_hash,
-        username_lookup_hash=username_lookup_hash,
-        last_name_hash_by_part=last_name_hash,
-        dob_sum=dob_sum,
-        hall_passes=3,
-        has_completed_setup=True,
-        teacher_id=teacher.id,  # Primary owner
-        pin_hash=generate_password_hash(password_credential),  # Set PIN for login
-    )
-    db.session.add(student)
-    db.session.flush()
+    # Reuse existing student if already created in a previous partial run
+    student = Student.query.filter_by(username_lookup_hash=username_lookup_hash).first()
+    if not student:
+        student = Student(
+            first_name=first_name,
+            last_initial=last_initial,
+            block=block,
+            salt=salt,
+            first_half_hash=first_half_hash,
+            username_hash=username_hash,
+            username_lookup_hash=username_lookup_hash,
+            last_name_hash_by_part=last_name_hash,
+            dob_sum=dob_sum,
+            hall_passes=3,
+            has_completed_setup=True,
+            pin_hash=generate_password_hash(password_credential),  # Set PIN for login
+        )
+        db.session.add(student)
+        db.session.flush()
+    else:
+        # Keep seed expectations stable if user reruns script
+        student.block = block
+        student.has_completed_setup = True
 
-    # Create TeacherBlock (claimed seat)
-    teacher_block = TeacherBlock(
+    # Create/update TeacherBlock (claimed seat)
+    teacher_block = TeacherBlock.query.filter_by(
         teacher_id=teacher.id,
         block=block,
-        first_name=first_name,
-        last_initial=last_initial,
-        last_name_hash_by_part=last_name_hash,
-        dob_sum=dob_sum,
-        salt=salt,
-        first_half_hash=first_half_hash,
-        join_code=join_code,
-        student_id=student.id,
-        is_claimed=True,
-        claimed_at=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 30))
-    )
-    db.session.add(teacher_block)
+        student_id=student.id
+    ).first()
+    if not teacher_block:
+        teacher_block = TeacherBlock(
+            teacher_id=teacher.id,
+            block=block,
+            first_name=first_name,
+            last_initial=last_initial,
+            last_name_hash_by_part=last_name_hash,
+            dob_sum=dob_sum,
+            salt=student.salt,
+            first_half_hash=student.first_half_hash,
+            join_code=join_code,
+            student_id=student.id,
+            is_claimed=True,
+            claimed_at=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 30))
+        )
+        db.session.add(teacher_block)
+    else:
+        teacher_block.join_code = join_code
+        teacher_block.is_claimed = True
+        if not teacher_block.claimed_at:
+            teacher_block.claimed_at = datetime.now(timezone.utc) - timedelta(days=random.randint(1, 30))
 
     # Create StudentTeacher link
-    student_teacher = StudentTeacher(
+    existing_link = StudentTeacher.query.filter_by(
         student_id=student.id,
-        admin_id=teacher.id,
-        created_at=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 30))
-    )
-    db.session.add(student_teacher)
+        admin_id=teacher.id
+    ).first()
+    if not existing_link:
+        student_teacher = StudentTeacher(
+            student_id=student.id,
+            admin_id=teacher.id,
+            created_at=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 30))
+        )
+        db.session.add(student_teacher)
+
+    ensure_class_economy(join_code, teacher=teacher)
+    ensure_admin_membership(join_code, teacher)
+    ensure_student_membership(join_code, student)
 
     db.session.flush()
 
@@ -323,6 +450,18 @@ def create_store_items(teacher, period_name, block):
                 if block not in existing.blocks_list:
                     existing.set_blocks(existing.blocks_list + [block])
                 continue
+        else:
+            existing_for_block = None
+            candidates = StoreItem.query.filter_by(
+                teacher_id=teacher.id,
+                name=item_template['name']
+            ).all()
+            for candidate in candidates:
+                if block in candidate.blocks_list:
+                    existing_for_block = candidate
+                    break
+            if existing_for_block:
+                continue
 
         item = StoreItem(
             teacher_id=teacher.id,
@@ -350,6 +489,15 @@ def create_insurance_policies(teacher, period_name, block):
     """Create insurance policies for a teacher's period."""
     policies_created = []
 
+    def _generate_unique_policy_code(base_code):
+        if not InsurancePolicy.query.filter_by(policy_code=base_code).first():
+            return base_code
+        for attempt in range(1, 100):
+            candidate = f"{base_code}{attempt:02d}"
+            if not InsurancePolicy.query.filter_by(policy_code=candidate).first():
+                return candidate
+        raise RuntimeError(f"Unable to generate unique policy_code from base {base_code}")
+
     for idx, policy_template in enumerate(INSURANCE_TEMPLATES):
         # Determine if this policy should be created
         if policy_template['shared']:
@@ -362,13 +510,24 @@ def create_insurance_policies(teacher, period_name, block):
                 # Add block to visibility
                 if block not in existing.blocks_list:
                     existing.set_blocks(existing.blocks_list + [block])
+                policies_created.append(existing)
                 continue
         else:
+            existing_candidates = InsurancePolicy.query.filter_by(
+                teacher_id=teacher.id,
+                title=policy_template['title']
+            ).all()
+            existing = next((p for p in existing_candidates if block in p.blocks_list), None)
+            if existing:
+                policies_created.append(existing)
+                continue
+
             # Only create for some periods (randomly)
             if random.random() < 0.5:
                 continue
 
-        policy_code = f"{teacher.username[:3].upper()}{block}{idx+1:02d}"
+        base_policy_code = f"{teacher.username[:3].upper()}{block}{idx+1:02d}"
+        policy_code = _generate_unique_policy_code(base_policy_code)
 
         policy = InsurancePolicy(
             policy_code=policy_code,
@@ -474,11 +633,25 @@ def purchase_insurance_for_student(student, policy, join_code, teacher, past_wai
             db.session.add(claim_tx)
 
 
-def create_payroll_settings(teacher, block):
+def create_payroll_settings(teacher, block, join_code=None):
     """Create payroll settings for a teacher's period."""
+    join_code = join_code or resolve_period_join_code(teacher, block)
+    ensure_class_economy(join_code, teacher=teacher, display_name=f"{teacher.username} - Period {block}")
+    ensure_admin_membership(join_code, teacher)
+
+    existing = PayrollSettings.query.filter_by(
+        teacher_id=teacher.id,
+        block=block,
+    ).order_by(PayrollSettings.id.asc()).first()
+    if existing:
+        if not existing.join_code:
+            existing.join_code = join_code
+        return existing
+
     settings = PayrollSettings(
         teacher_id=teacher.id,
         block=block,
+        join_code=join_code,
         pay_rate=round(random.uniform(0.20, 0.40), 2),
         payroll_frequency_days=random.choice([7, 14, 30]),
         next_payroll_date=datetime.now(timezone.utc) + timedelta(days=7),
@@ -493,11 +666,25 @@ def create_payroll_settings(teacher, block):
     return settings
 
 
-def create_rent_settings(teacher, block):
+def create_rent_settings(teacher, block, join_code=None):
     """Create rent settings for a teacher's period."""
+    join_code = join_code or resolve_period_join_code(teacher, block)
+    ensure_class_economy(join_code, teacher=teacher, display_name=f"{teacher.username} - Period {block}")
+    ensure_admin_membership(join_code, teacher)
+
+    existing = RentSettings.query.filter_by(
+        teacher_id=teacher.id,
+        block=block,
+    ).order_by(RentSettings.id.asc()).first()
+    if existing:
+        if not existing.join_code:
+            existing.join_code = join_code
+        return existing
+
     settings = RentSettings(
         teacher_id=teacher.id,
         block=block,
+        join_code=join_code,
         is_enabled=True,
         rent_amount=random.choice([40, 50, 60, 75]),
         frequency_type='monthly',
@@ -557,7 +744,9 @@ def seed_database():
         for period in teacher_config['periods']:
             block = period['block']
             period_name = period['name']
-            join_code = generate_join_code()
+            join_code = resolve_period_join_code(teacher, block)
+            ensure_class_economy(join_code, teacher=teacher, display_name=period_name)
+            ensure_admin_membership(join_code, teacher)
 
             teacher_map[username]['periods'][block] = {
                 'join_code': join_code,
@@ -574,8 +763,8 @@ def seed_database():
             })
 
             # Create period-specific settings
-            create_payroll_settings(teacher, block)
-            create_rent_settings(teacher, block)
+            create_payroll_settings(teacher, block, join_code=join_code)
+            create_rent_settings(teacher, block, join_code=join_code)
 
             # Create store items and insurance for this period
             create_store_items(teacher, period_name, block)
@@ -616,39 +805,10 @@ def seed_database():
                 student_creds['username'] = username
                 student_creds['password'] = password
             else:
-                # Additional enrollment - just create seat and link
-                salt = student_obj.salt
-                last_name_hash = student_obj.last_name_hash_by_part
-                first_half_hash = student_obj.first_half_hash
-
-                seat = TeacherBlock(
-                    teacher_id=teacher.id,
-                    block=block,
-                    first_name=first_name,
-                    last_initial=last_name[0].upper(),
-                    last_name_hash_by_part=last_name_hash,
-                    dob_sum=dob_sum,
-                    salt=salt,
-                    first_half_hash=first_half_hash,
-                    join_code=join_code,
-                    student_id=student_obj.id,
-                    is_claimed=True,
-                    claimed_at=datetime.now(timezone.utc) - timedelta(days=random.randint(1, 30))
+                # Additional enrollment - ensure seat/link exist without duplicate inserts
+                student_obj, seat, _, _ = create_student_with_seat(
+                    first_name, last_name, dob_sum, teacher, block, join_code
                 )
-                db.session.add(seat)
-
-                # Create StudentTeacher link if doesn't exist
-                existing_link = StudentTeacher.query.filter_by(
-                    student_id=student_obj.id,
-                    admin_id=teacher.id
-                ).first()
-
-                if not existing_link:
-                    student_teacher = StudentTeacher(
-                        student_id=student_obj.id,
-                        admin_id=teacher.id
-                    )
-                    db.session.add(student_teacher)
 
             # Create transactions for this enrollment
             num_transactions = random.randint(8, 15)
