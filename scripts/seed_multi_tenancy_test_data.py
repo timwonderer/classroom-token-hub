@@ -292,7 +292,7 @@ def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, joi
     """
     Create a student account and claim a seat in a teacher's class.
 
-    Returns tuple: (student, teacher_block, username, password_credential)
+    Returns tuple: (student, teacher_block, username, pin_credential, passphrase_credential)
     """
     salt = get_random_salt()
 
@@ -306,8 +306,9 @@ def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, joi
     username_lookup_hash = hash_username_lookup(username)
     last_name_hash = hash_last_name_parts(last_name, salt)
 
-    # Password credential is first_initial + dob_sum
-    password_credential = f"{first_name[0].upper()}{dob_sum}"
+    # Login + auth credentials for seeded accounts
+    pin_credential = f"{first_name[0].upper()}{dob_sum}"
+    passphrase_credential = f"{first_name.lower()}-{last_name.lower()}-{dob_sum}"
 
     # Reuse existing student if already created in a previous partial run
     student = Student.query.filter_by(username_lookup_hash=username_lookup_hash).first()
@@ -324,7 +325,8 @@ def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, joi
             dob_sum=dob_sum,
             hall_passes=3,
             has_completed_setup=True,
-            pin_hash=generate_password_hash(password_credential),  # Set PIN for login
+            pin_hash=generate_password_hash(pin_credential),
+            passphrase_hash=generate_password_hash(passphrase_credential),
         )
         db.session.add(student)
         db.session.flush()
@@ -332,6 +334,10 @@ def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, joi
         # Keep seed expectations stable if user reruns script
         student.block = block
         student.has_completed_setup = True
+        if not student.pin_hash:
+            student.pin_hash = generate_password_hash(pin_credential)
+        if not student.passphrase_hash:
+            student.passphrase_hash = generate_password_hash(passphrase_credential)
 
     # Create/update TeacherBlock (claimed seat)
     teacher_block = TeacherBlock.query.filter_by(
@@ -380,7 +386,7 @@ def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, joi
 
     db.session.flush()
 
-    return student, teacher_block, username, password_credential
+    return student, teacher_block, username, pin_credential, passphrase_credential
 
 
 def create_transactions(student, teacher, join_code, num_transactions=10):
@@ -799,15 +805,16 @@ def seed_database():
 
             if student_obj is None:
                 # Create student on first enrollment
-                student_obj, seat, username, password = create_student_with_seat(
+                student_obj, seat, username, pin, passphrase = create_student_with_seat(
                     first_name, last_name, dob_sum, teacher, block, join_code
                 )
                 student_map[first_name] = student_obj
                 student_creds['username'] = username
-                student_creds['password'] = password
+                student_creds['pin'] = pin
+                student_creds['passphrase'] = passphrase
             else:
                 # Additional enrollment - ensure seat/link exist without duplicate inserts
-                student_obj, seat, _, _ = create_student_with_seat(
+                student_obj, seat, _, _, _ = create_student_with_seat(
                     first_name, last_name, dob_sum, teacher, block, join_code
                 )
 
@@ -884,12 +891,13 @@ def seed_database():
     print("\n" + "-" * 80)
     print("STUDENT ACCOUNTS")
     print("-" * 80)
-    print("\nStudent Login Format: Username + Password (PIN)")
+    print("\nStudent Login Format: Username + PIN (with passphrase for protected actions)")
 
     for student_cred in credentials['students']:
         print(f"\n{student_cred['name']}")
         print(f"  Username: {student_cred['username']}")
-        print(f"  Password: {student_cred['password']}")
+        print(f"  PIN: {student_cred['pin']}")
+        print(f"  Passphrase: {student_cred['passphrase']}")
         print(f"  Enrollments:")
         for enrollment in student_cred['enrollments']:
             print(f"    • {enrollment['class_name']} ({enrollment['teacher']}, Period {enrollment['period']})")
