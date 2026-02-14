@@ -300,7 +300,7 @@ def derive_dob_from_sum(dob_sum):
     return derived
 
 
-def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, join_code, setup_complete=True):
+def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, join_code):
     """
     Create a student account and claim a seat in a teacher's class.
 
@@ -337,23 +337,20 @@ def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, joi
             last_name_hash_by_part=last_name_hash,
             dob_sum=dob_sum,
             hall_passes=3,
-            has_completed_setup=setup_complete,
-            pin_hash=generate_password_hash(pin_credential) if setup_complete else None,
-            passphrase_hash=generate_password_hash(passphrase_credential) if setup_complete else None,
+            has_completed_setup=True,
+            pin_hash=generate_password_hash(pin_credential),
+            passphrase_hash=generate_password_hash(passphrase_credential),
         )
         db.session.add(student)
         db.session.flush()
     else:
         # Keep seed expectations stable if user reruns script
         student.block = block
-        student.has_completed_setup = setup_complete
-        if setup_complete and not student.pin_hash:
+        student.has_completed_setup = True
+        if not student.pin_hash:
             student.pin_hash = generate_password_hash(pin_credential)
-        if setup_complete and not student.passphrase_hash:
+        if not student.passphrase_hash:
             student.passphrase_hash = generate_password_hash(passphrase_credential)
-        if not setup_complete:
-            student.pin_hash = None
-            student.passphrase_hash = None
 
     # Create/update TeacherBlock (claimed seat)
     teacher_block = TeacherBlock.query.filter_by(
@@ -403,6 +400,46 @@ def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, joi
     db.session.flush()
 
     return student, teacher_block, username, pin_credential, passphrase_credential
+
+
+def create_unclaimed_seat(first_name, last_name, dob_sum, teacher, block, join_code):
+    """Create (or reuse) an unclaimed roster seat for claim flow testing."""
+    salt = get_random_salt()
+    last_initial = last_name[0].upper()
+    first_half_hash = compute_primary_claim_hash(first_name[0].upper(), dob_sum, salt)
+    last_name_hash = hash_last_name_parts(last_name, salt)
+
+    existing = TeacherBlock.query.filter_by(
+        teacher_id=teacher.id,
+        block=block,
+        first_name=first_name,
+        last_initial=last_initial,
+        dob_sum=dob_sum,
+        student_id=None,
+    ).first()
+    if existing:
+        existing.join_code = join_code
+        existing.is_claimed = False
+        existing.claimed_at = None
+        return existing
+
+    seat = TeacherBlock(
+        teacher_id=teacher.id,
+        block=block,
+        first_name=first_name,
+        last_initial=last_initial,
+        last_name_hash_by_part=last_name_hash,
+        dob_sum=dob_sum,
+        salt=salt,
+        first_half_hash=first_half_hash,
+        join_code=join_code,
+        student_id=None,
+        is_claimed=False,
+        claimed_at=None,
+    )
+    db.session.add(seat)
+    db.session.flush()
+    return seat
 
 
 def create_transactions(student, teacher, join_code, num_transactions=10):
@@ -803,9 +840,9 @@ def seed_database(credential_mode='mixed'):
         last_name = student_config['last_name']
         dob_sum = student_config['dob_sum']
         enrollments = student_config['enrollments']
-        setup_complete = (
-            credential_mode == 'setup-complete'
-            or (credential_mode == 'mixed' and student_index % 2 == 0)
+        claim_required = (
+            credential_mode == 'needs-claim'
+            or (credential_mode == 'mixed' and student_index % 2 == 1)
         )
 
         print(f"\n  Student: {first_name} {last_name}")
@@ -826,22 +863,44 @@ def seed_database(credential_mode='mixed'):
             period_name = period_info['name']
 
             if student_obj is None:
-                # Create student on first enrollment
-                student_obj, seat, username, pin, passphrase = create_student_with_seat(
-                    first_name, last_name, dob_sum, teacher, block, join_code, setup_complete=setup_complete
-                )
-                student_map[first_name] = student_obj
-                student_creds['username'] = username
-                if setup_complete:
+                if claim_required:
+                    # Create unclaimed seats only; student will claim account in UI.
+                    create_unclaimed_seat(first_name, last_name, dob_sum, teacher, block, join_code)
+                    student_creds['username'] = '[CLAIM REQUIRED]'
+                    student_creds['pin'] = '[CLAIM REQUIRED]'
+                    student_creds['passphrase'] = '[CLAIM REQUIRED]'
+                    student_creds['claim_join_code'] = join_code
+                    student_creds['claim_first_initial'] = first_name[0].upper()
+                    student_creds['claim_last_name'] = last_name
+                    student_creds['claim_dob'] = derive_dob_from_sum(dob_sum).strftime('%Y-%m-%d')
+                else:
+                    # Create student on first enrollment with completed credentials.
+                    student_obj, seat, username, pin, passphrase = create_student_with_seat(
+                        first_name, last_name, dob_sum, teacher, block, join_code
+                    )
+                    student_map[first_name] = student_obj
+                    student_creds['username'] = username
                     student_creds['pin'] = pin
                     student_creds['passphrase'] = passphrase
             else:
-                # Additional enrollment - ensure seat/link exist without duplicate inserts
-                student_obj, seat, _, _, _ = create_student_with_seat(
-                    first_name, last_name, dob_sum, teacher, block, join_code, setup_complete=setup_complete
-                )
+                if claim_required:
+                    create_unclaimed_seat(first_name, last_name, dob_sum, teacher, block, join_code)
+                else:
+                    # Additional enrollment - ensure seat/link exist without duplicate inserts
+                    student_obj, seat, _, _, _ = create_student_with_seat(
+                        first_name, last_name, dob_sum, teacher, block, join_code
+                    )
 
-            # Create transactions for this enrollment
+            if claim_required:
+                student_creds['enrollments'].append({
+                    'teacher': teacher_username,
+                    'period': block,
+                    'join_code': join_code,
+                    'class_name': period_name,
+                })
+                continue
+
+            # Create transactions for this enrollment (claimed/setup accounts only)
             num_transactions = random.randint(8, 15)
             create_transactions(student_obj, teacher, join_code, num_transactions)
 
@@ -883,17 +942,13 @@ def seed_database(credential_mode='mixed'):
 
             print(f"    ✓ Enrolled in {teacher_username} - {period_name} ({join_code})")
 
-        account_claimed = bool(
-            student_obj
-            and student_obj.username_lookup_hash
-        )
         student_creds['account_status'] = (
+            'Needs Claim'
+            if claim_required else
             'Claimed + Setup Complete'
-            if setup_complete else
-            'Claimed, Needs PIN/Passphrase Setup'
         )
-        student_creds['needs_claim'] = not account_claimed
-        student_creds['needs_setup'] = not setup_complete
+        student_creds['needs_claim'] = claim_required
+        student_creds['needs_setup'] = False
 
         credentials['students'].append(student_creds)
 
@@ -936,11 +991,16 @@ def seed_database(credential_mode='mixed'):
         print(f"  Account Status: {student_cred['account_status']}")
         print(f"  Needs Claim: {'Yes' if student_cred['needs_claim'] else 'No'}")
         print(f"  Needs Setup: {'Yes' if student_cred['needs_setup'] else 'No'}")
-        print(f"  Username: {student_cred['username']}")
-        if student_cred['needs_setup']:
-            print("  PIN: [NOT SET - student must create]")
-            print("  Passphrase: [NOT SET - student must create]")
+        if student_cred['needs_claim']:
+            print("  Username: [CLAIM REQUIRED]")
+            print("  PIN: [CLAIM REQUIRED]")
+            print("  Passphrase: [CLAIM REQUIRED]")
+            print("  Claim Join Code: {}".format(student_cred['claim_join_code']))
+            print("  Claim First Initial: {}".format(student_cred['claim_first_initial']))
+            print("  Claim Last Name: {}".format(student_cred['claim_last_name']))
+            print("  Claim DOB: {}".format(student_cred['claim_dob']))
         else:
+            print(f"  Username: {student_cred['username']}")
             print(f"  PIN: {student_cred['pin']}")
             print(f"  Passphrase: {student_cred['passphrase']}")
         print(f"  Enrollments:")
@@ -1010,7 +1070,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Seed multi-tenancy test data')
     parser.add_argument(
         '--credential-mode',
-        choices=['setup-complete', 'needs-setup', 'mixed'],
+        choices=['setup-complete', 'needs-claim', 'mixed'],
         default='mixed',
         help='How student credentials should be seeded (default: mixed)'
     )
