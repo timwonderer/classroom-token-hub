@@ -1028,17 +1028,17 @@ def delete_period(admin_id, period):
     if teacher_block:
         # It's a join_code
         join_code = teacher_block.join_code
-        period_name = teacher_block.block_name
+        period_name = teacher_block.block
     else:
         # Try as legacy period string (by block_name)
         teacher_block = TeacherBlock.query.filter_by(
             teacher_id=admin_id,
-            block_name=period
+            block=period
         ).first()
 
         if teacher_block:
             join_code = teacher_block.join_code
-            period_name = teacher_block.block_name
+            period_name = teacher_block.block
         else:
             # Legacy fallback: period string without TeacherBlock
             # Sanitize period to prevent SQL injection

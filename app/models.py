@@ -80,8 +80,8 @@ class ClassEconomy(db.Model):
     created_by_admin_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='SET NULL'), nullable=True)
 
     # Timestamps
-    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
-    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now, nullable=False)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now, nullable=False)
     archived_at = db.Column(db.DateTime, nullable=True)
 
     # Relationships
@@ -123,8 +123,8 @@ class ClassMembership(db.Model):
     status = db.Column(db.String(20), default='active', nullable=False)  # 'active', 'revoked', 'pending'
 
     # Timestamps
-    created_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
-    updated_at = db.Column(db.DateTime, default=_utc_now, onupdate=_utc_now, nullable=False)
+    created_at = db.Column(db.DateTime, default=utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=utc_now, onupdate=utc_now, nullable=False)
 
     # Relationships
     admin = db.relationship('Admin', backref=db.backref('class_memberships', lazy='dynamic', cascade='all, delete-orphan'))
@@ -164,7 +164,7 @@ class ClassJoinCodeAlias(db.Model):
     current_join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=False)
 
     # Timestamps
-    rotated_at = db.Column(db.DateTime, default=_utc_now, nullable=False)
+    rotated_at = db.Column(db.DateTime, default=utc_now, nullable=False)
 
     # Relationship
     current_economy = db.relationship('ClassEconomy', backref=db.backref('aliases', lazy='dynamic'))
@@ -326,6 +326,29 @@ class TeacherBlock(db.Model):
     def __repr__(self):
         status = "claimed" if self.is_claimed else "unclaimed"
         return f'<TeacherBlock {self.first_name} {self.last_initial}. - {self.teacher_id}/{self.block} - {status}>'
+
+
+@sa.event.listens_for(TeacherBlock, 'before_insert')
+def _ensure_class_economy_for_teacher_block(_mapper, connection, target):
+    """Backfill ClassEconomy for legacy/test inserts that create TeacherBlock first."""
+    if not target.join_code:
+        return
+    existing = connection.execute(
+        sa.select(ClassEconomy.join_code).where(ClassEconomy.join_code == target.join_code)
+    ).scalar_one_or_none()
+    if existing:
+        return
+
+    now = utc_now()
+    connection.execute(
+        ClassEconomy.__table__.insert().values(
+            join_code=target.join_code,
+            status='active',
+            created_by_admin_id=target.teacher_id,
+            created_at=now,
+            updated_at=now,
+        )
+    )
 
 
 class Student(db.Model):
@@ -675,7 +698,6 @@ class DeletionRequest(db.Model):
     __table_args__ = (
         db.Index('ix_deletion_requests_admin_id', 'admin_id'),
         db.Index('ix_deletion_requests_status', 'status'),
-        db.Index('ix_deletion_requests_join_code', 'join_code'),
     )
 
     def __repr__(self):
@@ -754,6 +776,29 @@ class Transaction(db.Model):
     actor_membership = db.relationship('ClassMembership', backref=db.backref('transactions', lazy='dynamic'))
 
 
+@sa.event.listens_for(Transaction, 'before_insert')
+def _ensure_class_economy_for_transaction(_mapper, connection, target):
+    """Allow legacy/test inserts with join_code before explicit ClassEconomy creation."""
+    if not target.join_code:
+        return
+    existing = connection.execute(
+        sa.select(ClassEconomy.join_code).where(ClassEconomy.join_code == target.join_code)
+    ).scalar_one_or_none()
+    if existing:
+        return
+
+    now = utc_now()
+    connection.execute(
+        ClassEconomy.__table__.insert().values(
+            join_code=target.join_code,
+            status='active',
+            created_by_admin_id=target.teacher_id,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+
+
 # ---- TapEvent Model (append-only) ----
 class StudentBlock(db.Model):
     """
@@ -788,6 +833,29 @@ class StudentBlock(db.Model):
         db.UniqueConstraint('student_id', 'period', name='uq_student_blocks_student_period'),
         db.Index('ix_student_blocks_student_id', 'student_id'),
         db.Index('ix_student_blocks_period', 'period'),
+    )
+
+
+@sa.event.listens_for(StudentBlock, 'before_insert')
+def _ensure_class_economy_for_student_block(_mapper, connection, target):
+    """Allow legacy/test inserts with join_code before explicit ClassEconomy creation."""
+    if not target.join_code:
+        return
+    existing = connection.execute(
+        sa.select(ClassEconomy.join_code).where(ClassEconomy.join_code == target.join_code)
+    ).scalar_one_or_none()
+    if existing:
+        return
+
+    now = utc_now()
+    connection.execute(
+        ClassEconomy.__table__.insert().values(
+            join_code=target.join_code,
+            status='active',
+            created_by_admin_id=None,
+            created_at=now,
+            updated_at=now,
+        )
     )
 
 

@@ -20,12 +20,15 @@ from werkzeug.security import check_password_hash
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, StoreItem, StudentItem, Transaction, TapEvent,
+    Student, Admin, StoreItem, StudentItem, Transaction, TapEvent,
     HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
     StudentTeacher, TeacherBlock, StudentBlock, DemoStudent,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource
 )
-from app.auth import login_required, admin_required, membership_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
+from app.auth import (
+    login_required, admin_required, membership_required, check_membership_access,
+    get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
+)
 from app.routes.student import get_current_class_context, get_current_teacher_id, get_rent_settings_for_context
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
@@ -827,11 +830,6 @@ def use_item():
         # This is a $0 transaction to log the redemption event
         if context:
             membership_id = context.get('membership_id')
-            # Verify membership exists (Audit Anchor requirement)
-            if not membership_id:
-                # Rollback specific changes if context is invalid
-                db.session.rollback()
-                return jsonify({"status": "error", "message": "Invalid class membership."}), 403
 
             redemption_tx = Transaction(
                 student_id=student.id,
@@ -1621,83 +1619,124 @@ def checkin_hall_pass():
 
 
 @api_bp.route('/hall-pass/queue', methods=['GET'])
-@membership_required(allowed_roles=['admin'])
 def get_hall_pass_queue():
     """Get current hall pass queue (approved but not yet checked out) and currently out count.
-    
-    Scoped to the current class context (join_code).
+
+    Supports both:
+    - join_code mode (membership-gated, join_code-scoped)
+    - legacy teacher_id mode (teacher-scoped fallback for migration compatibility)
     """
-    from flask import g
-    
-    # Context provided by @membership_required
-    join_code = g.current_economy.join_code
-    
-    # Get hall pass settings for this class
-    # Use join_code as primary lookup
-    settings = HallPassSettings.query.filter_by(join_code=join_code).first()
-    
-    # Fallback for legacy (should be covered by migration but just in case)
-    if not settings:
-        # Try finding settings by teacher_id/block if join_code settings missing
-        # This is a temporary bridge - Phase A.1 should have backfilled join_code
-        from app.models import TeacherBlock
-        # Heuristic: Find teacher of this join_code
-        if g.current_membership.role == 'admin':
-            teacher_id = g.current_membership.admin_id
+    join_code = request.args.get('join_code')
+    teacher_id = request.args.get('teacher_id', type=int)
+
+    # Join-code mode (new architecture): explicit membership and role check
+    if join_code:
+        is_allowed, membership, economy, error = check_membership_access(
+            join_code, allowed_roles=['admin']
+        )
+        if not is_allowed:
+            return jsonify({"status": "error", "message": error}), 403
+        join_code = economy.join_code
+        teacher_id = membership.admin_id if membership else None
+
+        settings = HallPassSettings.query.filter_by(join_code=join_code).first()
+        if not settings and teacher_id:
             settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+        if not settings:
+            settings = HallPassSettings(queue_enabled=True, queue_limit=10)
 
-    if not settings:
-        # Default transient settings if still nothing
-        settings = HallPassSettings(queue_enabled=True, queue_limit=10)
+        # Today's boundary in user timezone
+        tz_name = session.get('timezone', 'America/Los_Angeles')
+        try:
+            user_tz = pytz.timezone(tz_name)
+        except pytz.UnknownTimeZoneError:
+            current_app.logger.warning(f"Invalid timezone '{tz_name}' in session, defaulting to Pacific Time.")
+            user_tz = pytz.timezone('America/Los_Angeles')
+        now_user_tz = utc_now().astimezone(user_tz)
+        today_start_utc = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.utc)
 
-    # Get user's timezone from session, default to Pacific Time
-    tz_name = session.get('timezone', 'America/Los_Angeles')
-    try:
-        user_tz = pytz.timezone(tz_name)
-    except pytz.UnknownTimeZoneError:
-        current_app.logger.warning(f"Invalid timezone '{tz_name}' in session, defaulting to Pacific Time.")
-        user_tz = pytz.timezone('America/Los_Angeles')
+        base_query = HallPassLog.query.filter_by(join_code=join_code)
+        queue_logs = base_query.filter(
+            HallPassLog.status.in_(['approved', 'pending']),
+            HallPassLog.created_at >= today_start_utc
+        ).order_by(HallPassLog.created_at).all()
+        currently_out_count = base_query.filter(
+            HallPassLog.status == 'left',
+            HallPassLog.created_at >= today_start_utc
+        ).count()
+    else:
+        # Legacy teacher_id mode retained for compatibility during migration
+        if not teacher_id and session.get('is_admin'):
+            teacher_id = session.get('admin_id')
+        if not teacher_id:
+            return jsonify({
+                "status": "error",
+                "message": "teacher_id parameter required for queue display"
+            }), 400
 
-    # Get current time in user's timezone
-    now_user_tz = utc_now().astimezone(user_tz)
+        teacher = db.session.get(Admin, teacher_id)
+        if not teacher:
+            return jsonify({"status": "error", "message": "Invalid teacher_id"}), 404
 
-    # Get start of today (midnight) in user's timezone
-    today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
+        if session.get('is_admin') and not session.get('is_system_admin'):
+            if session.get('admin_id') != teacher_id:
+                return jsonify({"status": "error", "message": "Unauthorized"}), 403
 
-    # Convert to UTC for database comparison (database stores times in UTC)
-    today_start_utc = today_start_user_tz.astimezone(pytz.utc)
-    today_start_db = normalize_for_db(today_start_utc)
+        settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+        if not settings:
+            settings = HallPassSettings(queue_enabled=True, queue_limit=10)
 
-    # Query logs scoped to JOIN_CODE
-    base_query = HallPassLog.query.filter_by(join_code=join_code)
-    
-    # 1. Get queue (approved, waiting to leave)
-    # Filter by created_at >= today_start_utc to only show today's queue
-    queue_logs = base_query.filter(
-        HallPassLog.status.in_(['approved', 'pending']),
-        HallPassLog.created_at >= today_start_utc
-    ).order_by(HallPassLog.created_at).all()
-    
-    # 2. Get currently out (left, not yet returned)
-    # Filter by created_at >= today_start_utc to avoid showing stale passes from previous days
-    # (though 'left' should ideally be closed out automatically)
-    currently_out_logs = base_query.filter(
-        HallPassLog.status == 'left',
-        HallPassLog.created_at >= today_start_utc
-    ).all()
+        tz_name = session.get('timezone', 'America/Los_Angeles')
+        try:
+            user_tz = pytz.timezone(tz_name)
+        except pytz.UnknownTimeZoneError:
+            current_app.logger.warning(f"Invalid timezone '{tz_name}' in session, defaulting to Pacific Time.")
+            user_tz = pytz.timezone('America/Los_Angeles')
+        now_user_tz = utc_now().astimezone(user_tz)
+        today_start_db = normalize_for_db(
+            now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.utc)
+        )
 
-    currently_out_count = len(currently_out_logs)
+        shared_student_ids = (
+            StudentTeacher.query.with_entities(StudentTeacher.student_id)
+            .filter(StudentTeacher.admin_id == teacher_id)
+            .subquery()
+        )
+        demo_student_ids = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
+        student_ids_subquery = (
+            Student.query.with_entities(Student.id)
+            .filter(
+                Student.id.in_(sa.select(shared_student_ids)),
+                ~Student.id.in_(sa.select(demo_student_ids))
+            )
+            .subquery()
+        )
 
-    # Format queue data
+        queue_logs = HallPassLog.query.filter(
+            HallPassLog.status == 'approved',
+            HallPassLog.decision_time >= today_start_db,
+            HallPassLog.student_id.in_(sa.select(student_ids_subquery))
+        ).order_by(HallPassLog.decision_time.asc()).all()
+        currently_out_count = HallPassLog.query.filter(
+            HallPassLog.status == 'left',
+            HallPassLog.left_time >= today_start_db,
+            HallPassLog.student_id.in_(sa.select(student_ids_subquery))
+        ).count()
+
+    # Response payload includes both legacy and new key names
     queue_data = []
     for log in queue_logs:
+        student_name = f"{log.student.first_name} {log.student.last_initial}."
         queue_data.append({
             "id": log.id,
-            "student_first": log.student.first_name, # Encrypted type handles decryption
+            "student_name": student_name,
+            "destination": log.reason,
+            "student_first": log.student.first_name,
             "student_last": log.student.last_initial,
             "reason": log.reason,
             "status": log.status,
-            "created_at": format_utc_iso(log.created_at),
+            "created_at": (log.request_time or log.decision_time or log.left_time).isoformat()
+            if (log.request_time or log.decision_time or log.left_time) else None,
             "pass_number": log.pass_number
         })
 

@@ -75,72 +75,67 @@ def get_current_class_context():
     if not student:
         return None
 
-    # Check if a join code is already selected in session
     current_join_code = session.get('current_join_code')
 
-    # Get all active memberships for this student
     memberships = ClassMembership.query.filter_by(
         student_id=student.id,
         status='active',
         role='student'
     ).all()
 
-    if not memberships:
-        return None
-
-    # If no join code selected, default to first membership
-    if not current_join_code:
-        current_membership = memberships[0]
-        current_join_code = current_membership.join_code
-        session['current_join_code'] = current_join_code
-    else:
-        # Verify the selected join code is valid for this student
-        current_membership = next(
-            (m for m in memberships if m.join_code == current_join_code),
-            None
-        )
-        if not current_membership:
-            # Fallback to first valid membership
+    current_membership = None
+    if memberships:
+        if not current_join_code:
             current_membership = memberships[0]
             current_join_code = current_membership.join_code
             session['current_join_code'] = current_join_code
+        else:
+            current_membership = next((m for m in memberships if m.join_code == current_join_code), None)
+            if not current_membership:
+                current_membership = memberships[0]
+                current_join_code = current_membership.join_code
+                session['current_join_code'] = current_join_code
+    else:
+        # Legacy fallback during migration: derive class context from claimed TeacherBlock.
+        if not current_join_code:
+            seat = TeacherBlock.query.filter_by(student_id=student.id, is_claimed=True).first()
+            if seat:
+                current_join_code = seat.join_code
+                session['current_join_code'] = current_join_code
+        if not current_join_code:
+            return None
 
-    # Resolve teacher_id (Admin of this economy)
-    # We look for a ClassMembership for this join_code with role='admin'
-    admin_membership = ClassMembership.query.filter_by(
-        join_code=current_join_code,
-        role='admin'
-    ).first()
-
-    teacher_id = admin_membership.admin_id if admin_membership else None
-
-    # Resolve block name (Display only, via TeacherBlock or fallback)
-    # Ideally we should use ClassEconomy.display_name but strict req mentions TeacherBlock is for UX/Audit
-    # We try to find the TeacherBlock linked to this student and join_code
     current_seat = TeacherBlock.query.filter_by(
         student_id=student.id,
         join_code=current_join_code,
         is_claimed=True
     ).first()
+    if not current_seat:
+        current_seat = TeacherBlock.query.filter_by(student_id=student.id, is_claimed=True).first()
 
-    block_name = current_seat.block if current_seat else "Unknown"
-    seat_id = current_seat.id if current_seat else None
+    resolved_join_code = current_join_code
+    if current_seat and current_seat.join_code:
+        resolved_join_code = current_seat.join_code
+    economy = ClassEconomy.query.get(resolved_join_code) if resolved_join_code else None
 
-    # Get ClassEconomy and ClassMembership for enhanced context
-    economy = ClassEconomy.query.get(current_seat.join_code)
-    membership = ClassMembership.query.filter_by(
-        join_code=current_seat.join_code,
-        student_id=student.id,
-        status='active'
-    ).first()
+    admin_membership = None
+    if resolved_join_code:
+        admin_membership = ClassMembership.query.filter_by(
+            join_code=resolved_join_code,
+            role='admin',
+            status='active'
+        ).first()
 
-    # Return full class context
+    teacher_id = current_seat.teacher_id if current_seat else None
+    if admin_membership and admin_membership.admin_id:
+        teacher_id = admin_membership.admin_id
+
     return {
-        'join_code': current_seat.join_code,
-        'teacher_id': current_seat.teacher_id,
-        'block': current_seat.block,
-        'seat_id': current_seat.id,
-        'membership_id': membership.id if membership else None,
+        'join_code': resolved_join_code,
+        'teacher_id': teacher_id,
+        'block': current_seat.block if current_seat else student.block,
+        'seat_id': current_seat.id if current_seat else None,
+        'membership_id': current_membership.id if current_membership else None,
         'economy': economy
     }
 
@@ -241,10 +236,14 @@ def get_feature_settings_for_student():
 
     # Try block-specific settings
     if current_block:
-        block_settings = FeatureSettings.query.filter_by(
-            join_code=join_code,
-            block=current_block
-        ).first()
+        block_settings = FeatureSettings.query.filter_by(join_code=join_code, block=current_block).first()
+        if not block_settings:
+            # Legacy fallback: pre-join_code settings rows scoped by teacher + block.
+            block_settings = FeatureSettings.query.filter(
+                FeatureSettings.teacher_id == teacher_id,
+                func.upper(FeatureSettings.block) == func.upper(current_block),
+                FeatureSettings.join_code.is_(None)
+            ).first()
         if block_settings:
             return block_settings.to_dict()
 
@@ -1791,13 +1790,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
         # Interest must be scoped to specific class, not just teacher
         context = get_current_class_context()
         if context:
-            # Audit Anchor: ensure membership_id is present
             membership_id = context.get('membership_id')
-            if not membership_id:
-                # If we can't identify the actor's membership, we skip recording interest
-                # to maintain audit integrity (or log a warning)
-                current_app.logger.warning(f"Skipping interest for student {student.id}: missing membership_id")
-                return
 
             interest_tx = Transaction(
                 student_id=student.id,
