@@ -793,6 +793,7 @@ def seed_database():
         student_obj = None
         student_creds = {
             'name': f"{first_name} {last_name}",
+            'dob_sum': dob_sum,
             'enrollments': []
         }
 
@@ -860,6 +861,16 @@ def seed_database():
 
             print(f"    ✓ Enrolled in {teacher_username} - {period_name} ({join_code})")
 
+        account_claimed = bool(
+            student_obj
+            and student_obj.has_completed_setup
+            and student_obj.username_lookup_hash
+            and student_obj.pin_hash
+            and student_obj.passphrase_hash
+        )
+        student_creds['account_status'] = 'Claimed + Setup Complete' if account_claimed else 'Needs Claim/Setup'
+        student_creds['needs_claim'] = not account_claimed
+
         credentials['students'].append(student_creds)
 
     db.session.commit()
@@ -895,6 +906,9 @@ def seed_database():
 
     for student_cred in credentials['students']:
         print(f"\n{student_cred['name']}")
+        print(f"  DOB Sum: {student_cred['dob_sum']}")
+        print(f"  Account Status: {student_cred['account_status']}")
+        print(f"  Needs Claim: {'Yes' if student_cred['needs_claim'] else 'No'}")
         print(f"  Username: {student_cred['username']}")
         print(f"  PIN: {student_cred['pin']}")
         print(f"  Passphrase: {student_cred['passphrase']}")
