@@ -13,6 +13,7 @@ Outputs credentials to console (not to file, to avoid security issues).
 import os
 import sys
 import random
+import argparse
 from datetime import datetime, timedelta, timezone, date
 from pathlib import Path
 from dotenv import load_dotenv
@@ -299,7 +300,7 @@ def derive_dob_from_sum(dob_sum):
     return derived
 
 
-def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, join_code):
+def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, join_code, setup_complete=True):
     """
     Create a student account and claim a seat in a teacher's class.
 
@@ -336,20 +337,23 @@ def create_student_with_seat(first_name, last_name, dob_sum, teacher, block, joi
             last_name_hash_by_part=last_name_hash,
             dob_sum=dob_sum,
             hall_passes=3,
-            has_completed_setup=True,
-            pin_hash=generate_password_hash(pin_credential),
-            passphrase_hash=generate_password_hash(passphrase_credential),
+            has_completed_setup=setup_complete,
+            pin_hash=generate_password_hash(pin_credential) if setup_complete else None,
+            passphrase_hash=generate_password_hash(passphrase_credential) if setup_complete else None,
         )
         db.session.add(student)
         db.session.flush()
     else:
         # Keep seed expectations stable if user reruns script
         student.block = block
-        student.has_completed_setup = True
-        if not student.pin_hash:
+        student.has_completed_setup = setup_complete
+        if setup_complete and not student.pin_hash:
             student.pin_hash = generate_password_hash(pin_credential)
-        if not student.passphrase_hash:
+        if setup_complete and not student.passphrase_hash:
             student.passphrase_hash = generate_password_hash(passphrase_credential)
+        if not setup_complete:
+            student.pin_hash = None
+            student.passphrase_hash = None
 
     # Create/update TeacherBlock (claimed seat)
     teacher_block = TeacherBlock.query.filter_by(
@@ -721,7 +725,7 @@ def create_rent_settings(teacher, block, join_code=None):
 
 # ===================== MAIN SEEDING FUNCTION =====================
 
-def seed_database():
+def seed_database(credential_mode='mixed'):
     """Main seeding function."""
     print("🌱 Starting database seeding...")
     print("=" * 60)
@@ -794,11 +798,15 @@ def seed_database():
 
     # ===== CREATE STUDENTS =====
     print("\n👥 Creating students...")
-    for student_config in STUDENTS:
+    for student_index, student_config in enumerate(STUDENTS):
         first_name = student_config['first_name']
         last_name = student_config['last_name']
         dob_sum = student_config['dob_sum']
         enrollments = student_config['enrollments']
+        setup_complete = (
+            credential_mode == 'setup-complete'
+            or (credential_mode == 'mixed' and student_index % 2 == 0)
+        )
 
         print(f"\n  Student: {first_name} {last_name}")
 
@@ -820,16 +828,17 @@ def seed_database():
             if student_obj is None:
                 # Create student on first enrollment
                 student_obj, seat, username, pin, passphrase = create_student_with_seat(
-                    first_name, last_name, dob_sum, teacher, block, join_code
+                    first_name, last_name, dob_sum, teacher, block, join_code, setup_complete=setup_complete
                 )
                 student_map[first_name] = student_obj
                 student_creds['username'] = username
-                student_creds['pin'] = pin
-                student_creds['passphrase'] = passphrase
+                if setup_complete:
+                    student_creds['pin'] = pin
+                    student_creds['passphrase'] = passphrase
             else:
                 # Additional enrollment - ensure seat/link exist without duplicate inserts
                 student_obj, seat, _, _, _ = create_student_with_seat(
-                    first_name, last_name, dob_sum, teacher, block, join_code
+                    first_name, last_name, dob_sum, teacher, block, join_code, setup_complete=setup_complete
                 )
 
             # Create transactions for this enrollment
@@ -876,13 +885,15 @@ def seed_database():
 
         account_claimed = bool(
             student_obj
-            and student_obj.has_completed_setup
             and student_obj.username_lookup_hash
-            and student_obj.pin_hash
-            and student_obj.passphrase_hash
         )
-        student_creds['account_status'] = 'Claimed + Setup Complete' if account_claimed else 'Needs Claim/Setup'
+        student_creds['account_status'] = (
+            'Claimed + Setup Complete'
+            if setup_complete else
+            'Claimed, Needs PIN/Passphrase Setup'
+        )
         student_creds['needs_claim'] = not account_claimed
+        student_creds['needs_setup'] = not setup_complete
 
         credentials['students'].append(student_creds)
 
@@ -916,6 +927,7 @@ def seed_database():
     print("STUDENT ACCOUNTS")
     print("-" * 80)
     print("\nStudent Login Format: Username + PIN (with passphrase for protected actions)")
+    print(f"Credential Mode: {credential_mode}")
 
     for student_cred in credentials['students']:
         print(f"\n{student_cred['name']}")
@@ -923,9 +935,14 @@ def seed_database():
         print(f"  DOB Sum: {student_cred['dob_sum']}")
         print(f"  Account Status: {student_cred['account_status']}")
         print(f"  Needs Claim: {'Yes' if student_cred['needs_claim'] else 'No'}")
+        print(f"  Needs Setup: {'Yes' if student_cred['needs_setup'] else 'No'}")
         print(f"  Username: {student_cred['username']}")
-        print(f"  PIN: {student_cred['pin']}")
-        print(f"  Passphrase: {student_cred['passphrase']}")
+        if student_cred['needs_setup']:
+            print("  PIN: [NOT SET - student must create]")
+            print("  Passphrase: [NOT SET - student must create]")
+        else:
+            print(f"  PIN: {student_cred['pin']}")
+            print(f"  Passphrase: {student_cred['passphrase']}")
         print(f"  Enrollments:")
         for enrollment in student_cred['enrollments']:
             print(f"    • {enrollment['class_name']} ({enrollment['teacher']}, Period {enrollment['period']})")
@@ -990,6 +1007,15 @@ def seed_database():
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Seed multi-tenancy test data')
+    parser.add_argument(
+        '--credential-mode',
+        choices=['setup-complete', 'needs-setup', 'mixed'],
+        default='mixed',
+        help='How student credentials should be seeded (default: mixed)'
+    )
+    args = parser.parse_args()
+
     app = create_app()
     with app.app_context():
-        seed_database()
+        seed_database(credential_mode=args.credential_mode)
