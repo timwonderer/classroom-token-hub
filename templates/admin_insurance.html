@@ -1661,6 +1661,12 @@ document.addEventListener('DOMContentLoaded', function() {
   updatePolicyPreview();
 });
 
+function escapeHtml(value) {
+  const div = document.createElement('div');
+  div.textContent = String(value);
+  return div.innerHTML;
+}
+
 // Update Policy Preview (Student View)
 function updatePolicyPreview() {
   const previewDiv = document.getElementById('policyPreview');
@@ -1695,7 +1701,9 @@ function updatePolicyPreview() {
       'monthly': 'month',
       'semester': 'semester'
     };
-    const frequencyName = frequencyNames[frequency] || frequency;
+    const frequencyName = escapeHtml(frequencyNames[frequency] || frequency);
+    const safeTitle = escapeHtml(title);
+    const safeDescription = escapeHtml(description);
     
     // Policy card preview (marketplace view)
     previewHTML += `<div class="card shadow-sm">`;
@@ -1703,7 +1711,7 @@ function updatePolicyPreview() {
     
     // Title and badges
     previewHTML += `<div class="d-flex justify-content-between align-items-start mb-2">`;
-    previewHTML += `<h5 class="card-title text-primary mb-0">${title}</h5>`;
+    previewHTML += `<h5 class="card-title text-primary mb-0">${safeTitle}</h5>`;
     if (marketingBadge && marketingBadge !== 'none') {
       const badgeLabels = {
         'most_popular': 'Most Popular',
@@ -1720,7 +1728,7 @@ function updatePolicyPreview() {
     
     // Description
     if (description) {
-      previewHTML += `<p class="text-muted small mb-3">${description}</p>`;
+      previewHTML += `<p class="text-muted small mb-3">${safeDescription}</p>`;
     }
     
     // Quick facts
