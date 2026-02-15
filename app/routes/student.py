@@ -264,22 +264,59 @@ def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: in
     if cache:
         checking_balance += Decimal(cache.posted_checking_balance_cents) / 100
         savings_balance += Decimal(cache.posted_savings_balance_cents) / 100
+    else:
+        # Legacy fallback for contexts not yet represented in BalanceCache.
+        # Derive posted as (all non-void) - (pending) to avoid enum-label assumptions.
+        all_checking = db.session.query(func.sum(Transaction.amount)).filter(
+            Transaction.student_id == student.id,
+            Transaction.join_code == join_code,
+            Transaction.account_type == 'checking',
+            Transaction.is_void == False,
+        ).scalar() or Decimal('0.00')
+        pending_checking_fallback = db.session.query(func.sum(Transaction.amount)).filter(
+            Transaction.student_id == student.id,
+            Transaction.join_code == join_code,
+            Transaction.status == TransactionStatus.PENDING,
+            Transaction.account_type == 'checking',
+            Transaction.is_void == False,
+        ).scalar() or Decimal('0.00')
+        all_savings = db.session.query(func.sum(Transaction.amount)).filter(
+            Transaction.student_id == student.id,
+            Transaction.join_code == join_code,
+            Transaction.account_type == 'savings',
+            Transaction.is_void == False,
+        ).scalar() or Decimal('0.00')
+        pending_savings_fallback = db.session.query(func.sum(Transaction.amount)).filter(
+            Transaction.student_id == student.id,
+            Transaction.join_code == join_code,
+            Transaction.status == TransactionStatus.PENDING,
+            Transaction.account_type == 'savings',
+            Transaction.is_void == False,
+        ).scalar() or Decimal('0.00')
+        posted_checking = all_checking - pending_checking_fallback
+        posted_savings = all_savings - pending_savings_fallback
+        checking_balance += posted_checking
+        savings_balance += posted_savings
 
-    # 3. Add Pending Transactions
-    pending_txs = Transaction.query.filter_by(
-        student_id=student.id,
-        join_code=join_code,
-        status=TransactionStatus.PENDING
-    ).filter(Transaction.is_void == False).all()  # Explicitly exclude void pending
+    # 3. Add Pending Transactions (aggregate in DB to avoid loading all rows)
+    pending_checking = db.session.query(func.sum(Transaction.amount)).filter(
+        Transaction.student_id == student.id,
+        Transaction.join_code == join_code,
+        Transaction.status == TransactionStatus.PENDING,
+        Transaction.account_type == 'checking',
+        Transaction.is_void == False,
+    ).scalar() or Decimal('0.00')
 
-    for tx in pending_txs:
-        # Defensive check against None amounts
-        amount = tx.amount or Decimal('0.00')
-        acct_type = str(tx.account_type).lower()
-        if acct_type == 'checking':
-            checking_balance += amount
-        elif acct_type == 'savings':
-            savings_balance += amount
+    pending_savings = db.session.query(func.sum(Transaction.amount)).filter(
+        Transaction.student_id == student.id,
+        Transaction.join_code == join_code,
+        Transaction.status == TransactionStatus.PENDING,
+        Transaction.account_type == 'savings',
+        Transaction.is_void == False,
+    ).scalar() or Decimal('0.00')
+
+    checking_balance += pending_checking
+    savings_balance += pending_savings
 
     return _quantize_currency(checking_balance), _quantize_currency(savings_balance)
 

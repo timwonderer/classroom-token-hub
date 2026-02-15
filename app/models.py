@@ -8,14 +8,18 @@ Times are stored as UTC in the database.
 from datetime import timezone, timedelta
 from decimal import Decimal, InvalidOperation
 import enum
+import logging
 import uuid
 
 import sqlalchemy as sa
 from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.hybrid import hybrid_property
 from app.extensions import db
 from app.utils.encryption import PIIEncryptedType
 from app.utils.time import utc_now, ensure_utc
+
+logger = logging.getLogger(__name__)
 
 
 def _quantize_currency(value):
@@ -330,12 +334,34 @@ class Student(db.Model):
             # 1. Eager Settlement (Best Effort)
             try:
                 settle_balances(self.id, join_code)
-            except Exception:
-                pass # Proceed with best available data
+            except SQLAlchemyError as exc:
+                logger.warning(
+                    "Eager settlement failed for student %s, join_code %s: %s",
+                    self.id,
+                    join_code,
+                    exc,
+                )
 
             # 2. Read Posted from Cache
             cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()
-            posted = Decimal(cache.posted_checking_balance_cents)/100 if cache else Decimal('0.00')
+            if cache:
+                posted = Decimal(cache.posted_checking_balance_cents) / 100
+            else:
+                # Legacy fallback: derive posted as (all non-void) - (pending).
+                all_non_void = db.session.query(func.sum(Transaction.amount)).filter(
+                    Transaction.student_id == self.id,
+                    Transaction.join_code == join_code,
+                    Transaction.account_type == 'checking',
+                    Transaction.is_void == False,
+                ).scalar() or Decimal('0.00')
+                pending_fallback = db.session.query(func.sum(Transaction.amount)).filter(
+                    Transaction.student_id == self.id,
+                    Transaction.join_code == join_code,
+                    Transaction.status == TransactionStatus.PENDING,
+                    Transaction.account_type == 'checking',
+                    Transaction.is_void == False,
+                ).scalar() or Decimal('0.00')
+                posted = all_non_void - pending_fallback
 
             # 3. Add Pending
             pending = db.session.query(func.sum(Transaction.amount)).filter(
@@ -405,12 +431,34 @@ class Student(db.Model):
             # 1. Eager Settlement (Best Effort)
             try:
                 settle_balances(self.id, join_code)
-            except Exception:
-                pass # Proceed with best available data
+            except SQLAlchemyError as exc:
+                logger.warning(
+                    "Eager settlement failed for student %s, join_code %s: %s",
+                    self.id,
+                    join_code,
+                    exc,
+                )
 
             # 2. Read Posted from Cache
             cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()
-            posted = Decimal(cache.posted_savings_balance_cents)/100 if cache else Decimal('0.00')
+            if cache:
+                posted = Decimal(cache.posted_savings_balance_cents) / 100
+            else:
+                # Legacy fallback: derive posted as (all non-void) - (pending).
+                all_non_void = db.session.query(func.sum(Transaction.amount)).filter(
+                    Transaction.student_id == self.id,
+                    Transaction.join_code == join_code,
+                    Transaction.account_type == 'savings',
+                    Transaction.is_void == False,
+                ).scalar() or Decimal('0.00')
+                pending_fallback = db.session.query(func.sum(Transaction.amount)).filter(
+                    Transaction.student_id == self.id,
+                    Transaction.join_code == join_code,
+                    Transaction.status == TransactionStatus.PENDING,
+                    Transaction.account_type == 'savings',
+                    Transaction.is_void == False,
+                ).scalar() or Decimal('0.00')
+                posted = all_non_void - pending_fallback
 
             # 3. Add Pending
             pending = db.session.query(func.sum(Transaction.amount)).filter(
@@ -658,13 +706,17 @@ class Transaction(db.Model):
     # Float causes bugs: -0.00 overdraft fees, unpayable rent balances
     amount = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
     # All times stored as UTC (see header note)
-    # All times stored as UTC (see header note)
     timestamp = db.Column(db.DateTime(timezone=True), default=utc_now)
     account_type = db.Column(db.String(20), default='checking')
 
     # Ledger Fields
-    status = db.Column(db.Enum(TransactionStatus), default=TransactionStatus.POSTED, nullable=False, server_default='posted')
-    amount_cents = db.Column(db.Integer, nullable=True)  # Signed integer (e.g. 100 = $1.00)
+    status = db.Column(
+        db.Enum(TransactionStatus),
+        default=TransactionStatus.POSTED,
+        nullable=False,
+        server_default=TransactionStatus.POSTED.name,
+    )
+    amount_cents = db.Column(db.Integer, nullable=False)  # Signed integer (e.g. 100 = $1.00)
     posted_at = db.Column(db.DateTime(timezone=True), nullable=True)
     voided_at = db.Column(db.DateTime(timezone=True), nullable=True)
     effective_at = db.Column(db.DateTime(timezone=True), default=utc_now)
@@ -688,6 +740,15 @@ class Transaction(db.Model):
     )
 
 
+@sa.event.listens_for(Transaction, "before_insert")
+@sa.event.listens_for(Transaction, "before_update")
+def _sync_transaction_amount_cents(_mapper, _connection, target):
+    """Keep amount_cents consistent with amount for all write paths."""
+    if target.amount is None:
+        return
+    target.amount_cents = int(_quantize_currency(target.amount) * 100)
+
+
 class BalanceCache(db.Model):
     """
     snapshot of posted balances to allow O(1) reads.
@@ -708,7 +769,6 @@ class BalanceCache(db.Model):
 
     __table_args__ = (
         db.UniqueConstraint('join_code', 'student_id', name='uq_balance_cache_scope'),
-        db.Index('ix_balance_cache_scope', 'join_code', 'student_id'),
     )
 
 

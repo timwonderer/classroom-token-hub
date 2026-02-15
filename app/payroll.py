@@ -173,14 +173,25 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
     # If no history at all, we technically fetch everything (min_anchor=None)
     min_anchor = min(valid_times) if valid_times else None
 
-    # map: (student_id, period) -> list of valid events (sorted)
+    # map: (student_id, period, join_code) -> list of valid events (sorted)
     # Also handles the "initial state" (was active at anchor) logic internally
     events_map = _get_batch_attendance_events(student_ids, min_anchor)
 
     # --- 5. In-Memory Calculation ---
     for student in students:
-        # Keep original block names for settings lookup
-        student_blocks = [b.strip() for b in (student.block or "").split(',') if b.strip()]
+        # Keep original block names for settings lookup and dedupe to avoid duplicate period entries
+        # (e.g., "PERIOD 1, PERIOD 1") causing duplicate payroll calculations.
+        student_blocks = []
+        seen_blocks = set()
+        for raw_block in (student.block or "").split(','):
+            block = raw_block.strip()
+            if not block:
+                continue
+            norm = block.upper()
+            if norm in seen_blocks:
+                continue
+            seen_blocks.add(norm)
+            student_blocks.append(block)
         
         # Determine specific anchor for this student
         student_last_pay = student_last_payrolls.get(student.id)
@@ -191,10 +202,10 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
             block_upper = block_original.upper()
 
             # lookup rate
-            rate_per_second = pay_rates.get(block_original, pay_rates.get(None, Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))))
+            rate_per_second = pay_rates.get(block_upper, pay_rates.get(None, Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))))
 
             # lookup join code
-            join_code = student_join_codes.get((student.id, block_original))
+            join_code = student_join_codes.get((student.id, block_upper))
             
             if not join_code:
                 continue
@@ -204,7 +215,7 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
             # The batch loader naturally gives us a relevant stream
             # but we must double-check the anchor for this specific student-block logic
             
-            events = events_map.get((student.id, block_upper), [])
+            events = events_map.get((student.id, block_upper, join_code), [])
             total_seconds = _calculate_seconds_in_memory(events, payroll_anchor)
 
             if total_seconds > 0:
@@ -225,7 +236,7 @@ def _get_batch_pay_rates(teacher_id):
     for s in settings:
         if s.pay_rate:
             rate_sec = s.pay_rate / Decimal('60')
-            key = s.block if s.block else None
+            key = s.block.upper() if s.block else None
             rates[key] = rate_sec
             
     return rates
@@ -242,10 +253,15 @@ def _get_batch_join_codes(teacher_id, student_ids):
     if teacher_id:
         query = query.filter(TeacherBlock.teacher_id == teacher_id)
         
-    seats = query.all()
-    
-    # Map (student_id, block) -> join_code
-    return {(seat.student_id, seat.block): seat.join_code for seat in seats}
+    seats = query.order_by(TeacherBlock.id.desc()).all()
+
+    # Map (student_id, block_upper) -> latest join_code for that block context
+    join_codes = {}
+    for seat in seats:
+        key = (seat.student_id, (seat.block or "").upper())
+        if key not in join_codes:
+            join_codes[key] = seat.join_code
+    return join_codes
 
 def _get_batch_last_payroll_times(student_ids):
     """
@@ -282,10 +298,10 @@ def _get_batch_attendance_events(student_ids, min_anchor):
     
     events = query.order_by(TapEvent.timestamp.asc()).all()
     
-    # Group by (student_id, period)
+    # Group by (student_id, period, join_code)
     grouped = {}
     for e in events:
-        key = (e.student_id, e.period)
+        key = (e.student_id, (e.period or "").upper(), e.join_code)
         grouped.setdefault(key, []).append(e)
         
     # 2. If min_anchor exists, we need the "initial state" for each student/period
@@ -293,10 +309,11 @@ def _get_batch_attendance_events(student_ids, min_anchor):
     if min_anchor:
         from sqlalchemy import func, and_
         
-        # Subquery to find the latest timestamp for each student/period before anchor
+        # Subquery to find the latest timestamp for each student/period/join_code before anchor
         subquery = db.session.query(
             TapEvent.student_id,
             TapEvent.period,
+            TapEvent.join_code,
             func.max(TapEvent.timestamp).label("max_ts")
         ).filter(
             TapEvent.student_id.in_(student_ids),
@@ -304,7 +321,8 @@ def _get_batch_attendance_events(student_ids, min_anchor):
             TapEvent.is_deleted == False
         ).group_by(
             TapEvent.student_id,
-            TapEvent.period
+            TapEvent.period,
+            TapEvent.join_code,
         ).subquery()
         
         # Join back to get the full event details (status)
@@ -312,6 +330,7 @@ def _get_batch_attendance_events(student_ids, min_anchor):
         initial_states = db.session.query(
             TapEvent.student_id,
             TapEvent.period,
+            TapEvent.join_code,
             TapEvent.status,
             TapEvent.timestamp
         ).join(
@@ -319,6 +338,7 @@ def _get_batch_attendance_events(student_ids, min_anchor):
             and_(
                 TapEvent.student_id == subquery.c.student_id,
                 TapEvent.period == subquery.c.period,
+                TapEvent.join_code == subquery.c.join_code,
                 TapEvent.timestamp == subquery.c.max_ts
             )
         ).filter(
@@ -328,8 +348,9 @@ def _get_batch_attendance_events(student_ids, min_anchor):
         # Prepend a virtual "start" event if they were active
         for row in initial_states:
             s_id, period, status, ts = row.student_id, row.period, row.status, row.timestamp
+            join_code = row.join_code
             if status == 'active':
-                key = (s_id, period)
+                key = (s_id, (period or "").upper(), join_code)
                 
                 # We inject the state into the list
                 virtual_start_time = ensure_utc(min_anchor)
@@ -338,6 +359,7 @@ def _get_batch_attendance_events(student_ids, min_anchor):
                 mock_event = TapEvent(
                     student_id=s_id,
                     period=period,
+                    join_code=join_code,
                     status='active',
                     timestamp=virtual_start_time
                 )
@@ -408,7 +430,6 @@ def calculate_payroll(students, last_payroll_time, teacher_id=None):
     for (student_id, _), amount in breakdown.items():
         summary.setdefault(student_id, 0)
         summary[student_id] += amount
-    return summary
     return summary
 
 def get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=None):

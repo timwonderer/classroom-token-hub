@@ -4,7 +4,6 @@ import pytest
 from app.models import Student, Transaction, TransactionStatus, BalanceCache, Admin
 from app.extensions import db
 from app.utils.banking import settle_balances
-from app.utils.time import utc_now
 
 def test_ledger_flow(client):
     """Test full flow: Create PENDING -> Settle -> Verify Cache."""
@@ -74,10 +73,8 @@ def test_void_pending(client):
     db.session.commit()
     
     # 2. Simulate Void Logic (Admin Button)
-    # Assuming void logic:
+    # Pending voids are marked is_void and resolved during settlement.
     tx.is_void = True
-    tx.status = TransactionStatus.VOID
-    tx.voided_at = utc_now()
     db.session.commit()
     
     # 3. Read Balance
@@ -89,6 +86,12 @@ def test_void_pending(client):
     # Verify no reversal created
     reversals = Transaction.query.filter_by(original_transaction_id=tx.id).all()
     assert len(reversals) == 0
+
+    # Verify pending transaction was settled as VOID.
+    db.session.expire_all()
+    tx = Transaction.query.get(tx.id)
+    assert tx.status == TransactionStatus.VOID
+    assert tx.voided_at is not None
     
     # Verify Cache state (should be 0)
     cache = BalanceCache.query.filter_by(student_id=student.id, join_code=join_code).first()

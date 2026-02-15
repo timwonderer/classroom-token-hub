@@ -5405,21 +5405,20 @@ def void_transaction(transaction_id):
                 if not student_item.redemption_date:
                     student_item.redemption_date = utc_now()
 
-            if not is_pending:
-                reversal_tx = Transaction(
-                    student_id=tx.student_id,
-                    teacher_id=tx.teacher_id,
-                    join_code=tx.join_code,
-                    amount=abs(tx.amount or Decimal('0.00')),
-                    account_type=tx.account_type or 'checking',
-                    status=TransactionStatus.PENDING,
-                    type='refund',
-                    original_transaction_id=tx.id,
-                    description=f"Void refund for transaction #{tx.id}: {tx.description}",
-                )
-                db.session.add(reversal_tx)
-                db.session.flush()
-                tx.reversal_transaction_id = reversal_tx.id
+            reversal_tx = Transaction(
+                student_id=tx.student_id,
+                teacher_id=tx.teacher_id,
+                join_code=tx.join_code,
+                amount=abs(tx.amount or Decimal('0.00')),
+                account_type=tx.account_type or 'checking',
+                status=TransactionStatus.PENDING,
+                type='refund',
+                original_transaction_id=tx.id,
+                description=f"Void refund for transaction #{tx.id}: {tx.description}",
+            )
+            db.session.add(reversal_tx)
+            db.session.flush()
+            tx.reversal_transaction_id = reversal_tx.id
 
         elif tx.type == 'Rent Payment':
             rent_payments_query = RentPayment.query.filter(

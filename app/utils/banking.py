@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 import logging
+from sqlalchemy.exc import IntegrityError
 from app import db
 from app.models import Transaction, TransactionStatus, BalanceCache, AccountType
 
@@ -21,6 +23,7 @@ def settle_balances(student_id: int, join_code: str) -> None:
         join_code: The class join code.
     """
     try:
+        cache_was_created = False
         # 1. Lock (or Create) BalanceCache Row
         # ---------------------------------------------------------
         # We must lock the cache row to prevent concurrent settlements
@@ -37,14 +40,14 @@ def settle_balances(student_id: int, join_code: str) -> None:
             # We assume unique constraint protects against race condition insert
             # but usually we're inside a transaction so this insert blocks others.
             try:
-                cache = BalanceCache(student_id=student_id, join_code=join_code)
-                db.session.add(cache)
-                db.session.flush() # Persist to get ID and lock
-            except Exception as e:
-                # If race condition leads to IntegrityError, retry fetch 
-                # (though usually handled by application retries)
+                with db.session.begin_nested():
+                    cache = BalanceCache(student_id=student_id, join_code=join_code)
+                    db.session.add(cache)
+                    db.session.flush() # Persist to get ID and lock
+                    cache_was_created = True
+            except IntegrityError as e:
+                # Handle duplicate row races without rolling back the outer transaction.
                 logger.warning(f"Race condition creating BalanceCache, retrying fetch: {e}")
-                db.session.rollback()
                 cache = (
                     BalanceCache.query
                     .filter_by(student_id=student_id, join_code=join_code)
@@ -52,7 +55,7 @@ def settle_balances(student_id: int, join_code: str) -> None:
                     .first()
                 )
                 if not cache:
-                    raise e # Re-raise if still failing
+                    raise
 
         # 2. Fetch PENDING transactions
         # ---------------------------------------------------------
@@ -67,8 +70,81 @@ def settle_balances(student_id: int, join_code: str) -> None:
             .with_for_update()
             .all()
         )
-        
-        if not pending_txs:
+
+        # Legacy/direct-write compatibility:
+        # absorb posted rows that were written outside settlement and not yet folded into cache.
+        unsettled_posted_txs = []
+        if not cache_was_created:
+            unsettled_posted_txs = (
+                Transaction.query
+                .filter_by(
+                    student_id=student_id,
+                    join_code=join_code,
+                    status=TransactionStatus.POSTED,
+                )
+                .filter(
+                    Transaction.is_void == False,
+                    Transaction.posted_at.is_(None),
+                )
+                .order_by(Transaction.timestamp)
+                .with_for_update()
+                .all()
+            )
+
+        # Seed a newly created cache from existing posted/non-pending ledger rows.
+        # This preserves legacy balances when cache rows are introduced lazily at read time.
+        if cache_was_created:
+            seed_time = datetime.now(timezone.utc)
+            all_checking = db.session.query(db.func.sum(Transaction.amount)).filter(
+                Transaction.student_id == student_id,
+                Transaction.join_code == join_code,
+                Transaction.account_type == 'checking',
+                Transaction.is_void == False,
+            ).scalar() or Decimal('0.00')
+            pending_checking = db.session.query(db.func.sum(Transaction.amount)).filter(
+                Transaction.student_id == student_id,
+                Transaction.join_code == join_code,
+                Transaction.status == TransactionStatus.PENDING,
+                Transaction.account_type == 'checking',
+                Transaction.is_void == False,
+            ).scalar() or Decimal('0.00')
+
+            all_savings = db.session.query(db.func.sum(Transaction.amount)).filter(
+                Transaction.student_id == student_id,
+                Transaction.join_code == join_code,
+                Transaction.account_type == 'savings',
+                Transaction.is_void == False,
+            ).scalar() or Decimal('0.00')
+            pending_savings = db.session.query(db.func.sum(Transaction.amount)).filter(
+                Transaction.student_id == student_id,
+                Transaction.join_code == join_code,
+                Transaction.status == TransactionStatus.PENDING,
+                Transaction.account_type == 'savings',
+                Transaction.is_void == False,
+            ).scalar() or Decimal('0.00')
+
+            cache.posted_checking_balance_cents = int((all_checking - pending_checking) * 100)
+            cache.posted_savings_balance_cents = int((all_savings - pending_savings) * 100)
+            cache.last_settlement_at = seed_time
+
+            seeded_posted_txs = (
+                Transaction.query
+                .filter_by(
+                    student_id=student_id,
+                    join_code=join_code,
+                    status=TransactionStatus.POSTED,
+                )
+                .filter(
+                    Transaction.is_void == False,
+                    Transaction.posted_at.is_(None),
+                )
+                .with_for_update()
+                .all()
+            )
+            for tx in seeded_posted_txs:
+                tx.posted_at = seed_time
+
+        if not pending_txs and not unsettled_posted_txs:
             # Nothing to settle
             return
 
@@ -110,13 +186,27 @@ def settle_balances(student_id: int, join_code: str) -> None:
             elif acct_type == 'savings' or acct_type == AccountType.SAVINGS.value:
                 savings_delta_cents += tx.amount_cents
             else:
-                logger.warning(f"Unknown account type '{tx.account_type}' for transaction {tx.id}")
-                # Default to checking or ignore? Better to log and assume checking to avoid money loss?
-                # For safety, we'll log strict warning but maybe track it in checking?
-                # Let's assume checking to be safe, or just skip? 
-                # Skiping loses money track. Defaulting to checking is safer for student.
-                checking_delta_cents += tx.amount_cents
+                raise ValueError(
+                    f"Unknown account type '{tx.account_type}' for transaction {tx.id}"
+                )
 
+            cnt_posted += 1
+
+        for tx in unsettled_posted_txs:
+            if not tx.posted_at:
+                tx.posted_at = now
+            if tx.amount_cents is None:
+                tx.amount_cents = int(tx.amount * 100)
+
+            acct_type = str(tx.account_type).lower()
+            if acct_type == 'checking' or acct_type == AccountType.CHECKING.value:
+                checking_delta_cents += tx.amount_cents
+            elif acct_type == 'savings' or acct_type == AccountType.SAVINGS.value:
+                savings_delta_cents += tx.amount_cents
+            else:
+                raise ValueError(
+                    f"Unknown account type '{tx.account_type}' for transaction {tx.id}"
+                )
             cnt_posted += 1
             
         # 3. Update Cache
@@ -131,4 +221,4 @@ def settle_balances(student_id: int, join_code: str) -> None:
         
     except Exception as e:
         logger.error(f"Error settling balances for Student {student_id} in {join_code}: {e}")
-        raise e
+        raise

@@ -78,8 +78,6 @@ def upgrade():
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('join_code', 'student_id', name='uq_balance_cache_scope')
         )
-        with op.batch_alter_table('balance_cache', schema=None) as batch_op:
-            batch_op.create_index('ix_balance_cache_scope', ['join_code', 'student_id'], unique=False)
 
     # 2. Update Transaction table schema
     # Create Enum type explicitly for Postgres (UPPERCASE for SQLAlchemy compatibility)
@@ -115,6 +113,10 @@ def upgrade():
     
     # amount_cents = amount * 100
     op.execute("UPDATE transaction SET amount_cents = CAST(amount * 100 AS INTEGER) WHERE amount_cents IS NULL")
+
+    with op.batch_alter_table('transaction', schema=None) as batch_op:
+        if column_exists('transaction', 'amount_cents'):
+            batch_op.alter_column('amount_cents', existing_type=sa.Integer(), nullable=False)
     
     # posted_at = timestamp (since all current ones are posted)
     op.execute("UPDATE transaction SET posted_at = timestamp WHERE posted_at IS NULL")
@@ -136,13 +138,14 @@ def upgrade():
         )
         SELECT
             student_id,
-            COALESCE(join_code, 'UNKNOWN'),
+            join_code,
             COALESCE(SUM(CASE WHEN account_type = 'checking' THEN CAST(amount * 100 AS INTEGER) ELSE 0 END), 0),
             COALESCE(SUM(CASE WHEN account_type = 'savings' THEN CAST(amount * 100 AS INTEGER) ELSE 0 END), 0),
             CURRENT_TIMESTAMP,
             CURRENT_TIMESTAMP
         FROM transaction
         WHERE is_void = FALSE
+          AND join_code IS NOT NULL
         GROUP BY student_id, join_code
     """)
     # ---------------------------------------------------------
@@ -151,14 +154,22 @@ def upgrade():
 def downgrade():
     # ### commands manually adjusted ###
     bind = op.get_bind()
-    with op.batch_alter_table('transaction', schema=None) as batch_op:
-        batch_op.drop_index('ix_transaction_student_ledger')
-        batch_op.drop_index('ix_transaction_ledger_scope')
-        batch_op.drop_column('effective_at')
-        batch_op.drop_column('voided_at')
-        batch_op.drop_column('posted_at')
-        batch_op.drop_column('amount_cents')
-        batch_op.drop_column('status')
+    if table_exists('transaction'):
+        with op.batch_alter_table('transaction', schema=None) as batch_op:
+            if index_exists('transaction', 'ix_transaction_student_ledger'):
+                batch_op.drop_index('ix_transaction_student_ledger')
+            if index_exists('transaction', 'ix_transaction_ledger_scope'):
+                batch_op.drop_index('ix_transaction_ledger_scope')
+            if column_exists('transaction', 'effective_at'):
+                batch_op.drop_column('effective_at')
+            if column_exists('transaction', 'voided_at'):
+                batch_op.drop_column('voided_at')
+            if column_exists('transaction', 'posted_at'):
+                batch_op.drop_column('posted_at')
+            if column_exists('transaction', 'amount_cents'):
+                batch_op.drop_column('amount_cents')
+            if column_exists('transaction', 'status'):
+                batch_op.drop_column('status')
         
     # Drop Enum type (using UPPERCASE per upgrade definition)
     transaction_status_enum = sa.Enum('PENDING', 'POSTED', 'VOID', name='transactionstatus')
@@ -167,8 +178,5 @@ def downgrade():
     except Exception:
         pass
         
-    with op.batch_alter_table('balance_cache', schema=None) as batch_op:
-        batch_op.drop_index('ix_balance_cache_scope')
-
     if table_exists('balance_cache'):
         op.drop_table('balance_cache')
