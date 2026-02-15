@@ -82,6 +82,13 @@ MAX_JOIN_CODE_RETRIES = 10  # Maximum attempts to generate a unique join code
 FALLBACK_BLOCK_PREFIX_LENGTH = 1  # Number of characters from block name in fallback code
 FALLBACK_CODE_MODULO = 10000  # Modulo for timestamp suffix (produces 4-digit number)
 
+
+# Insurance form mapping for derived claim period storage
+FREQUENCY_TO_CLAIM_PERIOD = {
+    'weekly': 'week',
+    'monthly': 'month',
+    'semester': 'semester',
+}
 # Placeholder values for legacy class TeacherBlock entries
 LEGACY_PLACEHOLDER_CREDENTIAL = "LEGACY0"  # Placeholder credential for legacy classes
 LEGACY_PLACEHOLDER_FIRST_NAME = "__JOIN_CODE_PLACEHOLDER__"  # Marks legacy placeholder entries
@@ -149,6 +156,45 @@ def _get_teacher_blocks():
         for b in s_blocks.split(',') if b.strip()
     ))
 
+
+
+def _populate_policy_from_form(policy, form, *, next_tier_category_id=None):
+    """Populate insurance policy fields from form data."""
+    is_non_monetary = form.claim_type.data == 'non_monetary'
+    policy.title = form.title.data
+    policy.description = form.description.data
+    policy.premium = form.premium.data
+    policy.charge_frequency = form.charge_frequency.data
+    policy.autopay = form.autopay.data
+    policy.waiting_period_days = form.waiting_period_days.data
+    policy.max_claims_count = form.max_claims_count.data
+    policy.max_claims_period = FREQUENCY_TO_CLAIM_PERIOD.get(form.charge_frequency.data, 'month')
+    policy.max_claim_amount = None if is_non_monetary else form.max_claim_amount.data
+    policy.max_payout_per_period = None if is_non_monetary else form.max_payout_per_period.data
+    policy.claim_type = form.claim_type.data
+    policy.is_monetary = not is_non_monetary
+    policy.no_repurchase_after_cancel = form.no_repurchase_after_cancel.data
+    policy.enable_repurchase_cooldown = form.enable_repurchase_cooldown.data
+    policy.repurchase_wait_days = form.repurchase_wait_days.data
+    policy.auto_cancel_nonpay_days = form.auto_cancel_nonpay_days.data
+    policy.claim_time_limit_days = form.claim_time_limit_days.data
+    policy.bundle_with_policy_ids = form.bundle_with_policy_ids.data
+    policy.bundle_discount_percent = form.bundle_discount_percent.data
+    policy.bundle_discount_amount = form.bundle_discount_amount.data
+    policy.marketing_badge = form.marketing_badge.data if form.marketing_badge.data else None
+    policy.set_blocks(form.blocks.data if form.blocks.data else [])
+
+    if form.tier_category_id.data:
+        policy.tier_category_id = form.tier_category_id.data
+    elif form.tier_name.data or form.tier_color.data:
+        policy.tier_category_id = next_tier_category_id
+    else:
+        policy.tier_category_id = None
+
+    policy.tier_name = form.tier_name.data or None
+    policy.tier_color = form.tier_color.data or None
+    policy.tier_level = form.tier_level.data or None
+    policy.is_active = form.is_active.data
 
 def _get_class_labels_for_blocks(admin_id, blocks):
     """Return mapping of block -> class label for the given admin without N+1 queries."""
@@ -4564,11 +4610,6 @@ def insurance_management():
     next_tier_category_id = _next_tenant_scoped_tier_id(tier_namespace_seed, existing_tier_ids)
 
     if request.method == 'POST' and form.validate_on_submit():
-        frequency_to_claim_period = {
-            'weekly': 'week',
-            'monthly': 'month',
-            'semester': 'semester',
-        }
         # Generate unique policy code
         policy_code = secrets.token_urlsafe(12)[:16]
         while InsurancePolicy.query.filter_by(policy_code=policy_code).first():
@@ -4581,40 +4622,14 @@ def insurance_management():
             tier_category_id = next_tier_category_id
 
         # Create new insurance policy
-        is_non_monetary = form.claim_type.data == 'non_monetary'
         policy = InsurancePolicy(
             policy_code=policy_code,
             teacher_id=session.get('admin_id'),
-            title=form.title.data,
-            description=form.description.data,
-            premium=form.premium.data,
-            charge_frequency=form.charge_frequency.data,
-            autopay=form.autopay.data,
-            waiting_period_days=form.waiting_period_days.data,
-            max_claims_count=form.max_claims_count.data,
-            max_claims_period=frequency_to_claim_period.get(form.charge_frequency.data, 'month'),
-            max_claim_amount=None if is_non_monetary else form.max_claim_amount.data,
-            max_payout_per_period=None if is_non_monetary else form.max_payout_per_period.data,
-            claim_type=form.claim_type.data,
-            is_monetary=not is_non_monetary,
-            no_repurchase_after_cancel=form.no_repurchase_after_cancel.data,
-            repurchase_wait_days=form.repurchase_wait_days.data,
-            auto_cancel_nonpay_days=form.auto_cancel_nonpay_days.data,
-            claim_time_limit_days=form.claim_time_limit_days.data,
-            bundle_discount_percent=form.bundle_discount_percent.data,
-            marketing_badge=form.marketing_badge.data if form.marketing_badge.data else None,
-            tier_category_id=tier_category_id,
-            tier_name=form.tier_name.data or None,
-            tier_color=form.tier_color.data or None,
-            tier_level=form.tier_level.data or None,
             settings_mode=request.form.get('settings_mode', 'advanced'),
-            is_active=form.is_active.data
         )
+        _populate_policy_from_form(policy, form, next_tier_category_id=tier_category_id)
         db.session.add(policy)
         db.session.flush()  # Get the ID for the policy before adding blocks
-        # Set blocks using many-to-many relationship
-        if form.blocks.data:
-            policy.set_blocks(form.blocks.data)
         db.session.commit()
         flash(f"Insurance policy '{policy.title}' created successfully!", "success")
         return redirect(url_for('admin.insurance_management'))
@@ -4747,45 +4762,7 @@ def edit_insurance_policy(policy_id):
     next_tier_category_id = _next_tenant_scoped_tier_id(tier_namespace_seed, existing_tier_ids)
 
     if request.method == 'POST' and form.validate_on_submit():
-        frequency_to_claim_period = {
-            'weekly': 'week',
-            'monthly': 'month',
-            'semester': 'semester',
-        }
-        is_non_monetary = form.claim_type.data == 'non_monetary'
-        policy.title = form.title.data
-        policy.description = form.description.data
-        policy.premium = form.premium.data
-        policy.charge_frequency = form.charge_frequency.data
-        policy.autopay = form.autopay.data
-        policy.waiting_period_days = form.waiting_period_days.data
-        policy.max_claims_count = form.max_claims_count.data
-        policy.max_claims_period = frequency_to_claim_period.get(form.charge_frequency.data, 'month')
-        policy.max_claim_amount = None if is_non_monetary else form.max_claim_amount.data
-        policy.max_payout_per_period = None if is_non_monetary else form.max_payout_per_period.data
-        policy.claim_type = form.claim_type.data
-        policy.is_monetary = not is_non_monetary
-        policy.no_repurchase_after_cancel = form.no_repurchase_after_cancel.data
-        policy.enable_repurchase_cooldown = form.enable_repurchase_cooldown.data
-        policy.repurchase_wait_days = form.repurchase_wait_days.data
-        policy.auto_cancel_nonpay_days = form.auto_cancel_nonpay_days.data
-        policy.claim_time_limit_days = form.claim_time_limit_days.data
-        policy.bundle_with_policy_ids = form.bundle_with_policy_ids.data
-        policy.bundle_discount_percent = form.bundle_discount_percent.data
-        policy.bundle_discount_amount = form.bundle_discount_amount.data
-        policy.marketing_badge = form.marketing_badge.data if form.marketing_badge.data else None
-        # Set blocks using many-to-many relationship
-        policy.set_blocks(form.blocks.data if form.blocks.data else [])
-        if form.tier_category_id.data:
-            policy.tier_category_id = form.tier_category_id.data
-        elif form.tier_name.data or form.tier_color.data:
-            policy.tier_category_id = next_tier_category_id
-        else:
-            policy.tier_category_id = None
-        policy.tier_name = form.tier_name.data or None
-        policy.tier_color = form.tier_color.data or None
-        policy.tier_level = form.tier_level.data or None
-        policy.is_active = form.is_active.data
+        _populate_policy_from_form(policy, form, next_tier_category_id=next_tier_category_id)
 
         db.session.commit()
         flash(f"Insurance policy '{policy.title}' updated successfully!", "success")

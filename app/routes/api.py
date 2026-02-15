@@ -353,7 +353,6 @@ def purchase_item():
     # Check if student has free uses remaining from rent (per-use rent items).
     # Also recover gracefully if a paid-rent student is missing the grant row.
     if quantity == 1 and (item.is_rent_linked or per_use_rent_item):
-        now_utc = utc_now()
         # Look for an active StudentItem with uses_remaining for this store item
         rent_item_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
@@ -364,7 +363,7 @@ def purchase_item():
             ),
             db.or_(
                 StudentItem.expiry_date.is_(None),
-                StudentItem.expiry_date > now_utc
+                StudentItem.expiry_date > now
             )
         )
         rent_item_query = rent_item_query.filter(StudentItem.join_code == join_code)
@@ -377,7 +376,7 @@ def purchase_item():
             StudentItem.uses_remaining.isnot(None),
             db.or_(
                 StudentItem.expiry_date.is_(None),
-                StudentItem.expiry_date > now_utc
+                StudentItem.expiry_date > now
             )
         ).first()
 
@@ -388,7 +387,7 @@ def purchase_item():
                 student_id=student.id,
                 store_item_id=item.id,
                 join_code=join_code,
-                purchase_date=now_utc,
+                purchase_date=now,
                 expiry_date=None,
                 status='purchased',
                 is_from_bundle=False,
@@ -417,13 +416,13 @@ def purchase_item():
 
             expiry_date = None
             if item.item_type == 'delayed' and item.auto_expiry_days:
-                expiry_date = now_utc + timedelta(days=item.auto_expiry_days)
+                expiry_date = now + timedelta(days=item.auto_expiry_days)
 
             db.session.add(StudentItem(
                 student_id=student.id,
                 store_item_id=item.id,
                 join_code=join_code,
-                purchase_date=now_utc,
+                purchase_date=now,
                 expiry_date=expiry_date,
                 status='purchased',
                 is_from_bundle=False,

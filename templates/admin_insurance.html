@@ -16,6 +16,7 @@
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
 <script src="{{ static_url('js/economy-balance.js') }}"></script>
+<script src="{{ static_url('js/insurance-badge-select.js') }}"></script>
 <style>
     .EasyMDEContainer .CodeMirror {
         min-height: 120px;
@@ -1136,85 +1137,8 @@
         return new bootstrap.Tooltip(tooltipTriggerEl);
       });
 
-      function renderBadgeLikeSelect(selectId, kind) {
-        const selectEl = document.getElementById(selectId);
-        if (!selectEl || selectEl.dataset.badgeRendered === 'true') return;
-
-        const marketingStyles = {
-          best_value: 'success',
-          most_popular: 'primary',
-          recommended: 'info',
-          premium: 'warning text-dark',
-          limited_time: 'danger',
-          new: 'secondary',
-          fan_favorite: 'primary',
-          yolo: 'warning text-dark',
-          trust_me: 'secondary',
-          definitely_not_scam: 'danger',
-          parents_approved: 'success',
-          as_seen_on_tv: 'info',
-          industry_leading: 'dark',
-          chaos_insurance: 'danger',
-          responsible_choice: 'success',
-          your_friend_has_it: 'primary'
-        };
-
-        const tierStyles = {
-          primary: 'primary',
-          success: 'success',
-          info: 'info',
-          warning: 'warning text-dark',
-          danger: 'danger',
-          secondary: 'secondary',
-          dark: 'dark'
-        };
-
-        const renderOption = (value, text) => {
-          if (!value) {
-            return `<span class="text-muted">${text}</span>`;
-          }
-          const style = kind === 'marketing' ? (marketingStyles[value] || 'secondary') : (tierStyles[value] || 'secondary');
-          return `<span class="badge bg-${style}">${text}</span>`;
-        };
-
-        selectEl.classList.add('d-none');
-        const wrapper = document.createElement('div');
-        wrapper.className = 'dropdown w-100 mt-1';
-        wrapper.innerHTML = `
-          <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center" type="button" data-bs-toggle="dropdown" aria-expanded="false"></button>
-          <ul class="dropdown-menu w-100"></ul>
-        `;
-        selectEl.insertAdjacentElement('afterend', wrapper);
-        const button = wrapper.querySelector('button');
-        const menu = wrapper.querySelector('ul');
-
-        const updateButton = () => {
-          const selected = selectEl.options[selectEl.selectedIndex];
-          button.innerHTML = renderOption(selected ? selected.value : '', selected ? selected.text : 'Select');
-        };
-
-        Array.from(selectEl.options).forEach(opt => {
-          const li = document.createElement('li');
-          const optionButton = document.createElement('button');
-          optionButton.type = 'button';
-          optionButton.className = 'dropdown-item';
-          optionButton.innerHTML = renderOption(opt.value, opt.text);
-          optionButton.addEventListener('click', () => {
-            selectEl.value = opt.value;
-            selectEl.dispatchEvent(new Event('change', { bubbles: true }));
-            updateButton();
-          });
-          li.appendChild(optionButton);
-          menu.appendChild(li);
-        });
-
-        selectEl.addEventListener('change', updateButton);
-        updateButton();
-        selectEl.dataset.badgeRendered = 'true';
-      }
-
-      renderBadgeLikeSelect('advanced_marketing_badge', 'marketing');
-      renderBadgeLikeSelect('tier_color', 'tier');
+      window.renderBadgeLikeSelect('advanced_marketing_badge', 'marketing');
+      window.renderBadgeLikeSelect('tier_color', 'tier');
 
       // Initialize Economy Balance Checker
       if (typeof EconomyBalanceChecker !== 'undefined') {
@@ -1662,12 +1586,6 @@ document.addEventListener('DOMContentLoaded', function() {
   updatePolicyPreview();
 });
 
-function escapeHtml(value) {
-  const div = document.createElement('div');
-  div.textContent = String(value);
-  return div.innerHTML;
-}
-
 const insuranceModeToggle = document.getElementById('insurance_mode_toggle');
 // Update Policy Preview (Student View)
 function updatePolicyPreview() {
@@ -1676,102 +1594,109 @@ function updatePolicyPreview() {
 
   const isAdvanced = insuranceModeToggle && insuranceModeToggle.checked;
   const isSimpleMode = !isAdvanced;
-  
-  // Get form values
+
   const title = (isSimpleMode ? document.getElementById('simple_title')?.value : document.getElementById('title')?.value) || '';
   const description = (isSimpleMode ? document.getElementById('simple_description')?.value : document.getElementById('description')?.value) || '';
   const premium = parseFloat((isSimpleMode ? document.getElementById('simple_premium')?.value : document.getElementById('advanced_premium')?.value)) || 0;
   const frequency = (isSimpleMode ? document.getElementById('simple_charge_frequency')?.value : document.getElementById('advanced_charge_frequency')?.value) || 'monthly';
   const claimType = (isSimpleMode ? document.getElementById('simple_claim_type')?.value : document.getElementById('advanced_claim_type')?.value) || 'transaction_monetary';
-  const waitingPeriod = parseInt((isSimpleMode ? document.getElementById('simple_waiting_period_days')?.value : document.getElementById('waiting_period_days')?.value)) || 0;
-  const maxPayoutPerPeriod = parseFloat((isSimpleMode ? document.getElementById('simple_max_payout_per_period')?.value : document.getElementById('advanced_max_payout_per_period')?.value)) || null;
-  const maxClaimsCount = parseInt((isSimpleMode ? document.getElementById('simple_max_claims_count')?.value : document.getElementById('max_claims_count')?.value)) || null;
-  const maxClaimAmount = parseFloat(document.getElementById('advanced_max_claim_amount')?.value) || null;
+  const waitingPeriod = parseInt((isSimpleMode ? document.getElementById('simple_waiting_period_days')?.value : document.getElementById('waiting_period_days')?.value), 10) || 0;
   const autopay = !isSimpleMode && document.getElementById('autopay')?.checked;
   const isActive = (isSimpleMode ? document.getElementById('simple_is_active')?.checked : document.getElementById('is_active')?.checked);
   const marketingBadge = !isSimpleMode ? (document.getElementById('advanced_marketing_badge')?.value) : '';
 
-  // Build preview HTML - show what students see when browsing
-  let previewHTML = '';
+  previewDiv.replaceChildren();
 
   if (!title || premium === 0) {
-    previewHTML = '<div class="alert alert-light border mb-0"><p class="text-muted small mb-0"><em>Fill out the policy name and premium to see a preview of how students will see this insurance policy.</em></p></div>';
-  } else {
-    const frequencyNames = {
-      'weekly': 'week',
-      'biweekly': '2 weeks', 
-      'monthly': 'month',
-      'semester': 'semester'
-    };
-    const frequencyName = escapeHtml(frequencyNames[frequency] || frequency);
-    const safeTitle = escapeHtml(title);
-    const safeDescription = escapeHtml(description);
-    
-    // Policy card preview (marketplace view)
-    previewHTML += `<div class="card shadow-sm">`;
-    previewHTML += `<div class="card-body">`;
-    
-    // Title and badges
-    previewHTML += `<div class="d-flex justify-content-between align-items-start mb-2">`;
-    previewHTML += `<h5 class="card-title text-primary mb-0">${safeTitle}</h5>`;
-    if (marketingBadge && marketingBadge !== 'none') {
-      const badgeLabels = {
-        'most_popular': 'Most Popular',
-        'best_value': 'Best Value',
-        'recommended': 'Recommended',
-        'new': 'New'
-      };
-      previewHTML += `<span class="badge bg-warning text-dark">${badgeLabels[marketingBadge] || ''}</span>`;
-    }
-    previewHTML += `</div>`;
-    
-    // Premium
-    previewHTML += `<p class="text-success fw-bold mb-2">$${premium.toFixed(2)} / ${frequencyName}</p>`;
-    
-    // Description
-    if (description) {
-      previewHTML += `<p class="text-muted small mb-3">${safeDescription}</p>`;
-    }
-    
-    // Quick facts
-    previewHTML += `<div class="d-flex flex-wrap gap-1 mb-2">`;
-    if (autopay) {
-      previewHTML += `<span class="badge bg-info">Auto-Pay</span>`;
-    }
-    if (waitingPeriod === 0) {
-      previewHTML += `<span class="badge bg-success">Immediate Coverage</span>`;
-    } else {
-      previewHTML += `<span class="badge bg-warning text-dark">${waitingPeriod} day wait</span>`;
-    }
-    
-    // Coverage type
-    if (claimType === 'transaction_monetary') {
-      previewHTML += `<span class="badge bg-secondary">Reimbursement</span>`;
-    } else if (claimType === 'non_monetary') {
-      previewHTML += `<span class="badge bg-secondary">Non-Monetary</span>`;
-    } else {
-      previewHTML += `<span class="badge bg-secondary">Custom Payout</span>`;
-    }
-    previewHTML += `</div>`;
-    
-    // Status
-    if (!isActive) {
-      previewHTML += `<div class="alert alert-secondary py-2 mb-0 small">`;
-      previewHTML += `<i class="bi bi-eye-slash me-1"></i>This policy is not yet available to students`;
-      previewHTML += `</div>`;
-    } else {
-      previewHTML += `<button class="btn btn-primary btn-sm w-100">View Details & Enroll</button>`;
-    }
-    
-    previewHTML += `</div></div>`;
-    
-    // Note about plain language explanation
-    previewHTML += `<div class="alert alert-info mt-3 mb-0 small">`;
-    previewHTML += `<i class="bi bi-info-circle me-1"></i><strong>Note:</strong> After students purchase this policy, they'll see a plain language explanation of the coverage terms on their insurance page.`;
-    previewHTML += `</div>`;
+    const blank = document.createElement('div');
+    blank.className = 'alert alert-light border mb-0';
+    blank.textContent = 'Fill out the policy name and premium to see a preview of how students will see this insurance policy.';
+    previewDiv.appendChild(blank);
+    return;
   }
 
-  previewDiv.innerHTML = previewHTML;
+  const frequencyNames = {
+    weekly: 'week',
+    biweekly: '2 weeks',
+    monthly: 'month',
+    semester: 'semester'
+  };
+  const badgeLabels = {
+    most_popular: 'Most Popular',
+    best_value: 'Best Value',
+    recommended: 'Recommended',
+    new: 'New'
+  };
+
+  const card = document.createElement('div');
+  card.className = 'card shadow-sm';
+  const cardBody = document.createElement('div');
+  cardBody.className = 'card-body';
+
+  const titleRow = document.createElement('div');
+  titleRow.className = 'd-flex justify-content-between align-items-start mb-2';
+  const titleEl = document.createElement('h5');
+  titleEl.className = 'card-title text-primary mb-0';
+  titleEl.textContent = title;
+  titleRow.appendChild(titleEl);
+  if (marketingBadge && marketingBadge !== 'none') {
+    const marketingBadgeEl = document.createElement('span');
+    marketingBadgeEl.className = 'badge bg-warning text-dark';
+    marketingBadgeEl.textContent = badgeLabels[marketingBadge] || '';
+    titleRow.appendChild(marketingBadgeEl);
+  }
+  cardBody.appendChild(titleRow);
+
+  const premiumEl = document.createElement('p');
+  premiumEl.className = 'text-success fw-bold mb-2';
+  premiumEl.textContent = `$${premium.toFixed(2)} / ${frequencyNames[frequency] || frequency}`;
+  cardBody.appendChild(premiumEl);
+
+  if (description) {
+    const descriptionEl = document.createElement('p');
+    descriptionEl.className = 'text-muted small mb-3';
+    descriptionEl.textContent = description;
+    cardBody.appendChild(descriptionEl);
+  }
+
+  const facts = document.createElement('div');
+  facts.className = 'd-flex flex-wrap gap-1 mb-2';
+  if (autopay) {
+    const autopayBadge = document.createElement('span');
+    autopayBadge.className = 'badge bg-info';
+    autopayBadge.textContent = 'Auto-Pay';
+    facts.appendChild(autopayBadge);
+  }
+  const waitBadge = document.createElement('span');
+  waitBadge.className = waitingPeriod === 0 ? 'badge bg-success' : 'badge bg-warning text-dark';
+  waitBadge.textContent = waitingPeriod === 0 ? 'Immediate Coverage' : `${waitingPeriod} day wait`;
+  facts.appendChild(waitBadge);
+
+  const typeBadge = document.createElement('span');
+  typeBadge.className = 'badge bg-secondary';
+  typeBadge.textContent = claimType === 'transaction_monetary' ? 'Reimbursement' : (claimType === 'non_monetary' ? 'Non-Monetary' : 'Custom Payout');
+  facts.appendChild(typeBadge);
+  cardBody.appendChild(facts);
+
+  if (!isActive) {
+    const inactive = document.createElement('div');
+    inactive.className = 'alert alert-secondary py-2 mb-0 small';
+    inactive.textContent = 'This policy is not yet available to students';
+    cardBody.appendChild(inactive);
+  } else {
+    const action = document.createElement('button');
+    action.className = 'btn btn-primary btn-sm w-100';
+    action.textContent = 'View Details & Enroll';
+    cardBody.appendChild(action);
+  }
+
+  card.appendChild(cardBody);
+  previewDiv.appendChild(card);
+
+  const note = document.createElement('div');
+  note.className = 'alert alert-info mt-3 mb-0 small';
+  note.textContent = "Note: After students purchase this policy, they'll see a plain language explanation of the coverage terms on their insurance page.";
+  previewDiv.appendChild(note);
 }
 
 // Update preview when form fields change
