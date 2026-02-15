@@ -3,13 +3,12 @@ import pytest
 pytestmark = [pytest.mark.critical, pytest.mark.regression]
 
 """
-Test for student transfer functionality with legacy transactions.
+Test transfer behavior when legacy transactions (NULL join_code) are present.
 
-Ensures that students can transfer between checking and savings accounts
-even when they have legacy transactions without join_code.
+Current behavior is strict join_code scoping: legacy NULL-join_code records do
+not count toward balances in a class-scoped student session.
 """
 
-import pytest
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
 from app.models import Student, Admin, Transaction, TeacherBlock, TransactionStatus
@@ -103,8 +102,8 @@ def setup_student_with_legacy_transactions(client):
     }
 
 
-def test_transfer_with_legacy_transactions(client, setup_student_with_legacy_transactions):
-    """Test that students can transfer when they have legacy transactions."""
+def test_transfer_uses_only_join_code_scoped_balance(client, setup_student_with_legacy_transactions):
+    """Transfer should use only join_code-scoped balance (legacy rows ignored)."""
     data = setup_student_with_legacy_transactions
     student = data['student']
     join_code = data['join_code']
@@ -115,12 +114,12 @@ def test_transfer_with_legacy_transactions(client, setup_student_with_legacy_tra
         sess['current_join_code'] = join_code
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
     
-    # Student should have $150 total in checking ($100 legacy + $50 new)
-    # Try to transfer $75 from checking to savings
+    # Student has $50 join_code-scoped checking ($100 legacy row is ignored)
+    # Try to transfer exactly $50 from checking to savings
     response = client.post('/student/transfer', data={
         'from_account': 'checking',
         'to_account': 'savings',
-        'amount': '75.00',
+        'amount': '50.00',
         'passphrase': 'alice_pass'
     }, follow_redirects=False)
     
@@ -142,11 +141,11 @@ def test_transfer_with_legacy_transactions(client, setup_student_with_legacy_tra
     deposit = next((tx for tx in transactions if tx.amount > 0), None)
     
     assert withdrawal is not None
-    assert withdrawal.amount == -75.0
+    assert withdrawal.amount == -50.0
     assert withdrawal.account_type == 'checking'
     
     assert deposit is not None
-    assert deposit.amount == 75.0
+    assert deposit.amount == 50.0
     assert deposit.account_type == 'savings'
 
 
@@ -162,7 +161,7 @@ def test_insufficient_funds_with_only_new_transactions(client, setup_student_wit
         sess['current_join_code'] = join_code
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
     
-    # Student has $150 in checking
+    # Student has only $50 join_code-scoped checking.
     # Try to transfer $200 (more than available)
     response = client.post('/student/transfer', data={
         'from_account': 'checking',
@@ -176,8 +175,8 @@ def test_insufficient_funds_with_only_new_transactions(client, setup_student_wit
     assert b'Insufficient checking funds' in response.data
 
 
-def test_transfer_includes_both_legacy_and_new_in_balance(client, setup_student_with_legacy_transactions):
-    """Test that balance calculation includes both legacy and new transactions."""
+def test_transfer_does_not_include_legacy_null_join_code_balance(client, setup_student_with_legacy_transactions):
+    """Legacy NULL-join_code balance should not be spendable in class context."""
     data = setup_student_with_legacy_transactions
     student = data['student']
     join_code = data['join_code']
@@ -188,14 +187,13 @@ def test_transfer_includes_both_legacy_and_new_in_balance(client, setup_student_
         sess['current_join_code'] = join_code
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
     
-    # Try to transfer exactly $150 (legacy $100 + new $50)
+    # Try to transfer $150 (legacy $100 + new $50). Should fail now.
     response = client.post('/student/transfer', data={
         'from_account': 'checking',
         'to_account': 'savings',
         'amount': '150.00',
         'passphrase': 'alice_pass'
-    }, follow_redirects=False)
-    
-    # Should succeed
-    assert response.status_code == 302
-    assert '/student/dashboard' in response.location
+    }, follow_redirects=True)
+
+    assert response.status_code == 200
+    assert b'Insufficient checking funds' in response.data

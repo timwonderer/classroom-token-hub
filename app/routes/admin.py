@@ -321,6 +321,24 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
             StoreItem.id.in_(sa.select(deletable_store_item_ids))
         ).delete(synchronize_session=False)
 
+    # Clean up orphaned StoreItemBlock entries for the deleted class blocks
+    # This handles items that are visible to multiple classes
+    if class_blocks:
+        deletable_block_entries = (
+            db.session.query(StoreItemBlock.store_item_id, StoreItemBlock.block)
+            .join(StoreItem, StoreItemBlock.store_item_id == StoreItem.id)
+            .filter(
+                StoreItem.teacher_id == teacher_id,
+                StoreItemBlock.block.in_(class_blocks)
+            )
+            .subquery()
+        )
+        StoreItemBlock.query.filter(
+            sa.tuple_(StoreItemBlock.store_item_id, StoreItemBlock.block).in_(
+                sa.select(deletable_block_entries)
+            )
+        ).delete(synchronize_session=False)
+
     # Seats/ownership for this class
     TeacherBlock.query.filter(
         TeacherBlock.teacher_id == teacher_id,
@@ -446,52 +464,6 @@ def _link_student_to_admin(student: Student, admin_id):
         current_app.logger.info(
             f"Claimed existing TeacherBlock for student with join_code {existing_teacher_block.join_code}"
         )
-
-
-def _get_students_needing_transaction_backfill(teacher_id):
-    """
-    Get students who have transactions missing proper scoping (teacher_id and/or join_code).
-    
-    These are orphaned transactions that need to be associated with a join_code
-    for proper class isolation. This is CRITICAL because join_code is the source
-    of truth for class scoping, and StudentTeacher is the source for auth, not teacher_id.
-    
-    Args:
-        teacher_id: The teacher's admin ID
-        
-    Returns:
-        list: Student objects that have unscoped transactions
-    """
-    # Get students that belong to this teacher
-    student_ids_query = _scoped_students().with_entities(Student.id).all()
-    student_ids = [sid[0] for sid in student_ids_query]
-    
-    if not student_ids:
-        return []
-    
-    # Find transactions for these students that have NO join_code
-    # (regardless of whether they have teacher_id)
-    transactions_needing_backfill = (
-        Transaction.query
-        .filter(
-            Transaction.student_id.in_(student_ids),
-            Transaction.join_code.is_(None)
-        )
-        .with_entities(Transaction.student_id)
-        .distinct()
-        .all()
-    )
-    
-    if not transactions_needing_backfill:
-        return []
-    
-    affected_student_ids = [tx.student_id for tx in transactions_needing_backfill]
-
-    # SECURITY FIX: Get the student objects using scoped query for defense-in-depth
-    # While the IDs are already from scoped students, this ensures consistency
-    students = _scoped_students().filter(Student.id.in_(affected_student_ids)).all()
-
-    return students
 
 
 def _get_feature_settings(teacher_id, block=None):
@@ -700,22 +672,7 @@ def dashboard():
     onboarding_redirect = _check_onboarding_redirect()
     if onboarding_redirect:
         return onboarding_redirect
-
-    # Check for students with transactions needing join_code backfill
     current_admin_id = session.get('admin_id')
-    students_needing_backfill = _get_students_needing_transaction_backfill(current_admin_id)
-    if students_needing_backfill:
-        # Only redirect if we have a block/join_code mapping to work with
-        has_blocks = (
-            TeacherBlock.query
-            .filter_by(teacher_id=current_admin_id, is_claimed=True)
-            .filter(TeacherBlock.join_code.isnot(None))
-            .count()
-        )
-        if has_blocks:
-            # Redirect to backfill page
-            return redirect(url_for('admin.backfill_transactions'))
-        flash("No periods/blocks found. Please add students to periods first.", "error")
 
     student_ids_subq = _student_scope_subquery()
     # Auto-tapout students who have exceeded their daily limit
@@ -1003,98 +960,6 @@ def give_bonus_all():
         message += f" Overdraft fee charged for {fee_count}."
     flash(message, "warning" if declined_count else "success")
     return redirect(url_for('admin.dashboard'))
-
-
-@admin_bp.route('/backfill-transactions', methods=['GET', 'POST'])
-@admin_required
-def backfill_transactions():
-    """
-    Backfill join_code for orphaned transactions (CRITICAL for proper class isolation).
-    
-    join_code is the SOURCE OF TRUTH for class scoping because:
-    - A teacher can have multiple periods (Period 1 Math, Period 3 Math)
-    - Each period has a unique join_code
-    - Students in both periods should see SEPARATE balances for each
-    
-    Teacher selects which period/block each affected student belongs to,
-    and we update:
-    1. Transaction join_code (CRITICAL - required for balance scoping)
-    2. Transaction teacher_id (if not already set)
-    3. Student teacher_id (if not already set)
-    4. StudentTeacher association (if not already exists)
-    """
-    current_admin_id = session.get('admin_id')
-    students_needing_backfill = _get_students_needing_transaction_backfill(current_admin_id)
-    
-    if not students_needing_backfill:
-        # No students need backfill, redirect to dashboard
-        return redirect(url_for('admin.dashboard'))
-    
-    # Get teacher's available periods/blocks with join codes
-    teacher_blocks = (
-        TeacherBlock.query
-        .filter_by(teacher_id=current_admin_id, is_claimed=True)
-        .with_entities(TeacherBlock.block, TeacherBlock.join_code)
-        .distinct()
-        .all()
-    )
-    
-    # Create a mapping of block to join_code
-    block_to_join_code = {}
-    for block, join_code in teacher_blocks:
-        if block and join_code:
-            block_to_join_code[block] = join_code
-    
-    # If no blocks available, create a default mapping
-    if not block_to_join_code:
-        flash("No periods/blocks found. Please add students to periods first.", "error")
-        return redirect(url_for('admin.dashboard'))
-    
-    if request.method == 'POST':
-        try:
-            # Process each student assignment
-            for student in students_needing_backfill:
-                block_key = f"student_{student.id}_block"
-                selected_block = request.form.get(block_key)
-                
-                if selected_block and selected_block in block_to_join_code:
-                    join_code = block_to_join_code[selected_block]
-                    
-                    # 1. Update all transactions that have NO join_code
-                    #    (CRITICAL: join_code is source of truth, not teacher_id)
-                    transactions_to_update = Transaction.query.filter_by(
-                        student_id=student.id,
-                        join_code=None
-                    ).all()
-                    
-                    for tx in transactions_to_update:
-                        # Set join_code (critical for scoping)
-                        tx.join_code = join_code
-
-                    # 2. Ensure StudentTeacher association exists
-                    # StudentTeacher and join_code are now the sole sources of truth.
-                    _link_student_to_admin(student, current_admin_id)
-                    
-                    current_app.logger.info(
-                        f"Backfilled teacher_id={current_admin_id} and join_code={join_code} "
-                        f"for {len(transactions_to_update)} transactions for student"
-                    )
-            
-            db.session.commit()
-            flash(f"Successfully backfilled transactions for {len(students_needing_backfill)} student(s)! Balances should now be correct.", "success")
-            return redirect(url_for('admin.dashboard'))
-            
-        except SQLAlchemyError as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error backfilling transactions: {e}", exc_info=True)
-            flash("Error backfilling transactions. Please try again.", "error")
-    
-    # GET request - show form
-    return render_template(
-        'admin_backfill_join_codes.html',
-        students=students_needing_backfill,
-        available_blocks=sorted(block_to_join_code.keys())
-    )
 
 
 # -------------------- AUTHENTICATION --------------------
@@ -2007,7 +1872,7 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
             RentPayment.period == block,
             RentPayment.coverage_month == coverage_month,
             RentPayment.coverage_year == coverage_year,
-            or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+            RentPayment.join_code == join_code
         ))
 
     if not all_student_ids:
@@ -2115,7 +1980,7 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
         RentPayment.period == current_block,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
-        db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+        RentPayment.join_code == join_code
     ).first() is not None
 
     per_period_items = RentItem.query.filter_by(
@@ -2377,13 +2242,20 @@ def set_current_class():
 def student_detail(student_id):
     """View detailed information for a specific student."""
     student = _get_student_or_404(student_id)
+    join_code = session.get('current_join_code')
     # Remove deprecated last_tap_in/last_tap_out logic; rely on TapEvent backend.
     # Fetch last rent payment
-    latest_rent = Transaction.query.filter_by(student_id=student.id, type="rent").order_by(Transaction.timestamp.desc()).first()
+    rent_query = Transaction.query.filter_by(student_id=student.id, type="rent")
+    if join_code:
+        rent_query = rent_query.filter(Transaction.join_code == join_code)
+    latest_rent = rent_query.order_by(Transaction.timestamp.desc()).first()
     student.rent_last_paid = latest_rent.timestamp if latest_rent else None
 
     # Fetch last property tax payment
-    latest_tax = Transaction.query.filter_by(student_id=student.id, type="property_tax").order_by(Transaction.timestamp.desc()).first()
+    tax_query = Transaction.query.filter_by(student_id=student.id, type="property_tax")
+    if join_code:
+        tax_query = tax_query.filter(Transaction.join_code == join_code)
+    latest_tax = tax_query.order_by(Transaction.timestamp.desc()).first()
     student.property_tax_last_paid = latest_tax.timestamp if latest_tax else None
 
     # Compute due dates and overdue status
@@ -2399,10 +2271,18 @@ def student_detail(student_id):
     student.property_tax_due_date = tax_due
     student.property_tax_overdue = today > tax_due and (not student.property_tax_last_paid or student.property_tax_last_paid.astimezone(PACIFIC).date() <= tax_due)
 
-    transactions = Transaction.query.filter_by(student_id=student.id).order_by(Transaction.timestamp.desc()).all()
-    student_items = student.items.order_by(StudentItem.purchase_date.desc()).all()
+    transactions_query = Transaction.query.filter_by(student_id=student.id)
+    student_items_query = student.items
+    latest_tap_event_query = TapEvent.query.filter_by(student_id=student.id)
+    if join_code:
+        transactions_query = transactions_query.filter(Transaction.join_code == join_code)
+        student_items_query = student_items_query.filter(StudentItem.join_code == join_code)
+        latest_tap_event_query = latest_tap_event_query.filter(TapEvent.join_code == join_code)
+
+    transactions = transactions_query.order_by(Transaction.timestamp.desc()).all()
+    student_items = student_items_query.order_by(StudentItem.purchase_date.desc()).all()
     # Fetch most recent TapEvent for this student
-    latest_tap_event = TapEvent.query.filter_by(student_id=student.id).order_by(TapEvent.timestamp.desc()).first()
+    latest_tap_event = latest_tap_event_query.order_by(TapEvent.timestamp.desc()).first()
 
     # Get student's active insurance policy (scoped to current teacher)
     teacher_id = session.get('admin_id')
@@ -2428,7 +2308,6 @@ def student_detail(student_id):
 
     # CRITICAL: Get scoped balances for current join_code to prevent multi-tenancy violations
     # Teacher clicked from a specific class tab, so show balances for that period only
-    join_code = session.get('current_join_code')
     scoped_checking_balance = 0
     scoped_savings_balance = 0
     scoped_total_earnings = 0
@@ -4169,11 +4048,9 @@ def rent_settings():
                         coverage_year=coverage_due.year
                     )
                     if block_join_code:
-                        paid_query = paid_query.filter(
-                            db.or_(RentPayment.join_code == block_join_code, RentPayment.join_code.is_(None))
-                        )
+                        paid_query = paid_query.filter(RentPayment.join_code == block_join_code)
                     else:
-                        paid_query = paid_query.filter(RentPayment.join_code.is_(None))
+                        paid_query = paid_query.filter(sa.false())
                     paid_count = paid_query.count()
                     if paid_count > 0:
                         mid_period_locked = True
@@ -4381,7 +4258,7 @@ def rent_settings():
                 RentPayment.query
                 .filter(RentPayment.student_id.in_(student_ids))
                 .filter_by(coverage_month=coverage_month, coverage_year=coverage_year)
-                .filter(db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)))
+                .filter(RentPayment.join_code == join_code)
                 .all()
             )
 
@@ -5355,10 +5232,9 @@ def void_transaction(transaction_id):
                 StudentItem.student_id == tx.student_id,
                 StudentItem.store_item_id == store_item.id,
             )
-            if tx.join_code:
-                matching_items_query = matching_items_query.filter(StudentItem.join_code == tx.join_code)
-            else:
-                matching_items_query = matching_items_query.filter(StudentItem.join_code.is_(None))
+            if not tx.join_code:
+                return _void_error("Transaction is missing class scope (join_code) and cannot be voided safely.")
+            matching_items_query = matching_items_query.filter(StudentItem.join_code == tx.join_code)
 
             matching_items = matching_items_query.all()
             if not matching_items:
@@ -5425,10 +5301,9 @@ def void_transaction(transaction_id):
                 RentPayment.student_id == tx.student_id,
                 RentPayment.amount_paid == abs(tx.amount or Decimal('0.00')),
             )
-            if tx.join_code:
-                rent_payments_query = rent_payments_query.filter(RentPayment.join_code == tx.join_code)
-            else:
-                rent_payments_query = rent_payments_query.filter(RentPayment.join_code.is_(None))
+            if not tx.join_code:
+                return _void_error("Transaction is missing class scope (join_code) and cannot be voided safely.")
+            rent_payments_query = rent_payments_query.filter(RentPayment.join_code == tx.join_code)
             rent_payments = rent_payments_query.all()
 
             if rent_payments:
@@ -5470,10 +5345,11 @@ def void_transaction(transaction_id):
             )
             if policy_title:
                 enrollments_query = enrollments_query.filter(InsurancePolicy.title == policy_title)
-            if tx.join_code:
-                enrollments_query = enrollments_query.filter(
-                    or_(StudentInsurance.join_code == tx.join_code, StudentInsurance.join_code.is_(None))
-                )
+            if not tx.join_code:
+                return _void_error("Transaction is missing class scope (join_code) and cannot be voided safely.")
+            enrollments_query = enrollments_query.filter(
+                StudentInsurance.join_code == tx.join_code
+            )
             enrollments = enrollments_query.all()
 
             if enrollments:
@@ -6049,16 +5925,23 @@ def payroll():
         estimated_payout = payroll_summary.get(student.id, 0)
 
         # Get last payroll date
-        last_payroll = Transaction.query.filter_by(
-            student_id=student.id,
-            type='payroll'
-        ).order_by(Transaction.timestamp.desc()).first()
+        last_payroll = (
+            Transaction.query
+            .filter(
+                Transaction.student_id == student.id,
+                Transaction.type == 'payroll',
+                Transaction.join_code.in_(my_join_codes),
+            )
+            .order_by(Transaction.timestamp.desc())
+            .first()
+        )
 
         # Total earned from payroll
         total_earned = db.session.query(func.sum(Transaction.amount)).filter(
             Transaction.student_id == student.id,
             Transaction.type == 'payroll',
-            Transaction.is_void == False
+            Transaction.is_void == False,
+            Transaction.join_code.in_(my_join_codes),
         ).scalar() or 0.0
 
         student_stats.append({
