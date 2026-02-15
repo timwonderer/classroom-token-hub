@@ -362,7 +362,7 @@
                   <span class="input-group-text">/{{ form.charge_frequency(class="form-select", id="simple_charge_frequency", style="width: auto;", **{'data-economy-frequency-field': 'true', 'data-economy-frequency-target': '#simple_premium'}) }}</span>
                   
                 </div>
-                <small class="text-muted">This also control how long each subscription period lasts.</small>
+                <small class="text-muted">This also controls how long each subscription period lasts.</small>
               </div>
             </div>
 
@@ -759,8 +759,9 @@
 
     <script>
     // Handle simple/advanced mode toggle
+    let insuranceModeToggle;
     document.addEventListener('DOMContentLoaded', function() {
-      const insuranceModeToggle = document.getElementById('insuranceModeToggle');
+      insuranceModeToggle = document.getElementById('insuranceModeToggle');
       const settingsModeInput = document.getElementById('settingsModeInput');
       const simpleModeFields = document.getElementById('simpleModeFields');
       const advancedModeFields = document.getElementById('advancedModeFields');

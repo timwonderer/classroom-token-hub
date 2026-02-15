@@ -31,7 +31,7 @@
             {% set is_rent_perk_item = rent_item_type is not none or item.is_rent_linked %}
             {% set is_rent_covered = has_paid_rent and rent_item_type == 'privilege' %}
             {% set rent_free_uses_remaining = rent_free_uses.get(item.id) %}
-            {% set has_rent_free_purchase = rent_free_uses_remaining is not none %}
+            {% set has_rent_free_purchase = rent_free_uses_remaining is not none and (rent_free_uses_remaining == -1 or rent_free_uses_remaining > 0) %}
             <div class="col">
                 <div class="card h-100 {% if item.is_bundle or item.bulk_discount_enabled %}border-primary{% endif %} {% if is_rent_covered %}opacity-50{% endif %}">
                     <div class="card-body d-flex flex-column">
