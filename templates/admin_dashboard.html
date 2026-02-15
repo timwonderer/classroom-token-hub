@@ -120,7 +120,17 @@
                     data-timestamp="{{ format_utc_iso(next_payroll_date) }}">
                     {{ next_payroll_date.strftime('%b %d') }}
                 </h5>
-                <div class="text-secondary small">Est: ${{ "{:,.0f}".format(total_payroll_estimate) }}</div>
+                <div class="text-secondary small">
+                    Est: ${{ "{:,.0f}".format(total_payroll_estimate) }}
+                    {% if payroll_updated_at %}
+                    <br>
+                    <span class="text-muted" style="font-size: 0.85em;">
+                        Updated <span class="local-timestamp" data-timestamp="{{ format_utc_iso(payroll_updated_at) }}">
+                            {{ payroll_updated_at.strftime('%H:%M') }}
+                        </span>
+                    </span>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
