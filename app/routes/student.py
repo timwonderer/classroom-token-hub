@@ -233,7 +233,7 @@ def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: in
     Args:
         student (Student): Student object
         join_code (str): The join code for the current class context
-        teacher_id (int): The teacher ID (redundant if join_code is present, but kept for signature compatibility)
+        teacher_id (int): The teacher ID (kept for signature compatibility)
     
     Returns:
         tuple[Decimal, Decimal]: (checking_balance, savings_balance)
