@@ -1242,7 +1242,8 @@ def dashboard():
                     Transaction.type == 'Rent Payment',
                     Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
                     Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
-                    Transaction.amount == -payment.amount_paid
+                    Transaction.amount == -payment.amount_paid,
+                    Transaction.join_code == join_code
                 ).first()
 
                 if txn and not txn.is_void:

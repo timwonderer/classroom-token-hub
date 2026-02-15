@@ -14,7 +14,7 @@ with app.app_context():
     posted_tx_count = Transaction.query.filter(Transaction.status == TransactionStatus.POSTED).count()
     print(f"Posted Transactions: {posted_tx_count}")
     
-    null_cents = Transaction.query.filter(Transaction.amount_cents == None).count()
+    null_cents = Transaction.query.filter(Transaction.amount_cents.is_(None)).count()
     print(f"Transactions with NULL amount_cents: {null_cents}")
     
     if tx_count > 0:
