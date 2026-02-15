@@ -20,7 +20,7 @@ from werkzeug.security import check_password_hash
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, StoreItem, StudentItem, Transaction, TapEvent,
+    Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
     HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
     StudentTeacher, TeacherBlock, StudentBlock, DemoStudent,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource
@@ -353,6 +353,7 @@ def purchase_item():
                 join_code=join_code,
                 amount=0.0,
                 account_type='checking',
+                status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
                 type='purchase',
                 description=f"Purchase: {item.name} [Rent Perk $0]"
             )
@@ -478,6 +479,7 @@ def purchase_item():
             join_code=join_code,  # CRITICAL: Add join_code for period isolation
             amount=-total_price,
             account_type='checking',
+            status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
             type='purchase',
             description=purchase_description
         )
@@ -503,6 +505,7 @@ def purchase_item():
                         join_code=join_code,  # CRITICAL: Add join_code for period isolation
                         amount=-shortfall,
                         account_type='savings',
+                        status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
                         type='Withdrawal',
                         description='Overdraft protection transfer to checking'
                     )
@@ -512,6 +515,7 @@ def purchase_item():
                         join_code=join_code,  # CRITICAL: Add join_code for period isolation
                         amount=shortfall,
                         account_type='checking',
+                        status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
                         type='Deposit',
                         description='Overdraft protection transfer from savings'
                     )

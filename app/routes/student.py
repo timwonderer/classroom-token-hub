@@ -23,7 +23,7 @@ from dateutil.relativedelta import relativedelta
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, Transaction, TapEvent, StoreItem, StudentItem,
+    Student, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     RentSettings, RentPayment, InsurancePolicy, StudentInsurance, InsuranceClaim,
     BankingSettings, UserReport, FeatureSettings, Issue
 )
@@ -223,37 +223,65 @@ def is_feature_enabled(feature_name):
 
 
 def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: int) -> tuple[Decimal, Decimal]:
-    """Calculate checking and savings balances scoped to a specific class.
+    """Calculate checking and savings balances using the Ledger + Settlement model.
     
-    This function ensures consistent balance calculation across the application
-    by including transactions with matching join_code OR NULL join_code (legacy)
-    with matching teacher_id.
+    This function:
+    1. Triggers an eager settlement (if lock available) to ensure BalanceCache is up-to-date.
+    2. Reads the posted balance from BalanceCache (O(1)).
+    3. Adds any remaining pending transactions.
     
     Args:
-        student (Student): Student object whose balances to calculate
+        student (Student): Student object
         join_code (str): The join code for the current class context
-        teacher_id (int): The teacher ID for the current class context
+        teacher_id (int): The teacher ID (redundant if join_code is present, but kept for signature compatibility)
     
     Returns:
-        tuple[Decimal, Decimal]: (checking_balance, savings_balance) as Decimal with 2 decimal places
+        tuple[Decimal, Decimal]: (checking_balance, savings_balance)
     """
-    from app.models import _quantize_currency
+    from app.models import BalanceCache, Transaction, TransactionStatus, _quantize_currency
+    from app.utils.banking import settle_balances
+    import logging
     
-    checking_balance = _quantize_currency(sum(
-        (tx.amount for tx in student.transactions
-        if tx.account_type == 'checking' and not tx.is_void and
-        (tx.join_code == join_code or (tx.join_code is None and tx.teacher_id == teacher_id))),
-        Decimal('0.00')
-    ))
-    
-    savings_balance = _quantize_currency(sum(
-        (tx.amount for tx in student.transactions
-        if tx.account_type == 'savings' and not tx.is_void and
-        (tx.join_code == join_code or (tx.join_code is None and tx.teacher_id == teacher_id))),
-        Decimal('0.00')
-    ))
-    
-    return checking_balance, savings_balance
+    logger = logging.getLogger(__name__)
+
+    # Default to 0.00
+    checking_balance = Decimal('0.00')
+    savings_balance = Decimal('0.00')
+
+    if not join_code:
+        # Fallback for legacy calls without join_code (should be rare/non-existent)
+        logger.warning(f"calculate_scoped_balances called without join_code for student {student.id}")
+        return checking_balance, savings_balance
+
+    # 1. Eager Settlement (Best Effort)
+    try:
+        settle_balances(student.id, join_code)
+    except Exception as e:
+        logger.warning(f"Eager settlement failed during read for student {student.id}: {e}")
+
+    # 2. Read Posted Balance from Cache
+    cache = BalanceCache.query.filter_by(student_id=student.id, join_code=join_code).first()
+    if cache:
+        checking_balance += Decimal(cache.posted_checking_balance_cents) / 100
+        savings_balance += Decimal(cache.posted_savings_balance_cents) / 100
+
+    # 3. Add Pending Transactions
+    pending_txs = Transaction.query.filter_by(
+        student_id=student.id,
+        join_code=join_code,
+        status=TransactionStatus.PENDING
+    ).filter(Transaction.is_void == False).all()  # Explicitly exclude void pending
+
+    for tx in pending_txs:
+        # Defensive check against None amounts
+        amount = tx.amount or Decimal('0.00')
+        acct_type = str(tx.account_type).lower()
+        if acct_type == 'checking':
+            checking_balance += amount
+        elif acct_type == 'savings':
+            savings_balance += amount
+
+    return _quantize_currency(checking_balance), _quantize_currency(savings_balance)
 
 
 # -------------------- LEGACY PROFILE MIGRATION --------------------
@@ -1515,6 +1543,7 @@ def transfer():
                 join_code=join_code,  # CRITICAL: Add join_code for period isolation
                 amount=-amount,
                 account_type=from_account,
+                status=TransactionStatus.PENDING,
                 type='Withdrawal',
                 description=f'Transfer to {to_account}'
             ))
@@ -1525,6 +1554,7 @@ def transfer():
                 join_code=join_code,  # CRITICAL: Add join_code for period isolation
                 amount=amount,
                 account_type=to_account,
+                status=TransactionStatus.PENDING,
                 type='Deposit',
                 description=f'Transfer from {from_account}'
             ))
@@ -1725,6 +1755,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
                 join_code=context['join_code'],  # CRITICAL: Add join_code for period isolation
                 amount=interest,
                 account_type='savings',
+                status=TransactionStatus.PENDING,
                 type='Interest',
                 description="Monthly Savings Interest"
             )
@@ -1977,6 +2008,7 @@ def purchase_insurance(policy_id):
         join_code=join_code,  # CRITICAL: Add join_code for period isolation
         amount=-policy.premium,
         account_type='checking',
+        status=TransactionStatus.PENDING,
         type='insurance_premium',
         description=f"Insurance premium: {policy.title}"
     )
@@ -1990,6 +2022,7 @@ def purchase_insurance(policy_id):
             join_code=join_code,
             amount=-overdraft_shortfall,
             account_type='savings',
+            status=TransactionStatus.PENDING,
             type='Withdrawal',
             description='Overdraft protection transfer to checking'
         )
@@ -1999,6 +2032,7 @@ def purchase_insurance(policy_id):
             join_code=join_code,
             amount=overdraft_shortfall,
             account_type='checking',
+            status=TransactionStatus.PENDING,
             type='Deposit',
             description='Overdraft protection transfer from savings'
         )
@@ -3121,6 +3155,7 @@ def rent_pay(period):
         join_code=join_code,  # CRITICAL: Add join_code for period isolation
         amount=-payment_amount,
         account_type='checking',
+        status=TransactionStatus.PENDING,
         type='Rent Payment',
         description=payment_description
     )
@@ -3161,6 +3196,7 @@ def rent_pay(period):
             join_code=join_code,  # CRITICAL: Add join_code for period isolation
             amount=-overdraft_shortfall,
             account_type='savings',
+            status=TransactionStatus.PENDING,
             type='Withdrawal',
             description='Overdraft protection transfer to checking'
         )
@@ -3170,6 +3206,7 @@ def rent_pay(period):
             join_code=join_code,  # CRITICAL: Add join_code for period isolation
             amount=overdraft_shortfall,
             account_type='checking',
+            status=TransactionStatus.PENDING,
             type='Deposit',
             description='Overdraft protection transfer from savings'
         )

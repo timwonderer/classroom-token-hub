@@ -24,7 +24,7 @@ import pyotp
 from app.extensions import db, limiter
 from app.models import (
     SystemAdmin, SystemAdminCredential, Admin, Student, AdminInviteCode, ErrorLog,
-    Transaction, TapEvent, HallPassLog, StudentItem, RentPayment,
+    Transaction, TransactionStatus, TapEvent, HallPassLog, StudentItem, RentPayment,
     StudentInsurance, InsuranceClaim, StudentTeacher, DeletionRequest,
     DeletionRequestType, DeletionRequestStatus, TeacherBlock, StudentBlock, UserReport,
     FeatureSettings, TeacherOnboarding, RentSettings, BankingSettings,
@@ -1326,6 +1326,7 @@ def send_reward_to_reporter(report_id):
             account_type='checking',
             description=f"Bug Report Reward (Report #{report_id})",
             timestamp=utc_now(),
+            status=TransactionStatus.PENDING,
             is_void=False
         )
         db.session.add(transaction)
