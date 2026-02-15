@@ -293,7 +293,7 @@ def purchase_item():
                     RentPayment.period == current_block,
                     RentPayment.coverage_month == coverage_month,
                     RentPayment.coverage_year == coverage_year,
-                    db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                    RentPayment.join_code == join_code
                 ).scalar() or 0
 
                 # Student is late if they haven't paid full rent
@@ -334,10 +334,7 @@ def purchase_item():
                 StudentItem.expiry_date > utc_now()
             )
         )
-        if join_code:
-            rent_item_query = rent_item_query.filter(StudentItem.join_code == join_code)
-        else:
-            rent_item_query = rent_item_query.filter(StudentItem.join_code.is_(None))
+        rent_item_query = rent_item_query.filter(StudentItem.join_code == join_code)
 
         active_rent_item = rent_item_query.first()
 

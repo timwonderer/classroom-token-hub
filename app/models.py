@@ -310,12 +310,9 @@ class Student(db.Model):
         """
         if join_code:
             # Proper scoping by join_code (period-level isolation)
-            # Include legacy transactions with NULL join_code but matching teacher_id
             total = sum(
                 (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.account_type == 'checking' and not tx.is_void and (
-                    tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id)
-                )),
+                if tx.account_type == 'checking' and not tx.is_void and tx.join_code == join_code),
                 Decimal('0.00')
             )
             return _quantize_currency(total)
@@ -353,12 +350,9 @@ class Student(db.Model):
         """
         if join_code:
             # Proper scoping by join_code (period-level isolation)
-            # Include legacy transactions with NULL join_code but matching teacher_id
             total = sum(
                 (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.account_type == 'savings' and not tx.is_void and (
-                    tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id)
-                )),
+                if tx.account_type == 'savings' and not tx.is_void and tx.join_code == join_code),
                 Decimal('0.00')
             )
             return _quantize_currency(total)
@@ -396,10 +390,9 @@ class Student(db.Model):
         """
         if join_code:
             # Proper scoping by join_code (period-level isolation)
-            # Include legacy transactions with NULL join_code but matching teacher_id
             return float(round(sum(
                 (_quantize_currency(tx.amount) for tx in self.transactions
-                if (tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id))
+                if tx.join_code == join_code
                 and tx.amount is not None and _quantize_currency(tx.amount) > Decimal('0') and not tx.is_void
                 and not (tx.description or "").startswith("Transfer")),
                 Decimal('0.00')

@@ -192,68 +192,11 @@ def database_maintenance_job():
         else:
             logger.info("No orphaned StoreItemBlock entries found")
 
-        # Task 2: Backfill join_code on legacy records
-        # Migrate old records that only have teacher_id/block to use join_code
-        logger.info("Checking for legacy records missing join_code...")
-        
-        from app.models import StudentItem, Transaction, StudentInsurance, RentPayment, Issue
-        
-        backfilled_count = 0
-        
-        # Backfill StudentItem records
-        legacy_student_items = StudentItem.query.filter(
-            StudentItem.join_code.is_(None)
-        ).limit(100).all()  # Process in batches to avoid long-running transactions
-        
-        for item in legacy_student_items:
-            try:
-                if item.student and item.student.block:
-                    # Find the join_code for this student's block
-                    student_blocks = [b.strip().upper() for b in item.student.block.split(',') if b.strip()]
-                    if student_blocks:
-                        # Use the first block to find join_code
-                        teacher_block = TeacherBlock.query.filter_by(
-                            student_id=item.student_id,
-                            block=student_blocks[0]
-                        ).first()
-                        
-                        if teacher_block and teacher_block.join_code:
-                            item.join_code = teacher_block.join_code
-                            backfilled_count += 1
-            except Exception as e:
-                logger.error(f"Error backfilling StudentItem {item.id}: {e}")
-                continue
-        
-        # Backfill Transaction records
-        legacy_transactions = Transaction.query.filter(
-            Transaction.join_code.is_(None)
-        ).limit(100).all()
-        
-        for tx in legacy_transactions:
-            try:
-                if tx.student and tx.student.block:
-                    student_blocks = [b.strip().upper() for b in tx.student.block.split(',') if b.strip()]
-                    if student_blocks:
-                        teacher_block = TeacherBlock.query.filter_by(
-                            student_id=tx.student_id,
-                            block=student_blocks[0]
-                        ).first()
-                        
-                        if teacher_block and teacher_block.join_code:
-                            tx.join_code = teacher_block.join_code
-                            backfilled_count += 1
-            except Exception as e:
-                logger.error(f"Error backfilling Transaction {tx.id}: {e}")
-                continue
-        
-        if backfilled_count > 0:
-            db.session.commit()
-            logger.info(f"Backfilled join_code on {backfilled_count} legacy records")
-            total_cleaned += backfilled_count
-        else:
-            logger.info("No legacy records found needing join_code backfill")
-        
-        logger.info(f"Database maintenance completed. Total entries processed: {total_cleaned}")
+        logger.info(
+            "Skipping legacy join_code backfill in nightly maintenance; "
+            "records are expected to already be join_code-scoped."
+        )
+        logger.info(f"Database maintenance completed. Total orphaned entries cleaned: {total_cleaned}")
 
     except Exception as e:
         db.session.rollback()

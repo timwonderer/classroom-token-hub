@@ -226,8 +226,7 @@ def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: in
     """Calculate checking and savings balances scoped to a specific class.
     
     This function ensures consistent balance calculation across the application
-    by including transactions with matching join_code OR NULL join_code (legacy)
-    with matching teacher_id.
+    using strict join_code scoping for class isolation.
     
     Args:
         student (Student): Student object whose balances to calculate
@@ -241,15 +240,13 @@ def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: in
     
     checking_balance = _quantize_currency(sum(
         (tx.amount for tx in student.transactions
-        if tx.account_type == 'checking' and not tx.is_void and
-        (tx.join_code == join_code or (tx.join_code is None and tx.teacher_id == teacher_id))),
+        if tx.account_type == 'checking' and not tx.is_void and tx.join_code == join_code),
         Decimal('0.00')
     ))
     
     savings_balance = _quantize_currency(sum(
         (tx.amount for tx in student.transactions
-        if tx.account_type == 'savings' and not tx.is_void and
-        (tx.join_code == join_code or (tx.join_code is None and tx.teacher_id == teacher_id))),
+        if tx.account_type == 'savings' and not tx.is_void and tx.join_code == join_code),
         Decimal('0.00')
     ))
     
@@ -1163,7 +1160,7 @@ def dashboard():
                 RentPayment.period == period,
                 RentPayment.coverage_month == coverage_month,
                 RentPayment.coverage_year == coverage_year,
-                or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                RentPayment.join_code == join_code
             ).all()
 
             payments = []
@@ -1547,15 +1544,11 @@ def transfer():
             flash("Transfer completed successfully!", "transfer_success")
             return redirect(url_for('student.dashboard'))
 
-    # CRITICAL FIX v2: Get transactions for display - scope by join_code
-    # Include transactions with matching join_code OR NULL join_code (legacy) with matching teacher_id
+    # CRITICAL FIX v2: Get transactions for display - strict join_code scoping.
     transactions = Transaction.query.filter(
         Transaction.student_id == student.id,
         Transaction.is_void == False,
-        or_(
-            Transaction.join_code == join_code,
-            and_(Transaction.join_code.is_(None), Transaction.teacher_id == teacher_id)
-        )
+        Transaction.join_code == join_code
     ).order_by(Transaction.timestamp.desc()).all()
     checking_transactions = [t for t in transactions if t.account_type == 'checking']
     savings_transactions = [t for t in transactions if t.account_type == 'savings']
@@ -2351,7 +2344,7 @@ def shop():
                     RentPayment.period == current_block,
                     RentPayment.coverage_month == coverage_month,
                     RentPayment.coverage_year == coverage_year,
-                    db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                    RentPayment.join_code == join_code
                 ).all()
 
                 valid_payments = _filter_valid_rent_payments(
@@ -2403,10 +2396,7 @@ def shop():
                 StudentItem.expiry_date > utc_now()
             )
         )
-        if join_code:
-            rent_linked_items_query = rent_linked_items_query.filter(StudentItem.join_code == join_code)
-        else:
-            rent_linked_items_query = rent_linked_items_query.filter(StudentItem.join_code.is_(None))
+        rent_linked_items_query = rent_linked_items_query.filter(StudentItem.join_code == join_code)
 
         rent_linked_items = rent_linked_items_query.all()
         for si in rent_linked_items:
@@ -2631,10 +2621,9 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
         Transaction.timestamp <= window_end,
         Transaction.amount.in_(payment_amounts)
     )
-    if join_code:
-        txn_query = txn_query.filter(Transaction.join_code == join_code)
-    else:
-        txn_query = txn_query.filter(Transaction.join_code.is_(None))
+    if not join_code:
+        return []
+    txn_query = txn_query.filter(Transaction.join_code == join_code)
 
     candidate_txns = txn_query.all()
     txns_by_amount = {}
@@ -2762,7 +2751,7 @@ def rent():
             RentPayment.period == current_block,
             RentPayment.coverage_month == coverage_due_date.month,
             RentPayment.coverage_year == coverage_due_date.year,
-            or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
+            RentPayment.join_code == join_code,
         ).all()
 
         valid_payments = _filter_valid_rent_payments(
@@ -2803,7 +2792,7 @@ def rent():
         RentPayment.period == current_block,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
-        or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
+        RentPayment.join_code == join_code,
     ).all()
 
     # Filter out payments where the corresponding transaction was voided
@@ -2812,7 +2801,7 @@ def rent():
         txn = Transaction.query.filter(
             Transaction.student_id == student.id,
             Transaction.type == 'Rent Payment',
-            or_(Transaction.join_code == join_code, Transaction.join_code.is_(None)),
+            Transaction.join_code == join_code,
             Transaction.timestamp >= payment.payment_date - timedelta(seconds=5),
             Transaction.timestamp <= payment.payment_date + timedelta(seconds=5),
             Transaction.amount == -payment.amount_paid
@@ -2852,7 +2841,7 @@ def rent():
     # Get payment history for the current class only
     payment_history = RentPayment.query.filter(
         RentPayment.student_id == student.id,
-        or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
+        RentPayment.join_code == join_code,
     ).order_by(
         RentPayment.payment_date.desc()
     ).limit(24).all()  # Increased to show more history with multiple periods
@@ -2957,7 +2946,7 @@ def rent_pay(period):
             RentPayment.period == period,
             RentPayment.coverage_month == coverage_due_date.month,
             RentPayment.coverage_year == coverage_due_date.year,
-            or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
+            RentPayment.join_code == join_code,
         ).all()
 
         valid_payments = _filter_valid_rent_payments(
@@ -2997,7 +2986,7 @@ def rent_pay(period):
         RentPayment.period == period,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
-        or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
+        RentPayment.join_code == join_code,
     ).all()
 
     # Filter out payments where the corresponding transaction was voided
@@ -3007,7 +2996,7 @@ def rent_pay(period):
         txn = Transaction.query.filter(
             Transaction.student_id == student.id,
             Transaction.type == 'Rent Payment',
-            or_(Transaction.join_code == join_code, Transaction.join_code.is_(None)),
+            Transaction.join_code == join_code,
             Transaction.timestamp >= payment.payment_date - timedelta(seconds=5),
             Transaction.timestamp <= payment.payment_date + timedelta(seconds=5),
             Transaction.amount == -payment.amount_paid
@@ -3243,7 +3232,7 @@ def rent_pay(period):
                     StudentItem.uses_remaining > 0,
                     StudentItem.uses_remaining == -1
                 ),
-                StudentItem.join_code == join_code if join_code else StudentItem.join_code.is_(None),
+                StudentItem.join_code == join_code,
                 db.or_(
                     StudentItem.expiry_date.is_(None),
                     StudentItem.expiry_date > utc_now()
