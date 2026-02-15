@@ -135,6 +135,7 @@ def database_maintenance_job():
     Runs at 2 AM UTC to clean up orphaned entries and maintain data integrity.
     """
     # Import here to avoid circular imports
+    from sqlalchemy import and_, or_, tuple_
     from app.models import StoreItemBlock, TeacherBlock, StoreItem
     from app.extensions import db
 
@@ -148,47 +149,46 @@ def database_maintenance_job():
         # These are blocks that reference classes that no longer exist
         logger.info("Checking for orphaned StoreItemBlock entries...")
         
-        # Get all unique store item blocks
-        all_store_blocks = db.session.query(
-            StoreItemBlock.store_item_id,
-            StoreItemBlock.block
-        ).distinct().all()
-        
-        orphaned_store_blocks = []
-        
-        for store_item_id, block in all_store_blocks:
-            # Get the teacher_id for this store item
-            store_item = db.session.get(StoreItem, store_item_id)
-            if not store_item:
-                # Store item doesn't exist, this is orphaned
-                orphaned_store_blocks.append((store_item_id, block))
-                continue
-            
-            # Check if a TeacherBlock exists for this teacher and block
-            teacher_block_exists = TeacherBlock.query.filter_by(
-                teacher_id=store_item.teacher_id,
-                block=block
-            ).first() is not None
-            
-            if not teacher_block_exists:
-                orphaned_store_blocks.append((store_item_id, block))
-        
-        if orphaned_store_blocks:
-            logger.info(f"Found {len(orphaned_store_blocks)} orphaned StoreItemBlock entries")
-            for store_item_id, block in orphaned_store_blocks:
-                try:
-                    deleted = StoreItemBlock.query.filter_by(
-                        store_item_id=store_item_id,
-                        block=block
-                    ).delete()
-                    total_cleaned += deleted
-                except Exception as e:
-                    logger.error(f"Error deleting StoreItemBlock({store_item_id}, {block}): {e}")
-                    db.session.rollback()
-                    continue
-            
+        orphaned_entries_subq = (
+            db.session.query(
+                StoreItemBlock.store_item_id.label("store_item_id"),
+                StoreItemBlock.block.label("block"),
+            )
+            .outerjoin(StoreItem, StoreItem.id == StoreItemBlock.store_item_id)
+            .outerjoin(
+                TeacherBlock,
+                and_(
+                    TeacherBlock.teacher_id == StoreItem.teacher_id,
+                    TeacherBlock.block == StoreItemBlock.block,
+                ),
+            )
+            .filter(
+                or_(
+                    StoreItem.id.is_(None),
+                    TeacherBlock.id.is_(None),
+                )
+            )
+            .distinct()
+            .subquery()
+        )
+
+        orphaned_count = db.session.query(orphaned_entries_subq).count()
+        if orphaned_count:
+            logger.info("Found %s orphaned StoreItemBlock entries", orphaned_count)
+            total_cleaned = (
+                StoreItemBlock.query
+                .filter(
+                    tuple_(StoreItemBlock.store_item_id, StoreItemBlock.block).in_(
+                        db.session.query(
+                            orphaned_entries_subq.c.store_item_id,
+                            orphaned_entries_subq.c.block,
+                        )
+                    )
+                )
+                .delete(synchronize_session=False)
+            )
             db.session.commit()
-            logger.info(f"Cleaned up {len(orphaned_store_blocks)} orphaned StoreItemBlock entries")
+            logger.info("Cleaned up %s orphaned StoreItemBlock entries", total_cleaned)
         else:
             logger.info("No orphaned StoreItemBlock entries found")
 
