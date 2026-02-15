@@ -54,7 +54,7 @@
               </div>
               <div class="col-md-6 mb-3">
                 {{ form.marketing_badge.label(class="form-label fw-bold") }}
-                {{ form.marketing_badge(class="form-select") }}
+                {{ form.marketing_badge(class="form-select", id="edit_marketing_badge") }}
                 <small class="text-muted">Add a fun marketing badge to attract students</small>
               </div>
             </div>
@@ -164,16 +164,11 @@
                   <div class="col-md-6 mb-3">
                     {{ form.max_claims_count.label(class="form-label fw-bold") }}
                     {{ form.max_claims_count(class="form-control", placeholder="0") }}
-                    <small class="text-muted">Max per period (0 = ∞)</small>
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    {{ form.max_claims_period.label(class="form-label fw-bold") }}
-                    {{ form.max_claims_period(class="form-select") }}
-                    <small class="text-muted">Period type</small>
+                    <small class="text-muted">Max per charge period (0 = ∞)</small>
                   </div>
                 </div>
                 <div class="row">
-                  <div class="col-md-6 mb-3">
+                  <div class="col-md-6 mb-3" id="editMaxClaimAmountGroup">
                     {{ form.max_claim_amount.label(class="form-label fw-bold") }}
                     <div class="input-group">
                       <span class="input-group-text">$</span>
@@ -181,7 +176,7 @@
                     </div>
                     <small class="text-muted">Max payout per claim (0 = ∞)</small>
                   </div>
-                  <div class="col-md-6 mb-0">
+                  <div class="col-md-6 mb-0" id="editMaxPayoutPerPeriodGroup">
                     {{ form.max_payout_per_period.label(class="form-label fw-bold") }}
                     <div class="input-group">
                       <span class="input-group-text">$</span>
@@ -621,6 +616,11 @@ document.addEventListener('DOMContentLoaded', function() {
   const cooldownSection = document.getElementById('cooldownSection');
   const cooldownDays = document.getElementById('cooldownDays');
   const repurchaseBadge = document.querySelector('.repurchase-badge');
+  const editClaimType = document.getElementById('edit_claim_type');
+  const editMaxClaimAmountGroup = document.getElementById('editMaxClaimAmountGroup');
+  const editMaxPayoutPerPeriodGroup = document.getElementById('editMaxPayoutPerPeriodGroup');
+  const editMaxClaimAmountInput = document.getElementById('edit_max_claim_amount');
+  const editMaxPayoutInput = document.getElementById('edit_max_payout_per_period');
 
   function updateRepurchaseRestrictions() {
     if (permanentBlockToggle.checked) {
@@ -660,6 +660,36 @@ document.addEventListener('DOMContentLoaded', function() {
     updateRepurchaseRestrictions(); // Initialize on load
   }
 
+  function setEditMonetaryFieldsVisibility() {
+    if (!editClaimType) return;
+    const isNonMonetary = editClaimType.value === 'non_monetary';
+
+    if (editMaxClaimAmountGroup) {
+      editMaxClaimAmountGroup.style.display = isNonMonetary ? 'none' : '';
+    }
+    if (editMaxPayoutPerPeriodGroup) {
+      editMaxPayoutPerPeriodGroup.style.display = isNonMonetary ? 'none' : '';
+    }
+
+    if (isNonMonetary) {
+      if (editMaxClaimAmountInput) {
+        editMaxClaimAmountInput.value = '';
+        editMaxClaimAmountInput.disabled = true;
+      }
+      if (editMaxPayoutInput) {
+        editMaxPayoutInput.value = '';
+        editMaxPayoutInput.disabled = true;
+      }
+    } else {
+      if (editMaxClaimAmountInput) editMaxClaimAmountInput.disabled = false;
+      if (editMaxPayoutInput) editMaxPayoutInput.disabled = false;
+    }
+  }
+  if (editClaimType) {
+    editClaimType.addEventListener('change', setEditMonetaryFieldsVisibility);
+    setEditMonetaryFieldsVisibility();
+  }
+
   // Tier grouping flow (edit mode)
   const tierToggleEdit = document.getElementById('tierToggleEdit');
   const tierSelectionEdit = document.getElementById('tierSelectionEdit');
@@ -678,7 +708,10 @@ document.addEventListener('DOMContentLoaded', function() {
   function clearTierFields() {
     if (tierCategoryInput) tierCategoryInput.value = '';
     if (tierNameInput) tierNameInput.value = '';
-    if (tierColorInput) tierColorInput.value = '';
+    if (tierColorInput) {
+      tierColorInput.value = '';
+      tierColorInput.dispatchEvent(new Event('change'));
+    }
     if (tierLevelInput) tierLevelInput.value = '';
   }
 
@@ -719,7 +752,10 @@ document.addEventListener('DOMContentLoaded', function() {
   function setTierValues(tier) {
     if (tierCategoryInput) tierCategoryInput.value = tier.id;
     if (tierNameInput) tierNameInput.value = tier.name || '';
-    if (tierColorInput) tierColorInput.value = tier.color || 'primary';
+    if (tierColorInput) {
+      tierColorInput.value = tier.color || 'primary';
+      tierColorInput.dispatchEvent(new Event('change'));
+    }
     updateTierSummary();
     if (tierActionsEdit) tierActionsEdit.style.display = 'flex';
     if (newGroupFieldsEdit) newGroupFieldsEdit.classList.remove('d-none');
@@ -731,7 +767,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (tierSummaryEdit) tierSummaryEdit.classList.add('d-none');
     if (tierActionsEdit) tierActionsEdit.style.display = 'flex';
     if (newGroupFieldsEdit) newGroupFieldsEdit.classList.remove('d-none');
-    if (tierColorInput && !tierColorInput.value) tierColorInput.value = 'primary';
+    if (tierColorInput && !tierColorInput.value) {
+      tierColorInput.value = 'primary';
+      tierColorInput.dispatchEvent(new Event('change'));
+    }
   }
 
   selectTierButtonsEdit.forEach(btn => {
@@ -803,6 +842,85 @@ document.addEventListener('DOMContentLoaded', function() {
   tooltipTriggerList.map(function (tooltipTriggerEl) {
     return new bootstrap.Tooltip(tooltipTriggerEl);
   });
+
+  function renderBadgeLikeSelect(selectId, kind) {
+    const selectEl = document.getElementById(selectId);
+    if (!selectEl || selectEl.dataset.badgeRendered === 'true') return;
+
+    const marketingStyles = {
+      best_value: 'success',
+      most_popular: 'primary',
+      recommended: 'info',
+      premium: 'warning text-dark',
+      limited_time: 'danger',
+      new: 'secondary',
+      fan_favorite: 'primary',
+      yolo: 'warning text-dark',
+      trust_me: 'secondary',
+      definitely_not_scam: 'danger',
+      parents_approved: 'success',
+      as_seen_on_tv: 'info',
+      industry_leading: 'dark',
+      chaos_insurance: 'danger',
+      responsible_choice: 'success',
+      your_friend_has_it: 'primary'
+    };
+    const tierStyles = {
+      primary: 'primary',
+      success: 'success',
+      info: 'info',
+      warning: 'warning text-dark',
+      danger: 'danger',
+      secondary: 'secondary',
+      dark: 'dark'
+    };
+
+    const renderOption = (value, text) => {
+      if (!value) {
+        return `<span class="text-muted">${text}</span>`;
+      }
+      const style = kind === 'marketing' ? (marketingStyles[value] || 'secondary') : (tierStyles[value] || 'secondary');
+      return `<span class="badge bg-${style}">${text}</span>`;
+    };
+
+    selectEl.classList.add('d-none');
+    const wrapper = document.createElement('div');
+    wrapper.className = 'dropdown w-100 mt-1';
+    wrapper.innerHTML = `
+      <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center" type="button" data-bs-toggle="dropdown" aria-expanded="false"></button>
+      <ul class="dropdown-menu w-100"></ul>
+    `;
+    selectEl.insertAdjacentElement('afterend', wrapper);
+    const button = wrapper.querySelector('button');
+    const menu = wrapper.querySelector('ul');
+
+    const updateButton = () => {
+      const selected = selectEl.options[selectEl.selectedIndex];
+      button.innerHTML = renderOption(selected ? selected.value : '', selected ? selected.text : 'Select');
+    };
+
+    Array.from(selectEl.options).forEach(opt => {
+      const li = document.createElement('li');
+      const optionButton = document.createElement('button');
+      optionButton.type = 'button';
+      optionButton.className = 'dropdown-item';
+      optionButton.innerHTML = renderOption(opt.value, opt.text);
+      optionButton.addEventListener('click', () => {
+        selectEl.value = opt.value;
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+        updateButton();
+      });
+      li.appendChild(optionButton);
+      menu.appendChild(li);
+    });
+
+    selectEl.addEventListener('change', updateButton);
+    updateButton();
+    selectEl.dataset.badgeRendered = 'true';
+  }
+
+  renderBadgeLikeSelect('edit_marketing_badge', 'marketing');
+  renderBadgeLikeSelect('tier_color', 'tier');
 });
 </script>
 

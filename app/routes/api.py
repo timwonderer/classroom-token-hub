@@ -10,6 +10,7 @@ import string
 import re
 import pytz
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 
 from flask import Blueprint, request, jsonify, session, current_app
@@ -269,10 +270,41 @@ def purchase_item():
     from datetime import datetime, timedelta
 
     rent_settings = get_rent_settings_for_context(context)
+    current_block = context.get('block', '').strip().upper()
+    now = utc_now()
+    has_paid_rent = False
+    per_use_rent_item = None
+
+    if rent_settings and rent_settings.is_enabled:
+        from app.routes.student import _calculate_rent_coverage_due_date
+        coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
+        if coverage_due_date:
+            coverage_month = coverage_due_date.month
+            coverage_year = coverage_due_date.year
+            coverage_payments = RentPayment.query.filter(
+                RentPayment.student_id == student.id,
+                RentPayment.period == current_block,
+                RentPayment.coverage_month == coverage_month,
+                RentPayment.coverage_year == coverage_year,
+                RentPayment.join_code == join_code
+            ).all()
+            from app.routes.student import _filter_valid_rent_payments
+            valid_payments = _filter_valid_rent_payments(coverage_payments, student.id, join_code)
+            if valid_payments:
+                total_paid = sum(p.amount_paid for p in valid_payments)
+                grace_for_coverage = coverage_due_date + timedelta(days=rent_settings.grace_period_days)
+                late_fee_applies = now > grace_for_coverage
+                required = rent_settings.rent_amount + (rent_settings.late_fee if late_fee_applies else Decimal('0'))
+                has_paid_rent = total_paid >= required
+
+        per_use_rent_item = RentItem.query.filter(
+            RentItem.rent_setting_id == rent_settings.id,
+            RentItem.rent_item_type == 'per_use',
+            RentItem.store_item_id == item.id
+        ).first()
+
     if rent_settings and rent_settings.is_enabled and rent_settings.prevent_purchase_when_late:
         # Check if student is late on rent
-        now = utc_now()
-
         from app.routes.student import _calculate_rent_coverage_due_date
         coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
 
@@ -287,7 +319,6 @@ def purchase_item():
             # Check if past grace period
             if now > grace_end_date:
                 # Check if rent is paid for current coverage period
-                current_block = context.get('block', '').strip().upper()
                 total_paid = db.session.query(db.func.sum(RentPayment.amount_paid)).filter(
                     RentPayment.student_id == student.id,
                     RentPayment.period == current_block,
@@ -319,8 +350,10 @@ def purchase_item():
                             "message": "You cannot make purchases while late on rent. Please pay your rent first."
                         }), 403
 
-    # Check if student has free uses remaining from rent (per-use rent items)
-    if item.is_rent_linked and quantity == 1:
+    # Check if student has free uses remaining from rent (per-use rent items).
+    # Also recover gracefully if a paid-rent student is missing the grant row.
+    if quantity == 1 and (item.is_rent_linked or per_use_rent_item):
+        now_utc = utc_now()
         # Look for an active StudentItem with uses_remaining for this store item
         rent_item_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
@@ -331,12 +364,38 @@ def purchase_item():
             ),
             db.or_(
                 StudentItem.expiry_date.is_(None),
-                StudentItem.expiry_date > utc_now()
+                StudentItem.expiry_date > now_utc
             )
         )
         rent_item_query = rent_item_query.filter(StudentItem.join_code == join_code)
 
         active_rent_item = rent_item_query.first()
+        existing_grant_row = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.store_item_id == item.id,
+            StudentItem.join_code == join_code,
+            StudentItem.uses_remaining.isnot(None),
+            db.or_(
+                StudentItem.expiry_date.is_(None),
+                StudentItem.expiry_date > now_utc
+            )
+        ).first()
+
+        if not active_rent_item and not existing_grant_row and has_paid_rent and per_use_rent_item:
+            # Missing grant edge case: create current-period grant on demand.
+            # This prevents paid-rent students from being charged due to stale data.
+            active_rent_item = StudentItem(
+                student_id=student.id,
+                store_item_id=item.id,
+                join_code=join_code,
+                purchase_date=now_utc,
+                expiry_date=None,
+                status='purchased',
+                is_from_bundle=False,
+                quantity_purchased=1,
+                uses_remaining=per_use_rent_item.use_limit if per_use_rent_item.use_limit else -1
+            )
+            db.session.add(active_rent_item)
 
         if active_rent_item:
             # Free purchase from rent perk - decrement available free uses unless unlimited (-1)
@@ -358,13 +417,13 @@ def purchase_item():
 
             expiry_date = None
             if item.item_type == 'delayed' and item.auto_expiry_days:
-                expiry_date = utc_now() + timedelta(days=item.auto_expiry_days)
+                expiry_date = now_utc + timedelta(days=item.auto_expiry_days)
 
             db.session.add(StudentItem(
                 student_id=student.id,
                 store_item_id=item.id,
                 join_code=join_code,
-                purchase_date=utc_now(),
+                purchase_date=now_utc,
                 expiry_date=expiry_date,
                 status='purchased',
                 is_from_bundle=False,

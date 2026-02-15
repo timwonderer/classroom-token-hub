@@ -51,6 +51,10 @@ from app.utils.time import utc_now, ensure_utc, normalize_for_db
 # Create blueprint
 student_bp = Blueprint('student', __name__, url_prefix='/student')
 
+# Tolerance used to match RentPayment rows with their Transaction rows.
+# This guards against small timestamp drift without weakening ownership checks.
+RENT_PAYMENT_MATCH_TOLERANCE_SECONDS = 300
+
 # -------------------- DATETIME HELPERS --------------------
 
 
@@ -1236,8 +1240,8 @@ def dashboard():
                 txn = Transaction.query.filter(
                     Transaction.student_id == student.id,
                     Transaction.type == 'Rent Payment',
-                    Transaction.timestamp >= payment.payment_date - timedelta(seconds=5),
-                    Transaction.timestamp <= payment.payment_date + timedelta(seconds=5),
+                    Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+                    Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
                     Transaction.amount == -payment.amount_paid
                 ).first()
 
@@ -2124,12 +2128,8 @@ def file_claim(policy_id):
 
     def _get_period_bounds():
         now = utc_now()
-        if policy.max_claims_period == 'year':
-            return (
-                now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
-                now.replace(month=12, day=31, hour=23, minute=59, second=59),
-            )
-        if policy.max_claims_period == 'semester':
+        period_key = (policy.charge_frequency or '').lower()
+        if period_key == 'semester':
             if now.month <= 6:
                 return (
                     now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
@@ -2139,6 +2139,10 @@ def file_claim(policy_id):
                 now.replace(month=7, day=1, hour=0, minute=0, second=0, microsecond=0),
                 now.replace(month=12, day=31, hour=23, minute=59, second=59),
             )
+        if period_key == 'weekly':
+            period_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+            period_end = period_start + timedelta(days=7) - timedelta(seconds=1)
+            return period_start, period_end
         period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         next_month = period_start.replace(day=28) + timedelta(days=4)
         period_end = next_month.replace(day=1) - timedelta(seconds=1)
@@ -2170,7 +2174,7 @@ def file_claim(policy_id):
         ).count()
 
         if claims_count >= policy.max_claims_count:
-            errors.append(f"You have reached the maximum number of claims ({policy.max_claims_count}) for this {policy.max_claims_period}.")
+            errors.append(f"You have reached the maximum number of claims ({policy.max_claims_count}) for this {policy.charge_frequency}.")
 
     period_payouts = None
     remaining_period_cap = None
@@ -2398,6 +2402,7 @@ def shop():
     has_paid_rent = False
     per_period_rent_item_ids = set()
     rent_item_type_by_store_id = {}
+    per_use_limit_by_store_id = {}
 
     if teacher_id and join_code and current_block:
         rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
@@ -2444,6 +2449,11 @@ def shop():
                 for rent_item in rent_store_items
                 if rent_item.store_item_id
             }
+            per_use_limit_by_store_id = {
+                rent_item.store_item_id: (rent_item.use_limit if rent_item.use_limit else -1)
+                for rent_item in rent_store_items
+                if rent_item.store_item_id and rent_item.rent_item_type == 'per_use'
+            }
 
             # Get privilege-type per-period rent items (only these are included/disabled).
             per_period_items = RentItem.query.filter_by(
@@ -2458,6 +2468,7 @@ def shop():
     # Build free uses remaining map for rent-linked per-use items
     rent_free_uses = {}  # {store_item_id: uses_remaining or -1 for unlimited}
     if student:
+        now_utc = utc_now()
         rent_linked_items_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
             StudentItem.uses_remaining != None,
@@ -2467,7 +2478,7 @@ def shop():
             ),
             db.or_(
                 StudentItem.expiry_date.is_(None),
-                StudentItem.expiry_date > utc_now()
+                StudentItem.expiry_date > now_utc
             )
         )
         rent_linked_items_query = rent_linked_items_query.filter(StudentItem.join_code == join_code)
@@ -2476,6 +2487,26 @@ def shop():
         for si in rent_linked_items:
             if si.store_item_id:
                 rent_free_uses[si.store_item_id] = si.uses_remaining
+
+        # Backfill UI for paid-rent students who are entitled to per-use perks
+        # but are missing grant rows (legacy/edge-state). Do not override items
+        # that already have an explicit grant record (including exhausted = 0).
+        if has_paid_rent and per_use_limit_by_store_id:
+            existing_per_use_rows = StudentItem.query.filter(
+                StudentItem.student_id == student.id,
+                StudentItem.join_code == join_code,
+                StudentItem.store_item_id.in_(list(per_use_limit_by_store_id.keys())),
+                StudentItem.uses_remaining.isnot(None),
+                db.or_(
+                    StudentItem.expiry_date.is_(None),
+                    StudentItem.expiry_date > now_utc
+                )
+            ).all()
+            existing_per_use_ids = {row.store_item_id for row in existing_per_use_rows if row.store_item_id}
+
+            for store_item_id, granted_uses in per_use_limit_by_store_id.items():
+                if store_item_id not in existing_per_use_ids and store_item_id not in rent_free_uses:
+                    rent_free_uses[store_item_id] = granted_uses
 
     # Calculate class size for collective goals (count unique students in this class)
     from app.models import TeacherBlock
@@ -2683,8 +2714,8 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
 
     min_payment_date = min(payment_dates)
     max_payment_date = max(payment_dates)
-    window_start = min_payment_date - timedelta(seconds=5)
-    window_end = max_payment_date + timedelta(seconds=5)
+    window_start = min_payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS)
+    window_end = max_payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS)
 
     payment_amounts = {-(p.amount_paid) for p in payments}
 
@@ -2713,7 +2744,7 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
                 continue
             if not txn.timestamp or not payment.payment_date:
                 continue
-            if abs((ensure_utc(txn.timestamp) - ensure_utc(payment.payment_date)).total_seconds()) > 5:
+            if abs((ensure_utc(txn.timestamp) - ensure_utc(payment.payment_date)).total_seconds()) > RENT_PAYMENT_MATCH_TOLERANCE_SECONDS:
                 continue
             used_txn_ids.add(txn.id)
             valid_payments.append(payment)
@@ -2876,8 +2907,8 @@ def rent():
             Transaction.student_id == student.id,
             Transaction.type == 'Rent Payment',
             Transaction.join_code == join_code,
-            Transaction.timestamp >= payment.payment_date - timedelta(seconds=5),
-            Transaction.timestamp <= payment.payment_date + timedelta(seconds=5),
+            Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+            Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
             Transaction.amount == -payment.amount_paid
         ).first()
 
@@ -3071,8 +3102,8 @@ def rent_pay(period):
             Transaction.student_id == student.id,
             Transaction.type == 'Rent Payment',
             Transaction.join_code == join_code,
-            Transaction.timestamp >= payment.payment_date - timedelta(seconds=5),
-            Transaction.timestamp <= payment.payment_date + timedelta(seconds=5),
+            Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+            Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
             Transaction.amount == -payment.amount_paid
         ).first()
 
