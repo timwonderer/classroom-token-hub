@@ -1941,7 +1941,7 @@ class FeatureSettings(db.Model):
     def get_defaults(cls):
         """Return default feature settings dictionary."""
         return {
-            'payroll_enabled': True,
+            'payroll_enabled': True,  # Always enabled - payroll is mandatory
             'insurance_enabled': True,
             'banking_enabled': True,
             'rent_enabled': True,

@@ -352,7 +352,7 @@
               </div>
               <div class="text-end">
                 <span class="badge {{ 'bg-success' if item.is_active else 'bg-secondary' }}">{{ 'Active' if item.is_active else 'Inactive' }}</span>
-                {% if item.is_rent_linked %}
+                {% if item.is_rent_linked or item.id in rent_managed_item_ids %}
                   <span class="badge bg-info">Rent Perk</span>
                 {% endif %}
               </div>
@@ -362,7 +362,7 @@
                 {{ item.description|striptags|truncate(160) if item.description else 'No description provided.' }}
               </p>
 
-              {% if item.is_rent_linked %}
+              {% if item.is_rent_linked or item.id in rent_managed_item_ids %}
               <div class="mb-2">
                 <span class="badge bg-info">Rent Perk</span>
                 <span class="text-muted small ms-1">Managed by rent settings</span>
@@ -431,12 +431,9 @@
                 <a href="{{ url_for('admin.edit_store_item', item_id=item.id) }}" class="btn btn-outline-primary" title="Edit">
                   <i class="bi bi-pencil"></i>
                 </a>
-                {% if item.is_rent_linked %}
+                {% if item.is_rent_linked or item.id in rent_managed_item_ids %}
                 <button class="btn btn-outline-warning" disabled title="Managed by Rent Settings">
                   <i class="bi bi-eye-slash"></i>
-                </button>
-                <button class="btn btn-outline-danger" disabled title="Remove from Rent Settings to delete">
-                  <i class="bi bi-trash"></i>
                 </button>
                 {% else %}
                 <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#deactivateItemModal" data-item-id="{{ item.id }}" data-item-name="{{ item.name }}" title="Deactivate">

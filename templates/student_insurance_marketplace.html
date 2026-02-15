@@ -9,6 +9,7 @@
 
 {% block content %}
 
+{% if feature_settings.rent_enabled and feature_settings.insurance_enabled %}
 <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
     <ul class="nav nav-pills bills-tabs mb-0">
         <li class="nav-item">
@@ -28,6 +29,7 @@
     </div>
     {% endif %}
 </div>
+{% endif %}
 
 <!-- Tabs Navigation -->
 <ul class="nav nav-tabs mb-4" id="insuranceTabs" role="tablist">
