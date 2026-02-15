@@ -8,13 +8,18 @@ Times are stored as UTC in the database.
 from datetime import timezone, timedelta
 from decimal import Decimal, InvalidOperation
 import enum
+import logging
 import uuid
 
 import sqlalchemy as sa
+from sqlalchemy import func
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.hybrid import hybrid_property
 from app.extensions import db
 from app.utils.encryption import PIIEncryptedType
 from app.utils.time import utc_now, ensure_utc
+
+logger = logging.getLogger(__name__)
 
 
 def _quantize_currency(value):
@@ -55,6 +60,18 @@ def _current_utc_year():
 
 
 # -------------------- MODELS --------------------
+
+
+# -------------------- ENUMS --------------------
+
+class TransactionStatus(str, enum.Enum):
+    PENDING = 'pending'
+    POSTED = 'posted'
+    VOID = 'void'
+
+class AccountType(str, enum.Enum):
+    CHECKING = 'checking'
+    SAVINGS = 'savings'
 
 # -------------------- ANALYTICS ALERT MODEL --------------------
 
@@ -310,12 +327,53 @@ class Student(db.Model):
         """
         if join_code:
             # Proper scoping by join_code (period-level isolation)
-            total = sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.account_type == 'checking' and not tx.is_void and tx.join_code == join_code),
-                Decimal('0.00')
-            )
-            return _quantize_currency(total)
+            # Use Ledger + Settlement model (BalanceCache)
+            from app.models import BalanceCache, Transaction, TransactionStatus 
+            from app.utils.banking import settle_balances
+            
+            # 1. Eager Settlement (Best Effort)
+            try:
+                settle_balances(self.id, join_code)
+            except SQLAlchemyError as exc:
+                logger.warning(
+                    "Eager settlement failed for student %s, join_code %s: %s",
+                    self.id,
+                    join_code,
+                    exc,
+                )
+
+            # 2. Read Posted from Cache
+            cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()
+            if cache:
+                posted = Decimal(cache.posted_checking_balance_cents) / 100
+            else:
+                # Legacy fallback: derive posted as (all non-void) - (pending).
+                all_non_void = db.session.query(func.sum(Transaction.amount)).filter(
+                    Transaction.student_id == self.id,
+                    Transaction.join_code == join_code,
+                    Transaction.account_type == 'checking',
+                    Transaction.is_void == False,
+                ).scalar() or Decimal('0.00')
+                pending_fallback = db.session.query(func.sum(Transaction.amount)).filter(
+                    Transaction.student_id == self.id,
+                    Transaction.join_code == join_code,
+                    Transaction.status == TransactionStatus.PENDING,
+                    Transaction.account_type == 'checking',
+                    Transaction.is_void == False,
+                ).scalar() or Decimal('0.00')
+                posted = all_non_void - pending_fallback
+
+            # 3. Add Pending
+            pending = db.session.query(func.sum(Transaction.amount)).filter(
+                Transaction.student_id == self.id,
+                Transaction.join_code == join_code,
+                Transaction.status == TransactionStatus.PENDING,
+                Transaction.account_type == 'checking',
+                Transaction.is_void == False
+            ).scalar() or Decimal('0.00')
+
+            return _quantize_currency(posted + pending)
+
         elif teacher_id:
             # DEPRECATED: Only use this for backward compatibility during migration
             # This will show aggregated balance across all periods with same teacher
@@ -327,6 +385,22 @@ class Student(db.Model):
             return _quantize_currency(total)
         else:
             # No scope provided - return total across all classes
+            # Optimized: Sum all BalanceCaches + All Pending Transactions
+            from app.models import BalanceCache, Transaction, TransactionStatus
+            
+            # Post-migration, most data should be in BalanceCache.
+            # But we can't easily iterate all joins to settle them.
+            # So just summing BalanceCache + Transaction(Pending) + Transaction(Legacy/NullJoin)
+            
+            # To be safe and compatible with legacy (which iterates transactions), 
+            # we can stick to iterating transactions for global sum 
+            # UNTIL we are sure BalanceCache covers everything.
+            # Since we verified UNKNOWN cache is 0, logic implies we can trust cache?
+            # But global view might include "legacy" transactions that are not in cache (if any existed)?
+            # My check showed 0 UNKNOWN cache, meaning NO transactions had NULL join code (assuming script correct).
+            
+            # For now, keep the old iterative logic for global/legacy to be safe, 
+            # as global view is rarely performance critical (or if it is, we optimize later).
             total = sum(
                 (_quantize_currency(tx.amount) for tx in self.transactions
                 if tx.account_type == 'checking' and not tx.is_void),
@@ -350,12 +424,53 @@ class Student(db.Model):
         """
         if join_code:
             # Proper scoping by join_code (period-level isolation)
-            total = sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.account_type == 'savings' and not tx.is_void and tx.join_code == join_code),
-                Decimal('0.00')
-            )
-            return _quantize_currency(total)
+            # Use Ledger + Settlement model (BalanceCache)
+            from app.models import BalanceCache, Transaction, TransactionStatus 
+            from app.utils.banking import settle_balances
+            
+            # 1. Eager Settlement (Best Effort)
+            try:
+                settle_balances(self.id, join_code)
+            except SQLAlchemyError as exc:
+                logger.warning(
+                    "Eager settlement failed for student %s, join_code %s: %s",
+                    self.id,
+                    join_code,
+                    exc,
+                )
+
+            # 2. Read Posted from Cache
+            cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()
+            if cache:
+                posted = Decimal(cache.posted_savings_balance_cents) / 100
+            else:
+                # Legacy fallback: derive posted as (all non-void) - (pending).
+                all_non_void = db.session.query(func.sum(Transaction.amount)).filter(
+                    Transaction.student_id == self.id,
+                    Transaction.join_code == join_code,
+                    Transaction.account_type == 'savings',
+                    Transaction.is_void == False,
+                ).scalar() or Decimal('0.00')
+                pending_fallback = db.session.query(func.sum(Transaction.amount)).filter(
+                    Transaction.student_id == self.id,
+                    Transaction.join_code == join_code,
+                    Transaction.status == TransactionStatus.PENDING,
+                    Transaction.account_type == 'savings',
+                    Transaction.is_void == False,
+                ).scalar() or Decimal('0.00')
+                posted = all_non_void - pending_fallback
+
+            # 3. Add Pending
+            pending = db.session.query(func.sum(Transaction.amount)).filter(
+                Transaction.student_id == self.id,
+                Transaction.join_code == join_code,
+                Transaction.status == TransactionStatus.PENDING,
+                Transaction.account_type == 'savings',
+                Transaction.is_void == False
+            ).scalar() or Decimal('0.00')
+
+            return _quantize_currency(posted + pending)
+
         elif teacher_id:
             # DEPRECATED: Only use this for backward compatibility during migration
             # This will show aggregated balance across all periods with same teacher
@@ -592,6 +707,19 @@ class Transaction(db.Model):
     # All times stored as UTC (see header note)
     timestamp = db.Column(db.DateTime(timezone=True), default=utc_now)
     account_type = db.Column(db.String(20), default='checking')
+
+    # Ledger Fields
+    status = db.Column(
+        db.Enum(TransactionStatus),
+        default=TransactionStatus.POSTED,
+        nullable=False,
+        server_default=TransactionStatus.POSTED.name,
+    )
+    amount_cents = db.Column(db.Integer, nullable=False)  # Signed integer (e.g. 100 = $1.00)
+    posted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    voided_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    effective_at = db.Column(db.DateTime(timezone=True), default=utc_now)
+
     description = db.Column(db.String(255))
     is_void = db.Column(db.Boolean, default=False)
     # References for compensating/reversal ledger entries.
@@ -604,6 +732,43 @@ class Transaction(db.Model):
 
     # Relationship to track which teacher created this transaction
     teacher = db.relationship('Admin', backref=db.backref('transactions', lazy='dynamic'))
+
+    __table_args__ = (
+        db.Index('ix_transaction_ledger_scope', 'join_code', 'student_id', 'status', 'account_type'),
+        db.Index('ix_transaction_student_ledger', 'join_code', 'student_id'),
+    )
+
+
+@sa.event.listens_for(Transaction, "before_insert")
+@sa.event.listens_for(Transaction, "before_update")
+def _sync_transaction_amount_cents(_mapper, _connection, target):
+    """Keep amount_cents consistent with amount for all write paths."""
+    if target.amount is None:
+        return
+    target.amount_cents = int(_quantize_currency(target.amount) * 100)
+
+
+class BalanceCache(db.Model):
+    """
+    snapshot of posted balances to allow O(1) reads.
+    Available Balance = Posted Balance (Cache) + Sum(Pending Transactions from Ledger)
+    """
+    __tablename__ = 'balance_cache'
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
+    join_code = db.Column(db.String(20), nullable=False)
+
+    # Balances stored in CENTS to avoid floating point issues
+    posted_checking_balance_cents = db.Column(db.Integer, default=0, nullable=False)
+    posted_savings_balance_cents = db.Column(db.Integer, default=0, nullable=False)
+
+    last_settlement_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now)
+
+    __table_args__ = (
+        db.UniqueConstraint('join_code', 'student_id', name='uq_balance_cache_scope'),
+    )
 
 
 # ---- TapEvent Model (append-only) ----
@@ -730,6 +895,24 @@ class HallPassSettings(db.Model):
         for pt in self.pass_types:
             pt.setdefault('enabled', True)
         return self.pass_types
+
+
+class PayrollCache(db.Model):
+    """
+    Stores the cached result of the expensive payroll calculation.
+    One record per teacher.
+    """
+    __tablename__ = 'payroll_cache'
+
+    id = db.Column(db.Integer, primary_key=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False, unique=True)
+    cached_breakdown = db.Column(db.JSON, nullable=True)  # Stores the breakdown: {"(id, code)": amount}
+    last_calculated_at = db.Column(db.DateTime(timezone=True), default=utc_now)
+
+    teacher = db.relationship('Admin', backref=db.backref('payroll_cache', uselist=False, cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<PayrollCache teacher_id={self.teacher_id} updated={self.last_calculated_at}>'
 
 
 # -------------------- STORE MODELS --------------------

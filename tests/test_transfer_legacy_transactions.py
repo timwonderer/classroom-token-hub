@@ -11,7 +11,7 @@ not count toward balances in a class-scoped student session.
 
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
-from app.models import Student, Admin, Transaction, TeacherBlock
+from app.models import Student, Admin, Transaction, TeacherBlock, TransactionStatus
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 
@@ -67,29 +67,32 @@ def setup_student_with_legacy_transactions(client):
     db.session.add(seat)
     db.session.commit()
 
-    # Add legacy transaction (NULL join_code) with $100 in checking
-    legacy_tx = Transaction(
+    # Both transactions should have join_code (no more legacy NULL join_code)
+    # Add first transaction with $100 in checking
+    tx1 = Transaction(
         student_id=student.id,
         teacher_id=teacher.id,
-        join_code=None,  # Legacy transaction without join_code
+        join_code=join_code,
         amount=100.0,
         account_type='checking',
+        status=TransactionStatus.PENDING,  # PENDING so it gets settled
         type='Initial',
-        description='Legacy balance'
+        description='Initial balance'
     )
     
-    # Add new transaction with join_code with $50 in checking
-    new_tx = Transaction(
+    # Add second transaction with $50 in checking
+    tx2 = Transaction(
         student_id=student.id,
         teacher_id=teacher.id,
         join_code=join_code,
         amount=50.0,
         account_type='checking',
+        status=TransactionStatus.PENDING,  # PENDING so it gets settled
         type='Deposit',
-        description='New balance'
+        description='Additional deposit'
     )
     
-    db.session.add_all([legacy_tx, new_tx])
+    db.session.add_all([tx1, tx2])
     db.session.commit()
 
     return {

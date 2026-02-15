@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from sqlalchemy import func
 
 from app.extensions import db
-from app.models import Transaction, _quantize_currency
+from app.models import Transaction, TransactionStatus, _quantize_currency
 
 
 def evaluate_overdraft_allowance(student, debit_amount, banking_settings, teacher_id=None, join_code=None):
@@ -111,6 +111,7 @@ def charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, j
             join_code=join_code,
             amount=-fee_amount,
             account_type='checking',
+            status=TransactionStatus.PENDING,
             type='overdraft_fee',
             description=(
                 f'Overdraft fee (declined transaction balance: ${current_balance:.2f})'
