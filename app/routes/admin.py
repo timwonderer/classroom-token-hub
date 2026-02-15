@@ -36,7 +36,7 @@ import pytz
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TapEvent, StoreItem, StudentItem,
+    Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
@@ -70,7 +70,7 @@ from app.utils.passwordless_client import (
     get_public_api_key
 )
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
-from app.payroll import calculate_payroll, calculate_payroll_breakdown
+from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
 from app.attendance import get_last_payroll_time, calculate_unpaid_attendance_seconds, get_join_code_for_student_period
 import time
 
@@ -831,7 +831,7 @@ def dashboard():
 
     # --- Payroll Info ---
     last_payroll_time = get_last_payroll_time()
-    payroll_summary = calculate_payroll(students, last_payroll_time, teacher_id=current_admin_id)
+    payroll_summary, payroll_updated_at = get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=current_admin_id)
     total_payroll_estimate = sum(payroll_summary.values())
 
     # Calculate next payroll date (keep in UTC for template conversion)
@@ -876,6 +876,7 @@ def dashboard():
         total_transactions_today=total_transactions_today,
         # Payroll info
         total_payroll_estimate=total_payroll_estimate,
+        payroll_updated_at=payroll_updated_at,
         next_payroll_date=next_payroll_date,
         # Limited data for cards
         recent_redemptions=recent_redemptions,
@@ -964,6 +965,7 @@ def give_bonus_all():
             amount=amount,
             type=tx_type,
             description=title,
+            status=TransactionStatus.PENDING,
             account_type='checking'
         )
         db.session.add(tx)
@@ -976,6 +978,7 @@ def give_bonus_all():
                 join_code=join_code,
                 amount=-shortfall,
                 account_type='savings',
+                status=TransactionStatus.PENDING,
                 type='Withdrawal',
                 description='Overdraft protection transfer to checking'
             )
@@ -985,6 +988,7 @@ def give_bonus_all():
                 join_code=join_code,
                 amount=shortfall,
                 account_type='checking',
+                status=TransactionStatus.PENDING,
                 type='Deposit',
                 description='Overdraft protection transfer from savings'
             )
@@ -5252,6 +5256,7 @@ def process_claim(claim_id):
                 join_code=join_code,  # CRITICAL: Add join_code for period isolation
                 amount=approved_amount,
                 account_type='checking',
+                status=TransactionStatus.PENDING,
                 type='insurance_reimbursement',
                 description=transaction_description,
             )
@@ -5319,6 +5324,8 @@ def void_transaction(transaction_id):
         return _void_error("Transaction is already voided.")
 
     try:
+        is_pending = (tx.status == TransactionStatus.PENDING)
+
         if tx.type == 'purchase':
             purchase_match = re.match(
                 r'^Purchase:\s*(?P<name>.+?)(?:\s+\(x(?P<qty>\d+)\))?(?:\s+\[.*\])?$',
@@ -5387,6 +5394,7 @@ def void_transaction(transaction_id):
                 join_code=tx.join_code,
                 amount=Decimal('0.00'),
                 account_type=tx.account_type or 'checking',
+                status=TransactionStatus.PENDING,
                 type='void_item_removed',
                 description=f"item removed - {store_item.name}",
             ))
@@ -5403,6 +5411,7 @@ def void_transaction(transaction_id):
                 join_code=tx.join_code,
                 amount=abs(tx.amount or Decimal('0.00')),
                 account_type=tx.account_type or 'checking',
+                status=TransactionStatus.PENDING,
                 type='refund',
                 original_transaction_id=tx.id,
                 description=f"Void refund for transaction #{tx.id}: {tx.description}",
@@ -5430,19 +5439,21 @@ def void_transaction(transaction_id):
                 )
                 db.session.delete(matched_rent_payment)
 
-            reversal_tx = Transaction(
-                student_id=tx.student_id,
-                teacher_id=tx.teacher_id,
-                join_code=tx.join_code,
-                amount=abs(tx.amount or Decimal('0.00')),
-                account_type=tx.account_type or 'checking',
-                type='refund',
-                original_transaction_id=tx.id,
-                description=f"Void refund for transaction #{tx.id}: {tx.description}",
-            )
-            db.session.add(reversal_tx)
-            db.session.flush()
-            tx.reversal_transaction_id = reversal_tx.id
+            if not is_pending:
+                reversal_tx = Transaction(
+                    student_id=tx.student_id,
+                    teacher_id=tx.teacher_id,
+                    join_code=tx.join_code,
+                    amount=abs(tx.amount or Decimal('0.00')),
+                    account_type=tx.account_type or 'checking',
+                    status=TransactionStatus.PENDING,
+                    type='refund',
+                    original_transaction_id=tx.id,
+                    description=f"Void refund for transaction #{tx.id}: {tx.description}",
+                )
+                db.session.add(reversal_tx)
+                db.session.flush()
+                tx.reversal_transaction_id = reversal_tx.id
 
         elif tx.type == 'insurance_premium':
             policy_title = None
@@ -5474,21 +5485,46 @@ def void_transaction(transaction_id):
                 matched_enrollment.payment_current = False
                 matched_enrollment.days_unpaid = max(1, matched_enrollment.days_unpaid or 0)
 
-            reversal_tx = Transaction(
-                student_id=tx.student_id,
-                teacher_id=tx.teacher_id,
-                join_code=tx.join_code,
-                amount=abs(tx.amount or Decimal('0.00')),
-                account_type=tx.account_type or 'checking',
-                type='refund',
-                original_transaction_id=tx.id,
-                description=f"Void refund for transaction #{tx.id}: {tx.description}",
-            )
-            db.session.add(reversal_tx)
-            db.session.flush()
-            tx.reversal_transaction_id = reversal_tx.id
+            if not is_pending:
+                reversal_tx = Transaction(
+                    student_id=tx.student_id,
+                    teacher_id=tx.teacher_id,
+                    join_code=tx.join_code,
+                    amount=abs(tx.amount or Decimal('0.00')),
+                    account_type=tx.account_type or 'checking',
+                    status=TransactionStatus.PENDING,
+                    type='refund',
+                    original_transaction_id=tx.id,
+                    description=f"Void refund for transaction #{tx.id}: {tx.description}",
+                )
+                db.session.add(reversal_tx)
+                db.session.flush()
+                tx.reversal_transaction_id = reversal_tx.id
+        
+        else:
+            # Generic reversal for other types (if posted)
+            if not is_pending:
+                # Invert amount
+                reversal_amount = -(tx.amount or Decimal('0.00'))
+                reversal_tx = Transaction(
+                    student_id=tx.student_id,
+                    teacher_id=tx.teacher_id,
+                    join_code=tx.join_code,
+                    amount=reversal_amount,
+                    account_type=tx.account_type or 'checking',
+                    status=TransactionStatus.PENDING,
+                    type='refund',
+                    original_transaction_id=tx.id,
+                    description=f"Void refund for transaction #{tx.id}: {tx.description}",
+                )
+                db.session.add(reversal_tx)
+                db.session.flush()
+                tx.reversal_transaction_id = reversal_tx.id
 
         tx.is_void = True
+        if is_pending:
+            tx.status = TransactionStatus.VOID
+            tx.voided_at = utc_now()
         db.session.commit()
         current_app.logger.info(f"Transaction {transaction_id} voided")
     except SQLAlchemyError as e:
@@ -5852,6 +5888,7 @@ def run_payroll():
                 join_code=join_code,  # CRITICAL: Add join_code for proper scoping
                 amount=amount,
                 description=f"Payroll based on attendance",
+                status=TransactionStatus.PENDING,
                 account_type="checking",
                 type="payroll"
             )
@@ -5977,7 +6014,7 @@ def payroll():
     )
 
     # Calculate payroll estimates
-    payroll_summary = calculate_payroll(students, last_payroll_time, teacher_id=admin_id)
+    payroll_summary, payroll_updated_at = get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=admin_id)
     total_payroll_estimate = sum(payroll_summary.values())
 
     # Build class_labels_by_block dictionary
@@ -6104,6 +6141,7 @@ def payroll():
         next_payroll_date=next_pay_date_utc,  # Pass UTC timestamp
         next_payroll_by_block=next_payroll_by_block,
         total_payroll_estimate=total_payroll_estimate,
+        payroll_updated_at=payroll_updated_at,
         total_students=len(students),
         avg_payout=avg_payout,
         total_blocks=len(blocks),
@@ -6539,7 +6577,31 @@ def void_payroll_transaction(transaction_id):
         if transaction.is_void:
             return jsonify({'success': False, 'message': 'Transaction is already voided'}), 400
 
+        is_pending = (transaction.status == TransactionStatus.PENDING)
+
         transaction.is_void = True
+        
+        if is_pending:
+            transaction.status = TransactionStatus.VOID
+            transaction.voided_at = utc_now()
+        else:
+            # Create reversal for posted transaction
+            reversal_amount = -(transaction.amount or Decimal('0.00'))
+            reversal_tx = Transaction(
+                student_id=transaction.student_id,
+                teacher_id=transaction.teacher_id,
+                join_code=transaction.join_code,
+                amount=reversal_amount,
+                account_type=transaction.account_type or 'checking',
+                status=TransactionStatus.PENDING,
+                type='refund',
+                original_transaction_id=transaction.id,
+                description=f"Void refund for transaction #{transaction.id}: {transaction.description}",
+            )
+            db.session.add(reversal_tx)
+            db.session.flush()
+            transaction.reversal_transaction_id = reversal_tx.id
+
         db.session.commit()
 
         return jsonify({'success': True, 'message': 'Transaction voided successfully'})
@@ -6571,7 +6633,33 @@ def void_transactions_bulk():
                 .first()
             )
             if transaction and not transaction.is_void:
+                is_pending = (transaction.status == TransactionStatus.PENDING)
                 transaction.is_void = True
+                
+                if is_pending:
+                    transaction.status = TransactionStatus.VOID
+                    transaction.voided_at = utc_now()
+                else:
+                    # Create reversal for posted transaction
+                    reversal_amount = -(transaction.amount or Decimal('0.00'))
+                    reversal_tx = Transaction(
+                        student_id=transaction.student_id,
+                        teacher_id=transaction.teacher_id,
+                        join_code=transaction.join_code,
+                        amount=reversal_amount,
+                        account_type=transaction.account_type or 'checking',
+                        status=TransactionStatus.PENDING,
+                        type='refund',
+                        original_transaction_id=transaction.id,
+                        description=f"Void refund for transaction #{transaction.id}: {transaction.description}",
+                    )
+                    db.session.add(reversal_tx)
+                    # No flush here to avoid performance hit in loop? 
+                    # Actually we need ID for reversal_transaction_id?
+                    # Yes, linking them is good practice.
+                    db.session.flush()
+                    transaction.reversal_transaction_id = reversal_tx.id
+
                 count += 1
 
         db.session.commit()
@@ -6616,6 +6704,7 @@ def payroll_apply_reward(reward_id):
                     amount=reward.amount,
                     description=f"Reward: {reward.name}",
                     account_type='checking',
+                    status=TransactionStatus.PENDING,
                     type='reward',
                     timestamp=utc_now()
                 )
@@ -6687,6 +6776,7 @@ def payroll_apply_fine(fine_id):
                     amount=-abs(fine.amount),  # Negative for fine
                     description=f"Fine: {fine.name}",
                     account_type='checking',
+                    status=TransactionStatus.PENDING,
                     type='fine',
                     timestamp=utc_now()
                 )
@@ -6700,6 +6790,7 @@ def payroll_apply_fine(fine_id):
                         join_code=join_code,
                         amount=-shortfall,
                         account_type='savings',
+                        status=TransactionStatus.PENDING,
                         type='Withdrawal',
                         description='Overdraft protection transfer to checking'
                     )
@@ -6709,6 +6800,7 @@ def payroll_apply_fine(fine_id):
                         join_code=join_code,
                         amount=shortfall,
                         account_type='checking',
+                        status=TransactionStatus.PENDING,
                         type='Deposit',
                         description='Overdraft protection transfer from savings'
                     )
@@ -6795,6 +6887,7 @@ def payroll_manual_payment():
                         amount=amount,
                         description=f"Manual Payment: {description}",
                         account_type=account_type,
+                        status=TransactionStatus.PENDING,
                         type='manual_payment',
                         timestamp=utc_now()
                     )
@@ -6808,6 +6901,7 @@ def payroll_manual_payment():
                             join_code=join_code,
                             amount=-shortfall,
                             account_type='savings',
+                            status=TransactionStatus.PENDING,
                             type='Withdrawal',
                             description='Overdraft protection transfer to checking'
                         )
@@ -6817,6 +6911,7 @@ def payroll_manual_payment():
                             join_code=join_code,
                             amount=shortfall,
                             account_type='checking',
+                            status=TransactionStatus.PENDING,
                             type='Deposit',
                             description='Overdraft protection transfer from savings'
                         )
