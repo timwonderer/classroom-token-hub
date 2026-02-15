@@ -11,55 +11,67 @@ Usage:
 
 from app.extensions import db
 from app.models import StoreItemBlock, TeacherBlock, StoreItem
+from sqlalchemy import and_, or_, tuple_
 
 def cleanup_orphaned_store_blocks():
     """Remove StoreItemBlock entries for non-existent classes."""
-    
-    # Get all unique blocks from StoreItemBlock
-    all_store_blocks = db.session.query(
-        StoreItemBlock.store_item_id,
-        StoreItemBlock.block
-    ).distinct().all()
-    
-    orphaned_entries = []
-    
-    for store_item_id, block in all_store_blocks:
-        # Get the teacher_id for this store item
-        store_item = db.session.get(StoreItem, store_item_id)
-        if not store_item:
-            # Store item doesn't exist, this is orphaned
-            orphaned_entries.append((store_item_id, block))
-            continue
-        
-        # Check if a TeacherBlock exists for this teacher and block
-        teacher_block_exists = TeacherBlock.query.filter_by(
-            teacher_id=store_item.teacher_id,
-            block=block
-        ).first() is not None
-        
-        if not teacher_block_exists:
-            orphaned_entries.append((store_item_id, block))
-    
+
+    orphaned_entries_subq = (
+        db.session.query(
+            StoreItemBlock.store_item_id.label("store_item_id"),
+            StoreItemBlock.block.label("block"),
+        )
+        .outerjoin(StoreItem, StoreItem.id == StoreItemBlock.store_item_id)
+        .outerjoin(
+            TeacherBlock,
+            and_(
+                TeacherBlock.teacher_id == StoreItem.teacher_id,
+                TeacherBlock.block == StoreItemBlock.block,
+            ),
+        )
+        .filter(
+            or_(
+                StoreItem.id.is_(None),
+                TeacherBlock.id.is_(None),
+            )
+        )
+        .distinct()
+        .subquery()
+    )
+
+    orphaned_entries = db.session.query(
+        orphaned_entries_subq.c.store_item_id,
+        orphaned_entries_subq.c.block,
+    ).all()
+
     if not orphaned_entries:
         print("No orphaned StoreItemBlock entries found.")
         return 0
-    
+
     print(f"Found {len(orphaned_entries)} orphaned StoreItemBlock entries:")
     for store_item_id, block in orphaned_entries:
         print(f"  - StoreItem ID {store_item_id}, Block '{block}'")
-    
-    # Delete orphaned entries
-    deleted_count = 0
-    for store_item_id, block in orphaned_entries:
-        result = StoreItemBlock.query.filter_by(
-            store_item_id=store_item_id,
-            block=block
-        ).delete()
-        deleted_count += result
-    
-    db.session.commit()
-    print(f"\nSuccessfully deleted {deleted_count} orphaned StoreItemBlock entries.")
-    return deleted_count
+
+    try:
+        deleted_count = (
+            StoreItemBlock.query
+            .filter(
+                tuple_(StoreItemBlock.store_item_id, StoreItemBlock.block).in_(
+                    db.session.query(
+                        orphaned_entries_subq.c.store_item_id,
+                        orphaned_entries_subq.c.block,
+                    )
+                )
+            )
+            .delete(synchronize_session=False)
+        )
+        db.session.commit()
+        print(f"\nSuccessfully deleted {deleted_count} orphaned StoreItemBlock entries.")
+        return deleted_count
+    except Exception as exc:
+        db.session.rollback()
+        print(f"Cleanup failed: {exc}")
+        raise
 
 if __name__ == "__main__":
     cleanup_orphaned_store_blocks()
