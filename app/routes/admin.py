@@ -6047,14 +6047,25 @@ def payroll():
     # Get student scope subquery for filtering
     student_ids_subq = _student_scope_subquery()
 
+    # Get admin ID for filtering
+    admin_id = session.get("admin_id")
+
     # Get all students
     students = _scoped_students().all()
+    join_codes_by_student = _get_admin_owned_join_codes_by_student(admin_id, [s.id for s in students])
+    scoped_balances_by_student = {}
+    for student in students:
+        checking_balance, savings_balance, _earnings = _get_scoped_student_financial_totals(
+            student,
+            join_codes_by_student.get(student.id, set()),
+        )
+        scoped_balances_by_student[student.id] = {
+            'checking': checking_balance,
+            'savings': savings_balance,
+        }
 
     # Get all blocks (split multi-block assignments like "A, B")
     blocks = sorted({b.strip() for s in students for b in (s.block or "").split(',') if b.strip()})
-
-    # Get admin ID for filtering
-    admin_id = session.get("admin_id")
 
     # Check if payroll settings exist for this teacher
     has_settings = PayrollSettings.query.filter_by(teacher_id=admin_id).first() is not None
@@ -6278,6 +6289,7 @@ def payroll():
         # Manual Payment tab
         manual_payment_form=manual_payment_form,
         all_students=students,
+        scoped_balances_by_student=scoped_balances_by_student,
         # History tab
         payroll_history=payroll_history,
         # CWI Configuration
