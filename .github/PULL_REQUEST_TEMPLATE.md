@@ -1,9 +1,23 @@
-## Schema Change Gate Classification (required for schema changes)
+## PR Mode (Required – Select Exactly ONE)
 
-<!--
-Required if this PR modifies app/models.py, app/models/**, or migrations/versions/**.
-Select exactly one classification for schema-affecting changes.
+<!-- CI will fail if:
+     - Both options are selected
+     - Neither option is selected
 -->
+
+- [ ] Standard PR (Feature / Bug / Refactor / Docs / Performance)
+- [ ] Audit PR (Read-Only, Documentation-Only – No Source Changes Allowed)
+
+---
+
+# STANDARD PR SECTION
+
+<!-- Complete this section ONLY if "Standard PR" is selected above. -->
+
+## Schema Change Gate Classification (Required for schema changes)
+
+<!-- Required if this PR modifies app/models.py, app/models/**, or migrations/versions/**.
+     Select exactly ONE classification for schema-affecting changes. -->
 
 - [ ] **EXPAND** – Additive, backward-compatible (no removals)
 - [ ] **CONTRACT (CODE ONLY)** – Model attribute removal, DB schema unchanged
@@ -33,7 +47,7 @@ Select exactly one classification for schema-affecting changes.
 
 ## Database Migration Checklist
 
-<!-- If this PR includes a database migration, complete the following checklist -->
+<!-- Complete this section ONLY if this PR includes a database migration -->
 
 **Does this PR include a database migration?** [ ] Yes / [ ] No
 
@@ -68,3 +82,34 @@ Closes #
 ## Additional Notes
 
 <!-- Any additional information that reviewers should know -->
+
+---
+
+# AUDIT PR SECTION
+
+<!-- Complete this section ONLY if "Audit PR" is selected above. -->
+
+## Audit Stage (Select Exactly ONE)
+
+- [ ] Stage 1 – Static Structural Audit
+- [ ] Stage 2 – Economic Invariant Risk Audit
+- [ ] Stage 3 – Security & Boundary Scan
+- [ ] Stage 4 – Test Coverage & Fragility Audit
+- [ ] Stage 5 – Refactor Proposal (Plan Only)
+
+## Audit Artifacts
+
+<!-- List all NEW or MODIFIED documentation artifacts created under docs/audits/ in this PR -->
+
+- Primary report file:
+  - docs/audits/...
+
+- Additional artifacts (if any):
+  - docs/audits/...
+
+## Audit Confirmation
+
+- [ ] No source code files were modified
+- [ ] No migrations were modified
+- [ ] No database schema was altered
+- [ ] This PR contains documentation changes only

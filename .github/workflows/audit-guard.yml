@@ -1,0 +1,108 @@
+name: Audit Guard
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: audit-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    types: [opened, synchronize, edited, labeled, unlabeled, reopened]
+
+jobs:
+  audit-guard:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files (audit mode)
+        if: ${{ contains(github.event.pull_request.labels.*.name, 'audit') }}
+        run: |
+          set -euo pipefail
+          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > changed_files.txt
+          echo "Changed files:"
+          cat changed_files.txt
+
+      - name: Enforce docs-only changes for audit PR
+        if: ${{ contains(github.event.pull_request.labels.*.name, 'audit') }}
+        run: |
+          set -euo pipefail
+          echo "Validating that only documentation files were modified..."
+
+          INVALID=false
+          HIGH_RISK=false
+
+          while read file; do
+            # Explicit high-risk guard
+            if [[ "$file" == migrations/* || "$file" == app/models.py || "$file" == app/models/* ]]; then
+              echo "🚨 HIGH-RISK FILE MODIFIED IN AUDIT PR: $file"
+              HIGH_RISK=true
+            fi
+
+            # General docs-only enforcement
+            if [[ "$file" != docs/audits/* && "$file" != .github/* ]]; then
+              echo "❌ Invalid file modified in audit PR: $file"
+              INVALID=true
+            fi
+          done < changed_files.txt
+
+          if [ "$HIGH_RISK" = true ]; then
+            echo "Audit PRs must NEVER modify migrations or model definitions."
+            exit 1
+          fi
+
+          if [ "$INVALID" = true ]; then
+            echo "Audit PRs must not modify source code, migrations, or schema files."
+            exit 1
+          fi
+
+      - name: Ensure at least one NEW or MODIFIED audit artifact exists
+        if: ${{ contains(github.event.pull_request.labels.*.name, 'audit') }}
+        run: |
+          set -euo pipefail
+          echo "Validating that this PR includes a new or modified audit artifact..."
+
+          MATCH=false
+
+          while read file; do
+            if [[ "$file" == docs/audits/* && "$file" == *.md ]]; then
+              echo "✅ Audit artifact modified in this PR: $file"
+              MATCH=true
+            fi
+          done < changed_files.txt
+
+          if [ "$MATCH" = false ]; then
+            echo "❌ Audit PR must include at least one NEW or MODIFIED markdown file under docs/audits/."
+            exit 1
+          fi
+
+      - name: Warn if audit artifacts modified without audit label
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'audit') }}
+        run: |
+          set -euo pipefail
+          git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }} > changed_files.txt
+
+          WARNING=false
+
+          while read file; do
+            if [[ "$file" == docs/audits/* && "$file" == *.md ]]; then
+              echo "⚠️ Audit artifact detected but 'audit' label is missing: $file"
+              WARNING=true
+            fi
+          done < changed_files.txt
+
+          if [ "$WARNING" = true ]; then
+            echo "This PR appears to include audit artifacts. Consider adding the 'audit' label to activate audit guard enforcement."
+          fi
+
+      - name: Skip audit enforcement when audit label is absent
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'audit') }}
+        run: |
+          echo "No audit label present. Skipping audit enforcement."

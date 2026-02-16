@@ -32,10 +32,11 @@ jobs:
 
     - name: Deploy to DO Production Server
       run: |
-        MAINT_MODE="${{ vars.MAINTENANCE_MODE || 'false' }}"
-        MAINT_MESSAGE="${{ vars.MAINTENANCE_MESSAGE || 'We are performing scheduled maintenance.' }}"
-        MAINT_END="${{ vars.MAINTENANCE_EXPECTED_END || '' }}"
-        MAINT_CONTACT="${{ vars.MAINTENANCE_CONTACT || '' }}"
+        # Intentionally avoid defaults: empty means "no override", so current server state is preserved.
+        MAINT_MODE="${{ vars.MAINTENANCE_MODE }}"
+        MAINT_MESSAGE="${{ vars.MAINTENANCE_MESSAGE }}"
+        MAINT_END="${{ vars.MAINTENANCE_EXPECTED_END }}"
+        MAINT_CONTACT="${{ vars.MAINTENANCE_CONTACT }}"
         TURNSTILE_SITE="${{ secrets.TURNSTILE_SITE_KEY || '' }}"
         TURNSTILE_SECRET="${{ secrets.TURNSTILE_SECRET_KEY || '' }}"
         PASSWORDLESS_API_KEY="${{ secrets.PASSWORDLESS_API_KEY || '' }}"
@@ -67,6 +68,49 @@ jobs:
           touch .env
           chmod 600 .env
 
+          # Preserve current maintenance settings unless explicit override values are supplied from workflow vars.
+          CURRENT_MAINT_MODE="$(grep -E '^MAINTENANCE_MODE=' .env | tail -1 | cut -d= -f2- || true)"
+          CURRENT_MAINT_MESSAGE="$(grep -E '^MAINTENANCE_MESSAGE=' .env | tail -1 | cut -d= -f2- || true)"
+          CURRENT_MAINT_END="$(grep -E '^MAINTENANCE_EXPECTED_END=' .env | tail -1 | cut -d= -f2- || true)"
+          CURRENT_MAINT_CONTACT="$(grep -E '^MAINTENANCE_CONTACT=' .env | tail -1 | cut -d= -f2- || true)"
+
+          # Normalize values that might already be wrapped in double quotes from prior writes.
+          strip_wrapping_quotes() {
+            local value="$1"
+            if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+              value="${value#\"}"
+              value="${value%\"}"
+            fi
+            printf '%s' "$value"
+          }
+
+          CURRENT_MAINT_MESSAGE="$(strip_wrapping_quotes "$CURRENT_MAINT_MESSAGE")"
+          CURRENT_MAINT_END="$(strip_wrapping_quotes "$CURRENT_MAINT_END")"
+          CURRENT_MAINT_CONTACT="$(strip_wrapping_quotes "$CURRENT_MAINT_CONTACT")"
+
+          EFFECTIVE_MAINT_MODE="$CURRENT_MAINT_MODE"
+          EFFECTIVE_MAINT_MESSAGE="$CURRENT_MAINT_MESSAGE"
+          EFFECTIVE_MAINT_END="$CURRENT_MAINT_END"
+          EFFECTIVE_MAINT_CONTACT="$CURRENT_MAINT_CONTACT"
+
+          if [ -n "${MAINT_MODE}" ]; then
+            EFFECTIVE_MAINT_MODE="${MAINT_MODE}"
+          fi
+          if [ -n "${MAINT_MESSAGE}" ]; then
+            EFFECTIVE_MAINT_MESSAGE="${MAINT_MESSAGE}"
+          fi
+          if [ -n "${MAINT_END}" ]; then
+            EFFECTIVE_MAINT_END="${MAINT_END}"
+          fi
+          if [ -n "${MAINT_CONTACT}" ]; then
+            EFFECTIVE_MAINT_CONTACT="${MAINT_CONTACT}"
+          fi
+
+          # Default to disabled only when maintenance mode has never been set.
+          if [ -z "${EFFECTIVE_MAINT_MODE}" ]; then
+            EFFECTIVE_MAINT_MODE="false"
+          fi
+
           # Remove old variables if they exist
           sed -i '/^MAINTENANCE_MODE=/d' .env 2>/dev/null || true
           sed -i '/^MAINTENANCE_MESSAGE=/d' .env 2>/dev/null || true
@@ -78,11 +122,14 @@ jobs:
           sed -i '/^PASSWORDLESS_API_PUBLIC=/d' .env 2>/dev/null || true
           sed -i '/^DIGITALOCEAN_ACCESS_TOKEN=/d' .env 2>/dev/null || true
 
-          # Add updated variables from GitHub
-          echo "MAINTENANCE_MODE=${MAINT_MODE}" >> .env
-          echo "MAINTENANCE_MESSAGE=\"${MAINT_MESSAGE}\"" >> .env
-          echo "MAINTENANCE_EXPECTED_END=\"${MAINT_END}\"" >> .env
-          echo "MAINTENANCE_CONTACT=\"${MAINT_CONTACT}\"" >> .env
+          # Add maintenance variables using effective values (preserved unless explicitly overridden)
+          SAFE_MAINT_MESSAGE="${EFFECTIVE_MAINT_MESSAGE//\"/\\\"}"
+          SAFE_MAINT_END="${EFFECTIVE_MAINT_END//\"/\\\"}"
+          SAFE_MAINT_CONTACT="${EFFECTIVE_MAINT_CONTACT//\"/\\\"}"
+          echo "MAINTENANCE_MODE=${EFFECTIVE_MAINT_MODE}" >> .env
+          echo "MAINTENANCE_MESSAGE=\"${SAFE_MAINT_MESSAGE}\"" >> .env
+          echo "MAINTENANCE_EXPECTED_END=\"${SAFE_MAINT_END}\"" >> .env
+          echo "MAINTENANCE_CONTACT=\"${SAFE_MAINT_CONTACT}\"" >> .env
 
           # Add Turnstile keys if provided
           if [ -n "${TURNSTILE_SITE}" ]; then
