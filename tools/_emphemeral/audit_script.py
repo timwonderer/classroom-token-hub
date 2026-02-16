@@ -379,7 +379,7 @@ def main():
     detect_unused()
 
     # 4. Generate Report
-    report_path = "docs/audits/audit_stage_1.md"
+    report_path = "docs/audits/2026-02-16_stage-1_static-structure.md"
 
     # Sort findings by severity then file
     severity_order = {"High": 0, "Medium": 1, "Low": 2}
