@@ -1,76 +1,149 @@
 # Stage 2 – Economic Invariant Risk Audit
 
 **Date:** 2026-02-16
+
 **Status:** Complete
-**Auditor:** Jules (AI Agent)
 
-## Objective
-Identify logic that could compromise financial invariants, ledger integrity, tenant isolation, or audit trails.
+**Updated:** 2026-02-16
 
-## Scope
-*   Payroll logic
-*   Transactions & Void logic
-*   Balance calculations
-*   Multi-tenant boundaries
-*   Redemption flow
+**Updated by:** Timothy Chang (signed commit on GitHub)
 
 ## Findings
 
-### 1. Multi-tenant Balance Leakage (Global Balance Calculation)
-*   **Severity:** Critical
-*   **File:** `app/models.py`
-*   **Line Range:** 290-300 (`Student.checking_balance`, `Student.savings_balance`)
-*   **Category:** Multi-tenant Boundary Violation
-*   **Description:** The `checking_balance` and `savings_balance` properties on the `Student` model calculate the sum of `Transaction.amount` filtering only by `student_id`. They do not filter by `join_code`.
-*   **Why This Violates Financial Invariants:** In this multi-tenant architecture, a `join_code` represents a distinct economy (Class). By summing globally, funds earned in one class (e.g., "Period 1") are available for spending in another class (e.g., "Period 2") if the student uses the same account. This breaks the isolation of class economies.
-*   **Worst Case Scenario:** A student earns massive amounts in a "test" or "easy" class and uses those funds to purchase high-value items or disrupt the economy in a "strict" or "real" class.
-*   **Confidence:** 100%
+### 1. Cross-Tenant Fund Leakage in Purchase Authorization
+**Severity:** Critical
 
-### 2. Void Logic Double Deduction
-*   **Severity:** Critical
-*   **File:** `app/routes/admin.py`
-*   **Line Range:** 6456-6500 (`void_payroll_transaction`)
-*   **Category:** Financial Logic Error
-*   **Description:** When voiding a transaction, the code performs two actions:
-    1.  Sets `transaction.is_void = True`.
-    2.  Creates a *new* reversal transaction with a negative amount (`-amount`).
+**File:** `app/routes/api.py`
 
-    The balance calculation (`app/models.py`) sums all transactions where `is_void == False`.
-    *   The original transaction is excluded (balance - X).
-    *   The reversal transaction is included (balance - X).
-*   **Why This Violates Financial Invariants:** This results in the amount being deducted twice from the student's balance.
-*   **Worst Case Scenario:** A teacher corrects a mistake (voids a payroll), and the student is penalized double the amount, potentially driving their balance negative and destroying trust in the banking system.
-*   **Confidence:** 100%
+**Line Range:** 408-413
 
-### 3. Random Ledger Assignment in Bulk Bonuses
-*   **Severity:** High
-*   **File:** `app/routes/admin.py`
-*   **Line Range:** 899-1014 (`give_bonus_all`)
-*   **Category:** Ledger Integrity / Logic Error
-*   **Description:** The function constructs a `join_code_map` dictionary: `{student_id: join_code}`. If a student is enrolled in multiple classes (blocks) with the same teacher, the dictionary comprehension overwrites previous entries, leaving only the `join_code` of the last processed block. The bonus transaction is then created using this single `join_code`.
-*   **Why This Violates Financial Invariants:** The bonus is applied to an arbitrary class economy. The student receives the money, but it appears in the wrong ledger, or only in one ledger when it might have been intended for all (or a specific one).
-*   **Worst Case Scenario:** Financial records become corrupt as funds appear in class ledgers where no corresponding activity (attendance/behavior) occurred, making per-class reporting inaccurate.
-*   **Confidence:** 95%
+**Category:** Multi-tenant boundaries
 
-### 4. Float Usage in Financial Calculations
-*   **Severity:** High
-*   **File:** `app/models.py`, `app/routes/api.py`
-*   **Line Range:** 290-300 (models), Multiple (api)
-*   **Category:** Precision Error
-*   **Description:**
-    *   `Student.checking_balance` returns a `float`.
-    *   `Transaction.amount` is a `Decimal`.
-    *   `app/routes/api.py` performs comparisons using floats (e.g., `if student.checking_balance < amount:`).
-*   **Why This Violates Financial Invariants:** Floating-point arithmetic is imprecise for currency. `0.1 + 0.2 != 0.3`. Mixing `float` and `Decimal` can lead to subtle comparison failures (e.g., allowing a purchase when balance is `0.000000001` less than price, or blocking valid purchases).
-*   **Worst Case Scenario:** Ledger drift over time; "phantom pennies" appearing or disappearing; strict equality checks failing in reconciliation scripts.
-*   **Confidence:** 100%
+**Description:**
+The `purchase_item` route authorizes purchases by checking `student.checking_balance` (a global property summing funds across all classes) against the item price, instead of using the class-scoped balance calculated earlier.
 
-### 5. Hard Deletion of Financial Records
-*   **Severity:** Medium
-*   **File:** `app/routes/admin.py`
-*   **Line Range:** 258-420 (`_hard_delete_join_code_scope`)
-*   **Category:** Audit Trail Violation
-*   **Description:** The `_hard_delete_join_code_scope` function executes `DELETE` statements on the `transactions` table when a class is deleted.
-*   **Why This Violates Financial Invariants:** Financial systems generally require immutable audit trails. Even if a class is "deleted", the record of financial transactions should ideally be archived or soft-deleted to maintain a history of system activity and prevent fraud (e.g., a teacher deleting a class to hide illicit transfers).
-*   **Worst Case Scenario:** A dispute arises regarding past payments or a system bug, but the data is permanently gone, making investigation impossible.
-*   **Confidence:** 100%
+**Why This Violates Financial Invariants:**
+This allows a student with funds in Class A to purchase items in Class B even if they have $0 or negative balance in Class B. The transaction is then recorded in Class B (correctly scoped), driving Class B's ledger into negative territory based on funds that exist only in Class A. This breaks tenant isolation and fund segregation.
+**Worst Case Scenario:**
+
+A student uses funds earned in a high-paying class to drain the economy of a stricter class, effectively counterfeiting currency across tenant boundaries.
+
+**Confidence:** 100%
+
+---
+### 2. Global Balance Properties Violate Tenant Isolation
+
+**Severity:** Critical
+
+**File:** `app/models.py`
+
+**Line Range:** 463-473
+
+**Category:** Multi-tenant boundaries
+
+**Description:**
+The `Student.checking_balance` and `Student.savings_balance` properties calculate balances by summing *all* non-void transactions for a student, ignoring `join_code`.
+
+**Why This Violates Financial Invariants:**
+Any logic relying on these properties (like the purchase check above, or CSV exports) inherently mixes data from different tenants. A student belonging to multiple classes has no isolated "balance" in this model, only a global aggregate.
+
+**Worst Case Scenario:**
+System-wide confusion where students see inflated balances, and financial decisions (overdrafts, purchases) are made on incorrect global aggregates rather than the relevant class economy.
+
+**Confidence:** 100%
+
+---
+### 3. Cross-Tenant Data Leakage in CSV Export
+
+**Severity:** High
+**File:** `app/routes/admin.py`
+
+**Line Range:** 7156-7158
+
+**Category:** Multi-tenant boundaries
+
+**Description:**
+The `export_students` route writes `student.checking_balance`, `student.savings_balance`, and `student.total_earnings` to the CSV export. Since these properties are global aggregates (see Finding #2), this exposes a student's total financial status across *all* their classes to any single teacher who exports their roster.
+
+**Why This Violates Financial Invariants:**
+This violates tenant isolation and privacy. Teacher A should only see the funds earned/spent in Teacher A's class. Exporting the global sum leaks information about the student's activity in Teacher B's class.
+
+**Worst Case Scenario:**
+A teacher uses the exported data to grade or judge students based on financial activity in other classes, or infers private information about other class economies.
+
+**Confidence:** 100%
+
+---
+### 4. Ledger Mutability via Direct Voiding
+
+**Severity:** High
+
+**File:** `app/routes/admin.py`
+
+**Line Range:** 6597 (void_payroll_transaction), 6629 (void_transactions_bulk), 9454 (resolve_issue)
+
+**Category:** Void logic
+
+**Description:**
+Transactions are voided by setting the `is_void` flag to `True` on the original record.
+
+**Why This Violates Financial Invariants:**
+Financial ledgers should be immutable. Voids should be implemented as a new transaction with an inverted amount (reversal) linked to the original. Modifying the original record destroys the historical state of the ledger at the time the transaction occurred and complicates point-in-time reconstruction.
+
+**Worst Case Scenario:**
+An admin voids a transaction from a closed accounting period, changing historical reports retroactively without a clear audit trail of *when* the void happened.
+
+**Confidence:** 95%
+
+---
+### 5. Precision Loss due to Float Usage
+**Severity:** High
+
+**File:** `app/models.py` (Line 467, 473), `app/routes/admin.py` (Line 2225)
+
+**Category:** Balance calculations
+
+**Description:**
+Financial values are frequently cast to `float` for calculations or API responses. `Student.checking_balance` explicitly casts `Decimal` to `float`.
+
+**Why This Violates Financial Invariants:**
+Floats are imprecise for currency. Accumulating float errors can lead to "penny shaving" issues, where ledger sums do not equal the sum of their parts (e.g., $0.10 + $0.20 != $0.30).
+
+**Worst Case Scenario:**
+Balances drift over time due to rounding errors, causing reconciliation failures or allowing students to exploit fractional discrepancies.
+
+**Confidence:** 100%
+
+---
+### 6. Audit Trail Destruction in Join Code Cleanup
+**Severity:** ~~Medium~~ Intended Behavior / Need Guardrail
+
+**File:** `app/routes/admin.py`
+
+**Line Range:** 212-313
+
+**Category:** Audit trails
+
+**Description:**
+`_hard_delete_join_code_scope` performs hard deletes (`.delete()`) on `Transaction`, `RentPayment`, `InsuranceClaim`, and other financial records.
+
+~~**Why This Violates Financial Invariants:**
+While intended for cleaning up deleted classes, hard deleting financial records prevents any future audit or dispute resolution regarding that data. "Deleted" classes should ideally be archived (soft deleted) or at least their financial history preserved for a retention period.~~
+
+~~**Worst Case Scenario:**
+A teacher deletes a class by mistake or maliciously to hide embezzlement/fraud, and the financial history is permanently lost.~~
+
+~~**Confidence:** 90~~
+
+> [!IMPORTANT]
+> Join code is the sole multitenancy boundary of this application. Destruction of join code necessitates the destruction all data scoped under that join code. No global ledger or archival storage is allowed via any route of the application. Any future changes to this design principle must be explicitly written and justified.
+
+**Why was this risk downgraded:** Join code is the sole boundary in which a "Class" is defined. "Teachers" and "Students" are merely tenants within the scope of that boundary. When a join code is deleted, everything derived from that join code cease to exist. If a financial record is kept without join code, it would be useless since it would be devoid of join code (and therefore the users under that join code). If historic financial record can be traced back to its user without join code, that would render join code a mere facade that does not, in fact, define multitenancy boundary. This behavior is not only appropriate, but necessary to uphold the grounding principle of this application: minimal data retention. This means if a teacher delete the class, they are effectively deleting the join code and everything related to that join code. This application does not have hidden global ledger, but tiny scoped universe wrapped with join code.
+
+**Additional Precaution:** The main concern of this behavior is not, in fact, concealment of malicious activity. Because teachers are constantly making decisions and could suffer from decision fatigue (or just being tired), it is very likely a teacher could, in theory, accidentally delete the class without the intent to delete the class. Without secondary prompts and explicit confirmation from the teacher, it would be an UX landmine and UI failure. Therefore, a couple of UX designs must be in place:
+1. A highly visible modal must open up and clearly state the consequences of such action, preferably with simple sentence no longer than a line.
+2. A countdown timer of at least 30 seconds must be displayed in the modal. During the 30 second period, the `Yes, I am sure` button is disabled (the `cancel` button is always available). The behavior of the `return` key on this modal should be the same as `cancel`
+3. Once the teacher click on `Yes, I am sure`, open a second modal that have the teacher type in *Delete [insert class name here]* in a textbox. Disable copy and pasting within the modal so the teacher must type it in. 
+4. After the positive explicitly typed confirmation, the teacher must click and hold the `Confirm Deletion` button for 10 seconds with visible timer. The `cancel` button is always available and instant. The behavior of the `return` key on this modal should be the same as `cancel`
+5. Once the `Confirm Deletion` is held for 10 seconds, the modal will close and proceed with the `_hard_delete_join_code_scope` 
+
