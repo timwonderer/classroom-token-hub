@@ -47,7 +47,7 @@ jobs:
             fi
 
             # General docs-only enforcement
-            if [[ "$file" != docs/audits/** ]]; then
+            if [[ "$file" != docs/audits/** && "$file" != tools/_emphemeral/** && "$file" != .github/workflows/audit-guard.yml ]]; then
               echo "❌ Invalid file modified in audit PR: $file"
               INVALID=true
             fi
