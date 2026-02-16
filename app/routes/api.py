@@ -8,6 +8,7 @@ and other interactive features. Most routes require authentication.
 import random
 import string
 import re
+import copy
 import pytz
 from datetime import datetime, timedelta, timezone
 from dateutil.relativedelta import relativedelta
@@ -29,7 +30,7 @@ from app.auth import (
     login_required, admin_required, membership_required, check_membership_access,
     get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
 )
-from app.routes.student import get_current_class_context, get_current_teacher_id, get_rent_settings_for_context
+from app.routes.student import get_current_class_context, get_rent_settings_for_context, calculate_scoped_balances
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
@@ -251,12 +252,8 @@ def purchase_item():
     teacher_id = context['teacher_id']
     membership_id = context.get('membership_id')
 
-    # CRITICAL: Use join_code as primary filter for class isolation
-    # Fall back to teacher_id for items without join_code (legacy)
+    # CRITICAL: Use join_code as the sole filter for class isolation.
     item = StoreItem.query.filter_by(id=item_id, join_code=join_code).first()
-    if not item:
-        # Fallback: Check for legacy items scoped by teacher_id only
-        item = StoreItem.query.filter_by(id=item_id, teacher_id=teacher_id, join_code=None).first()
 
     if not item or not item.is_active:
         return jsonify({"status": "error", "message": "This item is not available."}), 404
@@ -355,6 +352,7 @@ def purchase_item():
                 student_id=student.id,
                 teacher_id=teacher_id,
                 join_code=join_code,
+                actor_membership_id=membership_id,
                 amount=0.0,
                 account_type='checking',
                 type='purchase',
@@ -400,16 +398,21 @@ def purchase_item():
     # Get banking settings for overdraft handling
     # CRITICAL: Use join_code as primary filter for class isolation
     banking_settings = BankingSettings.query.filter_by(join_code=join_code).first()
-    if not banking_settings:
-        # Fallback: Legacy settings by teacher_id
-        banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id, join_code=None).first()
+    if not banking_settings and teacher_id:
+        banking_settings = BankingSettings.query.filter_by(
+            teacher_id=teacher_id,
+            block=None,
+            join_code=None,
+        ).first()
+
+    checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
 
     # Check if student has sufficient funds
-    if student.checking_balance < total_price:
-        shortfall = total_price - student.checking_balance
+    if checking_balance < total_price:
+        shortfall = total_price - checking_balance
         # Check if overdraft protection is enabled (savings can cover the difference)
         if (banking_settings and banking_settings.overdraft_protection_enabled and
-                student.savings_balance >= shortfall):
+                savings_balance >= shortfall):
             # Allow transaction - overdraft protection will transfer from savings
             pass
         else:
@@ -426,10 +429,10 @@ def purchase_item():
             if banking_settings and banking_settings.overdraft_protection_enabled:
                 message = (f"Insufficient funds in both checking and savings. You need "
                            f"${total_price:.2f} total but have "
-                           f"${student.checking_balance + student.savings_balance:.2f}.")
+                           f"${checking_balance + savings_balance:.2f}.")
             else:
                 message = (f"Insufficient funds. You need ${total_price:.2f} but have "
-                           f"${student.checking_balance:.2f}.")
+                           f"${checking_balance:.2f}.")
 
             if fee_charged:
                 message += f" Overdraft fee of ${fee_amount:.2f} charged."
@@ -502,9 +505,10 @@ def purchase_item():
             db.session.flush()  # Flush to update balances without committing yet
 
             # Check if overdraft protection should transfer funds from savings
-            if banking_settings and banking_settings.overdraft_protection_enabled and student.checking_balance < 0:
-                shortfall = abs(student.checking_balance)
-                if student.savings_balance >= shortfall:
+            checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
+            if banking_settings and banking_settings.overdraft_protection_enabled and checking_balance < 0:
+                shortfall = abs(checking_balance)
+                if savings_balance >= shortfall:
                     # CRITICAL FIX v2: Transfer from savings to checking with join_code
                     transfer_tx_withdraw = Transaction(
                         student_id=student.id,
@@ -629,9 +633,10 @@ def purchase_item():
 
         # Handle overdraft protection and fees for regular items
         # Check if overdraft protection should transfer funds from savings
-        if banking_settings and banking_settings.overdraft_protection_enabled and student.checking_balance < 0:
-            shortfall = abs(student.checking_balance)
-            if student.savings_balance >= shortfall:
+        checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
+        if banking_settings and banking_settings.overdraft_protection_enabled and checking_balance < 0:
+            shortfall = abs(checking_balance)
+            if savings_balance >= shortfall:
                 # CRITICAL FIX v2: Transfer from savings to checking with join_code
                 transfer_tx_withdraw = Transaction(
                     student_id=student.id,
@@ -1180,76 +1185,35 @@ def handle_hall_pass_action(pass_id, action):
 
 
 @api_bp.route('/hall-pass/verification/active', methods=['GET'])
+@admin_required
 def get_active_hall_passes():
     """Get last 10 students who used hall passes for verification display
 
-    CRITICAL: This endpoint requires join_code for proper class isolation.
+    CRITICAL: This endpoint requires join_code + membership for proper class isolation.
     Usage: /api/hall-pass/verification/active?join_code=ABC123
-    Legacy: /api/hall-pass/verification/active?teacher_id=123 (deprecated)
     """
-
-    from app.models import Admin, Student, StudentTeacher
-    from sqlalchemy import or_
 
     # CRITICAL: Use join_code as primary scoping mechanism
     join_code = request.args.get('join_code')
-    teacher_id = request.args.get('teacher_id', type=int)
+    if not join_code:
+        return jsonify({
+            "status": "error",
+            "message": "join_code is required"
+        }), 400
+
+    is_allowed, membership, economy, error = check_membership_access(
+        join_code, allowed_roles=['admin', 'observer']
+    )
+    if not is_allowed:
+        return jsonify({"status": "error", "message": error}), 403
+    join_code = economy.join_code
 
     # Start with base query
     query = HallPassLog.query.filter(
+        HallPassLog.join_code == join_code,
         HallPassLog.status.in_(['left', 'returned']),
         HallPassLog.left_time.isnot(None)
     )
-
-    # Primary: Scope by join_code (new architecture)
-    if join_code:
-        query = query.filter(HallPassLog.join_code == join_code)
-
-    # Fallback: Scope by teacher_id (legacy)
-    elif teacher_id:
-        # Validate teacher exists
-        teacher = db.session.get(Admin, teacher_id)
-        if not teacher:
-            return jsonify({
-                "status": "error",
-                "message": "Invalid teacher_id"
-            }), 404
-
-        # If querying as admin, verify authorization (only their own data unless system admin)
-        if session.get('is_admin') and not session.get('is_system_admin'):
-            if session.get('admin_id') != teacher_id:
-                return jsonify({
-                    "status": "error",
-                    "message": "Unauthorized"
-                }), 403
-
-        # Build subquery for students belonging to this teacher
-        # Include both primary ownership (teacher_id) and shared access (student_teachers)
-        shared_student_ids = (
-            StudentTeacher.query.with_entities(StudentTeacher.student_id)
-            .filter(StudentTeacher.admin_id == teacher_id)
-            .subquery()
-        )
-
-        student_ids_subquery = (
-            Student.query.with_entities(Student.id)
-            .filter(
-                Student.id.in_(sa.select(shared_student_ids))
-            )
-            .subquery()
-        )
-
-        # Add teacher scoping filter
-        query = query.filter(HallPassLog.student_id.in_(sa.select(student_ids_subquery)))
-
-    else:
-        # SECURITY: Require either join_code or teacher_id to prevent global data leak
-        # System admins can still see all data by providing teacher_id
-        if not session.get('is_system_admin'):
-            return jsonify({
-                "status": "error",
-                "message": "join_code or teacher_id is required"
-            }), 400
 
     # Get the last 10 students who have left class
     recent_passes = query.order_by(HallPassLog.left_time.desc()).limit(10).all()
@@ -1331,21 +1295,60 @@ def _get_default_timezone():
         return pytz.timezone('America/Los_Angeles')
 
 
+def _get_or_create_hall_pass_settings(join_code, teacher_id=None):
+    """Return join_code-scoped hall pass settings, cloning teacher defaults when needed."""
+    settings = HallPassSettings.query.filter_by(join_code=join_code).first()
+    if settings:
+        return settings
+
+    template = None
+    if teacher_id:
+        template = HallPassSettings.query.filter_by(
+            teacher_id=teacher_id,
+            block=None,
+            join_code=None,
+        ).first()
+    if template:
+        settings = HallPassSettings(
+            teacher_id=teacher_id,
+            join_code=join_code,
+            block=None,
+            queue_enabled=template.queue_enabled,
+            queue_limit=template.queue_limit,
+            pass_types=copy.deepcopy(template.pass_types),
+        )
+        db.session.add(settings)
+        db.session.commit()
+        return settings
+
+    settings = HallPassSettings(
+        teacher_id=teacher_id,
+        join_code=join_code,
+        block=None,
+        queue_enabled=True,
+        queue_limit=10,
+    )
+    db.session.add(settings)
+    db.session.commit()
+    return settings
+
+
 def _check_simultaneous_pass_limit(log_entry):
     """Validate destination settings and simultaneous pass limits."""
+    if not log_entry.join_code:
+        return None
+
+    teacher_id = None
     teacher_block = TeacherBlock.query.filter_by(join_code=log_entry.join_code).first()
-    teacher_id = teacher_block.teacher_id if teacher_block else None
+    if teacher_block:
+        teacher_id = teacher_block.teacher_id
     if not teacher_id:
-        # Fallback for legacy data: derive teacher from StudentTeacher link
         teacher_id = (
             StudentTeacher.query.with_entities(StudentTeacher.admin_id)
             .filter(StudentTeacher.student_id == log_entry.student_id)
             .scalar()
         )
-    if not teacher_id:
-        return None
-
-    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+    settings = _get_or_create_hall_pass_settings(log_entry.join_code, teacher_id=teacher_id)
     if not settings:
         return None
 
@@ -1622,106 +1625,46 @@ def checkin_hall_pass():
 def get_hall_pass_queue():
     """Get current hall pass queue (approved but not yet checked out) and currently out count.
 
-    Supports both:
-    - join_code mode (membership-gated, join_code-scoped)
-    - legacy teacher_id mode (teacher-scoped fallback for migration compatibility)
+    Requires join_code + membership and is strictly join-code scoped.
     """
     join_code = request.args.get('join_code')
-    teacher_id = request.args.get('teacher_id', type=int)
+    if not join_code:
+        return jsonify({
+            "status": "error",
+            "message": "join_code parameter required for queue display"
+        }), 400
 
-    # Join-code mode (new architecture): explicit membership and role check
-    if join_code:
-        is_allowed, membership, economy, error = check_membership_access(
-            join_code, allowed_roles=['admin']
-        )
-        if not is_allowed:
-            return jsonify({"status": "error", "message": error}), 403
-        join_code = economy.join_code
-        teacher_id = membership.admin_id if membership else None
+    is_allowed, _, economy, error = check_membership_access(
+        join_code, allowed_roles=['admin', 'observer']
+    )
+    if not is_allowed:
+        return jsonify({"status": "error", "message": error}), 403
+    join_code = economy.join_code
 
-        settings = HallPassSettings.query.filter_by(join_code=join_code).first()
-        if not settings and teacher_id:
-            settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
-        if not settings:
-            settings = HallPassSettings(queue_enabled=True, queue_limit=10)
+    settings = _get_or_create_hall_pass_settings(
+        join_code,
+        teacher_id=membership.admin_id if membership else None,
+    )
 
-        # Today's boundary in user timezone
-        tz_name = session.get('timezone', 'America/Los_Angeles')
-        try:
-            user_tz = pytz.timezone(tz_name)
-        except pytz.UnknownTimeZoneError:
-            current_app.logger.warning(f"Invalid timezone '{tz_name}' in session, defaulting to Pacific Time.")
-            user_tz = pytz.timezone('America/Los_Angeles')
-        now_user_tz = utc_now().astimezone(user_tz)
-        today_start_utc = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.utc)
+    # Today's boundary in user timezone
+    tz_name = session.get('timezone', 'America/Los_Angeles')
+    try:
+        user_tz = pytz.timezone(tz_name)
+    except pytz.UnknownTimeZoneError:
+        current_app.logger.warning(f"Invalid timezone '{tz_name}' in session, defaulting to Pacific Time.")
+        user_tz = pytz.timezone('America/Los_Angeles')
+    now_user_tz = utc_now().astimezone(user_tz)
+    today_start_utc = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.utc)
 
-        base_query = HallPassLog.query.filter_by(join_code=join_code)
-        queue_logs = base_query.filter(
-            HallPassLog.status.in_(['approved', 'pending']),
-            HallPassLog.created_at >= today_start_utc
-        ).order_by(HallPassLog.created_at).all()
-        currently_out_count = base_query.filter(
-            HallPassLog.status == 'left',
-            HallPassLog.created_at >= today_start_utc
-        ).count()
-    else:
-        # Legacy teacher_id mode retained for compatibility during migration
-        if not teacher_id and session.get('is_admin'):
-            teacher_id = session.get('admin_id')
-        if not teacher_id:
-            return jsonify({
-                "status": "error",
-                "message": "teacher_id parameter required for queue display"
-            }), 400
-
-        teacher = db.session.get(Admin, teacher_id)
-        if not teacher:
-            return jsonify({"status": "error", "message": "Invalid teacher_id"}), 404
-
-        if session.get('is_admin') and not session.get('is_system_admin'):
-            if session.get('admin_id') != teacher_id:
-                return jsonify({"status": "error", "message": "Unauthorized"}), 403
-
-        settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
-        if not settings:
-            settings = HallPassSettings(queue_enabled=True, queue_limit=10)
-
-        tz_name = session.get('timezone', 'America/Los_Angeles')
-        try:
-            user_tz = pytz.timezone(tz_name)
-        except pytz.UnknownTimeZoneError:
-            current_app.logger.warning(f"Invalid timezone '{tz_name}' in session, defaulting to Pacific Time.")
-            user_tz = pytz.timezone('America/Los_Angeles')
-        now_user_tz = utc_now().astimezone(user_tz)
-        today_start_db = normalize_for_db(
-            now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(pytz.utc)
-        )
-
-        shared_student_ids = (
-            StudentTeacher.query.with_entities(StudentTeacher.student_id)
-            .filter(StudentTeacher.admin_id == teacher_id)
-            .subquery()
-        )
-        demo_student_ids = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
-        student_ids_subquery = (
-            Student.query.with_entities(Student.id)
-            .filter(
-                Student.id.in_(sa.select(shared_student_ids)),
-                ~Student.id.in_(sa.select(demo_student_ids))
-            )
-            .subquery()
-        )
-
-        queue_logs = HallPassLog.query.filter(
-            HallPassLog.status == 'approved',
-            HallPassLog.decision_time >= today_start_db,
-            HallPassLog.student_id.in_(sa.select(student_ids_subquery))
-        ).order_by(HallPassLog.decision_time.asc()).all()
-        currently_out_count = HallPassLog.query.filter(
-            HallPassLog.status == 'left',
-            HallPassLog.left_time >= today_start_db,
-            HallPassLog.student_id.in_(sa.select(student_ids_subquery))
-        ).count()
+    base_query = HallPassLog.query.filter_by(join_code=join_code)
+    queue_logs = base_query.filter(
+        HallPassLog.status.in_(['approved', 'pending']),
+        HallPassLog.created_at >= today_start_utc
+    ).order_by(HallPassLog.created_at).all()
+    currently_out_count = base_query.filter(
+        HallPassLog.status == 'left',
+        HallPassLog.created_at >= today_start_utc
+    ).count()
 
     # Response payload includes both legacy and new key names
     queue_data = []
@@ -1754,42 +1697,21 @@ def get_hall_pass_queue():
 @admin_required
 def hall_pass_settings():
     """Get or update hall pass settings (admin only)"""
-    # CRITICAL: Scope by join_code if available for multi-tenancy
-    teacher_id = session.get('admin_id')
     current_join_code = session.get('current_join_code')
-    
-    if not teacher_id:
-        return jsonify({"status": "error", "message": "Admin ID not found in session"}), 401
+    if not current_join_code:
+        return jsonify({"status": "error", "message": "current_join_code is required"}), 400
 
-    if current_join_code:
-        # Phase A/B: Settings scoped to join_code
-        settings = HallPassSettings.query.filter_by(join_code=current_join_code).first()
-        if not settings:
-             # Create new settings for this join_code
-             # Note: We don't copy old teacher settings automatically to avoid confusion?
-             # Or should we? For now, clean slate or default.
-             settings = HallPassSettings(
-                teacher_id=teacher_id,
-                join_code=current_join_code,
-                block=None,
-                queue_enabled=True,
-                queue_limit=10
-             )
-             db.session.add(settings)
-             db.session.commit()
-    else:
-        # Legacy fallback: Scope by teacher_id
-        # This path should fade out as admin UI enforces join_code selection
-        settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
-        if not settings:
-            settings = HallPassSettings(
-                teacher_id=teacher_id,
-                block=None,
-                queue_enabled=True,
-                queue_limit=10
-            )
-            db.session.add(settings)
-            db.session.commit()
+    is_allowed, membership, economy, error = check_membership_access(
+        current_join_code, allowed_roles=['admin']
+    )
+    if not is_allowed:
+        return jsonify({"status": "error", "message": error}), 403
+    current_join_code = economy.join_code
+
+    settings = _get_or_create_hall_pass_settings(
+        current_join_code,
+        teacher_id=membership.admin_id if membership else session.get('admin_id'),
+    )
 
     if request.method == 'GET':
         return jsonify({
@@ -1938,10 +1860,16 @@ def hall_pass_history():
 @admin_required
 def get_hall_pass_setup():
     """Get teacher's hall pass configuration"""
-    teacher_id = session.get('admin_id')
+    join_code = session.get('current_join_code')
+    if not join_code:
+        return jsonify({"status": "error", "message": "current_join_code is required"}), 400
 
-    # Get or create settings for this teacher
-    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+    is_allowed, _, economy, error = check_membership_access(join_code, allowed_roles=['admin'])
+    if not is_allowed:
+        return jsonify({"status": "error", "message": error}), 403
+    join_code = economy.join_code
+
+    settings = _get_or_create_hall_pass_settings(join_code, teacher_id=session.get('admin_id'))
 
     if not settings:
         # Return default configuration
@@ -1964,6 +1892,13 @@ def get_hall_pass_setup():
 def save_hall_pass_setup():
     """Save teacher's hall pass configuration"""
     teacher_id = session.get('admin_id')
+    join_code = session.get('current_join_code')
+    if not join_code:
+        return jsonify({"status": "error", "message": "current_join_code is required"}), 400
+    is_allowed, _, economy, error = check_membership_access(join_code, allowed_roles=['admin'])
+    if not is_allowed:
+        return jsonify({"status": "error", "message": error}), 403
+    join_code = economy.join_code
     data = request.get_json()
 
     pass_types = data.get('pass_types', [])
@@ -2003,12 +1938,12 @@ def save_hall_pass_setup():
                     return jsonify({"status": "error", "message": f"{field} must be a number or blank"}), 400
 
     try:
-        # Get or create settings for this teacher
-        settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+        settings = _get_or_create_hall_pass_settings(join_code, teacher_id=teacher_id)
 
         if not settings:
             settings = HallPassSettings(
                 teacher_id=teacher_id,
+                join_code=join_code,
                 block=None,
                 queue_enabled=hall_pass_enabled,
                 queue_limit=10,
@@ -2038,14 +1973,21 @@ def save_hall_pass_setup():
 @api_bp.route('/hall-pass/available-types', methods=['GET'])
 @login_required
 def get_available_hall_pass_types():
-    """Get available pass types for a teacher (endpoint for authenticated student use)"""
-    teacher_id = request.args.get('teacher_id', type=int)
+    """Get available pass types for a class economy (endpoint for authenticated use)."""
+    join_code = request.args.get('join_code') or session.get('current_join_code')
+    if not join_code:
+        return jsonify({"status": "error", "message": "join_code is required"}), 400
 
-    if not teacher_id:
-        return jsonify({"status": "error", "message": "teacher_id is required"}), 400
+    is_allowed, _, economy, error = check_membership_access(
+        join_code, allowed_roles=['admin', 'observer', 'student']
+    )
+    if not is_allowed:
+        return jsonify({"status": "error", "message": error}), 403
+    join_code = economy.join_code
 
-    # Get settings for this teacher
-    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+    teacher_block = TeacherBlock.query.filter_by(join_code=join_code).first()
+    teacher_id = teacher_block.teacher_id if teacher_block else None
+    settings = _get_or_create_hall_pass_settings(join_code, teacher_id=teacher_id)
 
     if not settings:
         # Return defaults if not configured
@@ -2307,25 +2249,7 @@ def handle_tap():
             # All other reasons go through the hall pass approval flow
             # Check hall pass settings and queue limits
 
-            # CRITICAL: Get teacher_id from join_code for multi-tenancy scoping
-            from app.models import TeacherBlock
-            teacher_block = TeacherBlock.query.filter_by(join_code=join_code).first()
-            if not teacher_block:
-                return jsonify({"error": "Unable to resolve teacher for this class period."}), 400
-
-            teacher_id = teacher_block.teacher_id
-
-            # Query settings scoped to this teacher (block=None means global default)
-            settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
-            if not settings:
-                settings = HallPassSettings(
-                    teacher_id=teacher_id,
-                    block=None,
-                    queue_enabled=True,
-                    queue_limit=10
-                )
-                db.session.add(settings)
-                db.session.commit()
+            settings = _get_or_create_hall_pass_settings(join_code, teacher_id=teacher_id)
 
             # Get pass types configuration
             pass_types = settings.get_pass_types()

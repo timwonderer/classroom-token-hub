@@ -66,13 +66,13 @@ def test_get_total_earnings_defensive_checks(client, app):
         earnings = student.get_total_earnings(join_code=join_code, teacher_id=teacher.id)
         assert earnings == 10.50
         
-        # Test with teacher_id parameter (deprecated path)
+        # Deprecated teacher-only path should not return cross-class aggregates.
         earnings_by_teacher = student.get_total_earnings(teacher_id=teacher.id)
-        assert earnings_by_teacher == 10.50
+        assert earnings_by_teacher == 0.0
         
-        # Test with no parameters (all classes)
+        # Unscoped path should not return cross-class aggregates.
         earnings_all = student.get_total_earnings()
-        assert earnings_all == 10.50
+        assert earnings_all == 0.0
         
         # Add another transaction to verify aggregation still works
         another_tx = Transaction(
@@ -315,11 +315,10 @@ def test_get_total_earnings_with_mocked_null_amount(client, app):
             # Should return 20.00 + 15.00 = 35.00, skipping the NULL amount
             assert earnings == 35.00
             
-            # Test with teacher_id only (deprecated path)
+            # Deprecated teacher-only path should not return cross-class aggregates.
             earnings_by_teacher = student.get_total_earnings(teacher_id=teacher.id)
-            assert earnings_by_teacher == 35.00
+            assert earnings_by_teacher == 0.0
             
-            # Test with no parameters (all classes path)
+            # Unscoped path should not return cross-class aggregates.
             earnings_all = student.get_total_earnings()
-            assert earnings_all == 35.00
-
+            assert earnings_all == 0.0

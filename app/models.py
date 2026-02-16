@@ -425,9 +425,9 @@ class Student(db.Model):
         # CRITICAL: Convert to float for compatibility with arithmetic calculations
         return float(_quantize_currency(total))
 
-    def get_active_insurance(self, teacher_id):
-        """Return the active insurance enrollment scoped to a teacher, if any."""
-        if not teacher_id:
+    def get_active_insurance(self, join_code):
+        """Return the active insurance enrollment scoped to a join_code, if any."""
+        if not join_code:
             return None
 
         return StudentInsurance.query.join(
@@ -435,15 +435,15 @@ class Student(db.Model):
         ).filter(
             StudentInsurance.student_id == self.id,
             StudentInsurance.status == 'active',
-            InsurancePolicy.teacher_id == teacher_id
+            StudentInsurance.join_code == join_code,
+            InsurancePolicy.join_code == join_code,
         ).first()
 
     def get_checking_balance(self, teacher_id=None, join_code=None):
         """
         Get checking balance scoped to a specific class economy.
 
-        CRITICAL: For proper period isolation, callers should pass join_code.
-        The teacher_id parameter is deprecated and only kept for backward compatibility.
+        CRITICAL: join_code is required. Legacy teacher/global aggregation is disabled.
 
         Args:
             teacher_id: DEPRECATED - Only for backward compatibility
@@ -452,41 +452,20 @@ class Student(db.Model):
         Returns:
             Decimal: The checking balance rounded to 2 decimal places
         """
-        if join_code:
-            # Proper scoping by join_code (period-level isolation)
-            # Include legacy transactions with NULL join_code but matching teacher_id
-            total = sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.account_type == 'checking' and not tx.is_void and (
-                    tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id)
-                )),
-                Decimal('0.00')
-            )
-            return _quantize_currency(total)
-        elif teacher_id:
-            # DEPRECATED: Only use this for backward compatibility during migration
-            # This will show aggregated balance across all periods with same teacher
-            total = sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.account_type == 'checking' and not tx.is_void and tx.teacher_id == teacher_id),
-                Decimal('0.00')
-            )
-            return _quantize_currency(total)
-        else:
-            # No scope provided - return total across all classes
-            total = sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.account_type == 'checking' and not tx.is_void),
-                Decimal('0.00')
-            )
-            return _quantize_currency(total)
+        if not join_code:
+            return Decimal('0.00')
+        total = sum(
+            (_quantize_currency(tx.amount) for tx in self.transactions
+            if tx.account_type == 'checking' and not tx.is_void and tx.join_code == join_code),
+            Decimal('0.00')
+        )
+        return _quantize_currency(total)
 
     def get_savings_balance(self, teacher_id=None, join_code=None):
         """
         Get savings balance scoped to a specific class economy.
 
-        CRITICAL: For proper period isolation, callers should pass join_code.
-        The teacher_id parameter is deprecated and only kept for backward compatibility.
+        CRITICAL: join_code is required. Legacy teacher/global aggregation is disabled.
 
         Args:
             teacher_id: DEPRECATED - Only for backward compatibility
@@ -495,41 +474,20 @@ class Student(db.Model):
         Returns:
             Decimal: The savings balance rounded to 2 decimal places
         """
-        if join_code:
-            # Proper scoping by join_code (period-level isolation)
-            # Include legacy transactions with NULL join_code but matching teacher_id
-            total = sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.account_type == 'savings' and not tx.is_void and (
-                    tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id)
-                )),
-                Decimal('0.00')
-            )
-            return _quantize_currency(total)
-        elif teacher_id:
-            # DEPRECATED: Only use this for backward compatibility during migration
-            # This will show aggregated balance across all periods with same teacher
-            total = sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.account_type == 'savings' and not tx.is_void and tx.teacher_id == teacher_id),
-                Decimal('0.00')
-            )
-            return _quantize_currency(total)
-        else:
-            # No scope provided - return total across all classes
-            total = sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.account_type == 'savings' and not tx.is_void),
-                Decimal('0.00')
-            )
-            return _quantize_currency(total)
+        if not join_code:
+            return Decimal('0.00')
+        total = sum(
+            (_quantize_currency(tx.amount) for tx in self.transactions
+            if tx.account_type == 'savings' and not tx.is_void and tx.join_code == join_code),
+            Decimal('0.00')
+        )
+        return _quantize_currency(total)
 
     def get_total_earnings(self, teacher_id=None, join_code=None):
         """
         Get total earnings scoped to a specific class economy.
 
-        CRITICAL: For proper period isolation, callers should pass join_code.
-        The teacher_id parameter is deprecated and only kept for backward compatibility.
+        CRITICAL: join_code is required. Legacy teacher/global aggregation is disabled.
 
         Args:
             teacher_id: DEPRECATED - Only for backward compatibility
@@ -538,33 +496,15 @@ class Student(db.Model):
         Returns:
             float: The total earnings rounded to 2 decimal places
         """
-        if join_code:
-            # Proper scoping by join_code (period-level isolation)
-            # Include legacy transactions with NULL join_code but matching teacher_id
-            return float(round(sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if (tx.join_code == join_code or (tx.join_code is None and teacher_id and tx.teacher_id == teacher_id))
-                and tx.amount is not None and _quantize_currency(tx.amount) > Decimal('0') and not tx.is_void
-                and not (tx.description or "").startswith("Transfer")),
-                Decimal('0.00')
-            ), 2))
-        elif teacher_id:
-            # DEPRECATED: Only use this for backward compatibility during migration
-            # This will show aggregated earnings across all periods with same teacher
-            return float(round(sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.teacher_id == teacher_id and tx.amount is not None and _quantize_currency(tx.amount) > Decimal('0') and not tx.is_void
-                and not (tx.description or "").startswith("Transfer")),
-                Decimal('0.00')
-            ), 2))
-        else:
-            # No scope provided - return total across all classes
-            return float(round(sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.amount is not None and _quantize_currency(tx.amount) > Decimal('0') and not tx.is_void
-                and not (tx.description or "").startswith("Transfer")),
-                Decimal('0.00')
-            ), 2))
+        if not join_code:
+            return 0.0
+        return float(round(sum(
+            (_quantize_currency(tx.amount) for tx in self.transactions
+            if tx.join_code == join_code
+            and tx.amount is not None and _quantize_currency(tx.amount) > Decimal('0') and not tx.is_void
+            and not (tx.description or "").startswith("Transfer")),
+            Decimal('0.00')
+        ), 2))
 
     def get_all_teachers(self):
         """
@@ -895,7 +835,13 @@ class HallPassLog(db.Model):
     # Each hall pass request should be scoped to the specific class/period
     join_code = db.Column(db.String(20), db.ForeignKey('class_economies.join_code', ondelete='CASCADE'), nullable=True, index=True)
 
-    # Audit Anchor: Who approved/rejected/modified this request?\n    actor_membership_id = db.Column(db.Integer, db.ForeignKey('class_memberships.id', ondelete='SET NULL'), nullable=True, index=True)
+    # Audit Anchor: Who approved/rejected/modified this request?
+    actor_membership_id = db.Column(
+        db.Integer,
+        db.ForeignKey('class_memberships.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
 
     request_time = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
     decision_time = db.Column(db.DateTime(timezone=True), nullable=True)

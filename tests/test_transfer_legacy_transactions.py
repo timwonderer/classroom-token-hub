@@ -111,7 +111,7 @@ def setup_student_with_legacy_transactions(client):
 
 
 def test_transfer_with_legacy_transactions(client, setup_student_with_legacy_transactions):
-    """Test that students can transfer when they have legacy transactions."""
+    """Test transfer succeeds when amount is within join_code-scoped balance."""
     data = setup_student_with_legacy_transactions
     student = data['student']
     join_code = data['join_code']
@@ -122,12 +122,12 @@ def test_transfer_with_legacy_transactions(client, setup_student_with_legacy_tra
         sess['current_join_code'] = join_code
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
     
-    # Student should have $150 total in checking ($100 legacy + $50 new)
-    # Try to transfer $75 from checking to savings
+    # Student has only $50 available in this class economy (join_code-scoped).
+    # Legacy NULL join_code balance must not be used.
     response = client.post('/student/transfer', data={
         'from_account': 'checking',
         'to_account': 'savings',
-        'amount': '75.00',
+        'amount': '25.00',
         'passphrase': 'alice_pass'
     }, follow_redirects=False)
     
@@ -149,11 +149,11 @@ def test_transfer_with_legacy_transactions(client, setup_student_with_legacy_tra
     deposit = next((tx for tx in transactions if tx.amount > 0), None)
     
     assert withdrawal is not None
-    assert withdrawal.amount == -75.0
+    assert withdrawal.amount == -25.0
     assert withdrawal.account_type == 'checking'
     
     assert deposit is not None
-    assert deposit.amount == 75.0
+    assert deposit.amount == 25.0
     assert deposit.account_type == 'savings'
 
 
@@ -183,8 +183,8 @@ def test_insufficient_funds_with_only_new_transactions(client, setup_student_wit
     assert b'Insufficient checking funds' in response.data
 
 
-def test_transfer_includes_both_legacy_and_new_in_balance(client, setup_student_with_legacy_transactions):
-    """Test that balance calculation includes both legacy and new transactions."""
+def test_transfer_excludes_legacy_balance_without_join_code(client, setup_student_with_legacy_transactions):
+    """Test that legacy NULL join_code balances are excluded from transfer checks."""
     data = setup_student_with_legacy_transactions
     student = data['student']
     join_code = data['join_code']
@@ -195,14 +195,14 @@ def test_transfer_includes_both_legacy_and_new_in_balance(client, setup_student_
         sess['current_join_code'] = join_code
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
     
-    # Try to transfer exactly $150 (legacy $100 + new $50)
+    # Transfer exceeds join_code-scoped $50 balance, so it must be rejected.
     response = client.post('/student/transfer', data={
         'from_account': 'checking',
         'to_account': 'savings',
         'amount': '150.00',
         'passphrase': 'alice_pass'
     }, follow_redirects=False)
-    
-    # Should succeed
+
+    # Should fail and remain on transfer page
     assert response.status_code == 302
-    assert '/student/dashboard' in response.location
+    assert '/student/transfer' in response.location

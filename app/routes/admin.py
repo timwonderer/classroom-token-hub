@@ -2400,9 +2400,8 @@ def student_detail(student_id):
     # Fetch most recent TapEvent for this student
     latest_tap_event = TapEvent.query.filter_by(student_id=student.id).order_by(TapEvent.timestamp.desc()).first()
 
-    # Get student's active insurance policy (scoped to current teacher)
-    teacher_id = session.get('admin_id')
-    active_insurance = student.get_active_insurance(teacher_id)
+    # Get student's active insurance policy scoped to the currently selected class.
+    active_insurance = student.get_active_insurance(session.get('current_join_code'))
 
     # Get all blocks for the edit modal
     all_students = _scoped_students().all()

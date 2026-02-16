@@ -75,48 +75,78 @@ def get_current_class_context():
     if not student:
         return None
 
-    current_join_code = session.get('current_join_code')
-
     memberships = ClassMembership.query.filter_by(
         student_id=student.id,
         status='active',
         role='student'
     ).all()
-
-    current_membership = None
-    if memberships:
-        if not current_join_code:
-            current_membership = memberships[0]
-            current_join_code = current_membership.join_code
-            session['current_join_code'] = current_join_code
-        else:
-            current_membership = next((m for m in memberships if m.join_code == current_join_code), None)
-            if not current_membership:
-                current_membership = memberships[0]
-                current_join_code = current_membership.join_code
-                session['current_join_code'] = current_join_code
-    else:
-        # Legacy fallback during migration: derive class context from claimed TeacherBlock.
-        if not current_join_code:
-            seat = TeacherBlock.query.filter_by(student_id=student.id, is_claimed=True).first()
-            if seat:
-                current_join_code = seat.join_code
-                session['current_join_code'] = current_join_code
-        if not current_join_code:
+    if not memberships:
+        bootstrap_seat = None
+        current_join_code = session.get('current_join_code')
+        if current_join_code:
+            bootstrap_seat = TeacherBlock.query.filter_by(
+                student_id=student.id,
+                join_code=current_join_code,
+                is_claimed=True,
+            ).first()
+        if not bootstrap_seat:
+            bootstrap_seat = TeacherBlock.query.filter_by(student_id=student.id, is_claimed=True).first()
+        if not bootstrap_seat or not bootstrap_seat.join_code:
             return None
+
+        current_join_code = bootstrap_seat.join_code
+        session['current_join_code'] = current_join_code
+        economy = db.session.get(ClassEconomy, current_join_code)
+        if not economy:
+            economy = ClassEconomy(
+                join_code=current_join_code,
+                status='active',
+                created_by_admin_id=bootstrap_seat.teacher_id,
+            )
+            db.session.add(economy)
+            db.session.flush()
+
+        student_membership = ClassMembership(
+            join_code=current_join_code,
+            student_id=student.id,
+            role='student',
+            status='active',
+        )
+        db.session.add(student_membership)
+
+        if bootstrap_seat.teacher_id:
+            admin_membership = ClassMembership.query.filter_by(
+                join_code=current_join_code,
+                admin_id=bootstrap_seat.teacher_id,
+                role='admin',
+                status='active',
+            ).first()
+            if not admin_membership:
+                db.session.add(ClassMembership(
+                    join_code=current_join_code,
+                    admin_id=bootstrap_seat.teacher_id,
+                    role='admin',
+                    status='active',
+                ))
+        db.session.commit()
+        memberships = [student_membership]
+
+    current_join_code = session.get('current_join_code')
+    current_membership = next((m for m in memberships if m.join_code == current_join_code), None)
+    if not current_membership:
+        current_membership = memberships[0]
+        session['current_join_code'] = current_membership.join_code
+
+    resolved_join_code = current_membership.join_code
+    economy = db.session.get(ClassEconomy, resolved_join_code)
+    if not economy:
+        return None
 
     current_seat = TeacherBlock.query.filter_by(
         student_id=student.id,
-        join_code=current_join_code,
+        join_code=resolved_join_code,
         is_claimed=True
     ).first()
-    if not current_seat:
-        current_seat = TeacherBlock.query.filter_by(student_id=student.id, is_claimed=True).first()
-
-    resolved_join_code = current_join_code
-    if current_seat and current_seat.join_code:
-        resolved_join_code = current_seat.join_code
-    economy = ClassEconomy.query.get(resolved_join_code) if resolved_join_code else None
 
     admin_membership = None
     if resolved_join_code:
@@ -126,14 +156,14 @@ def get_current_class_context():
             status='active'
         ).first()
 
-    teacher_id = current_seat.teacher_id if current_seat else None
-    if admin_membership and admin_membership.admin_id:
-        teacher_id = admin_membership.admin_id
+    teacher_id = admin_membership.admin_id if admin_membership else None
+    if not teacher_id:
+        return None
 
     return {
         'join_code': resolved_join_code,
         'teacher_id': teacher_id,
-        'block': current_seat.block if current_seat else student.block,
+        'block': current_seat.block if current_seat else None,
         'seat_id': current_seat.id if current_seat else None,
         'membership_id': current_membership.id if current_membership else None,
         'economy': economy
@@ -141,27 +171,21 @@ def get_current_class_context():
 
 
 def get_rent_settings_for_context(context):
-    """Return rent settings scoped to the current class context.
-
-    CRITICAL: Uses join_code as primary lookup, falls back to teacher_id/block
-    for backward compatibility during migration.
-    """
+    """Return rent settings scoped to the current class context."""
     if not context:
         return None
 
     join_code = context.get('join_code')
     teacher_id = context.get('teacher_id')
-
-    # Primary: Look up by join_code (new architecture)
-    if join_code:
-        settings = RentSettings.query.filter_by(join_code=join_code).first()
-        if settings:
-            return settings
-
-    # Fallback: Look up by teacher_id + block (legacy)
-    if not teacher_id:
+    if not join_code:
         return None
 
+    settings = RentSettings.query.filter_by(join_code=join_code).first()
+    if settings:
+        return settings
+
+    if not teacher_id:
+        return None
     current_block = (context.get('block') or '').strip().upper()
     if current_block:
         settings = RentSettings.query.filter_by(
@@ -170,8 +194,6 @@ def get_rent_settings_for_context(context):
         ).first()
         if settings:
             return settings
-
-    # Final fallback: Global settings for teacher
     return RentSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
 
 
@@ -183,6 +205,30 @@ def get_current_teacher_id():
     """
     context = get_current_class_context()
     return context['teacher_id'] if context else None
+
+
+def get_banking_settings_for_context(context):
+    """Return banking settings scoped to the current class context."""
+    if not context:
+        return None
+    join_code = context.get('join_code')
+    teacher_id = context.get('teacher_id')
+    if join_code:
+        settings = BankingSettings.query.filter_by(join_code=join_code).first()
+        if settings:
+            return settings
+    if not teacher_id:
+        return None
+    current_block = (context.get('block') or '').strip().upper()
+    if current_block:
+        settings = BankingSettings.query.filter_by(
+            teacher_id=teacher_id,
+            block=current_block,
+            join_code=None,
+        ).first()
+        if settings:
+            return settings
+    return BankingSettings.query.filter_by(teacher_id=teacher_id, block=None, join_code=None).first()
 
 
 def get_current_join_code():
@@ -217,56 +263,46 @@ def get_feature_settings_for_student():
         return FeatureSettings.get_defaults()
 
     join_code = context.get('join_code')
-    teacher_id = context.get('teacher_id')
-
-    # Primary: Look up by join_code (new architecture)
-    if join_code:
-        join_code_settings = FeatureSettings.query.filter_by(
-            join_code=join_code
-        ).first()
-        if join_code_settings:
-            return join_code_settings.to_dict()
-
-    # Fallback: Legacy teacher_id + block lookup
-    if not teacher_id:
+    if not join_code:
         return FeatureSettings.get_defaults()
 
-    current_block = (context.get('block') or '').strip().upper() or None
-    join_code = context.get('join_code')
+    # Primary: Look up by join_code (new architecture)
+    join_code_settings = FeatureSettings.query.filter_by(
+        join_code=join_code
+    ).first()
+    if join_code_settings:
+        return join_code_settings.to_dict()
 
-    # Try block-specific settings
+    current_block = (context.get('block') or '').strip().upper() or None
+
+    # Try block-specific settings on this class economy first.
     if current_block:
         block_settings = FeatureSettings.query.filter_by(join_code=join_code, block=current_block).first()
         if not block_settings:
-            # Legacy fallback: pre-join_code settings rows scoped by teacher + block.
             block_settings = FeatureSettings.query.filter(
-                FeatureSettings.teacher_id == teacher_id,
+                FeatureSettings.teacher_id == context.get('teacher_id'),
                 func.upper(FeatureSettings.block) == func.upper(current_block),
-                FeatureSettings.join_code.is_(None)
+                FeatureSettings.join_code.is_(None),
             ).first()
         if block_settings:
             return block_settings.to_dict()
 
-    # Fall back to global settings for this teacher
-    # Note: Global settings (block=None) might not have a join_code if they apply to all of a teacher's classes
-    # But we should prefer one linked to this join_code if it exists (e.g. class-wide default)
-    if join_code:
-        class_settings = FeatureSettings.query.filter_by(
-            join_code=join_code,
-            block=None
-        ).first()
-        if class_settings:
-            return class_settings.to_dict()
-
-    # Final fallback: Teacher global (no block, no join_code or just teacher_id)
-    # This maintains backward compatibility for settings created before join_code association
-    global_settings = FeatureSettings.query.filter_by(
-        teacher_id=teacher_id,
+    class_settings = FeatureSettings.query.filter_by(
+        join_code=join_code,
         block=None
     ).first()
+    if class_settings:
+        return class_settings.to_dict()
 
-    if global_settings:
-        return global_settings.to_dict()
+    teacher_id = context.get('teacher_id')
+    if teacher_id:
+        global_settings = FeatureSettings.query.filter_by(
+            teacher_id=teacher_id,
+            block=None,
+            join_code=None,
+        ).first()
+        if global_settings:
+            return global_settings.to_dict()
 
     # Return system defaults
     return FeatureSettings.get_defaults()
@@ -292,17 +328,16 @@ def is_feature_enabled(feature_name):
     return settings.get(feature_key, True)  # Default to enabled
 
 
-def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: int) -> tuple[Decimal, Decimal]:
+def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: int | None = None) -> tuple[Decimal, Decimal]:
     """Calculate checking and savings balances scoped to a specific class.
     
     This function ensures consistent balance calculation across the application
-    by including transactions with matching join_code OR NULL join_code (legacy)
-    with matching teacher_id.
+    by including only transactions with matching join_code.
     
     Args:
         student (Student): Student object whose balances to calculate
         join_code (str): The join code for the current class context
-        teacher_id (int): The teacher ID for the current class context
+        teacher_id (int | None): Unused legacy argument kept for compatibility.
     
     Returns:
         tuple[Decimal, Decimal]: (checking_balance, savings_balance) as Decimal with 2 decimal places
@@ -312,14 +347,14 @@ def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: in
     checking_balance = _quantize_currency(sum(
         (tx.amount for tx in student.transactions
         if tx.account_type == 'checking' and not tx.is_void and
-        (tx.join_code == join_code or (tx.join_code is None and tx.teacher_id == teacher_id))),
+        tx.join_code == join_code),
         Decimal('0.00')
     ))
     
     savings_balance = _quantize_currency(sum(
         (tx.amount for tx in student.transactions
         if tx.account_type == 'savings' and not tx.is_void and
-        (tx.join_code == join_code or (tx.join_code is None and tx.teacher_id == teacher_id))),
+        tx.join_code == join_code),
         Decimal('0.00')
     ))
     
@@ -1101,7 +1136,12 @@ def dashboard():
         return redirect(url_for('student.login'))
 
     join_code = context['join_code']
+    join_code = context['join_code']
+    join_code = context['join_code']
     teacher_id = context['teacher_id']
+    if not join_code:
+        flash("No class selected. Please select a class to continue.", "error")
+        return redirect(url_for('student.dashboard'))
     current_block = context['block']  # Get current class block
 
     apply_savings_interest(student)  # Apply savings interest if not already applied
@@ -1114,11 +1154,9 @@ def dashboard():
     ).order_by(Transaction.timestamp.desc()).all()
 
     # FIX: Filter student items by current teacher's store
-    student_items = student.items.join(
-        StoreItem, StudentItem.store_item_id == StoreItem.id
-    ).filter(
+    student_items = student.items.filter(
         StudentItem.status.in_(['purchased', 'pending', 'processing', 'redeemed', 'completed', 'expired']),
-        StoreItem.teacher_id == teacher_id
+        StudentItem.join_code == join_code,
     ).order_by(StudentItem.purchase_date.desc()).all()
 
     checking_transactions = [tx for tx in transactions if tx.account_type == 'checking']
@@ -1193,7 +1231,7 @@ def dashboard():
     # Get student's active insurance policies (scoped to current class)
     context = get_current_class_context()
     teacher_id = context['teacher_id'] if context else None
-    active_insurance = student.get_active_insurance(teacher_id)
+    active_insurance = student.get_active_insurance(join_code)
 
     rent_status = None
     rent_settings = get_rent_settings_for_context(context)
@@ -1540,7 +1578,7 @@ def transfer():
 
         # CRITICAL FIX: Calculate balances using join_code scoping
         checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
-        banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+        banking_settings = get_banking_settings_for_context(context)
 
         if from_account == to_account:
             if is_json:
@@ -1619,20 +1657,17 @@ def transfer():
             return redirect(url_for('student.dashboard'))
 
     # CRITICAL FIX v2: Get transactions for display - scope by join_code
-    # Include transactions with matching join_code OR NULL join_code (legacy) with matching teacher_id
+    # Strictly scoped to the current class economy.
     transactions = Transaction.query.filter(
         Transaction.student_id == student.id,
         Transaction.is_void == False,
-        or_(
-            Transaction.join_code == join_code,
-            and_(Transaction.join_code.is_(None), Transaction.teacher_id == teacher_id)
-        )
+        Transaction.join_code == join_code,
     ).order_by(Transaction.timestamp.desc()).all()
     checking_transactions = [t for t in transactions if t.account_type == 'checking']
     savings_transactions = [t for t in transactions if t.account_type == 'savings']
 
     # Get banking settings for interest rate display
-    settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    settings = get_banking_settings_for_context(context)
     # Convert APY to decimal rate (e.g., 5% = 0.05)
     from app.models import _quantize_currency
     annual_rate = _quantize_currency(settings.savings_apy / Decimal('100')) if settings and settings.savings_apy is not None else Decimal('0.045')
@@ -1716,9 +1751,12 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
 
 
 
-    # Get banking settings for current teacher
-    teacher_id = get_current_teacher_id()
-    settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    context = get_current_class_context()
+    if not context:
+        return
+    join_code = context.get('join_code')
+    teacher_id = context.get('teacher_id')
+    settings = get_banking_settings_for_context(context)
     if not settings:
         # Use default simple interest if no settings
         calculation_type = 'simple'
@@ -1749,8 +1787,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
     # Calculate interest based on type
     if calculation_type == 'compound':
         # For compound interest, use current total balance (including previous interest)
-        # Convert float balance to Decimal for arithmetic compatibility with Decimal rates
-        balance = _quantize_currency(student.savings_balance)
+        balance = student.get_savings_balance(join_code=join_code)
 
         # Determine the rate based on compound frequency
         if compound_frequency == 'daily':
@@ -1836,13 +1873,14 @@ def insurance_marketplace():
     ).filter(
         StudentInsurance.student_id == student.id,
         StudentInsurance.status == 'active',
-        InsurancePolicy.teacher_id == teacher_id  # FIX: Only show current class policies
+        StudentInsurance.join_code == join_code,
+        InsurancePolicy.join_code == join_code,
     ).all()
 
     # FIX: Get available policies (only from current teacher)
     available_policies = InsurancePolicy.query.filter(
         InsurancePolicy.is_active == True,
-        InsurancePolicy.teacher_id == teacher_id  # FIX: Only current class
+        InsurancePolicy.join_code == join_code,
     ).all()
 
     # Check which policies can be purchased
@@ -1854,6 +1892,7 @@ def insurance_marketplace():
         existing = StudentInsurance.query.filter_by(
             student_id=student.id,
             policy_id=policy.id,
+            join_code=join_code,
             status='active'
         ).first()
 
@@ -1866,6 +1905,7 @@ def insurance_marketplace():
             cancelled = StudentInsurance.query.filter_by(
                 student_id=student.id,
                 policy_id=policy.id,
+                join_code=join_code,
                 status='cancelled'
             ).order_by(StudentInsurance.cancel_date.desc()).first()
 
@@ -1884,7 +1924,7 @@ def insurance_marketplace():
         InsurancePolicy, InsuranceClaim.policy_id == InsurancePolicy.id
     ).filter(
         InsuranceClaim.student_id == student.id,
-        InsurancePolicy.teacher_id == teacher_id  # FIX: Only current class claims
+        InsurancePolicy.join_code == join_code,
     ).all()
 
     # Group policies by tier for display
@@ -1941,8 +1981,8 @@ def purchase_insurance(policy_id):
 
     policy = db.get_or_404(InsurancePolicy, policy_id)
 
-    # FIX: Verify policy belongs to CURRENT teacher only
-    if policy.teacher_id != teacher_id:
+    # Verify policy belongs to the currently selected class economy.
+    if policy.join_code != join_code:
         flash("This insurance policy is not available in your current class.", "danger")
         return redirect(url_for('student.student_insurance'))
 
@@ -1950,6 +1990,7 @@ def purchase_insurance(policy_id):
     existing = StudentInsurance.query.filter_by(
         student_id=student.id,
         policy_id=policy.id,
+        join_code=join_code,
         status='active'
     ).first()
 
@@ -1961,6 +2002,7 @@ def purchase_insurance(policy_id):
     cancelled = StudentInsurance.query.filter_by(
         student_id=student.id,
         policy_id=policy.id,
+        join_code=join_code,
         status='cancelled'
     ).order_by(StudentInsurance.cancel_date.desc()).first()
 
@@ -1984,8 +2026,9 @@ def purchase_insurance(policy_id):
         ).filter(
             StudentInsurance.student_id == student.id,
             StudentInsurance.status == 'active',
+            StudentInsurance.join_code == join_code,
             InsurancePolicy.tier_category_id == policy.tier_category_id,
-            InsurancePolicy.teacher_id == teacher_id  # Scope to current class only
+            InsurancePolicy.join_code == join_code,
         ).first()
 
         if existing_tier_enrollment:
@@ -1995,7 +2038,7 @@ def purchase_insurance(policy_id):
     # CRITICAL FIX v2: Check sufficient funds using join_code scoped balance
     checking_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
     savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
-    banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    banking_settings = get_banking_settings_for_context(context)
     overdraft_shortfall = Decimal('0.00')
 
     allowed, shortfall, _, _ = evaluate_overdraft_allowance(
@@ -2036,6 +2079,7 @@ def purchase_insurance(policy_id):
     enrollment = StudentInsurance(
         student_id=student.id,
         policy_id=policy.id,
+        join_code=join_code,
         status='active',
         purchase_date=utc_now(),
         last_payment_date=utc_now(),
@@ -2389,7 +2433,7 @@ def shop():
     now = utc_now()
     now_db = normalize_for_db(now)
     items = StoreItem.query.filter(
-        StoreItem.teacher_id == teacher_id,
+        StoreItem.join_code == join_code,
         StoreItem.is_active == True,
         or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now_db)
     ).order_by(StoreItem.name).all()
@@ -2399,19 +2443,18 @@ def shop():
         StoreItem, StudentItem.store_item_id == StoreItem.id
     ).filter(
         StudentItem.status.in_(['purchased', 'pending', 'processing', 'redeemed', 'completed', 'expired']),
-        StoreItem.teacher_id == teacher_id  # FIX: Only current class items
+        StudentItem.join_code == join_code,
     ).order_by(StudentItem.purchase_date.desc()).all()
 
     # Check if student has paid rent this month and get per-period rent item IDs
     from app.models import RentSettings, RentPayment, RentItem
-    join_code = context.get('join_code')
     current_block = context.get('block')
     has_paid_rent = False
     per_period_rent_item_ids = set()
     rent_item_type_by_store_id = {}
 
-    if teacher_id and join_code and current_block:
-        rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
+    if join_code and current_block:
+        rent_settings = RentSettings.query.filter_by(join_code=join_code).first()
         if rent_settings and rent_settings.is_enabled:
             now = utc_now()
 
@@ -3143,7 +3186,7 @@ def rent_pay(period):
         payment_amount = remaining_amount
 
     # Get banking settings for overdraft handling (reuse teacher_id from above)
-    banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    banking_settings = get_banking_settings_for_context(context)
 
     # Check if student has enough funds for this payment using shared utility
     overdraft_shortfall = Decimal('0.00')
