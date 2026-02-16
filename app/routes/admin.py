@@ -157,6 +157,50 @@ def _get_teacher_blocks():
     ))
 
 
+def _get_admin_owned_join_codes_by_student(admin_id, student_ids):
+    """Return mapping of student_id -> set(join_code) where admin owns active class membership."""
+    if not admin_id or not student_ids:
+        return {}
+
+    admin_membership = aliased(ClassMembership)
+    student_membership = aliased(ClassMembership)
+    membership_rows = db.session.query(
+        student_membership.student_id,
+        student_membership.join_code,
+    ).join(
+        admin_membership,
+        and_(
+            admin_membership.join_code == student_membership.join_code,
+            admin_membership.admin_id == admin_id,
+            admin_membership.role == 'admin',
+            admin_membership.status == 'active',
+        ),
+    ).filter(
+        student_membership.student_id.in_(student_ids),
+        student_membership.role == 'student',
+        student_membership.status == 'active',
+    ).all()
+
+    join_codes_by_student = {}
+    for student_id, join_code in membership_rows:
+        if not join_code:
+            continue
+        join_codes_by_student.setdefault(student_id, set()).add(join_code)
+    return join_codes_by_student
+
+
+def _get_scoped_student_financial_totals(student, join_codes):
+    """Return (checking, savings, earnings) totals across an explicit join_code set."""
+    checking_balance = Decimal('0.00')
+    savings_balance = Decimal('0.00')
+    total_earnings = Decimal('0.00')
+    for join_code in join_codes:
+        checking_balance += student.get_checking_balance(join_code=join_code)
+        savings_balance += student.get_savings_balance(join_code=join_code)
+        total_earnings += Decimal(str(student.get_total_earnings(join_code=join_code)))
+    return checking_balance, savings_balance, total_earnings
+
+
 
 def _populate_policy_from_form(policy, form, *, next_tier_category_id=None):
     """Populate insurance policy fields from form data."""
@@ -727,10 +771,18 @@ def dashboard():
     # Get all students for calculations
     students = _scoped_students().order_by(Student.first_name).all()
     student_lookup = {s.id: s for s in students}
+    join_codes_by_student = _get_admin_owned_join_codes_by_student(
+        current_admin_id,
+        [s.id for s in students],
+    )
 
     # Quick Stats
     total_students = len(students)
-    total_balance = sum(s.checking_balance + s.savings_balance for s in students)
+    dashboard_student_totals = [
+        _get_scoped_student_financial_totals(s, join_codes_by_student.get(s.id, set()))
+        for s in students
+    ]
+    total_balance = sum((totals[0] + totals[1] for totals in dashboard_student_totals), Decimal('0.00'))
     avg_balance = total_balance / total_students if total_students > 0 else 0
 
     # Pending actions - count all types of pending approvals
@@ -7135,36 +7187,8 @@ def export_students():
     teacher_id = session.get('admin_id')
 
     student_ids = [s.id for s in students]
-
-    # Resolve (student_id -> join_codes) strictly via active ClassMembership intersection.
-    # "All sections" means all join_codes where this teacher has admin membership.
-    join_codes_by_student = {}
-    admin_join_codes = set()
-    if teacher_id and student_ids:
-        admin_membership = aliased(ClassMembership)
-        student_membership = aliased(ClassMembership)
-        membership_rows = db.session.query(
-            student_membership.student_id,
-            student_membership.join_code,
-        ).join(
-            admin_membership,
-            and_(
-                admin_membership.join_code == student_membership.join_code,
-                admin_membership.admin_id == teacher_id,
-                admin_membership.role == 'admin',
-                admin_membership.status == 'active',
-            ),
-        ).filter(
-            student_membership.student_id.in_(student_ids),
-            student_membership.role == 'student',
-            student_membership.status == 'active',
-        ).all()
-
-        for student_id, join_code in membership_rows:
-            if not join_code:
-                continue
-            join_codes_by_student.setdefault(student_id, set()).add(join_code)
-            admin_join_codes.add(join_code)
+    join_codes_by_student = _get_admin_owned_join_codes_by_student(teacher_id, student_ids)
+    admin_join_codes = {jc for join_codes in join_codes_by_student.values() for jc in join_codes}
 
     # Prefetch active insurances to avoid N+1 queries
     active_insurances_map = {}
@@ -7188,13 +7212,10 @@ def export_students():
         insurance_name = active_insurance.policy.title if active_insurance else 'None'
 
         scoped_join_codes = join_codes_by_student.get(student.id, set())
-        checking_balance = Decimal('0.00')
-        savings_balance = Decimal('0.00')
-        total_earnings = Decimal('0.00')
-        for join_code in scoped_join_codes:
-            checking_balance += student.get_checking_balance(join_code=join_code)
-            savings_balance += student.get_savings_balance(join_code=join_code)
-            total_earnings += Decimal(str(student.get_total_earnings(join_code=join_code)))
+        checking_balance, savings_balance, total_earnings = _get_scoped_student_financial_totals(
+            student,
+            scoped_join_codes,
+        )
 
         writer.writerow([
             _sanitize_csv_field(student.first_name),
@@ -7765,12 +7786,17 @@ def banking():
     students = _scoped_students().all()
 
     # Calculate banking stats
-    total_checking = sum(s.checking_balance for s in students)
-    total_savings = sum(s.savings_balance for s in students)
-    total_deposits = sum(s.checking_balance + s.savings_balance for s in students)
+    join_codes_by_student = _get_admin_owned_join_codes_by_student(admin_id, [s.id for s in students])
+    student_totals = [
+        _get_scoped_student_financial_totals(s, join_codes_by_student.get(s.id, set()))
+        for s in students
+    ]
+    total_checking = sum((totals[0] for totals in student_totals), Decimal('0.00'))
+    total_savings = sum((totals[1] for totals in student_totals), Decimal('0.00'))
+    total_deposits = total_checking + total_savings
 
     # Count students with savings
-    students_with_savings = sum(1 for s in students if s.savings_balance > 0)
+    students_with_savings = sum(1 for totals in student_totals if totals[1] > 0)
 
     # Calculate average savings balance (across all students, including those with 0)
     average_savings_balance = total_savings / len(students) if len(students) > 0 else 0

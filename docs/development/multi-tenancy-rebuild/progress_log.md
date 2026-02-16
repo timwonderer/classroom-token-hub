@@ -32,19 +32,22 @@ Branch: `join-code-centric-architecture-rebuild`
   - Enforces issue/transaction scope match (`student_id`, `teacher_id`, `join_code`) before reversal.
   - For posted transactions, creates compensating pending reversal ledger row (`type='refund'`) and links via `reversal_transaction_id`.
   - Pending transactions are transitioned to `VOID` with `voided_at`.
+- Replaced remaining admin financial aggregates that used global student properties:
+  - Admin dashboard totals and banking summary totals now aggregate only across teacher-owned active `join_code` memberships.
+  - Shared helper added for scoped per-student totals (`checking`, `savings`, `earnings`) to reduce future regressions.
 
 ## Verified
 - Targeted and multitenancy-related suites passed after hardening updates:
   - `98 passed` across the selected multi-tenancy regression suites
 - Endpoint-level runtime checks (not static-only) additionally verified:
-  - `11 passed` across issue reversal, void rules, and admin tenancy tests.
+  - `18 passed` across export scoping, issue reversal, void rules, and admin tenancy tests.
 
 ## Risk Report Reconciliation (`Economics_Invariant_Risk_Report.md`)
 - 1) Cross-tenant purchase authorization leakage: `Patched`
   - `/api/purchase-item` uses class-scoped balances (`join_code`) and no global balance fallback.
 - 2) Global balance properties violate isolation: `Partially patched`
   - High-risk call paths now use `get_checking_balance/get_savings_balance/get_total_earnings` with `join_code`.
-  - Legacy global properties (`Student.checking_balance`, `Student.savings_balance`, `Student.total_earnings`) still exist for compatibility and must be fully retired from class-scoped contexts.
+  - Legacy global properties (`Student.checking_balance`, `Student.savings_balance`, `Student.total_earnings`) still exist for compatibility, but known admin export/dashboard/banking usages were migrated to scoped helpers.
 - 3) CSV export cross-tenant leakage: `Patched`
   - `/admin/export-students` now computes balances/earnings from teacher-owned `join_code` memberships only.
 - 4) Ledger mutability via direct voiding: `Partially patched`
