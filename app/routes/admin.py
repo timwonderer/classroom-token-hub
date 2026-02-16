@@ -39,12 +39,12 @@ from app.models import (
     Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
-    BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
+    BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus, ClassEconomy,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction, ClassMembership,
     RedemptionAuditSource, Issue, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent
 )
-from app.auth import admin_required, get_admin_student_query, get_student_for_admin
+from app.auth import admin_required, get_admin_student_query, get_student_for_admin, check_membership_access
 from app.forms import (
     AdminLoginForm, AdminSignupForm, AdminTOTPConfirmForm, AdminRecoveryForm, AdminResetCredentialsForm, StoreItemForm,
     InsurancePolicyForm, AdminClaimProcessForm, PayrollSettingsForm,
@@ -199,6 +199,92 @@ def _get_scoped_student_financial_totals(student, join_codes):
         savings_balance += student.get_savings_balance(join_code=join_code)
         total_earnings += Decimal(str(student.get_total_earnings(join_code=join_code)))
     return checking_balance, savings_balance, total_earnings
+
+
+def _get_admin_active_join_codes(admin_id):
+    """Return active join codes where the admin has admin-role membership."""
+    if not admin_id:
+        return set()
+    rows = db.session.query(ClassMembership.join_code).filter(
+        ClassMembership.admin_id == admin_id,
+        ClassMembership.role == 'admin',
+        ClassMembership.status == 'active',
+    ).all()
+    return {join_code for (join_code,) in rows if join_code}
+
+
+def _bootstrap_admin_membership_from_teacherblock(admin_id, join_code):
+    """Best-effort legacy bootstrap for admin ClassMembership from owned TeacherBlock."""
+    if not admin_id or not join_code:
+        return False
+
+    existing = ClassMembership.query.filter_by(
+        join_code=join_code,
+        admin_id=admin_id,
+        role='admin',
+        status='active',
+    ).first()
+    if existing:
+        return True
+
+    teacher_block = TeacherBlock.query.filter_by(
+        teacher_id=admin_id,
+        join_code=join_code,
+    ).first()
+    if not teacher_block:
+        return False
+
+    economy = db.session.get(ClassEconomy, join_code)
+    if economy and economy.created_by_admin_id and economy.created_by_admin_id != admin_id:
+        return False
+    if not economy:
+        economy = ClassEconomy(
+            join_code=join_code,
+            status='active',
+            created_by_admin_id=admin_id,
+        )
+        db.session.add(economy)
+        db.session.flush()
+
+    membership = ClassMembership.query.filter_by(
+        join_code=join_code,
+        admin_id=admin_id,
+        role='admin',
+    ).first()
+    if membership:
+        membership.status = 'active'
+    else:
+        db.session.add(ClassMembership(
+            join_code=join_code,
+            admin_id=admin_id,
+            role='admin',
+            status='active',
+        ))
+    db.session.flush()
+    return True
+
+
+def _check_admin_join_code_access(join_code, *, require_active_economy=False, allow_legacy_bootstrap=True):
+    """Authorize current admin against join_code membership; optionally bootstrap legacy memberships."""
+    allowed, membership, economy, error = check_membership_access(
+        join_code,
+        allowed_roles=['admin'],
+        require_active_economy=require_active_economy,
+    )
+    if allowed:
+        return True, membership, economy, None
+
+    admin_id = session.get('admin_id')
+    if allow_legacy_bootstrap and _bootstrap_admin_membership_from_teacherblock(admin_id, join_code):
+        allowed, membership, economy, error = check_membership_access(
+            join_code,
+            allowed_roles=['admin'],
+            require_active_economy=require_active_economy,
+        )
+        if allowed:
+            return True, membership, economy, None
+
+    return False, None, None, error or "Access denied"
 
 
 
@@ -2319,19 +2405,19 @@ def students():
 def set_current_class():
     """Set the current class join code for admin-scoped views."""
     data = request.get_json(silent=True) or {}
-    join_code = (data.get('join_code') or '').strip()
+    join_code = (data.get('join_code') or '').strip().upper()
     if not join_code:
         return jsonify({'status': 'error', 'message': 'Join code required'}), 400
 
-    admin_id = session.get('admin_id')
-    teacher_block = TeacherBlock.query.filter_by(
-        teacher_id=admin_id,
-        join_code=join_code
-    ).first()
-    if not teacher_block:
-        return jsonify({'status': 'error', 'message': 'Class period not found'}), 404
+    allowed, membership, _economy, error = _check_admin_join_code_access(
+        join_code,
+        require_active_economy=False,
+        allow_legacy_bootstrap=True,
+    )
+    if not allowed:
+        return jsonify({'status': 'error', 'message': error or 'Access denied'}), 403
 
-    session['current_join_code'] = join_code
+    session['current_join_code'] = membership.join_code
     return jsonify({'status': 'success'}), 200
 
 
@@ -2821,13 +2907,25 @@ def delete_block():
         ]
         if not join_codes:
             return jsonify({"status": "success", "message": f"No join code found for Block {block}. Nothing to delete."})
-        if len(join_codes) > 1:
+        authorized_join_codes = []
+        for code in join_codes:
+            allowed, _membership, _economy, _error = _check_admin_join_code_access(
+                code,
+                require_active_economy=False,
+                allow_legacy_bootstrap=True,
+            )
+            if allowed:
+                authorized_join_codes.append(code)
+
+        if not authorized_join_codes:
+            return jsonify({"status": "error", "message": f"No authorized join code found for Block {block}."}), 403
+        if len(authorized_join_codes) > 1:
             return jsonify({
                 "status": "error",
                 "message": f"Block {block} has multiple join codes. Delete by join code explicitly."
             }), 400
 
-        join_code = join_codes[0]
+        join_code = authorized_join_codes[0]
         _hard_delete_join_code_scope(join_code, current_admin_id)
 
         # Cleanup any residual unclaimed seats in same block for this join code owner.
@@ -2861,9 +2959,13 @@ def delete_join_code():
     if not join_code:
         return jsonify({"status": "error", "message": "join_code is required."}), 400
 
-    seat = TeacherBlock.query.filter_by(teacher_id=current_admin_id, join_code=join_code).first()
-    if not seat:
-        return jsonify({"status": "error", "message": "Join code not found or access denied."}), 404
+    allowed, _membership, _economy, error = _check_admin_join_code_access(
+        join_code,
+        require_active_economy=False,
+        allow_legacy_bootstrap=True,
+    )
+    if not allowed:
+        return jsonify({"status": "error", "message": error or "Join code not found or access denied."}), 403
 
     try:
         _hard_delete_join_code_scope(join_code, current_admin_id)
@@ -9444,16 +9546,22 @@ def issues_queue():
     from app.utils.issue_categories import init_default_categories
 
     admin_id = session.get('admin_id')
-    join_code = session.get('join_code')
+    current_join_code = session.get('current_join_code')
+    owned_join_codes = _get_admin_active_join_codes(admin_id)
 
     # Initialize default categories if they don't exist
     init_default_categories()
 
-    # Filter by join code if one is selected, otherwise show all issues for this teacher
-    if join_code:
-        issues_query = Issue.query.filter_by(teacher_id=admin_id, join_code=join_code)
+    # Filter by selected join code if authorized; otherwise fan out across owned join codes.
+    if current_join_code and current_join_code in owned_join_codes:
+        issues_query = Issue.query.filter_by(teacher_id=admin_id, join_code=current_join_code)
     else:
-        issues_query = Issue.query.filter_by(teacher_id=admin_id)
+        if current_join_code and current_join_code not in owned_join_codes:
+            session.pop('current_join_code', None)
+        issues_query = Issue.query.filter(
+            Issue.teacher_id == admin_id,
+            Issue.join_code.in_(owned_join_codes),
+        )
 
     # Get issues by status
     pending_issues = issues_query.filter(

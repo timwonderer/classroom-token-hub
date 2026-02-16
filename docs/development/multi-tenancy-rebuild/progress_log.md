@@ -35,12 +35,19 @@ Branch: `join-code-centric-architecture-rebuild`
 - Replaced remaining admin financial aggregates that used global student properties:
   - Admin dashboard totals and banking summary totals now aggregate only across teacher-owned active `join_code` memberships.
   - Shared helper added for scoped per-student totals (`checking`, `savings`, `earnings`) to reduce future regressions.
+- Added route-level admin membership gates for class-bound actions:
+  - `/admin/current-class` now requires active admin `ClassMembership` for the requested `join_code`.
+  - `/admin/students/delete-block` and `/admin/join-code/delete` now enforce admin membership authorization for targeted join codes.
+  - `/admin/issues` now uses `current_join_code` and filters through owned active join-code memberships.
+  - `ensure_admin_join_code` now prefers `ClassMembership` as source-of-truth (with legacy `TeacherBlock` fallback only during migration).
+  - Added guarded legacy bootstrap helper to create missing admin memberships from owned `TeacherBlock` only when no ownership conflict exists.
 
 ## Verified
 - Targeted and multitenancy-related suites passed after hardening updates:
   - `98 passed` across the selected multi-tenancy regression suites
 - Endpoint-level runtime checks (not static-only) additionally verified:
   - `18 passed` across export scoping, issue reversal, void rules, and admin tenancy tests.
+  - `19 passed` across admin membership gates + legacy delete flows.
 
 ## Risk Report Reconciliation (`Economics_Invariant_Risk_Report.md`)
 - 1) Cross-tenant purchase authorization leakage: `Patched`

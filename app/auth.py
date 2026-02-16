@@ -346,17 +346,37 @@ def get_current_admin():
 
 def ensure_admin_join_code(admin_id):
     """Ensure an admin has a current join code selected in session."""
-    from app.models import TeacherBlock  # Imported lazily to avoid circular import
+    from app.models import TeacherBlock, ClassMembership  # Imported lazily to avoid circular import
 
     if not admin_id:
         return
 
     join_code = session.get('current_join_code')
     if join_code:
-        if TeacherBlock.query.filter_by(teacher_id=admin_id, join_code=join_code).first():
+        if ClassMembership.query.filter_by(
+            join_code=join_code,
+            admin_id=admin_id,
+            role='admin',
+            status='active',
+        ).first():
             return
         session.pop('current_join_code', None)
 
+    membership = (
+        ClassMembership.query
+        .filter_by(
+            admin_id=admin_id,
+            role='admin',
+            status='active',
+        )
+        .order_by(ClassMembership.join_code)
+        .first()
+    )
+    if membership and membership.join_code:
+        session['current_join_code'] = membership.join_code
+        return
+
+    # Legacy fallback for pre-membership data during migration.
     teacher_block = (
         TeacherBlock.query
         .filter_by(teacher_id=admin_id)
