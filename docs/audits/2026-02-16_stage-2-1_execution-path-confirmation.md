@@ -8,8 +8,8 @@ This audit validates the reachability and runtime impact of findings from the St
 ### Call Graph
 *   **Definition:** `app/models.py:290-300` (`Student.checking_balance`, `Student.savings_balance`)
 *   **Active Callers:**
-    *   `app/routes/api.py:327`: `if student.checking_balance < total_price:` (Inside `purchase_item`)
-    *   `app/routes/api.py:328`: `shortfall = total_price - student.checking_balance`
+    *   `app/routes/api.py:456`: `if student.checking_balance < total_price:` (Inside `purchase_item`)
+    *   `app/routes/api.py:457`: `shortfall = total_price - student.checking_balance`
     *   `app/routes/admin.py:680` (approx): `total_balance = sum(s.checking_balance ...)` (Admin Dashboard stats)
 
 ### Join Code Enforcement
@@ -64,7 +64,8 @@ The route `/admin/bonuses` exists but has no UI entry point. It is technically c
 ### Call Graph
 *   **Definition:** `app/routes/admin.py:258` (`_hard_delete_join_code_scope`)
 *   **Active Callers:**
-    *   `app/routes/admin.py`: `delete_block` and `delete_join_code` routes.
+    *   `app/routes/admin.py:2779`: `delete_block`
+    *   `app/routes/admin.py:2817`: `delete_join_code`
     *   `templates/admin_students.html`: "Delete All Students in [Block]" button calls `delete_block`.
 
 ### Join Code Enforcement
