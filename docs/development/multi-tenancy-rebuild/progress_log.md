@@ -33,6 +33,23 @@ Branch: `join-code-centric-architecture-rebuild`
 - Targeted and multitenancy-related suites passed after hardening updates:
   - `98 passed` across the selected multi-tenancy regression suites
 
+## Risk Report Reconciliation (`Economics_Invariant_Risk_Report.md`)
+- 1) Cross-tenant purchase authorization leakage: `Patched`
+  - `/api/purchase-item` uses class-scoped balances (`join_code`) and no global balance fallback.
+- 2) Global balance properties violate isolation: `Partially patched`
+  - High-risk call paths now use `get_checking_balance/get_savings_balance/get_total_earnings` with `join_code`.
+  - Legacy global properties (`Student.checking_balance`, `Student.savings_balance`, `Student.total_earnings`) still exist for compatibility and must be fully retired from class-scoped contexts.
+- 3) CSV export cross-tenant leakage: `Patched`
+  - `/admin/export-students` now computes balances/earnings from teacher-owned `join_code` memberships only.
+- 4) Ledger mutability via direct voiding: `Partially patched`
+  - Reversal transactions are created in key void flows, but original-row mutability flags remain in use (`is_void`) and full immutable-ledger semantics are not complete.
+- 5) Float precision risk: `Partially patched`
+  - Core money storage is `Numeric`, and ledger cache uses integer cents.
+  - Remaining float conversions still exist in presentation/compatibility paths and should be minimized for strict financial invariants.
+- 6) Join-code hard deletion audit concern: `Intended behavior (accepted)`
+  - Confirmed as required by design: join_code destruction removes all data in that tenant boundary.
+  - UX guardrail work for destructive confirmation is still pending.
+
 ## Intentional-by-Design Decisions
 - Join-code deletion performs hard deletion of all class-scoped data in that boundary.
 - Legacy unscoped aggregate earnings/balance paths are being retired; scoped (`join_code`) calls are the expected v2 behavior.

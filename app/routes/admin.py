@@ -28,7 +28,7 @@ from flask import (
 )
 from urllib.parse import urlparse
 from sqlalchemy import desc, text, or_, and_, func
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, aliased
 from sqlalchemy.exc import SQLAlchemyError
 import sqlalchemy as sa
 import pyotp
@@ -41,7 +41,7 @@ from app.models import (
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
-    DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
+    DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction, ClassMembership,
     RedemptionAuditSource, Issue, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
@@ -2288,6 +2288,7 @@ def set_current_class():
 def student_detail(student_id):
     """View detailed information for a specific student."""
     student = _get_student_or_404(student_id)
+    teacher_id = session.get('admin_id')
     join_code = session.get('current_join_code')
     # Remove deprecated last_tap_in/last_tap_out logic; rely on TapEvent backend.
     # Fetch last rent payment
@@ -7133,16 +7134,48 @@ def export_students():
     students = _scoped_students().order_by(Student.first_name, Student.last_initial).all()
     teacher_id = session.get('admin_id')
 
-    # Prefetch active insurances to avoid N+1 queries
     student_ids = [s.id for s in students]
-    active_insurances_map = {}
+
+    # Resolve (student_id -> join_codes) strictly via active ClassMembership intersection.
+    # "All sections" means all join_codes where this teacher has admin membership.
+    join_codes_by_student = {}
+    admin_join_codes = set()
     if teacher_id and student_ids:
+        admin_membership = aliased(ClassMembership)
+        student_membership = aliased(ClassMembership)
+        membership_rows = db.session.query(
+            student_membership.student_id,
+            student_membership.join_code,
+        ).join(
+            admin_membership,
+            and_(
+                admin_membership.join_code == student_membership.join_code,
+                admin_membership.admin_id == teacher_id,
+                admin_membership.role == 'admin',
+                admin_membership.status == 'active',
+            ),
+        ).filter(
+            student_membership.student_id.in_(student_ids),
+            student_membership.role == 'student',
+            student_membership.status == 'active',
+        ).all()
+
+        for student_id, join_code in membership_rows:
+            if not join_code:
+                continue
+            join_codes_by_student.setdefault(student_id, set()).add(join_code)
+            admin_join_codes.add(join_code)
+
+    # Prefetch active insurances to avoid N+1 queries
+    active_insurances_map = {}
+    if teacher_id and student_ids and admin_join_codes:
         scoped_insurances = StudentInsurance.query.join(
             InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id
         ).filter(
             StudentInsurance.student_id.in_(student_ids),
             StudentInsurance.status == 'active',
-            InsurancePolicy.teacher_id == teacher_id
+            InsurancePolicy.teacher_id == teacher_id,
+            StudentInsurance.join_code.in_(admin_join_codes),
         ).all()
 
         for ins in scoped_insurances:
@@ -7154,13 +7187,22 @@ def export_students():
         active_insurance = active_insurances_map.get(student.id)
         insurance_name = active_insurance.policy.title if active_insurance else 'None'
 
+        scoped_join_codes = join_codes_by_student.get(student.id, set())
+        checking_balance = Decimal('0.00')
+        savings_balance = Decimal('0.00')
+        total_earnings = Decimal('0.00')
+        for join_code in scoped_join_codes:
+            checking_balance += student.get_checking_balance(join_code=join_code)
+            savings_balance += student.get_savings_balance(join_code=join_code)
+            total_earnings += Decimal(str(student.get_total_earnings(join_code=join_code)))
+
         writer.writerow([
             _sanitize_csv_field(student.first_name),
             _sanitize_csv_field(student.last_initial),
             _sanitize_csv_field(student.block),
-            f"{student.checking_balance:.2f}",
-            f"{student.savings_balance:.2f}",
-            f"{student.total_earnings:.2f}",
+            f"{checking_balance:.2f}",
+            f"{savings_balance:.2f}",
+            f"{total_earnings:.2f}",
             _sanitize_csv_field(insurance_name),
             'Yes' if student.is_rent_enabled else 'No',
             'Yes' if student.has_completed_setup else 'No'
