@@ -28,10 +28,16 @@ Branch: `join-code-centric-architecture-rebuild`
   - Added join-code settings bootstrap helper that clones teacher template rows into join-code-scoped settings
 - Fixed audit-anchor implementation bug:
   - `HallPassLog.actor_membership_id` is now a real persisted column definition
+- Hardened issue-resolution reverse flow (`/admin/issues/<id>/resolve`):
+  - Enforces issue/transaction scope match (`student_id`, `teacher_id`, `join_code`) before reversal.
+  - For posted transactions, creates compensating pending reversal ledger row (`type='refund'`) and links via `reversal_transaction_id`.
+  - Pending transactions are transitioned to `VOID` with `voided_at`.
 
 ## Verified
 - Targeted and multitenancy-related suites passed after hardening updates:
   - `98 passed` across the selected multi-tenancy regression suites
+- Endpoint-level runtime checks (not static-only) additionally verified:
+  - `11 passed` across issue reversal, void rules, and admin tenancy tests.
 
 ## Risk Report Reconciliation (`Economics_Invariant_Risk_Report.md`)
 - 1) Cross-tenant purchase authorization leakage: `Patched`
@@ -42,7 +48,8 @@ Branch: `join-code-centric-architecture-rebuild`
 - 3) CSV export cross-tenant leakage: `Patched`
   - `/admin/export-students` now computes balances/earnings from teacher-owned `join_code` memberships only.
 - 4) Ledger mutability via direct voiding: `Partially patched`
-  - Reversal transactions are created in key void flows, but original-row mutability flags remain in use (`is_void`) and full immutable-ledger semantics are not complete.
+  - Reversal transactions are created in key void flows, including issue-resolution reverse actions.
+  - Original-row mutability flags remain in use (`is_void`) and full immutable-ledger semantics are not complete.
 - 5) Float precision risk: `Partially patched`
   - Core money storage is `Numeric`, and ledger cache uses integer cents.
   - Remaining float conversions still exist in presentation/compatibility paths and should be minimized for strict financial invariants.

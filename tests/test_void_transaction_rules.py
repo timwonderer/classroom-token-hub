@@ -64,6 +64,7 @@ def test_void_delayed_purchase_removes_item_and_refunds(client):
 
     delayed_item = StoreItem(
         teacher_id=teacher.id,
+        join_code='VOIDDLY1',
         name='Delayed Reward',
         price=Decimal('25.00'),
         item_type='delayed',
@@ -132,6 +133,7 @@ def test_void_immediate_purchase_is_not_allowed(client):
 
     immediate_item = StoreItem(
         teacher_id=teacher.id,
+        join_code='VOIDIMM1',
         name='Immediate Reward',
         price=Decimal('15.00'),
         item_type='immediate',
@@ -180,6 +182,7 @@ def test_void_delayed_purchase_after_redemption_request_is_not_allowed(client):
 
     delayed_item = StoreItem(
         teacher_id=teacher.id,
+        join_code='VOIDUSE1',
         name='Delayed Use Reward',
         price=Decimal('20.00'),
         item_type='delayed',
@@ -240,6 +243,7 @@ def test_void_already_voided_transaction_is_rejected(client):
 
     delayed_item = StoreItem(
         teacher_id=teacher.id,
+        join_code='VOIDDBL1',
         name='Double Void Item',
         price=Decimal('10.00'),
         item_type='delayed',

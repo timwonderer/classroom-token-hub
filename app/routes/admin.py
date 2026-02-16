@@ -9497,22 +9497,66 @@ def resolve_issue(issue_id):
     try:
         # Apply resolution based on action type
         if action_type == 'reverse_transaction' and issue.related_transaction_id:
-            # Void the transaction
+            # Reverse transaction with strict issue scope validation.
             transaction = db.session.get(Transaction, issue.related_transaction_id)
-            if transaction and transaction.student_id == issue.student_id:
-                before_value = f"is_void={transaction.is_void}"
-                transaction.is_void = True
-                after_value = f"is_void={transaction.is_void}"
+            if not transaction:
+                flash("Related transaction was not found.", "error")
+                return redirect(url_for('admin.view_issue', issue_id=issue_id))
 
-                record_resolution_action(
-                    issue, 'reverse_transaction', 'teacher', admin_id,
-                    action_description=f"Voided transaction #{transaction.id}",
-                    related_transaction_id=transaction.id,
-                    before_value=before_value,
-                    after_value=after_value
+            if (
+                transaction.student_id != issue.student_id
+                or transaction.teacher_id != admin_id
+                or transaction.join_code != issue.join_code
+            ):
+                flash("Transaction does not match this issue's class scope.", "error")
+                return redirect(url_for('admin.view_issue', issue_id=issue_id))
+
+            if transaction.is_void:
+                flash("Transaction is already voided.", "warning")
+                return redirect(url_for('admin.view_issue', issue_id=issue_id))
+
+            before_value = (
+                f"is_void={transaction.is_void},"
+                f"status={transaction.status.value if transaction.status else None},"
+                f"reversal_transaction_id={transaction.reversal_transaction_id}"
+            )
+
+            if transaction.status == TransactionStatus.PENDING:
+                transaction.status = TransactionStatus.VOID
+            else:
+                reversal_tx = Transaction(
+                    student_id=transaction.student_id,
+                    teacher_id=transaction.teacher_id,
+                    join_code=transaction.join_code,
+                    amount=-(transaction.amount or Decimal('0.00')),
+                    account_type=transaction.account_type or 'checking',
+                    status=TransactionStatus.PENDING,
+                    type='refund',
+                    original_transaction_id=transaction.id,
+                    description=f"Issue resolution refund for transaction #{transaction.id}: {transaction.description}",
                 )
+                db.session.add(reversal_tx)
+                db.session.flush()
+                transaction.reversal_transaction_id = reversal_tx.id
 
-                issue.teacher_resolution = 'Transaction Reversed'
+            transaction.is_void = True
+            transaction.voided_at = utc_now()
+
+            after_value = (
+                f"is_void={transaction.is_void},"
+                f"status={transaction.status.value if transaction.status else None},"
+                f"reversal_transaction_id={transaction.reversal_transaction_id}"
+            )
+
+            record_resolution_action(
+                issue, 'reverse_transaction', 'teacher', admin_id,
+                action_description=f"Voided transaction #{transaction.id}",
+                related_transaction_id=transaction.id,
+                before_value=before_value,
+                after_value=after_value
+            )
+
+            issue.teacher_resolution = 'Transaction Reversed'
 
         elif action_type == 'manual_adjustment':
             # Teacher handles manually (no automatic action)
