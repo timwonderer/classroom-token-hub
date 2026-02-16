@@ -2,7 +2,7 @@ name: Lint Workflows
 
 permissions:
   contents: read
-  checks: write
+  pull-requests: write
 
 on:
   pull_request:
@@ -19,8 +19,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
       - name: actionlint with reviewdog
         uses: reviewdog/action-actionlint@v1.70.0
         with:
           reporter: github-pr-check
-          fail_on_error: true
+          fail_level: error
