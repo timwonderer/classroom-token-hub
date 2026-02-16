@@ -151,7 +151,7 @@
                         <div class="mb-3 pb-3 border-bottom">
                             <div class="d-flex justify-content-between align-items-center">
                                 <span class="text-muted">Total Lifetime Earnings</span>
-                                <h5 class="mb-0 text-info">${{ "%.2f"|format(student.total_earnings) }}</h5>
+                                <h5 class="mb-0 text-info">${{ "%.2f"|format(scoped_total_earnings) }}</h5>
                             </div>
                         </div>
                         <div>
@@ -338,7 +338,7 @@
                     <div class="col-md-4">
                         <div class="text-center p-3 bg-light rounded">
                             <h6 class="text-muted mb-1">Total Earnings to Date</h6>
-                            <h5 class="mb-0 text-success">${{ "%.2f"|format(student.total_earnings) }}</h5>
+                            <h5 class="mb-0 text-success">${{ "%.2f"|format(scoped_total_earnings) }}</h5>
                         </div>
                     </div>
                 </div>

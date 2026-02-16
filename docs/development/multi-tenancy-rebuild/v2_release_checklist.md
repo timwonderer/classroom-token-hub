@@ -11,6 +11,7 @@ Branch: `join-code-centric-architecture-rebuild`
 | 2 | Query inversion complete (`teacher_id/block` removed as access control) | In Progress | Access decisions no longer depend on `TeacherBlock`, `teacher_id`, `block` | Code sweep + targeted deny tests |
 | 3 | No class-scoped `join_code IS NULL` fallback paths | In Progress | Class reads/writes never blend legacy null join_code rows | Regression tests + grep guard |
 | 4 | “All sections” implemented as explicit fan-out over owned join-codes | In Progress | Batch operations iterate concrete owned join-codes only | Integration tests for multi-class teacher |
+| 4a | No global-balance property reads in live class-scoped displays | In Progress | Student/admin financial display surfaces render route-provided scoped totals only | Template + endpoint tests |
 | 5 | Actor audit anchor complete (`actor_membership_id`) | In Progress | All state-changing writes persist actor membership or fail safely | Endpoint mutation tests |
 | 6 | Ledger immutability semantics complete | In Progress | Reversal-first behavior for voids; no destructive retroactive mutation as source-of-truth | Void flow tests + ledger reconciliation |
 | 7 | Monetary precision hardened | In Progress | Core financial calculations avoid float drift | Precision tests |
@@ -28,6 +29,11 @@ Branch: `join-code-centric-architecture-rebuild`
 6. Remove legacy bypass routes and compatibility branches.
 7. Add destructive delete UX guardrails.
 8. Lock CI gate for multitenancy regression suite.
+
+## Recent Completions
+
+- Scoped admin payroll display balances to owned join-codes.
+- Scoped student payroll/transfer lifetime earnings display to current join-code context.
 
 ## Definition of Done for v2
 

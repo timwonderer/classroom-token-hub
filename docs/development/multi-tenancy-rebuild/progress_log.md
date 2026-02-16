@@ -44,6 +44,9 @@ Branch: `join-code-centric-architecture-rebuild`
 - Removed remaining live global-balance display leak in admin payroll UI:
   - `/admin/payroll` now renders per-student checking/savings from scoped join-code aggregates.
   - `templates/admin_payroll.html` no longer reads `student.checking_balance` / `student.savings_balance` directly.
+- Removed remaining live student earnings display leaks:
+  - `templates/student_payroll.html` and `templates/student_transfer.html` now render `scoped_total_earnings` provided by route context.
+  - Student payroll/transfer routes now pass join-code scoped earnings instead of template reads from `student.total_earnings`.
 
 ## Verified
 - Targeted and multitenancy-related suites passed after hardening updates:
@@ -52,13 +55,14 @@ Branch: `join-code-centric-architecture-rebuild`
   - `18 passed` across export scoping, issue reversal, void rules, and admin tenancy tests.
   - `19 passed` across admin membership gates + legacy delete flows.
   - `20 passed` across payroll + shared-student + admin multitenancy regression slice including scoped payroll display checks.
+  - `10 passed` across student scoped earnings display + adjacent feature/transfer regression slice.
 
 ## Risk Report Reconciliation (`Economics_Invariant_Risk_Report.md`)
 - 1) Cross-tenant purchase authorization leakage: `Patched`
   - `/api/purchase-item` uses class-scoped balances (`join_code`) and no global balance fallback.
 - 2) Global balance properties violate isolation: `Partially patched`
   - High-risk call paths now use `get_checking_balance/get_savings_balance/get_total_earnings` with `join_code`.
-  - Legacy global properties (`Student.checking_balance`, `Student.savings_balance`, `Student.total_earnings`) still exist for compatibility, but known admin export/dashboard/banking usages were migrated to scoped helpers.
+  - Legacy global properties (`Student.checking_balance`, `Student.savings_balance`, `Student.total_earnings`) still exist for compatibility, but known admin export/dashboard/banking/payroll display and student payroll/transfer display usages were migrated to scoped helpers.
 - 3) CSV export cross-tenant leakage: `Patched`
   - `/admin/export-students` now computes balances/earnings from teacher-owned `join_code` memberships only.
 - 4) Ledger mutability via direct voiding: `Partially patched`

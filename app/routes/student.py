@@ -1555,6 +1555,7 @@ def payroll():
     # Scope dashboard data to the selected class context only
     period_states = {current_block: period_states.get(current_block, {})}
     student_blocks = [current_block]
+    scoped_total_earnings = student.get_total_earnings(join_code=join_code)
 
     # Determine the pay rate for the current block (per minute)
     pay_rate_per_second = get_pay_rate_for_block(current_block)
@@ -1597,6 +1598,7 @@ def payroll():
         all_tap_events=all_tap_events,
         tap_events_by_block=tap_events_by_block,
         pay_rate_per_minute=pay_rate_per_minute,
+        scoped_total_earnings=scoped_total_earnings,
         pay_rate_table=[
             ("1 minute", pay_rate_per_minute),
             ("10 minutes", round(pay_rate_per_minute * 10, 2)),
@@ -1750,6 +1752,7 @@ def transfer():
     # Calculate forecast interest based on settings
     # CRITICAL FIX v3: Calculate BOTH checking and savings balances using join_code scoping
     checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
+    scoped_total_earnings = student.get_total_earnings(join_code=join_code)
 
     if calculation_type == 'compound':
         if compound_frequency == 'daily':
@@ -1802,6 +1805,7 @@ def transfer():
                          savings_transactions=savings_transactions,
                          checking_balance=checking_balance,
                          savings_balance=savings_balance,
+                         scoped_total_earnings=scoped_total_earnings,
                          forecast_interest=forecast_interest,
                          settings=settings,
                          calculation_type=calculation_type,
