@@ -129,6 +129,80 @@ def cleanup_expired_demo_sessions_job():
         logger.error(f"Demo session cleanup job failed: {e}", exc_info=True)
 
 
+def database_maintenance_job():
+    """
+    Scheduled job that performs nightly database maintenance tasks.
+    Runs at 2 AM UTC to clean up orphaned entries and maintain data integrity.
+    """
+    # Import here to avoid circular imports
+    from sqlalchemy import and_, or_, tuple_
+    from app.models import StoreItemBlock, TeacherBlock, StoreItem
+    from app.extensions import db
+
+    logger = logging.getLogger('scheduled_tasks')
+    logger.info("Starting nightly database maintenance job")
+
+    total_cleaned = 0
+
+    try:
+        # Task 1: Clean up orphaned StoreItemBlock entries
+        # These are blocks that reference classes that no longer exist
+        logger.info("Checking for orphaned StoreItemBlock entries...")
+        
+        orphaned_entries_subq = (
+            db.session.query(
+                StoreItemBlock.store_item_id.label("store_item_id"),
+                StoreItemBlock.block.label("block"),
+            )
+            .outerjoin(StoreItem, StoreItem.id == StoreItemBlock.store_item_id)
+            .outerjoin(
+                TeacherBlock,
+                and_(
+                    TeacherBlock.teacher_id == StoreItem.teacher_id,
+                    TeacherBlock.block == StoreItemBlock.block,
+                ),
+            )
+            .filter(
+                or_(
+                    StoreItem.id.is_(None),
+                    TeacherBlock.id.is_(None),
+                )
+            )
+            .distinct()
+            .subquery()
+        )
+
+        orphaned_count = db.session.query(orphaned_entries_subq).count()
+        if orphaned_count:
+            logger.info("Found %s orphaned StoreItemBlock entries", orphaned_count)
+            total_cleaned = (
+                StoreItemBlock.query
+                .filter(
+                    tuple_(StoreItemBlock.store_item_id, StoreItemBlock.block).in_(
+                        db.session.query(
+                            orphaned_entries_subq.c.store_item_id,
+                            orphaned_entries_subq.c.block,
+                        )
+                    )
+                )
+                .delete(synchronize_session=False)
+            )
+            db.session.commit()
+            logger.info("Cleaned up %s orphaned StoreItemBlock entries", total_cleaned)
+        else:
+            logger.info("No orphaned StoreItemBlock entries found")
+
+        logger.info(
+            "Skipping legacy join_code backfill in nightly maintenance; "
+            "records are expected to already be join_code-scoped."
+        )
+        logger.info(f"Database maintenance completed. Total orphaned entries cleaned: {total_cleaned}")
+
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Database maintenance job failed: {e}", exc_info=True)
+
+
 def init_scheduled_tasks(app):
     """
     Initialize and start scheduled tasks.
@@ -149,6 +223,11 @@ def init_scheduled_tasks(app):
     def run_cleanup_demo_sessions():
         with app.app_context():
             cleanup_expired_demo_sessions_job()
+
+    # Wrapper function that runs the database_maintenance_job with Flask app context
+    def run_database_maintenance():
+        with app.app_context():
+            database_maintenance_job()
 
     if not scheduler.running:
         # Add the auto tap-out enforcement job to run every hour
@@ -173,7 +252,19 @@ def init_scheduled_tasks(app):
             max_instances=1  # Prevent overlapping executions
         )
 
+        # Add the database maintenance job to run nightly at 2 AM UTC
+        scheduler.add_job(
+            func=run_database_maintenance,
+            trigger='cron',
+            hour=2,
+            minute=0,
+            id='database_maintenance',
+            name='Nightly database maintenance',
+            replace_existing=True,
+            max_instances=1  # Prevent overlapping executions
+        )
+
         scheduler.start()
-        logger.info("Scheduled tasks initialized. Auto tap-out will run every hour, demo cleanup every 5 minutes.")
+        logger.info("Scheduled tasks initialized: auto tap-out (hourly), demo cleanup (5 min), database maintenance (2 AM UTC daily)")
     else:
         logger.info("Scheduler already running")

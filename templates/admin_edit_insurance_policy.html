@@ -6,6 +6,7 @@
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
 <script src="{{ static_url('js/economy-balance.js') }}"></script>
+<script src="{{ static_url('js/insurance-badge-select.js') }}"></script>
 <style>
     .EasyMDEContainer .CodeMirror {
         min-height: 150px;
@@ -54,7 +55,7 @@
               </div>
               <div class="col-md-6 mb-3">
                 {{ form.marketing_badge.label(class="form-label fw-bold") }}
-                {{ form.marketing_badge(class="form-select") }}
+                {{ form.marketing_badge(class="form-select", id="edit_marketing_badge") }}
                 <small class="text-muted">Add a fun marketing badge to attract students</small>
               </div>
             </div>
@@ -164,16 +165,11 @@
                   <div class="col-md-6 mb-3">
                     {{ form.max_claims_count.label(class="form-label fw-bold") }}
                     {{ form.max_claims_count(class="form-control", placeholder="0") }}
-                    <small class="text-muted">Max per period (0 = ∞)</small>
-                  </div>
-                  <div class="col-md-6 mb-3">
-                    {{ form.max_claims_period.label(class="form-label fw-bold") }}
-                    {{ form.max_claims_period(class="form-select") }}
-                    <small class="text-muted">Period type</small>
+                    <small class="text-muted">Max per charge period (0 = ∞)</small>
                   </div>
                 </div>
                 <div class="row">
-                  <div class="col-md-6 mb-3">
+                  <div class="col-md-6 mb-3" id="editMaxClaimAmountGroup">
                     {{ form.max_claim_amount.label(class="form-label fw-bold") }}
                     <div class="input-group">
                       <span class="input-group-text">$</span>
@@ -181,7 +177,7 @@
                     </div>
                     <small class="text-muted">Max payout per claim (0 = ∞)</small>
                   </div>
-                  <div class="col-md-6 mb-0">
+                  <div class="col-md-6 mb-0" id="editMaxPayoutPerPeriodGroup">
                     {{ form.max_payout_per_period.label(class="form-label fw-bold") }}
                     <div class="input-group">
                       <span class="input-group-text">$</span>
@@ -621,6 +617,11 @@ document.addEventListener('DOMContentLoaded', function() {
   const cooldownSection = document.getElementById('cooldownSection');
   const cooldownDays = document.getElementById('cooldownDays');
   const repurchaseBadge = document.querySelector('.repurchase-badge');
+  const editClaimType = document.getElementById('edit_claim_type');
+  const editMaxClaimAmountGroup = document.getElementById('editMaxClaimAmountGroup');
+  const editMaxPayoutPerPeriodGroup = document.getElementById('editMaxPayoutPerPeriodGroup');
+  const editMaxClaimAmountInput = document.getElementById('edit_max_claim_amount');
+  const editMaxPayoutInput = document.getElementById('edit_max_payout_per_period');
 
   function updateRepurchaseRestrictions() {
     if (permanentBlockToggle.checked) {
@@ -660,6 +661,36 @@ document.addEventListener('DOMContentLoaded', function() {
     updateRepurchaseRestrictions(); // Initialize on load
   }
 
+  function setEditMonetaryFieldsVisibility() {
+    if (!editClaimType) return;
+    const isNonMonetary = editClaimType.value === 'non_monetary';
+
+    if (editMaxClaimAmountGroup) {
+      editMaxClaimAmountGroup.style.display = isNonMonetary ? 'none' : '';
+    }
+    if (editMaxPayoutPerPeriodGroup) {
+      editMaxPayoutPerPeriodGroup.style.display = isNonMonetary ? 'none' : '';
+    }
+
+    if (isNonMonetary) {
+      if (editMaxClaimAmountInput) {
+        editMaxClaimAmountInput.value = '';
+        editMaxClaimAmountInput.disabled = true;
+      }
+      if (editMaxPayoutInput) {
+        editMaxPayoutInput.value = '';
+        editMaxPayoutInput.disabled = true;
+      }
+    } else {
+      if (editMaxClaimAmountInput) editMaxClaimAmountInput.disabled = false;
+      if (editMaxPayoutInput) editMaxPayoutInput.disabled = false;
+    }
+  }
+  if (editClaimType) {
+    editClaimType.addEventListener('change', setEditMonetaryFieldsVisibility);
+    setEditMonetaryFieldsVisibility();
+  }
+
   // Tier grouping flow (edit mode)
   const tierToggleEdit = document.getElementById('tierToggleEdit');
   const tierSelectionEdit = document.getElementById('tierSelectionEdit');
@@ -678,7 +709,10 @@ document.addEventListener('DOMContentLoaded', function() {
   function clearTierFields() {
     if (tierCategoryInput) tierCategoryInput.value = '';
     if (tierNameInput) tierNameInput.value = '';
-    if (tierColorInput) tierColorInput.value = '';
+    if (tierColorInput) {
+      tierColorInput.value = '';
+      tierColorInput.dispatchEvent(new Event('change'));
+    }
     if (tierLevelInput) tierLevelInput.value = '';
   }
 
@@ -719,7 +753,10 @@ document.addEventListener('DOMContentLoaded', function() {
   function setTierValues(tier) {
     if (tierCategoryInput) tierCategoryInput.value = tier.id;
     if (tierNameInput) tierNameInput.value = tier.name || '';
-    if (tierColorInput) tierColorInput.value = tier.color || 'primary';
+    if (tierColorInput) {
+      tierColorInput.value = tier.color || 'primary';
+      tierColorInput.dispatchEvent(new Event('change'));
+    }
     updateTierSummary();
     if (tierActionsEdit) tierActionsEdit.style.display = 'flex';
     if (newGroupFieldsEdit) newGroupFieldsEdit.classList.remove('d-none');
@@ -731,7 +768,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (tierSummaryEdit) tierSummaryEdit.classList.add('d-none');
     if (tierActionsEdit) tierActionsEdit.style.display = 'flex';
     if (newGroupFieldsEdit) newGroupFieldsEdit.classList.remove('d-none');
-    if (tierColorInput && !tierColorInput.value) tierColorInput.value = 'primary';
+    if (tierColorInput && !tierColorInput.value) {
+      tierColorInput.value = 'primary';
+      tierColorInput.dispatchEvent(new Event('change'));
+    }
   }
 
   selectTierButtonsEdit.forEach(btn => {
@@ -803,6 +843,9 @@ document.addEventListener('DOMContentLoaded', function() {
   tooltipTriggerList.map(function (tooltipTriggerEl) {
     return new bootstrap.Tooltip(tooltipTriggerEl);
   });
+
+  window.renderBadgeLikeSelect('edit_marketing_badge', 'marketing');
+  window.renderBadgeLikeSelect('tier_color', 'tier');
 });
 </script>
 

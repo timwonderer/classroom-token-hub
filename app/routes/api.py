@@ -11,6 +11,7 @@ import re
 import copy
 import pytz
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 
 from flask import Blueprint, request, jsonify, session, current_app
@@ -21,7 +22,7 @@ from werkzeug.security import check_password_hash
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, Admin, StoreItem, StudentItem, Transaction, TapEvent,
+    Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
     HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
     StudentTeacher, TeacherBlock, StudentBlock, DemoStudent,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource
@@ -265,15 +266,57 @@ def purchase_item():
         if not is_visible:
              return jsonify({"status": "error", "message": "This item is not available for your class period."}), 404
 
+    # For collective items with whole_class goal, enforce one purchase per student per class
+    if item.item_type == 'collective' and item.collective_goal_type == 'whole_class':
+        existing_purchase = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.store_item_id == item.id,
+            StudentItem.join_code == join_code,
+            StudentItem.status.notin_(['voided', 'rejected'])
+        ).first()
+        if existing_purchase:
+            return jsonify({"status": "error", "message": "You have already purchased this whole class goal item."}), 400
+
     # Check rent late restrictions
     from app.models import RentSettings, RentPayment, RentItem
     from datetime import datetime, timedelta
 
     rent_settings = get_rent_settings_for_context(context)
+    current_block = context.get('block', '').strip().upper()
+    now = utc_now()
+    has_paid_rent = False
+    per_use_rent_item = None
+
+    if rent_settings and rent_settings.is_enabled:
+        from app.routes.student import _calculate_rent_coverage_due_date
+        coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
+        if coverage_due_date:
+            coverage_month = coverage_due_date.month
+            coverage_year = coverage_due_date.year
+            coverage_payments = RentPayment.query.filter(
+                RentPayment.student_id == student.id,
+                RentPayment.period == current_block,
+                RentPayment.coverage_month == coverage_month,
+                RentPayment.coverage_year == coverage_year,
+                RentPayment.join_code == join_code
+            ).all()
+            from app.routes.student import _filter_valid_rent_payments
+            valid_payments = _filter_valid_rent_payments(coverage_payments, student.id, join_code)
+            if valid_payments:
+                total_paid = sum(p.amount_paid for p in valid_payments)
+                grace_for_coverage = coverage_due_date + timedelta(days=rent_settings.grace_period_days)
+                late_fee_applies = now > grace_for_coverage
+                required = rent_settings.rent_amount + (rent_settings.late_fee if late_fee_applies else Decimal('0'))
+                has_paid_rent = total_paid >= required
+
+        per_use_rent_item = RentItem.query.filter(
+            RentItem.rent_setting_id == rent_settings.id,
+            RentItem.rent_item_type == 'per_use',
+            RentItem.store_item_id == item.id
+        ).first()
+
     if rent_settings and rent_settings.is_enabled and rent_settings.prevent_purchase_when_late:
         # Check if student is late on rent
-        now = utc_now()
-
         from app.routes.student import _calculate_rent_coverage_due_date
         coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
 
@@ -288,13 +331,12 @@ def purchase_item():
             # Check if past grace period
             if now > grace_end_date:
                 # Check if rent is paid for current coverage period
-                current_block = context.get('block', '').strip().upper()
                 total_paid = db.session.query(db.func.sum(RentPayment.amount_paid)).filter(
                     RentPayment.student_id == student.id,
                     RentPayment.period == current_block,
                     RentPayment.coverage_month == coverage_month,
                     RentPayment.coverage_year == coverage_year,
-                    db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                    RentPayment.join_code == join_code
                 ).scalar() or 0
 
                 # Student is late if they haven't paid full rent
@@ -320,8 +362,9 @@ def purchase_item():
                             "message": "You cannot make purchases while late on rent. Please pay your rent first."
                         }), 403
 
-    # Check if student has free uses remaining from rent (per-use rent items)
-    if item.is_rent_linked and quantity == 1:
+    # Check if student has free uses remaining from rent (per-use rent items).
+    # Also recover gracefully if a paid-rent student is missing the grant row.
+    if quantity == 1 and (item.is_rent_linked or per_use_rent_item):
         # Look for an active StudentItem with uses_remaining for this store item
         rent_item_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
@@ -332,15 +375,38 @@ def purchase_item():
             ),
             db.or_(
                 StudentItem.expiry_date.is_(None),
-                StudentItem.expiry_date > utc_now()
+                StudentItem.expiry_date > now
             )
         )
-        if join_code:
-            rent_item_query = rent_item_query.filter(StudentItem.join_code == join_code)
-        else:
-            rent_item_query = rent_item_query.filter(StudentItem.join_code.is_(None))
+        rent_item_query = rent_item_query.filter(StudentItem.join_code == join_code)
 
         active_rent_item = rent_item_query.first()
+        existing_grant_row = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.store_item_id == item.id,
+            StudentItem.join_code == join_code,
+            StudentItem.uses_remaining.isnot(None),
+            db.or_(
+                StudentItem.expiry_date.is_(None),
+                StudentItem.expiry_date > now
+            )
+        ).first()
+
+        if not active_rent_item and not existing_grant_row and has_paid_rent and per_use_rent_item:
+            # Missing grant edge case: create current-period grant on demand.
+            # This prevents paid-rent students from being charged due to stale data.
+            active_rent_item = StudentItem(
+                student_id=student.id,
+                store_item_id=item.id,
+                join_code=join_code,
+                purchase_date=now,
+                expiry_date=None,
+                status='purchased',
+                is_from_bundle=False,
+                quantity_purchased=1,
+                uses_remaining=per_use_rent_item.use_limit if per_use_rent_item.use_limit else -1
+            )
+            db.session.add(active_rent_item)
 
         if active_rent_item:
             # Free purchase from rent perk - decrement available free uses unless unlimited (-1)
@@ -355,6 +421,7 @@ def purchase_item():
                 actor_membership_id=membership_id,
                 amount=0.0,
                 account_type='checking',
+                status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
                 type='purchase',
                 description=f"Purchase: {item.name} [Rent Perk $0]"
             )
@@ -362,13 +429,13 @@ def purchase_item():
 
             expiry_date = None
             if item.item_type == 'delayed' and item.auto_expiry_days:
-                expiry_date = utc_now() + timedelta(days=item.auto_expiry_days)
+                expiry_date = now + timedelta(days=item.auto_expiry_days)
 
             db.session.add(StudentItem(
                 student_id=student.id,
                 store_item_id=item.id,
                 join_code=join_code,
-                purchase_date=utc_now(),
+                purchase_date=now,
                 expiry_date=expiry_date,
                 status='purchased',
                 is_from_bundle=False,
@@ -490,6 +557,7 @@ def purchase_item():
             actor_membership_id=membership_id, # Audit Anchor
             amount=-total_price,
             account_type='checking',
+            status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
             type='purchase',
             description=purchase_description
         )
@@ -517,6 +585,7 @@ def purchase_item():
                         actor_membership_id=membership_id, # Audit Anchor
                         amount=-shortfall,
                         account_type='savings',
+                        status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
                         type='Withdrawal',
                         description='Overdraft protection transfer to checking'
                     )
@@ -527,6 +596,7 @@ def purchase_item():
                         actor_membership_id=membership_id, # Audit Anchor
                         amount=shortfall,
                         account_type='checking',
+                        status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
                         type='Deposit',
                         description='Overdraft protection transfer from savings'
                     )
@@ -667,12 +737,16 @@ def purchase_item():
 
         # --- Collective Item Logic ---
         if item.item_type == 'collective':
-            class_size = TeacherBlock.query.filter_by(
-                teacher_id=teacher_id,
-                join_code=join_code,
-                is_claimed=True,
-            ).count()
-            purchased_students_count = db.session.query(func.count(func.distinct(StudentItem.student_id))).filter(
+            # Count unique students (not TeacherBlock seats) to get actual class size
+            class_size = db.session.query(db.func.count(db.func.distinct(Student.id))).join(
+                TeacherBlock, TeacherBlock.student_id == Student.id
+            ).filter(
+                TeacherBlock.teacher_id == teacher_id,
+                TeacherBlock.join_code == join_code,
+                TeacherBlock.is_claimed == True,
+            ).scalar() or 0
+            
+            purchased_students_count = db.session.query(db.func.count(db.func.distinct(StudentItem.student_id))).filter(
                 StudentItem.store_item_id == item.id,
                 StudentItem.join_code == join_code,
                 StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),

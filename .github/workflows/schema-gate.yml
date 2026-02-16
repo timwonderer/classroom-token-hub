@@ -57,33 +57,49 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            const body = context.payload.pull_request.body || "";
+            const prNumber = context.issue.number;
+            const { owner, repo } = context.repo;
+
+            // Pull latest PR body from API so reruns and stale event payloads do not cause false negatives.
+            let body = context.payload.pull_request?.body || "";
+            try {
+              const pr = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: prNumber
+              });
+              body = pr.data.body || "";
+            } catch (error) {
+              core.warning(`Unable to fetch latest PR body; falling back to event payload. ${error.message}`);
+            }
+
+            const normalizedBody = body.replace(/\r\n/g, '\n');
             const classifications = [
               "EXPAND",
               "CONTRACT (CODE ONLY)",
               "CONTRACT (DATABASE)"
             ];
-            
-            let found = false;
-            let checkedCount = 0;
-            
-            // Look for checked boxes like [x] EXPAND or [x] **EXPAND**
-            // Accept both with and without bold markers for flexibility
-            classifications.forEach(type => {
+
+            const matches = [];
+            const lines = normalizedBody.split('\n');
+
+            // Match checked markdown checkboxes in common variants:
+            // - [x] LABEL
+            // * [X] **LABEL**
+            classifications.forEach((type) => {
               const escapedType = type.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-              // Match with or without bold markers (**), and allow any text after
-              const regex = new RegExp(`- \\[[xX]\\] (\\*\\*)?${escapedType}(\\*\\*)?`);
-              if (regex.test(body)) {
-                found = type;
-                checkedCount++;
+              const regex = new RegExp(`^\\s*[-*]\\s*\\[[xX]\\]\\s*(?:\\*\\*)?\\s*${escapedType}\\s*(?:\\*\\*)?(?:\\s|$)`);
+              if (lines.some(line => regex.test(line))) {
+                matches.push(type);
               }
             });
 
-            if (checkedCount === 0) {
+            if (matches.length === 0) {
               core.setFailed("❌ Schema Change Gate Failed: No PR classification selected. Check one of: EXPAND, CONTRACT (CODE ONLY), CONTRACT (DATABASE)");
-            } else if (checkedCount > 1) {
+            } else if (matches.length > 1) {
               core.setFailed("❌ Schema Change Gate Failed: Multiple classifications selected. Please select exactly ONE.");
             } else {
+              const found = matches[0];
               console.log(`✅ PR Classified as: ${found}`);
               core.setOutput('classification', found);
             }

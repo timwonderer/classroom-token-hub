@@ -140,6 +140,7 @@ def test_store_sync_logic(client, teacher_admin):
     assert privilege_store is not None
     assert privilege_store.price == Decimal('10.00')
     assert privilege_store.limit_per_student == 1
+    assert privilege_store.is_rent_linked is True
 
     per_use_store = StoreItem.query.filter_by(name='Consumable').first()
     assert per_use_store is not None
@@ -679,6 +680,92 @@ def test_per_use_charges_when_uses_exhausted(client, teacher_admin, student_in_c
     assert student.checking_balance < original_balance
 
 
+def test_per_use_free_purchase_without_precreated_grant_when_rent_paid(client, teacher_admin, student_in_class):
+    """Paid-rent students should still get $0 per-use purchases when grant rows are missing."""
+    student = student_in_class
+    from werkzeug.security import generate_password_hash
+    student.passphrase_hash = generate_password_hash('password')
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Rent Pencil No Grant',
+        price=Decimal('5.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    db.session.add(RentItem(
+        rent_setting_id=settings.id,
+        name='Rent Pencil No Grant',
+        rent_item_type='per_use',
+        is_available_in_store=True,
+        store_price=Decimal('5.00'),
+        purchase_duration='per_use',
+        use_limit=1,
+        store_item_id=store_item.id,
+    ))
+
+    now = datetime.now(timezone.utc)
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=now.month,
+        period_year=now.year,
+        coverage_month=now.month,
+        coverage_year=now.year,
+        payment_date=now,
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent for Period A',
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        amount=100,
+        account_type='checking',
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123'
+    ))
+    db.session.commit()
+
+    starting_balance = student.checking_balance
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.post('/api/purchase-item', json={'item_id': store_item.id, 'passphrase': 'password', 'quantity': 1})
+    assert resp.status_code == 200
+    assert "$0" in resp.json['message'] or "rent perk" in resp.json['message'].lower()
+
+    db.session.refresh(student)
+    assert student.checking_balance == starting_balance
+
+
 def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin, student_in_class):
     """When rent is paid, privilege items are included/disabled but per-use items remain purchasable."""
     student = student_in_class
@@ -787,6 +874,183 @@ def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin
     )
     assert per_use_button is not None
     assert 'disabled' not in per_use_button.group(0)
+
+
+def test_shop_displays_rent_perk_price_as_free(client, teacher_admin, student_in_class):
+    """Rent perk items with active free uses should display $0 pricing in the student shop."""
+    student = student_in_class
+    from werkzeug.security import generate_password_hash
+    student.passphrase_hash = generate_password_hash('password')
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Rent Linked Pencil',
+        price=Decimal('7.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    # Active rent-granted uses for this item
+    db.session.add(StudentItem(
+        student_id=student.id,
+        store_item_id=store_item.id,
+        status='purchased',
+        uses_remaining=2,
+        purchase_date=datetime.now(timezone.utc),
+        join_code='JOINCODE123',
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    assert b'Rent Perk price: $0.00' in resp.data
+    assert b'Regular: $7.00' in resp.data
+
+
+def test_shop_displays_rent_perk_price_as_free_when_rent_paid_without_grant_row(client, teacher_admin, student_in_class):
+    """Shop should display per-use rent perk as $0 for paid-rent students even when grant row is missing."""
+    student = student_in_class
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    per_use_store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Paid Rent Pencil',
+        price=Decimal('4.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(per_use_store_item)
+    db.session.flush()
+
+    db.session.add(RentItem(
+        rent_setting_id=settings.id,
+        name='Paid Rent Pencil',
+        rent_item_type='per_use',
+        is_available_in_store=True,
+        store_price=Decimal('4.00'),
+        purchase_duration='per_use',
+        use_limit=2,
+        store_item_id=per_use_store_item.id,
+    ))
+
+    now = datetime.now(timezone.utc)
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=now.month,
+        period_year=now.year,
+        coverage_month=now.month,
+        coverage_year=now.year,
+        payment_date=now,
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent for Period A',
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    assert b'Paid Rent Pencil' in resp.data
+    assert b'Rent Perk price: $0.00' in resp.data
+
+
+def test_admin_store_hides_delete_button_for_rent_linked_items(client, teacher_admin):
+    """Rent-linked items should hide delete even when legacy is_rent_linked flag is stale."""
+    with client.session_transaction() as sess:
+        sess['admin_id'] = teacher_admin.id
+        sess['is_admin'] = True
+
+    settings = RentSettings(teacher_id=teacher_admin.id, block='A', is_enabled=True)
+    db.session.add(settings)
+    db.session.flush()
+
+    rent_linked = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Rent Linked Item',
+        price=Decimal('5.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=False,  # Legacy/stale flag
+    )
+    regular = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Regular Item',
+        price=Decimal('5.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=False,
+    )
+    db.session.add_all([rent_linked, regular])
+    db.session.flush()
+    db.session.add(RentItem(
+        rent_setting_id=settings.id,
+        name='Rent Linked Item',
+        rent_item_type='privilege',
+        is_available_in_store=True,
+        store_price=Decimal('5.00'),
+        purchase_duration='per_period',
+        store_item_id=rent_linked.id,
+    ))
+    db.session.commit()
+
+    resp = client.get('/admin/store')
+    assert resp.status_code == 200
+    html = resp.data.decode('utf-8')
+
+    linked_delete = re.search(
+        rf'(data-item-id="{rent_linked.id}"[^>]*data-bs-target="#deleteItemModal"|'
+        rf'data-bs-target="#deleteItemModal"[^>]*data-item-id="{rent_linked.id}")',
+        html,
+        re.DOTALL
+    )
+    assert linked_delete is None
+
+    regular_delete = re.search(
+        rf'(data-item-id="{regular.id}"[^>]*data-bs-target="#deleteItemModal"|'
+        rf'data-bs-target="#deleteItemModal"[^>]*data-item-id="{regular.id}")',
+        html,
+        re.DOTALL
+    )
+    assert regular_delete is not None
+
+    # Deletion guard should also block by RentItem linkage fallback
+    delete_resp = client.post(f'/admin/store/delete/{rent_linked.id}', follow_redirects=True)
+    assert delete_resp.status_code == 200
+    assert b"Cannot delete" in delete_resp.data
 
 
 def test_privilege_badge_only_shows_privilege_items(client, teacher_admin, student_in_class):

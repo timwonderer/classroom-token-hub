@@ -16,6 +16,7 @@
 {% block extra_head %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.css">
 <script src="{{ static_url('js/economy-balance.js') }}"></script>
+<script src="{{ static_url('js/insurance-badge-select.js') }}"></script>
 <style>
     .EasyMDEContainer .CodeMirror {
         min-height: 120px;
@@ -25,6 +26,57 @@
     }
     .CodeMirror {
         border-radius: 0 0 4px 4px;
+    }
+    #advancedInsuranceAccordion .accordion-item {
+        border: 2px solid #d9e2ec;
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 0.75rem;
+    }
+    #advancedInsuranceAccordion .accordion-button {
+        font-weight: 400;
+        padding: 0.9rem 1rem;
+        background-color: #ffffff;
+    }
+    #advancedInsuranceAccordion .accordion-button:not(.collapsed) {
+        box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.06);
+    }
+    #advancedInsuranceAccordion .accordion-body {
+        padding: 1.15rem 1.2rem 1.25rem;
+        background-color: #fcfdff;
+    }
+    #advancedInsuranceAccordion .advanced-section-basic .accordion-button {
+        color: #1f3f73;
+    }
+    #advancedInsuranceAccordion .advanced-section-basic {
+        border-color: #1f3f73;
+    }
+    #advancedInsuranceAccordion .advanced-section-pricing .accordion-button {
+        color: #1d5f36;
+    }
+    #advancedInsuranceAccordion .advanced-section-pricing {
+        border-color: #1d5f36;
+    }
+    #advancedInsuranceAccordion .advanced-section-coverage .accordion-button {
+        color: #0f4f73;
+    }
+    #advancedInsuranceAccordion .advanced-section-coverage {
+        border-color: #0f4f73;
+    }
+    #advancedInsuranceAccordion .advanced-section-rules .accordion-button {
+        color: #7a520a;
+    }
+    #advancedInsuranceAccordion .advanced-section-rules {
+        border-color: #7a520a;
+    }
+    #advancedInsuranceAccordion .advanced-section-tiered .accordion-button {
+        color: #4d2d86;
+    }
+    #advancedInsuranceAccordion .advanced-section-tiered {
+        border-color: #4d2d86;
+    }
+    #advancedInsuranceAccordion .accordion-button:focus {
+        box-shadow: 0 0 0 0.2rem rgba(44, 125, 246, 0.18);
     }
 </style>
 {% endblock %}
@@ -201,17 +253,17 @@
                 <td>{{ policy.charge_frequency|title }}</td>
                 <td>
                   {% if policy.claim_type == 'transaction_monetary' %}
-                    <span class="badge bg-info">[TXN]</span>
+                    <span class="badge bg-info">Transaction-Linked Reimbursement</span>
                   {% elif policy.claim_type == 'non_monetary' %}
-                    <span class="badge bg-warning text-dark">[NON-MONETARY]</span>
+                    <span class="badge bg-warning text-dark">Non-Monetary Benefit</span>
                   {% else %}
-                    <span class="badge bg-primary">[LEGACY]</span>
+                    <span class="badge bg-primary">Custom Monetary Reimbursement</span>
                   {% endif %}
                 </td>
                 <td>{{ policy.waiting_period_days }} days</td>
                 <td>
                   {% if policy.max_claims_count %}
-                    {{ policy.max_claims_count }}/{{ policy.max_claims_period }}
+                    {{ policy.max_claims_count }}/{{ policy.charge_frequency }}
                   {% else %}
                     Unlimited
                   {% endif %}
@@ -244,8 +296,10 @@
 
   <!-- ADD NEW POLICY TAB -->
   <div class="tab-pane fade" id="add-policy" role="tabpanel">
-    <!-- Add New Policy Form -->
-    <div class="card shadow mb-4">
+    <div class="row">
+      <!-- LEFT: Add New Policy Form -->
+      <div class="col-lg-8 mb-4">
+    <div class="card shadow mb-0">
       <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
         <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>Add New Insurance Policy</h5>
         <!-- Mode Toggle -->
@@ -307,7 +361,9 @@
                     'data-economy-claim-type-target': '#simple_claim_type'
                   }) }}
                   <span class="input-group-text">/{{ form.charge_frequency(class="form-select", id="simple_charge_frequency", style="width: auto;", **{'data-economy-frequency-field': 'true', 'data-economy-frequency-target': '#simple_premium'}) }}</span>
+                  
                 </div>
+                <small class="text-muted">This also controls how long each subscription period lasts.</small>
               </div>
             </div>
 
@@ -322,43 +378,23 @@
               <small class="text-muted">Choose how claims are processed.</small>
             </div>
 
-            <div class="mb-3">
-              <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="simpleClaimLimitToggle">
-                <label class="form-check-label fw-bold" for="simpleClaimLimitToggle">
-                  Is there a limit to how much payout a student receives per approved claim?
-                </label>
+            <div class="mb-3" id="simpleNonMonetaryClaimsLimit" style="display: none;">
+              <label class="form-label fw-bold">Claims per Period Limit</label>
+              <div class="input-group">
+                {{ form.max_claims_count(class="form-control", placeholder="3", id="simple_max_claims_count") }}
+                <span class="input-group-text">claims per subscription period</span>
               </div>
-              <small class="text-muted">Turn on to cap the payout for each approved claim.</small>
+              <small class="text-muted">Leave blank for unlimited claims per subscription period.</small>
             </div>
-
-            <div class="row" id="simpleClaimLimitFields" style="display:none;">
-              <div class="col-md-6 mb-3">
-                <label class="form-label fw-bold">Max Payout Per Approved Claim</label>
-                <div class="input-group">
-                  <span class="input-group-text">$</span>
-                {{ form.max_claim_amount(class="form-control", placeholder="50.00", id="simple_max_claim_amount", **{'data-economy-trigger': '#simple_premium'}) }}
-                </div>
-                <small class="text-muted">Optional. Leave blank for no per-claim cap.</small>
-              </div>
-              <div class="col-md-6 mb-3">
-                <label class="form-label fw-bold">Maximum number of claims per period</label>
-                <div class="input-group">
-                  {{ form.max_claims_count(class="form-control", placeholder="3", id="simple_max_claims_count") }}
-                  <span class="input-group-text">claims</span>
-                </div>
-                <small class="text-muted">Optional. Uses the period selected below.</small>
-              </div>
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label fw-bold">Max Payout Per Period</label>
+            
+            <div class="mb-3" id="simpleMaxPayoutPerPeriodGroup" style="display: none;">
+              <label class="form-label fw-bold">Per Period Payout Limit</label>
               <div class="input-group">
                 <span class="input-group-text">$</span>
                   {{ form.max_payout_per_period(class="form-control", placeholder="200.00", id="simple_max_payout_per_period", **{'data-economy-trigger': '#simple_premium'}) }}
-                <span class="input-group-text">/{{ form.max_claims_period(class="form-select", id="simple_max_claims_period", style="width: auto;") }}</span>
+                <span class="input-group-text">Within a single subscription period</span>
               </div>
-              <small class="text-muted">Optional. Leave blank for no total cap in the period.</small>
+              <small class="text-muted">Leave blank if there is no limit to how much student can receive payout.</small>
             </div>
 
             <div class="row">
@@ -368,7 +404,7 @@
                   {{ form.waiting_period_days(class="form-control", placeholder="7", id="simple_waiting_period_days") }}
                   <span class="input-group-text">days</span>
                 </div>
-                <small class="text-muted">Waiting period before coverage starts</small>
+                <small class="text-muted">Number of days students must wait before they can use their insurance</small>
               </div>
               <div class="col-md-6 mb-3">
                 <div class="form-check form-switch mt-4">
@@ -381,322 +417,317 @@
 
           <!-- ADVANCED MODE (hidden by default) -->
           <div id="advancedModeFields" style="display:none;">
-          <!-- 2x2 Card Grid -->
-          <div class="row">
-            <!-- Top Left: Basic Information -->
-            <div class="col-lg-6 mb-4">
-              <div class="card shadow-sm h-100 border-primary">
-                <div class="card-header bg-primary bg-opacity-10">
-                  <h6 class="mb-0 text-primary"><i class="bi bi-info-circle me-2"></i>Basic Information</h6>
-                </div>
-                <div class="card-body">
-                  <div class="mb-3">
-                    {{ form.title.label(class="form-label fw-bold") }}
-                    {{ form.title(class="form-control", placeholder="e.g., Basic Health Coverage") }}
-                    <small class="text-muted">Policy name shown to students</small>
-                  </div>
-                  <div class="mb-3">
-                    {{ form.description.label(class="form-label fw-bold") }}
-                    {{ form.description(class="form-control", rows=4, placeholder="Describe what this policy covers...") }}
-                    <small class="text-muted">Clear description of coverage and benefits</small>
-                  </div>
-                  <div class="mb-3">
-                    {{ form.marketing_badge.label(class="form-label fw-bold") }}
-                    {{ form.marketing_badge(class="form-select") }}
-                    <small class="text-muted">Add a fun marketing badge to attract students</small>
-                  </div>
-                  <div class="mb-0">
-                    {{ form.claim_type.label(class="form-label fw-bold") }}
-                    {{ form.claim_type(class="form-select", id="advanced_claim_type", **{'data-economy-trigger': '#advanced_premium'}) }}
-                    <div class="alert alert-light border mt-2 mb-0">
-                      <small>
-                        <strong>Transactions-based:</strong> Students pick a spending transaction; amount auto-calculated.<br>
-                        <strong>Non-monetary:</strong> Approval-only, no reimbursements.<br>
-                        <strong>Legacy monetary:</strong> Students enter an amount manually.
-                      </small>
+            <div class="accordion" id="advancedInsuranceAccordion">
+              <div class="accordion-item advanced-section-basic">
+                <h2 class="accordion-header" id="advancedHeadingBasic">
+                  <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#advancedCollapseBasic" aria-expanded="true" aria-controls="advancedCollapseBasic">
+                    <i class="bi bi-info-circle me-2"></i><strong>Basic Information</strong>
+                  </button>
+                </h2>
+                <div id="advancedCollapseBasic" class="accordion-collapse collapse show" aria-labelledby="advancedHeadingBasic" data-bs-parent="#advancedInsuranceAccordion">
+                  <div class="accordion-body">
+                    <div class="mb-3">
+                      {{ form.title.label(class="form-label fw-bold") }}
+                      {{ form.title(class="form-control", placeholder="e.g., Basic Health Coverage") }}
+                      <small class="text-muted">Policy name shown to students</small>
                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- Top Right: Pricing & Payment -->
-            <div class="col-lg-6 mb-4">
-              <div class="card shadow-sm h-100 border-success">
-                <div class="card-header bg-success bg-opacity-10">
-                  <h6 class="mb-0 text-success"><i class="bi bi-currency-dollar me-2"></i>Pricing & Payment</h6>
-                </div>
-                <div class="card-body">
-                  <div class="row">
-                    <div class="col-md-6 mb-3">
-                      {{ form.premium.label(class="form-label fw-bold") }}
-                      <div class="input-group">
-                        <span class="input-group-text">$</span>
-                        {{ form.premium(class="form-control", placeholder="0.00", id="advanced_premium", **{
-                          'data-economy-validate': 'insurance',
-                          'data-economy-coverage-target': '#advanced_max_claim_amount',
-                          'data-economy-period-target': '#advanced_max_payout_per_period',
-                          'data-economy-claim-type-target': '#advanced_claim_type'
-                        }) }}
+                    <div class="mb-3">
+                      {{ form.description.label(class="form-label fw-bold") }}
+                      {{ form.description(class="form-control", rows=4, placeholder="Describe what this policy covers...") }}
+                      <small class="text-muted">Clear description of coverage and benefits</small>
+                    </div>
+                    <div class="mb-3">
+                      {{ form.marketing_badge.label(class="form-label fw-bold") }}
+                      {{ form.marketing_badge(class="form-select", id="advanced_marketing_badge") }}
+                      <small class="text-muted">Add a fun marketing badge to attract students</small>
+                    </div>
+                    <div class="mb-0">
+                      {{ form.claim_type.label(class="form-label fw-bold") }}
+                      {{ form.claim_type(class="form-select", id="advanced_claim_type", **{'data-economy-trigger': '#advanced_premium'}) }}
+                      <div class="alert alert-light border mt-2 mb-0">
+                        <small>
+                          <strong>Transaction-Linked Reimbursement:</strong> Use this option if you want to reimburse student purchases<br>
+                          <strong>Non-Monetary:</strong> Use this option if your payout/reimbursement is outside of this app.<br>
+                          <strong>Custom Monetary Reimbursement:</strong> Use this option if you don't have a set amount to reimburse students.
+                        </small>
                       </div>
-                      <small class="text-muted">Cost per cycle</small>
                     </div>
-                    <div class="col-md-6 mb-3">
-                      {{ form.charge_frequency.label(class="form-label fw-bold") }}
-                      {{ form.charge_frequency(class="form-select", id="advanced_charge_frequency", **{'data-economy-frequency-field': 'true', 'data-economy-frequency-target': '#advanced_premium'}) }}
-                      <small class="text-muted">Billing frequency</small>
-                    </div>
-                  </div>
-                  <div class="mb-3">
-                    <div class="form-check form-switch">
-                      {{ form.autopay(class="form-check-input", role="switch") }}
-                      {{ form.autopay.label(class="form-check-label fw-bold") }}
-                    </div>
-                    <small class="text-muted">Auto-deduct premiums from student accounts</small>
-                  </div>
-                  <div class="mb-3">
-                    {{ form.auto_cancel_nonpay_days.label(class="form-label fw-bold") }}
-                    <div class="input-group">
-                      {{ form.auto_cancel_nonpay_days(class="form-control", placeholder="0") }}
-                      <span class="input-group-text">days</span>
-                    </div>
-                    <small class="text-muted">Cancel if unpaid (0 = never)</small>
-                  </div>
-                  <div class="mb-0">
-                    <div class="form-check form-switch">
-                      {{ form.is_active(class="form-check-input", role="switch") }}
-                      {{ form.is_active.label(class="form-check-label fw-bold") }}
-                    </div>
-                    <small class="text-muted">Make policy available to students</small>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <!-- Bottom Left: Coverage & Claims -->
-            <div class="col-lg-6 mb-4">
-              <div class="card shadow-sm h-100 border-info">
-                <div class="card-header bg-info bg-opacity-10">
-                  <h6 class="mb-0 text-info"><i class="bi bi-shield-check me-2"></i>Coverage & Claims</h6>
-                </div>
-                <div class="card-body">
-                  <div class="row">
-                    <div class="col-md-6 mb-3">
-                      {{ form.waiting_period_days.label(class="form-label fw-bold") }}
+              <div class="accordion-item advanced-section-pricing">
+                <h2 class="accordion-header" id="advancedHeadingPricing">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#advancedCollapsePricing" aria-expanded="false" aria-controls="advancedCollapsePricing">
+                    <i class="bi bi-currency-dollar me-2"></i><strong>Pricing & Payment</strong>
+                  </button>
+                </h2>
+                <div id="advancedCollapsePricing" class="accordion-collapse collapse" aria-labelledby="advancedHeadingPricing" data-bs-parent="#advancedInsuranceAccordion">
+                  <div class="accordion-body">
+                    <div class="row">
+                      <div class="col-md-6 mb-3">
+                        {{ form.premium.label(class="form-label fw-bold") }}
+                        <div class="input-group">
+                          <span class="input-group-text">$</span>
+                          {{ form.premium(class="form-control", placeholder="0.00", id="advanced_premium", **{
+                            'data-economy-validate': 'insurance',
+                            'data-economy-coverage-target': '#advanced_max_claim_amount',
+                            'data-economy-period-target': '#advanced_max_payout_per_period',
+                            'data-economy-claim-type-target': '#advanced_claim_type'
+                          }) }}
+                        </div>
+                        <small class="text-muted">Cost per cycle</small>
+                      </div>
+                      <div class="col-md-6 mb-3">
+                        {{ form.charge_frequency.label(class="form-label fw-bold") }}
+                        {{ form.charge_frequency(class="form-select", id="advanced_charge_frequency", **{'data-economy-frequency-field': 'true', 'data-economy-frequency-target': '#advanced_premium'}) }}
+                        <small class="text-muted">Billing frequency</small>
+                      </div>
+                    </div>
+                    <div class="mb-3">
+                      <div class="form-check form-switch">
+                        {{ form.autopay(class="form-check-input", role="switch") }}
+                        {{ form.autopay.label(class="form-check-label fw-bold") }}
+                      </div>
+                      <small class="text-muted">Enable Auto-Pay (premium will be charged directly to student's checking account)</small>
+                    </div>
+                    <div class="mb-3">
+                      {{ form.auto_cancel_nonpay_days.label(class="form-label fw-bold") }}
                       <div class="input-group">
-                        {{ form.waiting_period_days(class="form-control", placeholder="0") }}
+                        {{ form.auto_cancel_nonpay_days(class="form-control", placeholder="0") }}
                         <span class="input-group-text">days</span>
                       </div>
-                      <small class="text-muted">Before coverage starts</small>
+                      <small class="text-muted">Auto-Cancel if unpaid for set days</small>
                     </div>
-                    <div class="col-md-6 mb-3">
-                      {{ form.claim_time_limit_days.label(class="form-label fw-bold") }}
-                      <div class="input-group">
-                        {{ form.claim_time_limit_days(class="form-control", placeholder="0") }}
-                        <span class="input-group-text">days</span>
+                    <div class="mb-0">
+                      <div class="form-check form-switch">
+                        {{ form.is_active(class="form-check-input", role="switch") }}
+                        {{ form.is_active.label(class="form-check-label fw-bold") }}
                       </div>
-                      <small class="text-muted">To file after incident</small>
+                      <small class="text-muted">Students can see and purchase this policy</small>
                     </div>
-                  </div>
-                  <div class="row">
-                    <div class="col-md-6 mb-3">
-                      {{ form.max_claims_count.label(class="form-label fw-bold") }}
-                      {{ form.max_claims_count(class="form-control", placeholder="0") }}
-                      <small class="text-muted">Max per period (0 = ∞)</small>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                      {{ form.max_claims_period.label(class="form-label fw-bold") }}
-                      {{ form.max_claims_period(class="form-select") }}
-                      <small class="text-muted">Period type</small>
-                    </div>
-                  </div>
-                  <div class="mb-3">
-                    {{ form.max_claim_amount.label(class="form-label fw-bold") }}
-                    <div class="input-group">
-                      <span class="input-group-text">$</span>
-                      {{ form.max_claim_amount(class="form-control", placeholder="0.00", id="advanced_max_claim_amount", **{'data-economy-trigger': '#advanced_premium'}) }}
-                    </div>
-                    <small class="text-muted">Max payout per claim (0 = ∞)</small>
-                  </div>
-                  <div class="mb-0">
-                    {{ form.max_payout_per_period.label(class="form-label fw-bold") }}
-                    <div class="input-group">
-                      <span class="input-group-text">$</span>
-                      {{ form.max_payout_per_period(class="form-control", placeholder="0.00", id="advanced_max_payout_per_period", **{'data-economy-trigger': '#advanced_premium'}) }}
-                    </div>
-                    <small class="text-muted">Max total payout per period (0 = ∞)</small>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <!-- Bottom Right: Policy Rules & Bundles -->
-            <div class="col-lg-6 mb-4">
-              <div class="card shadow-sm h-100 border-warning">
-                <div class="card-header bg-warning bg-opacity-10">
-                  <h6 class="mb-0 text-dark"><i class="bi bi-gear me-2"></i>Rules & Bundles</h6>
-                </div>
-                <div class="card-body">
-                  <!-- Repurchase Rules -->
-                  <div class="mb-3 pb-3 border-bottom">
-                    <h6 class="fw-bold mb-2"><i class="bi bi-ban me-1"></i>Repurchase Restrictions</h6>
-
-                    <!-- Permanent Block -->
-                    <div class="form-check form-switch mb-2">
-                      {{ form.no_repurchase_after_cancel(class="form-check-input", role="switch", id="permanentBlockToggleNew") }}
-                      {{ form.no_repurchase_after_cancel.label(class="form-check-label fw-bold") }}
-                    </div>
-                    <small class="text-muted d-block mb-3">Students can NEVER repurchase after canceling</small>
-
-                    <!-- Cooldown Period -->
-                    <div id="cooldownSectionNew">
-                      <div class="form-check form-switch mb-2">
-                        {{ form.enable_repurchase_cooldown(class="form-check-input", role="switch", id="cooldownToggleNew") }}
-                        {{ form.enable_repurchase_cooldown.label(class="form-check-label fw-bold") }}
-                      </div>
-                      <small class="text-muted d-block mb-2">Students must wait before repurchasing</small>
-
-                      <div id="cooldownDaysNew" style="display: none;">
-                        {{ form.repurchase_wait_days.label(class="form-label fw-bold small") }}
-                        <div class="input-group input-group-sm">
-                          {{ form.repurchase_wait_days(class="form-control", placeholder="30") }}
+              <div class="accordion-item advanced-section-coverage">
+                <h2 class="accordion-header" id="advancedHeadingCoverage">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#advancedCollapseCoverage" aria-expanded="false" aria-controls="advancedCollapseCoverage">
+                    <i class="bi bi-shield-check me-2"></i><strong>Coverage & Claims</strong>
+                  </button>
+                </h2>
+                <div id="advancedCollapseCoverage" class="accordion-collapse collapse" aria-labelledby="advancedHeadingCoverage" data-bs-parent="#advancedInsuranceAccordion">
+                  <div class="accordion-body">
+                    <div class="row">
+                      <div class="col-md-6 mb-3">
+                        {{ form.waiting_period_days.label(class="form-label fw-bold") }}
+                        <div class="input-group">
+                          {{ form.waiting_period_days(class="form-control", placeholder="0") }}
                           <span class="input-group-text">days</span>
                         </div>
-                        <small class="text-muted">Cooldown period for repurchase</small>
+                        <small class="text-muted">Mandatory Waiting Period</small>
+                      </div>
+                      <div class="col-md-6 mb-3">
+                        {{ form.claim_time_limit_days.label(class="form-label fw-bold") }}
+                        <div class="input-group">
+                          {{ form.claim_time_limit_days(class="form-control", placeholder="0") }}
+                          <span class="input-group-text">days</span>
+                        </div>
+                        <small class="text-muted">Time limit to file claims (0 = no limit)</small>
                       </div>
                     </div>
-                  </div>
-
-                  <!-- Bundle Settings -->
-                  <div>
-                    <h6 class="fw-bold mb-2"><i class="bi bi-boxes me-1"></i>Bundle Discounts</h6>
-
-                    <!-- Discount Options -->
                     <div class="row">
-                      <div class="col-6 mb-3">
-                        {{ form.bundle_discount_percent.label(class="form-label fw-bold small") }}
-                        <div class="input-group input-group-sm">
-                          {{ form.bundle_discount_percent(class="form-control", placeholder="0") }}
-                          <span class="input-group-text">%</span>
-                        </div>
-                        <small class="text-muted">Percent off</small>
-                      </div>
-                      <div class="col-6 mb-3">
-                        {{ form.bundle_discount_amount.label(class="form-label fw-bold small") }}
-                        <div class="input-group input-group-sm">
-                          <span class="input-group-text">$</span>
-                          {{ form.bundle_discount_amount(class="form-control", placeholder="0.00") }}
-                        </div>
-                        <small class="text-muted">Dollar off</small>
+                      <div class="col-md-6 mb-3">
+                        {{ form.max_claims_count.label(class="form-label fw-bold") }}
+                        {{ form.max_claims_count(class="form-control", placeholder="0") }}
+                        <small class="text-muted">Student can file up to this many claims per charge period</small>
                       </div>
                     </div>
-                    <small class="text-muted fst-italic">Note: Bundle policies can be configured after creation via Edit</small>
+                    <div class="mb-3" id="advancedMaxClaimAmountGroup">
+                      {{ form.max_claim_amount.label(class="form-label fw-bold") }}
+                      <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        {{ form.max_claim_amount(class="form-control", placeholder="0.00", id="advanced_max_claim_amount", **{'data-economy-trigger': '#advanced_premium'}) }}
+                      </div>
+                      <small class="text-muted">Student may request reimbursement up to this amount per claim</small>
+                    </div>
+                    <div class="mb-0" id="advancedMaxPayoutPerPeriodGroup">
+                      {{ form.max_payout_per_period.label(class="form-label fw-bold") }}
+                      <div class="input-group">
+                        <span class="input-group-text">$</span>
+                        {{ form.max_payout_per_period(class="form-control", placeholder="0.00", id="advanced_max_payout_per_period", **{'data-economy-trigger': '#advanced_premium'}) }}
+                      </div>
+                      <small class="text-muted">Student may request reimbursement up to this amount per coverage period</small>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
 
-          <!-- Group Settings (Advanced Mode Only) -->
-          <div class="card border-warning shadow-sm mb-3">
-            <div class="card-body">
-              <div class="d-flex justify-content-between align-items-center mb-2">
-                <div>
-                  <h6 class="fw-bold mb-0"><i class="bi bi-layers me-2"></i>Grouped Insurance</h6>
-                  <small class="text-muted">Students can select <strong>one policy</strong> per group. <span class="ms-1" data-bs-toggle="tooltip" title="Grouped insurance policies are mutually exclusive—students choose only one from a group."><i class="bi bi-info-circle"></i></span></small>
-                </div>
-                <div class="form-check form-switch">
-                  <input class="form-check-input" type="checkbox" id="tierToggleNew">
-                  <label class="form-check-label fw-bold" for="tierToggleNew">This insurance is grouped</label>
-                </div>
-              </div>
+              <div class="accordion-item advanced-section-rules">
+                <h2 class="accordion-header" id="advancedHeadingRules">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#advancedCollapseRules" aria-expanded="false" aria-controls="advancedCollapseRules">
+                    <i class="bi bi-gear me-2"></i><strong>Rules & Bundles</strong>
+                  </button>
+                </h2>
+                <div id="advancedCollapseRules" class="accordion-collapse collapse" aria-labelledby="advancedHeadingRules" data-bs-parent="#advancedInsuranceAccordion">
+                  <div class="accordion-body">
+                    <div class="mb-3 pb-3 border-bottom">
+                      <h6 class="fw-bold mb-2"><i class="bi bi-ban me-1"></i>Re-Enrollment Restrictions</h6>
 
-              {% if form.tier_level is defined %}
-              <div id="tierSelectionNew" class="card bg-light-subtle border-0 shadow-sm" style="display: none;">
-                <div class="card-body">
-                  <div class="row g-3 align-items-start">
-                    <div class="col-lg-8">
-                      <div class="alert alert-info py-2 px-3 d-none mb-0" id="tierSummaryNew"></div>
-                    </div>
-                    <div class="col-lg-4">
-                      {{ form.tier_level.label(class="form-label fw-bold small mb-1") }}
-                      {{ form.tier_level(class="form-select form-select-sm", id="tier_level") }}
-                      <small class="text-muted">Tag this insurance as basic, mid-tier, or premium for clearer choices.</small>
-                    </div>
-                  </div>
+                      <div class="form-check form-switch mb-2">
+                        {{ form.no_repurchase_after_cancel(class="form-check-input", role="switch", id="permanentBlockToggleNew") }}
+                        {{ form.no_repurchase_after_cancel.label(class="form-check-label fw-bold") }}
+                      </div>
+                      <small class="text-muted d-block mb-3">No Re-Enrollment</small>
 
-                  {% if tier_groups %}
-                  <div class="row g-3 mt-2">
-                    {% for group in tier_groups %}
-                    <div class="col-md-6">
-                      <div class="card h-100 border-{{ group.color }} shadow-sm">
-                        <div class="card-body d-flex flex-column">
-                          <div class="d-flex justify-content-between align-items-start mb-2">
-                            <div>
-                              <span class="badge bg-{{ group.color }} text-white">{{ group.name }}</span>
-                              <div class="small text-muted">Students choose one option in this group</div>
-                            </div>
-                            <button type="button" class="btn btn-outline-primary btn-sm select-tier-btn" data-tier-id="{{ group.id }}" data-tier-name="{{ group.name }}" data-tier-color="{{ group.color }}">
-                              Add this insurance to group
-                            </button>
+                      <div id="cooldownSectionNew">
+                        <div class="form-check form-switch mb-2">
+                          {{ form.enable_repurchase_cooldown(class="form-check-input", role="switch", id="cooldownToggleNew") }}
+                          {{ form.enable_repurchase_cooldown.label(class="form-check-label fw-bold") }}
+                        </div>
+                        <small class="text-muted d-block mb-2">Forced Cooldown Period</small>
+
+                        <div id="cooldownDaysNew" style="display: none;">
+                          {{ form.repurchase_wait_days.label(class="form-label fw-bold small") }}
+                          <div class="input-group input-group-sm">
+                            {{ form.repurchase_wait_days(class="form-control", placeholder="30") }}
+                            <span class="input-group-text">days</span>
                           </div>
-                          <div class="small text-muted">{{ group.policies|length }} policy{{ 'ies' if group.policies|length != 1 else '' }} in this group</div>
-                          {% if group.policies %}
-                          <ul class="list-unstyled small mt-2 mb-0">
-                            {% for policy_info in group.policies %}
-                            <li class="d-flex align-items-center gap-2">
-                              <i class="bi bi-shield-check text-{{ group.color }}"></i>
-                              <span>{{ policy_info.title }}</span>
-                              {% if policy_info.level %}
-                              <span class="badge rounded-pill text-bg-light border border-{{ group.color }} text-{{ group.color }} text-uppercase" style="font-size: 0.65rem;">{{ policy_info.level.replace('_', ' ') }}</span>
-                              {% endif %}
-                            </li>
-                            {% endfor %}
-                          </ul>
-                          {% endif %}
+                          <small class="text-muted">Cooldown period for repurchase</small>
                         </div>
                       </div>
                     </div>
-                    {% endfor %}
-                  </div>
-                  <div class="mt-3">
-                    <button type="button" class="btn btn-outline-secondary btn-sm" id="startNewGroupBtnNew">Create a new group</button>
-                  </div>
-                  {% else %}
-                  <div class="alert alert-warning d-flex align-items-center mt-3" role="alert">
-                    <i class="bi bi-info-circle me-2"></i>
-                    <div>No grouped insurance exists yet. Name your first group to create a "select one only" group.</div>
-                  </div>
-                  {% endif %}
 
-                  <div id="newGroupFieldsNew" class="card card-body border-0 bg-white shadow-sm {% if tier_groups %}d-none{% endif %} mt-3">
-                    <div class="d-flex align-items-center mb-3">
-                      <small class="text-muted">Students can choose one policy per group.</small>
-                    </div>
-                    <div class="row g-2">
-                      <div class="col-md-7">
-                        {{ form.tier_name.label(class="form-label fw-bold small") }}
-                        {{ form.tier_name(class="form-control form-control-sm", id="tier_name") }}
+                    <div>
+                      <h6 class="fw-bold mb-2"><i class="bi bi-boxes me-1"></i>Bundle Discounts</h6>
+                      <div class="row">
+                        <div class="col-6 mb-3">
+                          {{ form.bundle_discount_percent.label(class="form-label fw-bold small") }}
+                          <div class="input-group input-group-sm">
+                            {{ form.bundle_discount_percent(class="form-control", placeholder="0") }}
+                            <span class="input-group-text">%</span>
+                          </div>
+                          <small class="text-muted">Percent off</small>
+                        </div>
+                        <div class="col-6 mb-3">
+                          {{ form.bundle_discount_amount.label(class="form-label fw-bold small") }}
+                          <div class="input-group input-group-sm">
+                            <span class="input-group-text">$</span>
+                            {{ form.bundle_discount_amount(class="form-control", placeholder="0.00") }}
+                          </div>
+                          <small class="text-muted">Dollar off</small>
+                        </div>
                       </div>
-                      <div class="col-md-5">
-                        {{ form.tier_color.label(class="form-label fw-bold small") }}
-                        {{ form.tier_color(class="form-select form-select-sm", id="tier_color") }}
-                      </div>
+                      <small class="text-muted fst-italic">You can create the bundle after you create this policy.</small>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div class="d-none">
-                {{ form.tier_category_id(id="tier_category_id") }}
+              <div class="accordion-item advanced-section-tiered">
+                <h2 class="accordion-header" id="advancedHeadingTiered">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#advancedCollapseTiered" aria-expanded="false" aria-controls="advancedCollapseTiered">
+                    <i class="bi bi-layers me-2"></i><strong>Tiered Insurance Policies</strong>
+                  </button>
+                </h2>
+                <div id="advancedCollapseTiered" class="accordion-collapse collapse" aria-labelledby="advancedHeadingTiered" data-bs-parent="#advancedInsuranceAccordion">
+                  <div class="accordion-body">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                      <small class="text-muted">These are insurance policies covering the same incidents but with different tiers of benefits. Students are allowed to choose <strong>one policy</strong> from the tiered policies. <span class="ms-1" data-bs-toggle="tooltip" title="Grouped insurance policies are mutually exclusive since they cover the same incidents."><i class="bi bi-info-circle"></i></span></small>
+                      <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="tierToggleNew">
+                        <label class="form-check-label fw-bold" for="tierToggleNew">Part of tiered group</label>
+                      </div>
+                    </div>
+
+                    {% if form.tier_level is defined %}
+                    <div id="tierSelectionNew" class="card bg-light-subtle border-0 shadow-sm" style="display: none;">
+                      <div class="card-body">
+                        <div class="row g-3 align-items-start">
+                          <div class="col-lg-8">
+                            <div class="alert alert-info py-2 px-3 d-none mb-0" id="tierSummaryNew"></div>
+                          </div>
+                          <div class="col-lg-4">
+                            {{ form.tier_level.label(class="form-label fw-bold small mb-1") }}
+                            {{ form.tier_level(class="form-select form-select-sm", id="tier_level") }}
+                            <small class="text-muted">Select the tier level for this policy</small>
+                          </div>
+                        </div>
+
+                        {% if tier_groups %}
+                        <div class="row g-3 mt-2">
+                          {% for group in tier_groups %}
+                          <div class="col-md-6">
+                            <div class="card h-100 border-{{ group.color }} shadow-sm">
+                              <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                  <div>
+                                    <span class="badge bg-{{ group.color }} text-white">{{ group.name }}</span>
+                                    <div class="small text-muted">Students will be shown these options to choose from</div>
+                                  </div>
+                                  <button type="button" class="btn btn-outline-primary btn-sm select-tier-btn" data-tier-id="{{ group.id }}" data-tier-name="{{ group.name }}" data-tier-color="{{ group.color }}">
+                                    Add this insurance to existing group
+                                  </button>
+                                </div>
+                                <div class="small text-muted">{{ group.policies|length }} policy{{ 'ies' if group.policies|length != 1 else '' }} in this group</div>
+                                {% if group.policies %}
+                                <ul class="list-unstyled small mt-2 mb-0">
+                                  {% for policy_info in group.policies %}
+                                  <li class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-shield-check text-{{ group.color }}"></i>
+                                    <span>{{ policy_info.title }}</span>
+                                    {% if policy_info.level %}
+                                    <span class="badge rounded-pill text-bg-light border border-{{ group.color }} text-{{ group.color }} text-uppercase" style="font-size: 0.65rem;">{{ policy_info.level.replace('_', ' ') }}</span>
+                                    {% endif %}
+                                  </li>
+                                  {% endfor %}
+                                </ul>
+                                {% endif %}
+                              </div>
+                            </div>
+                          </div>
+                          {% endfor %}
+                        </div>
+                        <div class="mt-3">
+                          <button type="button" class="btn btn-outline-secondary btn-sm" id="startNewGroupBtnNew">Create a new tiered set</button>
+                        </div>
+                        {% else %}
+                        <div class="alert alert-warning d-flex align-items-center mt-3" role="alert">
+                          <i class="bi bi-info-circle me-2"></i>
+                          <div>No tiered insurance set exist yet. You can create one by entering the name of the tiered set.</div>
+                        </div>
+                        {% endif %}
+
+                        <div id="newGroupFieldsNew" class="card card-body border-0 bg-white shadow-sm {% if tier_groups %}d-none{% endif %} mt-3">
+                          <div class="d-flex align-items-center mb-3">
+                            <small class="text-muted">Students can choose one policy per group.</small>
+                          </div>
+                          <div class="row g-2">
+                            <div class="col-md-7">
+                              {{ form.tier_name.label(class="form-label fw-bold small") }}
+                              {{ form.tier_name(class="form-control form-control-sm", id="tier_name") }}
+                            </div>
+                            <div class="col-md-5">
+                              {{ form.tier_color.label(class="form-label fw-bold small") }}
+                              {{ form.tier_color(class="form-select form-select-sm", id="tier_color") }}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="d-none">
+                      {{ form.tier_category_id(id="tier_category_id") }}
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning mb-0">
+                      Tier grouping controls are temporarily unavailable. Reload the page after updating the site to enable grouping. If this problem persists, please file a ticket.
+                    </div>
+                    {% endif %}
+                  </div>
+                </div>
               </div>
-              {% else %}
-              <div class="alert alert-warning mb-0">
-                Tier grouping controls are temporarily unavailable. Reload the page after updating the site to enable grouping.
-              </div>
-              {% endif %}
             </div>
-          </div>
           </div><!-- End Advanced Mode Fields -->
 
           <div class="d-grid">
@@ -705,11 +736,33 @@
         </form>
       </div>
     </div>
+      </div><!-- End LEFT column -->
+
+      <!-- RIGHT: Policy Preview -->
+      <div class="col-lg-4 mb-4">
+        <div class="card shadow border-info sticky-top" style="top: 20px;">
+          <div class="card-header bg-info text-white">
+            <h5 class="mb-0 text-white"><i class="bi bi-eye me-2 text-white"></i>Student View Preview</h5>
+          </div>
+          <div class="card-body">
+            <p class="text-muted small">This is how students will see your insurance policy.</p>
+
+            <!-- Preview Content -->
+            <div id="policyPreview">
+              <div class="alert alert-light border mb-0">
+                <p class="text-muted small mb-0"><em>Fill out the form to see a preview of your insurance policy.</em></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- End RIGHT column -->
+    </div><!-- End row -->
 
     <script>
     // Handle simple/advanced mode toggle
+    let insuranceModeToggle;
     document.addEventListener('DOMContentLoaded', function() {
-      const insuranceModeToggle = document.getElementById('insuranceModeToggle');
+      insuranceModeToggle = document.getElementById('insuranceModeToggle');
       const settingsModeInput = document.getElementById('settingsModeInput');
       const simpleModeFields = document.getElementById('simpleModeFields');
       const advancedModeFields = document.getElementById('advancedModeFields');
@@ -719,8 +772,17 @@
       const advancedModeInputs = advancedModeFields ? advancedModeFields.querySelectorAll('input, select, textarea') : [];
       const claimLimitToggle = document.getElementById('simpleClaimLimitToggle');
       const claimLimitFields = document.getElementById('simpleClaimLimitFields');
+      const simpleClaimType = document.getElementById('simple_claim_type');
+      const advancedClaimType = document.getElementById('advanced_claim_type');
+      const simpleMaxClaimAmountGroup = document.getElementById('simpleMaxClaimAmountGroup');
+      const simpleMaxPayoutPerPeriodGroup = document.getElementById('simpleMaxPayoutPerPeriodGroup');
+      const advancedMaxClaimAmountGroup = document.getElementById('advancedMaxClaimAmountGroup');
+      const advancedMaxPayoutPerPeriodGroup = document.getElementById('advancedMaxPayoutPerPeriodGroup');
       const maxClaimAmountInput = document.getElementById('simple_max_claim_amount');
       const maxClaimsCountInput = document.getElementById('simple_max_claims_count');
+      const simpleMaxPayoutInput = document.getElementById('simple_max_payout_per_period');
+      const advancedMaxClaimAmountInput = document.getElementById('advanced_max_claim_amount');
+      const advancedMaxPayoutInput = document.getElementById('advanced_max_payout_per_period');
 
       function setClaimLimit(isEnabled, allowInputs) {
         if (!claimLimitFields) {
@@ -736,6 +798,56 @@
         }
         if (maxClaimsCountInput) {
           maxClaimsCountInput.disabled = disableInputs;
+        }
+      }
+
+      function setMonetaryFieldsVisibilityForType(claimTypeValue) {
+        const isNonMonetary = claimTypeValue === 'non_monetary';
+
+        if (simpleMaxClaimAmountGroup) {
+          simpleMaxClaimAmountGroup.style.display = isNonMonetary ? 'none' : '';
+        }
+        if (simpleMaxPayoutPerPeriodGroup) {
+          simpleMaxPayoutPerPeriodGroup.style.display = isNonMonetary ? 'none' : '';
+        }
+        if (advancedMaxClaimAmountGroup) {
+          advancedMaxClaimAmountGroup.style.display = isNonMonetary ? 'none' : '';
+        }
+        if (advancedMaxPayoutPerPeriodGroup) {
+          advancedMaxPayoutPerPeriodGroup.style.display = isNonMonetary ? 'none' : '';
+        }
+
+        if (isNonMonetary) {
+          if (maxClaimAmountInput) {
+            maxClaimAmountInput.value = '';
+            maxClaimAmountInput.disabled = true;
+          }
+          if (simpleMaxPayoutInput) {
+            simpleMaxPayoutInput.value = '';
+            simpleMaxPayoutInput.disabled = true;
+          }
+          if (advancedMaxClaimAmountInput) {
+            advancedMaxClaimAmountInput.value = '';
+            advancedMaxClaimAmountInput.disabled = true;
+          }
+          if (advancedMaxPayoutInput) {
+            advancedMaxPayoutInput.value = '';
+            advancedMaxPayoutInput.disabled = true;
+          }
+          if (claimLimitToggle) {
+            claimLimitToggle.checked = true;
+            claimLimitToggle.disabled = true;
+            setClaimLimit(true, true);
+          }
+        } else {
+          if (maxClaimAmountInput) maxClaimAmountInput.disabled = false;
+          if (simpleMaxPayoutInput) simpleMaxPayoutInput.disabled = false;
+          if (advancedMaxClaimAmountInput) advancedMaxClaimAmountInput.disabled = false;
+          if (advancedMaxPayoutInput) advancedMaxPayoutInput.disabled = false;
+          if (claimLimitToggle) {
+            claimLimitToggle.disabled = false;
+            setClaimLimit(claimLimitToggle.checked, true);
+          }
         }
       }
 
@@ -814,6 +926,42 @@
         });
       }
 
+      function syncClaimTypeAcrossModes(sourceId) {
+        if (sourceId === 'simple_claim_type' && simpleClaimType && advancedClaimType) {
+          advancedClaimType.value = simpleClaimType.value;
+          setMonetaryFieldsVisibilityForType(simpleClaimType.value);
+          toggleSimpleNonMonetaryClaimsLimit(simpleClaimType.value);
+        } else if (sourceId === 'advanced_claim_type' && simpleClaimType && advancedClaimType) {
+          simpleClaimType.value = advancedClaimType.value;
+          setMonetaryFieldsVisibilityForType(advancedClaimType.value);
+          toggleSimpleNonMonetaryClaimsLimit(advancedClaimType.value);
+        }
+      }
+
+      function toggleSimpleNonMonetaryClaimsLimit(claimType) {
+        const claimsLimitField = document.getElementById('simpleNonMonetaryClaimsLimit');
+        const payoutLimitField = document.getElementById('simpleMaxPayoutPerPeriodGroup');
+        
+        if (claimType === 'non_monetary') {
+          // Non-monetary: show claims limit, hide payout limit
+          if (claimsLimitField) claimsLimitField.style.display = 'block';
+          if (payoutLimitField) payoutLimitField.style.display = 'none';
+        } else {
+          // Monetary: hide claims limit, show payout limit
+          if (claimsLimitField) claimsLimitField.style.display = 'none';
+          if (payoutLimitField) payoutLimitField.style.display = 'block';
+        }
+      }
+
+      if (simpleClaimType) {
+        simpleClaimType.addEventListener('change', () => syncClaimTypeAcrossModes('simple_claim_type'));
+        // Set initial visibility
+        toggleSimpleNonMonetaryClaimsLimit(simpleClaimType.value);
+      }
+      if (advancedClaimType) {
+        advancedClaimType.addEventListener('change', () => syncClaimTypeAcrossModes('advanced_claim_type'));
+      }
+
       if (insuranceModeToggle && settingsModeInput) {
         const initialAdvanced = settingsModeInput.value === 'advanced';
         insuranceModeToggle.checked = initialAdvanced;
@@ -821,6 +969,11 @@
       } else {
         setMode(false);
       }
+
+      const initialClaimType = (settingsModeInput && settingsModeInput.value === 'advanced' && advancedClaimType)
+        ? advancedClaimType.value
+        : (simpleClaimType ? simpleClaimType.value : 'legacy_monetary');
+      setMonetaryFieldsVisibilityForType(initialClaimType);
 
       // Handle mutually exclusive repurchase restrictions for new policy form
       const permanentBlockToggleNew = document.getElementById('permanentBlockToggleNew');
@@ -872,7 +1025,10 @@
       function clearTierFields() {
         if (tierCategoryInput) tierCategoryInput.value = '';
         if (tierNameInput) tierNameInput.value = '';
-        if (tierColorInput) tierColorInput.value = '';
+        if (tierColorInput) {
+          tierColorInput.value = '';
+          tierColorInput.dispatchEvent(new Event('change'));
+        }
         if (tierLevelInput) tierLevelInput.value = '';
       }
 
@@ -905,7 +1061,10 @@
       function setTierValues(tier) {
         if (tierCategoryInput) tierCategoryInput.value = tier.id;
         if (tierNameInput) tierNameInput.value = tier.name || '';
-        if (tierColorInput) tierColorInput.value = tier.color || 'primary';
+        if (tierColorInput) {
+          tierColorInput.value = tier.color || 'primary';
+          tierColorInput.dispatchEvent(new Event('change'));
+        }
         updateTierSummary();
         if (newGroupFieldsNew) newGroupFieldsNew.classList.add('d-none');
       }
@@ -915,7 +1074,10 @@
         if (tierCategoryInput) tierCategoryInput.value = '';
         if (tierSummaryNew) tierSummaryNew.classList.add('d-none');
         if (newGroupFieldsNew) newGroupFieldsNew.classList.remove('d-none');
-        if (tierColorInput && !tierColorInput.value) tierColorInput.value = 'primary';
+        if (tierColorInput && !tierColorInput.value) {
+          tierColorInput.value = 'primary';
+          tierColorInput.dispatchEvent(new Event('change'));
+        }
       }
 
       selectTierButtons.forEach(btn => {
@@ -974,6 +1136,9 @@
       tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl);
       });
+
+      window.renderBadgeLikeSelect('advanced_marketing_badge', 'marketing');
+      window.renderBadgeLikeSelect('tier_color', 'tier');
 
       // Initialize Economy Balance Checker
       if (typeof EconomyBalanceChecker !== 'undefined') {
@@ -1157,11 +1322,11 @@
                 <td>{{ claim.filed_date.strftime('%Y-%m-%d') }}</td>
                 <td>
                   {% if claim.policy.claim_type == 'transaction_monetary' %}
-                    <span class="badge bg-info me-1">TXN</span>
+                    <span class="badge bg-info me-1">Transaction-Based</span>
                   {% elif claim.policy.claim_type == 'non_monetary' %}
-                    <span class="badge bg-warning text-dark me-1">NON-MONETARY</span>
+                    <span class="badge bg-warning text-dark me-1">Non-Monetary</span>
                   {% else %}
-                    <span class="badge bg-primary me-1">LEGACY</span>
+                    <span class="badge bg-primary me-1">Custom Monetary</span>
                   {% endif %}
                   {% if claim.claim_amount %}
                     <span class="badge bg-success">${{ "%.2f"|format(claim.claim_amount) }}</span>
@@ -1416,7 +1581,136 @@ document.addEventListener('DOMContentLoaded', function() {
       row.style.display = 'none';
     }
   });
+  
+  // Initialize policy preview
+  updatePolicyPreview();
 });
+
+const insuranceModeToggle = document.getElementById('insurance_mode_toggle');
+// Update Policy Preview (Student View)
+function updatePolicyPreview() {
+  const previewDiv = document.getElementById('policyPreview');
+  if (!previewDiv) return;
+
+  const isAdvanced = insuranceModeToggle && insuranceModeToggle.checked;
+  const isSimpleMode = !isAdvanced;
+
+  const title = (isSimpleMode ? document.getElementById('simple_title')?.value : document.getElementById('title')?.value) || '';
+  const description = (isSimpleMode ? document.getElementById('simple_description')?.value : document.getElementById('description')?.value) || '';
+  const premium = parseFloat((isSimpleMode ? document.getElementById('simple_premium')?.value : document.getElementById('advanced_premium')?.value)) || 0;
+  const frequency = (isSimpleMode ? document.getElementById('simple_charge_frequency')?.value : document.getElementById('advanced_charge_frequency')?.value) || 'monthly';
+  const claimType = (isSimpleMode ? document.getElementById('simple_claim_type')?.value : document.getElementById('advanced_claim_type')?.value) || 'transaction_monetary';
+  const waitingPeriod = parseInt((isSimpleMode ? document.getElementById('simple_waiting_period_days')?.value : document.getElementById('waiting_period_days')?.value), 10) || 0;
+  const autopay = !isSimpleMode && document.getElementById('autopay')?.checked;
+  const isActive = (isSimpleMode ? document.getElementById('simple_is_active')?.checked : document.getElementById('is_active')?.checked);
+  const marketingBadge = !isSimpleMode ? (document.getElementById('advanced_marketing_badge')?.value) : '';
+
+  previewDiv.replaceChildren();
+
+  if (!title || premium === 0) {
+    const blank = document.createElement('div');
+    blank.className = 'alert alert-light border mb-0';
+    blank.textContent = 'Fill out the policy name and premium to see a preview of how students will see this insurance policy.';
+    previewDiv.appendChild(blank);
+    return;
+  }
+
+  const frequencyNames = {
+    weekly: 'week',
+    biweekly: '2 weeks',
+    monthly: 'month',
+    semester: 'semester'
+  };
+  const badgeLabels = {
+    most_popular: 'Most Popular',
+    best_value: 'Best Value',
+    recommended: 'Recommended',
+    new: 'New'
+  };
+
+  const card = document.createElement('div');
+  card.className = 'card shadow-sm';
+  const cardBody = document.createElement('div');
+  cardBody.className = 'card-body';
+
+  const titleRow = document.createElement('div');
+  titleRow.className = 'd-flex justify-content-between align-items-start mb-2';
+  const titleEl = document.createElement('h5');
+  titleEl.className = 'card-title text-primary mb-0';
+  titleEl.textContent = title;
+  titleRow.appendChild(titleEl);
+  if (marketingBadge && marketingBadge !== 'none') {
+    const marketingBadgeEl = document.createElement('span');
+    marketingBadgeEl.className = 'badge bg-warning text-dark';
+    marketingBadgeEl.textContent = badgeLabels[marketingBadge] || '';
+    titleRow.appendChild(marketingBadgeEl);
+  }
+  cardBody.appendChild(titleRow);
+
+  const premiumEl = document.createElement('p');
+  premiumEl.className = 'text-success fw-bold mb-2';
+  premiumEl.textContent = `$${premium.toFixed(2)} / ${frequencyNames[frequency] || frequency}`;
+  cardBody.appendChild(premiumEl);
+
+  if (description) {
+    const descriptionEl = document.createElement('p');
+    descriptionEl.className = 'text-muted small mb-3';
+    descriptionEl.textContent = description;
+    cardBody.appendChild(descriptionEl);
+  }
+
+  const facts = document.createElement('div');
+  facts.className = 'd-flex flex-wrap gap-1 mb-2';
+  if (autopay) {
+    const autopayBadge = document.createElement('span');
+    autopayBadge.className = 'badge bg-info';
+    autopayBadge.textContent = 'Auto-Pay';
+    facts.appendChild(autopayBadge);
+  }
+  const waitBadge = document.createElement('span');
+  waitBadge.className = waitingPeriod === 0 ? 'badge bg-success' : 'badge bg-warning text-dark';
+  waitBadge.textContent = waitingPeriod === 0 ? 'Immediate Coverage' : `${waitingPeriod} day wait`;
+  facts.appendChild(waitBadge);
+
+  const typeBadge = document.createElement('span');
+  typeBadge.className = 'badge bg-secondary';
+  typeBadge.textContent = claimType === 'transaction_monetary' ? 'Reimbursement' : (claimType === 'non_monetary' ? 'Non-Monetary' : 'Custom Payout');
+  facts.appendChild(typeBadge);
+  cardBody.appendChild(facts);
+
+  if (!isActive) {
+    const inactive = document.createElement('div');
+    inactive.className = 'alert alert-secondary py-2 mb-0 small';
+    inactive.textContent = 'This policy is not yet available to students';
+    cardBody.appendChild(inactive);
+  } else {
+    const action = document.createElement('button');
+    action.className = 'btn btn-primary btn-sm w-100';
+    action.textContent = 'View Details & Enroll';
+    cardBody.appendChild(action);
+  }
+
+  card.appendChild(cardBody);
+  previewDiv.appendChild(card);
+
+  const note = document.createElement('div');
+  note.className = 'alert alert-info mt-3 mb-0 small';
+  note.textContent = "Note: After students purchase this policy, they'll see a plain language explanation of the coverage terms on their insurance page.";
+  previewDiv.appendChild(note);
+}
+
+// Update preview when form fields change
+const insuranceFormFields = document.querySelectorAll('#insuranceForm input, #insuranceForm select, #insuranceForm textarea');
+insuranceFormFields.forEach(field => {
+  field.addEventListener('change', updatePolicyPreview);
+  field.addEventListener('input', updatePolicyPreview);
+});
+
+// Update preview when mode toggle changes
+if (insuranceModeToggle) {
+  insuranceModeToggle.addEventListener('change', updatePolicyPreview);
+}
+
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>

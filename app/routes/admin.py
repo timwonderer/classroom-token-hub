@@ -36,7 +36,7 @@ import pytz
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TapEvent, StoreItem, StudentItem,
+    Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
@@ -70,7 +70,7 @@ from app.utils.passwordless_client import (
     get_public_api_key
 )
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
-from app.payroll import calculate_payroll, calculate_payroll_breakdown
+from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
 from app.attendance import get_last_payroll_time, calculate_unpaid_attendance_seconds, get_join_code_for_student_period
 import time
 
@@ -82,6 +82,13 @@ MAX_JOIN_CODE_RETRIES = 10  # Maximum attempts to generate a unique join code
 FALLBACK_BLOCK_PREFIX_LENGTH = 1  # Number of characters from block name in fallback code
 FALLBACK_CODE_MODULO = 10000  # Modulo for timestamp suffix (produces 4-digit number)
 
+
+# Insurance form mapping for derived claim period storage
+FREQUENCY_TO_CLAIM_PERIOD = {
+    'weekly': 'week',
+    'monthly': 'month',
+    'semester': 'semester',
+}
 # Placeholder values for legacy class TeacherBlock entries
 LEGACY_PLACEHOLDER_CREDENTIAL = "LEGACY0"  # Placeholder credential for legacy classes
 LEGACY_PLACEHOLDER_FIRST_NAME = "__JOIN_CODE_PLACEHOLDER__"  # Marks legacy placeholder entries
@@ -149,6 +156,45 @@ def _get_teacher_blocks():
         for b in s_blocks.split(',') if b.strip()
     ))
 
+
+
+def _populate_policy_from_form(policy, form, *, next_tier_category_id=None):
+    """Populate insurance policy fields from form data."""
+    is_non_monetary = form.claim_type.data == 'non_monetary'
+    policy.title = form.title.data
+    policy.description = form.description.data
+    policy.premium = form.premium.data
+    policy.charge_frequency = form.charge_frequency.data
+    policy.autopay = form.autopay.data
+    policy.waiting_period_days = form.waiting_period_days.data
+    policy.max_claims_count = form.max_claims_count.data
+    policy.max_claims_period = FREQUENCY_TO_CLAIM_PERIOD.get(form.charge_frequency.data, 'month')
+    policy.max_claim_amount = None if is_non_monetary else form.max_claim_amount.data
+    policy.max_payout_per_period = None if is_non_monetary else form.max_payout_per_period.data
+    policy.claim_type = form.claim_type.data
+    policy.is_monetary = not is_non_monetary
+    policy.no_repurchase_after_cancel = form.no_repurchase_after_cancel.data
+    policy.enable_repurchase_cooldown = form.enable_repurchase_cooldown.data
+    policy.repurchase_wait_days = form.repurchase_wait_days.data
+    policy.auto_cancel_nonpay_days = form.auto_cancel_nonpay_days.data
+    policy.claim_time_limit_days = form.claim_time_limit_days.data
+    policy.bundle_with_policy_ids = form.bundle_with_policy_ids.data
+    policy.bundle_discount_percent = form.bundle_discount_percent.data
+    policy.bundle_discount_amount = form.bundle_discount_amount.data
+    policy.marketing_badge = form.marketing_badge.data if form.marketing_badge.data else None
+    policy.set_blocks(form.blocks.data if form.blocks.data else [])
+
+    if form.tier_category_id.data:
+        policy.tier_category_id = form.tier_category_id.data
+    elif form.tier_name.data or form.tier_color.data:
+        policy.tier_category_id = next_tier_category_id
+    else:
+        policy.tier_category_id = None
+
+    policy.tier_name = form.tier_name.data or None
+    policy.tier_color = form.tier_color.data or None
+    policy.tier_level = form.tier_level.data or None
+    policy.is_active = form.is_active.data
 
 def _get_class_labels_for_blocks(admin_id, blocks):
     """Return mapping of block -> class label for the given admin without N+1 queries."""
@@ -321,6 +367,24 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
             StoreItem.id.in_(sa.select(deletable_store_item_ids))
         ).delete(synchronize_session=False)
 
+    # Clean up orphaned StoreItemBlock entries for the deleted class blocks
+    # This handles items that are visible to multiple classes
+    if class_blocks:
+        deletable_block_entries = (
+            db.session.query(StoreItemBlock.store_item_id, StoreItemBlock.block)
+            .join(StoreItem, StoreItemBlock.store_item_id == StoreItem.id)
+            .filter(
+                StoreItem.teacher_id == teacher_id,
+                StoreItemBlock.block.in_(class_blocks)
+            )
+            .subquery()
+        )
+        StoreItemBlock.query.filter(
+            sa.tuple_(StoreItemBlock.store_item_id, StoreItemBlock.block).in_(
+                sa.select(deletable_block_entries)
+            )
+        ).delete(synchronize_session=False)
+
     # Seats/ownership for this class
     TeacherBlock.query.filter(
         TeacherBlock.teacher_id == teacher_id,
@@ -446,52 +510,6 @@ def _link_student_to_admin(student: Student, admin_id):
         current_app.logger.info(
             f"Claimed existing TeacherBlock for student with join_code {existing_teacher_block.join_code}"
         )
-
-
-def _get_students_needing_transaction_backfill(teacher_id):
-    """
-    Get students who have transactions missing proper scoping (teacher_id and/or join_code).
-    
-    These are orphaned transactions that need to be associated with a join_code
-    for proper class isolation. This is CRITICAL because join_code is the source
-    of truth for class scoping, and StudentTeacher is the source for auth, not teacher_id.
-    
-    Args:
-        teacher_id: The teacher's admin ID
-        
-    Returns:
-        list: Student objects that have unscoped transactions
-    """
-    # Get students that belong to this teacher
-    student_ids_query = _scoped_students().with_entities(Student.id).all()
-    student_ids = [sid[0] for sid in student_ids_query]
-    
-    if not student_ids:
-        return []
-    
-    # Find transactions for these students that have NO join_code
-    # (regardless of whether they have teacher_id)
-    transactions_needing_backfill = (
-        Transaction.query
-        .filter(
-            Transaction.student_id.in_(student_ids),
-            Transaction.join_code.is_(None)
-        )
-        .with_entities(Transaction.student_id)
-        .distinct()
-        .all()
-    )
-    
-    if not transactions_needing_backfill:
-        return []
-    
-    affected_student_ids = [tx.student_id for tx in transactions_needing_backfill]
-
-    # SECURITY FIX: Get the student objects using scoped query for defense-in-depth
-    # While the IDs are already from scoped students, this ensures consistency
-    students = _scoped_students().filter(Student.id.in_(affected_student_ids)).all()
-
-    return students
 
 
 def _get_feature_settings(teacher_id, block=None):
@@ -700,22 +718,7 @@ def dashboard():
     onboarding_redirect = _check_onboarding_redirect()
     if onboarding_redirect:
         return onboarding_redirect
-
-    # Check for students with transactions needing join_code backfill
     current_admin_id = session.get('admin_id')
-    students_needing_backfill = _get_students_needing_transaction_backfill(current_admin_id)
-    if students_needing_backfill:
-        # Only redirect if we have a block/join_code mapping to work with
-        has_blocks = (
-            TeacherBlock.query
-            .filter_by(teacher_id=current_admin_id, is_claimed=True)
-            .filter(TeacherBlock.join_code.isnot(None))
-            .count()
-        )
-        if has_blocks:
-            # Redirect to backfill page
-            return redirect(url_for('admin.backfill_transactions'))
-        flash("No periods/blocks found. Please add students to periods first.", "error")
 
     student_ids_subq = _student_scope_subquery()
     # Auto-tapout students who have exceeded their daily limit
@@ -831,7 +834,7 @@ def dashboard():
 
     # --- Payroll Info ---
     last_payroll_time = get_last_payroll_time()
-    payroll_summary = calculate_payroll(students, last_payroll_time, teacher_id=current_admin_id)
+    payroll_summary, payroll_updated_at = get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=current_admin_id)
     total_payroll_estimate = sum(payroll_summary.values())
 
     # Calculate next payroll date (keep in UTC for template conversion)
@@ -876,6 +879,7 @@ def dashboard():
         total_transactions_today=total_transactions_today,
         # Payroll info
         total_payroll_estimate=total_payroll_estimate,
+        payroll_updated_at=payroll_updated_at,
         next_payroll_date=next_payroll_date,
         # Limited data for cards
         recent_redemptions=recent_redemptions,
@@ -964,6 +968,7 @@ def give_bonus_all():
             amount=amount,
             type=tx_type,
             description=title,
+            status=TransactionStatus.PENDING,
             account_type='checking'
         )
         db.session.add(tx)
@@ -976,6 +981,7 @@ def give_bonus_all():
                 join_code=join_code,
                 amount=-shortfall,
                 account_type='savings',
+                status=TransactionStatus.PENDING,
                 type='Withdrawal',
                 description='Overdraft protection transfer to checking'
             )
@@ -985,6 +991,7 @@ def give_bonus_all():
                 join_code=join_code,
                 amount=shortfall,
                 account_type='checking',
+                status=TransactionStatus.PENDING,
                 type='Deposit',
                 description='Overdraft protection transfer from savings'
             )
@@ -999,98 +1006,6 @@ def give_bonus_all():
         message += f" Overdraft fee charged for {fee_count}."
     flash(message, "warning" if declined_count else "success")
     return redirect(url_for('admin.dashboard'))
-
-
-@admin_bp.route('/backfill-transactions', methods=['GET', 'POST'])
-@admin_required
-def backfill_transactions():
-    """
-    Backfill join_code for orphaned transactions (CRITICAL for proper class isolation).
-    
-    join_code is the SOURCE OF TRUTH for class scoping because:
-    - A teacher can have multiple periods (Period 1 Math, Period 3 Math)
-    - Each period has a unique join_code
-    - Students in both periods should see SEPARATE balances for each
-    
-    Teacher selects which period/block each affected student belongs to,
-    and we update:
-    1. Transaction join_code (CRITICAL - required for balance scoping)
-    2. Transaction teacher_id (if not already set)
-    3. Student teacher_id (if not already set)
-    4. StudentTeacher association (if not already exists)
-    """
-    current_admin_id = session.get('admin_id')
-    students_needing_backfill = _get_students_needing_transaction_backfill(current_admin_id)
-    
-    if not students_needing_backfill:
-        # No students need backfill, redirect to dashboard
-        return redirect(url_for('admin.dashboard'))
-    
-    # Get teacher's available periods/blocks with join codes
-    teacher_blocks = (
-        TeacherBlock.query
-        .filter_by(teacher_id=current_admin_id, is_claimed=True)
-        .with_entities(TeacherBlock.block, TeacherBlock.join_code)
-        .distinct()
-        .all()
-    )
-    
-    # Create a mapping of block to join_code
-    block_to_join_code = {}
-    for block, join_code in teacher_blocks:
-        if block and join_code:
-            block_to_join_code[block] = join_code
-    
-    # If no blocks available, create a default mapping
-    if not block_to_join_code:
-        flash("No periods/blocks found. Please add students to periods first.", "error")
-        return redirect(url_for('admin.dashboard'))
-    
-    if request.method == 'POST':
-        try:
-            # Process each student assignment
-            for student in students_needing_backfill:
-                block_key = f"student_{student.id}_block"
-                selected_block = request.form.get(block_key)
-                
-                if selected_block and selected_block in block_to_join_code:
-                    join_code = block_to_join_code[selected_block]
-                    
-                    # 1. Update all transactions that have NO join_code
-                    #    (CRITICAL: join_code is source of truth, not teacher_id)
-                    transactions_to_update = Transaction.query.filter_by(
-                        student_id=student.id,
-                        join_code=None
-                    ).all()
-                    
-                    for tx in transactions_to_update:
-                        # Set join_code (critical for scoping)
-                        tx.join_code = join_code
-
-                    # 2. Ensure StudentTeacher association exists
-                    # StudentTeacher and join_code are now the sole sources of truth.
-                    _link_student_to_admin(student, current_admin_id)
-                    
-                    current_app.logger.info(
-                        f"Backfilled teacher_id={current_admin_id} and join_code={join_code} "
-                        f"for {len(transactions_to_update)} transactions for student"
-                    )
-            
-            db.session.commit()
-            flash(f"Successfully backfilled transactions for {len(students_needing_backfill)} student(s)! Balances should now be correct.", "success")
-            return redirect(url_for('admin.dashboard'))
-            
-        except SQLAlchemyError as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error backfilling transactions: {e}", exc_info=True)
-            flash("Error backfilling transactions. Please try again.", "error")
-    
-    # GET request - show form
-    return render_template(
-        'admin_backfill_join_codes.html',
-        students=students_needing_backfill,
-        available_blocks=sorted(block_to_join_code.keys())
-    )
 
 
 # -------------------- AUTHENTICATION --------------------
@@ -2003,7 +1918,7 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
             RentPayment.period == block,
             RentPayment.coverage_month == coverage_month,
             RentPayment.coverage_year == coverage_year,
-            or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+            RentPayment.join_code == join_code
         ))
 
     if not all_student_ids:
@@ -2111,7 +2026,7 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
         RentPayment.period == current_block,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
-        db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+        RentPayment.join_code == join_code
     ).first() is not None
 
     per_period_items = RentItem.query.filter_by(
@@ -2373,13 +2288,20 @@ def set_current_class():
 def student_detail(student_id):
     """View detailed information for a specific student."""
     student = _get_student_or_404(student_id)
+    join_code = session.get('current_join_code')
     # Remove deprecated last_tap_in/last_tap_out logic; rely on TapEvent backend.
     # Fetch last rent payment
-    latest_rent = Transaction.query.filter_by(student_id=student.id, type="rent").order_by(Transaction.timestamp.desc()).first()
+    rent_query = Transaction.query.filter_by(student_id=student.id, type="rent")
+    if join_code:
+        rent_query = rent_query.filter(Transaction.join_code == join_code)
+    latest_rent = rent_query.order_by(Transaction.timestamp.desc()).first()
     student.rent_last_paid = latest_rent.timestamp if latest_rent else None
 
     # Fetch last property tax payment
-    latest_tax = Transaction.query.filter_by(student_id=student.id, type="property_tax").order_by(Transaction.timestamp.desc()).first()
+    tax_query = Transaction.query.filter_by(student_id=student.id, type="property_tax")
+    if join_code:
+        tax_query = tax_query.filter(Transaction.join_code == join_code)
+    latest_tax = tax_query.order_by(Transaction.timestamp.desc()).first()
     student.property_tax_last_paid = latest_tax.timestamp if latest_tax else None
 
     # Compute due dates and overdue status
@@ -2395,10 +2317,18 @@ def student_detail(student_id):
     student.property_tax_due_date = tax_due
     student.property_tax_overdue = today > tax_due and (not student.property_tax_last_paid or student.property_tax_last_paid.astimezone(PACIFIC).date() <= tax_due)
 
-    transactions = Transaction.query.filter_by(student_id=student.id).order_by(Transaction.timestamp.desc()).all()
-    student_items = student.items.order_by(StudentItem.purchase_date.desc()).all()
+    transactions_query = Transaction.query.filter_by(student_id=student.id)
+    student_items_query = student.items
+    latest_tap_event_query = TapEvent.query.filter_by(student_id=student.id)
+    if join_code:
+        transactions_query = transactions_query.filter(Transaction.join_code == join_code)
+        student_items_query = student_items_query.filter(StudentItem.join_code == join_code)
+        latest_tap_event_query = latest_tap_event_query.filter(TapEvent.join_code == join_code)
+
+    transactions = transactions_query.order_by(Transaction.timestamp.desc()).all()
+    student_items = student_items_query.order_by(StudentItem.purchase_date.desc()).all()
     # Fetch most recent TapEvent for this student
-    latest_tap_event = TapEvent.query.filter_by(student_id=student.id).order_by(TapEvent.timestamp.desc()).first()
+    latest_tap_event = latest_tap_event_query.order_by(TapEvent.timestamp.desc()).first()
 
     # Get student's active insurance policy scoped to the currently selected class.
     active_insurance = student.get_active_insurance(session.get('current_join_code'))
@@ -2423,7 +2353,6 @@ def student_detail(student_id):
 
     # CRITICAL: Get scoped balances for current join_code to prevent multi-tenancy violations
     # Teacher clicked from a specific class tab, so show balances for that period only
-    join_code = session.get('current_join_code')
     scoped_checking_balance = 0
     scoped_savings_balance = 0
     scoped_total_earnings = 0
@@ -3479,13 +3408,30 @@ def store_management():
         teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id, is_claimed=True).all()
         join_code_to_block = {}
         join_code_to_label = {}
+        
+        # Count unique students per join_code instead of TeacherBlock seats
         class_sizes = {}
+        class_size_query = (
+            db.session.query(
+                TeacherBlock.join_code,
+                db.func.count(db.func.distinct(Student.id)).label('student_count')
+            )
+            .join(Student, TeacherBlock.student_id == Student.id)
+            .filter(
+                TeacherBlock.teacher_id == admin_id,
+                TeacherBlock.is_claimed == True,
+                TeacherBlock.join_code.isnot(None)
+            )
+            .group_by(TeacherBlock.join_code)
+            .all()
+        )
+        class_sizes = {row.join_code: int(row.student_count or 0) for row in class_size_query}
+        
         for seat in teacher_blocks:
             if not seat.join_code:
                 continue
             join_code_to_block.setdefault(seat.join_code, (seat.block or '').strip().upper())
             join_code_to_label.setdefault(seat.join_code, seat.get_class_label())
-            class_sizes[seat.join_code] = class_sizes.get(seat.join_code, 0) + 1
 
         collective_item_ids = [item.id for item in collective_items]
         collective_counts = (
@@ -3677,10 +3623,20 @@ def store_management():
 
     audit_class_options = sorted(set(class_labels_by_block.values()))
 
+    rent_managed_item_ids = {
+        row[0] for row in db.session.query(RentItem.store_item_id).join(
+            RentSettings, RentItem.rent_setting_id == RentSettings.id
+        ).filter(
+            RentSettings.teacher_id == admin_id,
+            RentItem.store_item_id.isnot(None)
+        ).all()
+    }
+
     return render_template('admin_store.html', form=form, items=items, current_page="store",
                          total_items=total_items, active_items=active_items, total_purchases=total_purchases,
                          pending_redemptions=pending_redemptions, recent_purchases=recent_purchases,
                          class_labels_by_block=class_labels_by_block,
+                         rent_managed_item_ids=rent_managed_item_ids,
                          collective_progress_by_item=collective_progress_by_item,
                          audit_rows=audit_rows,
                          audit_total=audit_total,
@@ -3765,7 +3721,14 @@ def hard_delete_store_item(item_id):
 
 def _block_rent_linked_store_item(item: StoreItem) -> bool:
     """Return True if store item is rent-linked and deletion should be blocked."""
-    if item.is_rent_linked:
+    is_managed_by_rent = item.is_rent_linked or db.session.query(RentItem.id).join(
+        RentSettings, RentItem.rent_setting_id == RentSettings.id
+    ).filter(
+        RentSettings.teacher_id == item.teacher_id,
+        RentItem.store_item_id == item.id
+    ).first() is not None
+
+    if is_managed_by_rent:
         flash(f"Cannot delete '{item.name}' because it is managed by Rent Settings. Please remove it from Rent Settings instead.", "error")
         return True
     return False
@@ -3826,7 +3789,9 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                     StoreItem.name == rent_item.name
                 ).first()
 
-            is_per_use = (rent_item.rent_item_type == 'per_use')
+            # Mark any store-backed rent item as rent-linked (privilege + per-use).
+            # Hall pass items are skipped earlier and never synced to store.
+            is_rent_linked_item = rent_item.rent_item_type in ('privilege', 'per_use')
 
             if store_item:
                 # Update existing store item
@@ -3835,8 +3800,7 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                 store_item.price = rent_item.store_price
                 store_item.limit_per_student = limit
                 store_item.is_active = True
-                # Only mark linked for per-use rent items
-                store_item.is_rent_linked = is_per_use
+                store_item.is_rent_linked = is_rent_linked_item
 
                 # Link this rent_item to the store_item if not already linked
                 if not rent_item.store_item_id:
@@ -3853,7 +3817,7 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                     item_type='delayed',
                     limit_per_student=limit,
                     is_active=True,
-                    is_rent_linked=is_per_use
+                    is_rent_linked=is_rent_linked_item
                 )
                 db.session.add(store_item)
                 db.session.flush()  # Get the store_item.id
@@ -4147,11 +4111,9 @@ def rent_settings():
                         coverage_year=coverage_due.year
                     )
                     if block_join_code:
-                        paid_query = paid_query.filter(
-                            db.or_(RentPayment.join_code == block_join_code, RentPayment.join_code.is_(None))
-                        )
+                        paid_query = paid_query.filter(RentPayment.join_code == block_join_code)
                     else:
-                        paid_query = paid_query.filter(RentPayment.join_code.is_(None))
+                        paid_query = paid_query.filter(sa.false())
                     paid_count = paid_query.count()
                     if paid_count > 0:
                         mid_period_locked = True
@@ -4359,7 +4321,7 @@ def rent_settings():
                 RentPayment.query
                 .filter(RentPayment.student_id.in_(student_ids))
                 .filter_by(coverage_month=coverage_month, coverage_year=coverage_year)
-                .filter(db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)))
+                .filter(RentPayment.join_code == join_code)
                 .all()
             )
 
@@ -4662,36 +4624,11 @@ def insurance_management():
         policy = InsurancePolicy(
             policy_code=policy_code,
             teacher_id=session.get('admin_id'),
-            title=form.title.data,
-            description=form.description.data,
-            premium=form.premium.data,
-            charge_frequency=form.charge_frequency.data,
-            autopay=form.autopay.data,
-            waiting_period_days=form.waiting_period_days.data,
-            max_claims_count=form.max_claims_count.data,
-            max_claims_period=form.max_claims_period.data,
-            max_claim_amount=form.max_claim_amount.data,
-            max_payout_per_period=form.max_payout_per_period.data,
-            claim_type=form.claim_type.data,
-            is_monetary=form.claim_type.data != 'non_monetary',
-            no_repurchase_after_cancel=form.no_repurchase_after_cancel.data,
-            repurchase_wait_days=form.repurchase_wait_days.data,
-            auto_cancel_nonpay_days=form.auto_cancel_nonpay_days.data,
-            claim_time_limit_days=form.claim_time_limit_days.data,
-            bundle_discount_percent=form.bundle_discount_percent.data,
-            marketing_badge=form.marketing_badge.data if form.marketing_badge.data else None,
-            tier_category_id=tier_category_id,
-            tier_name=form.tier_name.data or None,
-            tier_color=form.tier_color.data or None,
-            tier_level=form.tier_level.data or None,
             settings_mode=request.form.get('settings_mode', 'advanced'),
-            is_active=form.is_active.data
         )
+        _populate_policy_from_form(policy, form, next_tier_category_id=tier_category_id)
         db.session.add(policy)
         db.session.flush()  # Get the ID for the policy before adding blocks
-        # Set blocks using many-to-many relationship
-        if form.blocks.data:
-            policy.set_blocks(form.blocks.data)
         db.session.commit()
         flash(f"Insurance policy '{policy.title}' created successfully!", "success")
         return redirect(url_for('admin.insurance_management'))
@@ -4896,39 +4833,7 @@ def edit_insurance_policy(policy_id):
     next_tier_category_id = _next_tenant_scoped_tier_id(tier_namespace_seed, existing_tier_ids)
 
     if request.method == 'POST' and form.validate_on_submit():
-        policy.title = form.title.data
-        policy.description = form.description.data
-        policy.premium = form.premium.data
-        policy.charge_frequency = form.charge_frequency.data
-        policy.autopay = form.autopay.data
-        policy.waiting_period_days = form.waiting_period_days.data
-        policy.max_claims_count = form.max_claims_count.data
-        policy.max_claims_period = form.max_claims_period.data
-        policy.max_claim_amount = form.max_claim_amount.data
-        policy.max_payout_per_period = form.max_payout_per_period.data
-        policy.claim_type = form.claim_type.data
-        policy.is_monetary = form.claim_type.data != 'non_monetary'
-        policy.no_repurchase_after_cancel = form.no_repurchase_after_cancel.data
-        policy.enable_repurchase_cooldown = form.enable_repurchase_cooldown.data
-        policy.repurchase_wait_days = form.repurchase_wait_days.data
-        policy.auto_cancel_nonpay_days = form.auto_cancel_nonpay_days.data
-        policy.claim_time_limit_days = form.claim_time_limit_days.data
-        policy.bundle_with_policy_ids = form.bundle_with_policy_ids.data
-        policy.bundle_discount_percent = form.bundle_discount_percent.data
-        policy.bundle_discount_amount = form.bundle_discount_amount.data
-        policy.marketing_badge = form.marketing_badge.data if form.marketing_badge.data else None
-        # Set blocks using many-to-many relationship
-        policy.set_blocks(form.blocks.data if form.blocks.data else [])
-        if form.tier_category_id.data:
-            policy.tier_category_id = form.tier_category_id.data
-        elif form.tier_name.data or form.tier_color.data:
-            policy.tier_category_id = next_tier_category_id
-        else:
-            policy.tier_category_id = None
-        policy.tier_name = form.tier_name.data or None
-        policy.tier_color = form.tier_color.data or None
-        policy.tier_level = form.tier_level.data or None
-        policy.is_active = form.is_active.data
+        _populate_policy_from_form(policy, form, next_tier_category_id=next_tier_category_id)
 
         db.session.commit()
         flash(f"Insurance policy '{policy.title}' updated successfully!", "success")
@@ -5129,12 +5034,8 @@ def process_claim(claim_id):
 
     def _get_period_bounds():
         now = utc_now()
-        if claim.policy.max_claims_period == 'year':
-            return (
-                now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
-                now.replace(month=12, day=31, hour=23, minute=59, second=59),
-            )
-        if claim.policy.max_claims_period == 'semester':
+        period_key = (claim.policy.charge_frequency or '').lower()
+        if period_key == 'semester':
             if now.month <= 6:
                 return (
                     now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
@@ -5144,6 +5045,10 @@ def process_claim(claim_id):
                 now.replace(month=7, day=1, hour=0, minute=0, second=0, microsecond=0),
                 now.replace(month=12, day=31, hour=23, minute=59, second=59),
             )
+        if period_key == 'weekly':
+            period_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+            period_end = period_start + timedelta(days=7) - timedelta(seconds=1)
+            return period_start, period_end
         period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         next_month = period_start.replace(day=28) + timedelta(days=4)
         period_end = next_month.replace(day=1) - timedelta(seconds=1)
@@ -5215,7 +5120,7 @@ def process_claim(claim_id):
         InsuranceClaim.id != claim.id,
     )
     if claim.policy.max_claims_count and approved_claims.count() >= claim.policy.max_claims_count:
-        validation_errors.append(f"Maximum claims limit reached ({claim.policy.max_claims_count} per {claim.policy.max_claims_period})")
+        validation_errors.append(f"Maximum claims limit reached ({claim.policy.max_claims_count} per {claim.policy.charge_frequency})")
 
     period_payouts = None
     remaining_period_cap = None
@@ -5233,7 +5138,7 @@ def process_claim(claim_id):
         remaining_period_cap = max(claim.policy.max_payout_per_period - period_payouts, 0)
         if remaining_period_cap is not None and requested_amount > remaining_period_cap and claim.policy.claim_type != 'non_monetary':
             validation_errors.append(
-                f"Maximum payout limit would be exceeded (${period_payouts:.2f} paid + ${requested_amount:.2f} requested > ${claim.policy.max_payout_per_period:.2f} limit per {claim.policy.max_claims_period})"
+                f"Maximum payout limit would be exceeded (${period_payouts:.2f} paid + ${requested_amount:.2f} requested > ${claim.policy.max_payout_per_period:.2f} limit per {claim.policy.charge_frequency})"
             )
 
     # Get claims statistics
@@ -5265,7 +5170,7 @@ def process_claim(claim_id):
         if requires_payout:
             approved_claims_count = approved_claims.count()
             if claim.policy.max_claims_count and approved_claims_count >= claim.policy.max_claims_count:
-                flash(f"Cannot approve claim: maximum of {claim.policy.max_claims_count} claims already reached this {claim.policy.max_claims_period}.", "danger")
+                flash(f"Cannot approve claim: maximum of {claim.policy.max_claims_count} claims already reached this {claim.policy.charge_frequency}.", "danger")
                 db.session.rollback()
                 return redirect(url_for('admin.process_claim', claim_id=claim_id))
 
@@ -5280,7 +5185,7 @@ def process_claim(claim_id):
             if remaining_period_cap is not None:
                 if remaining_period_cap <= 0:
                     flash(
-                        f"Cannot approve claim: Would exceed maximum payout limit of ${claim.policy.max_payout_per_period:.2f} per {claim.policy.max_claims_period} (${period_payouts:.2f} already paid)",
+                        f"Cannot approve claim: Would exceed maximum payout limit of ${claim.policy.max_payout_per_period:.2f} per {claim.policy.charge_frequency} (${period_payouts:.2f} already paid)",
                         "danger",
                     )
                     db.session.rollback()
@@ -5306,6 +5211,7 @@ def process_claim(claim_id):
                 join_code=join_code,  # CRITICAL: Add join_code for period isolation
                 amount=approved_amount,
                 account_type='checking',
+                status=TransactionStatus.PENDING,
                 type='insurance_reimbursement',
                 description=transaction_description,
             )
@@ -5373,6 +5279,8 @@ def void_transaction(transaction_id):
         return _void_error("Transaction is already voided.")
 
     try:
+        is_pending = (tx.status == TransactionStatus.PENDING)
+
         if tx.type == 'purchase':
             purchase_match = re.match(
                 r'^Purchase:\s*(?P<name>.+?)(?:\s+\(x(?P<qty>\d+)\))?(?:\s+\[.*\])?$',
@@ -5402,10 +5310,9 @@ def void_transaction(transaction_id):
                 StudentItem.student_id == tx.student_id,
                 StudentItem.store_item_id == store_item.id,
             )
-            if tx.join_code:
-                matching_items_query = matching_items_query.filter(StudentItem.join_code == tx.join_code)
-            else:
-                matching_items_query = matching_items_query.filter(StudentItem.join_code.is_(None))
+            if not tx.join_code:
+                return _void_error("Transaction is missing class scope (join_code) and cannot be voided safely.")
+            matching_items_query = matching_items_query.filter(StudentItem.join_code == tx.join_code)
 
             matching_items = matching_items_query.all()
             if not matching_items:
@@ -5441,6 +5348,7 @@ def void_transaction(transaction_id):
                 join_code=tx.join_code,
                 amount=Decimal('0.00'),
                 account_type=tx.account_type or 'checking',
+                status=TransactionStatus.PENDING,
                 type='void_item_removed',
                 description=f"item removed - {store_item.name}",
             ))
@@ -5457,6 +5365,7 @@ def void_transaction(transaction_id):
                 join_code=tx.join_code,
                 amount=abs(tx.amount or Decimal('0.00')),
                 account_type=tx.account_type or 'checking',
+                status=TransactionStatus.PENDING,
                 type='refund',
                 original_transaction_id=tx.id,
                 description=f"Void refund for transaction #{tx.id}: {tx.description}",
@@ -5470,10 +5379,9 @@ def void_transaction(transaction_id):
                 RentPayment.student_id == tx.student_id,
                 RentPayment.amount_paid == abs(tx.amount or Decimal('0.00')),
             )
-            if tx.join_code:
-                rent_payments_query = rent_payments_query.filter(RentPayment.join_code == tx.join_code)
-            else:
-                rent_payments_query = rent_payments_query.filter(RentPayment.join_code.is_(None))
+            if not tx.join_code:
+                return _void_error("Transaction is missing class scope (join_code) and cannot be voided safely.")
+            rent_payments_query = rent_payments_query.filter(RentPayment.join_code == tx.join_code)
             rent_payments = rent_payments_query.all()
 
             if rent_payments:
@@ -5484,19 +5392,21 @@ def void_transaction(transaction_id):
                 )
                 db.session.delete(matched_rent_payment)
 
-            reversal_tx = Transaction(
-                student_id=tx.student_id,
-                teacher_id=tx.teacher_id,
-                join_code=tx.join_code,
-                amount=abs(tx.amount or Decimal('0.00')),
-                account_type=tx.account_type or 'checking',
-                type='refund',
-                original_transaction_id=tx.id,
-                description=f"Void refund for transaction #{tx.id}: {tx.description}",
-            )
-            db.session.add(reversal_tx)
-            db.session.flush()
-            tx.reversal_transaction_id = reversal_tx.id
+            if not is_pending:
+                reversal_tx = Transaction(
+                    student_id=tx.student_id,
+                    teacher_id=tx.teacher_id,
+                    join_code=tx.join_code,
+                    amount=abs(tx.amount or Decimal('0.00')),
+                    account_type=tx.account_type or 'checking',
+                    status=TransactionStatus.PENDING,
+                    type='refund',
+                    original_transaction_id=tx.id,
+                    description=f"Void refund for transaction #{tx.id}: {tx.description}",
+                )
+                db.session.add(reversal_tx)
+                db.session.flush()
+                tx.reversal_transaction_id = reversal_tx.id
 
         elif tx.type == 'insurance_premium':
             policy_title = None
@@ -5513,10 +5423,11 @@ def void_transaction(transaction_id):
             )
             if policy_title:
                 enrollments_query = enrollments_query.filter(InsurancePolicy.title == policy_title)
-            if tx.join_code:
-                enrollments_query = enrollments_query.filter(
-                    or_(StudentInsurance.join_code == tx.join_code, StudentInsurance.join_code.is_(None))
-                )
+            if not tx.join_code:
+                return _void_error("Transaction is missing class scope (join_code) and cannot be voided safely.")
+            enrollments_query = enrollments_query.filter(
+                StudentInsurance.join_code == tx.join_code
+            )
             enrollments = enrollments_query.all()
 
             if enrollments:
@@ -5528,21 +5439,46 @@ def void_transaction(transaction_id):
                 matched_enrollment.payment_current = False
                 matched_enrollment.days_unpaid = max(1, matched_enrollment.days_unpaid or 0)
 
-            reversal_tx = Transaction(
-                student_id=tx.student_id,
-                teacher_id=tx.teacher_id,
-                join_code=tx.join_code,
-                amount=abs(tx.amount or Decimal('0.00')),
-                account_type=tx.account_type or 'checking',
-                type='refund',
-                original_transaction_id=tx.id,
-                description=f"Void refund for transaction #{tx.id}: {tx.description}",
-            )
-            db.session.add(reversal_tx)
-            db.session.flush()
-            tx.reversal_transaction_id = reversal_tx.id
+            if not is_pending:
+                reversal_tx = Transaction(
+                    student_id=tx.student_id,
+                    teacher_id=tx.teacher_id,
+                    join_code=tx.join_code,
+                    amount=abs(tx.amount or Decimal('0.00')),
+                    account_type=tx.account_type or 'checking',
+                    status=TransactionStatus.PENDING,
+                    type='refund',
+                    original_transaction_id=tx.id,
+                    description=f"Void refund for transaction #{tx.id}: {tx.description}",
+                )
+                db.session.add(reversal_tx)
+                db.session.flush()
+                tx.reversal_transaction_id = reversal_tx.id
+        
+        else:
+            # Generic reversal for other types (if posted)
+            if not is_pending:
+                # Invert amount
+                reversal_amount = -(tx.amount or Decimal('0.00'))
+                reversal_tx = Transaction(
+                    student_id=tx.student_id,
+                    teacher_id=tx.teacher_id,
+                    join_code=tx.join_code,
+                    amount=reversal_amount,
+                    account_type=tx.account_type or 'checking',
+                    status=TransactionStatus.PENDING,
+                    type='refund',
+                    original_transaction_id=tx.id,
+                    description=f"Void refund for transaction #{tx.id}: {tx.description}",
+                )
+                db.session.add(reversal_tx)
+                db.session.flush()
+                tx.reversal_transaction_id = reversal_tx.id
 
         tx.is_void = True
+        if is_pending:
+            tx.status = TransactionStatus.VOID
+            tx.voided_at = utc_now()
         db.session.commit()
         current_app.logger.info(f"Transaction {transaction_id} voided")
     except SQLAlchemyError as e:
@@ -5906,6 +5842,7 @@ def run_payroll():
                 join_code=join_code,  # CRITICAL: Add join_code for proper scoping
                 amount=amount,
                 description=f"Payroll based on attendance",
+                status=TransactionStatus.PENDING,
                 account_type="checking",
                 type="payroll"
             )
@@ -6031,7 +5968,7 @@ def payroll():
     )
 
     # Calculate payroll estimates
-    payroll_summary = calculate_payroll(students, last_payroll_time, teacher_id=admin_id)
+    payroll_summary, payroll_updated_at = get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=admin_id)
     total_payroll_estimate = sum(payroll_summary.values())
 
     # Build class_labels_by_block dictionary
@@ -6066,16 +6003,23 @@ def payroll():
         estimated_payout = payroll_summary.get(student.id, 0)
 
         # Get last payroll date
-        last_payroll = Transaction.query.filter_by(
-            student_id=student.id,
-            type='payroll'
-        ).order_by(Transaction.timestamp.desc()).first()
+        last_payroll = (
+            Transaction.query
+            .filter(
+                Transaction.student_id == student.id,
+                Transaction.type == 'payroll',
+                Transaction.join_code.in_(my_join_codes),
+            )
+            .order_by(Transaction.timestamp.desc())
+            .first()
+        )
 
         # Total earned from payroll
         total_earned = db.session.query(func.sum(Transaction.amount)).filter(
             Transaction.student_id == student.id,
             Transaction.type == 'payroll',
-            Transaction.is_void == False
+            Transaction.is_void == False,
+            Transaction.join_code.in_(my_join_codes),
         ).scalar() or 0.0
 
         student_stats.append({
@@ -6158,6 +6102,7 @@ def payroll():
         next_payroll_date=next_pay_date_utc,  # Pass UTC timestamp
         next_payroll_by_block=next_payroll_by_block,
         total_payroll_estimate=total_payroll_estimate,
+        payroll_updated_at=payroll_updated_at,
         total_students=len(students),
         avg_payout=avg_payout,
         total_blocks=len(blocks),
@@ -6593,7 +6538,31 @@ def void_payroll_transaction(transaction_id):
         if transaction.is_void:
             return jsonify({'success': False, 'message': 'Transaction is already voided'}), 400
 
+        is_pending = (transaction.status == TransactionStatus.PENDING)
+
         transaction.is_void = True
+        
+        if is_pending:
+            transaction.status = TransactionStatus.VOID
+            transaction.voided_at = utc_now()
+        else:
+            # Create reversal for posted transaction
+            reversal_amount = -(transaction.amount or Decimal('0.00'))
+            reversal_tx = Transaction(
+                student_id=transaction.student_id,
+                teacher_id=transaction.teacher_id,
+                join_code=transaction.join_code,
+                amount=reversal_amount,
+                account_type=transaction.account_type or 'checking',
+                status=TransactionStatus.PENDING,
+                type='refund',
+                original_transaction_id=transaction.id,
+                description=f"Void refund for transaction #{transaction.id}: {transaction.description}",
+            )
+            db.session.add(reversal_tx)
+            db.session.flush()
+            transaction.reversal_transaction_id = reversal_tx.id
+
         db.session.commit()
 
         return jsonify({'success': True, 'message': 'Transaction voided successfully'})
@@ -6625,7 +6594,33 @@ def void_transactions_bulk():
                 .first()
             )
             if transaction and not transaction.is_void:
+                is_pending = (transaction.status == TransactionStatus.PENDING)
                 transaction.is_void = True
+                
+                if is_pending:
+                    transaction.status = TransactionStatus.VOID
+                    transaction.voided_at = utc_now()
+                else:
+                    # Create reversal for posted transaction
+                    reversal_amount = -(transaction.amount or Decimal('0.00'))
+                    reversal_tx = Transaction(
+                        student_id=transaction.student_id,
+                        teacher_id=transaction.teacher_id,
+                        join_code=transaction.join_code,
+                        amount=reversal_amount,
+                        account_type=transaction.account_type or 'checking',
+                        status=TransactionStatus.PENDING,
+                        type='refund',
+                        original_transaction_id=transaction.id,
+                        description=f"Void refund for transaction #{transaction.id}: {transaction.description}",
+                    )
+                    db.session.add(reversal_tx)
+                    # No flush here to avoid performance hit in loop? 
+                    # Actually we need ID for reversal_transaction_id?
+                    # Yes, linking them is good practice.
+                    db.session.flush()
+                    transaction.reversal_transaction_id = reversal_tx.id
+
                 count += 1
 
         db.session.commit()
@@ -6670,6 +6665,7 @@ def payroll_apply_reward(reward_id):
                     amount=reward.amount,
                     description=f"Reward: {reward.name}",
                     account_type='checking',
+                    status=TransactionStatus.PENDING,
                     type='reward',
                     timestamp=utc_now()
                 )
@@ -6741,6 +6737,7 @@ def payroll_apply_fine(fine_id):
                     amount=-abs(fine.amount),  # Negative for fine
                     description=f"Fine: {fine.name}",
                     account_type='checking',
+                    status=TransactionStatus.PENDING,
                     type='fine',
                     timestamp=utc_now()
                 )
@@ -6754,6 +6751,7 @@ def payroll_apply_fine(fine_id):
                         join_code=join_code,
                         amount=-shortfall,
                         account_type='savings',
+                        status=TransactionStatus.PENDING,
                         type='Withdrawal',
                         description='Overdraft protection transfer to checking'
                     )
@@ -6763,6 +6761,7 @@ def payroll_apply_fine(fine_id):
                         join_code=join_code,
                         amount=shortfall,
                         account_type='checking',
+                        status=TransactionStatus.PENDING,
                         type='Deposit',
                         description='Overdraft protection transfer from savings'
                     )
@@ -6849,6 +6848,7 @@ def payroll_manual_payment():
                         amount=amount,
                         description=f"Manual Payment: {description}",
                         account_type=account_type,
+                        status=TransactionStatus.PENDING,
                         type='manual_payment',
                         timestamp=utc_now()
                     )
@@ -6862,6 +6862,7 @@ def payroll_manual_payment():
                             join_code=join_code,
                             amount=-shortfall,
                             account_type='savings',
+                            status=TransactionStatus.PENDING,
                             type='Withdrawal',
                             description='Overdraft protection transfer to checking'
                         )
@@ -6871,6 +6872,7 @@ def payroll_manual_payment():
                             join_code=join_code,
                             amount=shortfall,
                             account_type='checking',
+                            status=TransactionStatus.PENDING,
                             type='Deposit',
                             description='Overdraft protection transfer from savings'
                         )
@@ -8076,7 +8078,7 @@ def feature_settings():
 
             # Get feature toggle values
             features_data = {
-                'payroll_enabled': 'payroll_enabled' in request.form,
+                'payroll_enabled': True,  # Always enabled - payroll is mandatory
                 'insurance_enabled': 'insurance_enabled' in request.form,
                 'banking_enabled': 'banking_enabled' in request.form,
                 'rent_enabled': 'rent_enabled' in request.form,
@@ -8180,7 +8182,6 @@ def feature_settings():
         periods=periods,
         period_settings=period_settings,
         features_list=[
-            ('payroll_enabled', 'Payroll', 'payments', 'Time tracking and student payments'),
             ('insurance_enabled', 'Insurance', 'shield', 'Insurance policies and claims'),
             ('banking_enabled', 'Banking', 'account_balance', 'Savings accounts and interest'),
             ('rent_enabled', 'Rent', 'home', 'Housing costs and payments'),
@@ -8222,7 +8223,11 @@ def update_period_feature_settings(period):
 
         for feature_key, db_column in feature_map.items():
             if feature_key in data:
-                setattr(settings, db_column, bool(data[feature_key]))
+                # Payroll is always enabled and cannot be disabled
+                if db_column == 'payroll_enabled':
+                    setattr(settings, db_column, True)
+                else:
+                    setattr(settings, db_column, bool(data[feature_key]))
 
         settings.updated_at = utc_now()
         db.session.commit()
@@ -8301,7 +8306,11 @@ def copy_feature_settings():
             # Only copy valid feature columns to prevent attribute injection
             for key, value in source_dict.items():
                 if key in valid_feature_columns:
-                    setattr(target_settings, key, value)
+                    # Payroll is always enabled and cannot be disabled
+                    if key == 'payroll_enabled':
+                        setattr(target_settings, key, True)
+                    else:
+                        setattr(target_settings, key, value)
 
             target_settings.updated_at = utc_now()
             copied_count += 1
