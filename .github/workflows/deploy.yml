@@ -87,6 +87,7 @@ jobs:
           CURRENT_MAINT_MESSAGE="$(strip_wrapping_quotes "$CURRENT_MAINT_MESSAGE")"
           CURRENT_MAINT_END="$(strip_wrapping_quotes "$CURRENT_MAINT_END")"
           CURRENT_MAINT_CONTACT="$(strip_wrapping_quotes "$CURRENT_MAINT_CONTACT")"
+          CURRENT_MAINT_MODE="$(strip_wrapping_quotes "$CURRENT_MAINT_MODE")"
 
           EFFECTIVE_MAINT_MODE="$CURRENT_MAINT_MODE"
           EFFECTIVE_MAINT_MESSAGE="$CURRENT_MAINT_MESSAGE"
@@ -106,6 +107,17 @@ jobs:
             EFFECTIVE_MAINT_CONTACT="${MAINT_CONTACT}"
           fi
 
+          # Normalize mode to supported boolean values only.
+          EFFECTIVE_MAINT_MODE="$(echo "${EFFECTIVE_MAINT_MODE}" | tr '[:upper:]' '[:lower:]')"
+          case "${EFFECTIVE_MAINT_MODE}" in
+            true|false|'')
+              ;;
+            *)
+              echo "⚠ Invalid MAINTENANCE_MODE '${EFFECTIVE_MAINT_MODE}', defaulting to false"
+              EFFECTIVE_MAINT_MODE="false"
+              ;;
+          esac
+
           # Default to disabled only when maintenance mode has never been set.
           if [ -z "${EFFECTIVE_MAINT_MODE}" ]; then
             EFFECTIVE_MAINT_MODE="false"
@@ -123,6 +135,9 @@ jobs:
           sed -i '/^DIGITALOCEAN_ACCESS_TOKEN=/d' .env 2>/dev/null || true
 
           # Add maintenance variables using effective values (preserved unless explicitly overridden)
+          EFFECTIVE_MAINT_MESSAGE="$(printf '%s' "${EFFECTIVE_MAINT_MESSAGE}" | tr -d '\r\n')"
+          EFFECTIVE_MAINT_END="$(printf '%s' "${EFFECTIVE_MAINT_END}" | tr -d '\r\n')"
+          EFFECTIVE_MAINT_CONTACT="$(printf '%s' "${EFFECTIVE_MAINT_CONTACT}" | tr -d '\r\n')"
           SAFE_MAINT_MESSAGE="${EFFECTIVE_MAINT_MESSAGE//\"/\\\"}"
           SAFE_MAINT_END="${EFFECTIVE_MAINT_END//\"/\\\"}"
           SAFE_MAINT_CONTACT="${EFFECTIVE_MAINT_CONTACT//\"/\\\"}"

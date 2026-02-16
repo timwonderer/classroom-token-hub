@@ -1,8 +1,8 @@
 ## PR Mode (Required – Select Exactly ONE)
 
-<!-- CI will fail if:
-     - Both options are selected
-     - Neither option is selected
+<!-- Select exactly ONE option below to indicate PR mode.
+     CI enforcement is currently label-based (for example, the `audit` label), not checkbox-based.
+     Ensure your PR labels are consistent with the option you select.
 -->
 
 - [ ] Standard PR (Feature / Bug / Refactor / Docs / Performance)
@@ -10,7 +10,8 @@
 
 ---
 
-# STANDARD PR SECTION
+<details>
+<summary>STANDARD PR SECTION (Click to expand)</summary>
 
 <!-- Complete this section ONLY if "Standard PR" is selected above. -->
 
@@ -85,7 +86,10 @@ Closes #
 
 ---
 
-# AUDIT PR SECTION
+</details>
+
+<details>
+<summary>AUDIT PR SECTION (Click to expand)</summary>
 
 <!-- Complete this section ONLY if "Audit PR" is selected above. -->
 
@@ -109,7 +113,6 @@ Closes #
 
 ## Audit Confirmation
 
-- [ ] No source code files were modified
-- [ ] No migrations were modified
-- [ ] No database schema was altered
-- [ ] This PR contains documentation changes only
+- [ ] I confirm that this PR modifies documentation only and includes no changes to source code, migrations, or database schema.
+
+</details>

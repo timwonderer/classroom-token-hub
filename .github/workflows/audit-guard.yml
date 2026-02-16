@@ -39,15 +39,15 @@ jobs:
           INVALID=false
           HIGH_RISK=false
 
-          while read file; do
+          while IFS= read -r file; do
             # Explicit high-risk guard
-            if [[ "$file" == migrations/* || "$file" == app/models.py || "$file" == app/models/* ]]; then
+            if [[ "$file" == migrations/** || "$file" == app/models.py || "$file" == app/models/** ]]; then
               echo "🚨 HIGH-RISK FILE MODIFIED IN AUDIT PR: $file"
               HIGH_RISK=true
             fi
 
             # General docs-only enforcement
-            if [[ "$file" != docs/audits/* && "$file" != .github/* ]]; then
+            if [[ "$file" != docs/audits/** ]]; then
               echo "❌ Invalid file modified in audit PR: $file"
               INVALID=true
             fi
@@ -71,8 +71,8 @@ jobs:
 
           MATCH=false
 
-          while read file; do
-            if [[ "$file" == docs/audits/* && "$file" == *.md ]]; then
+          while IFS= read -r file; do
+            if [[ "$file" == docs/audits/** && "$file" == *.md ]]; then
               echo "✅ Audit artifact modified in this PR: $file"
               MATCH=true
             fi
@@ -91,8 +91,8 @@ jobs:
 
           WARNING=false
 
-          while read file; do
-            if [[ "$file" == docs/audits/* && "$file" == *.md ]]; then
+          while IFS= read -r file; do
+            if [[ "$file" == docs/audits/** && "$file" == *.md ]]; then
               echo "⚠️ Audit artifact detected but 'audit' label is missing: $file"
               WARNING=true
             fi

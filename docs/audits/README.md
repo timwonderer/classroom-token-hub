@@ -64,8 +64,7 @@ This ensures chronological traceability and consistent organization.
 All audit PRs must:
 
 - Use the `audit` label (lowercase)
-- Modify documentation only
-- Avoid changes to source code, migrations, or schema files
+- Modify documentation only (i.e., no changes to source code, migrations, or schema files)
 - Include at least one new or modified file under `docs/audits/`
 
 CI will enforce these rules automatically.
