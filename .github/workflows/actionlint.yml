@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: reviewdog/action-actionlint@v1
 
       - name: Run actionlint
         uses: reviewdog/actionlint@v1
