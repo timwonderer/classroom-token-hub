@@ -343,7 +343,7 @@
                 </td>
                 <td>
                   {% if record.student %}
-                  <a href="{{ url_for('admin.student_detail', student_id=record.student_id) }}">
+                  <a href="{{ url_for('admin.student_detail', student_id=record.student_id, join_code=record.join_code) }}">
                     {{ record.student.full_name }}
                   </a>
                   {% else %}
@@ -440,7 +440,7 @@
                 <td>{{ entry.class_label }}</td>
                 <td>
                   {% if entry.student %}
-                  <a href="{{ url_for('admin.student_detail', student_id=entry.student_id) }}">
+                  <a href="{{ url_for('admin.student_detail', student_id=entry.student_id, join_code=entry.join_code) }}">
                     {{ entry.student_name }}
                   </a>
                   {% else %}

@@ -215,6 +215,22 @@ def _get_class_labels_for_blocks(admin_id, blocks):
     return labels
 
 
+def _get_join_codes_by_block(admin_id, blocks):
+    """Return mapping of block -> join_code for the given admin without N+1 queries."""
+
+    if not blocks:
+        return {}
+
+    teacher_blocks = (
+        TeacherBlock.query
+        .filter(TeacherBlock.teacher_id == admin_id, TeacherBlock.block.in_(blocks))
+        .all()
+    )
+    join_codes = {tb.block: tb.join_code for tb in teacher_blocks if tb.join_code}
+
+    return join_codes
+
+
 def _student_scope_subquery(include_unassigned=True):
     """Return a subquery of student IDs the current admin can access."""
     return (
@@ -2288,7 +2304,47 @@ def set_current_class():
 def student_detail(student_id):
     """View detailed information for a specific student."""
     student = _get_student_or_404(student_id)
-    join_code = session.get('current_join_code')
+    teacher_id = session.get('admin_id')
+    requested_join_code = (request.args.get('join_code') or '').strip() or None
+
+    # Resolve the effective class context for this student detail page.
+    # This prevents stale `session['current_join_code']` values from hiding data
+    # when teachers open students from a different class tab.
+    student_join_codes_query = TeacherBlock.query.filter_by(
+        teacher_id=teacher_id,
+        student_id=student.id,
+        is_claimed=True,
+    ).with_entities(TeacherBlock.join_code)
+    student_join_codes = {
+        join_code for (join_code,) in student_join_codes_query.all() if join_code
+    }
+
+    join_code = None
+    if requested_join_code and requested_join_code in student_join_codes:
+        join_code = requested_join_code
+    else:
+        session_join_code = session.get('current_join_code')
+        if session_join_code in student_join_codes:
+            join_code = session_join_code
+        elif student_join_codes:
+            # Prefer the student's most recent transaction context, then a stable fallback.
+            latest_tx_join_code = (
+                Transaction.query.filter(
+                    Transaction.student_id == student.id,
+                    Transaction.join_code.in_(student_join_codes),
+                )
+                .order_by(Transaction.timestamp.desc())
+                .with_entities(Transaction.join_code)
+                .first()
+            )
+            if latest_tx_join_code and latest_tx_join_code[0]:
+                join_code = latest_tx_join_code[0]
+            else:
+                join_code = sorted(student_join_codes)[0]
+
+    if join_code:
+        session['current_join_code'] = join_code
+
     # Remove deprecated last_tap_in/last_tap_out logic; rely on TapEvent backend.
     # Fetch last rent payment
     rent_query = Transaction.query.filter_by(student_id=student.id, type="rent")
@@ -2331,7 +2387,6 @@ def student_detail(student_id):
     latest_tap_event = latest_tap_event_query.order_by(TapEvent.timestamp.desc()).first()
 
     # Get student's active insurance policy (scoped to current teacher)
-    teacher_id = session.get('admin_id')
     active_insurance = student.get_active_insurance(teacher_id)
 
     # Get all blocks for the edit modal
@@ -4216,16 +4271,10 @@ def rent_settings():
     all_students = _scoped_students().order_by(Student.first_name).all()
 
     # Build class_labels_by_block dictionary
-    class_labels_by_block = {}
-    for block in teacher_blocks:
-        teacher_block_rec = TeacherBlock.query.filter_by(
-            teacher_id=admin_id,
-            block=block
-        ).first()
-        if teacher_block_rec:
-            class_labels_by_block[block] = teacher_block_rec.get_class_label()
-        else:
-            class_labels_by_block[block] = block
+    class_labels_by_block = _get_class_labels_for_blocks(admin_id, teacher_blocks)
+
+    # Build join_codes_by_block dictionary
+    join_codes_by_block = _get_join_codes_by_block(admin_id, teacher_blocks)
 
     # Calculate payroll warning
     payroll_warning = None
@@ -4402,6 +4451,7 @@ def rent_settings():
                           settings_block=settings_block,
                           teacher_blocks=teacher_blocks,
                           class_labels_by_block=class_labels_by_block,
+                          join_codes_by_block=join_codes_by_block,
                           rent_items=rent_items,
                           unpaid_students=unpaid_students,
                           unpaid_students_by_class=unpaid_students_by_class,
@@ -4938,10 +4988,17 @@ def view_student_policy(enrollment_id):
         InsuranceClaim.filed_date.desc()
     ).all()
 
+    # Get join_code for the student's block
+    admin_id = session.get("admin_id")
+    student = enrollment.student
+    join_codes_by_block = _get_join_codes_by_block(admin_id, [student.block] if student.block else [])
+    join_code = join_codes_by_block.get(student.block, '')
+
     return render_template('admin_view_student_policy.html',
                           enrollment=enrollment,
                           policy=enrollment.policy,
-                          student=enrollment.student,
+                          student=student,
+                          join_code=join_code,
                           claims=claims)
 
 
@@ -5693,6 +5750,9 @@ def payroll_history():
     admin_id = session.get("admin_id")
     class_labels_by_block = _get_class_labels_for_blocks(admin_id, blocks)
 
+    # Build join_codes_by_block dictionary
+    join_codes_by_block = _get_join_codes_by_block(admin_id, blocks)
+
     payroll_records = []
     for tx in payroll_transactions:
         student = student_lookup.get(tx.student_id)
@@ -5703,7 +5763,9 @@ def payroll_history():
             'block': student_block,
             'class_label': class_labels_by_block.get(student_block, student_block) if student_block != 'Unknown' else 'Unknown',
             'student_id': student.id if student else tx.student_id,
+            'student': student,
             'student_name': student.full_name if student else 'Unknown',
+            'join_code': join_codes_by_block.get(student_block, ''),
             'amount': tx.amount,
             'notes': tx.description,
         })
@@ -5719,6 +5781,7 @@ def payroll_history():
         payroll_history=payroll_records,
         blocks=blocks,
         class_labels_by_block=class_labels_by_block,
+        join_codes_by_block=join_codes_by_block,
         current_page="payroll_history",
         selected_block=block,
         selected_start=start_date_str,
@@ -5903,6 +5966,9 @@ def payroll():
     # Build class_labels_by_block dictionary
     class_labels_by_block = _get_class_labels_for_blocks(admin_id, blocks)
 
+    # Build join_codes_by_block dictionary
+    join_codes_by_block = _get_join_codes_by_block(admin_id, blocks)
+
     # Next payroll by block
     next_payroll_by_block = []
     for block in blocks:
@@ -6000,6 +6066,7 @@ def payroll():
             'student_id': tx.student_id,
             'student': student,
             'student_name': student.full_name if student else 'Unknown',
+            'join_code': join_codes_by_block.get(student_block, ''),
             'amount': tx.amount,
             'notes': tx.description or '',
             'is_void': tx.is_void
@@ -6028,6 +6095,7 @@ def payroll():
         # Overview tab
         recent_payrolls=recent_payrolls,
         join_code_to_label=join_code_to_label, # Pass lookup map
+        join_codes_by_block=join_codes_by_block, # Pass block to join_code map
         next_payroll_date=next_pay_date_utc,  # Pass UTC timestamp
         next_payroll_by_block=next_payroll_by_block,
         total_payroll_estimate=total_payroll_estimate,
@@ -7668,6 +7736,9 @@ def banking():
     # Build class_labels_by_block dictionary
     class_labels_by_block = _get_class_labels_for_blocks(admin_id, blocks)
 
+    # Build join_codes_by_block dictionary
+    join_codes_by_block = _get_join_codes_by_block(admin_id, blocks)
+
     # Get transaction types for filter (filtered to this teacher's students)
     transaction_types = (
         db.session.query(Transaction.type)
@@ -7693,6 +7764,7 @@ def banking():
         average_savings_balance=average_savings_balance,
         blocks=blocks,
         class_labels_by_block=class_labels_by_block,
+        join_codes_by_block=join_codes_by_block,
         transaction_types=transaction_types,
         page=page,
         total_pages=total_pages,

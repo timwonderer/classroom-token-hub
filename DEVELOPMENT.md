@@ -23,6 +23,7 @@
 
 ## In Progress (Unreleased)
 
+- Fixed intermittent teacher student-detail scoping where stale class context could hide balances/transactions; detail view now resolves a valid join code for the selected student and roster links pass join code explicitly.
 - Fixed student recovery identity updates to preserve claimed class seats, preventing post-claim "No class selected" errors on next login.
 - Updated teacher reset flow to redirect to Student Detail after generating a reset code, where the active code remains visible until expiration.
 - Improved mobile responsiveness for student recovery pages by tightening spacing and collapsing the right panel on small screens.

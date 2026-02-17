@@ -381,7 +381,7 @@
                       {% for student in unclaimed_students %}
                       <tr>
                         <td>
-                          <a href="{{ url_for('admin.student_detail', student_id=student.id) }}" class="text-decoration-none">
+                          <a href="{{ url_for('admin.student_detail', student_id=student.id, join_code=join_codes_by_block.get(block|upper, '')) }}" class="text-decoration-none">
                             <span class="fw-bold">{{ student.first_name }} {{ student.last_initial }}.</span>
                           </a>
                         </td>
@@ -392,7 +392,7 @@
                           <span class="badge bg-warning text-dark">Needs Username</span>
                         </td>
                         <td>
-                          <a href="{{ url_for('admin.student_detail', student_id=student.id) }}" class="btn btn-sm btn-outline-primary" aria-label="View details for {{ student.full_name }}">
+                          <a href="{{ url_for('admin.student_detail', student_id=student.id, join_code=join_codes_by_block.get(block|upper, '')) }}" class="btn btn-sm btn-outline-primary" aria-label="View details for {{ student.full_name }}">
                             <span class="material-symbols-outlined align-middle fs-6" aria-hidden="true">visibility</span>
                           </a>
                           <button type="button" class="btn btn-sm btn-outline-danger"
@@ -497,7 +497,7 @@
                         <input type="checkbox" class="form-check-input student-checkbox" value="{{ student.id }}" onchange="updateBulkToolbar('{{ block }}')" aria-label="Select {{ student.full_name }}">
                       </td>
                       <td>
-                        <a href="{{ url_for('admin.student_detail', student_id=student.id) }}" class="fw-bold text-decoration-none">
+                        <a href="{{ url_for('admin.student_detail', student_id=student.id, join_code=join_codes_by_block.get(block|upper, '')) }}" class="fw-bold text-decoration-none">
                           {{ student.full_name }}
                         </a>
                       </td>
