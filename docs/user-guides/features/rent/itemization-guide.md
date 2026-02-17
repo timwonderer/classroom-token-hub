@@ -207,8 +207,8 @@ Paying rent adds 3 passes to student's balance.
 
 **How It Works:**
 Rent payments now cover a specific date range (Coverage Period).
-- **Start Date:** Last due date (or payment date)
-- **End Date:** Next due date
+- **Start Date:** The rent due date the payment is applied to. If payment is made after that due date, coverage starts on the payment date (no backdating).
+- **End Date:** The day before the next rent due date after the Start Date.
 
 **Privileges & Access:**
 - Students are considered "Rent Active" only within their paid coverage period.
@@ -235,7 +235,7 @@ When you mark an item "Available in Store" (or use Per-Use type):
    - Delete rent item → Store item removed
 
 3. **Purchase Limits Set:**
-   - Per Use items: No limit
+   - Per-Use items: No limit
    - Privilege items: Limit 1, expires automatically
 
 ### Student Store Experience
@@ -251,7 +251,7 @@ When you mark an item "Available in Store" (or use Per-Use type):
 2. **In Store:**
    - Rent items appear as purchasable products
    - Clear labeling: "Included in rent" or "Rent alternative"
-   - Duration info: "Per use" or "Valid until [date]"
+   - Duration info: "Per-Use" or "Valid until [date]"
 
 3. **On Student Detail Page (Teachers See):**
    - Privilege badges showing what student has
@@ -346,7 +346,7 @@ Items:
 
 4. Supply Pack (consumable)
    - Type: Per-Use
-   - Base: $5 | Store: $2 | Free Uses: 3
+   - Base: $5 | Store: $7 | Free Uses: 3
 
 Total Base Value: $60
 Total À La Carte (excl. supplies): $78
@@ -357,6 +357,31 @@ Savings: $18 + supplies as needed
 - Mix of long-term and per-use items
 - Students understand different types of costs
 - Teaches difference between fixed and variable expenses
+
+### Premium Setup: Luxury Classroom (Optional)
+
+```
+Rent Amount: $85/month
+
+Items:
+1. Executive Desk Access
+   - Type: Privilege
+   - Base: $30 | Store: $42
+
+2. Ergonomic Chair
+   - Type: Privilege
+   - Base: $25 | Store: $35
+
+3. Priority Supply Bundle
+   - Type: Per-Use
+   - Base: $10 | Store: $14 | Free Uses: 4
+
+4. Hall Pass Bundle
+   - Type: Hall Pass
+   - Base: $8 | Passes Granted: 5
+```
+
+Use this setup when you want a clear "premium bundle" example with optional buy-as-needed alternatives.
 
 ---
 

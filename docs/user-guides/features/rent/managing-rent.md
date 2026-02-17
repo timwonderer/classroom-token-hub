@@ -37,13 +37,13 @@ Rent settings can be customized for each class block. Use the **Class Selector**
 
 ### 3. Rent Coverage Tracking
 Rent payments now cover a specific date range, known as the **Coverage Period**:
-- **Start Date:** The last payment date or due date.
-- **End Date:** The next rent due date.
+- **Start Date:** The rent due date the payment is applied to. If payment is made after that due date, coverage starts on the payment date (no backdating).
+- **End Date:** The day before the next rent due date after the Start Date.
 - **Rent Active Status:** Students are only considered "Rent Active" (and receive privileges) if the current date falls within a paid coverage period.
 
 ### 4. Penalties & Restrictions
 - **Late Penalty**: One-time or recurring fee for late payments.
-- **Prevent Purchase When Late**:
+- **"Prevent Purchase When Late on Rent"**:
     - **Without Itemization**: Blocks ALL store purchases if rent is overdue.
     - **With Itemization**: Blocks purchases of *non-rent* items. Students can still purchase rent-covered items (e.g., a pencil or desk access) at à la carte prices, but cannot buy "fun" items until rent is paid.
 
