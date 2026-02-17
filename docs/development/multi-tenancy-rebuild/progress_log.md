@@ -1,6 +1,6 @@
 # Multi-Tenancy Hardening Progress Log (v2.0)
 
-Date: 2026-02-16  
+Date: 2026-02-17  
 Branch: `join-code-centric-architecture-rebuild`
 
 ## Scope and Rule of Truth
@@ -13,6 +13,9 @@ Branch: `join-code-centric-architecture-rebuild`
 - Added core class-boundary models and wiring:
   - `ClassEconomy`, `ClassMembership`, `ClassJoinCodeAlias`
   - FK scoping across class-bound entities to `class_economies.join_code`
+- Added non-enumerable teacher public identity:
+  - `Admin.public_id` random identifier introduced for public-facing teacher references (internal numeric PK remains internal-only)
+  - `Admin.public_id` now generates as a readable 3-word slug from `app/data/random-words.txt` for easier QR/url handling and manual entry
 - Added membership/access primitives in auth:
   - `resolve_join_code`, `get_membership`, `check_membership_access`, `membership_required`, `get_actor_membership_id`
 - Hardened high-risk student/API financial paths:
@@ -24,7 +27,8 @@ Branch: `join-code-centric-architecture-rebuild`
   - Student dashboard/shop/insurance flows use `join_code` scoping
   - `Student.get_active_insurance()` moved to `join_code` scoping
 - Hardened hall-pass class scoping:
-  - Verification/queue/settings/setup/available-types now require `join_code` and membership checks where applicable
+  - Queue/settings/setup/available-types enforce `join_code` and membership checks where applicable
+  - Verification display is intentionally unauthenticated and teacher-wide via stable random `Admin.public_id` URL, returning only join-codes owned by that teacher
   - Added join-code settings bootstrap helper that clones teacher template rows into join-code-scoped settings
 - Fixed audit-anchor implementation bug:
   - `HallPassLog.actor_membership_id` is now a real persisted column definition
@@ -51,6 +55,26 @@ Branch: `join-code-centric-architecture-rebuild`
   - `/api/admin/tap-entries/<student_id>` and `/api/admin/tap-entries/<event_id>` now require admin session + `current_join_code` membership and enforce join-code/student membership scope.
   - `/api/admin/student-block-settings` and `/api/admin/block-tap-settings` now require admin `current_join_code` membership and avoid cross-class StudentBlock writes.
   - Added compatibility handling for legacy payload key `enabled` in block tap settings POST.
+- Extended route-level hardening sweep across admin/api/student/system-admin surfaces:
+  - `/api/attendance/history` now scopes to either authorized requested `join_code` or explicit fan-out over admin-owned active join-codes.
+  - `/api/hall-pass/verification/active` now requires a stable random teacher public identifier and is constrained to that teacher's active join-code membership set.
+  - Deprecated hall-pass terminal APIs/routes were removed (`/api/hall-pass/lookup/*`, `/api/hall-pass/terminal/use`, `/api/hall-pass/terminal/return`, `/hall-pass/terminal`).
+  - Student dashboard queue status now consumes `/api/hall-pass/queue` via explicit `join_code` context and displays same-class queue entries.
+  - Queue API now supports student-role access in-class and resolves teacher-scoped hall-pass settings via the class admin membership anchor.
+  - `/api/approve-redemption` and `/api/reject-redemption` now enforce admin membership on redemption class scope before mutation.
+  - Student insurance claim eligibility now prioritizes policy `join_code` (fallback to `teacher_id` only when policy has no join_code).
+  - `/admin/join-code/delete` now requires explicit `confirm_join_code` confirmation before destructive hard delete.
+
+## Commit Review Snapshot (Recent Branch Work)
+| Commit | Scope Review | Hardening Impact |
+|---|---|---|
+| `37dc4e7` | `admin/api/student/system_admin` + new route sweep tests | Broad membership/join-code enforcement expansion, attendance/redemption/hall-pass/claim scoping tightening, and destructive delete confirmation gate |
+| `177e296` | `api` tap + block settings | Enforced current-class admin membership and cross-join-code rejection for tap/block settings endpoints |
+| `f846874` | student payroll/transfer views | Removed global earnings display reads from live student financial views |
+| `278d09d` | admin payroll view | Removed global checking/savings reads from admin payroll display |
+| `db0904c` | admin class-select/delete routes | Enforced admin membership gate for class switch/delete flows |
+| `4a15047` + `7c63429` | admin issue resolution/aggregates | Scoped issue reversal to class boundary and strengthened reversal-first ledger behavior in key path |
+| `d0967ef` | admin export | Scoped CSV export balances/earnings to teacher-owned join-codes |
 
 ## Verified
 - Targeted and multitenancy-related suites passed after hardening updates:
@@ -61,8 +85,19 @@ Branch: `join-code-centric-architecture-rebuild`
   - `20 passed` across payroll + shared-student + admin multitenancy regression slice including scoped payroll display checks.
   - `10 passed` across student scoped earnings display + adjacent feature/transfer regression slice.
   - `12 passed` across new API admin tap-scope tests + API fix smoke tests + admin membership/tenancy checks.
+  - `13 passed` across route authorization sweep + API tenancy + admin membership + API tap scope tests:
+    - `tests/test_route_authorization_sweep.py`
+    - `tests/test_api_tenancy.py`
+    - `tests/test_api_admin_tap_scope.py`
+    - `tests/test_admin_membership_gates.py`
+  - `24 passed` across route authorization + hall-pass queue/history + API tenancy/fixes suites after terminal removal and stable teacher-public-id verification scope update:
+    - `tests/test_route_authorization_sweep.py`
+    - `tests/test_hall_pass_queue_scoping.py`
+    - `tests/test_hall_pass_history_scoping.py`
+    - `tests/test_api_tenancy.py`
+    - `tests/test_api_fixes.py`
 
-## Risk Report Reconciliation (`Economics_Invariant_Risk_Report.md`)
+## Risk Report Reconciliation (`docs/audits/2026-02-16_stage-2_economic-invariant-risk.md`)
 - 1) Cross-tenant purchase authorization leakage: `Patched`
   - `/api/purchase-item` uses class-scoped balances (`join_code`) and no global balance fallback.
 - 2) Global balance properties violate isolation: `Partially patched`

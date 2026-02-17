@@ -162,15 +162,16 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function updateQueueStatus() {
-  if (typeof TEACHER_ID === 'undefined') return;
+  if (typeof CURRENT_JOIN_CODE === 'undefined' || !CURRENT_JOIN_CODE) return;
 
-  fetch(`/api/hall-pass/queue?teacher_id=${TEACHER_ID}`)
+  fetch(`/api/hall-pass/queue?join_code=${encodeURIComponent(CURRENT_JOIN_CODE)}`)
     .then(r => r.json())
     .then(data => {
       if (data.status === 'success' && data.queue_enabled) {
         const queueEl = document.getElementById('queueStatus');
         const countEl = document.getElementById('queueCount');
         const limitEl = document.getElementById('queueLimitBadge');
+        const previewEl = document.getElementById('queuePreview');
 
         if (queueEl && countEl) {
           queueEl.style.setProperty('display', 'flex', 'important');
@@ -181,6 +182,15 @@ function updateQueueStatus() {
           const waitingCount = (data.queue || []).length;
 
           countEl.textContent = waitingCount;
+          if (previewEl) {
+            const previewNames = (data.queue || []).slice(0, 5).map(item => item.student_name).filter(Boolean);
+            if (previewNames.length > 0) {
+              previewEl.textContent = `Queue: ${previewNames.join(', ')}`;
+              previewEl.style.setProperty('display', 'block', 'important');
+            } else {
+              previewEl.style.setProperty('display', 'none', 'important');
+            }
+          }
 
           if (limitEl) {
             limitEl.textContent = `Limit: ${data.queue_limit}`;
@@ -197,7 +207,9 @@ function updateQueueStatus() {
         }
       } else {
         const queueEl = document.getElementById('queueStatus');
+        const previewEl = document.getElementById('queuePreview');
         if (queueEl) queueEl.style.setProperty('display', 'none', 'important');
+        if (previewEl) previewEl.style.setProperty('display', 'none', 'important');
       }
     })
     .catch(e => console.error("Queue poll error:", e));

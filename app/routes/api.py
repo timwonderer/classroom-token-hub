@@ -22,7 +22,7 @@ from werkzeug.security import check_password_hash
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
+    Admin, Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
     HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
     StudentTeacher, TeacherBlock, StudentBlock, DemoStudent, ClassMembership,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource
@@ -1320,32 +1320,40 @@ def handle_hall_pass_action(pass_id, action):
 
 
 @api_bp.route('/hall-pass/verification/active', methods=['GET'])
-@admin_required
 def get_active_hall_passes():
-    """Get last 10 students who used hall passes for verification display
+    """Get last 10 recent hall pass usages for teacher-wide display.
 
-    CRITICAL: This endpoint requires join_code + membership for proper class isolation.
-    Usage: /api/hall-pass/verification/active?join_code=ABC123
+    This endpoint is intentionally unauthenticated for display screens.
+    It is scoped to active admin memberships owned by the teacher public ID.
     """
-
-    # CRITICAL: Use join_code as primary scoping mechanism
-    join_code = request.args.get('join_code')
-    if not join_code:
+    teacher_public_id = (request.args.get('teacher', type=str) or '').strip()
+    if not teacher_public_id:
         return jsonify({
             "status": "error",
-            "message": "join_code is required"
+            "message": "teacher is required"
         }), 400
 
-    is_allowed, membership, economy, error = check_membership_access(
-        join_code, allowed_roles=['admin', 'observer']
-    )
-    if not is_allowed:
-        return jsonify({"status": "error", "message": error}), 403
-    join_code = economy.join_code
+    teacher_id = db.session.query(Admin.id).filter_by(public_id=teacher_public_id).scalar()
+    if not teacher_id:
+        return jsonify({"status": "error", "message": "Teacher not found."}), 404
+
+    teacher_join_codes_subq = db.session.query(ClassMembership.join_code).filter(
+        ClassMembership.admin_id == teacher_id,
+        ClassMembership.role == 'admin',
+        ClassMembership.status == 'active',
+    ).subquery()
+
+    has_any_class = db.session.query(sa.exists().where(
+        ClassMembership.admin_id == teacher_id,
+        ClassMembership.role == 'admin',
+        ClassMembership.status == 'active',
+    )).scalar()
+    if not has_any_class:
+        return jsonify({"status": "error", "message": "Teacher has no active class memberships."}), 404
 
     # Start with base query
     query = HallPassLog.query.filter(
-        HallPassLog.join_code == join_code,
+        HallPassLog.join_code.in_(sa.select(teacher_join_codes_subq)),
         HallPassLog.status.in_(['left', 'returned']),
         HallPassLog.left_time.isnot(None)
     )
@@ -1378,42 +1386,6 @@ def get_active_hall_passes():
     return jsonify({
         "status": "success",
         "passes": passes_data
-    })
-
-
-@api_bp.route('/hall-pass/lookup/<string:pass_number>', methods=['GET'])
-def lookup_hall_pass(pass_number):
-    """Look up a hall pass by its pass number (for terminal use)"""
-    # Find the hall pass log entry by pass number
-    log_entry = HallPassLog.query.filter_by(pass_number=pass_number.upper()).first()
-
-    if not log_entry:
-        return jsonify({"status": "error", "message": "Pass number not found."}), 404
-
-    student = log_entry.student
-
-    # Return the pass information (ensure times are marked as UTC)
-    def format_utc_time(dt):
-        if not dt:
-            return None
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.isoformat()
-
-    return jsonify({
-        "status": "success",
-        "pass": {
-            "id": log_entry.id,
-            "student_name": student.full_name,
-            "period": log_entry.period,
-            "destination": log_entry.reason,
-            "pass_number": log_entry.pass_number,
-            "pass_status": log_entry.status,
-            "request_time": format_utc_time(log_entry.request_time),
-            "decision_time": format_utc_time(log_entry.decision_time),
-            "left_time": format_utc_time(log_entry.left_time),
-            "return_time": format_utc_time(log_entry.return_time)
-        }
     })
 
 
@@ -1529,103 +1501,6 @@ def _check_simultaneous_pass_limit(log_entry):
             }), 403
 
     return None
-
-
-@api_bp.route('/hall-pass/terminal/use', methods=['POST'])
-def hall_pass_terminal_use():
-    """Mark a hall pass as 'left' when student scans at terminal"""
-    data = request.get_json()
-    pass_number = data.get('pass_number', '').strip().upper()
-
-    if not pass_number:
-        return jsonify({"status": "error", "message": "Pass number is required."}), 400
-
-    log_entry = HallPassLog.query.filter_by(pass_number=pass_number).first()
-
-    if not log_entry:
-        return jsonify({"status": "error", "message": "Invalid pass number."}), 404
-
-    if log_entry.status != 'approved':
-        return jsonify({"status": "error", "message": f"Pass is not approved. Current status: {log_entry.status}"}), 400
-
-    limit_response = _check_simultaneous_pass_limit(log_entry)
-    if limit_response:
-        return limit_response
-
-    # Mark as left and create tap-out event
-    now = utc_now()
-    log_entry.status = 'left'
-    log_entry.left_time = now
-
-    # Create tap-out event for attendance tracking
-    tap_out_event = TapEvent(
-        student_id=log_entry.student_id,
-        period=log_entry.period,
-        status='inactive',
-        timestamp=now,
-        reason=log_entry.reason,
-        join_code=log_entry.join_code
-    )
-    db.session.add(tap_out_event)
-
-    try:
-        db.session.commit()
-        return jsonify({
-            "status": "success",
-            "message": f"{log_entry.student.full_name} has left for {log_entry.reason}.",
-            "student_name": log_entry.student.full_name,
-            "destination": log_entry.reason
-        })
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        current_app.logger.error(f"Hall pass terminal use failed: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": "Database error."}), 500
-
-
-@api_bp.route('/hall-pass/terminal/return', methods=['POST'])
-def hall_pass_terminal_return():
-    """Mark a hall pass as 'returned' when student scans back in at terminal"""
-    data = request.get_json()
-    pass_number = data.get('pass_number', '').strip().upper()
-
-    if not pass_number:
-        return jsonify({"status": "error", "message": "Pass number is required."}), 400
-
-    log_entry = HallPassLog.query.filter_by(pass_number=pass_number).first()
-
-    if not log_entry:
-        return jsonify({"status": "error", "message": "Invalid pass number."}), 404
-
-    if log_entry.status != 'left':
-        return jsonify({"status": "error", "message": f"Student is not currently out. Status: {log_entry.status}"}), 400
-
-    # Mark as returned and create tap-in event
-    now = utc_now()
-    log_entry.status = 'returned'
-    log_entry.return_time = now
-
-    # Create tap-in event for attendance tracking
-    tap_in_event = TapEvent(
-        student_id=log_entry.student_id,
-        period=log_entry.period,
-        status='active',
-        timestamp=now,
-        reason="Returned from hall pass",
-        join_code=log_entry.join_code
-    )
-    db.session.add(tap_in_event)
-
-    try:
-        db.session.commit()
-        return jsonify({
-            "status": "success",
-            "message": f"{log_entry.student.full_name} has returned.",
-            "student_name": log_entry.student.full_name
-        })
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        current_app.logger.error(f"Hall pass terminal return failed: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": "Database error."}), 500
 
 
 @api_bp.route('/hall-pass/cancel/<int:pass_id>', methods=['POST'])
@@ -1770,15 +1645,24 @@ def get_hall_pass_queue():
         }), 400
 
     is_allowed, membership, economy, error = check_membership_access(
-        join_code, allowed_roles=['admin', 'observer']
+        join_code, allowed_roles=['admin', 'observer', 'student']
     )
     if not is_allowed:
         return jsonify({"status": "error", "message": error}), 403
     join_code = economy.join_code
 
+    teacher_id = membership.admin_id if membership and membership.admin_id else None
+    if not teacher_id:
+        admin_membership = ClassMembership.query.filter_by(
+            join_code=join_code,
+            role='admin',
+            status='active',
+        ).first()
+        teacher_id = admin_membership.admin_id if admin_membership else None
+
     settings = _get_or_create_hall_pass_settings(
         join_code,
-        teacher_id=membership.admin_id if membership else None,
+        teacher_id=teacher_id,
     )
 
     # Today's boundary in user timezone
@@ -3463,4 +3347,3 @@ def _student_in_join_code(student_id, join_code):
         role='student',
         status='active',
     ).first() is not None
-

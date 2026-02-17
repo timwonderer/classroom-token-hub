@@ -5677,6 +5677,7 @@ def void_transaction(transaction_id):
 @admin_required
 def hall_pass():
     """Manage hall pass requests and active passes."""
+    current_admin = db.session.get(Admin, session.get('admin_id'))
     student_ids_subq = _student_scope_subquery()
     pending_requests = (
         HallPassLog.query
@@ -5720,6 +5721,7 @@ def hall_pass():
         approved_queue=approved_queue,
         out_of_class=out_of_class,
         available_periods=periods,
+        verification_public_id=current_admin.public_id if current_admin else None,
         current_page="hall_pass"
     )
 

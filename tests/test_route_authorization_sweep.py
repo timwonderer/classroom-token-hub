@@ -16,31 +16,80 @@ def _login_student(client, student_id):
         sess["login_time"] = datetime.now(timezone.utc).isoformat()
         sess["last_activity"] = datetime.now(timezone.utc).isoformat()
 
-def test_hall_pass_active_requires_join_code(client):
-    """Test that active hall pass endpoint requires join_code and membership."""
+def test_hall_pass_active_requires_teacher_public_id_and_scopes_to_teacher_classes(client):
+    """Verification display should require random teacher public ID and be join-code scoped."""
     admin = Admin(username="hall_pass_admin", totp_secret="secret")
+    other_admin = Admin(username="hall_pass_other", totp_secret="secret")
     db.session.add(admin)
+    db.session.add(other_admin)
     db.session.flush()
 
-    db.session.add(ClassEconomy(join_code="HPASS01", status="active", created_by_admin_id=admin.id))
-    db.session.add(ClassMembership(join_code="HPASS01", admin_id=admin.id, role="admin", status="active"))
+    student_a = Student(first_name="Alpha", last_initial="A", block="A", salt=b"salt")
+    student_b = Student(first_name="Bravo", last_initial="B", block="B", salt=b"salt")
+    db.session.add_all([student_a, student_b])
+    db.session.flush()
+
+    db.session.add_all([
+        ClassEconomy(join_code="HPASS01", status="active", created_by_admin_id=admin.id),
+        ClassEconomy(join_code="HPASS02", status="active", created_by_admin_id=admin.id),
+        ClassEconomy(join_code="HPASS99", status="active", created_by_admin_id=other_admin.id),
+        ClassMembership(join_code="HPASS01", admin_id=admin.id, role="admin", status="active"),
+        ClassMembership(join_code="HPASS02", admin_id=admin.id, role="admin", status="active"),
+        ClassMembership(join_code="HPASS99", admin_id=other_admin.id, role="admin", status="active"),
+    ])
+
+    from app.models import HallPassLog
+    now = datetime.now(timezone.utc)
+    db.session.add_all([
+        HallPassLog(
+            student_id=student_a.id,
+            reason="Restroom",
+            status="left",
+            period="A",
+            join_code="HPASS01",
+            left_time=now,
+            request_time=now,
+        ),
+        HallPassLog(
+            student_id=student_a.id,
+            reason="Nurse",
+            status="returned",
+            period="B",
+            join_code="HPASS02",
+            left_time=now - timedelta(minutes=2),
+            return_time=now - timedelta(minutes=1),
+            request_time=now - timedelta(minutes=3),
+        ),
+        HallPassLog(
+            student_id=student_b.id,
+            reason="Office",
+            status="left",
+            period="A",
+            join_code="HPASS99",
+            left_time=now - timedelta(minutes=4),
+            request_time=now - timedelta(minutes=4),
+        ),
+    ])
     db.session.commit()
 
-    _login_admin(client, admin.id)
-
-    # 1. Missing join_code -> 400
+    # 1. Missing teacher public ID -> 400
     response = client.get("/api/hall-pass/verification/active")
     assert response.status_code == 400
-    assert b"join_code is required" in response.data
+    assert b"teacher is required" in response.data
 
-    # 2. Invalid join_code -> 404 (or 403 depending on implementation, likely 403 from check_membership_access)
-    # Actually check_membership_access returns error string and False, caller returns 403 or 404
-    response = client.get("/api/hall-pass/verification/active?join_code=INVALID")
-    assert response.status_code in [403, 404]
+    # 2. Invalid teacher public ID -> 404
+    response = client.get("/api/hall-pass/verification/active?teacher=invalid-public-id")
+    assert response.status_code == 404
 
-    # 3. Valid join_code -> 200
-    response = client.get("/api/hall-pass/verification/active?join_code=HPASS01")
+    # 3. Valid teacher scope includes only that teacher's join codes
+    response = client.get(f"/api/hall-pass/verification/active?teacher={admin.public_id}")
     assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "success"
+    destinations = [entry["destination"] for entry in payload["passes"]]
+    assert "Restroom" in destinations
+    assert "Nurse" in destinations
+    assert "Office" not in destinations
 
 def test_approve_redemption_requires_membership(client):
     """Test that redemption approval requires admin membership in the class."""

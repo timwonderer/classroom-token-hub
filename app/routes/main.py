@@ -2,7 +2,7 @@
 Main routes for Classroom Token Hub.
 
 Contains public-facing utility routes including health checks, legal pages,
-debug endpoints, and hall pass terminals (no authentication required).
+debug endpoints, and hall pass display pages (no authentication required).
 """
 
 from flask import Blueprint, redirect, url_for, jsonify, current_app, session, request
@@ -158,12 +158,7 @@ def service_worker():
     return current_app.send_static_file('sw.js')
 
 
-# -------------------- HALL PASS TERMINALS (NO AUTH REQUIRED) --------------------
-
-@main_bp.route('/hall-pass/terminal')
-def hall_pass_terminal():
-    """Hall Pass Check in/out terminal page (no login required)."""
-    return render_template('hall_pass_terminal.html')
+# -------------------- HALL PASS DISPLAYS (NO AUTH REQUIRED) --------------------
 
 
 @main_bp.route('/hall-pass/verification')

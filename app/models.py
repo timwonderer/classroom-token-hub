@@ -9,6 +9,9 @@ from datetime import timezone, timedelta
 from decimal import Decimal, InvalidOperation
 import enum
 import logging
+from pathlib import Path
+import random
+import secrets
 import uuid
 
 import sqlalchemy as sa
@@ -20,6 +23,33 @@ from app.utils.encryption import PIIEncryptedType
 from app.utils.time import utc_now, ensure_utc
 
 logger = logging.getLogger(__name__)
+_PUBLIC_WORDS_CACHE = None
+
+
+def _load_public_words():
+    global _PUBLIC_WORDS_CACHE
+    if _PUBLIC_WORDS_CACHE is not None:
+        return _PUBLIC_WORDS_CACHE
+
+    words_file = Path(__file__).resolve().parent / "data" / "random-words.txt"
+    try:
+        with words_file.open("r", encoding="utf-8") as handle:
+            words = [line.strip().lower() for line in handle if line.strip()]
+    except OSError:
+        words = []
+
+    # Keep only URL-safe lowercase alpha tokens.
+    words = [word for word in words if word.isalpha()]
+    _PUBLIC_WORDS_CACHE = words
+    return _PUBLIC_WORDS_CACHE
+
+
+def _generate_public_id():
+    """Generate a non-enumerable identifier suitable for public URLs."""
+    words = _load_public_words()
+    if len(words) >= 3:
+        return "-".join(random.choice(words) for _ in range(3))
+    return secrets.token_urlsafe(18)
 
 
 def _quantize_currency(value):
@@ -1752,6 +1782,7 @@ class IssueResolutionAction(db.Model):
 class Admin(db.Model):
     __tablename__ = 'admins'
     id = db.Column(db.Integer, primary_key=True)
+    public_id = db.Column(db.String(64), unique=True, nullable=False, index=True, default=_generate_public_id)
     username = db.Column(db.String(80), unique=True, nullable=False)
     display_name = db.Column(db.String(100), nullable=True)  # Teacher's display name (defaults to username if not set)
     # TOTP-only: store secret (base64-encoded encrypted data)

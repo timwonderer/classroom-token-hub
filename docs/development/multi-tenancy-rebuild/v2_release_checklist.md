@@ -1,6 +1,6 @@
 # v2 Multitenancy Go/No-Go Checklist
 
-Date: 2026-02-16  
+Date: 2026-02-17  
 Branch: `join-code-centric-architecture-rebuild`
 
 ## Release Gate
@@ -15,8 +15,8 @@ Branch: `join-code-centric-architecture-rebuild`
 | 5 | Actor audit anchor complete (`actor_membership_id`) | In Progress | All state-changing writes persist actor membership or fail safely | Endpoint mutation tests |
 | 6 | Ledger immutability semantics complete | In Progress | Reversal-first behavior for voids; no destructive retroactive mutation as source-of-truth | Void flow tests + ledger reconciliation |
 | 7 | Monetary precision hardened | In Progress | Core financial calculations avoid float drift | Precision tests |
-| 8 | Legacy bypass routes removed/deprecated paths blocked | Pending | No deprecated route can mutate/read class data without membership scope | Route tests + routing audit |
-| 9 | Join-code deletion UX guardrails implemented | Pending | Multi-step confirmation flow before hard delete | UI + endpoint tests |
+| 8 | Legacy bypass routes removed/deprecated paths blocked | In Progress | No deprecated route can mutate/read class data without membership scope | Route tests + routing audit |
+| 9 | Join-code deletion UX guardrails implemented | In Progress | Multi-step confirmation flow before hard delete | UI + endpoint tests |
 | 10 | CI multitenancy regression suite required for merge | Pending | PR fails if multitenancy suite fails | CI workflow enforcement |
 
 ## Execution Order (Recommended)
@@ -35,6 +35,15 @@ Branch: `join-code-centric-architecture-rebuild`
 - Scoped admin payroll display balances to owned join-codes.
 - Scoped student payroll/transfer lifetime earnings display to current join-code context.
 - Hardened admin tap/block settings APIs to require `current_join_code` admin membership and block cross-join-code student/event access.
+- Expanded authorization sweep coverage for attendance/redemption/hall-pass/insurance claim class scoping and added explicit join-code delete confirmation guardrail.
+- Removed deprecated hall-pass terminal routes/APIs and switched student dashboard queue polling to explicit `current_join_code` scope.
+- Updated verification display API to intentional unauthenticated teacher-wide scope via stable random teacher public-id URL across that teacher's join-codes.
+- Added random `Admin.public_id` and moved verification identity resolution off numeric teacher IDs.
+- Switched new `Admin.public_id` generation to readable 3-word slugs from local word list for stable QR/manual use.
+
+## Immediate Next Step
+
+1. Complete the route-level authorization inventory and convert remaining class-scoped endpoints to strict join-code membership gates (`membership_required` or explicit `check_membership_access`), starting with unresolved `admin` and `api` endpoints that still depend on legacy `teacher_id/block` access patterns.
 
 ## Definition of Done for v2
 

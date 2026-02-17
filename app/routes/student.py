@@ -1510,6 +1510,7 @@ def dashboard():
         # FIX: Pass scoped balances to template instead of using unscoped properties
         checking_balance=float(checking_balance),
         savings_balance=float(savings_balance),
+        current_join_code=join_code,
         teacher_id=teacher_id,
         pending_recovery_code=pending_recovery_code,
         # Weekly/monthly analytics

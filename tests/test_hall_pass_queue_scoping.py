@@ -2,7 +2,7 @@
 Tests for hall pass queue API endpoint scoping.
 
 Ensures that the /api/hall-pass/queue endpoint properly scopes
-hall pass data by teacher_id to prevent cross-teacher data leakage.
+hall pass data by join_code membership to prevent cross-tenant leakage.
 """
 
 import pytest
@@ -336,3 +336,24 @@ def test_hall_pass_queue_rejects_cross_teacher_access(client, setup_multi_teache
     json_data = response.get_json()
     assert json_data['status'] == 'error'
     assert 'You do not have access to this class' in json_data['message']
+
+
+def test_hall_pass_queue_allows_student_same_class_scope(client, setup_multi_teacher_hall_passes):
+    """Student can read queue for their own class but not another class."""
+    data = setup_multi_teacher_hall_passes
+    student1_id = data['student1'].id
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student1_id
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+        sess['last_activity'] = datetime.now(timezone.utc).isoformat()
+        sess['current_join_code'] = "CLASS-A"
+
+    own_class_response = client.get("/api/hall-pass/queue?join_code=CLASS-A")
+    assert own_class_response.status_code == 200
+    own_class_data = own_class_response.get_json()
+    assert own_class_data["status"] == "success"
+    assert any(item["student_name"] == "Alice A." for item in own_class_data["queue"])
+
+    other_class_response = client.get("/api/hall-pass/queue?join_code=CLASS-B")
+    assert other_class_response.status_code == 403
