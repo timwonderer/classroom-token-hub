@@ -145,6 +145,7 @@ Per-student, per-period state (attendance gating, join-code mapping).
 | `join_code` | String(20) | Source of truth for class isolation. Indexed. |
 | `tap_enabled` | Boolean | Whether tap in/out is enabled for this period. |
 | `done_for_day_date` | Date | Pacific-date stamp when student marks done for day. |
+| `rent_hall_passes` | Integer | Tracks hall passes granted by rent payments. |
 | `created_at` | DateTime | Creation timestamp. |
 | `updated_at` | DateTime | Last update timestamp. |
 
@@ -180,12 +181,12 @@ Global hall pass configuration.
 ### `store_items`
 Available items in the classroom store.
 
-Key fields: `name`, `description`, `price`, `item_type` (`immediate`, `delayed`, `collective`), `inventory`, `limit_per_student`, `auto_delist_date`, `auto_expiry_days`, `is_active`, bundle flags (`is_bundle`, `bundle_size`, `bundle_discount_amount`, `bundle_discount_percent`, `bundle_item_limit`), and `requires_approval`.
+Key fields: `name`, `description`, `price`, `item_type` (`immediate`, `delayed`, `collective`), `inventory`, `limit_per_student`, `auto_delist_date`, `auto_expiry_days`, `is_active`, `is_rent_linked`, bundle flags (`is_bundle`, `bundle_size`, `bundle_discount_amount`, `bundle_discount_percent`, `bundle_item_limit`), and `requires_approval`.
 
 ### `student_items`
 Items purchased by students.
 
-Key fields: `student_id`, `store_item_id`, `purchase_date`, `expiry_date`, `status`, `redemption_details`, `redemption_date`, `is_from_bundle`, `bundle_remaining`, `quantity_purchased`.
+Key fields: `student_id`, `store_item_id`, `purchase_date`, `expiry_date`, `status`, `redemption_details`, `redemption_date`, `is_from_bundle`, `bundle_remaining`, `quantity_purchased`, `uses_remaining`.
 
 ---
 
@@ -199,7 +200,7 @@ Key fields: `is_enabled`, `rent_amount`, `frequency_type`, `custom_frequency_val
 ### `rent_payments`
 Rent payment history.
 
-Key fields: `student_id`, `period`, `amount_paid`, `period_month`, `period_year`, `payment_date`, `was_late`, `late_fee_charged`.
+Key fields: `student_id`, `period`, `amount_paid`, `period_month`, `period_year`, `payment_date`, `was_late`, `late_fee_charged`, `coverage_month`, `coverage_year`.
 
 ### `rent_waivers`
 Tracks rent waivers.
@@ -313,7 +314,7 @@ Itemized breakdown of what rent payment covers.
 | Column | Type | Description |
 |---|---|---|
 | `id` | Integer | Primary key. |
-| `join_code` | String(20) | FK to teacher_blocks for per-class configuration. |
+| `rent_setting_id` | Integer | FK to `rent_settings` (linked to teacher/block). |
 | `name` | String(100) | Item name (e.g., "Desk", "Locker"). |
 | `description` | Text, nullable | Explanation of what this item provides. |
 | `base_value` | Float | Dollar amount this contributes to rent. |
@@ -321,6 +322,9 @@ Itemized breakdown of what rent payment covers.
 | `purchase_available` | Boolean | Whether available as store alternative. |
 | `custom_price` | Float, nullable | À la carte store price (if available). |
 | `purchase_duration` | String(20) | 'per_use' or 'per_period'. |
+| `rent_item_type` | String(20) | 'privilege', 'per_use', 'hall_pass'. |
+| `use_limit` | Integer | Max uses for per-use items (NULL = single use). |
+| `hall_pass_count` | Integer | Passes granted for hall_pass type items. |
 | `created_at` | DateTime | Creation timestamp. |
 | `updated_at` | DateTime | Last modification time. |
 
@@ -329,6 +333,58 @@ Itemized breakdown of what rent payment covers.
 **Relationships:**
 - Automatically manages StoreItem sync
 - Used to calculate rent privilege badges
+
+---
+
+## Issue Resolution System (v1.5.0+)
+
+### `issues`
+Core issue tracking model for the resolution system.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `student_id` | Integer | FK to `students.id`. |
+| `teacher_id` | Integer | FK to `admins.id`. |
+| `join_code` | String(20) | Scoping for class context. |
+| `category_id` | Integer | FK to `issue_categories.id`. |
+| `issue_type` | String(50) | 'transaction' or 'general'. |
+| `status` | String(50) | 'submitted', 'teacher_review', 'resolved', 'elevated', etc. |
+| `student_explanation` | Text | Student's description of the problem. |
+| `opaque_student_reference` | String(64) | Non-reversible hash for sysadmin privacy. |
+| `related_transaction_id` | Integer | FK to `transaction.id` (optional). |
+| `context_snapshot` | JSON | Ledger state at time of submission. |
+| `submitted_at` | DateTime | Submission timestamp. |
+
+### `issue_categories`
+Predefined categories for student issue reports.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `name` | String(100) | Category name (e.g., "Wrong Amount"). |
+| `category_type` | String(50) | 'transaction' or 'general'. |
+
+### `issue_status_history`
+Audit trail for issue status changes.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `issue_id` | Integer | FK to `issues.id`. |
+| `new_status` | String(50) | The new status applied. |
+| `changed_by_type` | String(20) | 'student', 'teacher', 'sysadmin'. |
+| `changed_at` | DateTime | Timestamp. |
+
+### `issue_resolution_actions`
+Tracks resolution actions taken (e.g., voiding transaction).
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `issue_id` | Integer | FK to `issues.id`. |
+| `action_type` | String(100) | e.g., 'reverse_transaction'. |
+| `performed_by_type` | String(20) | 'teacher' or 'sysadmin'. |
 
 ---
 
