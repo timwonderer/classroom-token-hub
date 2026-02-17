@@ -24,7 +24,7 @@ from app.extensions import db, limiter
 from app.models import (
     Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
     HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
-    StudentTeacher, TeacherBlock, StudentBlock, DemoStudent,
+    StudentTeacher, TeacherBlock, StudentBlock, DemoStudent, ClassMembership,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource
 )
 from app.auth import (
@@ -2577,6 +2577,7 @@ def handle_tap():
 
 
 @api_bp.route('/admin/tap-entries/<int:student_id>', methods=['GET'])
+@admin_required
 def get_tap_entries(student_id):
     """
     Get all tap entries for a student with pairing validation.
@@ -2585,6 +2586,9 @@ def get_tap_entries(student_id):
     admin = get_current_admin()
     if not admin:
         return jsonify({"error": "Unauthorized"}), 401
+    join_code, error_response, error_status = _require_admin_current_join_code()
+    if error_response:
+        return error_response, error_status
 
     from app.models import TapEvent
     from app.auth import get_student_for_admin
@@ -2593,10 +2597,13 @@ def get_tap_entries(student_id):
     student = get_student_for_admin(student_id)
     if not student:
         return jsonify({"error": "Student not found or access denied"}), 404
+    if not _student_in_join_code(student_id, join_code):
+        return jsonify({"error": "Student not found in current class context"}), 404
 
     # Get all tap events for this student
     events = TapEvent.query.filter_by(
-        student_id=student_id
+        student_id=student_id,
+        join_code=join_code,
     ).order_by(TapEvent.period, TapEvent.timestamp.asc()).all()
 
     # Group by period and validate pairing
@@ -2648,6 +2655,7 @@ def get_tap_entries(student_id):
 
 
 @api_bp.route('/admin/tap-entries/<int:event_id>', methods=['DELETE'])
+@admin_required
 def delete_tap_entry(event_id):
     """
     Soft-delete a tap entry by marking it as deleted.
@@ -2656,6 +2664,9 @@ def delete_tap_entry(event_id):
     admin = get_current_admin()
     if not admin:
         return jsonify({"error": "Unauthorized"}), 401
+    join_code, error_response, error_status = _require_admin_current_join_code()
+    if error_response:
+        return error_response, error_status
 
     from app.models import TapEvent
     from app.auth import get_student_for_admin
@@ -2663,11 +2674,15 @@ def delete_tap_entry(event_id):
     event = db.session.get(TapEvent, event_id)
     if not event:
         return jsonify({"error": "Tap entry not found"}), 404
+    if event.join_code != join_code:
+        return jsonify({"error": "Tap entry is outside current class context"}), 403
 
     # SECURITY FIX: Use scoped helper to verify admin owns this student
     student = get_student_for_admin(event.student_id)
     if not student:
         return jsonify({"error": "Student not found or access denied"}), 404
+    if not _student_in_join_code(event.student_id, join_code):
+        return jsonify({"error": "Student not found in current class context"}), 404
 
     # Mark as deleted
     event.is_deleted = True
@@ -2685,6 +2700,7 @@ def delete_tap_entry(event_id):
 
 
 @api_bp.route('/admin/student-block-settings', methods=['POST'])
+@admin_required
 def update_student_block_settings():
     """
     Update StudentBlock settings (tap_enabled toggle) for a student-period combination.
@@ -2692,6 +2708,9 @@ def update_student_block_settings():
     admin = get_current_admin()
     if not admin:
         return jsonify({"error": "Unauthorized"}), 401
+    join_code, error_response, error_status = _require_admin_current_join_code()
+    if error_response:
+        return error_response, error_status
 
     data = request.get_json()
     student_id = data.get('student_id')
@@ -2708,6 +2727,8 @@ def update_student_block_settings():
     student = get_student_for_admin(student_id)
     if not student:
         return jsonify({"error": "Student not found or access denied"}), 404
+    if not _student_in_join_code(student_id, join_code):
+        return jsonify({"error": "Student not found in current class context"}), 404
 
     # Get or create StudentBlock record
     student_block = StudentBlock.query.filter_by(
@@ -2719,10 +2740,15 @@ def update_student_block_settings():
         student_block = StudentBlock(
             student_id=student_id,
             period=period,
+            join_code=join_code,
             tap_enabled=tap_enabled
         )
         db.session.add(student_block)
     else:
+        if student_block.join_code and student_block.join_code != join_code:
+            return jsonify({"error": "Student block row belongs to a different class context"}), 409
+        if not student_block.join_code:
+            student_block.join_code = join_code
         student_block.tap_enabled = tap_enabled
 
     db.session.commit()
@@ -3172,16 +3198,24 @@ def get_block_tap_settings():
     admin = get_current_admin()
     if not admin:
         return jsonify({"error": "Unauthorized"}), 401
+    join_code, error_response, error_status = _require_admin_current_join_code()
+    if error_response:
+        return error_response, error_status
     
     block = request.args.get('block', '').strip().upper()
     if not block:
         return jsonify({"error": "Block parameter is required"}), 400
     
     from app.models import Student, StudentBlock
-    from app.auth import get_admin_student_query
-    
-    # Get all students for this admin in this block
-    students = get_admin_student_query().all()
+
+    # Get students in current class context
+    students = Student.query.join(
+        ClassMembership, ClassMembership.student_id == Student.id
+    ).filter(
+        ClassMembership.join_code == join_code,
+        ClassMembership.role == 'student',
+        ClassMembership.status == 'active',
+    ).all()
     students_in_block = [
         s for s in students
         if s.block and block.upper() in [b.strip().upper() for b in s.block.split(',')]
@@ -3201,6 +3235,11 @@ def get_block_tap_settings():
             period=block
         ).first()
         
+        if student_block and student_block.join_code and student_block.join_code != join_code:
+            # Different class context; treat as absent/default enabled.
+            any_enabled = True
+            break
+
         if student_block:
             if student_block.tap_enabled:
                 any_enabled = True
@@ -3223,20 +3262,30 @@ def update_block_tap_settings():
     admin = get_current_admin()
     if not admin:
         return jsonify({"error": "Unauthorized"}), 401
+    join_code, error_response, error_status = _require_admin_current_join_code()
+    if error_response:
+        return error_response, error_status
     
     data = request.get_json()
     block = data.get('block', '').strip().upper()
     tap_enabled = data.get('tap_enabled')
+    if tap_enabled is None:
+        tap_enabled = data.get('enabled')
     
     if not block or tap_enabled is None:
         return jsonify({"error": "Missing required fields"}), 400
     
     from app.models import Student, StudentBlock
-    from app.auth import get_admin_student_query
     
     try:
-        # Get all students for this admin in this block
-        students = get_admin_student_query().all()
+        # Get students in current class context
+        students = Student.query.join(
+            ClassMembership, ClassMembership.student_id == Student.id
+        ).filter(
+            ClassMembership.join_code == join_code,
+            ClassMembership.role == 'student',
+            ClassMembership.status == 'active',
+        ).all()
         students_in_block = [
             s for s in students
             if s.block and block.upper() in [b.strip().upper() for b in s.block.split(',')]
@@ -3254,10 +3303,15 @@ def update_block_tap_settings():
                 student_block = StudentBlock(
                     student_id=student.id,
                     period=block,
+                    join_code=join_code,
                     tap_enabled=tap_enabled
                 )
                 db.session.add(student_block)
             else:
+                if student_block.join_code and student_block.join_code != join_code:
+                    continue
+                if not student_block.join_code:
+                    student_block.join_code = join_code
                 student_block.tap_enabled = tap_enabled
             
             updated_count += 1
@@ -3288,3 +3342,31 @@ def view_as_student_status():
         "status": "success",
         "view_as_student": session.get('view_as_student', False)
     })
+def _require_admin_current_join_code():
+    """Require current admin class context and validate admin membership."""
+    join_code = session.get('current_join_code')
+    if not join_code:
+        return None, jsonify({"error": "current_join_code is required"}), 400
+
+    is_allowed, _membership, economy, error = check_membership_access(
+        join_code,
+        allowed_roles=['admin'],
+        require_active_economy=False,
+    )
+    if not is_allowed:
+        return None, jsonify({"error": error or "Access denied"}), 403
+
+    return economy.join_code, None, None
+
+
+def _student_in_join_code(student_id, join_code):
+    """Return True if student has active student membership in join_code."""
+    if not student_id or not join_code:
+        return False
+    return ClassMembership.query.filter_by(
+        student_id=student_id,
+        join_code=join_code,
+        role='student',
+        status='active',
+    ).first() is not None
+

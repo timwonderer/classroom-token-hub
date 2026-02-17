@@ -47,6 +47,10 @@ Branch: `join-code-centric-architecture-rebuild`
 - Removed remaining live student earnings display leaks:
   - `templates/student_payroll.html` and `templates/student_transfer.html` now render `scoped_total_earnings` provided by route context.
   - Student payroll/transfer routes now pass join-code scoped earnings instead of template reads from `student.total_earnings`.
+- Hardened API admin tap/block settings endpoints to current class membership context:
+  - `/api/admin/tap-entries/<student_id>` and `/api/admin/tap-entries/<event_id>` now require admin session + `current_join_code` membership and enforce join-code/student membership scope.
+  - `/api/admin/student-block-settings` and `/api/admin/block-tap-settings` now require admin `current_join_code` membership and avoid cross-class StudentBlock writes.
+  - Added compatibility handling for legacy payload key `enabled` in block tap settings POST.
 
 ## Verified
 - Targeted and multitenancy-related suites passed after hardening updates:
@@ -56,6 +60,7 @@ Branch: `join-code-centric-architecture-rebuild`
   - `19 passed` across admin membership gates + legacy delete flows.
   - `20 passed` across payroll + shared-student + admin multitenancy regression slice including scoped payroll display checks.
   - `10 passed` across student scoped earnings display + adjacent feature/transfer regression slice.
+  - `12 passed` across new API admin tap-scope tests + API fix smoke tests + admin membership/tenancy checks.
 
 ## Risk Report Reconciliation (`Economics_Invariant_Risk_Report.md`)
 - 1) Cross-tenant purchase authorization leakage: `Patched`

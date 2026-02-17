@@ -34,6 +34,7 @@ Branch: `join-code-centric-architecture-rebuild`
 
 - Scoped admin payroll display balances to owned join-codes.
 - Scoped student payroll/transfer lifetime earnings display to current join-code context.
+- Hardened admin tap/block settings APIs to require `current_join_code` admin membership and block cross-join-code student/event access.
 
 ## Definition of Done for v2
 
