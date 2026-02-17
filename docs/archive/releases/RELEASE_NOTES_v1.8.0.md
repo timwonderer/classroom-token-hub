@@ -1,6 +1,6 @@
 # Release Notes - Version 1.8.0
 
-**Release Date**: February 9, 2026
+**Release Date**: February 8, 2026
 **Focus**: Rent item types, coverage-period tracking, and stability/security fixes
 
 ---

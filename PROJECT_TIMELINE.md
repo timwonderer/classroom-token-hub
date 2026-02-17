@@ -4,7 +4,7 @@
 
 **Classroom Token Hub** is an educational banking simulation platform built by a full-time high school teacher to teach financial literacy through hands-on classroom experience. The project has evolved from a simple concept to a production-grade multi-tenant system with 41 SQLAlchemy models, 83+ Alembic migrations, and comprehensive security hardening.
 
-**Current Status:** v1.8.0 (Released February 9, 2026)
+**Current Status:** v1.8.0 (Released February 8, 2026)
 **Total Versions Released:** 8 major versions (v1.0 through v1.8)
 **Development Timeline:** ~2 years (pre-2024 through 2026)
 **Total Commits:** 68+ visible commits (recent commit history in current shallow clone)
@@ -85,7 +85,7 @@ During this era, the project went through:
 
 This era was dominated by discovering and resolving critical issues revealed through the first deployments.
 
-#### v1.0.0 - November 29, 2025 (First Stable Release)
+#### v1.0.0 - December 11, 2025 (First Stable Release)
 
 **CRISIS 1: P0 Same-Teacher Multi-Period Data Leak**
 
@@ -98,7 +98,7 @@ This era was dominated by discovering and resolving critical issues revealed thr
 - Queries filtered by `teacher_id` only, returning all periods
 - Fundamental privacy and fairness violation
 
-**Resolution (November 29, 2025):**
+**Resolution (Early December 2025, released in v1.0.0):**
 - Added `join_code` to all financial tables
 - Updated session management to track `current_join_code`
 - Modified ALL queries to scope by `join_code`
@@ -142,7 +142,7 @@ This era was dominated by discovering and resolving critical issues revealed thr
 - **Complete UI Redesign** - Modern colors, card-based layouts, responsive design
 - Critical bug fixes: Invisible tabs, missing navigation links
 
-#### v1.1.1 - December 15, 2025
+#### v1.1.1 - December 14, 2025
 
 **Theme:** Security Hardening v1
 
@@ -165,7 +165,7 @@ This era was dominated by discovering and resolving critical issues revealed thr
 - Python float arithmetic: 0.1 + 0.2 ≠ 0.3 (IEEE 754 rounding errors)
 - Mixed Decimal/float arithmetic caused TypeErrors
 
-**Resolution (January 22, 2026 - v1.7.1):**
+**Resolution (January 25, 2026 - v1.7.1):**
 - Changed database: `Float` → `Numeric(12, 2)` across all financial models
 - Systematic refactoring of ALL calculations to use Decimal type
 - Added near-zero balance normalization (|balance| < $0.01 → $0.00)
@@ -295,7 +295,7 @@ With critical issues resolved, the project entered rapid feature development wit
   - Complete audit trail
   - Opaque student references (hashed, non-reversible)
 
-#### v1.6.0 - January 1, 2026
+#### v1.6.0 - December 31, 2025
 
 **Theme:** Repository Organization & Stability
 
@@ -341,7 +341,7 @@ With critical issues resolved, the project entered rapid feature development wit
   - Green badges for rent-covered privileges
   - Blue badges for individually purchased privileges
 
-#### v1.7.1 - January 22, 2026
+#### v1.7.1 - January 25, 2026
 
 **Theme:** Decimal Precision, Float/Decimal Type Fixes
 
@@ -355,7 +355,7 @@ With critical issues resolved, the project entered rapid feature development wit
 
 **Result:** All financial calculations now mathematically exact
 
-#### v1.8.0 - February 9, 2026
+#### v1.8.0 - February 8, 2026
 
 **Theme:** Rent Item Types, Coverage Tracking, Stability
 
@@ -481,7 +481,7 @@ app/
 
 ### Incident 2: Floating-Point Precision Errors
 
-**Status:** ✅ Resolved (January 22, 2026 - v1.7.1)
+**Status:** ✅ Resolved (January 25, 2026 - v1.7.1)
 
 **Impact:** Overdraft fees on zero-balance transfers; unpayable tiny balances
 **Root Cause:** Using `Float` instead of `Numeric` for financial amounts
@@ -594,7 +594,7 @@ We are defined as much by what we refuse as by what we include:
 | Dec 2025 | v1.3.0 | Passkey auth + Encrypted TOTP | Security audit completed |
 | Dec 2025 | v1.4.0 | Announcements + UI redesign | Teacher communication |
 | Dec 2025 | v1.5.0 | Issue resolution system | Structured escalation |
-| Jan 2026 | v1.6.0 | Repository organization | Operational hygiene |
+| Dec 2025 | v1.6.0 | Repository organization | Operational hygiene |
 | Jan 2026 | v1.7.0 | Analytics dashboard + Rent items | Economic management |
 | Jan 2026 | v1.7.1 | Decimal precision fixes | Financial accuracy |
 | Feb 2026 | v1.8.0 | Rent item types + Coverage | Financial flexibility |

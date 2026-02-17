@@ -1,6 +1,6 @@
 # Release Notes - Version 1.7.1
 
-**Release Date**: January 22, 2026
+**Release Date**: January 25, 2026
 **Focus**: Critical Financial Precision Updates, Payroll Stability, and Documentation Hygiene
 
 ---

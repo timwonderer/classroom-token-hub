@@ -1,6 +1,6 @@
 # Release Notes - Version 1.6.0
 
-**Release Date**: January 1, 2026  
+**Release Date**: December 31, 2025  
 **Focus**: Repository organization, multi-tenancy fixes, and operational stability
 
 ---

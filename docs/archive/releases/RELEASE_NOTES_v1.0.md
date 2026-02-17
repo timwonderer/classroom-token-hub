@@ -1,6 +1,6 @@
 # Classroom Token Hub v1.0.0
 
-**Release Date:** December 2025
+**Release Date:** December 11, 2025
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
 
 ---

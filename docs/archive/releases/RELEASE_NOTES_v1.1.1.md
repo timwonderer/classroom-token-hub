@@ -1,6 +1,6 @@
 # Release Notes - Version 1.1.1
 
-**Release Date**: December 15, 2025
+**Release Date**: December 14, 2025
 
 Version 1.1.1 is a stability-focused patch that addresses regressions discovered after the 1.1.0 launch. This release tightens authentication recovery, fixes redirect and time-zone edge cases in the student dashboard, and restores consistent styling across admin entry points.
 

@@ -14,7 +14,7 @@ and this project follows semantic versioning principles.
 - **Void transaction CSRF 400 error** - Fixed student detail page void transaction button failing with 400 error. Added missing X-CSRFToken header to fetch request in `voidTransaction()` JavaScript function. Teachers can now successfully void transactions from student detail pages.
 - **P0: Rent payment applied to wrong period with bill preview enabled** - Fixed critical bug where students with unpaid overdue rent were allowed to pre-pay for future periods instead of paying overdue amounts first. When bill preview was enabled with a long preview period (e.g., 30 days), the system incorrectly classified overdue students as being in "preview period" for next month's rent. This caused payments to be recorded for the wrong coverage period (next month instead of current/overdue month), preventing students from receiving rent benefits even after paying. Now verifies current coverage period is fully paid before allowing preview period payments. Students must pay oldest overdue period first, and benefits are granted immediately when current period is paid. Also fixed rent page to display correct period being paid for with OVERDUE badge when applicable.
 
-## [1.8.0] - 2026-02-09
+## [1.8.0] - 2026-02-08
 
 ### Added
 - **Rent Item Types (Privilege / Per-Use / Hall Pass)** - Extended itemized rent with three distinct item types
@@ -78,7 +78,7 @@ and this project follows semantic versioning principles.
   - **Solution**: Removed redundant first definition, kept wrapper around shared `is_safe_url` helper
   - Improves code maintainability and prevents potential bugs from function shadowing
 
-## [1.7.1] - 2026-01-22
+## [1.7.1] - 2026-01-25
 
 ### Fixed
 - **CRITICAL: Decimal.InvalidOperation in Student Dashboard Earnings/Spending Calculations** - Fixed crash when calculating weekly/monthly analytics with NULL transaction amounts
@@ -258,7 +258,7 @@ and this project follows semantic versioning principles.
   - Teachers can quickly see which students have which privileges at a glance
   - Hover over badges to see item descriptions
 
-## [1.6.0] - 2026-01-01
+## [1.6.0] - 2025-12-31
 
 ### Added
 - **Documentation Organization** - Improved repository structure and documentation consistency
@@ -697,7 +697,7 @@ and this project follows semantic versioning principles.
 - Improved mobile responsiveness across all admin templates
 - Enhanced documentation organization and clarity
 
-## [1.1.1] - 2025-12-15
+## [1.1.1] - 2025-12-14
 
 ### Fixed
 - Secured teacher recovery verification by hashing date-of-birth sums and migrating existing records to the new salted hash format (#637)
@@ -739,7 +739,7 @@ and this project follows semantic versioning principles.
 - Improved query performance for weekly analytics calculations
 - Updated forms.py with `is_long_term_goal` BooleanField
 
-## [1.0.0] - 2025-11-29
+## [1.0.0] - 2025-12-11
 
 ### Milestone
 First stable release of Classroom Token Hub! All critical security issues resolved and production-ready.

@@ -334,4 +334,4 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 Built for educators and students to make learning about finance engaging and practical.
 
-**Last Updated:** 2026-02-09
+**Last Updated:** 2026-02-08

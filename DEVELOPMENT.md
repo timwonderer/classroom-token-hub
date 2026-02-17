@@ -31,7 +31,7 @@
 
 ## Recent Releases
 
-### ✅ Version 1.8.0 - February 9, 2026
+### ✅ Version 1.8.0 - February 8, 2026
 
 **Major feature release focused on rent item types, coverage tracking, and stability fixes:**
 
@@ -61,7 +61,7 @@ See [RELEASE_NOTES_v1.8.0.md](docs/archive/releases/RELEASE_NOTES_v1.8.0.md) for
 
 See [RELEASE_NOTES_v1.7.0.md](docs/archive/releases/RELEASE_NOTES_v1.7.0.md) for full details.
 
-### ✅ Version 1.6.0 - January 1, 2026
+### ✅ Version 1.6.0 - December 31, 2025
 
 **Repository organization and stability release:**
 
@@ -124,7 +124,7 @@ See [RELEASE_NOTES_v1.3.0.md](docs/archive/releases/RELEASE_NOTES_v1.3.0.md) for
 
 See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for full details.
 
-### ✅ Version 1.0.0 - November 29, 2025
+### ✅ Version 1.0.0 - December 11, 2025
 
 **First stable release - all critical blockers resolved:**
 
