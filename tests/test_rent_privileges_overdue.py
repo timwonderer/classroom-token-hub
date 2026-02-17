@@ -97,7 +97,7 @@ def test_overdue_rent_payment_restores_privileges(client):
 
     with client.session_transaction() as sess:
         sess["student_id"] = student.id
-        sess["login_time"] = now.isoformat()
+        sess["login_time"] = datetime.now(timezone.utc).isoformat()
         sess["current_join_code"] = join_code
 
     response = client.get("/student/shop")
@@ -220,8 +220,9 @@ def test_voided_payment_does_not_restore_privileges(client):
 
     with client.session_transaction() as sess:
         sess["student_id"] = student.id
-        sess["login_time"] = now.isoformat()
+        sess["login_time"] = datetime.now(timezone.utc).isoformat()
         sess["current_join_code"] = join_code
+        sess["current_teacher_id"] = teacher.id
 
     coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
     assert coverage_due_date is not None
@@ -370,7 +371,7 @@ def test_overdue_rent_payment_with_timestamp_drift_restores_privileges(client):
 
     with client.session_transaction() as sess:
         sess["student_id"] = student.id
-        sess["login_time"] = now.isoformat()
+        sess["login_time"] = datetime.now(timezone.utc).isoformat()
         sess["current_join_code"] = join_code
 
     coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
@@ -409,3 +410,99 @@ def test_overdue_rent_payment_with_timestamp_drift_restores_privileges(client):
     response = client.get("/student/shop")
     assert response.status_code == 200
     assert b"Included in your rent!" in response.data
+
+
+def test_overdue_payment_uses_coverage_month_in_transaction_description(client, monkeypatch):
+    """Overdue payments made in a later month should still be labeled for the covered month."""
+    teacher = Admin(username="rent_teacher_overdue_desc", totp_secret="secret123")
+    db.session.add(teacher)
+    db.session.commit()
+
+    salt = get_random_salt()
+    student = Student(
+        first_name="Label",
+        last_initial="P",
+        block="A",
+        salt=salt,
+        username_hash=hash_username("rent_student_overdue_desc", salt),
+        pin_hash=generate_password_hash("1234"),
+    )
+    db.session.add(student)
+    db.session.commit()
+
+    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.commit()
+
+    join_code = "JOINDESC"
+    seat = TeacherBlock(
+        teacher_id=teacher.id,
+        block="A",
+        first_name="Label",
+        last_initial="P",
+        last_name_hash_by_part=["hash_a"],
+        dob_sum=2025,
+        salt=b"rent_salt",
+        first_half_hash="hash_a",
+        join_code=join_code,
+        student_id=student.id,
+        is_claimed=True,
+    )
+    db.session.add(seat)
+    db.session.commit()
+
+    now = datetime(2026, 2, 17, 20, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr("app.routes.student.utc_now", lambda: now)
+
+    rent_settings = RentSettings(
+        teacher_id=teacher.id,
+        block="A",
+        join_code=join_code,
+        is_enabled=True,
+        rent_amount=Decimal("570.00"),
+        first_rent_due_date=datetime(2026, 1, 28, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal("20.00"),
+        bill_preview_enabled=True,
+        bill_preview_days=10,
+    )
+    db.session.add(rent_settings)
+
+    # Seed funds so rent payment can succeed.
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher.id,
+        join_code=join_code,
+        amount=Decimal("1000.00"),
+        account_type="checking",
+        type="Initial Deposit",
+        description="Seed checking balance",
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["student_id"] = student.id
+        sess["login_time"] = datetime.now(timezone.utc).isoformat()
+        sess["current_join_code"] = join_code
+
+    response = client.post("/student/rent/pay/A", follow_redirects=False)
+    assert response.status_code == 302
+
+    rent_txn = Transaction.query.filter_by(
+        student_id=student.id,
+        type="Rent Payment",
+        join_code=join_code,
+    ).order_by(Transaction.id.desc()).first()
+    assert rent_txn is not None
+    assert "January 2026" in rent_txn.description
+    assert "February 2026" not in rent_txn.description
+    assert "includes $20.00 late fee" in rent_txn.description
+
+    rent_payment = RentPayment.query.filter_by(
+        student_id=student.id,
+        period="A",
+        join_code=join_code,
+    ).order_by(RentPayment.id.desc()).first()
+    assert rent_payment is not None
+    assert rent_payment.coverage_month == 1
+    assert rent_payment.coverage_year == 2026
+    assert rent_payment.was_late is True
