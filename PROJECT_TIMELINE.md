@@ -85,7 +85,7 @@ During this era, the project went through:
 
 This era was dominated by discovering and resolving critical issues revealed through the first deployments.
 
-#### v1.0.0 - November 29, 2024 (First Stable Release)
+#### v1.0.0 - November 29, 2025 (First Stable Release)
 
 **CRISIS 1: P0 Same-Teacher Multi-Period Data Leak**
 
@@ -131,7 +131,7 @@ This era was dominated by discovering and resolving critical issues revealed thr
 - 55 comprehensive test files
 - 83 Alembic migrations
 
-#### v1.1.0 - December 13, 2024
+#### v1.1.0 - December 13, 2025
 
 **Theme:** Analytics & Insights
 
@@ -142,7 +142,7 @@ This era was dominated by discovering and resolving critical issues revealed thr
 - **Complete UI Redesign** - Modern colors, card-based layouts, responsive design
 - Critical bug fixes: Invisible tabs, missing navigation links
 
-#### v1.1.1 - December 15, 2024
+#### v1.1.1 - December 15, 2025
 
 **Theme:** Security Hardening v1
 
@@ -586,9 +586,9 @@ We are defined as much by what we refuse as by what we include:
 |------|---------|---|---|
 | Pre-2024 | Genesis | Project conceived and designed | Foundation for all future work |
 | Nov 2025 | Pre-v1.0 | P0 data leak fixed | Multi-tenancy established |
-| Dec 2024 | v1.0.0 | First stable release | Production-ready platform |
-| Dec 2024 | v1.1.0 | Analytics dashboard shipped | Observability for teachers |
-| Dec 2024 | v1.1.1 | Security hardening | Recovery system secured |
+| Dec 2025 | v1.0.0 | First stable release | Production-ready platform |
+| Dec 2025 | v1.1.0 | Analytics dashboard shipped | Observability for teachers |
+| Dec 2025 | v1.1.1 | Security hardening | Recovery system secured |
 | Dec 2025 | v1.2.0 | PWA + Mobile + Accessibility | WCAG 2.1 AA compliant |
 | Dec 2025 | v1.2.1 | Legacy account migration | Multi-teacher support |
 | Dec 2025 | v1.3.0 | Passkey auth + Encrypted TOTP | Security audit completed |

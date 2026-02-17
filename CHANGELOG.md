@@ -707,7 +707,7 @@ and this project follows semantic versioning principles.
 - Stopped insurance management and edit screens from crashing when legacy forms lack the tier grouping field (#640)
 - Added one-time prompt for legacy insurance policies and supporting script to encourage migration to tiered plans (#641)
 
-## [1.1.0] - 2024-12-13
+## [1.1.0] - 2025-12-13
 
 ### Added
 - **Student Analytics Dashboard** - Weekly statistics showing days tapped in, minutes attended, earnings, and spending
@@ -739,7 +739,7 @@ and this project follows semantic versioning principles.
 - Improved query performance for weekly analytics calculations
 - Updated forms.py with `is_long_term_goal` BooleanField
 
-## [1.0.0] - 2024-11-29
+## [1.0.0] - 2025-11-29
 
 ### Milestone
 First stable release of Classroom Token Hub! All critical security issues resolved and production-ready.

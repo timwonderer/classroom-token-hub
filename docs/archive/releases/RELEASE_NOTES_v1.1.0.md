@@ -1,6 +1,6 @@
 # Release Notes - Version 1.1.0
 
-**Release Date**: December 13, 2024
+**Release Date**: December 13, 2025
 
 Version 1.1.0 brings exciting new analytics features, a completely redesigned user interface, and important quality-of-life improvements for teachers managing classroom economies.
 
