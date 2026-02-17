@@ -1411,6 +1411,8 @@ def grafana_proxy(path):
     # Validate the requested Grafana path to prevent proxying to arbitrary URLs
     # Disallow absolute or protocol-relative URLs and restrict to known Grafana prefixes.
     normalized_path = path or ''
+    # Normalize path to a safe form to avoid header/response splitting issues.
+    normalized_path = normalized_path.replace('\r', '').replace('\n', '')
     if normalized_path.startswith(('http://', 'https://', '//')):
         current_app.logger.warning(f"Rejected unsafe Grafana proxy path: {normalized_path}")
         raise BadRequest("Invalid Grafana path.")
@@ -1550,6 +1552,33 @@ def grafana_proxy(path):
             (name, value) for name, value in resp.raw.headers.items()
             if name.lower() in allowed_headers
         ]
+
+        # Restrict which content types are rendered inline to reduce XSS risk from proxied content.
+        content_type = resp.headers.get('Content-Type', '')
+        safe_inline_types = (
+            'image/',
+            'text/css',
+            'text/plain',
+            'application/json',
+            'application/javascript',
+            'text/javascript',
+        )
+        is_safe_inline = any(
+            content_type.startswith(prefix) if prefix.endswith('/') else content_type.split(';', 1)[0].strip() == prefix
+            for prefix in safe_inline_types
+        )
+
+        if not is_safe_inline:
+            # Force potentially unsafe content (e.g., HTML) to be downloaded instead of rendered.
+            # This keeps functionality (content still accessible) while preventing script execution in-page.
+            # Override Content-Type and add a safe Content-Disposition header.
+            response_headers = [
+                (name, value)
+                for name, value in response_headers
+                if name.lower() not in ('content-type', 'content-disposition')
+            ]
+            response_headers.append(('Content-Type', 'application/octet-stream'))
+            response_headers.append(('Content-Disposition', 'attachment; filename="grafana-content"'))
 
         response = Response(resp.iter_content(chunk_size=8192), resp.status_code, response_headers)
         # Prevent MIME sniffing to reduce the chance of script execution from mislabeled payloads.

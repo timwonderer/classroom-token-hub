@@ -35,9 +35,17 @@ Rent settings can be customized for each class block. Use the **Class Selector**
 - **First Due Date**: The date of the first rent charge.
 - **Grace Period**: Number of days after the due date before late fees apply.
 
-### 3. Penalties & Restrictions
+### 3. Rent Coverage Tracking
+Rent payments now cover a specific date range, known as the **Coverage Period**:
+- **Start Date:** The rent due date the payment is applied to. If payment is made after that due date, coverage starts on the payment date (no backdating).
+- **End Date:** The day before the next rent due date after the Start Date.
+- **Rent Active Status:** Students are only considered "Rent Active" (and receive privileges) if the current date falls within a paid coverage period.
+
+### 4. Penalties & Restrictions
 - **Late Penalty**: One-time or recurring fee for late payments.
-- **Block Store Purchases**: Prevent students from buying items in the store if they have overdue rent. This is a powerful incentive for timely payments.
+- **"Prevent Purchase When Late on Rent"**:
+    - **Without Itemization**: Blocks ALL store purchases if rent is overdue.
+    - **With Itemization**: Blocks purchases of *non-rent* items. Students can still purchase rent-covered items (e.g., a pencil or desk access) at à la carte prices, but cannot buy "fun" items until rent is paid.
 
 ## Best Practices
 - **Start Simple**: Begin with a low monthly rent and no penalties to let students adjust.
