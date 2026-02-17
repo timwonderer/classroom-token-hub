@@ -82,6 +82,13 @@ MAX_JOIN_CODE_RETRIES = 10  # Maximum attempts to generate a unique join code
 FALLBACK_BLOCK_PREFIX_LENGTH = 1  # Number of characters from block name in fallback code
 FALLBACK_CODE_MODULO = 10000  # Modulo for timestamp suffix (produces 4-digit number)
 
+
+# Insurance form mapping for derived claim period storage
+FREQUENCY_TO_CLAIM_PERIOD = {
+    'weekly': 'week',
+    'monthly': 'month',
+    'semester': 'semester',
+}
 # Placeholder values for legacy class TeacherBlock entries
 LEGACY_PLACEHOLDER_CREDENTIAL = "LEGACY0"  # Placeholder credential for legacy classes
 LEGACY_PLACEHOLDER_FIRST_NAME = "__JOIN_CODE_PLACEHOLDER__"  # Marks legacy placeholder entries
@@ -149,6 +156,45 @@ def _get_teacher_blocks():
         for b in s_blocks.split(',') if b.strip()
     ))
 
+
+
+def _populate_policy_from_form(policy, form, *, next_tier_category_id=None):
+    """Populate insurance policy fields from form data."""
+    is_non_monetary = form.claim_type.data == 'non_monetary'
+    policy.title = form.title.data
+    policy.description = form.description.data
+    policy.premium = form.premium.data
+    policy.charge_frequency = form.charge_frequency.data
+    policy.autopay = form.autopay.data
+    policy.waiting_period_days = form.waiting_period_days.data
+    policy.max_claims_count = form.max_claims_count.data
+    policy.max_claims_period = FREQUENCY_TO_CLAIM_PERIOD.get(form.charge_frequency.data, 'month')
+    policy.max_claim_amount = None if is_non_monetary else form.max_claim_amount.data
+    policy.max_payout_per_period = None if is_non_monetary else form.max_payout_per_period.data
+    policy.claim_type = form.claim_type.data
+    policy.is_monetary = not is_non_monetary
+    policy.no_repurchase_after_cancel = form.no_repurchase_after_cancel.data
+    policy.enable_repurchase_cooldown = form.enable_repurchase_cooldown.data
+    policy.repurchase_wait_days = form.repurchase_wait_days.data
+    policy.auto_cancel_nonpay_days = form.auto_cancel_nonpay_days.data
+    policy.claim_time_limit_days = form.claim_time_limit_days.data
+    policy.bundle_with_policy_ids = form.bundle_with_policy_ids.data
+    policy.bundle_discount_percent = form.bundle_discount_percent.data
+    policy.bundle_discount_amount = form.bundle_discount_amount.data
+    policy.marketing_badge = form.marketing_badge.data if form.marketing_badge.data else None
+    policy.set_blocks(form.blocks.data if form.blocks.data else [])
+
+    if form.tier_category_id.data:
+        policy.tier_category_id = form.tier_category_id.data
+    elif form.tier_name.data or form.tier_color.data:
+        policy.tier_category_id = next_tier_category_id
+    else:
+        policy.tier_category_id = None
+
+    policy.tier_name = form.tier_name.data or None
+    policy.tier_color = form.tier_color.data or None
+    policy.tier_level = form.tier_level.data or None
+    policy.is_active = form.is_active.data
 
 def _get_class_labels_for_blocks(admin_id, blocks):
     """Return mapping of block -> class label for the given admin without N+1 queries."""
@@ -3578,10 +3624,20 @@ def store_management():
 
     audit_class_options = sorted(set(class_labels_by_block.values()))
 
+    rent_managed_item_ids = {
+        row[0] for row in db.session.query(RentItem.store_item_id).join(
+            RentSettings, RentItem.rent_setting_id == RentSettings.id
+        ).filter(
+            RentSettings.teacher_id == admin_id,
+            RentItem.store_item_id.isnot(None)
+        ).all()
+    }
+
     return render_template('admin_store.html', form=form, items=items, current_page="store",
                          total_items=total_items, active_items=active_items, total_purchases=total_purchases,
                          pending_redemptions=pending_redemptions, recent_purchases=recent_purchases,
                          class_labels_by_block=class_labels_by_block,
+                         rent_managed_item_ids=rent_managed_item_ids,
                          collective_progress_by_item=collective_progress_by_item,
                          audit_rows=audit_rows,
                          audit_total=audit_total,
@@ -3666,7 +3722,14 @@ def hard_delete_store_item(item_id):
 
 def _block_rent_linked_store_item(item: StoreItem) -> bool:
     """Return True if store item is rent-linked and deletion should be blocked."""
-    if item.is_rent_linked:
+    is_managed_by_rent = item.is_rent_linked or db.session.query(RentItem.id).join(
+        RentSettings, RentItem.rent_setting_id == RentSettings.id
+    ).filter(
+        RentSettings.teacher_id == item.teacher_id,
+        RentItem.store_item_id == item.id
+    ).first() is not None
+
+    if is_managed_by_rent:
         flash(f"Cannot delete '{item.name}' because it is managed by Rent Settings. Please remove it from Rent Settings instead.", "error")
         return True
     return False
@@ -3727,7 +3790,9 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                     StoreItem.name == rent_item.name
                 ).first()
 
-            is_per_use = (rent_item.rent_item_type == 'per_use')
+            # Mark any store-backed rent item as rent-linked (privilege + per-use).
+            # Hall pass items are skipped earlier and never synced to store.
+            is_rent_linked_item = rent_item.rent_item_type in ('privilege', 'per_use')
 
             if store_item:
                 # Update existing store item
@@ -3736,8 +3801,7 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                 store_item.price = rent_item.store_price
                 store_item.limit_per_student = limit
                 store_item.is_active = True
-                # Only mark linked for per-use rent items
-                store_item.is_rent_linked = is_per_use
+                store_item.is_rent_linked = is_rent_linked_item
 
                 # Link this rent_item to the store_item if not already linked
                 if not rent_item.store_item_id:
@@ -3754,7 +3818,7 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                     item_type='delayed',
                     limit_per_student=limit,
                     is_active=True,
-                    is_rent_linked=is_per_use
+                    is_rent_linked=is_rent_linked_item
                 )
                 db.session.add(store_item)
                 db.session.flush()  # Get the store_item.id
@@ -4561,36 +4625,11 @@ def insurance_management():
         policy = InsurancePolicy(
             policy_code=policy_code,
             teacher_id=session.get('admin_id'),
-            title=form.title.data,
-            description=form.description.data,
-            premium=form.premium.data,
-            charge_frequency=form.charge_frequency.data,
-            autopay=form.autopay.data,
-            waiting_period_days=form.waiting_period_days.data,
-            max_claims_count=form.max_claims_count.data,
-            max_claims_period=form.max_claims_period.data,
-            max_claim_amount=form.max_claim_amount.data,
-            max_payout_per_period=form.max_payout_per_period.data,
-            claim_type=form.claim_type.data,
-            is_monetary=form.claim_type.data != 'non_monetary',
-            no_repurchase_after_cancel=form.no_repurchase_after_cancel.data,
-            repurchase_wait_days=form.repurchase_wait_days.data,
-            auto_cancel_nonpay_days=form.auto_cancel_nonpay_days.data,
-            claim_time_limit_days=form.claim_time_limit_days.data,
-            bundle_discount_percent=form.bundle_discount_percent.data,
-            marketing_badge=form.marketing_badge.data if form.marketing_badge.data else None,
-            tier_category_id=tier_category_id,
-            tier_name=form.tier_name.data or None,
-            tier_color=form.tier_color.data or None,
-            tier_level=form.tier_level.data or None,
             settings_mode=request.form.get('settings_mode', 'advanced'),
-            is_active=form.is_active.data
         )
+        _populate_policy_from_form(policy, form, next_tier_category_id=tier_category_id)
         db.session.add(policy)
         db.session.flush()  # Get the ID for the policy before adding blocks
-        # Set blocks using many-to-many relationship
-        if form.blocks.data:
-            policy.set_blocks(form.blocks.data)
         db.session.commit()
         flash(f"Insurance policy '{policy.title}' created successfully!", "success")
         return redirect(url_for('admin.insurance_management'))
@@ -4723,39 +4762,7 @@ def edit_insurance_policy(policy_id):
     next_tier_category_id = _next_tenant_scoped_tier_id(tier_namespace_seed, existing_tier_ids)
 
     if request.method == 'POST' and form.validate_on_submit():
-        policy.title = form.title.data
-        policy.description = form.description.data
-        policy.premium = form.premium.data
-        policy.charge_frequency = form.charge_frequency.data
-        policy.autopay = form.autopay.data
-        policy.waiting_period_days = form.waiting_period_days.data
-        policy.max_claims_count = form.max_claims_count.data
-        policy.max_claims_period = form.max_claims_period.data
-        policy.max_claim_amount = form.max_claim_amount.data
-        policy.max_payout_per_period = form.max_payout_per_period.data
-        policy.claim_type = form.claim_type.data
-        policy.is_monetary = form.claim_type.data != 'non_monetary'
-        policy.no_repurchase_after_cancel = form.no_repurchase_after_cancel.data
-        policy.enable_repurchase_cooldown = form.enable_repurchase_cooldown.data
-        policy.repurchase_wait_days = form.repurchase_wait_days.data
-        policy.auto_cancel_nonpay_days = form.auto_cancel_nonpay_days.data
-        policy.claim_time_limit_days = form.claim_time_limit_days.data
-        policy.bundle_with_policy_ids = form.bundle_with_policy_ids.data
-        policy.bundle_discount_percent = form.bundle_discount_percent.data
-        policy.bundle_discount_amount = form.bundle_discount_amount.data
-        policy.marketing_badge = form.marketing_badge.data if form.marketing_badge.data else None
-        # Set blocks using many-to-many relationship
-        policy.set_blocks(form.blocks.data if form.blocks.data else [])
-        if form.tier_category_id.data:
-            policy.tier_category_id = form.tier_category_id.data
-        elif form.tier_name.data or form.tier_color.data:
-            policy.tier_category_id = next_tier_category_id
-        else:
-            policy.tier_category_id = None
-        policy.tier_name = form.tier_name.data or None
-        policy.tier_color = form.tier_color.data or None
-        policy.tier_level = form.tier_level.data or None
-        policy.is_active = form.is_active.data
+        _populate_policy_from_form(policy, form, next_tier_category_id=next_tier_category_id)
 
         db.session.commit()
         flash(f"Insurance policy '{policy.title}' updated successfully!", "success")
@@ -4956,12 +4963,8 @@ def process_claim(claim_id):
 
     def _get_period_bounds():
         now = utc_now()
-        if claim.policy.max_claims_period == 'year':
-            return (
-                now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
-                now.replace(month=12, day=31, hour=23, minute=59, second=59),
-            )
-        if claim.policy.max_claims_period == 'semester':
+        period_key = (claim.policy.charge_frequency or '').lower()
+        if period_key == 'semester':
             if now.month <= 6:
                 return (
                     now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
@@ -4971,6 +4974,10 @@ def process_claim(claim_id):
                 now.replace(month=7, day=1, hour=0, minute=0, second=0, microsecond=0),
                 now.replace(month=12, day=31, hour=23, minute=59, second=59),
             )
+        if period_key == 'weekly':
+            period_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+            period_end = period_start + timedelta(days=7) - timedelta(seconds=1)
+            return period_start, period_end
         period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         next_month = period_start.replace(day=28) + timedelta(days=4)
         period_end = next_month.replace(day=1) - timedelta(seconds=1)
@@ -5042,7 +5049,7 @@ def process_claim(claim_id):
         InsuranceClaim.id != claim.id,
     )
     if claim.policy.max_claims_count and approved_claims.count() >= claim.policy.max_claims_count:
-        validation_errors.append(f"Maximum claims limit reached ({claim.policy.max_claims_count} per {claim.policy.max_claims_period})")
+        validation_errors.append(f"Maximum claims limit reached ({claim.policy.max_claims_count} per {claim.policy.charge_frequency})")
 
     period_payouts = None
     remaining_period_cap = None
@@ -5060,7 +5067,7 @@ def process_claim(claim_id):
         remaining_period_cap = max(claim.policy.max_payout_per_period - period_payouts, 0)
         if remaining_period_cap is not None and requested_amount > remaining_period_cap and claim.policy.claim_type != 'non_monetary':
             validation_errors.append(
-                f"Maximum payout limit would be exceeded (${period_payouts:.2f} paid + ${requested_amount:.2f} requested > ${claim.policy.max_payout_per_period:.2f} limit per {claim.policy.max_claims_period})"
+                f"Maximum payout limit would be exceeded (${period_payouts:.2f} paid + ${requested_amount:.2f} requested > ${claim.policy.max_payout_per_period:.2f} limit per {claim.policy.charge_frequency})"
             )
 
     # Get claims statistics
@@ -5092,7 +5099,7 @@ def process_claim(claim_id):
         if requires_payout:
             approved_claims_count = approved_claims.count()
             if claim.policy.max_claims_count and approved_claims_count >= claim.policy.max_claims_count:
-                flash(f"Cannot approve claim: maximum of {claim.policy.max_claims_count} claims already reached this {claim.policy.max_claims_period}.", "danger")
+                flash(f"Cannot approve claim: maximum of {claim.policy.max_claims_count} claims already reached this {claim.policy.charge_frequency}.", "danger")
                 db.session.rollback()
                 return redirect(url_for('admin.process_claim', claim_id=claim_id))
 
@@ -5107,7 +5114,7 @@ def process_claim(claim_id):
             if remaining_period_cap is not None:
                 if remaining_period_cap <= 0:
                     flash(
-                        f"Cannot approve claim: Would exceed maximum payout limit of ${claim.policy.max_payout_per_period:.2f} per {claim.policy.max_claims_period} (${period_payouts:.2f} already paid)",
+                        f"Cannot approve claim: Would exceed maximum payout limit of ${claim.policy.max_payout_per_period:.2f} per {claim.policy.charge_frequency} (${period_payouts:.2f} already paid)",
                         "danger",
                     )
                     db.session.rollback()
@@ -7959,7 +7966,7 @@ def feature_settings():
 
             # Get feature toggle values
             features_data = {
-                'payroll_enabled': 'payroll_enabled' in request.form,
+                'payroll_enabled': True,  # Always enabled - payroll is mandatory
                 'insurance_enabled': 'insurance_enabled' in request.form,
                 'banking_enabled': 'banking_enabled' in request.form,
                 'rent_enabled': 'rent_enabled' in request.form,
@@ -8063,7 +8070,6 @@ def feature_settings():
         periods=periods,
         period_settings=period_settings,
         features_list=[
-            ('payroll_enabled', 'Payroll', 'payments', 'Time tracking and student payments'),
             ('insurance_enabled', 'Insurance', 'shield', 'Insurance policies and claims'),
             ('banking_enabled', 'Banking', 'account_balance', 'Savings accounts and interest'),
             ('rent_enabled', 'Rent', 'home', 'Housing costs and payments'),
@@ -8105,7 +8111,11 @@ def update_period_feature_settings(period):
 
         for feature_key, db_column in feature_map.items():
             if feature_key in data:
-                setattr(settings, db_column, bool(data[feature_key]))
+                # Payroll is always enabled and cannot be disabled
+                if db_column == 'payroll_enabled':
+                    setattr(settings, db_column, True)
+                else:
+                    setattr(settings, db_column, bool(data[feature_key]))
 
         settings.updated_at = utc_now()
         db.session.commit()
@@ -8184,7 +8194,11 @@ def copy_feature_settings():
             # Only copy valid feature columns to prevent attribute injection
             for key, value in source_dict.items():
                 if key in valid_feature_columns:
-                    setattr(target_settings, key, value)
+                    # Payroll is always enabled and cannot be disabled
+                    if key == 'payroll_enabled':
+                        setattr(target_settings, key, True)
+                    else:
+                        setattr(target_settings, key, value)
 
             target_settings.updated_at = utc_now()
             copied_count += 1

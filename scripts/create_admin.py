@@ -8,6 +8,9 @@ import pyotp
 import qrcode
 import select
 
+# Add project root to path so we can import from 'app'
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Set up Flask app context
 from app import app
 from app.extensions import db

@@ -159,28 +159,23 @@ class InsurancePolicyForm(FlaskForm):
     claim_type = SelectField(
         'Claim Type',
         choices=[
-            ('transaction_monetary', 'Transactions-based (linked to spending)'),
-            ('non_monetary', 'Non-monetary (no reimbursement)'),
-            ('legacy_monetary', 'Legacy monetary (manual amount)'),
+            ('transaction_monetary', 'Transaction-Linked Reimbursement'),
+            ('non_monetary', 'Non-Monetary'),
+            ('legacy_monetary', 'Custom Monetary Reimbursement'),
         ],
         default='transaction_monetary',
     )
-    waiting_period_days = IntegerField('Waiting Period (days)', default=7, validators=[DataRequired()])
-    max_claims_count = IntegerField('Max Claims per Period (leave blank for unlimited)', validators=[Optional()])
-    max_claims_period = SelectField('Claims Period', choices=[
-        ('month', 'Per Month'),
-        ('semester', 'Per Semester'),
-        ('year', 'Per Year')
-    ], default='month')
-    max_claim_amount = FloatField('Max Claim Amount $ (leave blank for unlimited)', validators=[Optional()])
-    max_payout_per_period = FloatField('Max Total Payout per Period $ (leave blank for unlimited)', validators=[Optional()])
+    waiting_period_days = IntegerField('Waiting Period', default=7, validators=[DataRequired()])
+    max_claims_count = IntegerField('Claims per Coverage Period Limit', validators=[Optional()])
+    max_claim_amount = FloatField('Per Claim Limit', validators=[Optional()])
+    max_payout_per_period = FloatField('Per Coverage Period Limit', validators=[Optional()])
 
     # Special rules
-    no_repurchase_after_cancel = BooleanField('Prevent repurchase after cancellation (permanent block)', default=False)
-    enable_repurchase_cooldown = BooleanField('Enable forced cooldown period', default=False)
-    repurchase_wait_days = IntegerField('Cooldown days before repurchase allowed', default=30)
-    auto_cancel_nonpay_days = IntegerField('Auto-cancel after days of non-payment', default=7)
-    claim_time_limit_days = IntegerField('Time limit to file claim (days from incident)', default=30)
+    no_repurchase_after_cancel = BooleanField('No Re-Enrollment', default=False)
+    enable_repurchase_cooldown = BooleanField('Enforce Cooldown Period', default=False)
+    repurchase_wait_days = IntegerField('Mandatory Cooldown Period', default=30)
+    auto_cancel_nonpay_days = IntegerField('Non-Payment Cancellation', default=7)
+    claim_time_limit_days = IntegerField('Claim Filing Period', default=30)
 
     # Bundle settings
     bundle_with_policy_ids = StringField('Bundle with Policies', validators=[Optional()])  # Comma-separated IDs
