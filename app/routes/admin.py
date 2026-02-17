@@ -548,6 +548,9 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
         Student.id.in_(sa.select(orphan_student_ids))
     ).delete(synchronize_session=False)
 
+    # CRITICAL: Delete the ClassEconomy record itself
+    ClassEconomy.query.filter_by(join_code=join_code).delete(synchronize_session=False)
+
 
 def _sanitize_csv_field(value):
     """Prevent CSV injection by prefixing risky leading characters."""
@@ -1060,6 +1063,15 @@ def give_bonus_all():
     )
     join_code_map = {student_id: join_code for student_id, join_code in teacher_blocks}
 
+    # CRITICAL: Prefetch admin memberships for all relevant classes to populate audit trail (actor_membership_id)
+    unique_join_codes = list(set(join_code_map.values()))
+    admin_memberships = ClassMembership.query.filter(
+        ClassMembership.admin_id == current_admin_id,
+        ClassMembership.join_code.in_(unique_join_codes),
+        ClassMembership.role == 'admin'
+    ).all()
+    admin_membership_map = {m.join_code: m.id for m in admin_memberships}
+
     banking_settings = BankingSettings.query.filter_by(teacher_id=current_admin_id).first()
     applied_count = 0
     declined_count = 0
@@ -1107,7 +1119,9 @@ def give_bonus_all():
             type=tx_type,
             description=title,
             status=TransactionStatus.PENDING,
-            account_type='checking'
+            account_type='checking',
+            # CRITICAL: Link audit trail to the creating admin's membership
+            actor_membership_id=admin_membership_map.get(join_code)
         )
         db.session.add(tx)
         applied_count += 1
@@ -2966,6 +2980,14 @@ def delete_join_code():
     )
     if not allowed:
         return jsonify({"status": "error", "message": error or "Join code not found or access denied."}), 403
+
+    # DESTRUCTIVE GUARDRAIL: Require explicit confirmation
+    confirm_join_code = (data.get('confirm_join_code') or '').strip().upper()
+    if confirm_join_code != join_code:
+        return jsonify({
+            "status": "error",
+            "message": "Confirmation failed. You must provide the join code again to confirm deletion."
+        }), 400
 
     try:
         _hard_delete_join_code_scope(join_code, current_admin_id)

@@ -12,6 +12,7 @@ from app.models import (
 )
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
+from app.models import ClassEconomy, ClassMembership
 
 
 @pytest.fixture
@@ -80,6 +81,21 @@ def setup_multi_teacher_hall_passes(client):
     ])
     db.session.commit()
 
+    # Create Class Contexts
+    join_code1 = "CLASS-A"
+    join_code2 = "CLASS-B"
+    db.session.add_all([
+        ClassEconomy(join_code=join_code1, status="active", created_by_admin_id=teacher1.id),
+        ClassEconomy(join_code=join_code2, status="active", created_by_admin_id=teacher2.id),
+        ClassMembership(join_code=join_code1, admin_id=teacher1.id, role="admin", status="active"),
+        ClassMembership(join_code=join_code2, admin_id=teacher2.id, role="admin", status="active"),
+        ClassMembership(join_code=join_code1, student_id=student1.id, role="student", status="active"),
+        ClassMembership(join_code=join_code1, student_id=student2.id, role="student", status="active"),
+        ClassMembership(join_code=join_code2, student_id=student3.id, role="student", status="active"),
+        ClassMembership(join_code=join_code2, student_id=student4.id, role="student", status="active"),
+    ])
+    db.session.flush()
+
     # Create hall pass settings for both teachers
     settings1 = HallPassSettings(
         teacher_id=teacher1.id,
@@ -102,6 +118,7 @@ def setup_multi_teacher_hall_passes(client):
         student_id=student1.id,
         reason="Restroom",
         status="approved",
+        join_code=join_code1,
         decision_time=now - timedelta(minutes=5)
     )
     
@@ -110,6 +127,7 @@ def setup_multi_teacher_hall_passes(client):
         student_id=student2.id,
         reason="Office",
         status="left",
+        join_code=join_code1,
         left_time=now - timedelta(minutes=3),
         decision_time=now - timedelta(minutes=10)
     )
@@ -120,6 +138,7 @@ def setup_multi_teacher_hall_passes(client):
         student_id=student3.id,
         reason="Nurse",
         status="approved",
+        join_code=join_code2,
         decision_time=now - timedelta(minutes=2)
     )
     
@@ -128,6 +147,7 @@ def setup_multi_teacher_hall_passes(client):
         student_id=student4.id,
         reason="Locker",
         status="left",
+        join_code=join_code2,
         left_time=now - timedelta(minutes=1),
         decision_time=now - timedelta(minutes=8)
     )
@@ -149,21 +169,25 @@ def setup_multi_teacher_hall_passes(client):
     }
 
 
-def test_hall_pass_queue_requires_teacher_id(client, setup_multi_teacher_hall_passes):
-    """Test that the queue endpoint requires teacher_id parameter."""
+    """Test that the queue endpoint requires join_code parameter."""
     response = client.get('/api/hall-pass/queue')
     assert response.status_code == 400
     data = response.get_json()
     assert data['status'] == 'error'
-    assert 'teacher_id' in data['message']
+    assert 'join_code' in data['message']
 
 
 def test_hall_pass_queue_scopes_to_teacher1(client, setup_multi_teacher_hall_passes):
-    """Test that teacher1 only sees their own students' hall passes."""
     data = setup_multi_teacher_hall_passes
     teacher1_id = data['teacher1'].id
+    join_code1 = "CLASS-A"
     
-    response = client.get(f'/api/hall-pass/queue?teacher_id={teacher1_id}')
+    # Login as teacher1
+    with client.session_transaction() as sess:
+        sess['is_admin'] = True
+        sess['admin_id'] = teacher1_id
+    
+    response = client.get(f'/api/hall-pass/queue?join_code={join_code1}')
     assert response.status_code == 200
     
     json_data = response.get_json()
@@ -183,8 +207,14 @@ def test_hall_pass_queue_scopes_to_teacher2(client, setup_multi_teacher_hall_pas
     """Test that teacher2 only sees their own students' hall passes."""
     data = setup_multi_teacher_hall_passes
     teacher2_id = data['teacher2'].id
+    join_code2 = "CLASS-B"
     
-    response = client.get(f'/api/hall-pass/queue?teacher_id={teacher2_id}')
+    # Login as teacher2
+    with client.session_transaction() as sess:
+        sess['is_admin'] = True
+        sess['admin_id'] = teacher2_id
+    
+    response = client.get(f'/api/hall-pass/queue?join_code={join_code2}')
     assert response.status_code == 200
     
     json_data = response.get_json()
@@ -215,14 +245,44 @@ def test_hall_pass_queue_with_shared_student(client, setup_multi_teacher_hall_pa
     db.session.add(shared_link)
     db.session.commit()
     
-    # Teacher1 should still see student1 in queue
-    response1 = client.get(f'/api/hall-pass/queue?teacher_id={teacher1_id}')
+    # Add membership for shared student in Class B
+    db.session.add(ClassMembership(join_code="CLASS-B", student_id=student1_id, role="student", status="active"))
+    db.session.flush()
+    
+    # Login as teacher1
+    with client.session_transaction() as sess:
+        sess['is_admin'] = True
+        sess['admin_id'] = teacher1_id
+
+    # Teacher1 should still see student1 in queue (Class A)
+    response1 = client.get(f'/api/hall-pass/queue?join_code=CLASS-A')
     json_data1 = response1.get_json()
     assert len(json_data1['queue']) == 1
     assert json_data1['queue'][0]['student_name'] == 'Alice A.'
     
-    # Teacher2 should now also see student1 in queue (in addition to their own)
-    response2 = client.get(f'/api/hall-pass/queue?teacher_id={teacher2_id}')
+    # Teacher2 should ONLY see student1 if they have a pass in Class B or if we are testing cross-listing?
+    # Wait, the logic is: queue for A join_code shows passes with that join_code.
+    # If student1 has a pass in Class A, they show up in Class A queue.
+    # They do NOT show up in Class B queue unless they have a pass in Class B.
+    # The original test assumed "teacher queue" aggregates all their students.
+    # New logic is strict join_code.
+    # So create a pass for student1 in Class B to verify visibility.
+    pass_new = HallPassLog(
+        student_id=student1_id,
+        reason="Library",
+        status="approved",
+        join_code="CLASS-B",
+        decision_time=datetime.now(timezone.utc)
+    )
+    db.session.add(pass_new)
+    db.session.commit()
+
+    # Login as teacher2
+    with client.session_transaction() as sess:
+        sess['is_admin'] = True
+        sess['admin_id'] = teacher2_id
+
+    response2 = client.get(f'/api/hall-pass/queue?join_code=CLASS-B')
     json_data2 = response2.get_json()
     # Teacher2 now has 2 students in queue: Charlie (their original) + Alice (shared)
     assert len(json_data2['queue']) == 2
@@ -236,13 +296,12 @@ def test_hall_pass_queue_uses_session_admin_id(client, setup_multi_teacher_hall_
     data = setup_multi_teacher_hall_passes
     teacher1_id = data['teacher1'].id
     
-    # Simulate admin login by setting session
     with client.session_transaction() as sess:
         sess['is_admin'] = True
         sess['admin_id'] = teacher1_id
-    
-    # Request without teacher_id parameter
-    response = client.get('/api/hall-pass/queue')
+        sess['current_join_code'] = "CLASS-A"
+
+    response = client.get('/api/hall-pass/queue?join_code=CLASS-A')
     assert response.status_code == 200
     
     json_data = response.get_json()
@@ -253,13 +312,12 @@ def test_hall_pass_queue_uses_session_admin_id(client, setup_multi_teacher_hall_
     assert json_data['queue'][0]['student_name'] == 'Alice A.'
 
 
-def test_hall_pass_queue_rejects_invalid_teacher_id(client):
-    """Test that endpoint returns 404 for non-existent teacher_id."""
-    response = client.get('/api/hall-pass/queue?teacher_id=99999')
-    assert response.status_code == 404
+def test_hall_pass_queue_rejects_invalid_join_code(client):
+    """Test that endpoint returns 403/404 for non-existent or unauthorized join_code."""
+    response = client.get('/api/hall-pass/queue?join_code=INVALID99')
+    assert response.status_code in [403, 404]
     data = response.get_json()
     assert data['status'] == 'error'
-    assert 'Invalid teacher_id' in data['message']
 
 
 def test_hall_pass_queue_rejects_cross_teacher_access(client, setup_multi_teacher_hall_passes):
@@ -272,9 +330,9 @@ def test_hall_pass_queue_rejects_cross_teacher_access(client, setup_multi_teache
         sess['is_admin'] = True
         sess['admin_id'] = data['teacher1'].id
     
-    # Try to access teacher2's queue
-    response = client.get(f'/api/hall-pass/queue?teacher_id={teacher2_id}')
+    # Try to access teacher2's queue (Class B)
+    response = client.get(f'/api/hall-pass/queue?join_code=CLASS-B')
     assert response.status_code == 403
     json_data = response.get_json()
     assert json_data['status'] == 'error'
-    assert 'Unauthorized' in json_data['message']
+    assert 'You do not have access to this class' in json_data['message']

@@ -201,15 +201,6 @@ def get_rent_settings_for_context(context):
     return RentSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
 
 
-def get_current_teacher_id():
-    """DEPRECATED: Get teacher_id from current class context.
-
-    This function is maintained for backward compatibility but should be
-    replaced with get_current_class_context() for proper multi-tenancy.
-    """
-    context = get_current_class_context()
-    return context['teacher_id'] if context else None
-
 
 def get_banking_settings_for_context(context):
     """Return banking settings scoped to the current class context."""
@@ -1943,6 +1934,7 @@ def insurance_marketplace():
         return redirect(url_for('student.dashboard'))
 
     teacher_id = context['teacher_id']
+    join_code = context['join_code']
     now_utc = utc_now()
 
     # FIX: Get student's active policies scoped to current class only
@@ -2334,8 +2326,13 @@ def file_claim(policy_id):
             .filter(~Transaction.id.in_(claimed_tx_subq))
             .filter(Transaction.amount < Decimal('0'))
         )
-        if policy.teacher_id:
+        # CRITICAL FIX v2: Prioritize join_code for scoping
+        # If policy has join_code, we rely on that. Only fall back to teacher_id if join_code is missing.
+        if policy.join_code:
+            tx_query = tx_query.filter(Transaction.join_code == policy.join_code)
+        elif policy.teacher_id:
             tx_query = tx_query.filter(Transaction.teacher_id == policy.teacher_id)
+
         if enrollment.coverage_start_date:
             tx_query = tx_query.filter(Transaction.timestamp >= enrollment.coverage_start_date)
 
@@ -2383,6 +2380,11 @@ def file_claim(policy_id):
             if transaction_already_claimed:
                 flash("This transaction already has a claim. Each transaction can only be claimed once.", "danger")
                 return redirect(url_for('student.file_claim', policy_id=policy_id))
+
+            # CRITICAL FIX v2: Verify transaction belongs to the same class as the policy
+            if policy.join_code and selected_transaction.join_code != policy.join_code:
+                 flash("Invalid transaction selected. Transaction must come from the same class.", "danger")
+                 return redirect(url_for('student.file_claim', policy_id=policy_id))
 
             incident_date_value = ensure_utc(selected_transaction.timestamp)
             claim_amount_value = abs(selected_transaction.amount)
@@ -2514,11 +2516,28 @@ def shop():
 
     now = utc_now()
     now_db = normalize_for_db(now)
-    items = StoreItem.query.filter(
-        StoreItem.join_code == join_code,
+    # CRITICAL FIX: Filter StoreItems by teacher_id (shared items) not join_code.
+    # We must also handle block visibility filtering.
+    raw_items = StoreItem.query.filter(
+        StoreItem.teacher_id == teacher_id,
         StoreItem.is_active == True,
         or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now_db)
     ).order_by(StoreItem.name).all()
+
+    # Filter items based on block visibility (if configured)
+    items = []
+    current_block = context.get('block', '').strip().upper()
+    for item in raw_items:
+         # If strict join_code scoping is used on the item, enforce it.
+         if item.join_code and item.join_code != join_code:
+             continue
+             
+         # Check block visibility
+         if item.visible_blocks.count() > 0:
+             is_visible = any(b.block == current_block for b in item.visible_blocks)
+             if not is_visible:
+                 continue
+         items.append(item)
 
     # FIX: Fetch student's purchased items scoped to current teacher's store
     student_items = student.items.join(
@@ -3813,8 +3832,23 @@ def switch_period(teacher_id):
         flash("You don't have access to that class.", "error")
         return redirect(url_for('student.dashboard'))
 
-    # Update session with new teacher (old method)
-    session['current_teacher_id'] = teacher_id
+    # CRITICAL FIX: Update session with join_code, not just teacher_id
+    # Find a class membership for this student with the target teacher
+    from app.models import ClassMembership
+    target_membership = ClassMembership.query.filter_by(
+        student_id=student.id,
+        admin_id=teacher_id,
+        role='student',
+        status='active'
+    ).first()
+
+    if target_membership:
+        session['current_join_code'] = target_membership.join_code
+        session['current_teacher_id'] = teacher_id  # Keep for legacy compatibility
+    else:
+        # Fallback: Just set teacher_id (though get_current_class_context might ignore it)
+        session['current_teacher_id'] = teacher_id
+        session.pop('current_join_code', None)  # Clear join_code to force re-resolution
 
     # Get teacher name for flash message
     from app.models import Admin

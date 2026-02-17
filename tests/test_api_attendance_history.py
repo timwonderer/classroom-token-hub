@@ -4,7 +4,7 @@ Tests for the /api/attendance/history endpoint to ensure it returns attendance r
 import pytest
 from datetime import datetime, timezone, timedelta
 from app import app, db
-from app.models import Admin, Student, TapEvent, StudentTeacher
+from app.models import Admin, Student, TapEvent, StudentTeacher, ClassEconomy, ClassMembership
 from app.hash_utils import hash_username, get_random_salt
 from werkzeug.security import generate_password_hash
 
@@ -36,6 +36,12 @@ def admin_with_students(client):
 
     # CRITICAL FIX: Create StudentTeacher association for multi-tenancy
     db.session.add(StudentTeacher(student_id=student.id, admin_id=admin.id))
+    
+    # Setup Class Context
+    join_code = "TEST101"
+    db.session.add(ClassEconomy(join_code=join_code, status="active", created_by_admin_id=admin.id))
+    db.session.add(ClassMembership(join_code=join_code, admin_id=admin.id, role="admin", status="active"))
+    db.session.add(ClassMembership(join_code=join_code, student_id=student.id, role="student", status="active"))
     db.session.flush()
 
     # Create some tap events for this student
@@ -46,6 +52,7 @@ def admin_with_students(client):
         student_id=student.id,
         period='A',
         status='active',
+        join_code=join_code,
         timestamp=now_utc - timedelta(hours=1)
     )
     db.session.add(tap_in)
@@ -55,6 +62,7 @@ def admin_with_students(client):
         student_id=student.id,
         period='A',
         status='inactive',
+        join_code=join_code,
         timestamp=now_utc - timedelta(minutes=30),
         reason='done for the day'
     )
@@ -117,7 +125,7 @@ def test_attendance_history_with_date_filters(client, admin_with_students):
     today_str = event_ts.date().strftime('%Y-%m-%d')
     
     # Call the API endpoint with today's date as filter
-    response = client.get(f'/api/attendance/history?start_date={today_str}&end_date={today_str}')
+    response = client.get(f'/api/attendance/history?start_date={today_str}&end_date={today_str}&join_code=TEST101')
     
     assert response.status_code == 200
     data = response.get_json()
@@ -172,6 +180,19 @@ def test_attendance_history_tenant_scoping(client):
     db.session.add(StudentTeacher(student_id=student2.id, admin_id=admin2.id))
     db.session.flush()
 
+    # Create Class Contexts
+    join_code1 = "CLASS-A"
+    join_code2 = "CLASS-B"
+    db.session.add_all([
+        ClassEconomy(join_code=join_code1, status="active", created_by_admin_id=admin1.id),
+        ClassEconomy(join_code=join_code2, status="active", created_by_admin_id=admin2.id),
+        ClassMembership(join_code=join_code1, admin_id=admin1.id, role="admin", status="active"),
+        ClassMembership(join_code=join_code2, admin_id=admin2.id, role="admin", status="active"),
+        ClassMembership(join_code=join_code1, student_id=student1.id, role="student", status="active"),
+        ClassMembership(join_code=join_code2, student_id=student2.id, role="student", status="active"),
+    ])
+    db.session.flush()
+
     # Create tap events for both students
     now_utc = datetime.now(timezone.utc)
     
@@ -179,12 +200,14 @@ def test_attendance_history_tenant_scoping(client):
         student_id=student1.id,
         period='A',
         status='active',
+        join_code=join_code1,
         timestamp=now_utc
     )
     tap2 = TapEvent(
         student_id=student2.id,
         period='B',
         status='active',
+        join_code=join_code2,
         timestamp=now_utc
     )
     db.session.add_all([tap1, tap2])
@@ -197,7 +220,7 @@ def test_attendance_history_tenant_scoping(client):
         sess['last_activity'] = datetime.now(timezone.utc).isoformat()
     
     # Call the API endpoint as admin1
-    response = client.get('/api/attendance/history')
+    response = client.get(f'/api/attendance/history?join_code={join_code1}')
     
     assert response.status_code == 200
     data = response.get_json()
@@ -223,7 +246,8 @@ def test_attendance_history_excludes_deleted_records(client, admin_with_students
         timestamp=now_utc - timedelta(minutes=15),
         is_deleted=True,
         deleted_at=now_utc - timedelta(minutes=5),
-        deleted_by=admin.id
+        deleted_by=admin.id,
+        join_code="TEST101"
     )
     db.session.add(deleted_tap)
     db.session.commit()

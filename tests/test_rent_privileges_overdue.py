@@ -60,6 +60,7 @@ def test_overdue_rent_payment_restores_privileges(client):
     rent_settings = RentSettings(
         teacher_id=teacher.id,
         block="A",
+        join_code=join_code,
         is_enabled=True,
         rent_amount=Decimal("50.00"),
         first_rent_due_date=now - timedelta(days=5),
@@ -182,6 +183,7 @@ def test_voided_payment_does_not_restore_privileges(client):
     rent_settings = RentSettings(
         teacher_id=teacher.id,
         block="A",
+        join_code=join_code,
         is_enabled=True,
         rent_amount=Decimal("50.00"),
         first_rent_due_date=now - timedelta(days=5),
@@ -332,6 +334,7 @@ def test_overdue_rent_payment_with_timestamp_drift_restores_privileges(client):
     rent_settings = RentSettings(
         teacher_id=teacher.id,
         block="A",
+        join_code=join_code,
         is_enabled=True,
         rent_amount=Decimal("50.00"),
         first_rent_due_date=now - timedelta(days=5),

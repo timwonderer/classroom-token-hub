@@ -764,8 +764,14 @@ def delete_admin(admin_id):
     This is a permanent action that cascades to all student data.
     """
     admin = db.get_or_404(Admin, admin_id)
+    from app.models import ClassEconomy
 
     try:
+        # CRITICAL FIX: Delete ClassEconomy records FIRST to cascade delete transactions/logs/blocks
+        # This properly cleans up class-scoped data that survives Admin deletion due to SET NULL on created_by
+        # This acts on ALL classes owned by this admin, for both exclusive and shared students.
+        ClassEconomy.query.filter_by(created_by_admin_id=admin.id).delete(synchronize_session=False)
+
         # SECURITY FIX: Only use StudentTeacher table, NOT deprecated teacher_id
         # Get all students linked to this teacher via StudentTeacher table
         linked_student_ids = [
@@ -1067,14 +1073,20 @@ def delete_period(admin_id, period):
             # New architecture: Delete by join_code
             # This will cascade delete all associated data via FK constraints
 
+            # New architecture: Delete by join_code
+            # This will cascade delete all associated data via FK constraints
+
             # Get students in this class (by join_code)
-            from app.models import StudentBlock
+            from app.models import StudentBlock, ClassEconomy
             student_blocks = StudentBlock.query.filter_by(join_code=join_code).all()
             removed_count = len(student_blocks)
 
-            # Delete the TeacherBlock - this cascades to related data
+            # CRITICAL: Delete ClassEconomy - this triggers cascades for TeacherBlock, StudentBlock, Transactions, HallPassLog
+            ClassEconomy.query.filter_by(join_code=join_code).delete()
+            
+            # Manually delete TeacherBlock if it still exists (redundant if cascade works, but safe)
             if teacher_block:
-                db.session.delete(teacher_block)
+                TeacherBlock.query.filter_by(id=teacher_block.id).delete()
 
         else:
             # Legacy fallback: Delete by period string
@@ -1159,6 +1171,11 @@ def delete_teacher(admin_id):
         return redirect(url_for('sysadmin.teacher_overview'))
 
     try:
+        from app.models import ClassEconomy
+        
+        # CRITICAL FIX: Delete ClassEconomy records FIRST to cascade delete transactions/logs/blocks
+        ClassEconomy.query.filter_by(created_by_admin_id=admin.id).delete(synchronize_session=False)
+
         # Get all students linked to this teacher via StudentTeacher table
         affected_students = (
             db.session.query(Student)

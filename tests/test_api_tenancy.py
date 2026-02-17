@@ -8,7 +8,7 @@ import pyotp
 from datetime import datetime, timezone
 
 from app import app, db
-from app.models import Admin, Student, StudentTeacher, TapEvent
+from app.models import Admin, Student, StudentTeacher, TapEvent, ClassEconomy, ClassMembership
 from app.hash_utils import get_random_salt, hash_username
 
 
@@ -68,17 +68,51 @@ def _login_admin(client, admin: Admin, secret: str):
     return response
 
 
-def _create_tap_event(student: Student, status: str = "active"):
+def _create_tap_event(student: Student, status: str = "active", join_code: str = None):
     """Create a tap event for testing."""
     tap = TapEvent(
         student_id=student.id,
         period="1",
         status=status,
-        timestamp=datetime.now(timezone.utc)
+        timestamp=datetime.now(timezone.utc),
+        join_code=join_code
     )
     db.session.add(tap)
     db.session.commit()
     return tap
+
+
+def _setup_class_context(teacher_id: int, join_code: str, student_ids: list[int] = None):
+    """Create ClassEconomy and ClassMembership for testing strict scoping."""
+    # Ensure ClassEconomy exists
+    if not ClassEconomy.query.get(join_code):
+        db.session.add(ClassEconomy(
+            join_code=join_code,
+            status="active",
+            created_by_admin_id=teacher_id
+        ))
+    
+    # Ensure Teacher Membership
+    if not ClassMembership.query.filter_by(join_code=join_code, admin_id=teacher_id).first():
+        db.session.add(ClassMembership(
+            join_code=join_code,
+            admin_id=teacher_id,
+            role="admin",
+            status="active"
+        ))
+    
+    # Ensure Student Memberships
+    if student_ids:
+        for sid in student_ids:
+            if not ClassMembership.query.filter_by(join_code=join_code, student_id=sid).first():
+                db.session.add(ClassMembership(
+                    join_code=join_code,
+                    student_id=sid,
+                    role="student",
+                    status="active"
+                ))
+    
+    db.session.commit()
 
 
 def test_attendance_history_api_scoped_to_teacher(client):
@@ -89,10 +123,14 @@ def test_attendance_history_api_scoped_to_teacher(client):
     # Create students for each teacher
     student_a = _create_student("StudentA", primary_teacher=teacher_a)
     student_b = _create_student("StudentB", primary_teacher=teacher_b)
+
+    # Setup class context
+    _setup_class_context(teacher_a.id, "CLASSA", [student_a.id])
+    _setup_class_context(teacher_b.id, "CLASSB", [student_b.id])
     
     # Create tap events for both students
-    tap_a = _create_tap_event(student_a, status="active")
-    tap_b = _create_tap_event(student_b, status="active")
+    tap_a = _create_tap_event(student_a, status="active", join_code="CLASSA")
+    tap_b = _create_tap_event(student_b, status="active", join_code="CLASSB")
     
     # Login as teacher A
     _login_admin(client, teacher_a, secret_a)
@@ -121,11 +159,20 @@ def test_attendance_history_api_includes_shared_students(client):
     # Create exclusive students
     exclusive_a = _create_student("ExclusiveA", primary_teacher=teacher_a)
     exclusive_b = _create_student("ExclusiveB", primary_teacher=teacher_b)
+
+    # Setup class context
+    # Teacher A has CLASSA (with shared + exclusive A)
+    # Teacher B has CLASSB (with shared + exclusive B)
+    _setup_class_context(teacher_a.id, "CLASSA", [shared_student.id, exclusive_a.id])
+    _setup_class_context(teacher_b.id, "CLASSB", [shared_student.id, exclusive_b.id])
     
     # Create tap events
-    tap_shared = _create_tap_event(shared_student)
-    tap_a = _create_tap_event(exclusive_a)
-    tap_b = _create_tap_event(exclusive_b)
+    # Shared student taps in CLASSA
+    tap_shared = _create_tap_event(shared_student, join_code="CLASSA")
+    # Exclusive A taps in CLASSA
+    tap_a = _create_tap_event(exclusive_a, join_code="CLASSA")
+    # Exclusive B taps in CLASSB
+    tap_b = _create_tap_event(exclusive_b, join_code="CLASSB")
     
     # Login as teacher A
     _login_admin(client, teacher_a, secret_a)
@@ -136,7 +183,7 @@ def test_attendance_history_api_includes_shared_students(client):
     assert response.status_code == 200
     data = response.get_json()
     
-    # Should see shared student and exclusive A, but not exclusive B
+    # Should see shared student (in CLASSA context) and exclusive A
     record_ids = [r["id"] for r in data["records"]]
     assert tap_shared.id in record_ids
     assert tap_a.id in record_ids
@@ -156,11 +203,18 @@ def test_attendance_history_api_filters_work_with_scoping(client):
     student_b = _create_student("StudentB", primary_teacher=teacher_b)
     student_b.block = "Period1"
     db.session.commit()
+
+    # Setup class context
+    # Teacher A has CLASS_A1 (Period1), CLASS_A2 (Period2)
+    # Teacher B has CLASS_B1 (Period1)
+    _setup_class_context(teacher_a.id, "CLASS_A1", [student_a1.id])
+    _setup_class_context(teacher_a.id, "CLASS_A2", [student_a2.id])
+    _setup_class_context(teacher_b.id, "CLASS_B1", [student_b.id])
     
     # Create tap events
-    tap_a1 = TapEvent(student_id=student_a1.id, period="1", status="active", timestamp=datetime.now(timezone.utc))
-    tap_a2 = TapEvent(student_id=student_a2.id, period="2", status="active", timestamp=datetime.now(timezone.utc))
-    tap_b = TapEvent(student_id=student_b.id, period="1", status="active", timestamp=datetime.now(timezone.utc))
+    tap_a1 = TapEvent(student_id=student_a1.id, period="1", status="active", timestamp=datetime.now(timezone.utc), join_code="CLASS_A1")
+    tap_a2 = TapEvent(student_id=student_a2.id, period="2", status="active", timestamp=datetime.now(timezone.utc), join_code="CLASS_A2")
+    tap_b = TapEvent(student_id=student_b.id, period="1", status="active", timestamp=datetime.now(timezone.utc), join_code="CLASS_B1")
     db.session.add_all([tap_a1, tap_a2, tap_b])
     db.session.commit()
     

@@ -69,6 +69,32 @@ def test_delete_join_code_requires_membership_even_if_teacherblock_exists(client
     assert db.session.get(ClassEconomy, "DELG001") is not None
 
 
+def test_delete_join_code_requires_confirmation(client):
+    admin = Admin(username="confirm_admin", totp_secret="secret")
+    db.session.add(admin)
+    db.session.flush()
+
+    db.session.add(ClassEconomy(join_code="CONF001", status="active", created_by_admin_id=admin.id))
+    db.session.add(ClassMembership(join_code="CONF001", admin_id=admin.id, role="admin", status="active"))
+    db.session.commit()
+
+    _login_admin(client, admin.id)
+
+    # 1. Missing confirmation -> 400
+    response = client.post("/admin/join-code/delete", json={"join_code": "CONF001"})
+    assert response.status_code == 400
+    assert b"Confirmation failed" in response.data
+
+    # 2. Wrong confirmation -> 400
+    response = client.post("/admin/join-code/delete", json={"join_code": "CONF001", "confirm_join_code": "WRONG"})
+    assert response.status_code == 400
+
+    # 3. Correct confirmation -> 200
+    response = client.post("/admin/join-code/delete", json={"join_code": "CONF001", "confirm_join_code": "CONF001"})
+    assert response.status_code == 200
+    assert db.session.get(ClassEconomy, "CONF001") is None
+
+
 def test_issues_queue_respects_current_join_code_membership_scope(client):
     admin = Admin(username="issues_gate_admin", totp_secret="secret")
     db.session.add(admin)

@@ -253,8 +253,10 @@ def purchase_item():
     teacher_id = context['teacher_id']
     membership_id = context.get('membership_id')
 
-    # CRITICAL: Use join_code as the sole filter for class isolation.
-    item = StoreItem.query.filter_by(id=item_id, join_code=join_code).first()
+    # CRITICAL: Use teacher_id and handle visibility blocks.
+    # StoreItem is usually teacher-scoped, not join-code scoped (unless explicitly set).
+    # We filter by teacher_id from context to ensure the item belongs to the class's admin.
+    item = StoreItem.query.filter_by(id=item_id, teacher_id=teacher_id).first()
 
     if not item or not item.is_active:
         return jsonify({"status": "error", "message": "This item is not available."}), 404
@@ -837,11 +839,13 @@ def use_item():
 
     # Get context up front for audit snapshots and transaction scoping.
     context = get_current_class_context()
-    teacher_id_for_audit = (
-        context['teacher_id'] if context else
-        (student_item.store_item.teacher_id if student_item.store_item else None)
-    )
-    fallback_block = context.get('block') if context else student.block
+
+    # CRITICAL: Verify the student is currently enrolled in the class this item belongs to.
+    if not context or context.get('join_code') != student_item.join_code:
+        return jsonify({"status": "error", "message": "You are not an active member of the class this item belongs to."}), 403
+
+    teacher_id_for_audit = context['teacher_id']
+    fallback_block = context.get('block')
 
     # Request action happens when item transitions into admin approval workflow.
     will_create_request = (
@@ -954,10 +958,18 @@ def approve_redemption():
     if not student_item or student_item.status != 'processing':
         return jsonify({"status": "error", "message": "Invalid or already processed item."}), 404
 
-    # SECURITY: Verify the current admin owns the store item
-    current_admin = get_current_admin()
-    if not current_admin or student_item.store_item.teacher_id != current_admin.id:
-        return jsonify({"status": "error", "message": "Unauthorized."}), 403
+    # SECURITY FIX v2: Verify admin membership scope for this class
+    # Old logic: if not current_admin or student_item.store_item.teacher_id != current_admin.id:
+    is_allowed, membership, economy, error = check_membership_access(
+        student_item.join_code, 
+        allowed_roles=['admin']
+    )
+    
+    if not is_allowed:
+        return jsonify({"status": "error", "message": error or "Unauthorized access to this class."}), 403
+
+    current_admin = get_current_admin()  # Still need the object for logging
+
 
     try:
         audit_guard = {'inserted': False}
@@ -984,6 +996,8 @@ def approve_redemption():
 
         if redemption_tx:
             redemption_tx.description = f"Redeemed: {student_item.store_item.name}"
+            # CRITICAL: Link audit trail to the approving admin's membership
+            redemption_tx.actor_membership_id = membership.id if membership else None
 
         db.session.commit()
         return jsonify({"status": "success", "message": "Redemption approved."})
@@ -1006,10 +1020,55 @@ def reject_redemption():
     if not student_item or student_item.status != 'processing':
         return jsonify({"status": "error", "message": "Invalid or already processed item."}), 404
 
-    # SECURITY: Verify the current admin owns the store item
+    # SECURITY FIX v2: Verify admin membership scope for this class
+    # CRITICAL FIX: Resolve join_code BEFORE checking access if missing (legacy items)
+    target_join_code = student_item.join_code
+    
+    if not target_join_code:
+        # Try to resolve via purchase transaction
+        purchase_tx = Transaction.query.filter_by(
+            student_id=student_item.student_id,
+            teacher_id=student_item.store_item.teacher_id,
+            type='purchase'
+        ).filter(
+            Transaction.description.like(f"Purchase: {student_item.store_item.name}%")
+        ).order_by(Transaction.timestamp.desc()).first()
+        
+        if purchase_tx and purchase_tx.join_code:
+            target_join_code = purchase_tx.join_code
+            
+    if not target_join_code:
+         # Fallback: check if student has a block with this teacher
+         # This is less precise but necessary for legacy data
+         # We check if the admin has membership in ANY class the student is in
+         from app.models import ClassMembership
+         student_memberships = ClassMembership.query.filter_by(
+             student_id=student_item.student_id,
+             status='active'
+         ).all()
+         
+         # Find intersection with current admin's classes
+         current_admin = get_current_admin()
+         for sm in student_memberships:
+             admin_membership = ClassMembership.query.filter_by(
+                 join_code=sm.join_code,
+                 admin_id=current_admin.id,
+                 role='admin',
+                 status='active'
+             ).first()
+             if admin_membership:
+                 target_join_code = sm.join_code
+                 break
+
+    is_allowed, membership, economy, error = check_membership_access(
+        target_join_code, 
+        allowed_roles=['admin']
+    )
+
+    if not is_allowed:
+        return jsonify({"status": "error", "message": error or "Unauthorized access to this class."}), 403
+    
     current_admin = get_current_admin()
-    if not current_admin or student_item.store_item.teacher_id != current_admin.id:
-        return jsonify({"status": "error", "message": "Unauthorized."}), 403
 
     try:
         audit_guard = {'inserted': False}
@@ -1113,7 +1172,9 @@ def reject_redemption():
             account_type='checking',
             type='refund',
             original_transaction_id=purchase_tx.id if purchase_tx else None,
-            description=f"Refund: {student_item.store_item.name} (Redemption Rejected)"
+            description=f"Refund: {student_item.store_item.name} (Redemption Rejected)",
+            # CRITICAL: Link audit trail to the rejecting admin's membership
+            actor_membership_id=membership.id if membership else None
         )
         db.session.add(refund_tx)
         if purchase_tx:
@@ -1708,7 +1769,7 @@ def get_hall_pass_queue():
             "message": "join_code parameter required for queue display"
         }), 400
 
-    is_allowed, _, economy, error = check_membership_access(
+    is_allowed, membership, economy, error = check_membership_access(
         join_code, allowed_roles=['admin', 'observer']
     )
     if not is_allowed:
@@ -1733,11 +1794,11 @@ def get_hall_pass_queue():
     base_query = HallPassLog.query.filter_by(join_code=join_code)
     queue_logs = base_query.filter(
         HallPassLog.status.in_(['approved', 'pending']),
-        HallPassLog.created_at >= today_start_utc
-    ).order_by(HallPassLog.created_at).all()
+        HallPassLog.request_time >= today_start_utc
+    ).order_by(HallPassLog.request_time).all()
     currently_out_count = base_query.filter(
         HallPassLog.status == 'left',
-        HallPassLog.created_at >= today_start_utc
+        HallPassLog.request_time >= today_start_utc
     ).count()
 
     # Response payload includes both legacy and new key names
@@ -1852,6 +1913,23 @@ def hall_pass_history():
             HallPassLog.query
             .filter(HallPassLog.student_id.in_(sa.select(student_ids_subquery)))
         )
+
+        # CRITICAL FIX v2: Scope to specific join_code or all admin's join_codes
+        # prevent leaking data from other classes the student is in
+        join_code = request.args.get('join_code')
+        if join_code:
+            is_allowed, _, _, error = check_membership_access(join_code, allowed_roles=['admin'])
+            if not is_allowed:
+                return jsonify({"status": "error", "message": error}), 403
+            query = query.filter(HallPassLog.join_code == join_code)
+        else:
+            # Fallback: Filter by all join codes this admin owns/administers
+            admin_join_codes = db.session.query(ClassMembership.join_code).filter(
+                ClassMembership.admin_id == session.get('admin_id'),
+                ClassMembership.role == 'admin',
+                ClassMembership.status == 'active'
+            ).subquery()
+            query = query.filter(HallPassLog.join_code.in_(sa.select(admin_join_codes)))
 
         # Apply filters
         if period:
@@ -2107,6 +2185,22 @@ def attendance_history():
             TapEvent.student_id.in_(accessible_student_ids_query),
             TapEvent.is_deleted.is_(False)
         )
+
+        # CRITICAL FIX v2: Scope to specific join_code or all admin's join_codes
+        join_code = request.args.get('join_code')
+        if join_code:
+            is_allowed, _, _, error = check_membership_access(join_code, allowed_roles=['admin'])
+            if not is_allowed:
+                return jsonify({"status": "error", "message": error}), 403
+            query = query.filter(TapEvent.join_code == join_code)
+        else:
+            # Fallback: Filter by all join codes this admin owns/administers
+            admin_join_codes = db.session.query(ClassMembership.join_code).filter(
+                ClassMembership.admin_id == session.get('admin_id'),
+                ClassMembership.role == 'admin',
+                ClassMembership.status == 'active'
+            ).subquery()
+            query = query.filter(TapEvent.join_code.in_(sa.select(admin_join_codes)))
 
         # Apply filters
         if period:

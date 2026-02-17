@@ -1,7 +1,7 @@
 import pytest
 import re
 from decimal import Decimal
-from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher
+from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher, ClassEconomy, ClassMembership
 from app.extensions import db
 from datetime import datetime, timezone
 
@@ -36,6 +36,12 @@ def student_in_class(client, teacher_admin):
         first_name='Test', last_initial='S', last_name_hash_by_part=[], dob_sum=0, salt=b'salt', first_half_hash='hash'
     )
     db.session.add(seat)
+    db.session.add(seat)
+    
+    # Setup Class Context
+    db.session.add(ClassEconomy(join_code='JOINCODE123', status="active", created_by_admin_id=teacher_admin.id))
+    db.session.add(ClassMembership(join_code='JOINCODE123', admin_id=teacher_admin.id, role="admin", status="active"))
+    db.session.add(ClassMembership(join_code='JOINCODE123', student_id=student.id, role="student", status="active"))
     db.session.commit()
     db.session.refresh(student)
     return student
@@ -775,6 +781,7 @@ def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -922,6 +929,7 @@ def test_shop_displays_rent_perk_price_as_free_when_rent_paid_without_grant_row(
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',

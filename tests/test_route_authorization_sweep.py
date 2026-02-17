@@ -1,0 +1,193 @@
+
+from datetime import datetime, timezone, timedelta
+import pytest
+from app.extensions import db
+from app.models import Admin, ClassEconomy, ClassMembership, Student, Transaction, TransactionStatus, StoreItem, StudentItem, IssueCategory, Issue
+
+def _login_admin(client, admin_id):
+    with client.session_transaction() as sess:
+        sess["admin_id"] = admin_id
+        sess["is_admin"] = True
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+def _login_student(client, student_id):
+    with client.session_transaction() as sess:
+        sess["student_id"] = student_id
+        sess["login_time"] = datetime.now(timezone.utc).isoformat()
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+def test_hall_pass_active_requires_join_code(client):
+    """Test that active hall pass endpoint requires join_code and membership."""
+    admin = Admin(username="hall_pass_admin", totp_secret="secret")
+    db.session.add(admin)
+    db.session.flush()
+
+    db.session.add(ClassEconomy(join_code="HPASS01", status="active", created_by_admin_id=admin.id))
+    db.session.add(ClassMembership(join_code="HPASS01", admin_id=admin.id, role="admin", status="active"))
+    db.session.commit()
+
+    _login_admin(client, admin.id)
+
+    # 1. Missing join_code -> 400
+    response = client.get("/api/hall-pass/verification/active")
+    assert response.status_code == 400
+    assert b"join_code is required" in response.data
+
+    # 2. Invalid join_code -> 404 (or 403 depending on implementation, likely 403 from check_membership_access)
+    # Actually check_membership_access returns error string and False, caller returns 403 or 404
+    response = client.get("/api/hall-pass/verification/active?join_code=INVALID")
+    assert response.status_code in [403, 404]
+
+    # 3. Valid join_code -> 200
+    response = client.get("/api/hall-pass/verification/active?join_code=HPASS01")
+    assert response.status_code == 200
+
+def test_approve_redemption_requires_membership(client):
+    """Test that redemption approval requires admin membership in the class."""
+    admin_owner = Admin(username="owner_admin", totp_secret="secret")
+    admin_intruder = Admin(username="intruder_admin", totp_secret="secret")
+    db.session.add_all([admin_owner, admin_intruder])
+    db.session.flush()
+
+    student = Student(first_name="Redeem", last_initial="S", block="A", salt=b"salt")
+    db.session.add(student)
+    db.session.flush()
+
+    db.session.add(ClassEconomy(join_code="REDEEM1", status="active", created_by_admin_id=admin_owner.id))
+    db.session.add(ClassMembership(join_code="REDEEM1", admin_id=admin_owner.id, role="admin", status="active"))
+    # Intruder has NO membership
+    
+    # Create Item and StudentItem
+    item = StoreItem(name="Prize", price=10, teacher_id=admin_owner.id, is_active=True)
+    db.session.add(item)
+    db.session.flush()
+    
+    student_item = StudentItem(
+        student_id=student.id,
+        store_item_id=item.id,
+        status="processing",
+        join_code="REDEEM1"
+    )
+    db.session.add(student_item)
+    db.session.commit()
+
+    # Intruder tries to approve
+    _login_admin(client, admin_intruder.id)
+    response = client.post("/api/approve-redemption", json={"student_item_id": student_item.id})
+    assert response.status_code == 403
+    assert b"You do not have access to this class" in response.data
+
+    # Owner tries to approve
+    _login_admin(client, admin_owner.id)
+    response = client.post("/api/approve-redemption", json={"student_item_id": student_item.id})
+    assert response.status_code == 200
+    assert b"success" in response.data
+
+def test_file_claim_scoped_to_class(client):
+    """Test that insurance claims are scoped to the class of the policy."""
+    # Setup: Admin with 2 classes, Student in both.
+    admin = Admin(username="claim_admin", totp_secret="secret")
+    db.session.add(admin)
+    db.session.flush()
+    
+    student = Student(first_name="Claimer", last_initial="S", block="A", salt=b"salt")
+    db.session.add(student)
+    db.session.flush()
+
+    # Class A and Class B
+    db.session.add_all([
+        ClassEconomy(join_code="CLAIM_A", status="active", created_by_admin_id=admin.id),
+        ClassEconomy(join_code="CLAIM_B", status="active", created_by_admin_id=admin.id),
+        ClassMembership(join_code="CLAIM_A", admin_id=admin.id, role="admin", status="active"),
+        ClassMembership(join_code="CLAIM_B", admin_id=admin.id, role="admin", status="active"),
+        ClassMembership(join_code="CLAIM_A", student_id=student.id, role="student", status="active"),
+        ClassMembership(join_code="CLAIM_B", student_id=student.id, role="student", status="active"),
+    ])
+    db.session.flush()
+
+    # Policy in Class A
+    from app.models import InsurancePolicy, StudentInsurance
+    policy_a = InsurancePolicy(
+        teacher_id=admin.id,
+        policy_code="POL-A-1",
+        tier_category_id=1,
+        tier_level=1,
+        title="Policy A",
+        premium=10,
+        # deductible=0,
+        # coverage_percent=100,
+        claim_type="transaction_monetary",
+        join_code="CLAIM_A",
+        is_active=True
+    )
+    db.session.add(policy_a)
+    db.session.flush()
+
+    enrollment = StudentInsurance(
+        policy_id=policy_a.id,
+        student_id=student.id,
+        status="active",
+        coverage_start_date=datetime.now(timezone.utc) - timedelta(days=1),
+        join_code="CLAIM_A"
+    )
+    db.session.add(enrollment)
+
+    # Transaction in Class B (should NOT be claimable under Policy A)
+    tx_b = Transaction(
+        student_id=student.id,
+        teacher_id=admin.id,
+        join_code="CLAIM_B",
+        amount=-50,
+        status=TransactionStatus.POSTED,
+        type="fine",
+        description="Fine in Class B",
+        timestamp=datetime.now(timezone.utc)
+    )
+    # Transaction in Class A (Valid)
+    tx_a = Transaction(
+        student_id=student.id,
+        teacher_id=admin.id,
+        join_code="CLAIM_A",
+        amount=-50,
+        status=TransactionStatus.POSTED,
+        type="fine",
+        description="Fine in Class A",
+        timestamp=datetime.now(timezone.utc)
+    )
+    db.session.add_all([tx_b, tx_a])
+    db.session.commit()
+
+    _login_student(client, student.id)
+    # Set class context so get_current_class_context() resolves correctly
+    with client.session_transaction() as sess:
+        sess["current_join_code"] = "CLAIM_A"
+    
+    # 1. Try to claim Class B transaction on Policy A
+    # The form submission takes transaction_id
+    response = client.post(
+        f"/student/insurance/claim/{policy_a.id}",
+        data={
+            "transaction_id": tx_b.id,
+            "claim_amount": 50,
+            "incident_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "description": "Claiming fine from Class B"
+        },
+        follow_redirects=True
+    )
+    # Should fail: cross-class transaction is filtered out by strict scoping,
+    # so form validation rejects it OR the route explicitly blocks it.
+    assert response.status_code == 200  # Re-renders form (no redirect to success)
+    assert b"Claim submitted successfully" not in response.data
+
+    # 2. Claim Class A transaction (valid, same class as policy)
+    response = client.post(
+        f"/student/insurance/claim/{policy_a.id}",
+        data={
+            "transaction_id": tx_a.id,
+            "claim_amount": 50,
+            "incident_date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "description": "Claiming fine from Class A"
+        },
+        follow_redirects=True
+    )
+    assert b"Claim submitted successfully" in response.data
