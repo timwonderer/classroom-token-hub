@@ -23,7 +23,7 @@ from dateutil.relativedelta import relativedelta
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, Transaction, TapEvent, StoreItem, StudentItem,
+    Student, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     RentSettings, RentPayment, InsurancePolicy, StudentInsurance, InsuranceClaim,
     BankingSettings, UserReport, FeatureSettings, Issue
 )
@@ -50,6 +50,10 @@ from app.utils.time import utc_now, ensure_utc, normalize_for_db
 
 # Create blueprint
 student_bp = Blueprint('student', __name__, url_prefix='/student')
+
+# Tolerance used to match RentPayment rows with their Transaction rows.
+# This guards against small timestamp drift without weakening ownership checks.
+RENT_PAYMENT_MATCH_TOLERANCE_SECONDS = 300
 
 # -------------------- DATETIME HELPERS --------------------
 
@@ -223,37 +227,102 @@ def is_feature_enabled(feature_name):
 
 
 def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: int) -> tuple[Decimal, Decimal]:
-    """Calculate checking and savings balances scoped to a specific class.
+    """Calculate checking and savings balances using the Ledger + Settlement model.
     
-    This function ensures consistent balance calculation across the application
-    by including transactions with matching join_code OR NULL join_code (legacy)
-    with matching teacher_id.
+    This function:
+    1. Triggers an eager settlement (if lock available) to ensure BalanceCache is up-to-date.
+    2. Reads the posted balance from BalanceCache (O(1)).
+    3. Adds any remaining pending transactions.
     
     Args:
-        student (Student): Student object whose balances to calculate
+        student (Student): Student object
         join_code (str): The join code for the current class context
-        teacher_id (int): The teacher ID for the current class context
+        teacher_id (int): The teacher ID (kept for signature compatibility)
     
     Returns:
-        tuple[Decimal, Decimal]: (checking_balance, savings_balance) as Decimal with 2 decimal places
+        tuple[Decimal, Decimal]: (checking_balance, savings_balance)
     """
-    from app.models import _quantize_currency
+    from app.models import BalanceCache, Transaction, TransactionStatus, _quantize_currency
+    from app.utils.banking import settle_balances
+    import logging
     
-    checking_balance = _quantize_currency(sum(
-        (tx.amount for tx in student.transactions
-        if tx.account_type == 'checking' and not tx.is_void and
-        (tx.join_code == join_code or (tx.join_code is None and tx.teacher_id == teacher_id))),
-        Decimal('0.00')
-    ))
-    
-    savings_balance = _quantize_currency(sum(
-        (tx.amount for tx in student.transactions
-        if tx.account_type == 'savings' and not tx.is_void and
-        (tx.join_code == join_code or (tx.join_code is None and tx.teacher_id == teacher_id))),
-        Decimal('0.00')
-    ))
-    
-    return checking_balance, savings_balance
+    logger = logging.getLogger(__name__)
+
+    # Default to 0.00
+    checking_balance = Decimal('0.00')
+    savings_balance = Decimal('0.00')
+
+    if not join_code:
+        # Fallback for legacy calls without join_code (should be rare/non-existent)
+        logger.warning(f"calculate_scoped_balances called without join_code for student {student.id}")
+        return checking_balance, savings_balance
+
+    # 1. Eager Settlement (Best Effort)
+    try:
+        settle_balances(student.id, join_code)
+    except Exception as e:
+        logger.warning(f"Eager settlement failed during read for student {student.id}: {e}")
+
+    # 2. Read Posted Balance from Cache
+    cache = BalanceCache.query.filter_by(student_id=student.id, join_code=join_code).first()
+    if cache:
+        checking_balance += Decimal(cache.posted_checking_balance_cents) / 100
+        savings_balance += Decimal(cache.posted_savings_balance_cents) / 100
+    else:
+        # Legacy fallback for contexts not yet represented in BalanceCache.
+        # Derive posted as (all non-void) - (pending) to avoid enum-label assumptions.
+        all_checking = db.session.query(func.sum(Transaction.amount)).filter(
+            Transaction.student_id == student.id,
+            Transaction.join_code == join_code,
+            Transaction.account_type == 'checking',
+            Transaction.is_void == False,
+        ).scalar() or Decimal('0.00')
+        pending_checking_fallback = db.session.query(func.sum(Transaction.amount)).filter(
+            Transaction.student_id == student.id,
+            Transaction.join_code == join_code,
+            Transaction.status == TransactionStatus.PENDING,
+            Transaction.account_type == 'checking',
+            Transaction.is_void == False,
+        ).scalar() or Decimal('0.00')
+        all_savings = db.session.query(func.sum(Transaction.amount)).filter(
+            Transaction.student_id == student.id,
+            Transaction.join_code == join_code,
+            Transaction.account_type == 'savings',
+            Transaction.is_void == False,
+        ).scalar() or Decimal('0.00')
+        pending_savings_fallback = db.session.query(func.sum(Transaction.amount)).filter(
+            Transaction.student_id == student.id,
+            Transaction.join_code == join_code,
+            Transaction.status == TransactionStatus.PENDING,
+            Transaction.account_type == 'savings',
+            Transaction.is_void == False,
+        ).scalar() or Decimal('0.00')
+        posted_checking = all_checking - pending_checking_fallback
+        posted_savings = all_savings - pending_savings_fallback
+        checking_balance += posted_checking
+        savings_balance += posted_savings
+
+    # 3. Add Pending Transactions (aggregate in DB to avoid loading all rows)
+    pending_checking = db.session.query(func.sum(Transaction.amount)).filter(
+        Transaction.student_id == student.id,
+        Transaction.join_code == join_code,
+        Transaction.status == TransactionStatus.PENDING,
+        Transaction.account_type == 'checking',
+        Transaction.is_void == False,
+    ).scalar() or Decimal('0.00')
+
+    pending_savings = db.session.query(func.sum(Transaction.amount)).filter(
+        Transaction.student_id == student.id,
+        Transaction.join_code == join_code,
+        Transaction.status == TransactionStatus.PENDING,
+        Transaction.account_type == 'savings',
+        Transaction.is_void == False,
+    ).scalar() or Decimal('0.00')
+
+    checking_balance += pending_checking
+    savings_balance += pending_savings
+
+    return _quantize_currency(checking_balance), _quantize_currency(savings_balance)
 
 
 # -------------------- LEGACY PROFILE MIGRATION --------------------
@@ -788,6 +857,11 @@ def setup_pin_passphrase():
         student.pin_hash = generate_password_hash(pin)
         student.passphrase_hash = generate_password_hash(passphrase)
         student.has_completed_setup = True
+        if student.recovery_status == 'to_be_claimed':
+            # Complete recovery only after credentials are successfully re-established.
+            student.reset_code = None
+            student.reset_code_expires_at = None
+            student.recovery_status = 'active'
         db.session.commit()
         # Clear session onboarding keys
         session.pop('claimed_student_id', None)
@@ -1158,7 +1232,7 @@ def dashboard():
                 RentPayment.period == period,
                 RentPayment.coverage_month == coverage_month,
                 RentPayment.coverage_year == coverage_year,
-                or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                RentPayment.join_code == join_code
             ).all()
 
             payments = []
@@ -1166,9 +1240,10 @@ def dashboard():
                 txn = Transaction.query.filter(
                     Transaction.student_id == student.id,
                     Transaction.type == 'Rent Payment',
-                    Transaction.timestamp >= payment.payment_date - timedelta(seconds=5),
-                    Transaction.timestamp <= payment.payment_date + timedelta(seconds=5),
-                    Transaction.amount == -payment.amount_paid
+                    Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+                    Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+                    Transaction.amount == -payment.amount_paid,
+                    Transaction.join_code == join_code
                 ).first()
 
                 if txn and not txn.is_void:
@@ -1510,6 +1585,7 @@ def transfer():
                 join_code=join_code,  # CRITICAL: Add join_code for period isolation
                 amount=-amount,
                 account_type=from_account,
+                status=TransactionStatus.PENDING,
                 type='Withdrawal',
                 description=f'Transfer to {to_account}'
             ))
@@ -1520,6 +1596,7 @@ def transfer():
                 join_code=join_code,  # CRITICAL: Add join_code for period isolation
                 amount=amount,
                 account_type=to_account,
+                status=TransactionStatus.PENDING,
                 type='Deposit',
                 description=f'Transfer from {from_account}'
             ))
@@ -1542,15 +1619,11 @@ def transfer():
             flash("Transfer completed successfully!", "transfer_success")
             return redirect(url_for('student.dashboard'))
 
-    # CRITICAL FIX v2: Get transactions for display - scope by join_code
-    # Include transactions with matching join_code OR NULL join_code (legacy) with matching teacher_id
+    # CRITICAL FIX v2: Get transactions for display - strict join_code scoping.
     transactions = Transaction.query.filter(
         Transaction.student_id == student.id,
         Transaction.is_void == False,
-        or_(
-            Transaction.join_code == join_code,
-            and_(Transaction.join_code.is_(None), Transaction.teacher_id == teacher_id)
-        )
+        Transaction.join_code == join_code
     ).order_by(Transaction.timestamp.desc()).all()
     checking_transactions = [t for t in transactions if t.account_type == 'checking']
     savings_transactions = [t for t in transactions if t.account_type == 'savings']
@@ -1720,6 +1793,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
                 join_code=context['join_code'],  # CRITICAL: Add join_code for period isolation
                 amount=interest,
                 account_type='savings',
+                status=TransactionStatus.PENDING,
                 type='Interest',
                 description="Monthly Savings Interest"
             )
@@ -1972,6 +2046,7 @@ def purchase_insurance(policy_id):
         join_code=join_code,  # CRITICAL: Add join_code for period isolation
         amount=-policy.premium,
         account_type='checking',
+        status=TransactionStatus.PENDING,
         type='insurance_premium',
         description=f"Insurance premium: {policy.title}"
     )
@@ -1985,6 +2060,7 @@ def purchase_insurance(policy_id):
             join_code=join_code,
             amount=-overdraft_shortfall,
             account_type='savings',
+            status=TransactionStatus.PENDING,
             type='Withdrawal',
             description='Overdraft protection transfer to checking'
         )
@@ -1994,6 +2070,7 @@ def purchase_insurance(policy_id):
             join_code=join_code,
             amount=overdraft_shortfall,
             account_type='checking',
+            status=TransactionStatus.PENDING,
             type='Deposit',
             description='Overdraft protection transfer from savings'
         )
@@ -2052,12 +2129,8 @@ def file_claim(policy_id):
 
     def _get_period_bounds():
         now = utc_now()
-        if policy.max_claims_period == 'year':
-            return (
-                now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
-                now.replace(month=12, day=31, hour=23, minute=59, second=59),
-            )
-        if policy.max_claims_period == 'semester':
+        period_key = (policy.charge_frequency or '').lower()
+        if period_key == 'semester':
             if now.month <= 6:
                 return (
                     now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
@@ -2067,6 +2140,10 @@ def file_claim(policy_id):
                 now.replace(month=7, day=1, hour=0, minute=0, second=0, microsecond=0),
                 now.replace(month=12, day=31, hour=23, minute=59, second=59),
             )
+        if period_key == 'weekly':
+            period_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+            period_end = period_start + timedelta(days=7) - timedelta(seconds=1)
+            return period_start, period_end
         period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         next_month = period_start.replace(day=28) + timedelta(days=4)
         period_end = next_month.replace(day=1) - timedelta(seconds=1)
@@ -2098,7 +2175,7 @@ def file_claim(policy_id):
         ).count()
 
         if claims_count >= policy.max_claims_count:
-            errors.append(f"You have reached the maximum number of claims ({policy.max_claims_count}) for this {policy.max_claims_period}.")
+            errors.append(f"You have reached the maximum number of claims ({policy.max_claims_count}) for this {policy.charge_frequency}.")
 
     period_payouts = None
     remaining_period_cap = None
@@ -2325,6 +2402,8 @@ def shop():
     current_block = context.get('block')
     has_paid_rent = False
     per_period_rent_item_ids = set()
+    rent_item_type_by_store_id = {}
+    per_use_limit_by_store_id = {}
 
     if teacher_id and join_code and current_block:
         rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
@@ -2345,7 +2424,7 @@ def shop():
                     RentPayment.period == current_block,
                     RentPayment.coverage_month == coverage_month,
                     RentPayment.coverage_year == coverage_year,
-                    db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                    RentPayment.join_code == join_code
                 ).all()
 
                 valid_payments = _filter_valid_rent_payments(
@@ -2361,7 +2440,23 @@ def shop():
                     required = rent_settings.rent_amount + (rent_settings.late_fee if late_fee_applies else Decimal('0'))
                     has_paid_rent = total_paid >= required
 
-            # Get privilege-type per-period rent items (only these show "Included in your rent!")
+            rent_store_items = RentItem.query.filter(
+                RentItem.rent_setting_id == rent_settings.id,
+                RentItem.is_available_in_store == True,
+                RentItem.store_item_id.isnot(None),
+            ).all()
+            rent_item_type_by_store_id = {
+                rent_item.store_item_id: rent_item.rent_item_type
+                for rent_item in rent_store_items
+                if rent_item.store_item_id
+            }
+            per_use_limit_by_store_id = {
+                rent_item.store_item_id: (rent_item.use_limit if rent_item.use_limit else -1)
+                for rent_item in rent_store_items
+                if rent_item.store_item_id and rent_item.rent_item_type == 'per_use'
+            }
+
+            # Get privilege-type per-period rent items (only these are included/disabled).
             per_period_items = RentItem.query.filter_by(
                 rent_setting_id=rent_settings.id,
                 rent_item_type='privilege',
@@ -2374,6 +2469,7 @@ def shop():
     # Build free uses remaining map for rent-linked per-use items
     rent_free_uses = {}  # {store_item_id: uses_remaining or -1 for unlimited}
     if student:
+        now_utc = utc_now()
         rent_linked_items_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
             StudentItem.uses_remaining != None,
@@ -2383,32 +2479,88 @@ def shop():
             ),
             db.or_(
                 StudentItem.expiry_date.is_(None),
-                StudentItem.expiry_date > utc_now()
+                StudentItem.expiry_date > now_utc
             )
         )
-        if join_code:
-            rent_linked_items_query = rent_linked_items_query.filter(StudentItem.join_code == join_code)
-        else:
-            rent_linked_items_query = rent_linked_items_query.filter(StudentItem.join_code.is_(None))
+        rent_linked_items_query = rent_linked_items_query.filter(StudentItem.join_code == join_code)
 
         rent_linked_items = rent_linked_items_query.all()
         for si in rent_linked_items:
             if si.store_item_id:
                 rent_free_uses[si.store_item_id] = si.uses_remaining
 
-    # Calculate class size for collective goals (count claimed seats in this class)
+        # Backfill UI for paid-rent students who are entitled to per-use perks
+        # but are missing grant rows (legacy/edge-state). Do not override items
+        # that already have an explicit grant record (including exhausted = 0).
+        if has_paid_rent and per_use_limit_by_store_id:
+            existing_per_use_rows = StudentItem.query.filter(
+                StudentItem.student_id == student.id,
+                StudentItem.join_code == join_code,
+                StudentItem.store_item_id.in_(list(per_use_limit_by_store_id.keys())),
+                StudentItem.uses_remaining.isnot(None),
+                db.or_(
+                    StudentItem.expiry_date.is_(None),
+                    StudentItem.expiry_date > now_utc
+                )
+            ).all()
+            existing_per_use_ids = {row.store_item_id for row in existing_per_use_rows if row.store_item_id}
+
+            for store_item_id, granted_uses in per_use_limit_by_store_id.items():
+                if store_item_id not in existing_per_use_ids and store_item_id not in rent_free_uses:
+                    rent_free_uses[store_item_id] = granted_uses
+
+    # Calculate class size for collective goals (count unique students in this class)
     from app.models import TeacherBlock
     class_size = 0
     if join_code:
-        class_size = TeacherBlock.query.filter_by(
-            join_code=join_code,
-            is_claimed=True
-        ).count()
+        class_size = db.session.query(db.func.count(db.func.distinct(Student.id))).join(
+            TeacherBlock, TeacherBlock.student_id == Student.id
+        ).filter(
+            TeacherBlock.join_code == join_code,
+            TeacherBlock.is_claimed == True,
+        ).scalar() or 0
+
+    collective_progress = {}
+    collective_items = [item for item in items if item.item_type == 'collective']
+    collective_item_ids = [item.id for item in collective_items]
+    if collective_item_ids and join_code:
+        progress_rows = (
+            db.session.query(
+                StudentItem.store_item_id,
+                db.func.count(db.distinct(StudentItem.student_id)).label('student_count'),
+            )
+            .filter(
+                StudentItem.store_item_id.in_(collective_item_ids),
+                StudentItem.join_code == join_code,
+                StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
+            )
+            .group_by(StudentItem.store_item_id)
+            .all()
+        )
+        progress_counts = {row.store_item_id: int(row.student_count or 0) for row in progress_rows}
+
+        for item in collective_items:
+            if item.collective_goal_type == 'whole_class':
+                target = class_size
+            elif item.collective_goal_type == 'fixed':
+                target = int(item.collective_goal_target or 0)
+            else:
+                target = 0
+            count = progress_counts.get(item.id, 0)
+            collective_progress[item.id] = {
+                'count': count,
+                'target': target,
+                'remaining': max(0, target - count),
+                'percent': min(100, int((count / target) * 100)) if target > 0 else 0,
+                'is_complete': bool(target > 0 and count >= target),
+            }
 
     return render_template('student_shop.html', student=student, items=items, student_items=student_items,
                          has_paid_rent=has_paid_rent, per_period_rent_item_ids=per_period_rent_item_ids,
+                         rent_item_type_by_store_id=rent_item_type_by_store_id,
                          rent_free_uses=rent_free_uses,
-                         class_size=class_size, current_block=current_block)
+                         class_size=class_size, current_block=current_block,
+                         collective_progress=collective_progress)
 
 
 # -------------------- RENT --------------------
@@ -2563,8 +2715,8 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
 
     min_payment_date = min(payment_dates)
     max_payment_date = max(payment_dates)
-    window_start = min_payment_date - timedelta(seconds=5)
-    window_end = max_payment_date + timedelta(seconds=5)
+    window_start = min_payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS)
+    window_end = max_payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS)
 
     payment_amounts = {-(p.amount_paid) for p in payments}
 
@@ -2575,10 +2727,9 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
         Transaction.timestamp <= window_end,
         Transaction.amount.in_(payment_amounts)
     )
-    if join_code:
-        txn_query = txn_query.filter(Transaction.join_code == join_code)
-    else:
-        txn_query = txn_query.filter(Transaction.join_code.is_(None))
+    if not join_code:
+        return []
+    txn_query = txn_query.filter(Transaction.join_code == join_code)
 
     candidate_txns = txn_query.all()
     txns_by_amount = {}
@@ -2594,7 +2745,7 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
                 continue
             if not txn.timestamp or not payment.payment_date:
                 continue
-            if abs((ensure_utc(txn.timestamp) - ensure_utc(payment.payment_date)).total_seconds()) > 5:
+            if abs((ensure_utc(txn.timestamp) - ensure_utc(payment.payment_date)).total_seconds()) > RENT_PAYMENT_MATCH_TOLERANCE_SECONDS:
                 continue
             used_txn_ids.add(txn.id)
             valid_payments.append(payment)
@@ -2706,7 +2857,7 @@ def rent():
             RentPayment.period == current_block,
             RentPayment.coverage_month == coverage_due_date.month,
             RentPayment.coverage_year == coverage_due_date.year,
-            or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
+            RentPayment.join_code == join_code,
         ).all()
 
         valid_payments = _filter_valid_rent_payments(
@@ -2747,7 +2898,7 @@ def rent():
         RentPayment.period == current_block,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
-        or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
+        RentPayment.join_code == join_code,
     ).all()
 
     # Filter out payments where the corresponding transaction was voided
@@ -2756,9 +2907,9 @@ def rent():
         txn = Transaction.query.filter(
             Transaction.student_id == student.id,
             Transaction.type == 'Rent Payment',
-            or_(Transaction.join_code == join_code, Transaction.join_code.is_(None)),
-            Transaction.timestamp >= payment.payment_date - timedelta(seconds=5),
-            Transaction.timestamp <= payment.payment_date + timedelta(seconds=5),
+            Transaction.join_code == join_code,
+            Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+            Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
             Transaction.amount == -payment.amount_paid
         ).first()
 
@@ -2796,7 +2947,7 @@ def rent():
     # Get payment history for the current class only
     payment_history = RentPayment.query.filter(
         RentPayment.student_id == student.id,
-        or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
+        RentPayment.join_code == join_code,
     ).order_by(
         RentPayment.payment_date.desc()
     ).limit(24).all()  # Increased to show more history with multiple periods
@@ -2901,7 +3052,7 @@ def rent_pay(period):
             RentPayment.period == period,
             RentPayment.coverage_month == coverage_due_date.month,
             RentPayment.coverage_year == coverage_due_date.year,
-            or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
+            RentPayment.join_code == join_code,
         ).all()
 
         valid_payments = _filter_valid_rent_payments(
@@ -2941,7 +3092,7 @@ def rent_pay(period):
         RentPayment.period == period,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
-        or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)),
+        RentPayment.join_code == join_code,
     ).all()
 
     # Filter out payments where the corresponding transaction was voided
@@ -2951,9 +3102,9 @@ def rent_pay(period):
         txn = Transaction.query.filter(
             Transaction.student_id == student.id,
             Transaction.type == 'Rent Payment',
-            or_(Transaction.join_code == join_code, Transaction.join_code.is_(None)),
-            Transaction.timestamp >= payment.payment_date - timedelta(seconds=5),
-            Transaction.timestamp <= payment.payment_date + timedelta(seconds=5),
+            Transaction.join_code == join_code,
+            Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
+            Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
             Transaction.amount == -payment.amount_paid
         ).first()
 
@@ -3065,6 +3216,7 @@ def rent_pay(period):
         join_code=join_code,  # CRITICAL: Add join_code for period isolation
         amount=-payment_amount,
         account_type='checking',
+        status=TransactionStatus.PENDING,
         type='Rent Payment',
         description=payment_description
     )
@@ -3105,6 +3257,7 @@ def rent_pay(period):
             join_code=join_code,  # CRITICAL: Add join_code for period isolation
             amount=-overdraft_shortfall,
             account_type='savings',
+            status=TransactionStatus.PENDING,
             type='Withdrawal',
             description='Overdraft protection transfer to checking'
         )
@@ -3114,6 +3267,7 @@ def rent_pay(period):
             join_code=join_code,  # CRITICAL: Add join_code for period isolation
             amount=overdraft_shortfall,
             account_type='checking',
+            status=TransactionStatus.PENDING,
             type='Deposit',
             description='Overdraft protection transfer from savings'
         )
@@ -3187,7 +3341,7 @@ def rent_pay(period):
                     StudentItem.uses_remaining > 0,
                     StudentItem.uses_remaining == -1
                 ),
-                StudentItem.join_code == join_code if join_code else StudentItem.join_code.is_(None),
+                StudentItem.join_code == join_code,
                 db.or_(
                     StudentItem.expiry_date.is_(None),
                     StudentItem.expiry_date > utc_now()
@@ -3302,6 +3456,12 @@ def login():
                 if is_json:
                     return jsonify(status="error", message="Invalid credentials"), 401
                 flash("Invalid credentials", "error")
+                return redirect(url_for('student.login', next=request.args.get('next')))
+
+            if not student.is_active:
+                if is_json:
+                    return jsonify(status="error", message="Account is inactive. Contact your teacher."), 403
+                flash("Your account is inactive. Contact your teacher.", "error")
                 return redirect(url_for('student.login', next=request.args.get('next')))
 
             if not student.username_lookup_hash:

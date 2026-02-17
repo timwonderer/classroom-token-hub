@@ -230,6 +230,16 @@ def login_required(f):
             return redirect(f"{url_for('student.login')}?next={encoded_next}")  # nosec # Safe: validated by _get_safe_next_path()
 
         # Continue to update last_activity for other potential uses, but it no longer controls the timeout
+        student = get_logged_in_student()
+        if not student:
+            session.pop('student_id', None)
+            session.pop('login_time', None)
+            session.pop('last_activity', None)
+            if request.path.startswith('/api/'):
+                return jsonify({"status": "error", "error": "Account is inactive. Contact your teacher."}), 403
+            flash("Your account is inactive. Contact your teacher.", "error")
+            return redirect(url_for('student.login'))
+
         session['last_activity'] = utc_now().isoformat()
         return f(*args, **kwargs)
     return decorated_function
@@ -315,7 +325,12 @@ def get_logged_in_student():
     """
     # Import here to avoid circular imports
     from app.models import Student
-    return db.session.get(Student, session['student_id']) if 'student_id' in session else None
+    if 'student_id' not in session:
+        return None
+    student = db.session.get(Student, session['student_id'])
+    if not student or not getattr(student, "is_active", True):
+        return None
+    return student
 
 
 def get_current_admin():
@@ -370,7 +385,10 @@ def get_admin_student_query(include_unassigned=True):
 
     if session.get("is_system_admin"):
         demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
-        return Student.query.filter(~Student.id.in_(sa.select(demo_ids_subq)))
+        return Student.query.filter(
+            Student.is_active.is_(True),
+            ~Student.id.in_(sa.select(demo_ids_subq))
+        )
 
     admin = get_current_admin()
     if not admin:
@@ -389,6 +407,7 @@ def get_admin_student_query(include_unassigned=True):
     # This caused multi-tenancy leaks when teacher_id had stale data
     demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
     return Student.query.filter(
+        Student.is_active.is_(True),
         Student.id.in_(sa.select(shared_student_ids)),
         ~Student.id.in_(sa.select(demo_ids_subq))
     )

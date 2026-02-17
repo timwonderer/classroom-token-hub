@@ -10,6 +10,7 @@ import string
 import re
 import pytz
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 
 from flask import Blueprint, request, jsonify, session, current_app
@@ -20,7 +21,7 @@ from werkzeug.security import check_password_hash
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, StoreItem, StudentItem, Transaction, TapEvent,
+    Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
     HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
     StudentTeacher, TeacherBlock, StudentBlock, DemoStudent,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource
@@ -253,15 +254,57 @@ def purchase_item():
     if not item or not item.is_active:
         return jsonify({"status": "error", "message": "This item is not available."}), 404
 
+    # For collective items with whole_class goal, enforce one purchase per student per class
+    if item.item_type == 'collective' and item.collective_goal_type == 'whole_class':
+        existing_purchase = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.store_item_id == item.id,
+            StudentItem.join_code == join_code,
+            StudentItem.status.notin_(['voided', 'rejected'])
+        ).first()
+        if existing_purchase:
+            return jsonify({"status": "error", "message": "You have already purchased this whole class goal item."}), 400
+
     # Check rent late restrictions
     from app.models import RentSettings, RentPayment, RentItem
     from datetime import datetime, timedelta
 
     rent_settings = get_rent_settings_for_context(context)
+    current_block = context.get('block', '').strip().upper()
+    now = utc_now()
+    has_paid_rent = False
+    per_use_rent_item = None
+
+    if rent_settings and rent_settings.is_enabled:
+        from app.routes.student import _calculate_rent_coverage_due_date
+        coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
+        if coverage_due_date:
+            coverage_month = coverage_due_date.month
+            coverage_year = coverage_due_date.year
+            coverage_payments = RentPayment.query.filter(
+                RentPayment.student_id == student.id,
+                RentPayment.period == current_block,
+                RentPayment.coverage_month == coverage_month,
+                RentPayment.coverage_year == coverage_year,
+                RentPayment.join_code == join_code
+            ).all()
+            from app.routes.student import _filter_valid_rent_payments
+            valid_payments = _filter_valid_rent_payments(coverage_payments, student.id, join_code)
+            if valid_payments:
+                total_paid = sum(p.amount_paid for p in valid_payments)
+                grace_for_coverage = coverage_due_date + timedelta(days=rent_settings.grace_period_days)
+                late_fee_applies = now > grace_for_coverage
+                required = rent_settings.rent_amount + (rent_settings.late_fee if late_fee_applies else Decimal('0'))
+                has_paid_rent = total_paid >= required
+
+        per_use_rent_item = RentItem.query.filter(
+            RentItem.rent_setting_id == rent_settings.id,
+            RentItem.rent_item_type == 'per_use',
+            RentItem.store_item_id == item.id
+        ).first()
+
     if rent_settings and rent_settings.is_enabled and rent_settings.prevent_purchase_when_late:
         # Check if student is late on rent
-        now = utc_now()
-
         from app.routes.student import _calculate_rent_coverage_due_date
         coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
 
@@ -276,13 +319,12 @@ def purchase_item():
             # Check if past grace period
             if now > grace_end_date:
                 # Check if rent is paid for current coverage period
-                current_block = context.get('block', '').strip().upper()
                 total_paid = db.session.query(db.func.sum(RentPayment.amount_paid)).filter(
                     RentPayment.student_id == student.id,
                     RentPayment.period == current_block,
                     RentPayment.coverage_month == coverage_month,
                     RentPayment.coverage_year == coverage_year,
-                    db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+                    RentPayment.join_code == join_code
                 ).scalar() or 0
 
                 # Student is late if they haven't paid full rent
@@ -308,8 +350,9 @@ def purchase_item():
                             "message": "You cannot make purchases while late on rent. Please pay your rent first."
                         }), 403
 
-    # Check if student has free uses remaining from rent (per-use rent items)
-    if item.is_rent_linked and quantity == 1:
+    # Check if student has free uses remaining from rent (per-use rent items).
+    # Also recover gracefully if a paid-rent student is missing the grant row.
+    if quantity == 1 and (item.is_rent_linked or per_use_rent_item):
         # Look for an active StudentItem with uses_remaining for this store item
         rent_item_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
@@ -320,41 +363,80 @@ def purchase_item():
             ),
             db.or_(
                 StudentItem.expiry_date.is_(None),
-                StudentItem.expiry_date > utc_now()
+                StudentItem.expiry_date > now
             )
         )
-        if join_code:
-            rent_item_query = rent_item_query.filter(StudentItem.join_code == join_code)
-        else:
-            rent_item_query = rent_item_query.filter(StudentItem.join_code.is_(None))
+        rent_item_query = rent_item_query.filter(StudentItem.join_code == join_code)
 
         active_rent_item = rent_item_query.first()
+        existing_grant_row = StudentItem.query.filter(
+            StudentItem.student_id == student.id,
+            StudentItem.store_item_id == item.id,
+            StudentItem.join_code == join_code,
+            StudentItem.uses_remaining.isnot(None),
+            db.or_(
+                StudentItem.expiry_date.is_(None),
+                StudentItem.expiry_date > now
+            )
+        ).first()
+
+        if not active_rent_item and not existing_grant_row and has_paid_rent and per_use_rent_item:
+            # Missing grant edge case: create current-period grant on demand.
+            # This prevents paid-rent students from being charged due to stale data.
+            active_rent_item = StudentItem(
+                student_id=student.id,
+                store_item_id=item.id,
+                join_code=join_code,
+                purchase_date=now,
+                expiry_date=None,
+                status='purchased',
+                is_from_bundle=False,
+                quantity_purchased=1,
+                uses_remaining=per_use_rent_item.use_limit if per_use_rent_item.use_limit else -1
+            )
+            db.session.add(active_rent_item)
 
         if active_rent_item:
-            # Free use from rent - decrement uses_remaining unless unlimited (-1)
+            # Free purchase from rent perk - decrement available free uses unless unlimited (-1)
             if active_rent_item.uses_remaining != -1:
                 active_rent_item.uses_remaining -= 1
-            active_rent_item.redemption_date = utc_now()
 
-            # Create a $0 transaction to log the free use
-            free_use_tx = Transaction(
+            # For rent perks, purchasing is $0 and usage is logged later on /use-item.
+            purchase_tx = Transaction(
                 student_id=student.id,
                 teacher_id=teacher_id,
                 join_code=join_code,
                 amount=0.0,
                 account_type='checking',
+                status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
                 type='purchase',
-                description=f"Free use (rent perk): {item.name}"
+                description=f"Purchase: {item.name} [Rent Perk $0]"
             )
-            db.session.add(free_use_tx)
+            db.session.add(purchase_tx)
+
+            expiry_date = None
+            if item.item_type == 'delayed' and item.auto_expiry_days:
+                expiry_date = now + timedelta(days=item.auto_expiry_days)
+
+            db.session.add(StudentItem(
+                student_id=student.id,
+                store_item_id=item.id,
+                join_code=join_code,
+                purchase_date=now,
+                expiry_date=expiry_date,
+                status='purchased',
+                is_from_bundle=False,
+                quantity_purchased=1,
+                uses_remaining=None,
+            ))
             db.session.commit()
 
             remaining = active_rent_item.uses_remaining
             if remaining == -1:
-                return jsonify({"status": "success", "message": f"Free use of {item.name} (rent perk)! Unlimited free uses remaining."})
+                return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk). Unlimited free purchases remaining this period."})
             if remaining > 0:
-                return jsonify({"status": "success", "message": f"Free use of {item.name} (rent perk)! {remaining} free uses remaining."})
-            return jsonify({"status": "success", "message": f"Free use of {item.name} (rent perk)! No more free uses remaining."})
+                return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk). {remaining} free purchase(s) remaining this period."})
+            return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk). No free purchases remaining this period."})
 
     # Calculate price (with bulk discount if applicable)
     unit_price = item.price
@@ -428,7 +510,11 @@ def purchase_item():
 
             purchase_count = total_purchased
         else:
-            purchase_count = StudentItem.query.filter_by(student_id=student.id, store_item_id=item.id).count()
+            purchase_count = StudentItem.query.filter(
+                StudentItem.student_id == student.id,
+                StudentItem.store_item_id == item.id,
+                StudentItem.status.notin_(['voided', 'rejected'])
+            ).count()
         if purchase_count + quantity > item.limit_per_student:
             return jsonify({"status": "error", "message": f"You can only purchase {item.limit_per_student - purchase_count} more of this item."}), 400
 
@@ -448,6 +534,7 @@ def purchase_item():
             join_code=join_code,  # CRITICAL: Add join_code for period isolation
             amount=-total_price,
             account_type='checking',
+            status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
             type='purchase',
             description=purchase_description
         )
@@ -473,6 +560,7 @@ def purchase_item():
                         join_code=join_code,  # CRITICAL: Add join_code for period isolation
                         amount=-shortfall,
                         account_type='savings',
+                        status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
                         type='Withdrawal',
                         description='Overdraft protection transfer to checking'
                     )
@@ -482,6 +570,7 @@ def purchase_item():
                         join_code=join_code,  # CRITICAL: Add join_code for period isolation
                         amount=shortfall,
                         account_type='checking',
+                        status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
                         type='Deposit',
                         description='Overdraft protection transfer from savings'
                     )
@@ -619,31 +708,40 @@ def purchase_item():
 
         # --- Collective Item Logic ---
         if item.item_type == 'collective':
-            # SECURITY FIX: Check if all students in the same block AND same join_code have purchased
-            # Must scope by join_code to prevent cross-period data leaks
-            from app.models import StudentBlock
-
-            # Get student IDs in this specific class period (join_code + block combination)
-            student_blocks = StudentBlock.query.filter_by(
-                period=student.block,
-                join_code=join_code
-            ).all()
-            student_ids_in_block = {sb.student_id for sb in student_blocks}
-
-            purchased_students_count = db.session.query(func.count(func.distinct(StudentItem.student_id))).filter(
+            # Count unique students (not TeacherBlock seats) to get actual class size
+            class_size = db.session.query(db.func.count(db.func.distinct(Student.id))).join(
+                TeacherBlock, TeacherBlock.student_id == Student.id
+            ).filter(
+                TeacherBlock.teacher_id == teacher_id,
+                TeacherBlock.join_code == join_code,
+                TeacherBlock.is_claimed == True,
+            ).scalar() or 0
+            
+            purchased_students_count = db.session.query(db.func.count(db.func.distinct(StudentItem.student_id))).filter(
                 StudentItem.store_item_id == item.id,
-                StudentItem.student_id.in_(student_ids_in_block)
-            ).scalar()
+                StudentItem.join_code == join_code,
+                StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
+            ).scalar() or 0
 
-            if purchased_students_count >= len(student_ids_in_block):
-                # Threshold met, update all pending items for this collective goal to processing
+            if item.collective_goal_type == 'fixed':
+                target = int(item.collective_goal_target or 0)
+            else:
+                target = class_size
+
+            if target > 0 and purchased_students_count >= target:
+                # Threshold met for this class: unlock only this class period's pending items
                 StudentItem.query.filter(
                     StudentItem.store_item_id == item.id,
+                    StudentItem.join_code == join_code,
                     StudentItem.status == 'pending'
                 ).update({"status": "processing"})
-                # This flash won't be seen by the user due to the JSON response,
-                # but it's good for logging/debugging. A more robust solution might use websockets.
-                current_app.logger.info(f"Collective goal '{item.name}' for block {student.block} has been met!")
+                current_app.logger.info(
+                    "Collective goal '%s' reached for join_code=%s (%s/%s)",
+                    item.name,
+                    join_code,
+                    purchased_students_count,
+                    target,
+                )
 
         # Commit purchases for both collective and non-collective items
         db.session.commit()
@@ -982,36 +1080,20 @@ def reject_redemption():
             amount=refund_amount,
             account_type='checking',
             type='refund',
+            original_transaction_id=purchase_tx.id if purchase_tx else None,
             description=f"Refund: {student_item.store_item.name} (Redemption Rejected)"
         )
         db.session.add(refund_tx)
+        if purchase_tx:
+            purchase_tx.reversal_transaction_id = refund_tx.id
 
-        # 3. Clean up the 'redemption' transaction ($0 log) created during request
-        # Scope by join_code in addition to student/type/description for accuracy
-        redemption_query = Transaction.query.filter_by(
-            student_id=student_item.student_id,
-            type='redemption',
-            join_code=student_item.join_code,
-        ).filter(
-            Transaction.description.like(f"Used: {student_item.store_item.name}%")
-        )
-
-        redemption_date = getattr(student_item, "redemption_date", None)
-        if redemption_date is not None:
-            window_start = redemption_date - timedelta(minutes=10)
-            window_end = redemption_date + timedelta(minutes=10)
-            redemption_query = redemption_query.filter(
-                Transaction.timestamp >= window_start,
-                Transaction.timestamp <= window_end,
-            )
-
-        redemption_tx = redemption_query.order_by(Transaction.timestamp.desc()).first()
-
-        if redemption_tx:
-            db.session.delete(redemption_tx)
-
-        # 4. Remove the item from student's inventory
-        db.session.delete(student_item)
+        # 3. Mark item as rejected (terminal state) instead of deleting history.
+        student_item.status = 'rejected'
+        student_item.redemption_date = utc_now()
+        if student_item.redemption_details:
+            student_item.redemption_details = f"{student_item.redemption_details}\n---\nStatus: rejected"
+        else:
+            student_item.redemption_details = "Status: rejected"
 
         db.session.commit()
         return jsonify({"status": "success", "message": "Redemption rejected and refunded."})

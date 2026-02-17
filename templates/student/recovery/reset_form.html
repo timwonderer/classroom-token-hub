@@ -1,0 +1,40 @@
+{% extends "student/recovery/layout.html" %}
+
+{% block title %}Set New Credentials{% endblock %}
+{% block header %}Set New Credentials{% endblock %}
+{% block subheader %}Create a new PIN or Passphrase.{% endblock %}
+
+{% block content %}
+<form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
+
+    <div class="alert alert-warning border-0 shadow-sm mb-4">
+        <div class="d-flex">
+            <span class="material-symbols-outlined fs-5 me-2 mt-1">info</span>
+            <div>
+                <small>
+                    <strong>Note:</strong> Changing your Passphrase will lock money transfers for <strong>1
+                        hour</strong> for security.
+                    Changing only your PIN does not trigger a cooldown.
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label text-secondary small fw-bold">New PIN (Optional)</label>
+        <input type="password" name="pin" class="form-control form-control-lg" placeholder="4-6 digits"
+            inputmode="numeric" pattern="[0-9]*" autocomplete="off">
+        <div class="form-text">Leave blank if you don't want to change it.</div>
+    </div>
+
+    <div class="mb-4">
+        <label class="form-label text-secondary small fw-bold">New Passphrase (Optional)</label>
+        <input type="password" name="passphrase" class="form-control form-control-lg"
+            placeholder="At least 8 characters" autocomplete="off">
+        <div class="form-text">Leave blank if you don't want to change it.</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary w-100 btn-lg">Update Credentials</button>
+</form>
+{% endblock %}

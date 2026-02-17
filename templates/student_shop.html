@@ -27,7 +27,11 @@
         {% if items %}
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
             {% for item in items %}
-            {% set is_rent_covered = has_paid_rent and item.id in per_period_rent_item_ids %}
+            {% set rent_item_type = rent_item_type_by_store_id.get(item.id) %}
+            {% set is_rent_perk_item = rent_item_type is not none or item.is_rent_linked %}
+            {% set is_rent_covered = has_paid_rent and rent_item_type == 'privilege' %}
+            {% set rent_free_uses_remaining = rent_free_uses.get(item.id) %}
+            {% set has_rent_free_purchase = rent_free_uses_remaining is not none and (rent_free_uses_remaining == -1 or rent_free_uses_remaining > 0) %}
             <div class="col">
                 <div class="card h-100 {% if item.is_bundle or item.bulk_discount_enabled %}border-primary{% endif %} {% if is_rent_covered %}opacity-50{% endif %}">
                     <div class="card-body d-flex flex-column">
@@ -36,20 +40,27 @@
                         <div class="alert alert-success alert-sm mb-2 py-1 px-2">
                             <small><strong><span class="material-symbols-outlined" style="font-size: 16px; vertical-align: middle;">check_circle</span> Included in your rent!</strong></small>
                         </div>
-                        {% elif item.is_rent_linked %}
+                        {% elif is_rent_perk_item %}
                         <div class="mb-2">
                             <span class="badge bg-info"><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">card_membership</span> Rent Perk</span>
-                            {% if rent_free_uses and item.id in rent_free_uses %}
-                            {% if rent_free_uses[item.id] == -1 %}
+                            {% if has_rent_free_purchase %}
+                            {% if rent_free_uses_remaining == -1 %}
                             <span class="badge bg-success">Unlimited free uses</span>
                             {% else %}
-                            <span class="badge bg-success">{{ rent_free_uses[item.id] }} free use{{ 's' if rent_free_uses[item.id] != 1 else '' }} remaining</span>
+                            <span class="badge bg-success">{{ rent_free_uses_remaining }} free use{{ 's' if rent_free_uses_remaining != 1 else '' }} remaining</span>
                             {% endif %}
                             {% endif %}
                         </div>
                         {% endif %}
                         <div class="mb-2">
+                            {% if is_rent_covered %}
+                            <span class="badge bg-success fs-6">Included in Rent</span>
+                            {% elif has_rent_free_purchase %}
+                            <span class="badge bg-success fs-6">Rent Perk price: $0.00</span>
+                            <span class="badge bg-light text-dark border">Regular: ${{ "%.2f"|format(item.price) }}</span>
+                            {% else %}
                             <span class="badge bg-primary fs-6">${{ "%.2f"|format(item.price) }}</span>
+                            {% endif %}
                             {% if item.item_type == 'immediate' %}
                                 <span class="badge bg-success">Immediate Use</span>
                             {% elif item.item_type == 'delayed' %}
@@ -81,32 +92,30 @@
                         <!-- Collective Goal Progress -->
                         {% if item.item_type == 'collective' and item.collective_goal_type %}
                         <div class="mb-3">
-                            {% set purchases_count = item.student_items|selectattr('status', 'in', ['pending', 'processing', 'purchased', 'redeemed', 'completed'])|list|length %}
+                            {% set progress = collective_progress.get(item.id, {'count': 0, 'target': 0, 'remaining': 0, 'percent': 0, 'is_complete': false}) %}
+                            {% set purchases_count = progress.count %}
+                            {% set target = progress.target %}
                             {% if item.collective_goal_type == 'whole_class' %}
-                                {# Use class_size passed from route (students in same join_code) #}
-                                {% set target = class_size %}
                                 <div class="alert alert-info p-2 mb-2">
                                     <small><strong>Whole Class Goal:</strong> All {{ class_size }} students must purchase!</small>
                                 </div>
                             {% elif item.collective_goal_type == 'fixed' %}
-                                {% set target = item.collective_goal_target %}
                                 <div class="alert alert-info p-2 mb-2">
-                                    <small><strong>Collective Goal:</strong> {{ target }} purchases needed to unlock</small>
+                                    <small><strong>Collective Goal:</strong> {{ target }} students needed to unlock</small>
                                 </div>
                             {% endif %}
                             <div class="progress" style="height: 25px;">
-                                {% set progress_percent = (purchases_count / target * 100) if target > 0 else 0 %}
-                                <div class="progress-bar {% if progress_percent >= 100 %}bg-success{% else %}bg-warning{% endif %}"
+                                <div class="progress-bar {% if progress.is_complete %}bg-success{% else %}bg-warning{% endif %}"
                                      role="progressbar"
-                                     style="width: {{ progress_percent }}%;"
+                                     style="width: {{ progress.percent }}%;"
                                      aria-valuenow="{{ purchases_count }}"
                                      aria-valuemin="0"
                                      aria-valuemax="{{ target }}">
                                     {{ purchases_count }}/{{ target }}
                                 </div>
                             </div>
-                            {% if purchases_count < target %}
-                                <small class="text-muted">{{ target - purchases_count }} more needed!</small>
+                            {% if not progress.is_complete %}
+                                <small class="text-muted">{{ progress.remaining }} more needed!</small>
                             {% else %}
                                 <small class="text-success"><i class="bi bi-check-circle"></i> Goal reached! Item will unlock soon.</small>
                             {% endif %}
@@ -133,7 +142,9 @@
                                     data-bs-target="#buyItemModal"
                                     data-item-id="{{ item.id }}"
                                     data-item-name="{{ item.name }}"
-                                    data-item-price="{{ "%.2f"|format(item.price) }}"
+                                    data-item-price="{{ '0.00' if has_rent_free_purchase else '%.2f'|format(item.price) }}"
+                                    data-item-regular-price="{{ "%.2f"|format(item.price) }}"
+                                    data-has-rent-free-purchase="{{ 'true' if has_rent_free_purchase else 'false' }}"
                                     data-item-type="{{ item.item_type }}"
                                     data-is-bundle="{{ 'true' if item.is_bundle else 'false' }}"
                                     data-bundle-quantity="{{ item.bundle_quantity if item.is_bundle else 0 }}"
@@ -290,6 +301,10 @@
                 <div class="alert alert-info">
                     <strong>Item:</strong> <span id="modalItemName"></span><br>
                     <strong>Unit Price:</strong> $<span id="modalItemPrice"></span><br>
+                    <span id="rentPerkModalNote" style="display: none;">
+                        <strong>Rent Perk:</strong> This purchase is $0 while free uses remain this rent period.<br>
+                        <strong>Regular Price:</strong> $<span id="modalRegularPrice"></span><br>
+                    </span>
                     <span id="modalBundleInfo" style="display: none;">
                         <strong>Bundle:</strong> <span id="modalBundleQuantity"></span> items per bundle<br>
                     </span>
@@ -398,6 +413,8 @@
             itemId: button.getAttribute('data-item-id'),
             itemType: button.getAttribute('data-item-type'),
             basePrice: parseFloat(button.getAttribute('data-item-price')),
+            regularPrice: parseFloat(button.getAttribute('data-item-regular-price')),
+            hasRentFreePurchase: button.getAttribute('data-has-rent-free-purchase') === 'true',
             isBundle: button.getAttribute('data-is-bundle') === 'true',
             bundleQuantity: parseInt(button.getAttribute('data-bundle-quantity')) || 0,
             bulkDiscountEnabled: button.getAttribute('data-bulk-discount-enabled') === 'true',
@@ -417,6 +434,14 @@
         document.getElementById('modalBulkDiscountPercentage').value = currentItemData.bulkDiscountPercentage;
         document.getElementById('modalBasePrice').value = currentItemData.basePrice;
         document.getElementById('modalInventory').value = currentItemData.inventory;
+        const rentPerkModalNote = document.getElementById('rentPerkModalNote');
+        const modalRegularPrice = document.getElementById('modalRegularPrice');
+        if (currentItemData.hasRentFreePurchase) {
+            rentPerkModalNote.style.display = 'inline';
+            modalRegularPrice.textContent = currentItemData.regularPrice.toFixed(2);
+        } else {
+            rentPerkModalNote.style.display = 'none';
+        }
 
         // Show bundle info
         if (currentItemData.isBundle) {
@@ -472,14 +497,29 @@
 
         // Set max quantity if inventory limited
         const quantityInput = document.getElementById('quantity');
+        const decreaseQtyBtn = document.getElementById('decreaseQty');
+        const increaseQtyBtn = document.getElementById('increaseQty');
         if (currentItemData.inventory !== 'unlimited') {
             quantityInput.max = currentItemData.inventory;
         } else {
             quantityInput.removeAttribute('max');
         }
+        if (currentItemData.hasRentFreePurchase) {
+            quantityInput.value = 1;
+            quantityInput.max = 1;
+            quantityInput.readOnly = true;
+            decreaseQtyBtn.disabled = true;
+            increaseQtyBtn.disabled = true;
+        } else {
+            quantityInput.readOnly = false;
+            decreaseQtyBtn.disabled = false;
+            increaseQtyBtn.disabled = false;
+        }
 
         // Reset quantity
-        quantityInput.value = 1;
+        if (!currentItemData.hasRentFreePurchase) {
+            quantityInput.value = 1;
+        }
         updateTotalPrice();
     });
 
@@ -513,7 +553,9 @@
         let hasDiscount = false;
 
         // Apply bulk discount if applicable
-        if (currentItemData.bulkDiscountEnabled && quantity >= currentItemData.bulkDiscountQuantity) {
+        if (!currentItemData.hasRentFreePurchase &&
+            currentItemData.bulkDiscountEnabled &&
+            quantity >= currentItemData.bulkDiscountQuantity) {
             const discountMultiplier = 1 - (currentItemData.bulkDiscountPercentage / 100);
             unitPrice = currentItemData.basePrice * discountMultiplier;
             hasDiscount = true;
@@ -535,11 +577,15 @@
 
         // Update quantity hint
         let hint = '';
+        if (currentItemData.hasRentFreePurchase) {
+            hint = 'Rent perk active: this purchase is free.';
+        }
         if (currentItemData.isBundle) {
             const totalItems = quantity * currentItemData.bundleQuantity;
-            hint = `You will get ${totalItems} total uses (${quantity} bundle${quantity > 1 ? 's' : ''})`;
+            hint += hint ? ' • ' : '';
+            hint += `You will get ${totalItems} total uses (${quantity} bundle${quantity > 1 ? 's' : ''})`;
         }
-        if (currentItemData.bulkDiscountEnabled) {
+        if (!currentItemData.hasRentFreePurchase && currentItemData.bulkDiscountEnabled) {
             if (quantity >= currentItemData.bulkDiscountQuantity) {
                 hint += hint ? ' • ' : '';
                 hint += `Bulk discount applied!`;

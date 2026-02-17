@@ -352,7 +352,7 @@
               </div>
               <div class="text-end">
                 <span class="badge {{ 'bg-success' if item.is_active else 'bg-secondary' }}">{{ 'Active' if item.is_active else 'Inactive' }}</span>
-                {% if item.is_rent_linked %}
+                {% if item.is_rent_linked or item.id in rent_managed_item_ids %}
                   <span class="badge bg-info">Rent Perk</span>
                 {% endif %}
               </div>
@@ -362,7 +362,7 @@
                 {{ item.description|striptags|truncate(160) if item.description else 'No description provided.' }}
               </p>
 
-              {% if item.is_rent_linked %}
+              {% if item.is_rent_linked or item.id in rent_managed_item_ids %}
               <div class="mb-2">
                 <span class="badge bg-info">Rent Perk</span>
                 <span class="text-muted small ms-1">Managed by rent settings</span>
@@ -391,6 +391,28 @@
                 <div><strong>Limit per student:</strong> {{ item.limit_per_student if item.limit_per_student is not none else 'None' }}</div>
               </div>
 
+              {% if item.item_type == 'collective' %}
+              <div class="mb-3">
+                <div class="text-muted small mb-2"><strong>Collective Progress</strong></div>
+                {% set progress_rows = collective_progress_by_item.get(item.id, []) %}
+                {% if progress_rows %}
+                  {% for row in progress_rows %}
+                  <div class="mb-2">
+                    <div class="d-flex justify-content-between small">
+                      <span>{{ row.class_label }}</span>
+                      <span>{{ row.count }}/{{ row.target }}</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                      <div class="progress-bar {% if row.is_complete %}bg-success{% else %}bg-warning{% endif %}" role="progressbar" style="width: {{ row.percent }}%;" aria-valuenow="{{ row.count }}" aria-valuemin="0" aria-valuemax="{{ row.target }}"></div>
+                    </div>
+                  </div>
+                  {% endfor %}
+                {% else %}
+                  <div class="small text-muted">No class progress yet.</div>
+                {% endif %}
+              </div>
+              {% endif %}
+
               <div class="mt-auto">
                 <div class="text-muted small mb-2"><strong>Active In</strong></div>
                 <div class="d-flex flex-wrap gap-1">
@@ -409,12 +431,9 @@
                 <a href="{{ url_for('admin.edit_store_item', item_id=item.id) }}" class="btn btn-outline-primary" title="Edit">
                   <i class="bi bi-pencil"></i>
                 </a>
-                {% if item.is_rent_linked %}
+                {% if item.is_rent_linked or item.id in rent_managed_item_ids %}
                 <button class="btn btn-outline-warning" disabled title="Managed by Rent Settings">
                   <i class="bi bi-eye-slash"></i>
-                </button>
-                <button class="btn btn-outline-danger" disabled title="Remove from Rent Settings to delete">
-                  <i class="bi bi-trash"></i>
                 </button>
                 {% else %}
                 <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#deactivateItemModal" data-item-id="{{ item.id }}" data-item-name="{{ item.name }}" title="Deactivate">

@@ -36,13 +36,13 @@ import pytz
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TapEvent, StoreItem, StudentItem,
+    Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
-    RedemptionAuditSource
+    RedemptionAuditSource, Issue, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
 from app.forms import (
@@ -70,7 +70,7 @@ from app.utils.passwordless_client import (
     get_public_api_key
 )
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
-from app.payroll import calculate_payroll, calculate_payroll_breakdown
+from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
 from app.attendance import get_last_payroll_time, calculate_unpaid_attendance_seconds, get_join_code_for_student_period
 import time
 
@@ -82,6 +82,13 @@ MAX_JOIN_CODE_RETRIES = 10  # Maximum attempts to generate a unique join code
 FALLBACK_BLOCK_PREFIX_LENGTH = 1  # Number of characters from block name in fallback code
 FALLBACK_CODE_MODULO = 10000  # Modulo for timestamp suffix (produces 4-digit number)
 
+
+# Insurance form mapping for derived claim period storage
+FREQUENCY_TO_CLAIM_PERIOD = {
+    'weekly': 'week',
+    'monthly': 'month',
+    'semester': 'semester',
+}
 # Placeholder values for legacy class TeacherBlock entries
 LEGACY_PLACEHOLDER_CREDENTIAL = "LEGACY0"  # Placeholder credential for legacy classes
 LEGACY_PLACEHOLDER_FIRST_NAME = "__JOIN_CODE_PLACEHOLDER__"  # Marks legacy placeholder entries
@@ -150,6 +157,45 @@ def _get_teacher_blocks():
     ))
 
 
+
+def _populate_policy_from_form(policy, form, *, next_tier_category_id=None):
+    """Populate insurance policy fields from form data."""
+    is_non_monetary = form.claim_type.data == 'non_monetary'
+    policy.title = form.title.data
+    policy.description = form.description.data
+    policy.premium = form.premium.data
+    policy.charge_frequency = form.charge_frequency.data
+    policy.autopay = form.autopay.data
+    policy.waiting_period_days = form.waiting_period_days.data
+    policy.max_claims_count = form.max_claims_count.data
+    policy.max_claims_period = FREQUENCY_TO_CLAIM_PERIOD.get(form.charge_frequency.data, 'month')
+    policy.max_claim_amount = None if is_non_monetary else form.max_claim_amount.data
+    policy.max_payout_per_period = None if is_non_monetary else form.max_payout_per_period.data
+    policy.claim_type = form.claim_type.data
+    policy.is_monetary = not is_non_monetary
+    policy.no_repurchase_after_cancel = form.no_repurchase_after_cancel.data
+    policy.enable_repurchase_cooldown = form.enable_repurchase_cooldown.data
+    policy.repurchase_wait_days = form.repurchase_wait_days.data
+    policy.auto_cancel_nonpay_days = form.auto_cancel_nonpay_days.data
+    policy.claim_time_limit_days = form.claim_time_limit_days.data
+    policy.bundle_with_policy_ids = form.bundle_with_policy_ids.data
+    policy.bundle_discount_percent = form.bundle_discount_percent.data
+    policy.bundle_discount_amount = form.bundle_discount_amount.data
+    policy.marketing_badge = form.marketing_badge.data if form.marketing_badge.data else None
+    policy.set_blocks(form.blocks.data if form.blocks.data else [])
+
+    if form.tier_category_id.data:
+        policy.tier_category_id = form.tier_category_id.data
+    elif form.tier_name.data or form.tier_color.data:
+        policy.tier_category_id = next_tier_category_id
+    else:
+        policy.tier_category_id = None
+
+    policy.tier_name = form.tier_name.data or None
+    policy.tier_color = form.tier_color.data or None
+    policy.tier_level = form.tier_level.data or None
+    policy.is_active = form.is_active.data
+
 def _get_class_labels_for_blocks(admin_id, blocks):
     """Return mapping of block -> class label for the given admin without N+1 queries."""
 
@@ -176,6 +222,201 @@ def _student_scope_subquery(include_unassigned=True):
         .with_entities(Student.id)
         .subquery()
     )
+
+
+def _join_code_exists(join_code):
+    """Return True when a class economy identified by join_code still exists."""
+    if not join_code:
+        return False
+    return TeacherBlock.query.filter_by(join_code=join_code).first() is not None
+
+
+def _assert_transaction_deletion_allowed(join_code, *, join_code_deletion=False):
+    """
+    Guardrail: transactions are immutable while class join code exists.
+
+    Hard transaction deletion is only allowed from join-code destruction workflow.
+    """
+    if not join_code_deletion and _join_code_exists(join_code):
+        raise AssertionError(
+            f"Refusing to delete transactions for active join code '{join_code}'. "
+            "Use archive/deactivate flows instead."
+        )
+
+
+def _archive_student(student):
+    """Soft-delete a student account while preserving all financial/audit history."""
+    student.is_active = False
+
+
+def _delete_transactions_for_join_code(join_code, *, join_code_deletion=False):
+    """Hard-delete transactions scoped to join_code (join-code destruction only)."""
+    _assert_transaction_deletion_allowed(join_code, join_code_deletion=join_code_deletion)
+    return Transaction.query.filter_by(join_code=join_code).delete(synchronize_session=False)
+
+
+def _hard_delete_join_code_scope(join_code, teacher_id):
+    """
+    Permanently remove records scoped to a destroyed join code.
+
+    Scope is strict to the provided join_code.
+    """
+    if not join_code:
+        raise ValueError("join_code is required for class deletion")
+
+    scoped_student_ids = [
+        sid for (sid,) in db.session.query(TeacherBlock.student_id)
+        .filter(
+            TeacherBlock.join_code == join_code,
+            TeacherBlock.student_id.isnot(None),
+        )
+        .distinct()
+        .all()
+    ]
+    student_item_ids_subq = (
+        db.session.query(StudentItem.id)
+        .filter(StudentItem.join_code == join_code)
+        .subquery()
+    )
+    insurance_ids_subq = (
+        db.session.query(StudentInsurance.id)
+        .filter(StudentInsurance.join_code == join_code)
+        .subquery()
+    )
+    tx_ids_subq = (
+        db.session.query(Transaction.id)
+        .filter(Transaction.join_code == join_code)
+        .subquery()
+    )
+    issue_ids_subq = (
+        db.session.query(Issue.id)
+        .filter(Issue.join_code == join_code)
+        .subquery()
+    )
+    class_blocks = [
+        block for (block,) in db.session.query(TeacherBlock.block).filter(
+            TeacherBlock.teacher_id == teacher_id,
+            TeacherBlock.join_code == join_code,
+            TeacherBlock.block.isnot(None),
+        ).distinct().all()
+    ]
+
+    # Class-scoped records
+    RedemptionAuditLog.query.filter(
+        RedemptionAuditLog.student_item_id.in_(sa.select(student_item_ids_subq))
+    ).delete(synchronize_session=False)
+    StudentItem.query.filter(StudentItem.join_code == join_code).delete(synchronize_session=False)
+    TapEvent.query.filter(TapEvent.join_code == join_code).delete(synchronize_session=False)
+    HallPassLog.query.filter(HallPassLog.join_code == join_code).delete(synchronize_session=False)
+    RentPayment.query.filter(RentPayment.join_code == join_code).delete(synchronize_session=False)
+    StudentBlock.query.filter(StudentBlock.join_code == join_code).delete(synchronize_session=False)
+    AnalyticsSnapshot.query.filter(AnalyticsSnapshot.join_code == join_code).delete(synchronize_session=False)
+    AnalyticsEvent.query.filter(AnalyticsEvent.join_code == join_code).delete(synchronize_session=False)
+    Announcement.query.filter(
+        Announcement.teacher_id == teacher_id,
+        Announcement.join_code == join_code,
+    ).delete(synchronize_session=False)
+
+    # Issue data tied to this class
+    IssueResolutionAction.query.filter(
+        IssueResolutionAction.issue_id.in_(sa.select(issue_ids_subq))
+    ).delete(synchronize_session=False)
+    Issue.query.filter(Issue.join_code == join_code).delete(synchronize_session=False)
+
+    # Insurance data tied to this class or class-scoped transactions
+    InsuranceClaim.query.filter(
+        sa.or_(
+            InsuranceClaim.student_insurance_id.in_(sa.select(insurance_ids_subq)),
+            InsuranceClaim.transaction_id.in_(sa.select(tx_ids_subq)),
+        )
+    ).delete(synchronize_session=False)
+    StudentInsurance.query.filter(StudentInsurance.join_code == join_code).delete(synchronize_session=False)
+
+    # Financial ledger (only here)
+    _delete_transactions_for_join_code(join_code, join_code_deletion=True)
+
+    # Remove store items tied only to this class block scope.
+    if class_blocks:
+        store_item_ids_for_blocks = (
+            db.session.query(StoreItemBlock.store_item_id)
+            .group_by(StoreItemBlock.store_item_id)
+            .having(sa.func.count() > 0)
+            .having(sa.func.sum(sa.case((StoreItemBlock.block.in_(class_blocks), 1), else_=0)) == sa.func.count())
+            .subquery()
+        )
+        deletable_store_item_ids = (
+            db.session.query(StoreItem.id)
+            .filter(
+                StoreItem.teacher_id == teacher_id,
+                StoreItem.id.in_(sa.select(store_item_ids_for_blocks)),
+            )
+            .subquery()
+        )
+        class_item_student_ids = (
+            db.session.query(StudentItem.id)
+            .filter(StudentItem.store_item_id.in_(sa.select(deletable_store_item_ids)))
+            .subquery()
+        )
+        RedemptionAuditLog.query.filter(
+            RedemptionAuditLog.student_item_id.in_(sa.select(class_item_student_ids))
+        ).delete(synchronize_session=False)
+        StudentItem.query.filter(
+            StudentItem.store_item_id.in_(sa.select(deletable_store_item_ids))
+        ).delete(synchronize_session=False)
+        StoreItem.query.filter(
+            StoreItem.id.in_(sa.select(deletable_store_item_ids))
+        ).delete(synchronize_session=False)
+
+    # Clean up orphaned StoreItemBlock entries for the deleted class blocks
+    # This handles items that are visible to multiple classes
+    if class_blocks:
+        deletable_block_entries = (
+            db.session.query(StoreItemBlock.store_item_id, StoreItemBlock.block)
+            .join(StoreItem, StoreItemBlock.store_item_id == StoreItem.id)
+            .filter(
+                StoreItem.teacher_id == teacher_id,
+                StoreItemBlock.block.in_(class_blocks)
+            )
+            .subquery()
+        )
+        StoreItemBlock.query.filter(
+            sa.tuple_(StoreItemBlock.store_item_id, StoreItemBlock.block).in_(
+                sa.select(deletable_block_entries)
+            )
+        ).delete(synchronize_session=False)
+
+    # Seats/ownership for this class
+    TeacherBlock.query.filter(
+        TeacherBlock.teacher_id == teacher_id,
+        TeacherBlock.join_code == join_code
+    ).delete(synchronize_session=False)
+
+    if class_blocks and scoped_student_ids:
+        # Only delete legacy StudentBlocks (no join_code) that match the period names.
+        # StudentBlocks with a join_code were already handled by the join_code deletion above.
+        StudentBlock.query.filter(
+            StudentBlock.student_id.in_(scoped_student_ids),
+            StudentBlock.period.in_(class_blocks),
+            StudentBlock.join_code.is_(None),
+        ).delete(synchronize_session=False)
+
+    # Remove students that no longer belong to any class after this join-code deletion.
+    remaining_student_ids_subq = db.session.query(TeacherBlock.student_id).filter(
+        TeacherBlock.student_id.isnot(None),
+        TeacherBlock.join_code != join_code,
+    ).subquery()
+    orphan_student_ids = (
+        db.session.query(Student.id)
+        .filter(Student.id.in_(scoped_student_ids))
+        .filter(~Student.id.in_(sa.select(remaining_student_ids_subq)))
+        .subquery()
+    )
+    StudentTeacher.query.filter(
+        StudentTeacher.student_id.in_(sa.select(orphan_student_ids))
+    ).delete(synchronize_session=False)
+    Student.query.filter(
+        Student.id.in_(sa.select(orphan_student_ids))
+    ).delete(synchronize_session=False)
 
 
 def _sanitize_csv_field(value):
@@ -269,52 +510,6 @@ def _link_student_to_admin(student: Student, admin_id):
         current_app.logger.info(
             f"Claimed existing TeacherBlock for student with join_code {existing_teacher_block.join_code}"
         )
-
-
-def _get_students_needing_transaction_backfill(teacher_id):
-    """
-    Get students who have transactions missing proper scoping (teacher_id and/or join_code).
-    
-    These are orphaned transactions that need to be associated with a join_code
-    for proper class isolation. This is CRITICAL because join_code is the source
-    of truth for class scoping, and StudentTeacher is the source for auth, not teacher_id.
-    
-    Args:
-        teacher_id: The teacher's admin ID
-        
-    Returns:
-        list: Student objects that have unscoped transactions
-    """
-    # Get students that belong to this teacher
-    student_ids_query = _scoped_students().with_entities(Student.id).all()
-    student_ids = [sid[0] for sid in student_ids_query]
-    
-    if not student_ids:
-        return []
-    
-    # Find transactions for these students that have NO join_code
-    # (regardless of whether they have teacher_id)
-    transactions_needing_backfill = (
-        Transaction.query
-        .filter(
-            Transaction.student_id.in_(student_ids),
-            Transaction.join_code.is_(None)
-        )
-        .with_entities(Transaction.student_id)
-        .distinct()
-        .all()
-    )
-    
-    if not transactions_needing_backfill:
-        return []
-    
-    affected_student_ids = [tx.student_id for tx in transactions_needing_backfill]
-
-    # SECURITY FIX: Get the student objects using scoped query for defense-in-depth
-    # While the IDs are already from scoped students, this ensures consistency
-    students = _scoped_students().filter(Student.id.in_(affected_student_ids)).all()
-
-    return students
 
 
 def _get_feature_settings(teacher_id, block=None):
@@ -523,22 +718,7 @@ def dashboard():
     onboarding_redirect = _check_onboarding_redirect()
     if onboarding_redirect:
         return onboarding_redirect
-
-    # Check for students with transactions needing join_code backfill
     current_admin_id = session.get('admin_id')
-    students_needing_backfill = _get_students_needing_transaction_backfill(current_admin_id)
-    if students_needing_backfill:
-        # Only redirect if we have a block/join_code mapping to work with
-        has_blocks = (
-            TeacherBlock.query
-            .filter_by(teacher_id=current_admin_id, is_claimed=True)
-            .filter(TeacherBlock.join_code.isnot(None))
-            .count()
-        )
-        if has_blocks:
-            # Redirect to backfill page
-            return redirect(url_for('admin.backfill_transactions'))
-        flash("No periods/blocks found. Please add students to periods first.", "error")
 
     student_ids_subq = _student_scope_subquery()
     # Auto-tapout students who have exceeded their daily limit
@@ -654,7 +834,7 @@ def dashboard():
 
     # --- Payroll Info ---
     last_payroll_time = get_last_payroll_time()
-    payroll_summary = calculate_payroll(students, last_payroll_time, teacher_id=current_admin_id)
+    payroll_summary, payroll_updated_at = get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=current_admin_id)
     total_payroll_estimate = sum(payroll_summary.values())
 
     # Calculate next payroll date (keep in UTC for template conversion)
@@ -699,6 +879,7 @@ def dashboard():
         total_transactions_today=total_transactions_today,
         # Payroll info
         total_payroll_estimate=total_payroll_estimate,
+        payroll_updated_at=payroll_updated_at,
         next_payroll_date=next_payroll_date,
         # Limited data for cards
         recent_redemptions=recent_redemptions,
@@ -787,6 +968,7 @@ def give_bonus_all():
             amount=amount,
             type=tx_type,
             description=title,
+            status=TransactionStatus.PENDING,
             account_type='checking'
         )
         db.session.add(tx)
@@ -799,6 +981,7 @@ def give_bonus_all():
                 join_code=join_code,
                 amount=-shortfall,
                 account_type='savings',
+                status=TransactionStatus.PENDING,
                 type='Withdrawal',
                 description='Overdraft protection transfer to checking'
             )
@@ -808,6 +991,7 @@ def give_bonus_all():
                 join_code=join_code,
                 amount=shortfall,
                 account_type='checking',
+                status=TransactionStatus.PENDING,
                 type='Deposit',
                 description='Overdraft protection transfer from savings'
             )
@@ -822,98 +1006,6 @@ def give_bonus_all():
         message += f" Overdraft fee charged for {fee_count}."
     flash(message, "warning" if declined_count else "success")
     return redirect(url_for('admin.dashboard'))
-
-
-@admin_bp.route('/backfill-transactions', methods=['GET', 'POST'])
-@admin_required
-def backfill_transactions():
-    """
-    Backfill join_code for orphaned transactions (CRITICAL for proper class isolation).
-    
-    join_code is the SOURCE OF TRUTH for class scoping because:
-    - A teacher can have multiple periods (Period 1 Math, Period 3 Math)
-    - Each period has a unique join_code
-    - Students in both periods should see SEPARATE balances for each
-    
-    Teacher selects which period/block each affected student belongs to,
-    and we update:
-    1. Transaction join_code (CRITICAL - required for balance scoping)
-    2. Transaction teacher_id (if not already set)
-    3. Student teacher_id (if not already set)
-    4. StudentTeacher association (if not already exists)
-    """
-    current_admin_id = session.get('admin_id')
-    students_needing_backfill = _get_students_needing_transaction_backfill(current_admin_id)
-    
-    if not students_needing_backfill:
-        # No students need backfill, redirect to dashboard
-        return redirect(url_for('admin.dashboard'))
-    
-    # Get teacher's available periods/blocks with join codes
-    teacher_blocks = (
-        TeacherBlock.query
-        .filter_by(teacher_id=current_admin_id, is_claimed=True)
-        .with_entities(TeacherBlock.block, TeacherBlock.join_code)
-        .distinct()
-        .all()
-    )
-    
-    # Create a mapping of block to join_code
-    block_to_join_code = {}
-    for block, join_code in teacher_blocks:
-        if block and join_code:
-            block_to_join_code[block] = join_code
-    
-    # If no blocks available, create a default mapping
-    if not block_to_join_code:
-        flash("No periods/blocks found. Please add students to periods first.", "error")
-        return redirect(url_for('admin.dashboard'))
-    
-    if request.method == 'POST':
-        try:
-            # Process each student assignment
-            for student in students_needing_backfill:
-                block_key = f"student_{student.id}_block"
-                selected_block = request.form.get(block_key)
-                
-                if selected_block and selected_block in block_to_join_code:
-                    join_code = block_to_join_code[selected_block]
-                    
-                    # 1. Update all transactions that have NO join_code
-                    #    (CRITICAL: join_code is source of truth, not teacher_id)
-                    transactions_to_update = Transaction.query.filter_by(
-                        student_id=student.id,
-                        join_code=None
-                    ).all()
-                    
-                    for tx in transactions_to_update:
-                        # Set join_code (critical for scoping)
-                        tx.join_code = join_code
-
-                    # 2. Ensure StudentTeacher association exists
-                    # StudentTeacher and join_code are now the sole sources of truth.
-                    _link_student_to_admin(student, current_admin_id)
-                    
-                    current_app.logger.info(
-                        f"Backfilled teacher_id={current_admin_id} and join_code={join_code} "
-                        f"for {len(transactions_to_update)} transactions for student"
-                    )
-            
-            db.session.commit()
-            flash(f"Successfully backfilled transactions for {len(students_needing_backfill)} student(s)! Balances should now be correct.", "success")
-            return redirect(url_for('admin.dashboard'))
-            
-        except SQLAlchemyError as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error backfilling transactions: {e}", exc_info=True)
-            flash("Error backfilling transactions. Please try again.", "error")
-    
-    # GET request - show form
-    return render_template(
-        'admin_backfill_join_codes.html',
-        students=students_needing_backfill,
-        available_blocks=sorted(block_to_join_code.keys())
-    )
 
 
 # -------------------- AUTHENTICATION --------------------
@@ -1826,7 +1918,7 @@ def _build_rent_privileges_by_block(current_admin, blocks, join_codes_by_block, 
             RentPayment.period == block,
             RentPayment.coverage_month == coverage_month,
             RentPayment.coverage_year == coverage_year,
-            or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+            RentPayment.join_code == join_code
         ))
 
     if not all_student_ids:
@@ -1934,7 +2026,7 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
         RentPayment.period == current_block,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
-        db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None))
+        RentPayment.join_code == join_code
     ).first() is not None
 
     per_period_items = RentItem.query.filter_by(
@@ -2196,13 +2288,20 @@ def set_current_class():
 def student_detail(student_id):
     """View detailed information for a specific student."""
     student = _get_student_or_404(student_id)
+    join_code = session.get('current_join_code')
     # Remove deprecated last_tap_in/last_tap_out logic; rely on TapEvent backend.
     # Fetch last rent payment
-    latest_rent = Transaction.query.filter_by(student_id=student.id, type="rent").order_by(Transaction.timestamp.desc()).first()
+    rent_query = Transaction.query.filter_by(student_id=student.id, type="rent")
+    if join_code:
+        rent_query = rent_query.filter(Transaction.join_code == join_code)
+    latest_rent = rent_query.order_by(Transaction.timestamp.desc()).first()
     student.rent_last_paid = latest_rent.timestamp if latest_rent else None
 
     # Fetch last property tax payment
-    latest_tax = Transaction.query.filter_by(student_id=student.id, type="property_tax").order_by(Transaction.timestamp.desc()).first()
+    tax_query = Transaction.query.filter_by(student_id=student.id, type="property_tax")
+    if join_code:
+        tax_query = tax_query.filter(Transaction.join_code == join_code)
+    latest_tax = tax_query.order_by(Transaction.timestamp.desc()).first()
     student.property_tax_last_paid = latest_tax.timestamp if latest_tax else None
 
     # Compute due dates and overdue status
@@ -2218,10 +2317,18 @@ def student_detail(student_id):
     student.property_tax_due_date = tax_due
     student.property_tax_overdue = today > tax_due and (not student.property_tax_last_paid or student.property_tax_last_paid.astimezone(PACIFIC).date() <= tax_due)
 
-    transactions = Transaction.query.filter_by(student_id=student.id).order_by(Transaction.timestamp.desc()).all()
-    student_items = student.items.order_by(StudentItem.purchase_date.desc()).all()
+    transactions_query = Transaction.query.filter_by(student_id=student.id)
+    student_items_query = student.items
+    latest_tap_event_query = TapEvent.query.filter_by(student_id=student.id)
+    if join_code:
+        transactions_query = transactions_query.filter(Transaction.join_code == join_code)
+        student_items_query = student_items_query.filter(StudentItem.join_code == join_code)
+        latest_tap_event_query = latest_tap_event_query.filter(TapEvent.join_code == join_code)
+
+    transactions = transactions_query.order_by(Transaction.timestamp.desc()).all()
+    student_items = student_items_query.order_by(StudentItem.purchase_date.desc()).all()
     # Fetch most recent TapEvent for this student
-    latest_tap_event = TapEvent.query.filter_by(student_id=student.id).order_by(TapEvent.timestamp.desc()).first()
+    latest_tap_event = latest_tap_event_query.order_by(TapEvent.timestamp.desc()).first()
 
     # Get student's active insurance policy (scoped to current teacher)
     teacher_id = session.get('admin_id')
@@ -2247,7 +2354,6 @@ def student_detail(student_id):
 
     # CRITICAL: Get scoped balances for current join_code to prevent multi-tenancy violations
     # Teacher clicked from a specific class tab, so show balances for that period only
-    join_code = session.get('current_join_code')
     scoped_checking_balance = 0
     scoped_savings_balance = 0
     scoped_total_earnings = 0
@@ -2266,8 +2372,30 @@ def student_detail(student_id):
     # Get active rent privileges (per-period items)
     rent_privileges = _get_rent_privileges_for_student(student, teacher_id, join_code)
 
+    # CRITICAL: Fetch Join Codes for student's blocks (for Account Recovery display)
+    join_codes = {}
+    if student.block:
+        block_parts = [b.strip().upper() for b in student.block.split(',') if b.strip()]
+        if block_parts:
+            teacher_blocks = TeacherBlock.query.filter(
+                TeacherBlock.teacher_id == teacher_id,
+                TeacherBlock.block.in_(block_parts)
+            ).all()
+            for teacher_block in teacher_blocks:
+                if teacher_block.join_code:
+                    join_codes[teacher_block.block] = teacher_block.join_code
+
+    reset_code_is_active = bool(
+        student.reset_code
+        and student.reset_code_expires_at
+        and ensure_utc(student.reset_code_expires_at) >= utc_now()
+        and student.recovery_status == 'to_be_claimed'
+    )
+
     return render_template('student_detail.html',
                          student=student,
+                         reset_code_is_active=reset_code_is_active,
+                         join_codes=join_codes,
                          transactions=transactions,
                          student_items=student_items,
                          latest_tap_event=latest_tap_event,
@@ -2412,27 +2540,21 @@ def edit_student():
         if claim_hash:
             student.first_half_hash = claim_hash
 
-    # Handle login reset
+    # Handle account reset — generate recovery code per recovery spec
     reset_login = request.form.get('reset_login') == 'on'
     if reset_login:
-        # Clear login credentials but keep account data
-        student.username_hash = None
-        student.username_lookup_hash = None
-        student.pin_hash = None
-        student.passphrase_hash = None
-        student.has_completed_setup = False
-        
-        # Update TeacherBlock entries to mark them as unclaimed
-        # Keep student_id since the student record still exists
-        TeacherBlock.query.filter_by(
-            student_id=student.id,
-            teacher_id=current_admin_id
-        ).update({
-            'is_claimed': False,
-            'claimed_at': None
-        })
+        import secrets as _secrets
+        code = _secrets.token_hex(4).upper()  # 8-char mixed alphanumeric
+        student.reset_code = code
+        student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+        student.recovery_status = 'to_be_claimed'
 
-        flash(f"{student.full_name}'s login has been reset. They will need to re-claim their account.", "warning")
+        current_app.logger.info(
+            f"Reset code generated for student {student.id} by admin {current_admin_id}"
+        )
+
+        flash(f"Reset code generated for {student.full_name}: {code} — Expires in 10 minutes. "
+              f"Give this code to the student along with their join code.", "warning")
 
     if name_changed or dob_changed:
         TeacherBlock.query.filter_by(
@@ -2504,6 +2626,14 @@ def edit_student():
                     block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
                     timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
                     join_code = f"B{block_initial}{timestamp_suffix:04d}"
+
+            # CRITICAL FIX: Ensure first_half_hash exists before creating TeacherBlock
+            # Logic: If hash is missing (legacy student), generate it now to prevent NotNullViolation
+            if not student.first_half_hash:
+                claim_hash = compute_primary_claim_hash(student.first_name[:1], student.dob_sum or 0, student.salt)
+                if claim_hash:
+                    student.first_half_hash = claim_hash
+                    current_app.logger.info(f"Generated missing first_half_hash for student {student.id} during edit")
             
             # Student is claimed if they have a username set
             is_claimed = bool(student.username_hash)
@@ -2542,62 +2672,49 @@ def edit_student():
         current_app.logger.error(f"Error updating student {student_id}", exc_info=True)
         flash("Error updating student due to internal error", "error")
 
+    if reset_login:
+        return redirect(url_for('admin.student_detail', student_id=student.id))
+
     return redirect(url_for('admin.students'))
 
 
+@admin_bp.route('/student/archive', methods=['GET', 'POST'])
 @admin_bp.route('/student/delete', methods=['GET', 'POST'])
 @admin_required
 def delete_student():
-    """Delete a student and all associated data."""
+    """Archive a student account while preserving class financial history."""
     current_app.logger.info(f"Delete student route accessed. Method: {request.method}, Form data: {dict(request.form)}")
 
     # If GET request, show error and redirect (for debugging)
     if request.method == 'GET':
-        flash("Delete student must be accessed via POST request.", "error")
+        flash("Archive student must be accessed via POST request.", "error")
         return redirect(url_for('admin.students'))
 
     student_id = request.form.get('student_id', type=int)
     confirmation = request.form.get('confirmation', '').strip()
 
     if not student_id:
-        current_app.logger.error("No student_id provided in delete request")
+        current_app.logger.error("No student_id provided in archive request")
         flash("Error: No student ID provided.", "error")
         return redirect(url_for('admin.students'))
 
     if confirmation != 'DELETE':
-        current_app.logger.info(f"Delete cancelled: confirmation '{confirmation}' != 'DELETE'")
-        flash("Deletion cancelled: confirmation text did not match.", "warning")
+        current_app.logger.info(f"Archive cancelled: confirmation '{confirmation}' != 'DELETE'")
+        flash("Archive cancelled: confirmation text did not match.", "warning")
         return redirect(url_for('admin.students'))
 
     student = _get_student_or_404(student_id)
     student_name = student.full_name
 
     try:
-        # Delete associated records (cascade should handle this, but being explicit)
-        Transaction.query.filter_by(student_id=student.id).delete()
-        TapEvent.query.filter_by(student_id=student.id).delete()
-        StudentItem.query.filter_by(student_id=student.id).delete()
-        RentPayment.query.filter_by(student_id=student.id).delete()
-        StudentInsurance.query.filter_by(student_id=student.id).delete()
-        HallPassLog.query.filter_by(student_id=student.id).delete()
-        
-        # Delete StudentTeacher associations
-        StudentTeacher.query.filter_by(student_id=student.id).delete()
-
-        # Delete TeacherBlock entries for this student
-        TeacherBlock.query.filter_by(student_id=student.id).delete()
-
-        # Delete StudentBlock entries for this student
-        StudentBlock.query.filter_by(student_id=student.id).delete()
-
-        # Delete the student
-        db.session.delete(student)
+        _archive_student(student)
         db.session.commit()
+        flash(f"Archived {student_name}. Account access is now disabled and history is preserved.", "success")
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error deleting student {student_name}", exc_info=True)
-        flash(f"Cannot delete student due to internal error", "error")
+        current_app.logger.error(f"Error archiving student {student_name}", exc_info=True)
+        flash(f"Cannot archive student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
 
@@ -2605,7 +2722,7 @@ def delete_student():
 @admin_bp.route('/students/bulk-delete', methods=['POST'])
 @admin_required
 def bulk_delete_students():
-    """Delete multiple students at once."""
+    """Archive multiple students at once while preserving ledger history."""
     data = request.get_json()
     student_ids = data.get('student_ids', [])
 
@@ -2613,48 +2730,28 @@ def bulk_delete_students():
         return jsonify({"status": "error", "message": "No students selected."}), 400
 
     try:
-        deleted_count = 0
+        archived_count = 0
         for student_id in student_ids:
             student = _get_student_or_404(student_id)
             if student:
-                # Delete associated records
-                Transaction.query.filter_by(student_id=student.id).delete()
-                TapEvent.query.filter_by(student_id=student.id).delete()
-                StudentItem.query.filter_by(student_id=student.id).delete()
-                RentPayment.query.filter_by(student_id=student.id).delete()
-                RentWaiver.query.filter_by(student_id=student.id).delete()
-                StudentInsurance.query.filter_by(student_id=student.id).delete()
-                InsuranceClaim.query.filter_by(student_id=student.id).delete()
-                HallPassLog.query.filter_by(student_id=student.id).delete()
-                
-                # Delete StudentTeacher associations
-                StudentTeacher.query.filter_by(student_id=student.id).delete()
-
-                # Delete TeacherBlock entries for this student
-                TeacherBlock.query.filter_by(student_id=student.id).delete()
-
-                # Delete StudentBlock entries for this student
-                StudentBlock.query.filter_by(student_id=student.id).delete()
-
-                # Delete the student
-                db.session.delete(student)
-                deleted_count += 1
+                _archive_student(student)
+                archived_count += 1
 
         db.session.commit()
         return jsonify({
             "status": "success",
-            "message": f"Successfully deleted {deleted_count} student(s) and all associated data."
+            "message": f"Successfully archived {archived_count} student(s). Financial and issue history was preserved."
         })
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error deleting students: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": "An error occurred while deleting students. Please try again."}), 500
+        current_app.logger.error(f"Error archiving students: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": "An error occurred while archiving students. Please try again."}), 500
 
 
 @admin_bp.route('/students/delete-block', methods=['POST'])
 @admin_required
 def delete_block():
-    """Delete all students in a specific block."""
+    """Backwards-compatible block deletion wrapper that resolves to join-code deletion."""
     data = request.get_json()
     block = data.get('block', '').strip().upper()
     current_admin_id = session.get('admin_id')
@@ -2663,71 +2760,70 @@ def delete_block():
         return jsonify({"status": "error", "message": "No block specified."}), 400
 
     try:
-        # Get all students in this block that the current admin can access
-        students = _scoped_students().filter_by(block=block).all()
-        student_ids = [s.id for s in students]
-        deleted_count = len(students)
-        
-        current_app.logger.info(f"Deleting block {block} with {deleted_count} students (IDs: {student_ids})")
+        join_codes = [
+            code for (code,) in db.session.query(TeacherBlock.join_code).filter(
+                TeacherBlock.teacher_id == current_admin_id,
+                TeacherBlock.block == block,
+                TeacherBlock.join_code.isnot(None),
+            ).distinct().all()
+        ]
+        if not join_codes:
+            return jsonify({"status": "success", "message": f"No join code found for Block {block}. Nothing to delete."})
+        if len(join_codes) > 1:
+            return jsonify({
+                "status": "error",
+                "message": f"Block {block} has multiple join codes. Delete by join code explicitly."
+            }), 400
 
-        if deleted_count > 0:
-            # Delete all associated records in bulk where possible to avoid N+1 queries
-            # Using synchronize_session=False to avoid session synchronization issues
-            Transaction.query.filter(Transaction.student_id.in_(student_ids)).delete(synchronize_session=False)
-            TapEvent.query.filter(TapEvent.student_id.in_(student_ids)).delete(synchronize_session=False)
-            StudentItem.query.filter(StudentItem.student_id.in_(student_ids)).delete(synchronize_session=False)
-            RentPayment.query.filter(RentPayment.student_id.in_(student_ids)).delete(synchronize_session=False)
-            RentWaiver.query.filter(RentWaiver.student_id.in_(student_ids)).delete(synchronize_session=False)
-            StudentInsurance.query.filter(StudentInsurance.student_id.in_(student_ids)).delete(synchronize_session=False)
-            InsuranceClaim.query.filter(InsuranceClaim.student_id.in_(student_ids)).delete(synchronize_session=False)
-            HallPassLog.query.filter(HallPassLog.student_id.in_(student_ids)).delete(synchronize_session=False)
-            
-            # Delete StudentTeacher associations
-            StudentTeacher.query.filter(StudentTeacher.student_id.in_(student_ids)).delete(synchronize_session=False)
+        join_code = join_codes[0]
+        _hard_delete_join_code_scope(join_code, current_admin_id)
 
-            # Delete TeacherBlock entries for these students
-            TeacherBlock.query.filter(TeacherBlock.student_id.in_(student_ids)).delete(synchronize_session=False)
-
-            # Delete StudentBlock entries for these students
-            StudentBlock.query.filter(StudentBlock.student_id.in_(student_ids)).delete(synchronize_session=False)
-
-            # Flush to ensure all associated records are deleted before deleting students
-            db.session.flush()
-            
-            # Delete the students themselves (bulk delete to avoid stale ORM state)
-            Student.query.filter(Student.id.in_(student_ids)).delete(synchronize_session=False)
-
-            # Flush student deletions
-            db.session.flush()
-
-        # Also delete unclaimed TeacherBlock entries for this block and teacher
-        unclaimed_deleted = TeacherBlock.query.filter(
+        # Cleanup any residual unclaimed seats in same block for this join code owner.
+        TeacherBlock.query.filter(
             TeacherBlock.teacher_id == current_admin_id,
             TeacherBlock.block == block,
             TeacherBlock.student_id.is_(None)
         ).delete(synchronize_session=False)
-        
-        current_app.logger.info(f"Deleted {unclaimed_deleted} unclaimed TeacherBlock entries for block {block}")
+        db.session.commit()
+        current_app.logger.info(f"Successfully deleted join_code={join_code} for block={block}")
 
-        # Final commit (keep ORM instances from expiring to avoid stale access in tests)
-        db_session = db.session()
-        original_expire_on_commit = db_session.expire_on_commit
-        db_session.expire_on_commit = False
-        try:
-            db.session.commit()
-            db.session.expunge_all()
-        finally:
-            db_session.expire_on_commit = original_expire_on_commit
-        current_app.logger.info(f"Successfully deleted block {block}")
-        
         return jsonify({
             "status": "success",
-            "message": f"Successfully deleted all {deleted_count} student(s) in Block {block} and all associated data."
+            "message": f"Successfully deleted class Block {block} (join code {join_code}) and scoped records."
         })
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error deleting block {block}: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred while deleting the block. Please try again."}), 500
+
+
+@admin_bp.route('/join-code/delete', methods=['POST'])
+@admin_bp.route('/join-code', methods=['DELETE'])
+@admin_required
+def delete_join_code():
+    """Hard-delete a class economy and all records scoped to the join code."""
+    data = request.get_json(silent=True) or request.form
+    join_code = (data.get('join_code') or '').strip().upper()
+    current_admin_id = session.get('admin_id')
+
+    if not join_code:
+        return jsonify({"status": "error", "message": "join_code is required."}), 400
+
+    seat = TeacherBlock.query.filter_by(teacher_id=current_admin_id, join_code=join_code).first()
+    if not seat:
+        return jsonify({"status": "error", "message": "Join code not found or access denied."}), 404
+
+    try:
+        _hard_delete_join_code_scope(join_code, current_admin_id)
+        db.session.commit()
+        return jsonify({
+            "status": "success",
+            "message": f"Join code {join_code} and all scoped records were permanently deleted."
+        })
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Error deleting join code {join_code}: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": "An error occurred while deleting the join code. Please try again."}), 500
 
 
 @admin_bp.route('/pending-students/delete', methods=['POST'])
@@ -2851,10 +2947,10 @@ def bulk_delete_pending_students():
 @admin_required
 def bulk_delete_legacy_unclaimed_students():
     """
-    Delete multiple legacy unclaimed students (Student records without username_hash) at once.
+    Archive multiple legacy unclaimed students (Student records without username_hash) at once.
     
     Legacy unclaimed students are Student records that exist but don't have a username_hash set yet.
-    This route ensures comprehensive cleanup with no leftover traces.
+    This route disables access while preserving class financial/issue history.
     Accepts a block name to delete all legacy unclaimed students in that block.
     """
     data = request.get_json()
@@ -2876,32 +2972,12 @@ def bulk_delete_legacy_unclaimed_students():
         
         deleted_count = 0
         for student in students:
-            # Delete associated records
-            Transaction.query.filter_by(student_id=student.id).delete()
-            TapEvent.query.filter_by(student_id=student.id).delete()
-            StudentItem.query.filter_by(student_id=student.id).delete()
-            RentPayment.query.filter_by(student_id=student.id).delete()
-            RentWaiver.query.filter_by(student_id=student.id).delete()
-            StudentInsurance.query.filter_by(student_id=student.id).delete()
-            InsuranceClaim.query.filter_by(student_id=student.id).delete()
-            HallPassLog.query.filter_by(student_id=student.id).delete()
-            
-            # Delete StudentTeacher associations
-            StudentTeacher.query.filter_by(student_id=student.id).delete()
-
-            # Delete TeacherBlock entries for this student
-            TeacherBlock.query.filter_by(student_id=student.id).delete()
-
-            # Delete StudentBlock entries for this student
-            StudentBlock.query.filter_by(student_id=student.id).delete()
-
-            # Delete the student
-            db.session.delete(student)
+            _archive_student(student)
             deleted_count += 1
 
         db.session.commit()
         
-        message = f"Successfully deleted {deleted_count} legacy unclaimed student(s) from Block {block}."
+        message = f"Successfully archived {deleted_count} legacy unclaimed student(s) from Block {block}."
 
         return jsonify({
             "status": "success",
@@ -3327,6 +3403,86 @@ def store_management():
         .all()
     )
 
+    collective_progress_by_item = {}
+    collective_items = [item for item in items if item.item_type == 'collective']
+    if collective_items:
+        teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id, is_claimed=True).all()
+        join_code_to_block = {}
+        join_code_to_label = {}
+        
+        # Count unique students per join_code instead of TeacherBlock seats
+        class_sizes = {}
+        class_size_query = (
+            db.session.query(
+                TeacherBlock.join_code,
+                db.func.count(db.func.distinct(Student.id)).label('student_count')
+            )
+            .join(Student, TeacherBlock.student_id == Student.id)
+            .filter(
+                TeacherBlock.teacher_id == admin_id,
+                TeacherBlock.is_claimed == True,
+                TeacherBlock.join_code.isnot(None)
+            )
+            .group_by(TeacherBlock.join_code)
+            .all()
+        )
+        class_sizes = {row.join_code: int(row.student_count or 0) for row in class_size_query}
+        
+        for seat in teacher_blocks:
+            if not seat.join_code:
+                continue
+            join_code_to_block.setdefault(seat.join_code, (seat.block or '').strip().upper())
+            join_code_to_label.setdefault(seat.join_code, seat.get_class_label())
+
+        collective_item_ids = [item.id for item in collective_items]
+        collective_counts = (
+            db.session.query(
+                StudentItem.store_item_id,
+                StudentItem.join_code,
+                db.func.count(db.distinct(StudentItem.student_id)).label('student_count'),
+            )
+            .join(Student, StudentItem.student_id == Student.id)
+            .filter(
+                Student.id.in_(sa.select(student_ids_subq)),
+                StudentItem.store_item_id.in_(collective_item_ids),
+                StudentItem.join_code.isnot(None),
+                StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
+            )
+            .group_by(StudentItem.store_item_id, StudentItem.join_code)
+            .all()
+        )
+        counts_lookup = {
+            (row.store_item_id, row.join_code): int(row.student_count or 0)
+            for row in collective_counts
+        }
+
+        for item in collective_items:
+            if item.blocks_list:
+                applicable_join_codes = [
+                    jc for jc, block in join_code_to_block.items()
+                    if block in {b.strip().upper() for b in item.blocks_list if b}
+                ]
+            else:
+                applicable_join_codes = list(join_code_to_block.keys())
+
+            per_class = []
+            for jc in sorted(applicable_join_codes):
+                count = counts_lookup.get((item.id, jc), 0)
+                if item.collective_goal_type == 'fixed':
+                    target = int(item.collective_goal_target or 0)
+                else:
+                    target = class_sizes.get(jc, 0)
+                per_class.append({
+                    'join_code': jc,
+                    'class_label': join_code_to_label.get(jc, jc),
+                    'count': count,
+                    'target': target,
+                    'remaining': max(0, target - count),
+                    'percent': min(100, int((count / target) * 100)) if target > 0 else 0,
+                    'is_complete': bool(target > 0 and count >= target),
+                })
+            collective_progress_by_item[item.id] = per_class
+
     # -------------------- Redemption Audit (live + inferred legacy adapter) --------------------
     audit_student = request.args.get('audit_student', '').strip()
     audit_class = request.args.get('audit_class', '').strip()
@@ -3349,18 +3505,6 @@ def store_management():
         except ValueError:
             flash("Invalid audit action filter.", "warning")
 
-    audit_start_dt = None
-    audit_end_dt = None
-    date_filter_valid = True
-    try:
-        if audit_start_date:
-            audit_start_dt = datetime.strptime(audit_start_date, '%Y-%m-%d').replace(tzinfo=timezone.utc)
-        if audit_end_date:
-            audit_end_dt = datetime.strptime(audit_end_date, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1)
-    except ValueError:
-        flash("Invalid date format. Please use YYYY-MM-DD.", "warning")
-        date_filter_valid = False
-
     live_query = RedemptionAuditLog.query.filter(
         RedemptionAuditLog.teacher_id == admin_id,
         RedemptionAuditLog.source == RedemptionAuditSource.LIVE,
@@ -3371,11 +3515,18 @@ def store_management():
         live_query = live_query.filter(RedemptionAuditLog.class_display_label == audit_class)
     if parsed_audit_action:
         live_query = live_query.filter(RedemptionAuditLog.action == parsed_audit_action)
-    if date_filter_valid:
-        if audit_start_dt:
-            live_query = live_query.filter(RedemptionAuditLog.timestamp >= audit_start_dt)
-        if audit_end_dt:
-            live_query = live_query.filter(RedemptionAuditLog.timestamp < audit_end_dt)
+    if audit_start_date:
+        try:
+            start_dt = datetime.strptime(audit_start_date, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            live_query = live_query.filter(RedemptionAuditLog.timestamp >= start_dt)
+        except ValueError:
+            flash("Invalid audit start date format. Please use YYYY-MM-DD.", "warning")
+    if audit_end_date:
+        try:
+            end_dt = datetime.strptime(audit_end_date, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1)
+            live_query = live_query.filter(RedemptionAuditLog.timestamp < end_dt)
+        except ValueError:
+            flash("Invalid audit end date format. Please use YYYY-MM-DD.", "warning")
 
     live_rows = live_query.order_by(RedemptionAuditLog.timestamp.desc()).limit(5000).all()
     live_keys = {
@@ -3390,13 +3541,12 @@ def store_management():
         .join(StoreItem, StudentItem.store_item_id == StoreItem.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
         .filter(StoreItem.teacher_id == admin_id)
-        .filter(StudentItem.status.in_(['processing', 'completed']))
     )
     if audit_student:
-        matching_student_ids = [
-            s.id for s in _scoped_students().all()
-            if audit_student.lower() in s.full_name.lower()
-        ]
+        matching_student_ids = []
+        for s in _scoped_students().all():
+            if audit_student.lower() in s.full_name.lower():
+                matching_student_ids.append(s.id)
         if matching_student_ids:
             inferred_query = inferred_query.filter(StudentItem.student_id.in_(matching_student_ids))
         else:
@@ -3435,11 +3585,20 @@ def store_management():
             continue
         if parsed_audit_action and row['action'] != parsed_audit_action.value:
             continue
-        if date_filter_valid:
-            if audit_start_dt and (not row['timestamp'] or ensure_utc(row['timestamp']) < audit_start_dt):
-                continue
-            if audit_end_dt and (not row['timestamp'] or ensure_utc(row['timestamp']) >= audit_end_dt):
-                continue
+        if audit_start_date:
+            try:
+                start_dt = datetime.strptime(audit_start_date, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+                if not row['timestamp'] or ensure_utc(row['timestamp']) < start_dt:
+                    continue
+            except ValueError:
+                pass
+        if audit_end_date:
+            try:
+                end_dt = datetime.strptime(audit_end_date, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1)
+                if not row['timestamp'] or ensure_utc(row['timestamp']) >= end_dt:
+                    continue
+            except ValueError:
+                pass
         inferred_rows.append(row)
 
     live_serialized = [{
@@ -3465,10 +3624,21 @@ def store_management():
 
     audit_class_options = sorted(set(class_labels_by_block.values()))
 
+    rent_managed_item_ids = {
+        row[0] for row in db.session.query(RentItem.store_item_id).join(
+            RentSettings, RentItem.rent_setting_id == RentSettings.id
+        ).filter(
+            RentSettings.teacher_id == admin_id,
+            RentItem.store_item_id.isnot(None)
+        ).all()
+    }
+
     return render_template('admin_store.html', form=form, items=items, current_page="store",
                          total_items=total_items, active_items=active_items, total_purchases=total_purchases,
                          pending_redemptions=pending_redemptions, recent_purchases=recent_purchases,
                          class_labels_by_block=class_labels_by_block,
+                         rent_managed_item_ids=rent_managed_item_ids,
+                         collective_progress_by_item=collective_progress_by_item,
                          audit_rows=audit_rows,
                          audit_total=audit_total,
                          audit_page=audit_page,
@@ -3510,6 +3680,7 @@ def edit_store_item(item_id):
 
 
 @admin_bp.route('/store/delete/<int:item_id>', methods=['POST'])
+@admin_bp.route('/item/deactivate/<int:item_id>', methods=['POST'])
 @admin_required
 def delete_store_item(item_id):
     """Deactivate a store item (soft delete)."""
@@ -3531,31 +3702,19 @@ def delete_store_item(item_id):
 @admin_bp.route('/store/hard-delete/<int:item_id>', methods=['POST'])
 @admin_required
 def hard_delete_store_item(item_id):
-    """Permanently delete a store item (hard delete)."""
+    """Legacy endpoint: hard item deletion is restricted to join-code deletion workflow."""
     admin_id = session.get("admin_id")
     item = StoreItem.query.filter_by(id=item_id, teacher_id=admin_id).first_or_404()
-    item_name = item.name
 
     # Prevent deletion if linked to rent settings
     if _block_rent_linked_store_item(item):
         return redirect(url_for('admin.store_management'))
 
-    # Remove any student item records for this store item to avoid FK violations.
-    # Transaction history is preserved separately in the ledger.
-    from app.models import StudentItem
-    deleted_student_items = (
-        StudentItem.query
-        .filter(StudentItem.store_item_id == item_id)
-        .delete(synchronize_session=False)
+    flash(
+        f"Hard deletion for '{item.name}' is disabled. Deactivate items instead, "
+        "or delete the class join code for full scoped cleanup.",
+        "error",
     )
-
-    # Safe to delete
-    db.session.delete(item)
-    db.session.commit()
-    if deleted_student_items:
-        flash(f"'{item_name}' was deleted along with {deleted_student_items} related purchase record(s).", "success")
-    else:
-        flash(f"'{item_name}' has been permanently deleted from the database.", "success")
     return redirect(url_for('admin.store_management'))
 
 
@@ -3563,7 +3722,14 @@ def hard_delete_store_item(item_id):
 
 def _block_rent_linked_store_item(item: StoreItem) -> bool:
     """Return True if store item is rent-linked and deletion should be blocked."""
-    if item.is_rent_linked:
+    is_managed_by_rent = item.is_rent_linked or db.session.query(RentItem.id).join(
+        RentSettings, RentItem.rent_setting_id == RentSettings.id
+    ).filter(
+        RentSettings.teacher_id == item.teacher_id,
+        RentItem.store_item_id == item.id
+    ).first() is not None
+
+    if is_managed_by_rent:
         flash(f"Cannot delete '{item.name}' because it is managed by Rent Settings. Please remove it from Rent Settings instead.", "error")
         return True
     return False
@@ -3624,7 +3790,9 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                     StoreItem.name == rent_item.name
                 ).first()
 
-            is_per_use = (rent_item.rent_item_type == 'per_use')
+            # Mark any store-backed rent item as rent-linked (privilege + per-use).
+            # Hall pass items are skipped earlier and never synced to store.
+            is_rent_linked_item = rent_item.rent_item_type in ('privilege', 'per_use')
 
             if store_item:
                 # Update existing store item
@@ -3633,8 +3801,7 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                 store_item.price = rent_item.store_price
                 store_item.limit_per_student = limit
                 store_item.is_active = True
-                # Only mark linked for per-use rent items
-                store_item.is_rent_linked = is_per_use
+                store_item.is_rent_linked = is_rent_linked_item
 
                 # Link this rent_item to the store_item if not already linked
                 if not rent_item.store_item_id:
@@ -3651,7 +3818,7 @@ def _sync_rent_items_to_store(rent_settings, teacher_id, block):
                     item_type='delayed',
                     limit_per_student=limit,
                     is_active=True,
-                    is_rent_linked=is_per_use
+                    is_rent_linked=is_rent_linked_item
                 )
                 db.session.add(store_item)
                 db.session.flush()  # Get the store_item.id
@@ -3945,11 +4112,9 @@ def rent_settings():
                         coverage_year=coverage_due.year
                     )
                     if block_join_code:
-                        paid_query = paid_query.filter(
-                            db.or_(RentPayment.join_code == block_join_code, RentPayment.join_code.is_(None))
-                        )
+                        paid_query = paid_query.filter(RentPayment.join_code == block_join_code)
                     else:
-                        paid_query = paid_query.filter(RentPayment.join_code.is_(None))
+                        paid_query = paid_query.filter(sa.false())
                     paid_count = paid_query.count()
                     if paid_count > 0:
                         mid_period_locked = True
@@ -4157,7 +4322,7 @@ def rent_settings():
                 RentPayment.query
                 .filter(RentPayment.student_id.in_(student_ids))
                 .filter_by(coverage_month=coverage_month, coverage_year=coverage_year)
-                .filter(db.or_(RentPayment.join_code == join_code, RentPayment.join_code.is_(None)))
+                .filter(RentPayment.join_code == join_code)
                 .all()
             )
 
@@ -4460,36 +4625,11 @@ def insurance_management():
         policy = InsurancePolicy(
             policy_code=policy_code,
             teacher_id=session.get('admin_id'),
-            title=form.title.data,
-            description=form.description.data,
-            premium=form.premium.data,
-            charge_frequency=form.charge_frequency.data,
-            autopay=form.autopay.data,
-            waiting_period_days=form.waiting_period_days.data,
-            max_claims_count=form.max_claims_count.data,
-            max_claims_period=form.max_claims_period.data,
-            max_claim_amount=form.max_claim_amount.data,
-            max_payout_per_period=form.max_payout_per_period.data,
-            claim_type=form.claim_type.data,
-            is_monetary=form.claim_type.data != 'non_monetary',
-            no_repurchase_after_cancel=form.no_repurchase_after_cancel.data,
-            repurchase_wait_days=form.repurchase_wait_days.data,
-            auto_cancel_nonpay_days=form.auto_cancel_nonpay_days.data,
-            claim_time_limit_days=form.claim_time_limit_days.data,
-            bundle_discount_percent=form.bundle_discount_percent.data,
-            marketing_badge=form.marketing_badge.data if form.marketing_badge.data else None,
-            tier_category_id=tier_category_id,
-            tier_name=form.tier_name.data or None,
-            tier_color=form.tier_color.data or None,
-            tier_level=form.tier_level.data or None,
             settings_mode=request.form.get('settings_mode', 'advanced'),
-            is_active=form.is_active.data
         )
+        _populate_policy_from_form(policy, form, next_tier_category_id=tier_category_id)
         db.session.add(policy)
         db.session.flush()  # Get the ID for the policy before adding blocks
-        # Set blocks using many-to-many relationship
-        if form.blocks.data:
-            policy.set_blocks(form.blocks.data)
         db.session.commit()
         flash(f"Insurance policy '{policy.title}' created successfully!", "success")
         return redirect(url_for('admin.insurance_management'))
@@ -4622,39 +4762,7 @@ def edit_insurance_policy(policy_id):
     next_tier_category_id = _next_tenant_scoped_tier_id(tier_namespace_seed, existing_tier_ids)
 
     if request.method == 'POST' and form.validate_on_submit():
-        policy.title = form.title.data
-        policy.description = form.description.data
-        policy.premium = form.premium.data
-        policy.charge_frequency = form.charge_frequency.data
-        policy.autopay = form.autopay.data
-        policy.waiting_period_days = form.waiting_period_days.data
-        policy.max_claims_count = form.max_claims_count.data
-        policy.max_claims_period = form.max_claims_period.data
-        policy.max_claim_amount = form.max_claim_amount.data
-        policy.max_payout_per_period = form.max_payout_per_period.data
-        policy.claim_type = form.claim_type.data
-        policy.is_monetary = form.claim_type.data != 'non_monetary'
-        policy.no_repurchase_after_cancel = form.no_repurchase_after_cancel.data
-        policy.enable_repurchase_cooldown = form.enable_repurchase_cooldown.data
-        policy.repurchase_wait_days = form.repurchase_wait_days.data
-        policy.auto_cancel_nonpay_days = form.auto_cancel_nonpay_days.data
-        policy.claim_time_limit_days = form.claim_time_limit_days.data
-        policy.bundle_with_policy_ids = form.bundle_with_policy_ids.data
-        policy.bundle_discount_percent = form.bundle_discount_percent.data
-        policy.bundle_discount_amount = form.bundle_discount_amount.data
-        policy.marketing_badge = form.marketing_badge.data if form.marketing_badge.data else None
-        # Set blocks using many-to-many relationship
-        policy.set_blocks(form.blocks.data if form.blocks.data else [])
-        if form.tier_category_id.data:
-            policy.tier_category_id = form.tier_category_id.data
-        elif form.tier_name.data or form.tier_color.data:
-            policy.tier_category_id = next_tier_category_id
-        else:
-            policy.tier_category_id = None
-        policy.tier_name = form.tier_name.data or None
-        policy.tier_color = form.tier_color.data or None
-        policy.tier_level = form.tier_level.data or None
-        policy.is_active = form.is_active.data
+        _populate_policy_from_form(policy, form, next_tier_category_id=next_tier_category_id)
 
         db.session.commit()
         flash(f"Insurance policy '{policy.title}' updated successfully!", "success")
@@ -4855,12 +4963,8 @@ def process_claim(claim_id):
 
     def _get_period_bounds():
         now = utc_now()
-        if claim.policy.max_claims_period == 'year':
-            return (
-                now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
-                now.replace(month=12, day=31, hour=23, minute=59, second=59),
-            )
-        if claim.policy.max_claims_period == 'semester':
+        period_key = (claim.policy.charge_frequency or '').lower()
+        if period_key == 'semester':
             if now.month <= 6:
                 return (
                     now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0),
@@ -4870,6 +4974,10 @@ def process_claim(claim_id):
                 now.replace(month=7, day=1, hour=0, minute=0, second=0, microsecond=0),
                 now.replace(month=12, day=31, hour=23, minute=59, second=59),
             )
+        if period_key == 'weekly':
+            period_start = (now - timedelta(days=now.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+            period_end = period_start + timedelta(days=7) - timedelta(seconds=1)
+            return period_start, period_end
         period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         next_month = period_start.replace(day=28) + timedelta(days=4)
         period_end = next_month.replace(day=1) - timedelta(seconds=1)
@@ -4941,7 +5049,7 @@ def process_claim(claim_id):
         InsuranceClaim.id != claim.id,
     )
     if claim.policy.max_claims_count and approved_claims.count() >= claim.policy.max_claims_count:
-        validation_errors.append(f"Maximum claims limit reached ({claim.policy.max_claims_count} per {claim.policy.max_claims_period})")
+        validation_errors.append(f"Maximum claims limit reached ({claim.policy.max_claims_count} per {claim.policy.charge_frequency})")
 
     period_payouts = None
     remaining_period_cap = None
@@ -4959,7 +5067,7 @@ def process_claim(claim_id):
         remaining_period_cap = max(claim.policy.max_payout_per_period - period_payouts, 0)
         if remaining_period_cap is not None and requested_amount > remaining_period_cap and claim.policy.claim_type != 'non_monetary':
             validation_errors.append(
-                f"Maximum payout limit would be exceeded (${period_payouts:.2f} paid + ${requested_amount:.2f} requested > ${claim.policy.max_payout_per_period:.2f} limit per {claim.policy.max_claims_period})"
+                f"Maximum payout limit would be exceeded (${period_payouts:.2f} paid + ${requested_amount:.2f} requested > ${claim.policy.max_payout_per_period:.2f} limit per {claim.policy.charge_frequency})"
             )
 
     # Get claims statistics
@@ -4991,7 +5099,7 @@ def process_claim(claim_id):
         if requires_payout:
             approved_claims_count = approved_claims.count()
             if claim.policy.max_claims_count and approved_claims_count >= claim.policy.max_claims_count:
-                flash(f"Cannot approve claim: maximum of {claim.policy.max_claims_count} claims already reached this {claim.policy.max_claims_period}.", "danger")
+                flash(f"Cannot approve claim: maximum of {claim.policy.max_claims_count} claims already reached this {claim.policy.charge_frequency}.", "danger")
                 db.session.rollback()
                 return redirect(url_for('admin.process_claim', claim_id=claim_id))
 
@@ -5006,7 +5114,7 @@ def process_claim(claim_id):
             if remaining_period_cap is not None:
                 if remaining_period_cap <= 0:
                     flash(
-                        f"Cannot approve claim: Would exceed maximum payout limit of ${claim.policy.max_payout_per_period:.2f} per {claim.policy.max_claims_period} (${period_payouts:.2f} already paid)",
+                        f"Cannot approve claim: Would exceed maximum payout limit of ${claim.policy.max_payout_per_period:.2f} per {claim.policy.charge_frequency} (${period_payouts:.2f} already paid)",
                         "danger",
                     )
                     db.session.rollback()
@@ -5032,6 +5140,7 @@ def process_claim(claim_id):
                 join_code=join_code,  # CRITICAL: Add join_code for period isolation
                 amount=approved_amount,
                 account_type='checking',
+                status=TransactionStatus.PENDING,
                 type='insurance_reimbursement',
                 description=transaction_description,
             )
@@ -5072,6 +5181,21 @@ def transactions():
 def void_transaction(transaction_id):
     """Void a transaction."""
     is_json = request.is_json or request.headers.get("X-Requested-With") == "XMLHttpRequest"
+    def _safe_referrer_redirect():
+        # Safe redirect: validate referrer to prevent open redirects
+        ref = request.referrer or ""
+        potential_url = ref.replace('\\', '')
+        parsed = urlparse(potential_url)
+        if not parsed.scheme and not parsed.netloc:
+            return redirect(potential_url)
+        return redirect(url_for('admin.dashboard'))
+
+    def _void_error(message, status_code=400):
+        if is_json:
+            return jsonify(status="error", message=message), status_code
+        flash(message, "error")
+        return _safe_referrer_redirect()
+
     tx = (
         Transaction.query
         .join(Student, Transaction.student_id == Student.id)
@@ -5079,8 +5203,211 @@ def void_transaction(transaction_id):
         .filter(Student.id.in_(sa.select(_student_scope_subquery())))
         .first_or_404()
     )
-    tx.is_void = True
+
+    if tx.is_void:
+        return _void_error("Transaction is already voided.")
+
     try:
+        is_pending = (tx.status == TransactionStatus.PENDING)
+
+        if tx.type == 'purchase':
+            purchase_match = re.match(
+                r'^Purchase:\s*(?P<name>.+?)(?:\s+\(x(?P<qty>\d+)\))?(?:\s+\[.*\])?$',
+                (tx.description or '').strip()
+            )
+            if not purchase_match:
+                return _void_error("This purchase transaction cannot be voided automatically.")
+
+            item_name = (purchase_match.group('name') or '').strip()
+            quantity = int(purchase_match.group('qty') or 1)
+
+            store_item = StoreItem.query.filter_by(
+                teacher_id=tx.teacher_id,
+                name=item_name
+            ).first()
+
+            if not store_item:
+                return _void_error("Purchase item record was not found. This transaction cannot be voided.")
+
+            if store_item.item_type == 'immediate':
+                return _void_error("Immediate-use item purchases are not voidable.")
+
+            if store_item.item_type != 'delayed':
+                return _void_error("Only delayed-use item purchases are voidable.")
+
+            matching_items_query = StudentItem.query.filter(
+                StudentItem.student_id == tx.student_id,
+                StudentItem.store_item_id == store_item.id,
+            )
+            if not tx.join_code:
+                return _void_error("Transaction is missing class scope (join_code) and cannot be voided safely.")
+            matching_items_query = matching_items_query.filter(StudentItem.join_code == tx.join_code)
+
+            matching_items = matching_items_query.all()
+            if not matching_items:
+                return _void_error("No matching student item was found for this purchase.")
+
+            tx_ts = ensure_utc(tx.timestamp) if tx.timestamp else utc_now()
+
+            def _distance(student_item):
+                if not student_item.purchase_date:
+                    return float('inf')
+                return abs((ensure_utc(student_item.purchase_date) - tx_ts).total_seconds())
+
+            matching_items.sort(key=lambda si: (_distance(si), -si.id))
+
+            selected_items = []
+            selected_units = 0
+            for student_item in matching_items:
+                selected_items.append(student_item)
+                selected_units += (student_item.quantity_purchased or 1)
+                if selected_units >= quantity:
+                    break
+
+            if selected_units < quantity:
+                return _void_error("Unable to map this transaction to purchasable student items.")
+
+            used_statuses = {'processing', 'completed', 'redeemed'}
+            if any((student_item.status or '').lower() in used_statuses for student_item in selected_items):
+                return _void_error("Delayed-use item has already been used (redemption requested or completed) and cannot be voided.")
+
+            db.session.add(Transaction(
+                student_id=tx.student_id,
+                teacher_id=tx.teacher_id,
+                join_code=tx.join_code,
+                amount=Decimal('0.00'),
+                account_type=tx.account_type or 'checking',
+                status=TransactionStatus.PENDING,
+                type='void_item_removed',
+                description=f"item removed - {store_item.name}",
+            ))
+
+            for student_item in selected_items:
+                # Preserve item history while removing from active inventory surfaces.
+                student_item.status = 'voided'
+                if not student_item.redemption_date:
+                    student_item.redemption_date = utc_now()
+
+            reversal_tx = Transaction(
+                student_id=tx.student_id,
+                teacher_id=tx.teacher_id,
+                join_code=tx.join_code,
+                amount=abs(tx.amount or Decimal('0.00')),
+                account_type=tx.account_type or 'checking',
+                status=TransactionStatus.PENDING,
+                type='refund',
+                original_transaction_id=tx.id,
+                description=f"Void refund for transaction #{tx.id}: {tx.description}",
+            )
+            db.session.add(reversal_tx)
+            db.session.flush()
+            tx.reversal_transaction_id = reversal_tx.id
+
+        elif tx.type == 'Rent Payment':
+            rent_payments_query = RentPayment.query.filter(
+                RentPayment.student_id == tx.student_id,
+                RentPayment.amount_paid == abs(tx.amount or Decimal('0.00')),
+            )
+            if not tx.join_code:
+                return _void_error("Transaction is missing class scope (join_code) and cannot be voided safely.")
+            rent_payments_query = rent_payments_query.filter(RentPayment.join_code == tx.join_code)
+            rent_payments = rent_payments_query.all()
+
+            if rent_payments:
+                tx_ts = ensure_utc(tx.timestamp) if tx.timestamp else utc_now()
+                matched_rent_payment = min(
+                    rent_payments,
+                    key=lambda p: abs((ensure_utc(p.payment_date or tx.timestamp or utc_now()) - tx_ts).total_seconds())
+                )
+                db.session.delete(matched_rent_payment)
+
+            if not is_pending:
+                reversal_tx = Transaction(
+                    student_id=tx.student_id,
+                    teacher_id=tx.teacher_id,
+                    join_code=tx.join_code,
+                    amount=abs(tx.amount or Decimal('0.00')),
+                    account_type=tx.account_type or 'checking',
+                    status=TransactionStatus.PENDING,
+                    type='refund',
+                    original_transaction_id=tx.id,
+                    description=f"Void refund for transaction #{tx.id}: {tx.description}",
+                )
+                db.session.add(reversal_tx)
+                db.session.flush()
+                tx.reversal_transaction_id = reversal_tx.id
+
+        elif tx.type == 'insurance_premium':
+            policy_title = None
+            if tx.description and tx.description.startswith("Insurance premium: "):
+                policy_title = tx.description.replace("Insurance premium: ", "", 1).strip()
+
+            enrollments_query = (
+                StudentInsurance.query
+                .join(InsurancePolicy, StudentInsurance.policy_id == InsurancePolicy.id)
+                .filter(
+                    StudentInsurance.student_id == tx.student_id,
+                    InsurancePolicy.teacher_id == tx.teacher_id,
+                )
+            )
+            if policy_title:
+                enrollments_query = enrollments_query.filter(InsurancePolicy.title == policy_title)
+            if not tx.join_code:
+                return _void_error("Transaction is missing class scope (join_code) and cannot be voided safely.")
+            enrollments_query = enrollments_query.filter(
+                StudentInsurance.join_code == tx.join_code
+            )
+            enrollments = enrollments_query.all()
+
+            if enrollments:
+                tx_ts = ensure_utc(tx.timestamp) if tx.timestamp else utc_now()
+                matched_enrollment = min(
+                    enrollments,
+                    key=lambda e: abs((ensure_utc(e.purchase_date or tx.timestamp or utc_now()) - tx_ts).total_seconds())
+                )
+                matched_enrollment.payment_current = False
+                matched_enrollment.days_unpaid = max(1, matched_enrollment.days_unpaid or 0)
+
+            if not is_pending:
+                reversal_tx = Transaction(
+                    student_id=tx.student_id,
+                    teacher_id=tx.teacher_id,
+                    join_code=tx.join_code,
+                    amount=abs(tx.amount or Decimal('0.00')),
+                    account_type=tx.account_type or 'checking',
+                    status=TransactionStatus.PENDING,
+                    type='refund',
+                    original_transaction_id=tx.id,
+                    description=f"Void refund for transaction #{tx.id}: {tx.description}",
+                )
+                db.session.add(reversal_tx)
+                db.session.flush()
+                tx.reversal_transaction_id = reversal_tx.id
+        
+        else:
+            # Generic reversal for other types (if posted)
+            if not is_pending:
+                # Invert amount
+                reversal_amount = -(tx.amount or Decimal('0.00'))
+                reversal_tx = Transaction(
+                    student_id=tx.student_id,
+                    teacher_id=tx.teacher_id,
+                    join_code=tx.join_code,
+                    amount=reversal_amount,
+                    account_type=tx.account_type or 'checking',
+                    status=TransactionStatus.PENDING,
+                    type='refund',
+                    original_transaction_id=tx.id,
+                    description=f"Void refund for transaction #{tx.id}: {tx.description}",
+                )
+                db.session.add(reversal_tx)
+                db.session.flush()
+                tx.reversal_transaction_id = reversal_tx.id
+
+        tx.is_void = True
+        if is_pending:
+            tx.status = TransactionStatus.VOID
+            tx.voided_at = utc_now()
         db.session.commit()
         current_app.logger.info(f"Transaction {transaction_id} voided")
     except SQLAlchemyError as e:
@@ -5089,27 +5416,11 @@ def void_transaction(transaction_id):
         if is_json:
             return jsonify(status="error", message="Failed to void transaction"), 500
         flash("Error voiding transaction.", "error")
-        # Safe redirect: validate referrer to prevent open redirects
-        ref = request.referrer or ""
-        potential_url = ref.replace('\\', '')
-        parsed = urlparse(potential_url)
-        if not parsed.scheme and not parsed.netloc:
-            return_url = potential_url
-        else:
-            return_url = url_for('admin.dashboard')
-        return redirect(return_url)
+        return _safe_referrer_redirect()
     if is_json:
         return jsonify(status="success", message="Transaction voided.")
     flash("Transaction voided.", "success")
-    # Safe redirect: validate referrer to prevent open redirects
-    ref = request.referrer or ""
-    potential_url = ref.replace('\\', '')
-    parsed = urlparse(potential_url)
-    if not parsed.scheme and not parsed.netloc:
-        return_url = potential_url
-    else:
-        return_url = url_for('admin.dashboard')
-    return redirect(return_url)
+    return _safe_referrer_redirect()
 
 
 # -------------------- HALL PASS MANAGEMENT --------------------
@@ -5460,6 +5771,7 @@ def run_payroll():
                 join_code=join_code,  # CRITICAL: Add join_code for proper scoping
                 amount=amount,
                 description=f"Payroll based on attendance",
+                status=TransactionStatus.PENDING,
                 account_type="checking",
                 type="payroll"
             )
@@ -5585,7 +5897,7 @@ def payroll():
     )
 
     # Calculate payroll estimates
-    payroll_summary = calculate_payroll(students, last_payroll_time, teacher_id=admin_id)
+    payroll_summary, payroll_updated_at = get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=admin_id)
     total_payroll_estimate = sum(payroll_summary.values())
 
     # Build class_labels_by_block dictionary
@@ -5620,16 +5932,23 @@ def payroll():
         estimated_payout = payroll_summary.get(student.id, 0)
 
         # Get last payroll date
-        last_payroll = Transaction.query.filter_by(
-            student_id=student.id,
-            type='payroll'
-        ).order_by(Transaction.timestamp.desc()).first()
+        last_payroll = (
+            Transaction.query
+            .filter(
+                Transaction.student_id == student.id,
+                Transaction.type == 'payroll',
+                Transaction.join_code.in_(my_join_codes),
+            )
+            .order_by(Transaction.timestamp.desc())
+            .first()
+        )
 
         # Total earned from payroll
         total_earned = db.session.query(func.sum(Transaction.amount)).filter(
             Transaction.student_id == student.id,
             Transaction.type == 'payroll',
-            Transaction.is_void == False
+            Transaction.is_void == False,
+            Transaction.join_code.in_(my_join_codes),
         ).scalar() or 0.0
 
         student_stats.append({
@@ -5712,6 +6031,7 @@ def payroll():
         next_payroll_date=next_pay_date_utc,  # Pass UTC timestamp
         next_payroll_by_block=next_payroll_by_block,
         total_payroll_estimate=total_payroll_estimate,
+        payroll_updated_at=payroll_updated_at,
         total_students=len(students),
         avg_payout=avg_payout,
         total_blocks=len(blocks),
@@ -6147,7 +6467,31 @@ def void_payroll_transaction(transaction_id):
         if transaction.is_void:
             return jsonify({'success': False, 'message': 'Transaction is already voided'}), 400
 
+        is_pending = (transaction.status == TransactionStatus.PENDING)
+
         transaction.is_void = True
+        
+        if is_pending:
+            transaction.status = TransactionStatus.VOID
+            transaction.voided_at = utc_now()
+        else:
+            # Create reversal for posted transaction
+            reversal_amount = -(transaction.amount or Decimal('0.00'))
+            reversal_tx = Transaction(
+                student_id=transaction.student_id,
+                teacher_id=transaction.teacher_id,
+                join_code=transaction.join_code,
+                amount=reversal_amount,
+                account_type=transaction.account_type or 'checking',
+                status=TransactionStatus.PENDING,
+                type='refund',
+                original_transaction_id=transaction.id,
+                description=f"Void refund for transaction #{transaction.id}: {transaction.description}",
+            )
+            db.session.add(reversal_tx)
+            db.session.flush()
+            transaction.reversal_transaction_id = reversal_tx.id
+
         db.session.commit()
 
         return jsonify({'success': True, 'message': 'Transaction voided successfully'})
@@ -6179,7 +6523,33 @@ def void_transactions_bulk():
                 .first()
             )
             if transaction and not transaction.is_void:
+                is_pending = (transaction.status == TransactionStatus.PENDING)
                 transaction.is_void = True
+                
+                if is_pending:
+                    transaction.status = TransactionStatus.VOID
+                    transaction.voided_at = utc_now()
+                else:
+                    # Create reversal for posted transaction
+                    reversal_amount = -(transaction.amount or Decimal('0.00'))
+                    reversal_tx = Transaction(
+                        student_id=transaction.student_id,
+                        teacher_id=transaction.teacher_id,
+                        join_code=transaction.join_code,
+                        amount=reversal_amount,
+                        account_type=transaction.account_type or 'checking',
+                        status=TransactionStatus.PENDING,
+                        type='refund',
+                        original_transaction_id=transaction.id,
+                        description=f"Void refund for transaction #{transaction.id}: {transaction.description}",
+                    )
+                    db.session.add(reversal_tx)
+                    # No flush here to avoid performance hit in loop? 
+                    # Actually we need ID for reversal_transaction_id?
+                    # Yes, linking them is good practice.
+                    db.session.flush()
+                    transaction.reversal_transaction_id = reversal_tx.id
+
                 count += 1
 
         db.session.commit()
@@ -6224,6 +6594,7 @@ def payroll_apply_reward(reward_id):
                     amount=reward.amount,
                     description=f"Reward: {reward.name}",
                     account_type='checking',
+                    status=TransactionStatus.PENDING,
                     type='reward',
                     timestamp=utc_now()
                 )
@@ -6295,6 +6666,7 @@ def payroll_apply_fine(fine_id):
                     amount=-abs(fine.amount),  # Negative for fine
                     description=f"Fine: {fine.name}",
                     account_type='checking',
+                    status=TransactionStatus.PENDING,
                     type='fine',
                     timestamp=utc_now()
                 )
@@ -6308,6 +6680,7 @@ def payroll_apply_fine(fine_id):
                         join_code=join_code,
                         amount=-shortfall,
                         account_type='savings',
+                        status=TransactionStatus.PENDING,
                         type='Withdrawal',
                         description='Overdraft protection transfer to checking'
                     )
@@ -6317,6 +6690,7 @@ def payroll_apply_fine(fine_id):
                         join_code=join_code,
                         amount=shortfall,
                         account_type='checking',
+                        status=TransactionStatus.PENDING,
                         type='Deposit',
                         description='Overdraft protection transfer from savings'
                     )
@@ -6403,6 +6777,7 @@ def payroll_manual_payment():
                         amount=amount,
                         description=f"Manual Payment: {description}",
                         account_type=account_type,
+                        status=TransactionStatus.PENDING,
                         type='manual_payment',
                         timestamp=utc_now()
                     )
@@ -6416,6 +6791,7 @@ def payroll_manual_payment():
                             join_code=join_code,
                             amount=-shortfall,
                             account_type='savings',
+                            status=TransactionStatus.PENDING,
                             type='Withdrawal',
                             description='Overdraft protection transfer to checking'
                         )
@@ -6425,6 +6801,7 @@ def payroll_manual_payment():
                             join_code=join_code,
                             amount=shortfall,
                             account_type='checking',
+                            status=TransactionStatus.PENDING,
                             type='Deposit',
                             description='Overdraft protection transfer from savings'
                         )
@@ -7589,7 +7966,7 @@ def feature_settings():
 
             # Get feature toggle values
             features_data = {
-                'payroll_enabled': 'payroll_enabled' in request.form,
+                'payroll_enabled': True,  # Always enabled - payroll is mandatory
                 'insurance_enabled': 'insurance_enabled' in request.form,
                 'banking_enabled': 'banking_enabled' in request.form,
                 'rent_enabled': 'rent_enabled' in request.form,
@@ -7693,7 +8070,6 @@ def feature_settings():
         periods=periods,
         period_settings=period_settings,
         features_list=[
-            ('payroll_enabled', 'Payroll', 'payments', 'Time tracking and student payments'),
             ('insurance_enabled', 'Insurance', 'shield', 'Insurance policies and claims'),
             ('banking_enabled', 'Banking', 'account_balance', 'Savings accounts and interest'),
             ('rent_enabled', 'Rent', 'home', 'Housing costs and payments'),
@@ -7735,7 +8111,11 @@ def update_period_feature_settings(period):
 
         for feature_key, db_column in feature_map.items():
             if feature_key in data:
-                setattr(settings, db_column, bool(data[feature_key]))
+                # Payroll is always enabled and cannot be disabled
+                if db_column == 'payroll_enabled':
+                    setattr(settings, db_column, True)
+                else:
+                    setattr(settings, db_column, bool(data[feature_key]))
 
         settings.updated_at = utc_now()
         db.session.commit()
@@ -7814,7 +8194,11 @@ def copy_feature_settings():
             # Only copy valid feature columns to prevent attribute injection
             for key, value in source_dict.items():
                 if key in valid_feature_columns:
-                    setattr(target_settings, key, value)
+                    # Payroll is always enabled and cannot be disabled
+                    if key == 'payroll_enabled':
+                        setattr(target_settings, key, True)
+                    else:
+                        setattr(target_settings, key, value)
 
             target_settings.updated_at = utc_now()
             copied_count += 1
@@ -8128,13 +8512,8 @@ def onboarding_status():
                 # Set it in session for future requests
                 session['current_join_code'] = join_code
 
-        teacher_block = TeacherBlock.query.filter_by(
-            teacher_id=admin_id,
-            join_code=join_code
-        ).first()
-
-        if not teacher_block:
-            # No class period selected yet - indicate this so frontend can show appropriate message
+        # If still no join_code after auto-discovery, teacher has no class periods
+        if not join_code:
             return jsonify({
                 'status': 'success',
                 'dismissed': False,
