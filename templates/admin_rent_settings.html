@@ -352,7 +352,7 @@
                   {% for item in class_info.unpaid_students %}
                   <tr>
                     <td>
-                      <a href="{{ url_for('admin.student_detail', student_id=item.student.id) }}">
+                      <a href="{{ url_for('admin.student_detail', student_id=item.student.id, join_code=join_codes_by_block.get(item.student.block, '')) }}">
                         {{ item.student.full_name }}
                       </a>
                     </td>
