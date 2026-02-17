@@ -124,7 +124,7 @@ See [RELEASE_NOTES_v1.3.0.md](docs/archive/releases/RELEASE_NOTES_v1.3.0.md) for
 
 See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for full details.
 
-### ✅ Version 1.0.0 - November 29, 2024
+### ✅ Version 1.0.0 - November 29, 2025
 
 **First stable release - all critical blockers resolved:**
 
@@ -209,7 +209,7 @@ See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for
 
 ## Future Roadmap (Post-1.0)
 
-### Version 1.1 - Analytics & Insights ✅ **RELEASED 2024-12-13**
+### Version 1.1 - Analytics & Insights ✅ **RELEASED 2025-12-13**
 - ✅ Dashboard visualizations for student progress (weekly stats card with attendance, earnings, spending)
 - ✅ Savings projection graph with interactive 12-month forecast
 - ✅ Class economy health metrics (enhanced warnings with specific recommendations)

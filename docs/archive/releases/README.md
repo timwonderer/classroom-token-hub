@@ -14,8 +14,8 @@ This directory contains historical release notes for Classroom Token Hub.
 - **[v1.2.1](RELEASE_NOTES_v1.2.1.md)** - Migration hardening, join code audits, multi-tenancy fixes (December 21, 2025)
 - **[v1.2.0](RELEASE_NOTES_v1.2.0.md)** - Progressive Web App, mobile experience, accessibility (December 18, 2025)
 - **[v1.1.1](RELEASE_NOTES_v1.1.1.md)** - Bug fixes for authentication, theming, and redirects (December 15, 2025)
-- **[v1.1.0](RELEASE_NOTES_v1.1.0.md)** - Dashboard analytics, projection graphs, and UI redesign (December 13, 2024)
-- **[v1.0.0](RELEASE_NOTES_v1.0.md)** - Initial stable release (November 29, 2024)
+- **[v1.1.0](RELEASE_NOTES_v1.1.0.md)** - Dashboard analytics, projection graphs, and UI redesign (December 13, 2025)
+- **[v1.0.0](RELEASE_NOTES_v1.0.md)** - Initial stable release (November 29, 2025)
 
 ## Current Releases
 
