@@ -25,7 +25,6 @@ The `purchase_item` route authorizes purchases by checking `student.checking_bal
 **Why This Violates Financial Invariants:**
 This allows a student with funds in Class A to purchase items in Class B even if they have $0 or negative balance in Class B. The transaction is then recorded in Class B (correctly scoped), driving Class B's ledger into negative territory based on funds that exist only in Class A. This breaks tenant isolation and fund segregation.
 **Worst Case Scenario:**
-
 A student uses funds earned in a high-paying class to drain the economy of a stricter class, effectively counterfeiting currency across tenant boundaries.
 
 **Confidence:** 100%
