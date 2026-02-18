@@ -81,6 +81,20 @@ Review of personally identifiable information handling in the multi-tenancy syst
 - Reviewing data handling practices
 - Verifying PII encryption implementation
 
+### [Architecture Breaking Change Transition Plan](ARCHITECTURE_BREAKING_CHANGE_TRANSITION_PLAN.md)
+
+Runbook for safely rolling out a major architecture-breaking release while preserving legacy data compatibility and minimizing downtime.
+
+**Use this when:**
+- Production migration state differs from `main`/feature branch
+- Releasing large schema + behavior changes
+- Planning phased expand/backfill/cutover/contract rollouts
+
+**Key features:**
+- Migration drift reconciliation workflow (`production` vs `main` vs `feature`)
+- Expand/contract rollout phases with dual-write + feature-flag cutover
+- Backfill verification, parity checks, and rollback triggers
+
 ## Adding New Operational Guides
 
 When creating new operational documentation:
@@ -113,5 +127,5 @@ For critical issues:
 
 ---
 
-**Last Updated:** 2026-02-09
+**Last Updated:** 2026-02-17
 **Maintained by:** Project maintainers and operations team
