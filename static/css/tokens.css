@@ -7,6 +7,11 @@
     /* Perspective: Professional yet warm */
     --font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
+    /* Bootstrap Overrides - Base */
+    --bs-body-font-family: var(--font-family);
+    --bs-body-bg: var(--background);
+    --bs-body-color: var(--text-primary);
+
     /* Radius — Minimal / Crisp */
     --radius-xs: 2px;
     --radius-sm: 4px;
@@ -82,6 +87,17 @@
     --danger: #c0392b;
     --danger-hover: #a83024;
     --danger-subtle: #fce8e6;
+
+    /* Bootstrap Variable Mapping (Teacher Default) */
+    --bs-primary: var(--primary);
+    --bs-secondary: var(--secondary);
+    --bs-success: var(--success);
+    --bs-info: var(--info);
+    --bs-warning: var(--warning);
+    --bs-danger: var(--danger);
+    /* RGB values approximated for components using rgba() */
+    --bs-primary-rgb: 26, 77, 71;
+    --bs-secondary-rgb: 211, 175, 55;
 }
 
 /* ─── Student Theme (Steward Blue) ─── */
@@ -112,6 +128,15 @@ body.student-shell {
     --danger: #c44040;
     --danger-hover: #aa3636;
     --danger-subtle: #fce8e6;
+
+    /* Bootstrap Variable Mapping */
+    --bs-primary: var(--primary);
+    --bs-secondary: var(--secondary);
+    --bs-success: var(--success);
+    --bs-info: var(--info);
+    --bs-warning: var(--warning);
+    --bs-danger: var(--danger);
+    --bs-primary-rgb: 47, 79, 127;
 }
 
 /* ─── System Admin Theme (Guardian Gray) ─── */
@@ -142,4 +167,13 @@ body.sysadmin-shell {
     --danger: #c0392b;
     --danger-hover: #a83024;
     --danger-subtle: #fce8e6;
+
+    /* Bootstrap Variable Mapping */
+    --bs-primary: var(--primary);
+    --bs-secondary: var(--secondary);
+    --bs-success: var(--success);
+    --bs-info: var(--info);
+    --bs-warning: var(--warning);
+    --bs-danger: var(--danger);
+    --bs-primary-rgb: 48, 48, 48;
 }
