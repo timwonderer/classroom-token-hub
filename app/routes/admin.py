@@ -7998,7 +7998,22 @@ def help_support():
             cleaned_body,
         )
 
+    if not class_scope_options and request.method == 'GET':
+        # Inform teachers who have no classes that they must create one before submitting tickets.
+        flash(
+            "You don't have any classes yet. Please add a class from your dashboard before submitting a support ticket.",
+            "info",
+        )
+
     if request.method == 'POST':
+        # If the teacher has no classes, prevent submission and provide a clear message.
+        if not class_scope_options:
+            flash(
+                "You cannot submit a support ticket until you have at least one class. "
+                "Please add a class from your dashboard first.",
+                "error",
+            )
+            return redirect(url_for('admin.help_support'))
         issue_category = request.form.get('issue_category', 'general').strip().lower()
         title = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip()
