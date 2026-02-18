@@ -23,6 +23,7 @@
             font-family: 'Inter', sans-serif;
             height: 100vh;
             background: var(--neutral-50);
+            background: var(--neutral-50);
         }
 
        .login-wrapper {
@@ -39,6 +40,7 @@
             align-items: center;
             justify-content: center;
             background: white;
+            background: white;
 
             height: 100vh;
 
@@ -47,6 +49,7 @@
         .branding-side {
             flex: 1;
 
+            background: linear-gradient(135deg, var(--info) 0%, var(--info) 50%, var(--info) 100%);
             background: linear-gradient(135deg, var(--info) 0%, var(--info) 50%, var(--info) 100%);
             display: flex;
             align-items: center;
@@ -67,6 +70,7 @@
         }
 
         .branding-logo-card {
+            background: color-mix(in srgb, white 96%, transparent);
             background: color-mix(in srgb, white 96%, transparent);
             padding: 2rem;
             width: 300px;
@@ -92,6 +96,7 @@
             margin-bottom: 0.5rem;
             font-weight: 700;
             color: var(--primary);
+            color: var(--primary);
             text-align: center;
             font-size: 2rem;
         }
@@ -99,15 +104,18 @@
         .login-container .subtitle {
             text-align: center;
             color: var(--primary);
+            color: var(--primary);
             margin-bottom: 0.5rem;
             font-size: 0.95rem;
         }
 
         .info-box {
             border: 2px solid var(--info);
+            border: 2px solid var(--info);
             padding: 1rem;
             border-radius: 8px;
             margin-bottom: 1.5rem;
+            background-color: var(--primary-subtle);
             background-color: var(--primary-subtle);
         }
 
@@ -119,6 +127,8 @@
         .warning-box {
             background-color: var(--warning-subtle);
             border: 1px solid var(--warning);
+            background-color: var(--warning-subtle);
+            border: 1px solid var(--warning);
             padding: 1rem;
             margin-bottom: 1.5rem;
             border-radius: 8px;
@@ -128,10 +138,12 @@
             margin-bottom: 0;
             font-size: 0.9rem;
             color: var(--warning);
+            color: var(--warning);
             font-weight: 500;
         }
 
         .btn-primary {
+            background: linear-gradient(135deg, var(--info) 0%, var(--info) 100%);
             background: linear-gradient(135deg, var(--info) 0%, var(--info) 100%);
             border: none;
             padding: 0.85rem;
@@ -139,9 +151,11 @@
             transition: all 0.3s ease;
             border-radius: 12px;
             box-shadow: 0 8px 24px color-mix(in srgb, var(--info) 35%, transparent);
+            box-shadow: 0 8px 24px color-mix(in srgb, var(--info) 35%, transparent);
         }
 
         .btn-primary:hover {
+            background: linear-gradient(135deg, var(--info) 0%, var(--primary-hover) 100%);
             background: linear-gradient(135deg, var(--info) 0%, var(--primary-hover) 100%);
             transform: translateY(-2px);
         }
@@ -149,6 +163,7 @@
         .footer-info {
             margin-top: 20px;
 
+            color: var(--text-secondary);
             color: var(--text-secondary);
             
             font-size:8pt;
@@ -159,9 +174,12 @@
         .form-label {
             font-weight: 500;
             color: var(--text-primary);
+            color: var(--text-primary);
         }
 
         .form-control:focus {
+            border-color: var(--info);
+            box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--info) 25%, transparent);
             border-color: var(--info);
             box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--info) 25%, transparent);
         }
@@ -196,6 +214,7 @@
                 </div>
 
                 <div class="warning-box">
+                    <p><span class="material-symbols-outlined me-1">warning</span>Important: Your username will be generated and shown only once on the next page. You must write it down or save it before continuing, as it cannot be retrieved later.</p>
                     <p><span class="material-symbols-outlined me-1">warning</span>Important: Your username will be generated and shown only once on the next page. You must write it down or save it before continuing, as it cannot be retrieved later.</p>
                 </div>
 
