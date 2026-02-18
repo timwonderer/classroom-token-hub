@@ -236,12 +236,12 @@ body.sysadmin-shell {
 }
 
 .sysadmin-content {
-    padding: 1.5rem;
+    padding: 1rem 1rem 1rem 0.75rem;
 }
 
 @media (min-width: 992px) {
     .sysadmin-content {
-        padding: 2rem;
+        padding: 1.5rem 1.5rem 1.5rem 1rem;
     }
 }
 
@@ -302,14 +302,14 @@ body.sysadmin-shell {
 
 body.sysadmin-shell .page-header {
     background: white;
-    padding: 1.25rem 1.5rem;
+    padding: 1rem 1rem 1rem 0.75rem;
     border-bottom: 1px solid var(--border-color, #e5e5e5);
     margin-bottom: 0;
 }
 
 @media (min-width: 992px) {
     body.sysadmin-shell .page-header {
-        padding: 1.5rem 2rem;
+        padding: 1.25rem 1.5rem 1.25rem 1rem;
     }
 }
 
