@@ -8,6 +8,20 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+- **System Admin interface redesigned** - Complete redesign matching teacher/student interface patterns
+  - **Mobile-friendly layout** - Fixed sidebar with hamburger toggle on mobile, mobile bottom navigation bar with quick access to Dashboard, Teachers, Support, Logs, and Announcements
+  - **Dashboard revamped** - Stat cards (Total Teachers, Total Students, Active Invites, Open Tickets), 6 quick-action buttons, recent teacher registrations and errors panels, system admins table
+  - **Teacher Management consolidated** - Unified page combining invite code generation/voiding (with copy-to-clipboard and void button), teacher accounts with class badges, student counts, last login, status, and per-period/account deletion actions; pending deletion requests displayed in a dedicated table
+  - **Logs consolidated** - New combined `/sysadmin/combined-logs` page with tabbed Error Logs and Network Activity views; raw system log viewer removed (Grafana available instead)
+  - **Support Tickets unified** - New combined `/sysadmin/support` page showing both User Reports (teachers + students) and Escalated Issues in tabs; bug bounty reward workflow preserved; detail views link back to the unified page
+
+### Added
+- **`void_invite_code` route** (`/sysadmin/manage-teachers/void/<id>`) - Allows sysadmin to void unused invite codes directly from the Teacher Management page
+- **`combined_logs` route** (`/sysadmin/combined-logs`) - New consolidated log viewer combining error logs and network activity
+- **`support_tickets` route** (`/sysadmin/support`) - New consolidated support ticket view combining user reports and escalated issues
+- **`open_tickets` stat** on dashboard - Shows sum of new user reports + pending/in-review escalated issues
+
 ### Fixed
 - **P0: Duplicate auto-tap-out events causing payroll overpayment** - Added idempotency check to prevent race conditions when multiple sources (student browser polling, scheduled job, admin dashboard) call auto-tap-out logic simultaneously. Previously, duplicate "Daily limit reached" tap-out events would be created, causing payroll to count the same session multiple times and resulting in massive overpayment. Now checks if a daily limit tap-out already exists before creating a new one. Includes cleanup script (`cleanup_duplicate_tapouts.py`) to fix existing duplicate records. See `DUPLICATE_TAPOUT_BUG_REPORT.md` for full details.
 - **Void redemption creating transactions without join_code** - Fixed `/api/reject-redemption` endpoint creating refund transactions with `join_code=NULL` when voiding redemptions for legacy StudentItem records. Added fallback logic to resolve join_code from TeacherBlock or current session when StudentItem.join_code is NULL, preventing balance fix warnings for teachers. This resolves the "Fix Student Balances" alert appearing after voiding old redemptions.

@@ -1,0 +1,432 @@
+{% extends "layout_system_admin.html" %}
+{% set page_title = "Logs" %}
+{% set current_page = "logs" %}
+{% block page_icon %}description{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-0">
+
+    <!-- ── Summary Stats ── -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <div class="sysadmin-stat-card h-100">
+                <div class="sysadmin-stat-icon bg-danger bg-opacity-10">
+                    <span class="material-symbols-outlined text-danger">error</span>
+                </div>
+                <div>
+                    <div class="sysadmin-stat-value">{{ total_errors }}</div>
+                    <div class="sysadmin-stat-label">Total Errors</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="sysadmin-stat-card h-100">
+                <div class="sysadmin-stat-icon bg-primary bg-opacity-10">
+                    <span class="material-symbols-outlined text-primary">cloud</span>
+                </div>
+                <div>
+                    <div class="sysadmin-stat-value">{{ total_requests }}</div>
+                    <div class="sysadmin-stat-label">Network Requests</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="sysadmin-stat-card h-100">
+                <div class="sysadmin-stat-icon bg-info bg-opacity-10">
+                    <span class="material-symbols-outlined text-info">router</span>
+                </div>
+                <div>
+                    <div class="sysadmin-stat-value">{{ unique_ips }}</div>
+                    <div class="sysadmin-stat-label">Unique IPs</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-3">
+            <div class="sysadmin-stat-card h-100">
+                <div class="sysadmin-stat-icon bg-warning bg-opacity-10">
+                    <span class="material-symbols-outlined text-warning">category</span>
+                </div>
+                <div>
+                    <div class="sysadmin-stat-value">{{ error_types|length }}</div>
+                    <div class="sysadmin-stat-label">Error Types</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Tabs ── -->
+    <ul class="nav nav-tabs mb-0 border-bottom-0" id="logTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'errors' or not active_tab %}active{% endif %}"
+                    id="errors-tab" data-bs-toggle="tab" data-bs-target="#errors-pane"
+                    type="button" role="tab" aria-controls="errors-pane">
+                <span class="material-symbols-outlined align-middle me-1" style="font-size:16px;">error</span>
+                Error Logs
+                {% if total_errors > 0 %}
+                <span class="badge bg-danger ms-1">{{ total_errors }}</span>
+                {% endif %}
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link {% if active_tab == 'network' %}active{% endif %}"
+                    id="network-tab" data-bs-toggle="tab" data-bs-target="#network-pane"
+                    type="button" role="tab" aria-controls="network-pane">
+                <span class="material-symbols-outlined align-middle me-1" style="font-size:16px;">network_check</span>
+                Network Activity
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content border border-top-0 rounded-bottom bg-white shadow-sm mb-4">
+
+        <!-- ── Error Logs Tab ── -->
+        <div class="tab-pane fade {% if active_tab == 'errors' or not active_tab %}show active{% endif %}"
+             id="errors-pane" role="tabpanel">
+
+            <!-- Filter Bar -->
+            <div class="p-3 border-bottom bg-light d-flex flex-wrap gap-2 align-items-end">
+                <form method="GET" action="{{ url_for('sysadmin.combined_logs') }}" class="d-flex flex-wrap gap-2 w-100">
+                    <input type="hidden" name="tab" value="errors">
+                    <div class="flex-grow-1" style="min-width:200px; max-width:320px;">
+                        <label class="form-label mb-1" style="font-size:0.8rem;">Filter by Error Type</label>
+                        <select name="error_type" class="form-select form-select-sm">
+                            <option value="">All Error Types</option>
+                            {% for et in error_types %}
+                                <option value="{{ et }}" {% if et == current_error_type %}selected{% endif %}>{{ et }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="d-flex align-items-end gap-2">
+                        <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+                        {% if current_error_type %}
+                            <a href="{{ url_for('sysadmin.combined_logs') }}?tab=errors" class="btn btn-sm btn-outline-secondary">Clear</a>
+                        {% endif %}
+                    </div>
+                </form>
+            </div>
+
+            {% if error_logs %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="font-size:0.85rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3" style="width:60px;">ID</th>
+                            <th style="width:160px;">Timestamp</th>
+                            <th style="width:130px;">Error Type</th>
+                            <th>Message</th>
+                            <th class="d-none d-md-table-cell" style="width:180px;">Path</th>
+                            <th class="d-none d-md-table-cell" style="width:110px;">IP</th>
+                            <th style="width:70px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in error_logs %}
+                        <tr>
+                            <td class="ps-3"><code>{{ log.id }}</code></td>
+                            <td>
+                                <small>
+                                    {% if log.timestamp %}
+                                        <span class="local-timestamp" data-timestamp="{{ format_utc_iso(log.timestamp) }}"></span>
+                                    {% else %}N/A{% endif %}
+                                </small>
+                            </td>
+                            <td>
+                                <span class="badge
+                                    {% if '500' in (log.error_type or '') %}bg-danger
+                                    {% elif '503' in (log.error_type or '') %}bg-warning text-dark
+                                    {% elif '403' in (log.error_type or '') %}bg-danger
+                                    {% elif '401' in (log.error_type or '') %}bg-info
+                                    {% elif '400' in (log.error_type or '') %}bg-warning text-dark
+                                    {% elif '404' in (log.error_type or '') %}bg-secondary
+                                    {% else %}bg-dark{% endif %}" style="font-size:0.7rem;">
+                                    {{ log.error_type or 'Unknown' }}
+                                </span>
+                            </td>
+                            <td>
+                                <small class="text-truncate d-block" style="max-width:240px;" title="{{ log.error_message }}">
+                                    {{ log.error_message or 'No message' }}
+                                </small>
+                            </td>
+                            <td class="d-none d-md-table-cell"><code class="small">{{ log.request_path or 'N/A' }}</code></td>
+                            <td class="d-none d-md-table-cell"><small>{{ log.ip_address or 'N/A' }}</small></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                                        data-bs-toggle="modal" data-bs-target="#errModal{{ log.id }}">
+                                    View
+                                </button>
+                            </td>
+                        </tr>
+
+                        <!-- Error Detail Modal -->
+                        <div class="modal fade" id="errModal{{ log.id }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-xl">
+                                <div class="modal-content">
+                                    <div class="modal-header bg-danger text-white">
+                                        <h5 class="modal-title">
+                                            <span class="material-symbols-outlined align-middle me-1" style="font-size:18px;">error</span>
+                                            Error #{{ log.id }} — {{ log.error_type }}
+                                        </h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="row g-3 mb-3">
+                                            <div class="col-md-4"><strong>Timestamp:</strong><br>
+                                                {% if log.timestamp %}<span class="local-timestamp" data-timestamp="{{ format_utc_iso(log.timestamp) }}"></span>{% else %}N/A{% endif %}
+                                            </div>
+                                            <div class="col-md-4"><strong>Method:</strong><br><code>{{ log.request_method or 'N/A' }}</code></div>
+                                            <div class="col-md-4"><strong>IP:</strong><br>{{ log.ip_address or 'N/A' }}</div>
+                                        </div>
+                                        <div class="mb-3"><strong>Path:</strong><br><code>{{ log.request_path or 'N/A' }}</code></div>
+                                        <div class="mb-3"><strong>Error Message:</strong><br><code>{{ log.error_message or 'No message' }}</code></div>
+                                        <div class="mb-3"><strong>User Agent:</strong><br><small>{{ log.user_agent or 'N/A' }}</small></div>
+                                        {% if log.stack_trace %}
+                                        <div class="mb-3">
+                                            <strong>Stack Trace:</strong>
+                                            <pre class="bg-dark text-light p-3 rounded mt-2" style="max-height:300px;overflow-y:auto;font-size:0.78rem;"><code>{{ log.stack_trace }}</code></pre>
+                                        </div>
+                                        {% endif %}
+                                        {% if log.log_output %}
+                                        <div class="mb-3">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <strong>Log Output (Last 50 Lines):</strong>
+                                                <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard('errlog-{{ log.id }}')">Copy</button>
+                                            </div>
+                                            <pre id="errlog-{{ log.id }}" class="bg-dark text-light p-3 rounded" style="max-height:400px;overflow-y:auto;font-size:0.78rem;"><code>{{ log.log_output }}</code></pre>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Error Pagination -->
+            {% if error_pagination.pages > 1 %}
+            <div class="p-3 border-top d-flex justify-content-center">
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item {% if not error_pagination.has_prev %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('sysadmin.combined_logs', tab='errors', page=error_pagination.prev_num, error_type=current_error_type) if error_pagination.has_prev else '#' }}">‹</a>
+                        </li>
+                        {% for pn in error_pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                            {% if pn %}
+                            <li class="page-item {% if pn == error_pagination.page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('sysadmin.combined_logs', tab='errors', page=pn, error_type=current_error_type) }}">{{ pn }}</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link">…</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        <li class="page-item {% if not error_pagination.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('sysadmin.combined_logs', tab='errors', page=error_pagination.next_num, error_type=current_error_type) if error_pagination.has_next else '#' }}">›</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="p-5 text-center text-muted">
+                <span class="material-symbols-outlined d-block mb-2 text-success" style="font-size:56px;">check_circle</span>
+                <h5>No errors logged{% if current_error_type %} for this filter{% endif %}</h5>
+                <p class="mb-0">{% if current_error_type %}Try clearing the filter.{% else %}System is healthy.{% endif %}</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- ── Network Activity Tab ── -->
+        <div class="tab-pane fade {% if active_tab == 'network' %}show active{% endif %}"
+             id="network-pane" role="tabpanel">
+
+            <!-- Filter & Stats Row -->
+            <div class="p-3 border-bottom bg-light d-flex flex-wrap gap-3 align-items-end">
+                <form method="GET" action="{{ url_for('sysadmin.combined_logs') }}" class="d-flex flex-wrap gap-2 align-items-end">
+                    <input type="hidden" name="tab" value="network">
+                    <div style="min-width:200px; max-width:280px;">
+                        <label class="form-label mb-1" style="font-size:0.8rem;">Filter by IP Address</label>
+                        <select name="ip" class="form-select form-select-sm">
+                            <option value="">All IP Addresses</option>
+                            {% for ip in ip_addresses %}
+                                <option value="{{ ip }}" {% if ip == current_ip %}selected{% endif %}>{{ ip }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+                        {% if current_ip %}
+                            <a href="{{ url_for('sysadmin.combined_logs') }}?tab=network" class="btn btn-sm btn-outline-secondary">Clear</a>
+                        {% endif %}
+                    </div>
+                </form>
+
+                {% if error_type_stats %}
+                <div class="ms-auto d-none d-md-block">
+                    <div class="d-flex gap-1 flex-wrap">
+                        {% for error_type, count in error_type_stats[:5] %}
+                        <span class="badge bg-secondary" style="font-size:0.7rem;">{{ error_type or 'Unknown' }}: {{ count }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if network_logs %}
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" style="font-size:0.85rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3" style="width:160px;">Timestamp</th>
+                            <th style="width:70px;">Method</th>
+                            <th>Path</th>
+                            <th style="width:130px;">Status</th>
+                            <th class="d-none d-md-table-cell" style="width:120px;">IP</th>
+                            <th style="width:70px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in network_logs %}
+                        <tr>
+                            <td class="ps-3">
+                                <small>
+                                    {% if log.timestamp %}
+                                        <span class="local-timestamp" data-timestamp="{{ format_utc_iso(log.timestamp) }}"></span>
+                                    {% else %}N/A{% endif %}
+                                </small>
+                            </td>
+                            <td>
+                                <span class="badge
+                                    {% if log.request_method == 'GET' %}bg-primary
+                                    {% elif log.request_method == 'POST' %}bg-success
+                                    {% elif log.request_method == 'PUT' %}bg-warning text-dark
+                                    {% elif log.request_method == 'DELETE' %}bg-danger
+                                    {% else %}bg-secondary{% endif %}" style="font-size:0.7rem;">
+                                    {{ log.request_method or 'N/A' }}
+                                </span>
+                            </td>
+                            <td><code class="small">{{ log.request_path or 'N/A' }}</code></td>
+                            <td>
+                                <span class="badge
+                                    {% if '500' in (log.error_type or '') %}bg-danger
+                                    {% elif '503' in (log.error_type or '') %}bg-warning text-dark
+                                    {% elif '403' in (log.error_type or '') %}bg-danger
+                                    {% elif '401' in (log.error_type or '') %}bg-info
+                                    {% elif '400' in (log.error_type or '') %}bg-warning text-dark
+                                    {% elif '404' in (log.error_type or '') %}bg-secondary
+                                    {% else %}bg-dark{% endif %}" style="font-size:0.7rem;">
+                                    {{ log.error_type or 'Unknown' }}
+                                </span>
+                            </td>
+                            <td class="d-none d-md-table-cell"><small>{{ log.ip_address or 'N/A' }}</small></td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                                        data-bs-toggle="modal" data-bs-target="#netModal{{ log.id }}">
+                                    View
+                                </button>
+                            </td>
+                        </tr>
+
+                        <!-- Network Request Detail Modal -->
+                        <div class="modal fade" id="netModal{{ log.id }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-lg">
+                                <div class="modal-content">
+                                    <div class="modal-header bg-primary text-white">
+                                        <h5 class="modal-title">
+                                            <span class="material-symbols-outlined align-middle me-1" style="font-size:18px;">info</span>
+                                            Request #{{ log.id }}
+                                        </h5>
+                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <div class="row g-3 mb-3">
+                                            <div class="col-md-4"><strong>Timestamp:</strong><br>
+                                                {% if log.timestamp %}<span class="local-timestamp" data-timestamp="{{ format_utc_iso(log.timestamp) }}"></span>{% else %}N/A{% endif %}
+                                            </div>
+                                            <div class="col-md-4"><strong>Method:</strong><br><code>{{ log.request_method or 'N/A' }}</code></div>
+                                            <div class="col-md-4"><strong>IP:</strong><br>{{ log.ip_address or 'N/A' }}</div>
+                                        </div>
+                                        <div class="mb-3"><strong>Path:</strong><br><code>{{ log.request_path or 'N/A' }}</code></div>
+                                        <div class="mb-3"><strong>Status:</strong> <span class="badge bg-danger">{{ log.error_type or 'Unknown' }}</span></div>
+                                        <div class="mb-3"><strong>Error Message:</strong><br><code>{{ log.error_message or 'No message' }}</code></div>
+                                        <div class="mb-3"><strong>User Agent:</strong><br><small>{{ log.user_agent or 'N/A' }}</small></div>
+                                        {% if log.stack_trace %}
+                                        <div><strong>Stack Trace:</strong>
+                                            <pre class="bg-dark text-light p-3 rounded mt-2" style="max-height:300px;overflow-y:auto;font-size:0.78rem;"><code>{{ log.stack_trace }}</code></pre>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Network Pagination -->
+            {% if net_pagination.pages > 1 %}
+            <div class="p-3 border-top d-flex justify-content-center">
+                <nav>
+                    <ul class="pagination pagination-sm mb-0">
+                        <li class="page-item {% if not net_pagination.has_prev %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('sysadmin.combined_logs', tab='network', net_page=net_pagination.prev_num, ip=current_ip) if net_pagination.has_prev else '#' }}">‹</a>
+                        </li>
+                        {% for pn in net_pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                            {% if pn %}
+                            <li class="page-item {% if pn == net_pagination.page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('sysadmin.combined_logs', tab='network', net_page=pn, ip=current_ip) }}">{{ pn }}</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link">…</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        <li class="page-item {% if not net_pagination.has_next %}disabled{% endif %}">
+                            <a class="page-link" href="{{ url_for('sysadmin.combined_logs', tab='network', net_page=net_pagination.next_num, ip=current_ip) if net_pagination.has_next else '#' }}">›</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="p-5 text-center text-muted">
+                <span class="material-symbols-outlined d-block mb-2" style="font-size:56px;opacity:0.3;">wifi_off</span>
+                <h5>No network activity logged{% if current_ip %} for this IP{% endif %}</h5>
+                <p class="mb-0">{% if current_ip %}Try clearing the filter.{% else %}Network requests will appear here as they occur.{% endif %}</p>
+            </div>
+            {% endif %}
+        </div>
+
+    </div><!-- /.tab-content -->
+
+</div>
+
+<script>
+function copyToClipboard(elementId) {
+    const el = document.getElementById(elementId);
+    if (el) {
+        navigator.clipboard.writeText(el.textContent).catch(() => {});
+    }
+}
+
+// Preserve active tab across page reloads
+document.addEventListener('DOMContentLoaded', function() {
+    const tabParam = new URLSearchParams(window.location.search).get('tab');
+    if (tabParam === 'network') {
+        const networkTab = document.getElementById('network-tab');
+        if (networkTab) {
+            const tab = new bootstrap.Tab(networkTab);
+            tab.show();
+        }
+    }
+});
+</script>
+{% endblock %}

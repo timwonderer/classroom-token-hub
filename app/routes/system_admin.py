@@ -446,6 +446,14 @@ def dashboard():
     active_invites = AdminInviteCode.query.filter_by(used=False).count()
     system_admin_count = SystemAdmin.query.count()
 
+    # Open tickets = new user reports + pending/in-review escalated issues
+    from sqlalchemy import func as sqlfunc
+    new_reports_count = UserReport.query.filter_by(status='new').count()
+    open_issues_count = Issue.query.filter(
+        Issue.status.in_(['elevated', 'developer_review'])
+    ).count()
+    open_tickets = new_reports_count + open_issues_count
+
     # Recent teachers (last 5)
     recent_teachers = Admin.query.order_by(Admin.created_at.desc()).limit(5).all()
 
@@ -461,6 +469,7 @@ def dashboard():
         total_students=total_students,
         active_invites=active_invites,
         system_admin_count=system_admin_count,
+        open_tickets=open_tickets,
         recent_teachers=recent_teachers,
         recent_errors=recent_errors,
         system_admins=system_admins
@@ -468,6 +477,70 @@ def dashboard():
 
 
 # -------------------- LOGGING AND MONITORING --------------------
+
+@sysadmin_bp.route('/combined-logs')
+@system_admin_required
+def combined_logs():
+    """
+    Unified log viewer with two tabs: Error Logs and Network Activity.
+    Replaces the separate error-logs and network-activity pages.
+    """
+    active_tab = request.args.get('tab', 'errors')
+    per_page = 50
+
+    # ── Error Logs (Tab 1) ──
+    error_type_filter = request.args.get('error_type', '')
+    error_page = request.args.get('page', 1, type=int)
+    error_query = ErrorLog.query
+    if error_type_filter:
+        error_query = error_query.filter(ErrorLog.error_type == error_type_filter)
+    error_pagination = error_query.order_by(ErrorLog.timestamp.desc()).paginate(
+        page=error_page, per_page=per_page, error_out=False
+    )
+    error_logs = error_pagination.items
+
+    # Get all distinct error types for filter
+    error_types = [et[0] for et in db.session.query(ErrorLog.error_type).distinct().all() if et[0]]
+
+    # ── Network Activity (Tab 2) ──
+    ip_filter = request.args.get('ip', '')
+    net_page = request.args.get('net_page', 1, type=int)
+    net_query = ErrorLog.query
+    if ip_filter:
+        net_query = net_query.filter(ErrorLog.ip_address == ip_filter)
+    net_pagination = net_query.order_by(ErrorLog.timestamp.desc()).paginate(
+        page=net_page, per_page=per_page, error_out=False
+    )
+    network_logs = net_pagination.items
+
+    ip_addresses = [ip[0] for ip in db.session.query(ErrorLog.ip_address).distinct().all() if ip[0]]
+    total_requests = ErrorLog.query.count()
+    total_errors = ErrorLog.query.count()
+    unique_ips = db.session.query(ErrorLog.ip_address).distinct().count()
+    error_type_stats = db.session.query(
+        ErrorLog.error_type,
+        db.func.count(ErrorLog.id).label('count')
+    ).group_by(ErrorLog.error_type).order_by(db.func.count(ErrorLog.id).desc()).all()
+
+    return render_template(
+        "sysadmin_combined_logs.html",
+        current_page="logs",
+        active_tab=active_tab,
+        # Error tab
+        error_logs=error_logs,
+        error_pagination=error_pagination,
+        error_types=error_types,
+        current_error_type=error_type_filter,
+        total_errors=total_errors,
+        # Network tab
+        network_logs=network_logs,
+        net_pagination=net_pagination,
+        ip_addresses=ip_addresses,
+        current_ip=ip_filter,
+        total_requests=total_requests,
+        unique_ips=unique_ips,
+        error_type_stats=error_type_stats,
+    )
 
 @sysadmin_bp.route('/logs')
 @system_admin_required
@@ -825,8 +898,8 @@ def delete_admin(admin_id):
 @system_admin_required
 def manage_teachers():
     """
-    Combined page for teacher management and invite codes.
-    Allows creation of invite codes and viewing all teachers.
+    Unified teacher management page: invite codes + teacher overview with stats.
+    Merges the old manage_teachers and teacher_overview into a single page.
     """
     # Handle invite code form submission
     form = SystemAdminInviteForm()
@@ -845,15 +918,109 @@ def manage_teachers():
     # Get all invite codes
     invites = AdminInviteCode.query.order_by(AdminInviteCode.created_at.desc()).all()
 
-    # Get all teachers
-    teachers = Admin.query.order_by(Admin.created_at.desc()).all()
+    # Build rich teacher data (from teacher_overview logic)
+    all_teachers = Admin.query.order_by(Admin.username.asc()).all()
+    inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
+
+    # Batch query: teacher-student relationships
+    if all_teachers:
+        teacher_ids = [t.id for t in all_teachers]
+        teacher_students = db.session.query(
+            StudentTeacher.admin_id.label('teacher_id'),
+            Student.id.label('student_id'),
+            Student.block.label('block')
+        ).join(Student, Student.id == StudentTeacher.student_id).filter(
+            StudentTeacher.admin_id.in_(teacher_ids)
+        ).subquery()
+
+        teacher_student_count_rows = db.session.query(
+            teacher_students.c.teacher_id,
+            db.func.count(teacher_students.c.student_id).label('count')
+        ).group_by(teacher_students.c.teacher_id).all()
+        teacher_student_counts = {row.teacher_id: row.count for row in teacher_student_count_rows}
+
+        period_counts_query = db.session.query(
+            teacher_students.c.teacher_id,
+            teacher_students.c.block,
+            db.func.count(teacher_students.c.student_id).label('count')
+        ).group_by(teacher_students.c.teacher_id, teacher_students.c.block).all()
+
+        teacher_periods = {}
+        for teacher_id, block, count in period_counts_query:
+            if teacher_id not in teacher_periods:
+                teacher_periods[teacher_id] = {}
+            teacher_periods[teacher_id][block] = count
+
+        all_pending_requests = DeletionRequest.query.filter(
+            DeletionRequest.admin_id.in_(teacher_ids),
+            DeletionRequest.status == DeletionRequestStatus.PENDING
+        ).all()
+        teacher_pending_requests = {}
+        for req in all_pending_requests:
+            teacher_pending_requests.setdefault(req.admin_id, []).append(req)
+    else:
+        teacher_student_counts = {}
+        teacher_periods = {}
+        teacher_pending_requests = {}
+
+    teachers = []
+    for teacher in all_teachers:
+        total_students = teacher_student_counts.get(teacher.id, 0)
+        periods = teacher_periods.get(teacher.id, {})
+        pending_requests = teacher_pending_requests.get(teacher.id, [])
+
+        is_inactive = False
+        if teacher.last_login:
+            last_login = teacher.last_login
+            if last_login.tzinfo is None:
+                last_login = last_login.replace(tzinfo=timezone.utc)
+            is_inactive = last_login < inactivity_threshold
+        else:
+            is_inactive = True
+
+        # Determine authorization
+        authorized, pending_request = _check_deletion_authorization(teacher, 'account')
+        can_delete_account = authorized
+
+        authorized_periods = []
+        for period in periods:
+            auth_period, _ = _check_deletion_authorization(teacher, 'period', period)
+            if auth_period:
+                authorized_periods.append(period)
+
+        teachers.append({
+            'id': teacher.id,
+            'username': teacher.username,
+            'last_login': teacher.last_login,
+            'is_inactive': is_inactive,
+            'total_students': total_students,
+            'periods': periods,
+            'pending_requests': pending_requests,
+            'can_delete_account': can_delete_account,
+            'authorized_periods': authorized_periods,
+        })
 
     return render_template(
         "system_admin_manage_teachers.html",
         form=form,
         invites=invites,
-        teachers=teachers
+        teachers=teachers,
+        inactivity_threshold_days=INACTIVITY_THRESHOLD_DAYS,
     )
+
+
+@sysadmin_bp.route('/manage-teachers/void/<int:code_id>', methods=['POST'])
+@system_admin_required
+def void_invite_code(code_id):
+    """Void (mark as used) an unused invite code so it can no longer be claimed."""
+    invite = db.get_or_404(AdminInviteCode, code_id)
+    if invite.used:
+        flash("This invite code has already been used or voided.", "warning")
+    else:
+        invite.used = True
+        db.session.commit()
+        flash(f"Invite code '{invite.code}' has been voided.", "success")
+    return redirect(url_for("sysadmin.manage_teachers") + "#invite-codes")
 
 
 @sysadmin_bp.route('/teacher-overview', methods=['GET'])
@@ -999,12 +1166,12 @@ def delete_period(admin_id, period):
     # Validate period parameter
     if not period or len(period) > 10:
         flash("Invalid period parameter", "error")
-        return redirect(url_for('sysadmin.teacher_overview'))
+        return redirect(url_for('sysadmin.manage_teachers'))
     
     # Sanitize period to prevent SQL injection (allow only alphanumeric, spaces, hyphens, underscores)
     if not re.match(r'^[a-zA-Z0-9\s\-_]+$', period):
         flash("Invalid period format", "error")
-        return redirect(url_for('sysadmin.teacher_overview'))
+        return redirect(url_for('sysadmin.manage_teachers'))
     
     admin = db.get_or_404(Admin, admin_id)
 
@@ -1017,7 +1184,7 @@ def delete_period(admin_id, period):
             f"Teacher must request deletion or be inactive for 6+ months.",
             "error"
         )
-        return redirect(url_for('sysadmin.teacher_overview'))
+        return redirect(url_for('sysadmin.manage_teachers'))
 
     try:
         # Get students in this period linked to this teacher
@@ -1075,7 +1242,7 @@ def delete_period(admin_id, period):
         current_app.logger.exception(f"Error deleting period {period} for teacher {admin_id}")
         flash(f"Error deleting period: {str(e)}", "error")
 
-    return redirect(url_for('sysadmin.teacher_overview'))
+    return redirect(url_for('sysadmin.manage_teachers'))
 
 
 @sysadmin_bp.route('/manage-teachers/delete/<int:admin_id>', methods=['POST'])
@@ -1101,7 +1268,7 @@ def delete_teacher(admin_id):
             f"Teacher must request deletion or be inactive for 6+ months.",
             "error"
         )
-        return redirect(url_for('sysadmin.teacher_overview'))
+        return redirect(url_for('sysadmin.manage_teachers'))
 
     try:
         # Get all students linked to this teacher via StudentTeacher table
@@ -1169,7 +1336,64 @@ def delete_teacher(admin_id):
         current_app.logger.exception(f"Error deleting teacher {admin_id}")
         flash(f"Error deleting teacher: {str(e)}", "error")
 
-    return redirect(url_for('sysadmin.teacher_overview'))
+    return redirect(url_for('sysadmin.manage_teachers'))
+
+
+# -------------------- SUPPORT TICKETS (COMBINED VIEW) --------------------
+
+@sysadmin_bp.route('/support')
+@system_admin_required
+def support_tickets():
+    """
+    Unified support ticket dashboard combining user reports and escalated issues.
+    Tab 1: User Reports (bugs/suggestions from teachers and students)
+    Tab 2: Escalated Issues (student-escalated issues awaiting developer review)
+    """
+    active_tab = request.args.get('tab', 'reports')
+
+    # ── User Reports (Tab 1) ──
+    status_filter = request.args.get('status', 'all')
+    report_type_filter = request.args.get('type', 'all')
+    report_query = UserReport.query
+    if status_filter != 'all':
+        report_query = report_query.filter(UserReport.status == status_filter)
+    if report_type_filter != 'all':
+        report_query = report_query.filter(UserReport.report_type == report_type_filter)
+    reports = report_query.order_by(UserReport.submitted_at.desc()).all()
+
+    from sqlalchemy import func as sqlfunc
+    status_counts = dict(
+        db.session.query(UserReport.status, sqlfunc.count(UserReport.id))
+        .group_by(UserReport.status).all()
+    )
+    new_reports = status_counts.get('new', 0)
+    rewarded_reports = status_counts.get('rewarded', 0)
+
+    # ── Escalated Issues (Tab 2) ──
+    all_issues = Issue.query.filter(
+        Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
+    ).order_by(Issue.escalated_at.desc()).all()
+    issues_pending = [i for i in all_issues if i.status == 'elevated']
+    issues_in_review = [i for i in all_issues if i.status == 'developer_review']
+    issues_resolved = [i for i in all_issues if i.status == 'developer_resolved']
+
+    return render_template(
+        'sysadmin_support_tickets.html',
+        current_page='support_tickets',
+        active_tab=active_tab,
+        # User reports
+        reports=reports,
+        status_filter=status_filter,
+        report_type_filter=report_type_filter,
+        new_reports=new_reports,
+        rewarded_reports=rewarded_reports,
+        # Escalated issues
+        issues_pending=issues_pending,
+        issues_in_review=issues_in_review,
+        issues_resolved=issues_resolved,
+        pending_issues=len(issues_pending),
+        in_review_issues=len(issues_in_review),
+    )
 
 
 # -------------------- USER REPORTS --------------------

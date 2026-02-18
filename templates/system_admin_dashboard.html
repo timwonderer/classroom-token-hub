@@ -1,230 +1,246 @@
 {% extends "layout_system_admin.html" %}
 {% set page_title = "System Dashboard" %}
-{% set page_subtitle = "Overview of your classroom economy system" %}
 {% set current_page = "dashboard" %}
+{% block page_icon %}dashboard{% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Key Statistics Cards -->
-    <div class="row mb-4">
-        <div class="col-md-3 mb-3">
-            <div class="card stat-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <p class="text-muted mb-1" style="font-size: 0.85rem;">Total Teachers</p>
-                            <h3 class="mb-0 fw-bold" style="color: var(--primary-blue);">{{ total_teachers }}</h3>
-                        </div>
-                        <div>
-                            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-primary); opacity: 0.3;">badge</span>
-                        </div>
-                    </div>
+<div class="container-fluid px-0">
+
+    <!-- ── Stat Cards ── -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-lg-3">
+            <div class="sysadmin-stat-card h-100">
+                <div class="sysadmin-stat-icon bg-primary bg-opacity-10">
+                    <span class="material-symbols-outlined text-primary">badge</span>
+                </div>
+                <div>
+                    <div class="sysadmin-stat-value">{{ total_teachers }}</div>
+                    <div class="sysadmin-stat-label">Total Teachers</div>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-3 mb-3">
-            <div class="card stat-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <p class="text-muted mb-1" style="font-size: 0.85rem;">Total Students</p>
-                            <h3 class="mb-0 fw-bold" style="color: var(--success-green);">{{ total_students }}</h3>
-                        </div>
-                        <div>
-                            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-teal); opacity: 0.3;">groups</span>
-                        </div>
-                    </div>
+        <div class="col-6 col-lg-3">
+            <div class="sysadmin-stat-card h-100">
+                <div class="sysadmin-stat-icon bg-success bg-opacity-10">
+                    <span class="material-symbols-outlined text-success">groups</span>
+                </div>
+                <div>
+                    <div class="sysadmin-stat-value">{{ total_students }}</div>
+                    <div class="sysadmin-stat-label">Total Students</div>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-3 mb-3">
-            <div class="card stat-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <p class="text-muted mb-1" style="font-size: 0.85rem;">Active Invite Codes</p>
-                            <h3 class="mb-0 fw-bold" style="color: var(--warning-gold);">{{ active_invites }}</h3>
-                        </div>
-                        <div>
-                            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-gold); opacity: 0.3;">confirmation_number</span>
-                        </div>
-                    </div>
+        <div class="col-6 col-lg-3">
+            <div class="sysadmin-stat-card h-100">
+                <div class="sysadmin-stat-icon bg-warning bg-opacity-10">
+                    <span class="material-symbols-outlined text-warning">confirmation_number</span>
+                </div>
+                <div>
+                    <div class="sysadmin-stat-value">{{ active_invites }}</div>
+                    <div class="sysadmin-stat-label">Active Invite Codes</div>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-3 mb-3">
-            <div class="card stat-card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <p class="text-muted mb-1" style="font-size: 0.85rem;">System Admins</p>
-                            <h3 class="mb-0 fw-bold" style="color: var(--primary-blue);">{{ system_admin_count }}</h3>
-                        </div>
-                        <div>
-                            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--brand-primary); opacity: 0.3;">admin_panel_settings</span>
-                        </div>
-                    </div>
+        <div class="col-6 col-lg-3">
+            <div class="sysadmin-stat-card h-100">
+                <div class="sysadmin-stat-icon bg-danger bg-opacity-10">
+                    <span class="material-symbols-outlined text-danger">support_agent</span>
+                </div>
+                <div>
+                    <div class="sysadmin-stat-value">{{ open_tickets }}</div>
+                    <div class="sysadmin-stat-label">Open Tickets</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Recent Activity Section -->
-    <div class="row">
-        <div class="col-md-6 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">history</span> Recent Teacher Registrations</h5>
+    <!-- ── Quick Actions ── -->
+    <div class="mb-4">
+        <h6 class="text-uppercase fw-bold mb-3" style="font-size:0.75rem; letter-spacing:0.08em; color:#9ca3af;">Quick Actions</h6>
+        <div class="row g-3">
+            <div class="col-6 col-md-4 col-lg-2">
+                <a href="{{ url_for('sysadmin.manage_teachers') }}#invite-codes" class="sysadmin-quick-action">
+                    <span class="material-symbols-outlined text-warning">add_card</span>
+                    <span>Generate Invite</span>
+                </a>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <a href="{{ url_for('sysadmin.manage_teachers') }}" class="sysadmin-quick-action">
+                    <span class="material-symbols-outlined text-primary">group</span>
+                    <span>Manage Teachers</span>
+                </a>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <a href="{{ url_for('sysadmin.support_tickets') }}" class="sysadmin-quick-action">
+                    <span class="material-symbols-outlined text-danger">support_agent</span>
+                    <span>Support Tickets</span>
+                </a>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <a href="{{ url_for('sysadmin.combined_logs') }}" class="sysadmin-quick-action">
+                    <span class="material-symbols-outlined text-secondary">description</span>
+                    <span>View Logs</span>
+                </a>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <a href="{{ url_for('sysadmin.announcements') }}" class="sysadmin-quick-action">
+                    <span class="material-symbols-outlined text-info">campaign</span>
+                    <span>Announcements</span>
+                </a>
+            </div>
+            <div class="col-6 col-md-4 col-lg-2">
+                <a href="/sysadmin/grafana" target="_blank" rel="noopener noreferrer" class="sysadmin-quick-action">
+                    <span class="material-symbols-outlined text-success">monitoring</span>
+                    <span>Grafana</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Recent Activity ── -->
+    <div class="row g-4 mb-4">
+        <!-- Recent Teacher Registrations -->
+        <div class="col-12 col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-3">
+                    <span class="material-symbols-outlined text-primary" style="font-size:20px;">history_edu</span>
+                    <h6 class="mb-0 fw-semibold">Recent Teacher Registrations</h6>
+                    <a href="{{ url_for('sysadmin.manage_teachers') }}" class="btn btn-sm btn-outline-secondary ms-auto" style="font-size:0.75rem;">View All</a>
                 </div>
-                <div class="card-body">
+                <div class="card-body p-0">
                     {% if recent_teachers %}
-                        <div class="list-group list-group-flush">
+                        <ul class="list-group list-group-flush">
                             {% for teacher in recent_teachers %}
-                            <div class="list-group-item bg-transparent border-bottom">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <h6 class="mb-1">{{ teacher.username }}</h6>
-                                        <small class="text-muted">
-                                            <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 14px;">calendar_today</span>
-                                            Joined {{ teacher.created_at.strftime('%b %d, %Y') if teacher.created_at else 'Unknown' }}
-                                        </small>
-                                    </div>
-                                    <span class="badge bg-success">
-                                        <span class="material-symbols-outlined" style="vertical-align: middle; font-size: 14px;">person</span>
-                                    </span>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    {% else %}
-                        <p class="text-muted text-center mb-0">No teachers registered yet</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6 mb-4">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">warning</span> Recent Errors</h5>
-                </div>
-                <div class="card-body">
-                    {% if recent_errors %}
-                        <div class="list-group list-group-flush">
-                            {% for error in recent_errors %}
-                            <div class="list-group-item bg-transparent border-bottom">
-                                <div class="d-flex justify-content-between align-items-start">
-                                    <div class="flex-grow-1">
-                                        <div class="d-flex align-items-center mb-1">
-                                            <span class="badge bg-danger me-2">{{ error.error_type }}</span>
-                                            <small class="text-muted">
-                                                {% if error.timestamp %}
-                                                    <span class="local-timestamp" data-timestamp="{{ format_utc_iso(error.timestamp) }}"></span>
-                                                {% else %}
-                                                    N/A
-                                                {% endif %}
-                                            </small>
+                            <li class="list-group-item border-bottom py-3">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style="width:36px;height:36px;flex-shrink:0;">
+                                            <span class="material-symbols-outlined text-primary" style="font-size:18px;">person</span>
                                         </div>
-                                        <small class="text-muted">
+                                        <div>
+                                            <div class="fw-semibold" style="font-size:0.9rem;">{{ teacher.username }}</div>
+                                            <div class="text-muted" style="font-size:0.75rem;">
+                                                Joined {{ teacher.created_at.strftime('%b %d, %Y') if teacher.created_at else 'Unknown' }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <span class="badge bg-success-subtle text-success">Active</span>
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <div class="p-4 text-center text-muted">
+                            <span class="material-symbols-outlined d-block mb-2" style="font-size:40px;opacity:0.3;">person_off</span>
+                            No teachers registered yet
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Errors -->
+        <div class="col-12 col-lg-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-3">
+                    <span class="material-symbols-outlined text-danger" style="font-size:20px;">error</span>
+                    <h6 class="mb-0 fw-semibold">Recent Errors</h6>
+                    <a href="{{ url_for('sysadmin.combined_logs') }}" class="btn btn-sm btn-outline-secondary ms-auto" style="font-size:0.75rem;">View All</a>
+                </div>
+                <div class="card-body p-0">
+                    {% if recent_errors %}
+                        <ul class="list-group list-group-flush">
+                            {% for error in recent_errors %}
+                            <li class="list-group-item border-bottom py-3">
+                                <div class="d-flex align-items-start gap-2">
+                                    <span class="badge mt-1
+                                        {% if '500' in (error.error_type or '') %}bg-danger
+                                        {% elif '404' in (error.error_type or '') %}bg-secondary
+                                        {% elif '403' in (error.error_type or '') %}bg-danger
+                                        {% elif '401' in (error.error_type or '') %}bg-info
+                                        {% else %}bg-warning text-dark{% endif %}"
+                                        style="font-size:0.7rem; flex-shrink:0;">
+                                        {{ (error.error_type or 'ERR').split(' ')[0] }}
+                                    </span>
+                                    <div class="flex-grow-1 min-width-0">
+                                        <div class="text-truncate" style="font-size:0.82rem; max-width:260px;" title="{{ error.error_message }}">
+                                            {{ error.error_message or 'No message' }}
+                                        </div>
+                                        <div class="text-muted" style="font-size:0.72rem;">
                                             {{ error.request_method }} {{ error.request_path }}
-                                        </small>
+                                            {% if error.timestamp %}
+                                                · <span class="local-timestamp" data-timestamp="{{ format_utc_iso(error.timestamp) }}"></span>
+                                            {% endif %}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            </li>
                             {% endfor %}
-                        </div>
-                        <div class="text-center mt-3">
-                            <a href="{{ url_for('sysadmin.logs_testing') }}" class="btn btn-sm btn-outline-primary">
-                                View All Errors
-                            </a>
-                        </div>
+                        </ul>
                     {% else %}
-                        <p class="text-muted text-center mb-0">No recent errors</p>
+                        <div class="p-4 text-center text-muted">
+                            <span class="material-symbols-outlined d-block mb-2 text-success" style="font-size:40px;">check_circle</span>
+                            No recent errors — system is healthy
+                        </div>
                     {% endif %}
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Quick Actions -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">bolt</span> Quick Actions</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <a href="{{ url_for('sysadmin.manage_teachers') }}" class="btn btn-outline-primary w-100 py-3">
-                                <span class="material-symbols-outlined d-block" style="font-size: 48px; margin-bottom: 8px;">group</span>
-                                Manage Teachers
-                            </a>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <a href="{{ url_for('sysadmin.manage_teachers') }}#invite-codes" class="btn btn-outline-primary w-100 py-3">
-                                <span class="material-symbols-outlined d-block" style="font-size: 48px; margin-bottom: 8px;">confirmation_number</span>
-                                Generate Invite Code
-                            </a>
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <a href="{{ url_for('sysadmin.logs_testing') }}" class="btn btn-outline-primary w-100 py-3">
-                                <span class="material-symbols-outlined d-block" style="font-size: 48px; margin-bottom: 8px;">description</span>
-                                View System Logs
-                            </a>
-                        </div>
-                    </div>
-                </div>
+    <!-- ── System Admins ── -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-3">
+            <span class="material-symbols-outlined" style="font-size:20px; color: var(--sysadmin-accent);">admin_panel_settings</span>
+            <h6 class="mb-0 fw-semibold">System Administrators</h6>
+            <span class="badge bg-secondary ms-auto">{{ system_admin_count }}</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-3">Username</th>
+                            <th>Status</th>
+                            <th>Last Active</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for admin in system_admins %}
+                        <tr>
+                            <td class="ps-3">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center"
+                                         style="width:32px;height:32px;flex-shrink:0;background:rgba(212,168,87,0.15);">
+                                        <span class="material-symbols-outlined" style="font-size:16px;color:var(--sysadmin-accent);">shield_person</span>
+                                    </div>
+                                    <span class="fw-semibold" style="font-size:0.9rem;">{{ admin.username }}</span>
+                                </div>
+                            </td>
+                            <td><span class="badge bg-success-subtle text-success">Active</span></td>
+                            <td>
+                                <small class="text-muted">
+                                    {% if admin.last_login %}
+                                        <span class="local-timestamp" data-timestamp="{{ format_utc_iso(admin.last_login) }}"></span>
+                                    {% else %}
+                                        Never
+                                    {% endif %}
+                                </small>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="3" class="text-center text-muted py-4">No system admins found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 
-    <!-- System Admins List -->
-    <div class="row mt-4">
-        <div class="col-md-12">
-            <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 20px;">admin_panel_settings</span> Current System Administrators</h5>
-                </div>
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Username</th>
-                                    <th>Status</th>
-                                    <th>Last Active</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for admin in system_admins %}
-                                <tr>
-                                    <td><span class="material-symbols-outlined" style="vertical-align: middle; font-size: 16px;">person</span> {{ admin.username }}</td>
-                                    <td><span class="badge bg-success">Active</span></td>
-                                    <td>
-                                        <small class="text-muted">
-                                            {% if admin.last_login %}
-                                                <span class="local-timestamp" data-timestamp="{{ format_utc_iso(admin.last_login) }}"></span>
-                                            {% else %}
-                                                Never
-                                            {% endif %}
-                                        </small>
-                                    </td>
-                                </tr>
-                                {% else %}
-                                <tr>
-                                    <td colspan="3" class="text-center text-muted">No system admins found</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 {% endblock %}
