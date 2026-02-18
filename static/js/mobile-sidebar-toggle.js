@@ -202,11 +202,44 @@
             mobileMediaQuery.addListener(handleViewportChange);
         }
 
-        // Initialize ARIA attributes
+        // Initialize ARIA attributes based on viewport
         toggle.setAttribute('aria-expanded', 'false');
-        sidebar.setAttribute('aria-hidden', 'true');
+        
+        // Set aria-hidden based on viewport: only hide on mobile (matches CSS breakpoint)
+        const desktopMediaQuery = window.matchMedia('(min-width: 992px)');
+        if (desktopMediaQuery.matches) {
+            // Desktop: sidebar always visible, so not hidden from screen readers
+            sidebar.removeAttribute('aria-hidden');
+        } else {
+            // Mobile: sidebar hidden by default
+            sidebar.setAttribute('aria-hidden', 'true');
+        }
+        
         if (backdrop) {
             backdrop.setAttribute('aria-hidden', 'true');
+        }
+        
+        // Update aria-hidden on viewport resize
+        const updateSidebarAriaOnResize = (e) => {
+            if (e.matches) {
+                // Desktop: sidebar visible
+                sidebar.removeAttribute('aria-hidden');
+                // If sidebar was open on mobile, close it
+                if (sidebar.classList.contains('show')) {
+                    closeSidebar();
+                }
+            } else {
+                // Mobile: sidebar hidden unless explicitly shown
+                if (!sidebar.classList.contains('show')) {
+                    sidebar.setAttribute('aria-hidden', 'true');
+                }
+            }
+        };
+        
+        if (typeof desktopMediaQuery.addEventListener === 'function') {
+            desktopMediaQuery.addEventListener('change', updateSidebarAriaOnResize);
+        } else if (typeof desktopMediaQuery.addListener === 'function') {
+            desktopMediaQuery.addListener(updateSidebarAriaOnResize);
         }
     });
 })();
