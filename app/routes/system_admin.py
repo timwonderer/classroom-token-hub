@@ -981,22 +981,23 @@ def manage_teachers():
         can_delete_account = False
         authorized_periods = []
 
-        if is_inactive:
-            # Account-level deletion authorization
-            for req in pending_requests:
-                if req.request_type == DeletionRequestType.ACCOUNT:
-                    can_delete_account = True
-                    break
-
-            # Period-level deletion authorization
-            for period in periods:
-                for req in pending_requests:
-                    if (
-                        req.request_type == DeletionRequestType.PERIOD
-                        and req.period == period
-                    ):
-                        authorized_periods.append(period)
-                        break
+        if is_inactive and pending_requests:
+            # Build lookup for O(1) access: separate account and period requests
+            account_requests = [req for req in pending_requests if req.request_type == DeletionRequestType.ACCOUNT]
+            period_requests_by_period = {
+                req.period: req 
+                for req in pending_requests 
+                if req.request_type == DeletionRequestType.PERIOD and req.period is not None
+            }
+            
+            # Check account-level authorization
+            can_delete_account = len(account_requests) > 0
+            
+            # Check period-level authorization using lookup
+            authorized_periods = [
+                period for period in periods 
+                if period in period_requests_by_period
+            ]
 
         teachers.append({
             'id': teacher.id,
