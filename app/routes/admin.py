@@ -8043,7 +8043,7 @@ def help_support():
 
             flash("Your support ticket has been submitted directly to system administration.", "success")
             return redirect(url_for('admin.help_support', join_code=selected_join_code))
-        except Exception:
+        except SQLAlchemyError:
             db.session.rollback()
             current_app.logger.error("Error submitting report", exc_info=True)
             flash("An error occurred while submitting your ticket. Please try again.", "error")
