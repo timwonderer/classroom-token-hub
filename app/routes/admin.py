@@ -8014,12 +8014,53 @@ def help_support():
 
         if issue_category not in category_to_report_type:
             flash("Please select a valid support ticket category.", "error")
-            return redirect(url_for('admin.help_support'))
 
-        if not title or not description:
+            anonymous_code = generate_anonymous_code(f"admin:{admin_id}")
+            my_reports_query = UserReport.query.filter_by(anonymous_code=anonymous_code, user_type='teacher')
+            if selected_join_code:
+                my_reports_query = my_reports_query.filter_by(error_code=selected_join_code)
+            my_reports = my_reports_query.order_by(UserReport.submitted_at.desc()).limit(20).all()
+
+            return render_template(
+                'admin_support_tickets.html',
+                current_page='help',
+                page_title='Help & Support',
+                class_scope_options=class_scope_options,
+                selected_join_code=selected_join_code,
+                my_reports=my_reports,
+                help_content=HELP_ARTICLES['teacher'],
+                format_utc_iso=format_utc_iso,
+                form_issue_category=issue_category,
+                form_title=title,
+                form_description=description,
+                form_expected_behavior=expected_behavior,
+                form_page_url=page_url,
+            )
+
+        if not title or not description or not issue_category:
             flash("Please provide a category, title, and description for your support ticket.", "error")
-            return redirect(url_for('admin.help_support'))
 
+            anonymous_code = generate_anonymous_code(f"admin:{admin_id}")
+            my_reports_query = UserReport.query.filter_by(anonymous_code=anonymous_code, user_type='teacher')
+            if selected_join_code:
+                my_reports_query = my_reports_query.filter_by(error_code=selected_join_code)
+            my_reports = my_reports_query.order_by(UserReport.submitted_at.desc()).limit(20).all()
+
+            return render_template(
+                'admin_support_tickets.html',
+                current_page='help',
+                page_title='Help & Support',
+                class_scope_options=class_scope_options,
+                selected_join_code=selected_join_code,
+                my_reports=my_reports,
+                help_content=HELP_ARTICLES['teacher'],
+                format_utc_iso=format_utc_iso,
+                form_issue_category=issue_category,
+                form_title=title,
+                form_description=description,
+                form_expected_behavior=expected_behavior,
+                form_page_url=page_url,
+            )
         anonymous_code = generate_anonymous_code(f"admin:{admin_id}")
         metadata_header = _build_scope_metadata(selected_join_code, class_label or 'Unknown', issue_category)
         scoped_description = f"{metadata_header}\n\n{description}"
