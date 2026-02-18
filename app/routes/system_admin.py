@@ -447,7 +447,6 @@ def dashboard():
     system_admin_count = SystemAdmin.query.count()
 
     # Open tickets = new user reports + pending/in-review escalated issues
-    from sqlalchemy import func as sqlfunc
     new_reports_count = UserReport.query.filter_by(status='new').count()
     open_issues_count = Issue.query.filter(
         Issue.status.in_(['elevated', 'developer_review'])
@@ -515,7 +514,7 @@ def combined_logs():
 
     ip_addresses = [ip[0] for ip in db.session.query(ErrorLog.ip_address).distinct().all() if ip[0]]
     total_requests = ErrorLog.query.count()
-    total_errors = ErrorLog.query.count()
+    total_errors = ErrorLog.query.filter(ErrorLog.error_type.isnot(None)).count()
     unique_ips = db.session.query(ErrorLog.ip_address).distinct().count()
     error_type_stats = db.session.query(
         ErrorLog.error_type,
@@ -978,15 +977,27 @@ def manage_teachers():
         else:
             is_inactive = True
 
-        # Determine authorization
-        authorized, pending_request = _check_deletion_authorization(teacher, 'account')
-        can_delete_account = authorized
-
+        # Determine authorization using preloaded pending requests and inactivity flag
+        can_delete_account = False
         authorized_periods = []
-        for period in periods:
-            auth_period, _ = _check_deletion_authorization(teacher, 'period', period)
-            if auth_period:
-                authorized_periods.append(period)
+
+        if is_inactive and pending_requests:
+            # Build lookup for O(1) access: separate account and period requests
+            account_requests = [req for req in pending_requests if req.request_type == DeletionRequestType.ACCOUNT]
+            period_requests_by_period = {
+                req.period: req 
+                for req in pending_requests 
+                if req.request_type == DeletionRequestType.PERIOD and req.period is not None
+            }
+            
+            # Check account-level authorization
+            can_delete_account = len(account_requests) > 0
+            
+            # Check period-level authorization using lookup
+            authorized_periods = [
+                period for period in periods 
+                if period in period_requests_by_period
+            ]
 
         teachers.append({
             'id': teacher.id,

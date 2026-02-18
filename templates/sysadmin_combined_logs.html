@@ -156,55 +156,58 @@
                                 </button>
                             </td>
                         </tr>
-
-                        <!-- Error Detail Modal -->
-                        <div class="modal fade" id="errModal{{ log.id }}" tabindex="-1" aria-hidden="true">
-                            <div class="modal-dialog modal-xl">
-                                <div class="modal-content">
-                                    <div class="modal-header bg-danger text-white">
-                                        <h5 class="modal-title">
-                                            <span class="material-symbols-outlined align-middle me-1" style="font-size:18px;">error</span>
-                                            Error #{{ log.id }} — {{ log.error_type }}
-                                        </h5>
-                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                                    </div>
-                                    <div class="modal-body">
-                                        <div class="row g-3 mb-3">
-                                            <div class="col-md-4"><strong>Timestamp:</strong><br>
-                                                {% if log.timestamp %}<span class="local-timestamp" data-timestamp="{{ format_utc_iso(log.timestamp) }}"></span>{% else %}N/A{% endif %}
-                                            </div>
-                                            <div class="col-md-4"><strong>Method:</strong><br><code>{{ log.request_method or 'N/A' }}</code></div>
-                                            <div class="col-md-4"><strong>IP:</strong><br>{{ log.ip_address or 'N/A' }}</div>
-                                        </div>
-                                        <div class="mb-3"><strong>Path:</strong><br><code>{{ log.request_path or 'N/A' }}</code></div>
-                                        <div class="mb-3"><strong>Error Message:</strong><br><code>{{ log.error_message or 'No message' }}</code></div>
-                                        <div class="mb-3"><strong>User Agent:</strong><br><small>{{ log.user_agent or 'N/A' }}</small></div>
-                                        {% if log.stack_trace %}
-                                        <div class="mb-3">
-                                            <strong>Stack Trace:</strong>
-                                            <pre class="bg-dark text-light p-3 rounded mt-2" style="max-height:300px;overflow-y:auto;font-size:0.78rem;"><code>{{ log.stack_trace }}</code></pre>
-                                        </div>
-                                        {% endif %}
-                                        {% if log.log_output %}
-                                        <div class="mb-3">
-                                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                                <strong>Log Output (Last 50 Lines):</strong>
-                                                <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard('errlog-{{ log.id }}')">Copy</button>
-                                            </div>
-                                            <pre id="errlog-{{ log.id }}" class="bg-dark text-light p-3 rounded" style="max-height:400px;overflow-y:auto;font-size:0.78rem;"><code>{{ log.log_output }}</code></pre>
-                                        </div>
-                                        {% endif %}
-                                    </div>
-                                    <div class="modal-footer">
-                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+
+            {# Error Detail Modals - moved outside table to keep HTML valid #}
+            {% for log in error_logs %}
+            <!-- Error Detail Modal -->
+            <div class="modal fade" id="errModal{{ log.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-xl">
+                    <div class="modal-content">
+                        <div class="modal-header bg-danger text-white">
+                            <h5 class="modal-title">
+                                <span class="material-symbols-outlined align-middle me-1" style="font-size:18px;">error</span>
+                                Error #{{ log.id }} — {{ log.error_type }}
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-4"><strong>Timestamp:</strong><br>
+                                    {% if log.timestamp %}<span class="local-timestamp" data-timestamp="{{ format_utc_iso(log.timestamp) }}"></span>{% else %}N/A{% endif %}
+                                </div>
+                                <div class="col-md-4"><strong>Method:</strong><br><code>{{ log.request_method or 'N/A' }}</code></div>
+                                <div class="col-md-4"><strong>IP:</strong><br>{{ log.ip_address or 'N/A' }}</div>
+                            </div>
+                            <div class="mb-3"><strong>Path:</strong><br><code>{{ log.request_path or 'N/A' }}</code></div>
+                            <div class="mb-3"><strong>Error Message:</strong><br><code>{{ log.error_message or 'No message' }}</code></div>
+                            <div class="mb-3"><strong>User Agent:</strong><br><small>{{ log.user_agent or 'N/A' }}</small></div>
+                            {% if log.stack_trace %}
+                            <div class="mb-3">
+                                <strong>Stack Trace:</strong>
+                                <pre class="bg-dark text-light p-3 rounded mt-2" style="max-height:300px;overflow-y:auto;font-size:0.78rem;"><code>{{ log.stack_trace }}</code></pre>
+                            </div>
+                            {% endif %}
+                            {% if log.log_output %}
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <strong>Log Output (Last 50 Lines):</strong>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="copyToClipboard('errlog-{{ log.id }}')">Copy</button>
+                                </div>
+                                <pre id="errlog-{{ log.id }}" class="bg-dark text-light p-3 rounded" style="max-height:400px;overflow-y:auto;font-size:0.78rem;"><code>{{ log.log_output }}</code></pre>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
 
             <!-- Error Pagination -->
             {% if error_pagination.pages > 1 %}
@@ -330,46 +333,49 @@
                                 </button>
                             </td>
                         </tr>
-
-                        <!-- Network Request Detail Modal -->
-                        <div class="modal fade" id="netModal{{ log.id }}" tabindex="-1" aria-hidden="true">
-                            <div class="modal-dialog modal-lg">
-                                <div class="modal-content">
-                                    <div class="modal-header bg-primary text-white">
-                                        <h5 class="modal-title">
-                                            <span class="material-symbols-outlined align-middle me-1" style="font-size:18px;">info</span>
-                                            Request #{{ log.id }}
-                                        </h5>
-                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-                                    </div>
-                                    <div class="modal-body">
-                                        <div class="row g-3 mb-3">
-                                            <div class="col-md-4"><strong>Timestamp:</strong><br>
-                                                {% if log.timestamp %}<span class="local-timestamp" data-timestamp="{{ format_utc_iso(log.timestamp) }}"></span>{% else %}N/A{% endif %}
-                                            </div>
-                                            <div class="col-md-4"><strong>Method:</strong><br><code>{{ log.request_method or 'N/A' }}</code></div>
-                                            <div class="col-md-4"><strong>IP:</strong><br>{{ log.ip_address or 'N/A' }}</div>
-                                        </div>
-                                        <div class="mb-3"><strong>Path:</strong><br><code>{{ log.request_path or 'N/A' }}</code></div>
-                                        <div class="mb-3"><strong>Status:</strong> <span class="badge bg-danger">{{ log.error_type or 'Unknown' }}</span></div>
-                                        <div class="mb-3"><strong>Error Message:</strong><br><code>{{ log.error_message or 'No message' }}</code></div>
-                                        <div class="mb-3"><strong>User Agent:</strong><br><small>{{ log.user_agent or 'N/A' }}</small></div>
-                                        {% if log.stack_trace %}
-                                        <div><strong>Stack Trace:</strong>
-                                            <pre class="bg-dark text-light p-3 rounded mt-2" style="max-height:300px;overflow-y:auto;font-size:0.78rem;"><code>{{ log.stack_trace }}</code></pre>
-                                        </div>
-                                        {% endif %}
-                                    </div>
-                                    <div class="modal-footer">
-                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+
+            {# Network Request Detail Modals - moved outside table to keep HTML valid #}
+            {% for log in network_logs %}
+            <!-- Network Request Detail Modal -->
+            <div class="modal fade" id="netModal{{ log.id }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header bg-primary text-white">
+                            <h5 class="modal-title">
+                                <span class="material-symbols-outlined align-middle me-1" style="font-size:18px;">info</span>
+                                Request #{{ log.id }}
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-4"><strong>Timestamp:</strong><br>
+                                    {% if log.timestamp %}<span class="local-timestamp" data-timestamp="{{ format_utc_iso(log.timestamp) }}"></span>{% else %}N/A{% endif %}
+                                </div>
+                                <div class="col-md-4"><strong>Method:</strong><br><code>{{ log.request_method or 'N/A' }}</code></div>
+                                <div class="col-md-4"><strong>IP:</strong><br>{{ log.ip_address or 'N/A' }}</div>
+                            </div>
+                            <div class="mb-3"><strong>Path:</strong><br><code>{{ log.request_path or 'N/A' }}</code></div>
+                            <div class="mb-3"><strong>Status:</strong> <span class="badge bg-danger">{{ log.error_type or 'Unknown' }}</span></div>
+                            <div class="mb-3"><strong>Error Message:</strong><br><code>{{ log.error_message or 'No message' }}</code></div>
+                            <div class="mb-3"><strong>User Agent:</strong><br><small>{{ log.user_agent or 'N/A' }}</small></div>
+                            {% if log.stack_trace %}
+                            <div><strong>Stack Trace:</strong>
+                                <pre class="bg-dark text-light p-3 rounded mt-2" style="max-height:300px;overflow-y:auto;font-size:0.78rem;"><code>{{ log.stack_trace }}</code></pre>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
 
             <!-- Network Pagination -->
             {% if net_pagination.pages > 1 %}

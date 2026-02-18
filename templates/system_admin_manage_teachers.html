@@ -73,11 +73,13 @@
                                     {% if not invite.used %}
                                     <button class="btn btn-sm btn-outline-secondary p-1"
                                             title="Copy code"
-                                            onclick="navigator.clipboard.writeText('{{ invite.code }}').then(() => this.innerHTML='<span class=\'material-symbols-outlined\' style=\'font-size:16px;\'>check</span>')">
+                                            data-code="{{ invite.code | tojson }}"
+                                            onclick="navigator.clipboard.writeText(JSON.parse(this.dataset.code)).then(() => this.innerHTML='<span class=\'material-symbols-outlined\' style=\'font-size:16px;\'>check</span>')">
                                         <span class="material-symbols-outlined" style="font-size:16px;">content_copy</span>
                                     </button>
                                     <form method="POST" action="{{ url_for('sysadmin.void_invite_code', code_id=invite.id) }}"
-                                          onsubmit="return confirm('Void invite code {{ invite.code }}? It can no longer be used.')">
+                                          data-code="{{ invite.code | tojson }}"
+                                          onsubmit="return confirm('Void invite code ' + JSON.parse(this.dataset.code) + '? It can no longer be used.')">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <button type="submit" class="btn btn-sm btn-outline-danger p-1" title="Void code">
                                             <span class="material-symbols-outlined" style="font-size:16px;">block</span>
