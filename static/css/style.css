@@ -460,6 +460,132 @@ a:hover {
     color: white;
 }
 
+.text-white-55 {
+    color: color-mix(in srgb, white 55%, transparent) !important;
+}
+
+/* Sidebar section toggles */
+.nav-accordion-btn {
+    background-color: transparent;
+    color: color-mix(in srgb, white 82%, transparent);
+    border: none;
+    padding: 0.65rem 0.85rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.nav-accordion-btn:hover {
+    background-color: color-mix(in srgb, white 10%, transparent);
+    color: white;
+}
+
+.dropdown.show .nav-accordion-btn,
+.nav-accordion-btn.show {
+    background-color: color-mix(in srgb, white 14%, transparent);
+    color: white;
+}
+
+.nav-accordion-btn:focus {
+    box-shadow: none;
+}
+
+.nav-accordion-btn::after {
+    filter: brightness(0) invert(1);
+    opacity: 0.8;
+}
+
+.sidebar .dropdown-menu {
+    display: none;
+}
+
+.sidebar .dropdown-menu.show {
+    display: block;
+}
+
+.nav-sub-link {
+    padding-left: 2.1rem !important;
+    font-size: 0.96rem;
+}
+
+.nav-sub-link .material-symbols-outlined {
+    font-size: 19px;
+}
+
+/* Shared page shell used by admin/student/sysadmin layouts */
+.main-content,
+.student-main,
+.sysadmin-main {
+    margin-left: var(--sidebar-width);
+    width: calc(100% - var(--sidebar-width));
+    min-height: 100vh;
+    padding: 1.5rem;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.page-header h1 {
+    margin: 0;
+    font-weight: 700;
+}
+
+.page-header .eyebrow {
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    color: var(--text-secondary);
+    margin-bottom: 0.15rem;
+    font-weight: 600;
+}
+
+.page-header .meta {
+    color: var(--text-secondary);
+}
+
+.page-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+/* Mobile shell controls used by modern layouts */
+.mobile-menu-toggle {
+    display: none;
+    position: fixed;
+    top: 0.9rem;
+    left: 0.9rem;
+    z-index: 1100;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--border-color);
+    background: var(--surface);
+    color: var(--primary);
+    border-radius: var(--radius-sm);
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+    box-shadow: var(--shadow-sm);
+}
+
+.sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: color-mix(in srgb, black 40%, transparent);
+    z-index: 1040;
+}
+
+.sidebar-backdrop.show {
+    display: block;
+}
+
 /* ─── Student Shell Specifics ─── */
 .student-shell .sidebar {
     background-color: var(--primary);
@@ -485,20 +611,39 @@ a:hover {
 }
 
 /* ─── Mobile Layout ─── */
-@media (max-width: 768px) {
+@media (max-width: 991.98px) {
+    .mobile-menu-toggle {
+        display: inline-flex;
+    }
+
     .sidebar {
         transform: translateX(-100%);
+        z-index: 1090;
     }
 
     .sidebar.show {
         transform: translateX(0);
     }
 
-    .content-wrapper {
+    .main-content,
+    .student-main,
+    .sysadmin-main {
         margin-left: 0 !important;
         width: 100% !important;
-        padding-bottom: 80px;
-        /* Space for bottom nav */
+        padding: 4rem 1rem 84px !important;
+    }
+
+    .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .page-header-actions {
+        width: 100%;
+    }
+
+    .nav-sub-link {
+        padding-left: 1.6rem !important;
     }
 }
 
