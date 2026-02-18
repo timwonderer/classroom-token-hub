@@ -3202,8 +3202,7 @@ def rent_pay(period):
     # FIX: Process payment with teacher_id
     # Deduct from checking account
     is_partial = payment_amount < remaining_amount
-    billed_period_date = payment_due_date or now
-    payment_description = f'Rent for Period {period} - {billed_period_date.strftime("%B %Y")}'
+    payment_description = f'Rent for Period {period} - {(payment_due_date or now).strftime("%B %Y")}'
     if is_partial and settings.allow_incremental_payment:
         payment_description += f' (Partial: ${payment_amount:.2f} of ${remaining_amount:.2f})'
     elif late_fee > Decimal('0'):
