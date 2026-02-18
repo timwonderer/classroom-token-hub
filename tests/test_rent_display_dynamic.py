@@ -13,7 +13,7 @@ import os
 from werkzeug.security import generate_password_hash
 
 from app import db
-from app.models import Admin, Student, TeacherBlock, RentSettings, RentItem
+from app.models import Admin, Student, TeacherBlock, RentSettings, RentItem, Transaction, TransactionStatus
 from app.hash_utils import get_random_salt, hash_username
 
 
@@ -144,6 +144,53 @@ def test_rent_items_display_after_due_date(client, setup_rent_with_items):
     # Check that rent items are still displayed
     assert b'Desk' in response.data
     assert b'Locker' in response.data
+
+
+def test_overdue_rent_payment_uses_coverage_month_in_transaction_description(client, setup_rent_with_items, monkeypatch):
+    """Overdue students should pay the oldest unpaid coverage month first."""
+    data = setup_rent_with_items
+    fixed_now = datetime(2026, 2, 17, 12, 0, tzinfo=timezone.utc)
+
+    # Make this mirror the reported scenario: due day 28, preview enabled.
+    data['rent_settings'].first_rent_due_date = datetime(2026, 1, 28, tzinfo=timezone.utc)
+    data['rent_settings'].bill_preview_enabled = True
+    data['rent_settings'].bill_preview_days = 14
+    data['rent_settings'].late_penalty_amount = 20
+    data['rent_settings'].rent_amount = 570
+    data['student'].is_rent_enabled = True
+    db.session.add(
+        Transaction(
+            student_id=data['student'].id,
+            teacher_id=data['teacher'].id,
+            join_code=data['join_code'],
+            amount=1000,
+            account_type='checking',
+            status=TransactionStatus.POSTED,
+            type='Deposit',
+            description='Seed funds for rent test',
+        )
+    )
+    db.session.commit()
+
+    monkeypatch.setattr('app.routes.student.utc_now', lambda: fixed_now)
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = data['student'].id
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+        sess['current_join_code'] = data['join_code']
+
+    response = client.post('/student/rent/pay/A', follow_redirects=False)
+    assert response.status_code == 302
+
+    rent_txn = Transaction.query.filter_by(
+        student_id=data['student'].id,
+        join_code=data['join_code'],
+        type='Rent Payment',
+    ).order_by(Transaction.id.desc()).first()
+
+    assert rent_txn is not None
+    assert 'January 2026' in rent_txn.description
+    assert 'late fee' in rent_txn.description
 
 
 def test_days_until_due_calculation(client, setup_rent_with_items):

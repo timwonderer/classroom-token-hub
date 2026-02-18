@@ -67,20 +67,20 @@ def setup_student_with_legacy_transactions(client):
     db.session.add(seat)
     db.session.commit()
 
-    # Both transactions should have join_code (no more legacy NULL join_code)
-    # Add first transaction with $100 in checking
+    # Add first transaction as a legacy row with NULL join_code.
+    # It should be excluded from class-scoped balance calculations.
     tx1 = Transaction(
         student_id=student.id,
         teacher_id=teacher.id,
-        join_code=join_code,
+        join_code=None,
         amount=100.0,
         account_type='checking',
-        status=TransactionStatus.PENDING,  # PENDING so it gets settled
+        status=TransactionStatus.POSTED,
         type='Initial',
-        description='Initial balance'
+        description='Legacy balance without join_code'
     )
     
-    # Add second transaction with $50 in checking
+    # Add second transaction with current class join_code.
     tx2 = Transaction(
         student_id=student.id,
         teacher_id=teacher.id,
