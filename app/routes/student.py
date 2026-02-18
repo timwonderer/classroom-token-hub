@@ -3283,7 +3283,7 @@ def rent_pay(period):
     passes_awarded = 0
     # Only award if this payment completes full rent (not already fully paid)
     if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
-        from app.models import RentItem
+        from app.models import RentItem, StudentBlock
         hall_pass_items = RentItem.query.filter_by(
             rent_setting_id=settings.id,
             rent_item_type='hall_pass'
@@ -3310,7 +3310,10 @@ def rent_pay(period):
                 db.session.add(student_block)
 
             current_rent_passes = student_block.rent_hall_passes if student_block else 0
-            top_off = max(0, total_grant - current_rent_passes)
+            # Defensive normalization: if the rent-only counter drifts above actual passes
+            # (legacy/manual edits), still top-off correctly when rent is paid.
+            effective_rent_passes = min(current_rent_passes, student.hall_passes or 0)
+            top_off = max(0, total_grant - effective_rent_passes)
 
             if top_off > 0:
                 student.hall_passes = (student.hall_passes or 0) + top_off

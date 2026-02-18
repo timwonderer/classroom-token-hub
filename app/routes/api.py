@@ -375,6 +375,10 @@ def purchase_item():
             StudentItem.join_code == join_code,
             StudentItem.uses_remaining.isnot(None),
             db.or_(
+                StudentItem.uses_remaining > 0,
+                StudentItem.uses_remaining == -1
+            ),
+            db.or_(
                 StudentItem.expiry_date.is_(None),
                 StudentItem.expiry_date > now
             )
