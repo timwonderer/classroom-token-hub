@@ -51,7 +51,7 @@
         <div class="card h-100 border-0 shadow-sm bg-primary text-white">
             <div class="card-body p-4">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="icon-circle bg-primary-subtle text-primary text-white me-3">
+                    <div class="icon-circle bg-primary-subtle text-primary me-3">
                         <span class="material-symbols-outlined">group</span>
                     </div>
                     <span class="text-white text-opacity-75 fw-medium">Active Students</span>
@@ -210,7 +210,8 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="redemptions-tab" data-bs-toggle="tab"
                         data-bs-target="#redemptions" type="button" role="tab">
-                        <span class="material-symbols-outlined me-1">redeem</span>Redemptions <span class="badge bg-danger ms-1">{{
+                        <span class="material-symbols-outlined me-1">redeem</span>Redemptions <span
+                            class="badge bg-danger ms-1">{{
                             pending_redemptions_count }}</span>
                     </button>
                 </li>
@@ -220,7 +221,8 @@
                     <button class="nav-link {% if pending_redemptions_count == 0 %}active{% endif %}"
                         id="hall-passes-tab" data-bs-toggle="tab" data-bs-target="#hall-passes" type="button"
                         role="tab">
-                        <span class="material-symbols-outlined me-1">door_front</span>Hall Passes <span class="badge bg-danger ms-1">{{
+                        <span class="material-symbols-outlined me-1">door_front</span>Hall Passes <span
+                            class="badge bg-danger ms-1">{{
                             pending_hall_passes_count }}</span>
                     </button>
                 </li>
@@ -230,7 +232,8 @@
                     <button
                         class="nav-link {% if pending_redemptions_count == 0 and pending_hall_passes_count == 0 %}active{% endif %}"
                         id="claims-tab" data-bs-toggle="tab" data-bs-target="#claims" type="button" role="tab">
-                        <span class="material-symbols-outlined me-1">verified_user</span>Claims <span class="badge bg-danger ms-1">{{
+                        <span class="material-symbols-outlined me-1">verified_user</span>Claims <span
+                            class="badge bg-danger ms-1">{{
                             pending_insurance_claims_count }}</span>
                     </button>
                 </li>
@@ -290,7 +293,8 @@
                                 <strong>{{ student_lookup.get(pass.student_id).full_name if
                                     student_lookup.get(pass.student_id) else 'Unknown' }}</strong>
                                 <br>
-                                <small class="text-muted"><span class="material-symbols-outlined me-1">signpost</span>{{ pass.reason }}</small>
+                                <small class="text-muted"><span class="material-symbols-outlined me-1">signpost</span>{{
+                                    pass.reason }}</small>
                                 <br>
                                 <small class="text-muted">
                                     <span class="local-timestamp"

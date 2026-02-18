@@ -132,17 +132,17 @@ a:hover {
 }
 
 .btn-primary {
-    background-color: var(--primary);
-    border-color: var(--primary);
-    color: white;
+    background-color: var(--primary) !important;
+    border-color: var(--primary) !important;
+    color: white !important;
 }
 
 .btn-primary:hover,
 .btn-primary:focus,
 .btn-primary:active {
-    background-color: var(--primary-hover);
-    border-color: var(--primary-hover);
-    color: white;
+    background-color: var(--primary-hover) !important;
+    border-color: var(--primary-hover) !important;
+    color: white !important;
 }
 
 .btn-secondary {
@@ -217,14 +217,14 @@ a:hover {
 }
 
 .btn-outline-primary {
-    color: var(--primary);
-    border-color: var(--primary);
+    color: var(--primary) !important;
+    border-color: var(--primary) !important;
     background: transparent;
 }
 
 .btn-outline-primary:hover {
-    background-color: var(--primary);
-    color: white;
+    background-color: var(--primary) !important;
+    color: white !important;
 }
 
 .btn-link {

@@ -60,7 +60,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 
-<body class="d-flex bg-background {% if maintenance_bypass_active %}maintenance-active{% endif %}">
+<body class="bg-background {% if maintenance_bypass_active %}maintenance-active{% endif %}">
     <a href="#main-content" class="skip-link">Skip to main content</a>
     {% if maintenance_bypass_active %}
     <div class="maintenance-banner">
@@ -81,7 +81,7 @@
     <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
 
     <div class="container-fluid">
-        <div class="row">
+        <div class="row min-vh-100">
             <!-- Sidebar -->
             <nav id="sidebar" class="col-md-3 col-lg-2 bg-primary sidebar">
                 <div class="position-sticky pt-3 sidebar-sticky">
