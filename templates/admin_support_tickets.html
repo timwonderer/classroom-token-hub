@@ -55,7 +55,7 @@
                             <input type="text" class="form-control" id="page_url" name="page_url" maxlength="500" placeholder="/admin/students">
                         </div>
 
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-primary" id="submitTicketBtn">
                             <i class="bi bi-send-fill me-2"></i>Submit Ticket
                         </button>
                     </form>
@@ -112,4 +112,41 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.querySelector('form[action="{{ url_for(\'admin.help_support\') }}"]');
+    const submitBtn = document.getElementById('submitTicketBtn');
+    
+    if (form && submitBtn) {
+        // Store original button content
+        const originalContent = submitBtn.innerHTML;
+        let isSubmitting = false;
+        
+        form.addEventListener('submit', function(e) {
+            // Only disable if form is valid
+            if (form.checkValidity()) {
+                // Mark as submitting to prevent re-enabling
+                isSubmitting = true;
+                
+                // Disable button to prevent double submission
+                submitBtn.disabled = true;
+                
+                // Show loading state
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Submitting...';
+            }
+        });
+        
+        // Re-enable button if HTML5 validation fails (but only if not already submitting)
+        form.addEventListener('invalid', function(e) {
+            if (submitBtn.disabled && !isSubmitting) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalContent;
+            }
+        }, true); // Use capture phase to catch invalid events from form fields
+    }
+});
+</script>
 {% endblock %}
