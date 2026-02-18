@@ -410,16 +410,18 @@ a:hover {
 
 /* ─── Navigation (Sidebar) ─── */
 .sidebar {
-    width: var(--sidebar-width);
+    /* width: var(--sidebar-width); REMOVED for Bootstrap Grid */
     background-color: var(--primary);
     color: white;
-    height: 100vh;
-    position: fixed;
-    left: 0;
-    top: 0;
+    min-height: 100vh;
+    /* Changed from height: 100vh */
+    /* position: fixed; REMOVED */
+    /* top: 0; REMOVED */
+    /* left: 0; REMOVED */
     padding: 1.5rem;
     overflow-y: auto;
-    z-index: 1000;
+    z-index: 100;
+    /* Lowered z-index */
     transition: transform 0.3s ease;
 }
 
@@ -556,6 +558,12 @@ a:hover {
 
     .sidebar {
         transform: translateX(-100%);
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 280px;
+        z-index: 1050;
     }
 
     .sidebar.show {
@@ -572,6 +580,7 @@ a:hover {
 }
 
 @media (min-width: 769px) {
+
     .mobile-menu-toggle,
     .sidebar-backdrop {
         display: none !important;
@@ -580,11 +589,12 @@ a:hover {
 
 .content-wrapper,
 .main-content {
-    margin-left: var(--sidebar-width);
-    width: calc(100% - var(--sidebar-width));
+    /* margin-left: var(--sidebar-width); REMOVED */
+    /* width: calc(100% - var(--sidebar-width)); REMOVED */
     padding: 2rem;
     min-height: 100vh;
-    transition: margin-left 0.3s ease, width 0.3s ease;
+    /* Keep min-height */
+    /* transition: ... REMOVED */
 }
 
 /* Mobile Bottom Nav */
