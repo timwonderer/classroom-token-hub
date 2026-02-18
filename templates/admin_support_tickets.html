@@ -121,25 +121,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const submitBtn = document.getElementById('submitTicketBtn');
     
     if (form && submitBtn) {
+        // Store original button content
+        const originalContent = submitBtn.innerHTML;
+        
         form.addEventListener('submit', function(e) {
-            // Disable button to prevent double submission
-            submitBtn.disabled = true;
-            
-            // Store original button content
-            const originalContent = submitBtn.innerHTML;
-            
-            // Show loading state
-            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Submitting...';
-            
-            // Re-enable button if form validation fails or submission is cancelled
-            // This handles edge cases where submit might not actually proceed
-            setTimeout(() => {
-                if (submitBtn.disabled && form.checkValidity && !form.checkValidity()) {
-                    submitBtn.disabled = false;
-                    submitBtn.innerHTML = originalContent;
-                }
-            }, 100);
+            // Only disable if form is valid
+            if (form.checkValidity()) {
+                // Disable button to prevent double submission
+                submitBtn.disabled = true;
+                
+                // Show loading state
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Submitting...';
+            }
         });
+        
+        // Re-enable button if HTML5 validation fails
+        form.addEventListener('invalid', function(e) {
+            if (submitBtn.disabled) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalContent;
+            }
+        }, true); // Use capture phase to catch invalid events from form fields
     }
 });
 </script>
