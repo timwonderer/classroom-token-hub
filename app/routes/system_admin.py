@@ -914,8 +914,23 @@ def manage_teachers():
         flash(f"Invite code '{code}' created successfully.", "success")
         return redirect(url_for("sysadmin.manage_teachers") + "#invite-codes")
 
-    # Get all invite codes
-    invites = AdminInviteCode.query.order_by(AdminInviteCode.created_at.desc()).all()
+    # Get all invite codes and categorize them
+    all_invites = AdminInviteCode.query.order_by(AdminInviteCode.created_at.desc()).all()
+    
+    # Categorize invites: active, expired, or used
+    active_invites = []
+    expired_invites = []
+    used_invites = []
+    
+    current_time = utc_now()
+    
+    for invite in all_invites:
+        if invite.used:
+            used_invites.append(invite)
+        elif invite.expires_at and invite.expires_at < current_time:
+            expired_invites.append(invite)
+        else:
+            active_invites.append(invite)
 
     # Build rich teacher data (from teacher_overview logic)
     all_teachers = Admin.query.order_by(Admin.username.asc()).all()
@@ -1014,7 +1029,9 @@ def manage_teachers():
     return render_template(
         "system_admin_manage_teachers.html",
         form=form,
-        invites=invites,
+        active_invites=active_invites,
+        expired_invites=expired_invites,
+        used_invites=used_invites,
         teachers=teachers,
         inactivity_threshold_days=INACTIVITY_THRESHOLD_DAYS,
     )
