@@ -464,15 +464,8 @@ def purchase_item():
 
     total_price = unit_price * quantity
 
-    # Get banking settings for overdraft handling
-    # CRITICAL: Use join_code as primary filter for class isolation
+    # Get banking settings for overdraft handling (strict join-code scope).
     banking_settings = BankingSettings.query.filter_by(join_code=join_code).first()
-    if not banking_settings and teacher_id:
-        banking_settings = BankingSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=None,
-            join_code=None,
-        ).first()
 
     checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
 
@@ -1408,6 +1401,9 @@ def _get_or_create_hall_pass_settings(join_code, teacher_id=None):
     if settings:
         return settings
 
+    # Clone from teacher-level template (join_code=None) to initialize
+    # join-code-scoped settings. This is template cloning, NOT a settings
+    # fallback — the cloned row is persisted with the target join_code.
     template = None
     if teacher_id:
         template = HallPassSettings.query.filter_by(

@@ -175,55 +175,34 @@ def get_current_class_context():
 
 
 def get_rent_settings_for_context(context):
-    """Return rent settings scoped to the current class context."""
+    """Return rent settings scoped to the current class context.
+
+    Strict join-code scoping: returns None when no join-code-scoped settings
+    exist. Does NOT fall back to legacy teacher-global settings.
+    """
     if not context:
         return None
 
     join_code = context.get('join_code')
-    teacher_id = context.get('teacher_id')
     if not join_code:
         return None
 
-    settings = RentSettings.query.filter_by(join_code=join_code).first()
-    if settings:
-        return settings
-
-    if not teacher_id:
-        return None
-    current_block = (context.get('block') or '').strip().upper()
-    if current_block:
-        settings = RentSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=current_block
-        ).first()
-        if settings:
-            return settings
-    return RentSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+    return RentSettings.query.filter_by(join_code=join_code).first()
 
 
 
 def get_banking_settings_for_context(context):
-    """Return banking settings scoped to the current class context."""
+    """Return banking settings scoped to the current class context.
+
+    Strict join-code scoping: returns None when no join-code-scoped settings
+    exist. Does NOT fall back to legacy teacher-global settings.
+    """
     if not context:
         return None
     join_code = context.get('join_code')
-    teacher_id = context.get('teacher_id')
-    if join_code:
-        settings = BankingSettings.query.filter_by(join_code=join_code).first()
-        if settings:
-            return settings
-    if not teacher_id:
+    if not join_code:
         return None
-    current_block = (context.get('block') or '').strip().upper()
-    if current_block:
-        settings = BankingSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=current_block,
-            join_code=None,
-        ).first()
-        if settings:
-            return settings
-    return BankingSettings.query.filter_by(teacher_id=teacher_id, block=None, join_code=None).first()
+    return BankingSettings.query.filter_by(join_code=join_code).first()
 
 
 def get_current_join_code():
@@ -270,34 +249,19 @@ def get_feature_settings_for_student():
 
     current_block = (context.get('block') or '').strip().upper() or None
 
-    # Try block-specific settings on this class economy first.
+    # Try block-specific settings on this class economy (strict join-code scope).
     if current_block:
         block_settings = FeatureSettings.query.filter_by(join_code=join_code, block=current_block).first()
-        if not block_settings:
-            block_settings = FeatureSettings.query.filter(
-                FeatureSettings.teacher_id == context.get('teacher_id'),
-                func.upper(FeatureSettings.block) == func.upper(current_block),
-                FeatureSettings.join_code.is_(None),
-            ).first()
         if block_settings:
             return block_settings.to_dict()
 
+    # Try class-level settings (no block, same join-code).
     class_settings = FeatureSettings.query.filter_by(
         join_code=join_code,
         block=None
     ).first()
     if class_settings:
         return class_settings.to_dict()
-
-    teacher_id = context.get('teacher_id')
-    if teacher_id:
-        global_settings = FeatureSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=None,
-            join_code=None,
-        ).first()
-        if global_settings:
-            return global_settings.to_dict()
 
     # Return system defaults
     return FeatureSettings.get_defaults()

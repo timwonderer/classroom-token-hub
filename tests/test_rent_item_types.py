@@ -695,6 +695,7 @@ def test_per_use_free_purchase_without_precreated_grant_when_rent_paid(client, t
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',

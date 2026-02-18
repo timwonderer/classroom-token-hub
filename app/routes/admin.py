@@ -287,6 +287,38 @@ def _check_admin_join_code_access(join_code, *, require_active_economy=False, al
     return False, None, None, error or "Access denied"
 
 
+def _verify_membership_for_blocks(admin_id, blocks):
+    """Resolve blocks to join_codes and verify admin has membership for each.
+
+    Returns (True, None) on success or (False, error_message) on failure.
+    """
+    if not blocks:
+        return True, None
+
+    join_code_rows = (
+        db.session.query(TeacherBlock.block, TeacherBlock.join_code)
+        .filter(
+            TeacherBlock.teacher_id == admin_id,
+            TeacherBlock.block.in_(blocks),
+            TeacherBlock.join_code.isnot(None),
+        )
+        .distinct()
+        .all()
+    )
+    join_codes_by_block = {}
+    for block, jc in join_code_rows:
+        if jc and block not in join_codes_by_block:
+            join_codes_by_block[block] = jc
+
+    for block in blocks:
+        jc = join_codes_by_block.get(block)
+        if jc:
+            allowed, _m, _e, err = _check_admin_join_code_access(jc)
+            if not allowed:
+                return False, f"Access denied for class {block}: {err}"
+    return True, None
+
+
 
 def _populate_policy_from_form(policy, form, *, next_tier_category_id=None):
     """Populate insurance policy fields from form data."""
@@ -3034,6 +3066,12 @@ def delete_pending_student():
         if not teacher_block:
             return jsonify({"status": "error", "message": "Pending student not found or access denied."}), 404
 
+        # Verify admin membership for the TeacherBlock's join_code
+        if teacher_block.join_code:
+            allowed, _m, _e, err = _check_admin_join_code_access(teacher_block.join_code)
+            if not allowed:
+                return jsonify({"status": "error", "message": err or "Access denied"}), 403
+
         # Verify it's actually unclaimed
         if teacher_block.is_claimed or teacher_block.student_id is not None:
             return jsonify({
@@ -3081,6 +3119,11 @@ def bulk_delete_pending_students():
         deleted_count = 0
 
         if block:
+            # Verify admin membership for this block
+            ok, err = _verify_membership_for_blocks(current_admin_id, [block])
+            if not ok:
+                return jsonify({"status": "error", "message": err}), 403
+
             # Delete all unclaimed TeacherBlock entries for this teacher and block
             deleted_count = TeacherBlock.query.filter(
                 TeacherBlock.teacher_id == current_admin_id,
@@ -3099,6 +3142,11 @@ def bulk_delete_pending_students():
                 if teacher_block:
                     # Verify it's actually unclaimed
                     if not teacher_block.is_claimed and teacher_block.student_id is None:
+                        # Verify admin membership for this TeacherBlock's join_code
+                        if teacher_block.join_code:
+                            allowed, _m, _e, _err = _check_admin_join_code_access(teacher_block.join_code)
+                            if not allowed:
+                                continue  # Skip entries admin can't access
                         db.session.delete(teacher_block)
                         deleted_count += 1
 
@@ -3140,6 +3188,11 @@ def bulk_delete_legacy_unclaimed_students():
         }), 400
 
     try:
+        # Verify admin membership for this block
+        ok, err = _verify_membership_for_blocks(current_admin_id, [block])
+        if not ok:
+            return jsonify({"status": "error", "message": err}), 403
+
         # Query for legacy unclaimed students in this block for this teacher
         students = _scoped_students().filter(
             Student.block == block,
@@ -3507,6 +3560,13 @@ def store_management():
     class_labels_by_block = _get_class_labels_for_blocks(admin_id, blocks)
 
     if form.validate_on_submit():
+        # Verify admin membership for all selected blocks
+        if form.blocks.data:
+            ok, err = _verify_membership_for_blocks(admin_id, form.blocks.data)
+            if not ok:
+                flash(err, "danger")
+                return redirect(url_for('admin.store_management'))
+
         new_item = StoreItem(
             teacher_id=admin_id,
             name=form.name.data,
@@ -3844,6 +3904,14 @@ def edit_store_item(item_id):
         form.blocks.data = item.blocks_list
 
     if form.validate_on_submit():
+        # Verify admin membership for all selected blocks
+        target_blocks = form.blocks.data if form.blocks.data else []
+        if target_blocks:
+            ok, err = _verify_membership_for_blocks(admin_id, target_blocks)
+            if not ok:
+                flash(err, "danger")
+                return redirect(url_for('admin.store_management'))
+
         # Populate other fields first
         form.populate_obj(item)
         # Set blocks using many-to-many relationship
@@ -3862,6 +3930,13 @@ def delete_store_item(item_id):
     """Deactivate a store item (soft delete)."""
     admin_id = session.get("admin_id")
     item = StoreItem.query.filter_by(id=item_id, teacher_id=admin_id).first_or_404()
+
+    # Verify admin membership for the item's blocks
+    if item.blocks_list:
+        ok, err = _verify_membership_for_blocks(admin_id, item.blocks_list)
+        if not ok:
+            flash(err, "danger")
+            return redirect(url_for('admin.store_management'))
 
     # Prevent deletion if linked to rent settings
     if _block_rent_linked_store_item(item):
@@ -4127,6 +4202,15 @@ def rent_settings():
                 blocks_with_rows.add(block)
                 if join_code and not join_code_map.get(block):
                     join_code_map[block] = join_code
+
+        # Verify admin membership for every join_code that will be mutated
+        for block in blocks_to_update:
+            jc = join_code_map.get(block)
+            if jc:
+                allowed, _m, _e, err = _check_admin_join_code_access(jc)
+                if not allowed:
+                    flash(f"Access denied for class {block}: {err}", "danger")
+                    return redirect(url_for('admin.rent_settings'))
 
         for block in blocks_to_update:
             # Get or create settings for this class
@@ -4599,6 +4683,22 @@ def add_rent_waiver():
 
     # Get rent settings to calculate waiver period
     admin_id = session.get("admin_id")
+
+    # Verify membership for each student's class
+    for student_id in student_ids:
+        student = _get_student_or_404(int(student_id))
+        if student:
+            tb = TeacherBlock.query.filter_by(
+                student_id=student.id,
+                teacher_id=admin_id,
+                is_claimed=True,
+            ).first()
+            if tb and tb.join_code:
+                allowed, _m, _e, err = _check_admin_join_code_access(tb.join_code)
+                if not allowed:
+                    flash(f"Access denied for student {student.full_name}: {err}", "danger")
+                    return redirect(url_for('admin.rent_settings'))
+
     settings = RentSettings.query.filter_by(teacher_id=admin_id).first()
     if not settings:
         flash("Rent settings not configured.", "danger")
@@ -4659,7 +4759,21 @@ def add_rent_waiver():
 def remove_rent_waiver(waiver_id):
     """Remove a rent waiver."""
     waiver = RentWaiver.query.get_or_404(waiver_id)
-    _get_student_or_404(waiver.student_id)
+    student = _get_student_or_404(waiver.student_id)
+
+    # Verify membership for the student's class
+    admin_id = session.get('admin_id')
+    tb = TeacherBlock.query.filter_by(
+        student_id=waiver.student_id,
+        teacher_id=admin_id,
+        is_claimed=True,
+    ).first()
+    if tb and tb.join_code:
+        allowed, _m, _e, err = _check_admin_join_code_access(tb.join_code)
+        if not allowed:
+            flash(err or "Access denied", "danger")
+            return redirect(url_for('admin.rent_settings'))
+
     student_name = waiver.student.full_name
     db.session.delete(waiver)
     db.session.commit()
@@ -4786,6 +4900,13 @@ def insurance_management():
     next_tier_category_id = _next_tenant_scoped_tier_id(tier_namespace_seed, existing_tier_ids)
 
     if request.method == 'POST' and form.validate_on_submit():
+        # Verify admin membership for the selected class before creating a policy
+        if selected_join_code:
+            allowed, _m, _e, err = _check_admin_join_code_access(selected_join_code)
+            if not allowed:
+                flash(f"Access denied: {err}", "danger")
+                return redirect(url_for('admin.insurance_management'))
+
         # Generate unique policy code
         policy_code = secrets.token_urlsafe(12)[:16]
         while InsurancePolicy.query.filter_by(policy_code=policy_code).first():
@@ -5010,6 +5131,14 @@ def edit_insurance_policy(policy_id):
     next_tier_category_id = _next_tenant_scoped_tier_id(tier_namespace_seed, existing_tier_ids)
 
     if request.method == 'POST' and form.validate_on_submit():
+        # Verify admin membership for all selected blocks
+        target_blocks = form.blocks.data if form.blocks.data else []
+        if target_blocks:
+            ok, err = _verify_membership_for_blocks(session.get('admin_id'), target_blocks)
+            if not ok:
+                flash(err, "danger")
+                return redirect(url_for('admin.insurance_management'))
+
         _populate_policy_from_form(policy, form, next_tier_category_id=next_tier_category_id)
 
         db.session.commit()
@@ -5045,6 +5174,13 @@ def deactivate_insurance_policy(policy_id):
     if policy.teacher_id != session.get('admin_id'):
         abort(403)
 
+    # Verify admin membership for policy's blocks
+    if policy.blocks_list:
+        ok, err = _verify_membership_for_blocks(session.get('admin_id'), policy.blocks_list)
+        if not ok:
+            flash(err, "danger")
+            return redirect(url_for('admin.insurance_management'))
+
     policy.is_active = False
     db.session.commit()
     flash(f"Insurance policy '{policy.title}' has been deactivated.", "success")
@@ -5065,6 +5201,13 @@ def delete_insurance_policy(policy_id):
     # Verify this policy belongs to the current teacher
     if policy.teacher_id != session.get('admin_id'):
         abort(403)
+
+    # Verify admin membership for policy's blocks
+    if policy.blocks_list:
+        ok, err = _verify_membership_for_blocks(session.get('admin_id'), policy.blocks_list)
+        if not ok:
+            flash(err, "danger")
+            return redirect(url_for('admin.insurance_management'))
 
     force_delete = request.form.get('force_delete') == 'true'
 
@@ -6471,6 +6614,12 @@ def payroll_settings():
             # Apply to selected blocks only
             target_blocks = selected_blocks
 
+        # Verify admin membership for every class being updated
+        ok, err = _verify_membership_for_blocks(admin_id, target_blocks)
+        if not ok:
+            flash(err, "danger")
+            return redirect(url_for('admin.payroll'))
+
         for block_value in target_blocks:
             setting = PayrollSettings.query.filter_by(teacher_id=admin_id, block=block_value).first()
             if not setting:
@@ -6515,6 +6664,14 @@ def update_expected_weekly_hours():
             return redirect(url_for('admin.payroll', cwi_block=cwi_block))
 
         if apply_to_all:
+            # Verify membership for all blocks
+            students = _scoped_students().all()
+            all_blocks = sorted(set(s.block for s in students if s.block))
+            ok, err = _verify_membership_for_blocks(admin_id, all_blocks)
+            if not ok:
+                flash(err, "danger")
+                return redirect(url_for('admin.payroll', cwi_block=cwi_block))
+
             # Update all existing payroll settings
             settings_to_update = PayrollSettings.query.filter_by(teacher_id=admin_id).all()
 
@@ -6535,6 +6692,12 @@ def update_expected_weekly_hours():
                 db.session.add(new_setting)
                 flash_message = f'Expected weekly hours set to {expected_weekly_hours} hours/week for all classes.'
         else:
+            # Verify membership for the selected block
+            ok, err = _verify_membership_for_blocks(admin_id, [cwi_block])
+            if not ok:
+                flash(err, "danger")
+                return redirect(url_for('admin.payroll', cwi_block=cwi_block))
+
             # Update only the selected block
             block_setting = PayrollSettings.query.filter_by(
                 teacher_id=admin_id,
@@ -6586,8 +6749,18 @@ def payroll_add_reward():
     if form.validate_on_submit():
         try:
             admin_id = session.get("admin_id")
+            current_jc = session.get('current_join_code')
+
+            # Verify admin membership for current class context
+            if current_jc:
+                allowed, _m, _e, err = _check_admin_join_code_access(current_jc)
+                if not allowed:
+                    flash(err or "Access denied", "danger")
+                    return redirect(url_for('admin.payroll'))
+
             reward = PayrollReward(
                 teacher_id=admin_id,
+                join_code=current_jc,
                 name=form.name.data,
                 description=form.description.data,
                 amount=form.amount.data,
@@ -6613,6 +6786,13 @@ def payroll_delete_reward(reward_id):
     try:
         admin_id = session.get("admin_id")
         reward = PayrollReward.query.filter_by(id=reward_id, teacher_id=admin_id).first_or_404()
+
+        # Verify admin membership for the reward's join_code
+        if reward.join_code:
+            allowed, _m, _e, err = _check_admin_join_code_access(reward.join_code)
+            if not allowed:
+                return jsonify({'success': False, 'message': err or 'Access denied'}), 403
+
         db.session.delete(reward)
         db.session.commit()
         return jsonify({'success': True, 'message': 'Reward deleted successfully'})
@@ -6631,8 +6811,18 @@ def payroll_add_fine():
     if form.validate_on_submit():
         try:
             admin_id = session.get("admin_id")
+            current_jc = session.get('current_join_code')
+
+            # Verify admin membership for current class context
+            if current_jc:
+                allowed, _m, _e, err = _check_admin_join_code_access(current_jc)
+                if not allowed:
+                    flash(err or "Access denied", "danger")
+                    return redirect(url_for('admin.payroll'))
+
             fine = PayrollFine(
                 teacher_id=admin_id,
+                join_code=current_jc,
                 name=form.name.data,
                 description=form.description.data,
                 amount=form.amount.data,
@@ -6658,6 +6848,13 @@ def payroll_delete_fine(fine_id):
     try:
         admin_id = session.get("admin_id")
         fine = PayrollFine.query.filter_by(id=fine_id, teacher_id=admin_id).first_or_404()
+
+        # Verify admin membership for the fine's join_code
+        if fine.join_code:
+            allowed, _m, _e, err = _check_admin_join_code_access(fine.join_code)
+            if not allowed:
+                return jsonify({'success': False, 'message': err or 'Access denied'}), 403
+
         db.session.delete(fine)
         db.session.commit()
         return jsonify({'success': True, 'message': 'Fine deleted successfully'})
@@ -6675,6 +6872,13 @@ def payroll_edit_reward(reward_id):
         from app.models import _quantize_currency
         admin_id = session.get("admin_id")
         reward = PayrollReward.query.filter_by(id=reward_id, teacher_id=admin_id).first_or_404()
+
+        # Verify admin membership for the reward's join_code
+        if reward.join_code:
+            allowed, _m, _e, err = _check_admin_join_code_access(reward.join_code)
+            if not allowed:
+                return jsonify({'success': False, 'message': err or 'Access denied'}), 403
+
         data = request.get_json()
 
         reward.name = data.get('name', reward.name)
@@ -6698,6 +6902,13 @@ def payroll_edit_fine(fine_id):
         from app.models import _quantize_currency
         admin_id = session.get("admin_id")
         fine = PayrollFine.query.filter_by(id=fine_id, teacher_id=admin_id).first_or_404()
+
+        # Verify admin membership for the fine's join_code
+        if fine.join_code:
+            allowed, _m, _e, err = _check_admin_join_code_access(fine.join_code)
+            if not allowed:
+                return jsonify({'success': False, 'message': err or 'Access denied'}), 403
+
         data = request.get_json()
 
         fine.name = data.get('name', fine.name)

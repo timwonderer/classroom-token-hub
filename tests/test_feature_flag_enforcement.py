@@ -85,9 +85,10 @@ def setup_student_with_disabled_banking(client):
     db.session.add(tx)
     db.session.commit()
 
-    # Create feature settings with banking disabled
+    # Create feature settings with banking disabled (join-code scoped)
     feature_settings = FeatureSettings(
         teacher_id=teacher.id,
+        join_code=join_code,
         block="Period1",
         banking_enabled=False,  # Disable banking
         payroll_enabled=False,  # Disable payroll
@@ -263,9 +264,10 @@ def setup_student_with_enabled_banking(client):
     db.session.add(tx)
     db.session.commit()
 
-    # Create feature settings with banking ENABLED
+    # Create feature settings with banking ENABLED (join-code scoped)
     feature_settings = FeatureSettings(
         teacher_id=teacher.id,
+        join_code=join_code,
         block="Period2",
         banking_enabled=True,  # Enable banking
         payroll_enabled=True,  # Enable payroll

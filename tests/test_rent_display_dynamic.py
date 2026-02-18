@@ -68,10 +68,11 @@ def setup_rent_with_items(client):
     db.session.add(seat)
     db.session.commit()
 
-    # Create rent settings
+    # Create rent settings (join-code scoped)
     now = datetime.now(timezone.utc)
     rent_settings = RentSettings(
         teacher_id=teacher.id,
+        join_code="TESTA",
         block="A",
         is_enabled=True,
         rent_amount=50.0,

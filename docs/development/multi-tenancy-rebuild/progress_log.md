@@ -64,6 +64,18 @@ Branch: `join-code-centric-architecture-rebuild`
   - `/api/approve-redemption` and `/api/reject-redemption` now enforce admin membership on redemption class scope before mutation.
   - Student insurance claim eligibility now prioritizes policy `join_code` (fallback to `teacher_id` only when policy has no join_code).
   - `/admin/join-code/delete` now requires explicit `confirm_join_code` confirmation before destructive hard delete.
+- Removed legacy `join_code=NULL` settings fallback blending:
+  - `get_banking_settings_for_context()`, `get_rent_settings_for_context()`, `get_feature_settings_for_student()` in `student.py` no longer fall back to `join_code IS NULL` rows.
+  - `purchase_item()` banking settings lookup in `api.py` no longer falls back to `join_code IS NULL`.
+  - Settings now return `None` or system defaults when no class-scoped row exists.
+- Completed comprehensive admin mutation route audit and gating:
+  - Audited all 50+ POST routes in `admin.py` against the v2 join-code scoping rule.
+  - Added `_verify_membership_for_blocks` shared helper that resolves blocks → join_codes via `TeacherBlock` and verifies admin `ClassMembership` for each.
+  - Config mutation routes gated: `store_management` POST (create), `edit_store_item` POST, `delete_store_item` POST (soft), `payroll_settings` POST, `update_expected_weekly_hours` POST, `edit_insurance_policy` POST, `deactivate_insurance_policy` POST, `delete_insurance_policy` POST.
+  - Financial state routes gated: `rent_settings` POST, `insurance_management` POST (create), `add_rent_waiver` POST (per-student TeacherBlock join_code), `remove_rent_waiver` POST.
+  - Payroll reward/fine CRUD scoped to `current_join_code`: `payroll_add_reward`, `payroll_add_fine` now set `join_code` on records; `delete`/`edit` routes verify membership on the record's `join_code`.
+  - Pending/legacy student cleanup gated: `delete_pending_student`, `bulk_delete_pending_students`, `bulk_delete_legacy_unclaimed` now verify join_code membership.
+  - Identity-level routes documented as exempt: auth flows, display name settings, student creation.
 
 ## Commit Review Snapshot (Recent Branch Work)
 | Commit | Scope Review | Hardening Impact |
@@ -96,6 +108,9 @@ Branch: `join-code-centric-architecture-rebuild`
     - `tests/test_hall_pass_history_scoping.py`
     - `tests/test_api_tenancy.py`
     - `tests/test_api_fixes.py`
+  - `7 passed` across new settings fallback removal tests:
+    - `tests/test_settings_fallback_removal.py`
+  - Full suite: `463 passed, 1 skipped, 0 failures` after all hardening changes.
 
 ## Risk Report Reconciliation (`docs/audits/2026-02-16_stage-2_economic-invariant-risk.md`)
 - 1) Cross-tenant purchase authorization leakage: `Patched`
@@ -122,8 +137,8 @@ Branch: `join-code-centric-architecture-rebuild`
 ## Remaining TODO (Must Complete for Full v2.0 Hardening)
 
 ### 1) Route-Level Authorization Completion
-- Apply `membership_required(...)` or equivalent explicit `check_membership_access(...)` gates to all class-scoped API/admin/student routes.
-- Eliminate endpoints that still allow teacher-only or implicit scope without `join_code`.
+- ~~Apply `membership_required(...)` or equivalent explicit `check_membership_access(...)` gates to all class-scoped API/admin/student routes.~~ **Complete for admin mutation routes.** All admin POST routes now validate `join_code` membership or are documented as identity-level.
+- Remaining: student-side and API routes still need audit for class-scoped reads.
 
 ### 2) Query Inversion Completion (`teacher_id/block` -> `join_code`)
 - Remove remaining class-scope filters using:
