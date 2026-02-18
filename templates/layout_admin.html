@@ -202,9 +202,9 @@
 
             </div>
 
-            <!-- Help & Support Link -->
-            <a href="{{ url_for('admin.help_support') }}" class="nav-link d-flex align-items-center gap-2 {% if current_page == 'help' or request.endpoint == 'admin.help_support' %}active{% endif %}">
-                <span class="material-symbols-outlined">help</span> Help &amp; Support
+            <!-- Docs Home Link -->
+            <a href="{{ url_for('docs.index') }}" class="nav-link d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined">menu_book</span> Docs &amp; Help
             </a>
 
             <!-- Sign Out Button (Improved styling in next task) -->
