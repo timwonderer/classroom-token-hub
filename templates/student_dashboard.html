@@ -13,21 +13,21 @@
 </div>
 
 <script>
-// Set time-based greeting
-(function() {
-    const hour = new Date().getHours();
-    let greeting = 'Good day';
-    const midDayGreeting = ['Howdy', 'Good day to you', 'Good to see you again', 'Great timing', 'Let us get started'];
-    if (hour >= 5 && hour < 12) {
-        greeting = 'Good morning';
-    } else if (hour >= 12 && hour < 17) {
-        greeting = midDayGreeting[Math.floor(Math.random() * midDayGreeting.length)];
-    } else if (hour >= 17 || hour < 5) {
-        greeting = 'Good evening';
-    }
+    // Set time-based greeting
+    (function () {
+        const hour = new Date().getHours();
+        let greeting = 'Good day';
+        const midDayGreeting = ['Howdy', 'Good day to you', 'Good to see you again', 'Great timing', 'Let us get started'];
+        if (hour >= 5 && hour < 12) {
+            greeting = 'Good morning';
+        } else if (hour >= 12 && hour < 17) {
+            greeting = midDayGreeting[Math.floor(Math.random() * midDayGreeting.length)];
+        } else if (hour >= 17 || hour < 5) {
+            greeting = 'Good evening';
+        }
 
-    document.getElementById('greeting-text').textContent = greeting;
-})();
+        document.getElementById('greeting-text').textContent = greeting;
+    })();
 </script>
 <!-- Toast Container for Notifications -->
 <div id="toast-container" class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 1050;"></div>
@@ -42,17 +42,20 @@
         <span class="material-symbols-outlined fs-3 text-info me-3">security</span>
         <div class="flex-grow-1">
             <h5 class="alert-heading fw-bold mb-2">Account Recovery Request</h5>
-            <p class="mb-2">Your teacher is trying to recover their account and needs your help to verify their identity.</p>
+            <p class="mb-2">Your teacher is trying to recover their account and needs your help to verify their
+                identity.</p>
             <p class="mb-3 small text-muted">
                 <span class="material-symbols-outlined fs-6 align-text-bottom">schedule</span>
                 Expires on {{ pending_recovery_code.recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }}
             </p>
             <div class="d-flex gap-2">
-                <a href="{{ url_for('student.verify_recovery', code_id=pending_recovery_code.id) }}" class="btn btn-primary btn-sm">
+                <a href="{{ url_for('student.verify_recovery', code_id=pending_recovery_code.id) }}"
+                    class="btn btn-primary btn-sm">
                     <span class="material-symbols-outlined fs-6 align-bottom me-1">verified_user</span>
                     Help Verify Identity
                 </a>
-                <form method="POST" action="{{ url_for('student.dismiss_recovery', code_id=pending_recovery_code.id) }}" style="display: inline;">
+                <form method="POST" action="{{ url_for('student.dismiss_recovery', code_id=pending_recovery_code.id) }}"
+                    style="display: inline;">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <button type="submit" class="btn btn-outline-secondary btn-sm">Dismiss for now</button>
                 </form>
@@ -75,22 +78,23 @@
 
 <!-- Announcements Section -->
 {% if announcements %}
-    {% for announcement in announcements %}
-    <div class="alert {{ announcement.get_priority_class() }} d-flex align-items-start mb-3 border-0 shadow-sm" role="alert">
-        <span class="material-symbols-outlined me-3 fs-4">{{ announcement.get_priority_icon() }}</span>
-        <div class="flex-grow-1">
-            <h6 class="alert-heading fw-bold mb-2">{{ announcement.title }}</h6>
-            <p class="mb-1">{{ announcement.message|nl2br|safe }}</p>
-            {% if announcement.expires_at %}
-            <small class="text-muted d-block mt-2">
-                <span class="material-symbols-outlined fs-6 align-text-bottom">schedule</span>
-                Expires {{ announcement.expires_at.strftime('%b %d, %Y') }}
-            </small>
-            {% endif %}
-        </div>
-        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+{% for announcement in announcements %}
+<div class="alert {{ announcement.get_priority_class() }} d-flex align-items-start mb-3 border-0 shadow-sm"
+    role="alert">
+    <span class="material-symbols-outlined me-3 fs-4">{{ announcement.get_priority_icon() }}</span>
+    <div class="flex-grow-1">
+        <h6 class="alert-heading fw-bold mb-2">{{ announcement.title }}</h6>
+        <p class="mb-1">{{ announcement.message|nl2br|safe }}</p>
+        {% if announcement.expires_at %}
+        <small class="text-muted d-block mt-2">
+            <span class="material-symbols-outlined fs-6 align-text-bottom">schedule</span>
+            Expires {{ announcement.expires_at.strftime('%b %d, %Y') }}
+        </small>
+        {% endif %}
     </div>
-    {% endfor %}
+    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+</div>
+{% endfor %}
 {% endif %}
 
 <!-- Weekly Analytics Card -->
@@ -105,33 +109,33 @@
         </div>
         <div class="row g-3">
             <div class="col-6 col-md-3">
-                <div class="text-center p-3 bg-primary bg-opacity-10 rounded-3">
+                <div class="text-center p-3 bg-primary-subtle rounded-3">
                     <span class="material-symbols-outlined text-white fs-3">event_available</span>
                     <div class="h2 fw-bold text-white mb-0 mt-2">{{ unique_days_tapped }}</div>
                     <div class="small text-white">Days Tapped In</div>
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="text-center  p-3 bg-info bg-opacity-10 rounded-3">
+                <div class="text-center  p-3 bg-info-subtle rounded-3">
                     <span class="material-symbols-outlined text-primary fs-3">schedule</span>
                     <div class="h2 fw-bold text-primary mb-0 mt-2">{{ total_minutes_this_week }}</div>
                     <div class="small text-muted-primary">Minutes This Week</div>
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="text-center p-3 bg-success bg-opacity-10 rounded-3">
+                <div class="text-center p-3 bg-success-subtle rounded-3">
                     <span class="material-symbols-outlined text-success fs-3">trending_up</span>
                     <div class="h2 fw-bold text-success mb-0 mt-2">${{ "%.0f"|format(earnings_this_week) }}</div>
                     <div class="small text-black">Earned This Week</div>
-                    
+
                 </div>
             </div>
             <div class="col-6 col-md-3">
-                <div class="text-center p-3 bg-danger bg-opacity-10 rounded-3">
+                <div class="text-center p-3 bg-danger-subtle rounded-3">
                     <span class="material-symbols-outlined text-danger fs-3">trending_down</span>
                     <div class="h2 fw-bold text-danger mb-0 mt-2">${{ "%.0f"|format(spending_this_week) }}</div>
                     <div class="small text-black">Spent This Week</div>
-                    
+
                 </div>
             </div>
         </div>
@@ -146,7 +150,8 @@
             <div class="d-flex align-items-center gap-2">
                 <span class="material-symbols-outlined text-primary me-2">schedule</span>
                 <h5 class="fw-bold mb-0">Attendance</h5>
-                {{ help.help_icon("user-guides/diagnostics/student-attendance", "Learn how attendance tracking works") }}
+                {{ help.help_icon("user-guides/diagnostics/student-attendance", "Learn how attendance tracking works")
+                }}
             </div>
             <div class="badge bg-primary-subtle text-primary border border-primary-subtle rounded-pill px-3">
                 {{ student.hall_passes }} Passes Left
@@ -154,7 +159,8 @@
         </div>
 
         <!-- Queue Status (Hidden by default, populated by JS) -->
-        <div id="queueStatus" class="alert alert-info py-2 px-3 mb-3 d-flex align-items-center justify-content-between" style="display: none !important;">
+        <div id="queueStatus" class="alert alert-info py-2 px-3 mb-3 d-flex align-items-center justify-content-between"
+            style="display: none !important;">
             <div class="d-flex align-items-center">
                 <span class="material-symbols-outlined fs-5 me-2">people</span>
                 <span>Restroom Queue: <strong id="queueCount">0</strong> waiting</span>
@@ -179,10 +185,12 @@
             <div id="hallPassInfo-{{ period }}" style="display:none;" class="mb-3"></div>
 
             <div class="d-grid gap-2 d-flex">
-                <button id="tapIn-{{ period }}" class="btn btn-success flex-grow-1 tap-btn py-2 fw-bold" data-period="{{ period }}" data-action="tap_in">
+                <button id="tapIn-{{ period }}" class="btn btn-success flex-grow-1 tap-btn py-2 fw-bold"
+                    data-period="{{ period }}" data-action="tap_in">
                     <span class="material-symbols-outlined align-bottom me-1">login</span> Start Work
                 </button>
-                <button id="tapOut-{{ period }}" class="btn btn-danger flex-grow-1 tap-btn py-2 fw-bold" data-period="{{ period }}" data-action="tap_out" disabled>
+                <button id="tapOut-{{ period }}" class="btn btn-danger flex-grow-1 tap-btn py-2 fw-bold"
+                    data-period="{{ period }}" data-action="tap_out" disabled>
                     <span class="material-symbols-outlined align-bottom me-1">logout</span> Break / Done
                 </button>
             </div>
@@ -204,7 +212,8 @@
                     <div class="d-flex align-items-center gap-2">
                         <span class="material-symbols-outlined text-primary me-2 fs-3">account_balance_wallet</span>
                         <h5 class="fw-bold mb-0 text-dark">Checking Account</h5>
-                        {{ help.help_icon("user-guides/diagnostics/student-money", "Learn about checking and savings") }}
+                        {{ help.help_icon("user-guides/diagnostics/student-money", "Learn about checking and savings")
+                        }}
                     </div>
                 </div>
                 <div class="display-6 fw-bold text-primary mb-3">${{ "%.2f"|format(checking_balance) }}</div>
@@ -228,7 +237,8 @@
                     <div class="d-flex align-items-center gap-2">
                         <span class="material-symbols-outlined text-success me-2 fs-3">savings</span>
                         <h5 class="fw-bold mb-0 text-dark">Savings Account</h5>
-                        {{ help.help_icon("user-guides/diagnostics/student-money", "Learn about interest and savings") }}
+                        {{ help.help_icon("user-guides/diagnostics/student-money", "Learn about interest and savings")
+                        }}
                     </div>
                 </div>
                 {% if savings_balance > 0 %}
@@ -244,7 +254,8 @@
                 <div class="display-6 fw-bold text-muted mb-2">$0.00</div>
                 <div class="alert alert-warning border-warning py-2 px-3 mb-3 small d-flex align-items-start">
                     <span class="material-symbols-outlined fs-6 me-2">info</span>
-                    <span>You're missing out on interest! Transfer money from Checking to Savings to start earning.</span>
+                    <span>You're missing out on interest! Transfer money from Checking to Savings to start
+                        earning.</span>
                 </div>
                 <a href="{{ url_for('student.transfer') }}" class="btn btn-success btn-sm">
                     <span class="material-symbols-outlined align-bottom fs-6 me-1">add</span> Start Saving
@@ -263,45 +274,46 @@
 <div class="card border-0 shadow-sm">
     <div class="card-body p-0">
         {% if recent_transactions %}
-            <div class="list-group list-group-flush rounded-3">
-                {% for t in recent_transactions %}
-                <div class="list-group-item border-0 border-bottom px-4 py-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="rounded-circle p-2 d-flex align-items-center justify-content-center"
-                                 style="width: 40px; height: 40px; background-color: {{ 'rgba(25, 135, 84, 0.1)' if t.amount > 0 else 'rgba(220, 53, 69, 0.1)' }};">
-                                <span class="material-symbols-outlined fs-5 {{ 'text-success' if t.amount > 0 else 'text-danger' }}">
-                                    {{ 'input' if t.amount > 0 else 'output' }}
-                                </span>
-                            </div>
-                            <div>
-                                <div class="fw-semibold text-dark">{{ t.description }}</div>
-                                <div class="small text-muted local-timestamp" data-timestamp="{{ format_utc_iso(t.timestamp) }}">
-                                    {{ t.timestamp.strftime('%b %d') }}
-                                </div>
-                            </div>
+        <div class="list-group list-group-flush rounded-3">
+            {% for t in recent_transactions %}
+            <div class="list-group-item border-0 border-bottom px-4 py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle p-2 d-flex align-items-center justify-content-center"
+                            style="width: 40px; height: 40px; background-color: {{ 'rgba(25, 135, 84, 0.1)' if t.amount > 0 else 'rgba(220, 53, 69, 0.1)' }};">
+                            <span
+                                class="material-symbols-outlined fs-5 {{ 'text-success' if t.amount > 0 else 'text-danger' }}">
+                                {{ 'input' if t.amount > 0 else 'output' }}
+                            </span>
                         </div>
-                        <div class="d-flex align-items-center gap-2">
-                            <div class="fw-bold {{ 'text-success' if t.amount > 0 else 'text-danger' }}">
-                                {{ '+' if t.amount > 0 else '' }}{{ "%.2f"|format(t.amount) }}
+                        <div>
+                            <div class="fw-semibold text-dark">{{ t.description }}</div>
+                            <div class="small text-muted local-timestamp"
+                                data-timestamp="{{ format_utc_iso(t.timestamp) }}">
+                                {{ t.timestamp.strftime('%b %d') }}
                             </div>
-                            <!-- Report Issue Icon -->
-                            <a href="{{ url_for('student.report_transaction_issue', transaction_id=t.id) }}"
-                               class="btn btn-sm btn-link text-muted p-0"
-                               title="Report an issue with this transaction"
-                               data-bs-toggle="tooltip">
-                                <span class="material-symbols-outlined fs-6">help</span>
-                            </a>
                         </div>
                     </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="fw-bold {{ 'text-success' if t.amount > 0 else 'text-danger' }}">
+                            {{ '+' if t.amount > 0 else '' }}{{ "%.2f"|format(t.amount) }}
+                        </div>
+                        <!-- Report Issue Icon -->
+                        <a href="{{ url_for('student.report_transaction_issue', transaction_id=t.id) }}"
+                            class="btn btn-sm btn-link text-muted p-0" title="Report an issue with this transaction"
+                            data-bs-toggle="tooltip">
+                            <span class="material-symbols-outlined fs-6">help</span>
+                        </a>
+                    </div>
                 </div>
-                {% endfor %}
             </div>
+            {% endfor %}
+        </div>
         {% else %}
-            <div class="text-center py-5 text-muted">
-                <span class="material-symbols-outlined fs-2 opacity-25 d-block mb-2">receipt_long</span>
-                No recent transactions
-            </div>
+        <div class="text-center py-5 text-muted">
+            <span class="material-symbols-outlined fs-2 opacity-25 d-block mb-2">receipt_long</span>
+            No recent transactions
+        </div>
         {% endif %}
     </div>
 </div>
@@ -325,8 +337,10 @@
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label small fw-bold text-uppercase text-secondary">Enter PIN to Confirm</label>
-                        <input type="password" class="form-control form-control-lg text-center" id="hallPassPin" inputmode="numeric" pattern="[0-9]*" placeholder="••••" style="letter-spacing: 0.5em;">
+                        <label class="form-label small fw-bold text-uppercase text-secondary">Enter PIN to
+                            Confirm</label>
+                        <input type="password" class="form-control form-control-lg text-center" id="hallPassPin"
+                            inputmode="numeric" pattern="[0-9]*" placeholder="••••" style="letter-spacing: 0.5em;">
                     </div>
                 </form>
             </div>

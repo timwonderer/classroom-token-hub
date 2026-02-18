@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Classroom Token Hub — Design System Preview</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+        rel="stylesheet">
+    <style>
+        /* ─── Shared base tokens ─── */
+        :root {
+            --font-family: 'Inter', sans-serif;
+
+            /* Radius — minimal */
+            --radius-xs: 2px;
+            --radius-sm: 4px;
+            --radius-md: 6px;
+            --radius-lg: 8px;
+            --radius-pill: 999px;
+
+            /* Elevation */
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+            --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+
+            /* Neutral palette (warm-tinted) */
+            --neutral-50: #fafaf9;
+            --neutral-100: #f5f5f3;
+            --neutral-200: #e8e8e5;
+            --neutral-300: #d4d4d0;
+            --neutral-400: #a3a3a0;
+            --neutral-500: #737370;
+            --neutral-600: #525250;
+            --neutral-700: #404040;
+            --neutral-800: #262626;
+            --neutral-900: #171717;
+
+            --background: var(--neutral-100);
+            --surface: #ffffff;
+            --border-color: var(--neutral-200);
+            --text-primary: var(--neutral-800);
+            --text-secondary: var(--neutral-500);
+            --text-muted: var(--neutral-400);
+        }
+
+        /* ─── Teacher tokens ─── */
+        [data-theme="teacher"] {
+            --primary: #1a4d47;
+            --primary-hover: #15403b;
+            --primary-subtle: #e8f0ef;
+            --secondary: #d3af37;
+            --secondary-hover: #c49f2e;
+            --secondary-text: var(--neutral-900);
+            --accent: var(--secondary);
+            --success: #2e7d5b;
+            --success-subtle: #e6f4ed;
+            --info: #3b7daa;
+            --info-subtle: #e6f0f8;
+            --warning: #c08c15;
+            --warning-subtle: #fef8e6;
+            --danger: #c0392b;
+            --danger-subtle: #fce8e6;
+        }
+
+        /* ─── Student tokens ─── */
+        [data-theme="student"] {
+            --primary: #2F4F7F;
+            --primary-hover: #253f66;
+            --primary-subtle: #e8edf4;
+            --secondary: #ac8255;
+            --secondary-hover: #9a7349;
+            --accent: var(--secondary);
+            --secondary-text: white;
+            --success: #3a7d5c;
+            --success-subtle: #e6f4ed;
+            --info: #4a7fb3;
+            --info-subtle: #e8f0f8;
+            --warning: #b58a1a;
+            --warning-subtle: #fef8e6;
+            --danger: #c44040;
+            --danger-subtle: #fce8e6;
+        }
+
+        /* ─── Sysadmin tokens ─── */
+        [data-theme="sysadmin"] {
+            --primary: #303030;
+            --primary-hover: #1a1a1a;
+            --primary-subtle: #e8e8e8;
+            --secondary: #D4A857;
+            --secondary-hover: #c09840;
+            --secondary-text: var(--neutral-900);
+            --accent: #FDB034;
+            --success: #2e7d5b;
+            --success-subtle: #e6f4ed;
+            --info: #3b7daa;
+            --info-subtle: #e6f0f8;
+            --warning: #c08c15;
+            --warning-subtle: #fef8e6;
+            --danger: #c0392b;
+            --danger-subtle: #fce8e6;
+        }
+
+        /* ─── Global ─── */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background: var(--neutral-100);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 2rem;
+        }
+
+        h1,
+        h2,
+        h3,
+        h4 {
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .page-title {
+            text-align: center;
+            margin-bottom: 0.5rem;
+            font-size: 1.75rem;
+            color: var(--neutral-800);
+        }
+
+        .page-subtitle {
+            text-align: center;
+            color: var(--neutral-500);
+            margin-bottom: 2.5rem;
+            font-size: 0.95rem;
+        }
+
+        /* ─── Theme switcher ─── */
+        .theme-switcher {
+            display: flex;
+            justify-content: center;
+            gap: 0.5rem;
+            margin-bottom: 2.5rem;
+        }
+
+        .theme-btn {
+            font-family: var(--font-family);
+            padding: 0.6rem 1.5rem;
+            border: 2px solid var(--neutral-300);
+            border-radius: var(--radius-md);
+            background: var(--surface);
+            color: var(--neutral-700);
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+
+        .theme-btn:hover {
+            border-color: var(--neutral-400);
+        }
+
+        .theme-btn.active {
+            border-color: var(--neutral-800);
+            background: var(--neutral-800);
+            color: white;
+        }
+
+        /* ─── Themed preview container ─── */
+        .preview {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        /* ─── Section layout ─── */
+        .section {
+            margin-bottom: 2.5rem;
+        }
+
+        .section-title {
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        /* ─── Color swatches ─── */
+        .swatch-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .swatch {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .swatch-color {
+            height: 56px;
+            display: flex;
+            align-items: flex-end;
+            padding: 0.25rem 0.5rem;
+        }
+
+        .swatch-color span {
+            font-size: 0.65rem;
+            font-weight: 600;
+            font-family: 'Inter', monospace;
+            background: rgba(255, 255, 255, 0.85);
+            padding: 0.1rem 0.35rem;
+            border-radius: 2px;
+            color: var(--neutral-800);
+        }
+
+        .swatch-label {
+            padding: 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        /* ─── Component showcase ─── */
+        .component-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: flex-start;
+        }
+
+        /* Buttons */
+        .btn {
+            font-family: var(--font-family);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.55rem 1.1rem;
+            border-radius: var(--radius-md);
+            border: 1px solid transparent;
+            font-weight: 500;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
+            text-decoration: none;
+        }
+
+        .btn .material-symbols-outlined {
+            font-size: 18px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+            border-color: var(--primary-hover);
+        }
+
+        .btn-secondary {
+            background: var(--secondary);
+            color: var(--secondary-text);
+            border-color: var(--secondary);
+        }
+
+        .btn-secondary:hover {
+            background: var(--secondary-hover);
+            border-color: var(--secondary-hover);
+        }
+
+        .btn-outline {
+            background: transparent;
+            color: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .btn-outline:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+            border-color: var(--success);
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+            border-color: var(--danger);
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+            border-color: var(--warning);
+        }
+
+        .btn-info {
+            background: var(--info);
+            color: white;
+            border-color: var(--info);
+        }
+
+        .btn-light {
+            background: var(--neutral-100);
+            color: var(--text-primary);
+            border-color: var(--neutral-300);
+        }
+
+        .btn-light:hover {
+            background: var(--neutral-200);
+        }
+
+        /* Cards */
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-sm);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 0.85rem 1rem;
+            font-weight: 600;
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--primary);
+        }
+
+        .card-header.primary-bg {
+            background: var(--primary);
+            color: white;
+        }
+
+        .card-header.success-bg {
+            background: var(--success);
+            color: white;
+        }
+
+        .card-body {
+            padding: 1rem;
+        }
+
+        .card-body p {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 0.75rem;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25em 0.6em;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: var(--radius-pill);
+            color: white;
+        }
+
+        .badge-success {
+            background: var(--success);
+            border: 1px solid color-mix(in srgb, var(--success) 80%, black);
+        }
+
+        .badge-danger {
+            background: var(--danger);
+            border: 1px solid color-mix(in srgb, var(--danger) 80%, black);
+        }
+
+        .badge-warning {
+            background: var(--warning);
+            color: var(--neutral-900);
+            border: 1px solid color-mix(in srgb, var(--warning) 80%, black);
+        }
+
+        .badge-info {
+            background: var(--info);
+            border: 1px solid color-mix(in srgb, var(--info) 80%, black);
+        }
+
+        .badge-neutral {
+            background: var(--neutral-400);
+            border: 1px solid color-mix(in srgb, var(--neutral-400) 80%, black);
+        }
+
+        .badge-subtle-success {
+            background: var(--success-subtle);
+            color: var(--success);
+            border: 1px solid color-mix(in srgb, var(--success) 30%, transparent);
+        }
+
+        .badge-subtle-danger {
+            background: var(--danger-subtle);
+            color: var(--danger);
+            border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+        }
+
+        .badge-subtle-warning {
+            background: var(--warning-subtle);
+            color: var(--warning);
+            border: 1px solid color-mix(in srgb, var(--warning) 30%, transparent);
+        }
+
+        .badge-subtle-info {
+            background: var(--info-subtle);
+            color: var(--info);
+            border: 1px solid color-mix(in srgb, var(--info) 30%, transparent);
+        }
+
+        /* Alerts */
+        .alert {
+            padding: 0.85rem 1rem;
+            border-radius: var(--radius-sm);
+            font-size: 0.875rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .alert .material-symbols-outlined {
+            font-size: 20px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .alert-success {
+            background: var(--success-subtle);
+            color: var(--success);
+            border: 1px solid color-mix(in srgb, var(--success) 20%, transparent);
+        }
+
+        .alert-danger {
+            background: var(--danger-subtle);
+            color: var(--danger);
+            border: 1px solid color-mix(in srgb, var(--danger) 20%, transparent);
+        }
+
+        .alert-warning {
+            background: var(--warning-subtle);
+            color: var(--warning);
+            border: 1px solid color-mix(in srgb, var(--warning) 20%, transparent);
+        }
+
+        .alert-info {
+            background: var(--info-subtle);
+            color: var(--info);
+            border: 1px solid color-mix(in srgb, var(--info) 20%, transparent);
+        }
+
+        /* Forms */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+            margin-bottom: 0.35rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .form-control {
+            font-family: var(--font-family);
+            width: 100%;
+            padding: 0.55rem 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            background: var(--surface);
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+        }
+
+        .form-select {
+            font-family: var(--font-family);
+            padding: 0.55rem 0.75rem;
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            background: var(--surface);
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        .form-select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+        }
+
+        /* Tables */
+        .table-wrap {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.875rem;
+        }
+
+        thead th {
+            font-weight: 700;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-secondary);
+            padding: 0.65rem 0.75rem;
+            border-bottom: 2px solid var(--border-color);
+            text-align: left;
+        }
+
+        tbody td {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+        }
+
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+
+        /* Sidebar mini preview */
+        .sidebar-preview {
+            width: 220px;
+            border-radius: var(--radius-sm);
+            padding: 1rem;
+            color: white;
+            font-size: 0.85rem;
+            flex-shrink: 0;
+        }
+
+        .sidebar-preview.teacher-sidebar {
+            background: #1a4d47;
+        }
+
+        .sidebar-preview.student-sidebar {
+            background: #2F4F7F;
+        }
+
+        .sidebar-preview.sysadmin-sidebar {
+            background: #2C2C2C;
+        }
+
+        .sidebar-brand {
+            font-weight: 700;
+            font-size: 1rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .sidebar-identity {
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.7);
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+            margin-bottom: 0.75rem;
+        }
+
+        .sidebar-nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 0.6rem;
+            border-radius: var(--radius-sm);
+            color: rgba(255, 255, 255, 0.75);
+            font-weight: 500;
+            font-size: 0.8rem;
+            margin-bottom: 0.15rem;
+        }
+
+        .sidebar-nav-item .material-symbols-outlined {
+            font-size: 18px;
+        }
+
+        .sidebar-nav-item.active {
+            background: var(--secondary);
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        [data-theme="sysadmin"] .sidebar-nav-item.active {
+            background: transparent;
+            border: 1px solid var(--secondary);
+            color: var(--secondary);
+        }
+
+        /* Page header preview */
+        .page-header-preview {
+            background: var(--surface);
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid var(--border-color);
+            border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+            margin-bottom: 1rem;
+        }
+
+        .page-header-preview .eyebrow {
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+            margin-bottom: 0.15rem;
+        }
+
+        .page-header-preview h2 {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--primary);
+            font-size: 1.25rem;
+            margin-bottom: 0.15rem;
+        }
+
+        .page-header-preview .meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Neutral palette display */
+        .neutral-strip {
+            display: flex;
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            height: 48px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .neutral-chip {
+            flex: 1;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 0.25rem;
+            font-size: 0.55rem;
+            font-weight: 700;
+        }
+
+        /* Stat card */
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm);
+            padding: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .stat-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .stat-icon .material-symbols-outlined {
+            font-size: 22px;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            line-height: 1.1;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        /* ─── Mock dashboard layout ─── */
+        .mock-dashboard {
+            display: flex;
+            gap: 1rem;
+            background: var(--background);
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+        }
+
+        .mock-main {
+            flex: 1;
+            padding: 0;
+            min-width: 0;
+        }
+
+        .mock-main-content {
+            padding: 1rem;
+        }
+
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 800px) {
+            .mock-dashboard {
+                flex-direction: column;
+            }
+
+            .sidebar-preview {
+                width: 100%;
+            }
+
+            .stat-row {
+                grid-template-columns: 1fr;
+            }
+
+            .swatch-grid {
+                grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <h1 class="page-title">Classroom Token Hub — Design System</h1>
+    <p class="page-subtitle">Switch themes to see how tokens adapt per role</p>
+
+    <div class="theme-switcher">
+        <button class="theme-btn active" onclick="setTheme('teacher')">
+            <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;">school</span> Teacher
+        </button>
+        <button class="theme-btn" onclick="setTheme('student')">
+            <span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle;">person</span> Student
+        </button>
+        <button class="theme-btn" onclick="setTheme('sysadmin')">
+            <span class="material-symbols-outlined"
+                style="font-size:16px;vertical-align:middle;">admin_panel_settings</span> Sysadmin
+        </button>
+    </div>
+
+    <div class="preview" data-theme="teacher" id="preview">
+
+        <!-- ═══════ NEUTRAL PALETTE ═══════ -->
+        <div class="section">
+            <div class="section-title">Neutral Palette (Shared)</div>
+            <div class="neutral-strip">
+                <div class="neutral-chip" style="background:var(--neutral-50);color:var(--neutral-600)">50</div>
+                <div class="neutral-chip" style="background:var(--neutral-100);color:var(--neutral-600)">100</div>
+                <div class="neutral-chip" style="background:var(--neutral-200);color:var(--neutral-600)">200</div>
+                <div class="neutral-chip" style="background:var(--neutral-300);color:var(--neutral-700)">300</div>
+                <div class="neutral-chip" style="background:var(--neutral-400);color:white">400</div>
+                <div class="neutral-chip" style="background:var(--neutral-500);color:white">500</div>
+                <div class="neutral-chip" style="background:var(--neutral-600);color:white">600</div>
+                <div class="neutral-chip" style="background:var(--neutral-700);color:white">700</div>
+                <div class="neutral-chip" style="background:var(--neutral-800);color:white">800</div>
+                <div class="neutral-chip" style="background:var(--neutral-900);color:white">900</div>
+            </div>
+        </div>
+
+        <!-- ═══════ THEME COLORS ═══════ -->
+        <div class="section">
+            <div class="section-title">Theme Colors (Role-Specific)</div>
+            <div class="swatch-grid">
+                <div class="swatch">
+                    <div class="swatch-color" style="background:var(--primary)"><span id="lbl-primary"></span></div>
+                    <div class="swatch-label">Primary</div>
+                </div>
+                <div class="swatch">
+                    <div class="swatch-color" style="background:var(--primary-hover)"><span
+                            id="lbl-primary-hover"></span></div>
+                    <div class="swatch-label">Primary Hover</div>
+                </div>
+                <div class="swatch">
+                    <div class="swatch-color" style="background:var(--primary-subtle)"><span
+                            id="lbl-primary-subtle"></span></div>
+                    <div class="swatch-label">Primary Subtle</div>
+                </div>
+                <div class="swatch">
+                    <div class="swatch-color" style="background:var(--secondary)"><span id="lbl-secondary"></span></div>
+                    <div class="swatch-label">Secondary</div>
+                </div>
+                <div class="swatch">
+                    <div class="swatch-color" style="background:var(--secondary-hover)"><span
+                            id="lbl-secondary-hover"></span></div>
+                    <div class="swatch-label">Secondary Hover</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════ SEMANTIC COLORS ═══════ -->
+        <div class="section">
+            <div class="section-title">Semantic / Status Colors</div>
+            <div class="swatch-grid">
+                <div class="swatch">
+                    <div class="swatch-color" style="background:var(--success)"><span>Success</span></div>
+                    <div class="swatch-label">Approved / Active</div>
+                </div>
+                <div class="swatch">
+                    <div class="swatch-color" style="background:var(--success-subtle)"><span
+                            style="color:var(--success)">Subtle</span></div>
+                    <div class="swatch-label">Success Background</div>
+                </div>
+                <div class="swatch">
+                    <div class="swatch-color" style="background:var(--danger)"><span>Danger</span></div>
+                    <div class="swatch-label">Error / Overdue</div>
+                </div>
+                <div class="swatch">
+                    <div class="swatch-color" style="background:var(--danger-subtle)"><span
+                            style="color:var(--danger)">Subtle</span></div>
+                    <div class="swatch-label">Danger Background</div>
+                </div>
+                <div class="swatch">
+                    <div class="swatch-color" style="background:var(--warning)"><span>Warning</span></div>
+                    <div class="swatch-label">Pending / Caution</div>
+                </div>
+                <div class="swatch">
+                    <div class="swatch-color" style="background:var(--warning-subtle)"><span
+                            style="color:var(--warning)">Subtle</span></div>
+                    <div class="swatch-label">Warning Background</div>
+                </div>
+                <div class="swatch">
+                    <div class="swatch-color" style="background:var(--info)"><span>Info</span></div>
+                    <div class="swatch-label">Info / Preview</div>
+                </div>
+                <div class="swatch">
+                    <div class="swatch-color" style="background:var(--info-subtle)"><span
+                            style="color:var(--info)">Subtle</span></div>
+                    <div class="swatch-label">Info Background</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════ BUTTONS ═══════ -->
+        <div class="section">
+            <div class="section-title">Buttons</div>
+            <div class="component-row" style="margin-bottom:0.75rem">
+                <button class="btn btn-primary"><span class="material-symbols-outlined">save</span> Primary</button>
+                <button class="btn btn-secondary"><span class="material-symbols-outlined">star</span> Secondary</button>
+                <button class="btn btn-outline"><span class="material-symbols-outlined">description</span>
+                    Outline</button>
+                <button class="btn btn-light"><span class="material-symbols-outlined">visibility</span> Light</button>
+            </div>
+            <div class="component-row">
+                <button class="btn btn-success"><span class="material-symbols-outlined">check_circle</span>
+                    Approve</button>
+                <button class="btn btn-danger"><span class="material-symbols-outlined">delete</span> Delete</button>
+                <button class="btn btn-warning"><span class="material-symbols-outlined">warning</span> Escalate</button>
+                <button class="btn btn-info"><span class="material-symbols-outlined">info</span> Review</button>
+            </div>
+        </div>
+
+        <!-- ═══════ BADGES ═══════ -->
+        <div class="section">
+            <div class="section-title">Badges & Status Chips</div>
+            <div class="component-row" style="margin-bottom:0.75rem;align-items:center">
+                <span class="badge badge-success">Active</span>
+                <span class="badge badge-danger">Overdue</span>
+                <span class="badge badge-warning">Pending</span>
+                <span class="badge badge-info">In Review</span>
+                <span class="badge badge-neutral">Unknown</span>
+            </div>
+            <div class="component-row" style="align-items:center">
+                <span class="badge badge-subtle-success"><span class="material-symbols-outlined"
+                        style="font-size:14px">check</span> Approved</span>
+                <span class="badge badge-subtle-danger"><span class="material-symbols-outlined"
+                        style="font-size:14px">close</span> Rejected</span>
+                <span class="badge badge-subtle-warning"><span class="material-symbols-outlined"
+                        style="font-size:14px">schedule</span> Pending</span>
+                <span class="badge badge-subtle-info"><span class="material-symbols-outlined"
+                        style="font-size:14px">search</span> Preview</span>
+            </div>
+        </div>
+
+        <!-- ═══════ ALERTS ═══════ -->
+        <div class="section">
+            <div class="section-title">Alerts</div>
+            <div class="alert alert-success"><span class="material-symbols-outlined">check_circle</span> Payroll
+                processed successfully for 24 students.</div>
+            <div class="alert alert-danger"><span class="material-symbols-outlined">error</span> Insufficient balance to
+                complete this transaction.</div>
+            <div class="alert alert-warning"><span class="material-symbols-outlined">warning</span> Rent is due in 3
+                days. Review your itemization settings.</div>
+            <div class="alert alert-info"><span class="material-symbols-outlined">info</span> You can preview rent bills
+                before the due date.</div>
+        </div>
+
+        <!-- ═══════ FORMS ═══════ -->
+        <div class="section">
+            <div class="section-title">Form Controls</div>
+            <div style="max-width:400px">
+                <div class="form-group">
+                    <label class="form-label">Student Name</label>
+                    <input type="text" class="form-control" placeholder="Enter name..." value="Alex Johnson">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Class Period</label>
+                    <select class="form-select">
+                        <option>Period 1 — English</option>
+                        <option>Period 3 — Math</option>
+                        <option>Period 5 — Science</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Notes</label>
+                    <textarea class="form-control" rows="2" placeholder="Optional notes..."></textarea>
+                </div>
+                <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.5rem">
+                    <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle">info</span>
+                    Click into a field to see the role-aware focus ring.
+                </p>
+            </div>
+        </div>
+
+        <!-- ═══════ CARDS ═══════ -->
+        <div class="section">
+            <div class="section-title">Cards</div>
+            <div class="card-grid">
+                <div class="card">
+                    <div class="card-header">Standard Card</div>
+                    <div class="card-body">
+                        <p>Minimal 4px border radius. Clean header with primary-colored text. No hover effect.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header primary-bg"><span class="material-symbols-outlined"
+                            style="font-size:18px;vertical-align:middle">payments</span> Primary Header</div>
+                    <div class="card-body">
+                        <p>Card with primary-colored header background. Used for key sections.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header success-bg"><span class="material-symbols-outlined"
+                            style="font-size:18px;vertical-align:middle">shield</span> Insurance Active</div>
+                    <div class="card-body">
+                        <p>Card with success header. Used for positive status sections like active policies.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════ TABLE ═══════ -->
+        <div class="section">
+            <div class="section-title">Data Table</div>
+            <div class="card" style="overflow:hidden">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Balance</th>
+                                <th>Status</th>
+                                <th>Last Activity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="font-weight:600">Alex Johnson</td>
+                                <td style="color:var(--success);font-weight:600">$142.50</td>
+                                <td><span class="badge badge-subtle-success">Active</span></td>
+                                <td style="color:var(--text-secondary)">Today, 2:15 PM</td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight:600">Sam Rivera</td>
+                                <td style="color:var(--danger);font-weight:600">−$12.00</td>
+                                <td><span class="badge badge-subtle-danger">Overdue</span></td>
+                                <td style="color:var(--text-secondary)">Yesterday</td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight:600">Jordan Lee</td>
+                                <td style="font-weight:600">$85.75</td>
+                                <td><span class="badge badge-subtle-warning">Pending</span></td>
+                                <td style="color:var(--text-secondary)">Feb 15, 2026</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════ MOCK DASHBOARD ═══════ -->
+        <div class="section">
+            <div class="section-title">Dashboard Layout Preview</div>
+            <div class="mock-dashboard">
+                <!-- Sidebar -->
+                <div class="sidebar-preview" id="sidebarPreview">
+                    <div class="sidebar-brand">
+                        <span class="material-symbols-outlined" style="font-size:22px">local_atm</span>
+                        Token Hub
+                    </div>
+                    <div class="sidebar-identity" id="sidebarIdentity">Ms. Chang — Teacher</div>
+                    <div class="sidebar-nav-item active">
+                        <span class="material-symbols-outlined">dashboard</span> Dashboard
+                    </div>
+                    <div class="sidebar-nav-item">
+                        <span class="material-symbols-outlined">group</span> Students
+                    </div>
+                    <div class="sidebar-nav-item">
+                        <span class="material-symbols-outlined">payments</span> Payroll
+                    </div>
+                    <div class="sidebar-nav-item">
+                        <span class="material-symbols-outlined">storefront</span> Store
+                    </div>
+                    <div class="sidebar-nav-item">
+                        <span class="material-symbols-outlined">settings</span> Settings
+                    </div>
+                </div>
+                <!-- Main content -->
+                <div class="mock-main">
+                    <div class="page-header-preview">
+                        <div class="eyebrow">Classroom Token Hub</div>
+                        <h2><span class="material-symbols-outlined" style="font-size:24px">dashboard</span> Dashboard
+                        </h2>
+                        <div class="meta">Monday, Feb 17, 2026 · 8:52 PM</div>
+                    </div>
+                    <div class="mock-main-content">
+                        <div class="stat-row">
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background:var(--primary-subtle);color:var(--primary)">
+                                    <span class="material-symbols-outlined">group</span>
+                                </div>
+                                <div>
+                                    <div class="stat-value">127</div>
+                                    <div class="stat-label">Total Students</div>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background:var(--success-subtle);color:var(--success)">
+                                    <span class="material-symbols-outlined">account_balance</span>
+                                </div>
+                                <div>
+                                    <div class="stat-value">$4,892</div>
+                                    <div class="stat-label">Total Balances</div>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon" style="background:var(--warning-subtle);color:var(--warning)">
+                                    <span class="material-symbols-outlined">pending_actions</span>
+                                </div>
+                                <div>
+                                    <div class="stat-value">5</div>
+                                    <div class="stat-label">Pending Actions</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="alert alert-info" style="margin:0">
+                            <span class="material-symbols-outlined">lightbulb</span>
+                            3 students have rent due this week. <a href="#"
+                                style="color:var(--info);font-weight:600;text-decoration:underline">Review</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div><!-- /preview -->
+
+    <script>
+        const preview = document.getElementById('preview');
+        const sidebar = document.getElementById('sidebarPreview');
+        const identity = document.getElementById('sidebarIdentity');
+        const buttons = document.querySelectorAll('.theme-btn');
+
+        function setTheme(theme) {
+            preview.setAttribute('data-theme', theme);
+            buttons.forEach(b => b.classList.remove('active'));
+            document.querySelector(`.theme-btn[onclick="setTheme('${theme}')"]`).classList.add('active');
+
+            // Update sidebar visual
+            sidebar.className = 'sidebar-preview';
+            if (theme === 'teacher') {
+                sidebar.classList.add('teacher-sidebar');
+                identity.textContent = 'Ms. Chang — Teacher';
+            } else if (theme === 'student') {
+                sidebar.classList.add('student-sidebar');
+                identity.textContent = 'Alex J. — Student';
+            } else {
+                sidebar.classList.add('sysadmin-sidebar');
+                identity.textContent = 'admin — System Admin';
+            }
+
+            // Update hex labels
+            const style = getComputedStyle(preview);
+            ['primary', 'primary-hover', 'primary-subtle', 'secondary', 'secondary-hover'].forEach(name => {
+                const el = document.getElementById('lbl-' + name);
+                if (el) {
+                    const raw = style.getPropertyValue('--' + name).trim();
+                    el.textContent = raw;
+                }
+            });
+        }
+
+        // Init labels
+        setTheme('teacher');
+    </script>
+</body>
+
+</html>

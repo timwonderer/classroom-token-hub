@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <title>Student Login - Classroom Token Hub</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#1a4d47">
+    <meta name="theme-color" content="#2F4F7F">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -17,6 +17,7 @@
         href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
         rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
         body {
@@ -97,8 +98,8 @@
         }
 
         .btn-primary:hover {
-            background: #172740;
-            color: #ffffffff;
+            background: var(--primary-hover);
+            color: white;
         }
 
         .btn-outline-primary {
@@ -151,7 +152,7 @@
     </style>
 </head>
 
-<body class="student-theme">
+<body class="student-shell">
     <div class="login-container">
         <div class="login-left">
             <div class="mb-2">
@@ -200,7 +201,8 @@
                     a student account</a>
                 <br>
                 <a href="{{ url_for('recovery.account_lookup') }}"
-                    class="text-decoration-none small text-secondary mb-3 d-inline-block">I can't log into my account</a>
+                    class="text-decoration-none small text-secondary mb-3 d-inline-block">I can't log into my
+                    account</a>
 
                 <div class="d-flex gap-3 justify-content-center mb-3">
                     <a href="{{ url_for('admin.login') }}" class="text-decoration-none small text-secondary">

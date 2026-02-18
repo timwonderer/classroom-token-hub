@@ -343,7 +343,8 @@
                 </td>
                 <td>
                   {% if record.student %}
-                  <a href="{{ url_for('admin.student_detail', student_id=record.student_id, join_code=record.join_code) }}">
+                  <a
+                    href="{{ url_for('admin.student_detail', student_id=record.student_id, join_code=record.join_code) }}">
                     {{ record.student.full_name }}
                   </a>
                   {% else %}
@@ -440,7 +441,8 @@
                 <td>{{ entry.class_label }}</td>
                 <td>
                   {% if entry.student %}
-                  <a href="{{ url_for('admin.student_detail', student_id=entry.student_id, join_code=entry.join_code) }}">
+                  <a
+                    href="{{ url_for('admin.student_detail', student_id=entry.student_id, join_code=entry.join_code) }}">
                     {{ entry.student_name }}
                   </a>
                   {% else %}
@@ -694,7 +696,7 @@
 
                 <!-- Overtime Settings -->
                 <div class="card mb-3 border-info">
-                  <div class="card-header bg-info bg-opacity-10">
+                  <div class="card-header bg-info-subtle">
                     <div class="form-check form-switch">
                       <input class="form-check-input" type="checkbox" id="advOvertimeEnabled"
                         name="adv_overtime_enabled" {% if default_setting and default_setting.overtime_enabled

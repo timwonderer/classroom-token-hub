@@ -249,7 +249,8 @@
                                 <div class="row g-2">
                                     <div class="col-12">
                                         <div class="small text-muted text-uppercase fw-bold">Reset Code</div>
-                                        <div class="font-monospace fs-4 fw-bold text-danger user-select-all">{{ student.reset_code }}</div>
+                                        <div class="font-monospace fs-4 fw-bold text-danger user-select-all">{{
+                                            student.reset_code }}</div>
                                     </div>
                                     <div class="col-12">
                                         <div class="small text-muted text-uppercase fw-bold">Join Code(s)</div>
@@ -263,10 +264,13 @@
                                     <div class="col-12 mt-2">
                                         <div class="small text-muted fst-italic">
                                             <i class="bi bi-clock me-1"></i>Code expires at
-                                            <span class="utc-timestamp" data-utc="{{ student.reset_code_expires_at.isoformat() if student.reset_code_expires_at else '' }}">
-                                                {{ student.reset_code_expires_at.strftime('%I:%M %p') if student.reset_code_expires_at else 'N/A' }}
+                                            <span class="utc-timestamp"
+                                                data-utc="{{ student.reset_code_expires_at.isoformat() if student.reset_code_expires_at else '' }}">
+                                                {{ student.reset_code_expires_at.strftime('%I:%M %p') if
+                                                student.reset_code_expires_at else 'N/A' }}
                                             </span>.
-                                            Student must go to the login page and click <strong>"I can't log into my account"</strong>.
+                                            Student must go to the login page and click <strong>"I can't log into my
+                                                account"</strong>.
                                         </div>
                                     </div>
                                 </div>
@@ -780,7 +784,7 @@
 
                     <!-- Basic Information -->
                     <div class="card border-primary mb-3">
-                        <div class="card-header bg-primary bg-opacity-10">
+                        <div class="card-header bg-primary-subtle">
                             <h6 class="mb-0 text-primary"><i class="bi bi-person me-2"></i>Basic Information</h6>
                         </div>
                         <div class="card-body">
@@ -808,7 +812,7 @@
 
                     <!-- Block Assignment -->
                     <div class="card border-info mb-3">
-                        <div class="card-header bg-info bg-opacity-10">
+                        <div class="card-header bg-info-subtle">
                             <h6 class="mb-0 text-info"><i class="bi bi-calendar-week me-2"></i>Block Assignment</h6>
                         </div>
                         <div class="card-body">
@@ -834,7 +838,7 @@
 
                     <!-- Account Recovery -->
                     <div class="card border-warning mb-3">
-                        <div class="card-header bg-warning bg-opacity-10">
+                        <div class="card-header bg-warning-subtle">
                             <h6 class="mb-0 text-warning"><i class="bi bi-key me-2"></i>Account Recovery</h6>
                         </div>
                         <div class="card-body">
@@ -991,29 +995,30 @@
 
     // Load tap entries button
     document.getElementById('loadTapEntries')?.addEventListener('click', async function () {
-        const studentId = {{ student.id }};
-        const container = document.getElementById('tapEntriesContainer');
-        const btn = this;
+        const studentId = {{ student.id }
+    };
+    const container = document.getElementById('tapEntriesContainer');
+    const btn = this;
 
-        btn.disabled = true;
-        btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
+    btn.disabled = true;
+    btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
 
-        try {
-            const response = await fetch(`/api/admin/tap-entries/${studentId}`);
-            const data = await response.json();
+    try {
+        const response = await fetch(`/api/admin/tap-entries/${studentId}`);
+        const data = await response.json();
 
-            if (response.ok) {
-                displayTapEntries(data);
-                container.style.display = 'block';
-            } else {
-                showToast(data.error || 'Failed to load tap entries', true);
-            }
-        } catch (error) {
-            showToast('Network error', true);
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Reload Tap Entries';
+        if (response.ok) {
+            displayTapEntries(data);
+            container.style.display = 'block';
+        } else {
+            showToast(data.error || 'Failed to load tap entries', true);
         }
+    } catch (error) {
+        showToast('Network error', true);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Reload Tap Entries';
+    }
     });
 
 

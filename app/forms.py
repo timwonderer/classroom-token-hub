@@ -208,19 +208,20 @@ class InsurancePolicyForm(FlaskForm):
     tier_name = StringField('Tier Name (e.g., "Paycheck Protection")', validators=[Optional()])
     tier_color = SelectField('Tier Color Theme', choices=[
         ('', 'None'),
-        ('primary', 'Blue (Primary)'),
-        ('success', 'Green (Success)'),
-        ('info', 'Cyan (Info)'),
-        ('warning', 'Yellow (Warning)'),
-        ('danger', 'Red (Danger)'),
-        ('secondary', 'Gray (Secondary)'),
+        ('primary', 'Advisor Teal (Primary)'),
+        ('student', 'Steward Blue'),
+        ('success', 'Protection Green'),
+        ('info', 'Sky Blue'),
+        ('warning', 'Responsibility Yellow'),
+        ('danger', 'Alert Red'),
+        ('secondary', 'Basic Gray'),
         ('dark', 'Dark')
     ], validators=[Optional()])
     tier_level = SelectField('Tier Level within Group', choices=[
         ('', 'Select level (optional)'),
-        ('basic', 'Basic'),
-        ('mid', 'Mid-tier'),
-        ('premium', 'Premium')
+        ('basic', 'Minimum Coverage'),
+        ('mid', 'Regular Coverage'),
+        ('premium', 'Premium Coverage')
     ], validators=[Optional()])
 
     # Settings mode

@@ -10,7 +10,7 @@
     <div class="row g-3 mb-4">
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
-                <div class="sysadmin-stat-icon bg-primary bg-opacity-10">
+                <div class="sysadmin-stat-icon bg-primary-subtle">
                     <span class="material-symbols-outlined text-primary">mark_unread_chat_alt</span>
                 </div>
                 <div>
@@ -21,7 +21,7 @@
         </div>
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
-                <div class="sysadmin-stat-icon bg-warning bg-opacity-10">
+                <div class="sysadmin-stat-icon bg-warning-subtle">
                     <span class="material-symbols-outlined text-warning">pending</span>
                 </div>
                 <div>
@@ -32,7 +32,7 @@
         </div>
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
-                <div class="sysadmin-stat-icon bg-info bg-opacity-10">
+                <div class="sysadmin-stat-icon bg-info-subtle">
                     <span class="material-symbols-outlined text-info">rate_review</span>
                 </div>
                 <div>
@@ -43,7 +43,7 @@
         </div>
         <div class="col-6 col-md-3">
             <div class="sysadmin-stat-card h-100">
-                <div class="sysadmin-stat-icon bg-success bg-opacity-10">
+                <div class="sysadmin-stat-icon bg-success-subtle">
                     <span class="material-symbols-outlined text-success">task_alt</span>
                 </div>
                 <div>
@@ -58,8 +58,7 @@
     <ul class="nav nav-tabs mb-0 border-bottom-0" id="ticketTabs" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link {% if active_tab == 'reports' or not active_tab %}active{% endif %}"
-                    id="reports-tab" data-bs-toggle="tab" data-bs-target="#reports-pane"
-                    type="button" role="tab">
+                id="reports-tab" data-bs-toggle="tab" data-bs-target="#reports-pane" type="button" role="tab">
                 <span class="material-symbols-outlined align-middle me-1" style="font-size:16px;">bug_report</span>
                 User Reports
                 {% if new_reports > 0 %}
@@ -68,10 +67,10 @@
             </button>
         </li>
         <li class="nav-item" role="presentation">
-            <button class="nav-link {% if active_tab == 'issues' %}active{% endif %}"
-                    id="issues-tab" data-bs-toggle="tab" data-bs-target="#issues-pane"
-                    type="button" role="tab">
-                <span class="material-symbols-outlined align-middle me-1" style="font-size:16px;">escalator_warning</span>
+            <button class="nav-link {% if active_tab == 'issues' %}active{% endif %}" id="issues-tab"
+                data-bs-toggle="tab" data-bs-target="#issues-pane" type="button" role="tab">
+                <span class="material-symbols-outlined align-middle me-1"
+                    style="font-size:16px;">escalator_warning</span>
                 Escalated Issues
                 {% if (pending_issues + in_review_issues) > 0 %}
                 <span class="badge bg-warning text-dark ms-1">{{ pending_issues + in_review_issues }}</span>
@@ -84,35 +83,41 @@
 
         <!-- ── User Reports Tab ── -->
         <div class="tab-pane fade {% if active_tab == 'reports' or not active_tab %}show active{% endif %}"
-             id="reports-pane" role="tabpanel">
+            id="reports-pane" role="tabpanel">
 
             <!-- Filter Bar -->
             <div class="p-3 border-bottom bg-light d-flex flex-wrap gap-2 align-items-end">
-                <form method="GET" action="{{ url_for('sysadmin.support_tickets') }}" class="d-flex flex-wrap gap-2 w-100">
+                <form method="GET" action="{{ url_for('sysadmin.support_tickets') }}"
+                    class="d-flex flex-wrap gap-2 w-100">
                     <input type="hidden" name="tab" value="reports">
                     <div style="min-width:160px; max-width:200px;">
                         <label class="form-label mb-1" style="font-size:0.8rem;">Status</label>
                         <select name="status" class="form-select form-select-sm" onchange="this.form.submit()">
-                            <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
-                            <option value="new" {% if status_filter == 'new' %}selected{% endif %}>New</option>
-                            <option value="reviewed" {% if status_filter == 'reviewed' %}selected{% endif %}>Reviewed</option>
-                            <option value="rewarded" {% if status_filter == 'rewarded' %}selected{% endif %}>Rewarded</option>
-                            <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>Closed</option>
-                            <option value="spam" {% if status_filter == 'spam' %}selected{% endif %}>Spam</option>
+                            <option value="all" {% if status_filter=='all' %}selected{% endif %}>All Statuses</option>
+                            <option value="new" {% if status_filter=='new' %}selected{% endif %}>New</option>
+                            <option value="reviewed" {% if status_filter=='reviewed' %}selected{% endif %}>Reviewed
+                            </option>
+                            <option value="rewarded" {% if status_filter=='rewarded' %}selected{% endif %}>Rewarded
+                            </option>
+                            <option value="closed" {% if status_filter=='closed' %}selected{% endif %}>Closed</option>
+                            <option value="spam" {% if status_filter=='spam' %}selected{% endif %}>Spam</option>
                         </select>
                     </div>
                     <div style="min-width:160px; max-width:200px;">
                         <label class="form-label mb-1" style="font-size:0.8rem;">Type</label>
                         <select name="type" class="form-select form-select-sm" onchange="this.form.submit()">
-                            <option value="all" {% if report_type_filter == 'all' %}selected{% endif %}>All Types</option>
-                            <option value="bug" {% if report_type_filter == 'bug' %}selected{% endif %}>Bug</option>
-                            <option value="suggestion" {% if report_type_filter == 'suggestion' %}selected{% endif %}>Suggestion</option>
-                            <option value="comment" {% if report_type_filter == 'comment' %}selected{% endif %}>Comment</option>
+                            <option value="all" {% if report_type_filter=='all' %}selected{% endif %}>All Types</option>
+                            <option value="bug" {% if report_type_filter=='bug' %}selected{% endif %}>Bug</option>
+                            <option value="suggestion" {% if report_type_filter=='suggestion' %}selected{% endif %}>
+                                Suggestion</option>
+                            <option value="comment" {% if report_type_filter=='comment' %}selected{% endif %}>Comment
+                            </option>
                         </select>
                     </div>
                     {% if status_filter != 'all' or report_type_filter != 'all' %}
                     <div class="d-flex align-items-end">
-                        <a href="{{ url_for('sysadmin.support_tickets') }}?tab=reports" class="btn btn-sm btn-outline-secondary">Clear</a>
+                        <a href="{{ url_for('sysadmin.support_tickets') }}?tab=reports"
+                            class="btn btn-sm btn-outline-secondary">Clear</a>
                     </div>
                     {% endif %}
                 </form>
@@ -147,7 +152,8 @@
                                     {{ report.report_type|title }}
                                 </span>
                             </td>
-                            <td class="text-truncate" style="max-width:200px;" title="{{ report.title }}">{{ report.title }}</td>
+                            <td class="text-truncate" style="max-width:200px;" title="{{ report.title }}">{{
+                                report.title }}</td>
                             <td>
                                 <span class="badge
                                     {% if report.user_type == 'student' %}bg-info
@@ -158,15 +164,16 @@
                             </td>
                             <td>
                                 {% if report.error_code %}
-                                    <span class="badge bg-dark" style="font-size:0.7rem;">{{ report.error_code }}</span>
+                                <span class="badge bg-dark" style="font-size:0.7rem;">{{ report.error_code }}</span>
                                 {% else %}
-                                    <span class="text-muted">—</span>
+                                <span class="text-muted">—</span>
                                 {% endif %}
                             </td>
                             <td>
                                 <small>
                                     {% if report.submitted_at %}
-                                        <span class="local-timestamp" data-timestamp="{{ format_utc_iso(report.submitted_at) }}"></span>
+                                    <span class="local-timestamp"
+                                        data-timestamp="{{ format_utc_iso(report.submitted_at) }}"></span>
                                     {% else %}N/A{% endif %}
                                 </small>
                             </td>
@@ -182,14 +189,14 @@
                             </td>
                             <td>
                                 {% if report.reward_amount and report.reward_amount > 0 %}
-                                    <span class="text-success fw-bold">${{ "%.0f"|format(report.reward_amount) }}</span>
+                                <span class="text-success fw-bold">${{ "%.0f"|format(report.reward_amount) }}</span>
                                 {% else %}
-                                    <span class="text-muted">—</span>
+                                <span class="text-muted">—</span>
                                 {% endif %}
                             </td>
                             <td>
                                 <a href="{{ url_for('sysadmin.view_user_report', report_id=report.id) }}"
-                                   class="btn btn-sm btn-outline-primary py-0 px-2">View</a>
+                                    class="btn btn-sm btn-outline-primary py-0 px-2">View</a>
                             </td>
                         </tr>
                         {% endfor %}
@@ -228,33 +235,38 @@
                     <div class="fw-semibold mb-1" style="font-size:0.9rem;">{{ report.title }}</div>
                     <div class="text-muted mb-2" style="font-size:0.75rem;">
                         #{{ report.id }}
-                        {% if report.submitted_at %} · <span class="local-timestamp" data-timestamp="{{ format_utc_iso(report.submitted_at) }}"></span>{% endif %}
-                        {% if report.reward_amount and report.reward_amount > 0 %} · <span class="text-success">${{ "%.0f"|format(report.reward_amount) }}</span>{% endif %}
+                        {% if report.submitted_at %} · <span class="local-timestamp"
+                            data-timestamp="{{ format_utc_iso(report.submitted_at) }}"></span>{% endif %}
+                        {% if report.reward_amount and report.reward_amount > 0 %} · <span class="text-success">${{
+                            "%.0f"|format(report.reward_amount) }}</span>{% endif %}
                     </div>
                     <a href="{{ url_for('sysadmin.view_user_report', report_id=report.id) }}"
-                       class="btn btn-sm btn-outline-primary">View Report</a>
+                        class="btn btn-sm btn-outline-primary">View Report</a>
                 </div>
                 {% endfor %}
             </div>
 
             {% else %}
             <div class="p-5 text-center text-muted">
-                <span class="material-symbols-outlined d-block mb-2" style="font-size:56px;opacity:0.3;">chat_bubble_outline</span>
+                <span class="material-symbols-outlined d-block mb-2"
+                    style="font-size:56px;opacity:0.3;">chat_bubble_outline</span>
                 <h5>No reports found</h5>
-                <p class="mb-0">{% if status_filter != 'all' or report_type_filter != 'all' %}Try clearing the filters.{% else %}No user reports have been submitted yet.{% endif %}</p>
+                <p class="mb-0">{% if status_filter != 'all' or report_type_filter != 'all' %}Try clearing the
+                    filters.{% else %}No user reports have been submitted yet.{% endif %}</p>
             </div>
             {% endif %}
         </div>
 
         <!-- ── Escalated Issues Tab ── -->
-        <div class="tab-pane fade {% if active_tab == 'issues' %}show active{% endif %}"
-             id="issues-pane" role="tabpanel">
+        <div class="tab-pane fade {% if active_tab == 'issues' %}show active{% endif %}" id="issues-pane"
+            role="tabpanel">
 
             <!-- Issue sub-tabs -->
             <div class="p-3 border-bottom bg-light">
                 <ul class="nav nav-pills nav-sm gap-2" id="issuePills" role="tablist">
                     <li class="nav-item">
-                        <button class="nav-link active py-1 px-3" data-bs-toggle="pill" data-bs-target="#pill-pending" style="font-size:0.85rem;">
+                        <button class="nav-link active py-1 px-3" data-bs-toggle="pill" data-bs-target="#pill-pending"
+                            style="font-size:0.85rem;">
                             Pending
                             {% if issues_pending|length > 0 %}
                             <span class="badge bg-warning text-dark ms-1">{{ issues_pending|length }}</span>
@@ -262,7 +274,8 @@
                         </button>
                     </li>
                     <li class="nav-item">
-                        <button class="nav-link py-1 px-3" data-bs-toggle="pill" data-bs-target="#pill-review" style="font-size:0.85rem;">
+                        <button class="nav-link py-1 px-3" data-bs-toggle="pill" data-bs-target="#pill-review"
+                            style="font-size:0.85rem;">
                             In Review
                             {% if issues_in_review|length > 0 %}
                             <span class="badge bg-info ms-1">{{ issues_in_review|length }}</span>
@@ -270,7 +283,8 @@
                         </button>
                     </li>
                     <li class="nav-item">
-                        <button class="nav-link py-1 px-3" data-bs-toggle="pill" data-bs-target="#pill-resolved" style="font-size:0.85rem;">
+                        <button class="nav-link py-1 px-3" data-bs-toggle="pill" data-bs-target="#pill-resolved"
+                            style="font-size:0.85rem;">
                             Resolved
                         </button>
                     </li>
@@ -279,16 +293,17 @@
 
             <div class="tab-content p-0">
                 {% for pill_id, issue_list, badge_class, empty_icon, empty_msg in [
-                    ('pending', issues_pending, 'bg-warning text-dark', 'check_circle', 'No pending issues — all escalated issues have been reviewed.'),
-                    ('review',  issues_in_review, 'bg-info', 'inbox', 'No issues currently being reviewed.'),
-                    ('resolved', issues_resolved, 'bg-success', 'inbox', 'No resolved issues yet.')
+                ('pending', issues_pending, 'bg-warning text-dark', 'check_circle', 'No pending issues — all escalated
+                issues have been reviewed.'),
+                ('review', issues_in_review, 'bg-info', 'inbox', 'No issues currently being reviewed.'),
+                ('resolved', issues_resolved, 'bg-success', 'inbox', 'No resolved issues yet.')
                 ] %}
                 <div class="tab-pane fade {% if loop.first %}show active{% endif %}" id="pill-{{ pill_id }}">
                     {% if issue_list %}
                     <div class="list-group list-group-flush">
                         {% for issue in issue_list %}
                         <a href="{{ url_for('sysadmin.view_escalated_issue', issue_id=issue.id) }}"
-                           class="list-group-item list-group-item-action py-3">
+                            class="list-group-item list-group-item-action py-3">
                             <div class="d-flex w-100 justify-content-between align-items-start">
                                 <div class="flex-grow-1 me-3 min-width-0">
                                     <!-- Badges row -->
@@ -315,20 +330,25 @@
                                         {% endif %}
                                     </div>
                                     <!-- Escalation reason -->
-                                    <div class="fw-semibold mb-1" style="font-size:0.88rem;">{{ issue.escalation_reason }}</div>
+                                    <div class="fw-semibold mb-1" style="font-size:0.88rem;">{{ issue.escalation_reason
+                                        }}</div>
                                     <div class="text-muted text-truncate" style="font-size:0.78rem; max-width:400px;">
-                                        {{ issue.student_explanation[:150] }}{% if issue.student_explanation|length > 150 %}...{% endif %}
+                                        {{ issue.student_explanation[:150] }}{% if issue.student_explanation|length >
+                                        150 %}...{% endif %}
                                     </div>
                                     <div class="text-muted mt-1" style="font-size:0.72rem;">
                                         {% if pill_id == 'pending' %}
-                                            <i class="bi bi-arrow-up-circle me-1"></i>
-                                            Escalated <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
+                                        <i class="bi bi-arrow-up-circle me-1"></i>
+                                        Escalated <span class="local-timestamp"
+                                            data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
                                         {% elif pill_id == 'review' %}
-                                            <i class="bi bi-eye me-1"></i>
-                                            In review since <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.sysadmin_reviewed_at or issue.escalated_at) }}"></span>
+                                        <i class="bi bi-eye me-1"></i>
+                                        In review since <span class="local-timestamp"
+                                            data-timestamp="{{ format_utc_iso(issue.sysadmin_reviewed_at or issue.escalated_at) }}"></span>
                                         {% else %}
-                                            <i class="bi bi-check-circle me-1"></i>
-                                            Resolved <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.sysadmin_resolved_at) }}"></span>
+                                        <i class="bi bi-check-circle me-1"></i>
+                                        Resolved <span class="local-timestamp"
+                                            data-timestamp="{{ format_utc_iso(issue.sysadmin_resolved_at) }}"></span>
                                         {% endif %}
                                     </div>
                                 </div>
@@ -343,7 +363,9 @@
                     </div>
                     {% else %}
                     <div class="p-5 text-center text-muted">
-                        <span class="material-symbols-outlined d-block mb-2{% if pill_id == 'pending' %} text-success{% endif %}" style="font-size:48px;opacity:0.5;">{{ empty_icon }}</span>
+                        <span
+                            class="material-symbols-outlined d-block mb-2{% if pill_id == 'pending' %} text-success{% endif %}"
+                            style="font-size:48px;opacity:0.5;">{{ empty_icon }}</span>
                         <p class="mb-0">{{ empty_msg }}</p>
                     </div>
                     {% endif %}
@@ -357,15 +379,15 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Restore active tab from URL parameter
-    const tabParam = new URLSearchParams(window.location.search).get('tab');
-    if (tabParam === 'issues') {
-        const issuesTab = document.getElementById('issues-tab');
-        if (issuesTab) {
-            new bootstrap.Tab(issuesTab).show();
+    document.addEventListener('DOMContentLoaded', function () {
+        // Restore active tab from URL parameter
+        const tabParam = new URLSearchParams(window.location.search).get('tab');
+        if (tabParam === 'issues') {
+            const issuesTab = document.getElementById('issues-tab');
+            if (issuesTab) {
+                new bootstrap.Tab(issuesTab).show();
+            }
         }
-    }
-});
+    });
 </script>
 {% endblock %}
