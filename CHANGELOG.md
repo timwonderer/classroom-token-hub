@@ -15,6 +15,11 @@ and this project follows semantic versioning principles.
   - **Teacher Management consolidated** - Unified page combining invite code generation/voiding (with copy-to-clipboard and void button), teacher accounts with class badges, student counts, last login, status, and per-period/account deletion actions; pending deletion requests displayed in a dedicated table
   - **Logs consolidated** - New combined `/sysadmin/combined-logs` page with tabbed Error Logs and Network Activity views; raw system log viewer removed (Grafana available instead)
   - **Support Tickets unified** - New combined `/sysadmin/support` page showing both User Reports (teachers + students) and Escalated Issues in tabs; bug bounty reward workflow preserved; detail views link back to the unified page
+- **Template Design System Unification** - Standardized template styling across teacher, student, and sysadmin views
+  - Replaced legacy Bootstrap icon usage (`bi-*`) with Material Symbols in templates and JS-rendered button states
+  - Removed legacy opacity utility patterns (`bg-opacity-*`) in favor of semantic subtle backgrounds (`bg-*-subtle`)
+  - Replaced hardcoded inline color literals in template style contexts with token/semantic values
+  - Normalized standalone and shell templates to use consistent token-driven theming behavior
 
 ### Added
 - **`void_invite_code` route** (`/sysadmin/manage-teachers/void/<id>`) - Allows sysadmin to void unused invite codes directly from the Teacher Management page
@@ -28,6 +33,10 @@ and this project follows semantic versioning principles.
 - **Void transaction CSRF 400 error** - Fixed student detail page void transaction button failing with 400 error. Added missing X-CSRFToken header to fetch request in `voidTransaction()` JavaScript function. Teachers can now successfully void transactions from student detail pages.
 - **P0: Rent payment applied to wrong period with bill preview enabled** - Fixed critical bug where students with unpaid overdue rent were allowed to pre-pay for future periods instead of paying overdue amounts first. When bill preview was enabled with a long preview period (e.g., 30 days), the system incorrectly classified overdue students as being in "preview period" for next month's rent. This caused payments to be recorded for the wrong coverage period (next month instead of current/overdue month), preventing students from receiving rent benefits even after paying. Now verifies current coverage period is fully paid before allowing preview period payments. Students must pay oldest overdue period first, and benefits are granted immediately when current period is paid. Also fixed rent page to display correct period being paid for with OVERDUE badge when applicable.
 - **Rent transaction month label now matches the coverage period being paid** - Fixed rent payment transaction descriptions to use the selected coverage due date (e.g., January 2026 for overdue January rent paid on February 17) instead of the wall-clock payment month. This keeps late-fee transactions aligned with the actual rent period and avoids showing overdue January payments as February charges.
+- **Recovery and Claim Page Styling Not Applying** - Fixed account claim/recovery pages that referenced design tokens but did not load `tokens.css`
+  - Added missing `tokens.css` includes in standalone recovery/claim templates
+  - Corrected student recovery layout shell class from `student-theme` to `student-shell`
+  - Restored valid template syntax in `student_detail.html` that affected recovery-related page rendering/tests
 
 ## [1.8.0] - 2026-02-09
 

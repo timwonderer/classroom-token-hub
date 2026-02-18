@@ -145,27 +145,27 @@
 <ul class="nav nav-tabs mb-4" id="storeTabs" role="tablist">
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button" role="tab">
-      <i class="bi bi-grid me-1"></i>Overview
+      <span class="material-symbols-outlined me-1">grid_view</span>Overview
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="manage-tab" data-bs-toggle="tab" data-bs-target="#manage" type="button" role="tab">
-      <i class="bi bi-box-seam me-1"></i>Manage Items
+      <span class="material-symbols-outlined me-1">inventory_2</span>Manage Items
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="add-tab" data-bs-toggle="tab" data-bs-target="#add-item" type="button" role="tab">
-      <i class="bi bi-plus-circle me-1"></i>Add New Item
+      <span class="material-symbols-outlined me-1">add_circle</span>Add New Item
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">
-      <i class="bi bi-clock-history me-1"></i>Purchase History
+      <span class="material-symbols-outlined me-1">history</span>Purchase History
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="audit-tab" data-bs-toggle="tab" data-bs-target="#audit" type="button" role="tab">
-      <i class="bi bi-journal-text me-1"></i>Redemption Audit
+      <span class="material-symbols-outlined me-1">article</span>Redemption Audit
     </button>
   </li>
 </ul>
@@ -178,7 +178,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Store Statistics</h5>
+            <h5 class="mb-0"><span class="material-symbols-outlined me-2">trending_up</span>Store Statistics</h5>
           </div>
           <div class="card-body">
             <div class="row text-center">
@@ -203,15 +203,15 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow">
           <div class="card-header bg-success text-white">
-            <h5 class="mb-0"><i class="bi bi-lightning me-2"></i>Quick Actions</h5>
+            <h5 class="mb-0"><span class="material-symbols-outlined me-2">bolt</span>Quick Actions</h5>
           </div>
           <div class="card-body">
             <div class="d-grid gap-2">
               <button class="btn btn-outline-primary" onclick="document.getElementById('add-tab').click()">
-                <i class="bi bi-plus-circle me-2"></i>Add New Item
+                <span class="material-symbols-outlined me-2">add_circle</span>Add New Item
               </button>
               <button class="btn btn-outline-info" onclick="document.getElementById('history-tab').click()">
-                <i class="bi bi-clock-history me-2"></i>View Purchase History
+                <span class="material-symbols-outlined me-2">history</span>View Purchase History
               </button>
             </div>
           </div>
@@ -222,7 +222,7 @@
     <!-- Pending Redemption Requests -->
     <div class="card shadow mb-4">
       <div class="card-header bg-warning text-dark">
-        <h5 class="mb-0"><i class="bi bi-hourglass-split me-2"></i>Pending Redemption Requests</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2">hourglass_top</span>Pending Redemption Requests</h5>
       </div>
       <div class="card-body">
         {% if pending_redemptions %}
@@ -255,10 +255,10 @@
                     <button class="btn btn-sm btn-outline-danger reject-redemption-btn"
                       data-student-item-id="{{ student_item.id }}"
                       title="Refund and remove" aria-label="Refund and remove">
-                      <i class="bi bi-x-circle"></i>
+                      <span class="material-symbols-outlined">cancel</span>
                     </button>
                     <button class="btn btn-sm btn-success approve-redemption-btn" data-student-item-id="{{ student_item.id }}">
-                      <i class="bi bi-check-circle me-1"></i>Approve
+                      <span class="material-symbols-outlined me-1">check_circle</span>Approve
                     </button>
                   </div>
                 </td>
@@ -272,7 +272,7 @@
         </div>
         {% else %}
         <div class="text-center text-muted py-3">
-          <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+          <span class="material-symbols-outlined" style="font-size: 2rem;">check_circle</span>
           <p class="mb-0">No pending redemption requests</p>
         </div>
         {% endif %}
@@ -282,7 +282,7 @@
     <!-- Recent Purchases -->
     <div class="card shadow">
       <div class="card-header bg-info text-white">
-        <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Purchases</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2">history</span>Recent Purchases</h5>
       </div>
       <div class="card-body">
         {% if recent_purchases %}
@@ -328,7 +328,7 @@
         </div>
         {% else %}
         <div class="text-center text-muted py-3">
-          <i class="bi bi-cart-x" style="font-size: 2rem;"></i>
+          <span class="material-symbols-outlined" style="font-size: 2rem;">remove_shopping_cart</span>
           <p class="mb-0">No purchases yet</p>
         </div>
         {% endif %}
@@ -429,18 +429,18 @@
             <div class="card-footer bg-transparent border-0 pt-0">
               <div class="btn-group btn-group-sm" role="group">
                 <a href="{{ url_for('admin.edit_store_item', item_id=item.id) }}" class="btn btn-outline-primary" title="Edit">
-                  <i class="bi bi-pencil"></i>
+                  <span class="material-symbols-outlined">edit</span>
                 </a>
                 {% if item.is_rent_linked or item.id in rent_managed_item_ids %}
                 <button class="btn btn-outline-warning" disabled title="Managed by Rent Settings">
-                  <i class="bi bi-eye-slash"></i>
+                  <span class="material-symbols-outlined">visibility_off</span>
                 </button>
                 {% else %}
                 <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#deactivateItemModal" data-item-id="{{ item.id }}" data-item-name="{{ item.name }}" title="Deactivate">
-                  <i class="bi bi-eye-slash"></i>
+                  <span class="material-symbols-outlined">visibility_off</span>
                 </button>
                 <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteItemModal" data-item-id="{{ item.id }}" data-item-name="{{ item.name }}" title="Delete Permanently">
-                  <i class="bi bi-trash"></i>
+                  <span class="material-symbols-outlined">delete</span>
                 </button>
                 {% endif %}
               </div>
@@ -451,7 +451,7 @@
       {% else %}
         <div class="col">
           <div class="alert alert-info mb-0">
-            <i class="bi bi-info-circle me-2"></i>No store items yet. Use the Add New Item tab to get started.
+            <span class="material-symbols-outlined me-2">info</span>No store items yet. Use the Add New Item tab to get started.
           </div>
         </div>
       {% endif %}
@@ -464,7 +464,7 @@
       <div class="col-lg-12 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>Add New Item</h5>
+            <h5 class="mb-0"><span class="material-symbols-outlined me-2">add_circle</span>Add New Item</h5>
           </div>
           <div class="card-body">
             <form method="POST" action="{{ url_for('admin.store_management') }}">
@@ -555,7 +555,7 @@
               <!-- Bundle Settings -->
               <div class="card mb-3">
                 <div class="card-header bg-light">
-                  <h6 class="mb-0"><i class="bi bi-box-seam me-2"></i>Bundle Settings</h6>
+                  <h6 class="mb-0"><span class="material-symbols-outlined me-2">inventory_2</span>Bundle Settings</h6>
                 </div>
                 <div class="card-body">
                   <div class="form-check mb-3">
@@ -578,7 +578,7 @@
               <!-- Bulk Discount Settings -->
               <div class="card mb-3">
                 <div class="card-header bg-light">
-                  <h6 class="mb-0"><i class="bi bi-percent me-2"></i>Bulk Discount Settings</h6>
+                  <h6 class="mb-0"><span class="material-symbols-outlined me-2">percent</span>Bulk Discount Settings</h6>
                 </div>
                 <div class="card-body">
                   <div class="form-check mb-3">
@@ -606,7 +606,7 @@
               <!-- Collective Goal Settings -->
               <div class="card mb-3" id="collectiveGoalCard" style="display: none;">
                 <div class="card-header bg-light">
-                  <h6 class="mb-0"><i class="bi bi-people me-2"></i>Collective Goal Settings</h6>
+                  <h6 class="mb-0"><span class="material-symbols-outlined me-2">group</span>Collective Goal Settings</h6>
                 </div>
                 <div class="card-body">
                   <div class="alert alert-info">
@@ -626,7 +626,7 @@
                   </div>
                   <div id="wholeClassInfo" style="display: none;">
                     <div class="alert alert-warning">
-                      <small><i class="bi bi-info-circle me-2"></i><strong>Whole Class Mode:</strong> Every student in the class must purchase (1 per person). The target dynamically updates based on class size.</small>
+                      <small><span class="material-symbols-outlined me-2">info</span><strong>Whole Class Mode:</strong> Every student in the class must purchase (1 per person). The target dynamically updates based on class size.</small>
                     </div>
                   </div>
                 </div>
@@ -672,7 +672,7 @@
   <div class="tab-pane fade" id="history" role="tabpanel">
     <div class="card shadow">
       <div class="card-header bg-info text-white">
-        <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>All Purchases</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2">receipt_long</span>All Purchases</h5>
       </div>
       <div class="card-body">
         <div class="table-responsive">
@@ -735,7 +735,7 @@
   <div class="tab-pane fade" id="audit" role="tabpanel">
     <div class="card shadow">
       <div class="card-header bg-secondary text-white">
-        <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>Redemption Audit Log</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2">article</span>Redemption Audit Log</h5>
       </div>
       <div class="card-body">
         <form method="GET" action="{{ url_for('admin.store_management') }}" class="mb-4">
@@ -772,7 +772,7 @@
             </div>
           </div>
           <div class="mt-3">
-            <button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-funnel me-1"></i>Apply Filters</button>
+            <button type="submit" class="btn btn-primary btn-sm"><span class="material-symbols-outlined me-1">filter_alt</span>Apply Filters</button>
             <a href="{{ url_for('admin.store_management') }}#audit" class="btn btn-outline-secondary btn-sm">Clear</a>
             <span class="ms-3 text-muted">Showing {{ audit_rows|length }} of {{ audit_total|default(0) }} row(s)</span>
           </div>
@@ -875,7 +875,7 @@
       </div>
       <div class="modal-body">
         <div class="alert alert-danger">
-          <i class="bi bi-exclamation-triangle me-2"></i><strong>Warning!</strong> This action cannot be undone.
+          <span class="material-symbols-outlined me-2">warning</span><strong>Warning!</strong> This action cannot be undone.
         </div>
         <p>Are you sure you want to permanently delete <strong id="modalDeleteItemName"></strong>?</p>
         <p class="text-muted small">This will completely remove the item from the database and delete related purchase records. Transaction history will remain in the ledger.</p>
@@ -1084,7 +1084,7 @@
       // Disable button and show loading state
       button.disabled = true;
       const originalHtml = button.innerHTML;
-      button.innerHTML = '<i class=\"bi bi-hourglass-split\"></i> Processing...';
+      button.innerHTML = '<span class=\"material-symbols-outlined\">hourglass_top</span> Processing...';
 
       fetch('/api/approve-redemption', {
         method: 'POST',

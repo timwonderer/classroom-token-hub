@@ -10,7 +10,7 @@
     <div class="row g-3 mb-4">
         <div class="col-6 col-lg-3">
             <div class="sysadmin-stat-card h-100">
-                <div class="sysadmin-stat-icon bg-primary bg-opacity-10">
+                <div class="sysadmin-stat-icon bg-primary-subtle">
                     <span class="material-symbols-outlined text-primary">badge</span>
                 </div>
                 <div>
@@ -22,7 +22,7 @@
 
         <div class="col-6 col-lg-3">
             <div class="sysadmin-stat-card h-100">
-                <div class="sysadmin-stat-icon bg-success bg-opacity-10">
+                <div class="sysadmin-stat-icon bg-success-subtle">
                     <span class="material-symbols-outlined text-success">groups</span>
                 </div>
                 <div>
@@ -34,7 +34,7 @@
 
         <div class="col-6 col-lg-3">
             <div class="sysadmin-stat-card h-100">
-                <div class="sysadmin-stat-icon bg-warning bg-opacity-10">
+                <div class="sysadmin-stat-icon bg-warning-subtle">
                     <span class="material-symbols-outlined text-warning">confirmation_number</span>
                 </div>
                 <div>
@@ -46,7 +46,7 @@
 
         <div class="col-6 col-lg-3">
             <div class="sysadmin-stat-card h-100">
-                <div class="sysadmin-stat-icon bg-danger bg-opacity-10">
+                <div class="sysadmin-stat-icon bg-danger-subtle">
                     <span class="material-symbols-outlined text-danger">support_agent</span>
                 </div>
                 <div>
@@ -59,7 +59,8 @@
 
     <!-- ── Quick Actions ── -->
     <div class="mb-4">
-        <h6 class="text-uppercase fw-bold mb-3" style="font-size:0.75rem; letter-spacing:0.08em; color:#9ca3af;">Quick Actions</h6>
+        <h6 class="text-uppercase fw-bold mb-3" style="font-size:0.75rem; letter-spacing:0.08em; color:var(--text-secondary);">Quick
+            Actions</h6>
         <div class="row g-3">
             <div class="col-6 col-md-4 col-lg-2">
                 <a href="{{ url_for('sysadmin.manage_teachers') }}#invite-codes" class="sysadmin-quick-action">
@@ -108,35 +109,40 @@
                 <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-3">
                     <span class="material-symbols-outlined text-primary" style="font-size:20px;">history_edu</span>
                     <h6 class="mb-0 fw-semibold">Recent Teacher Registrations</h6>
-                    <a href="{{ url_for('sysadmin.manage_teachers') }}" class="btn btn-sm btn-outline-secondary ms-auto" style="font-size:0.75rem;">View All</a>
+                    <a href="{{ url_for('sysadmin.manage_teachers') }}" class="btn btn-sm btn-outline-secondary ms-auto"
+                        style="font-size:0.75rem;">View All</a>
                 </div>
                 <div class="card-body p-0">
                     {% if recent_teachers %}
-                        <ul class="list-group list-group-flush">
-                            {% for teacher in recent_teachers %}
-                            <li class="list-group-item border-bottom py-3">
-                                <div class="d-flex align-items-center justify-content-between">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" style="width:36px;height:36px;flex-shrink:0;">
-                                            <span class="material-symbols-outlined text-primary" style="font-size:18px;">person</span>
-                                        </div>
-                                        <div>
-                                            <div class="fw-semibold" style="font-size:0.9rem;">{{ teacher.username }}</div>
-                                            <div class="text-muted" style="font-size:0.75rem;">
-                                                Joined {{ teacher.created_at.strftime('%b %d, %Y') if teacher.created_at else 'Unknown' }}
-                                            </div>
+                    <ul class="list-group list-group-flush">
+                        {% for teacher in recent_teachers %}
+                        <li class="list-group-item border-bottom py-3">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="rounded-circle bg-primary-subtle d-flex align-items-center justify-content-center"
+                                        style="width:36px;height:36px;flex-shrink:0;">
+                                        <span class="material-symbols-outlined text-primary"
+                                            style="font-size:18px;">person</span>
+                                    </div>
+                                    <div>
+                                        <div class="fw-semibold" style="font-size:0.9rem;">{{ teacher.username }}</div>
+                                        <div class="text-muted" style="font-size:0.75rem;">
+                                            Joined {{ teacher.created_at.strftime('%b %d, %Y') if teacher.created_at
+                                            else 'Unknown' }}
                                         </div>
                                     </div>
-                                    <span class="badge bg-success-subtle text-success">Active</span>
                                 </div>
-                            </li>
-                            {% endfor %}
-                        </ul>
+                                <span class="badge bg-success-subtle text-success">Active</span>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
                     {% else %}
-                        <div class="p-4 text-center text-muted">
-                            <span class="material-symbols-outlined d-block mb-2" style="font-size:40px;opacity:0.3;">person_off</span>
-                            No teachers registered yet
-                        </div>
+                    <div class="p-4 text-center text-muted">
+                        <span class="material-symbols-outlined d-block mb-2"
+                            style="font-size:40px;opacity:0.3;">person_off</span>
+                        No teachers registered yet
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -148,43 +154,47 @@
                 <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-3">
                     <span class="material-symbols-outlined text-danger" style="font-size:20px;">error</span>
                     <h6 class="mb-0 fw-semibold">Recent Errors</h6>
-                    <a href="{{ url_for('sysadmin.combined_logs') }}" class="btn btn-sm btn-outline-secondary ms-auto" style="font-size:0.75rem;">View All</a>
+                    <a href="{{ url_for('sysadmin.combined_logs') }}" class="btn btn-sm btn-outline-secondary ms-auto"
+                        style="font-size:0.75rem;">View All</a>
                 </div>
                 <div class="card-body p-0">
                     {% if recent_errors %}
-                        <ul class="list-group list-group-flush">
-                            {% for error in recent_errors %}
-                            <li class="list-group-item border-bottom py-3">
-                                <div class="d-flex align-items-start gap-2">
-                                    <span class="badge mt-1
+                    <ul class="list-group list-group-flush">
+                        {% for error in recent_errors %}
+                        <li class="list-group-item border-bottom py-3">
+                            <div class="d-flex align-items-start gap-2">
+                                <span class="badge mt-1
                                         {% if '500' in (error.error_type or '') %}bg-danger
                                         {% elif '404' in (error.error_type or '') %}bg-secondary
                                         {% elif '403' in (error.error_type or '') %}bg-danger
                                         {% elif '401' in (error.error_type or '') %}bg-info
                                         {% else %}bg-warning text-dark{% endif %}"
-                                        style="font-size:0.7rem; flex-shrink:0;">
-                                        {{ (error.error_type or 'ERR').split(' ')[0] }}
-                                    </span>
-                                    <div class="flex-grow-1 min-width-0">
-                                        <div class="text-truncate" style="font-size:0.82rem; max-width:260px;" title="{{ error.error_message }}">
-                                            {{ error.error_message or 'No message' }}
-                                        </div>
-                                        <div class="text-muted" style="font-size:0.72rem;">
-                                            {{ error.request_method }} {{ error.request_path }}
-                                            {% if error.timestamp %}
-                                                · <span class="local-timestamp" data-timestamp="{{ format_utc_iso(error.timestamp) }}"></span>
-                                            {% endif %}
-                                        </div>
+                                    style="font-size:0.7rem; flex-shrink:0;">
+                                    {{ (error.error_type or 'ERR').split(' ')[0] }}
+                                </span>
+                                <div class="flex-grow-1 min-width-0">
+                                    <div class="text-truncate" style="font-size:0.82rem; max-width:260px;"
+                                        title="{{ error.error_message }}">
+                                        {{ error.error_message or 'No message' }}
+                                    </div>
+                                    <div class="text-muted" style="font-size:0.72rem;">
+                                        {{ error.request_method }} {{ error.request_path }}
+                                        {% if error.timestamp %}
+                                        · <span class="local-timestamp"
+                                            data-timestamp="{{ format_utc_iso(error.timestamp) }}"></span>
+                                        {% endif %}
                                     </div>
                                 </div>
-                            </li>
-                            {% endfor %}
-                        </ul>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
                     {% else %}
-                        <div class="p-4 text-center text-muted">
-                            <span class="material-symbols-outlined d-block mb-2 text-success" style="font-size:40px;">check_circle</span>
-                            No recent errors — system is healthy
-                        </div>
+                    <div class="p-4 text-center text-muted">
+                        <span class="material-symbols-outlined d-block mb-2 text-success"
+                            style="font-size:40px;">check_circle</span>
+                        No recent errors — system is healthy
+                    </div>
                     {% endif %}
                 </div>
             </div>
@@ -194,7 +204,8 @@
     <!-- ── System Admins ── -->
     <div class="card border-0 shadow-sm">
         <div class="card-header bg-white border-bottom d-flex align-items-center gap-2 py-3">
-            <span class="material-symbols-outlined" style="font-size:20px; color: var(--sysadmin-accent);">admin_panel_settings</span>
+            <span class="material-symbols-outlined"
+                style="font-size:20px; color: var(--sysadmin-accent);">admin_panel_settings</span>
             <h6 class="mb-0 fw-semibold">System Administrators</h6>
             <span class="badge bg-secondary ms-auto">{{ system_admin_count }}</span>
         </div>
@@ -214,8 +225,9 @@
                             <td class="ps-3">
                                 <div class="d-flex align-items-center gap-2">
                                     <div class="rounded-circle d-flex align-items-center justify-content-center"
-                                         style="width:32px;height:32px;flex-shrink:0;background:rgba(212,168,87,0.15);">
-                                        <span class="material-symbols-outlined" style="font-size:16px;color:var(--sysadmin-accent);">shield_person</span>
+                                        style="width:32px;height:32px;flex-shrink:0;background:color-mix(in srgb, var(--secondary) 15%, transparent);">
+                                        <span class="material-symbols-outlined"
+                                            style="font-size:16px;color:var(--sysadmin-accent);">shield_person</span>
                                     </div>
                                     <span class="fw-semibold" style="font-size:0.9rem;">{{ admin.username }}</span>
                                 </div>
@@ -224,9 +236,10 @@
                             <td>
                                 <small class="text-muted">
                                     {% if admin.last_login %}
-                                        <span class="local-timestamp" data-timestamp="{{ format_utc_iso(admin.last_login) }}"></span>
+                                    <span class="local-timestamp"
+                                        data-timestamp="{{ format_utc_iso(admin.last_login) }}"></span>
                                     {% else %}
-                                        Never
+                                    Never
                                     {% endif %}
                                 </small>
                             </td>

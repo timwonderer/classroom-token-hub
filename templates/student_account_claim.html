@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Classroom Token Hub - Student Account Setup</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
         body {
@@ -16,6 +18,7 @@
             min-height: 100vh;
             margin: 0;
         }
+
         .login-container {
             width: 100%;
             max-width: 900px;
@@ -25,6 +28,7 @@
             display: flex;
             min-height: 600px;
         }
+
         .login-left {
             flex: 1;
             padding: 3rem;
@@ -32,6 +36,7 @@
             flex-direction: column;
             justify-content: center;
         }
+
         .login-right {
             flex: 1;
             background: var(--primary);
@@ -62,19 +67,23 @@
             position: relative;
             z-index: 1;
         }
+
         .info-box {
             border: 2px solid var(--primary);
             padding: 1rem;
             margin-bottom: 1.5rem;
             background-color: var(--background);
         }
+
         .info-box p {
             margin-bottom: 0.5rem;
             font-size: 0.9rem;
         }
+
         .subtitle {
             color: var(--secondary) !important;
         }
+
         .form-label {
             color: var(--secondary) !important;
             text-transform: uppercase;
@@ -82,56 +91,65 @@
             font-size: 0.75rem;
             letter-spacing: 0.05em;
         }
+
         a {
             color: var(--secondary);
         }
+
         a:hover {
             color: var(--secondary);
             opacity: 0.8;
         }
+
         .btn-primary {
             background: var(--primary);
             border: none;
             color: white;
             transition: all 0.3s ease;
         }
+
         .btn-primary:hover {
             background: var(--secondary);
-            color: #2c2c2c;
+            color: var(--neutral-900);
         }
+
         @media (max-width: 768px) {
             .login-container {
                 flex-direction: column;
                 margin: 1rem;
                 min-height: auto;
             }
+
             .login-right {
                 display: none;
             }
+
             .login-left {
                 padding: 2rem;
             }
         }
     </style>
 </head>
-<body class="student-theme">
+
+<body class="student-shell">
     <div class="login-container">
         <div class="login-left">
             <div class="mb-2">
                 <small class="text-muted">STUDENT PORTAL</small>
                 <h1 class="h3 fw-bold mb-2  text-primary">Find Your Account</h1>
-                <p class="subtitle">Enter your information below to find the account your teacher has created for you.</p>
+                <p class="subtitle">Enter your information below to find the account your teacher has created for you.
+                </p>
             </div>
 
 
             {% with messages = get_flashed_messages(category_filter=["claim"]) %}
-                {% if messages %}
-                    <div class="flash-messages">
-                        {% for message in messages %}
-                            <div class="alert alert-info">{{ message }}</div>
-                        {% endfor %}
-                    </div>
-                {% endif %}
+            {% if messages %}
+            <div class="flash-messages">
+                {% for message in messages %}
+                <div class="alert alert-info">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
             {% endwith %}
 
             <form method="POST">
@@ -140,17 +158,18 @@
                 <div class="mb-3">
                     <label for="join_code" class="form-label">Join Code</label>
                     {{ form.join_code(class="form-control", autocomplete="off", placeholder="Example: ABC123") }}
-                    
+
                     {% for error in form.join_code.errors %}
-                        <div class="text-danger small">{{ error }}</div>
+                    <div class="text-danger small">{{ error }}</div>
                     {% endfor %}
                 </div>
 
                 <div class="mb-3">
                     <label for="first_initial" class="form-label">First Initial</label>
-                    {{ form.first_initial(class="form-control", autocomplete="off", placeholder="Example: J", maxlength="1") }}
+                    {{ form.first_initial(class="form-control", autocomplete="off", placeholder="Example: J",
+                    maxlength="1") }}
                     {% for error in form.first_initial.errors %}
-                        <div class="text-danger small">{{ error }}</div>
+                    <div class="text-danger small">{{ error }}</div>
                     {% endfor %}
                 </div>
 
@@ -158,7 +177,7 @@
                     <label for="last_name" class="form-label">Last Name</label>
                     {{ form.last_name(class="form-control", autocomplete="off", placeholder="Example: Smith") }}
                     {% for error in form.last_name.errors %}
-                        <div class="text-danger small">{{ error }}</div>
+                    <div class="text-danger small">{{ error }}</div>
                     {% endfor %}
                 </div>
 
@@ -166,7 +185,7 @@
                     <label for="dob_sum" class="form-label">Date of Birth</label>
                     {{ form.dob_sum(class="form-control", type="date") }}
                     {% for error in form.dob_sum.errors %}
-                        <div class="text-danger small">{{ error }}</div>
+                    <div class="text-danger small">{{ error }}</div>
                     {% endfor %}
                 </div>
 
@@ -178,7 +197,8 @@
                 <a href="{{ url_for('student.login') }}" class="text-decoration-none">Back to Login</a>
 
                 <div class="d-flex gap-3 justify-content-center mt-3">
-                    <a href="{{ url_for('main.privacy') }}" class="text-decoration-none small text-secondary">Privacy</a>
+                    <a href="{{ url_for('main.privacy') }}"
+                        class="text-decoration-none small text-secondary">Privacy</a>
                     <span class="text-secondary">•</span>
                     <a href="{{ url_for('main.terms') }}" class="text-decoration-none small text-secondary">Terms</a>
                 </div>
@@ -191,4 +211,5 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
+
 </html>

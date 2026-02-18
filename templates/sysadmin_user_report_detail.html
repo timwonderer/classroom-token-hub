@@ -3,9 +3,9 @@
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-file-text-fill me-2"></i>Report #{{ report.id }}</h2>
+        <h2><span class="material-symbols-outlined me-2">description</span>Report #{{ report.id }}</h2>
         <a href="{{ url_for('sysadmin.support_tickets') }}?tab=reports" class="btn btn-secondary">
-            <i class="bi bi-arrow-left me-2"></i>Back to Reports
+            <span class="material-symbols-outlined me-2">arrow_back</span>Back to Reports
         </a>
     </div>
 
@@ -14,7 +14,7 @@
         <div class="col-lg-8">
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0"><i class="bi bi-info-circle-fill me-2"></i>Report Details</h5>
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">info</span>Report Details</h5>
                 </div>
                 <div class="card-body">
                     <div class="row mb-3">
@@ -113,7 +113,7 @@
                     {% if report.admin_notes %}
                     <div class="mb-4">
                         <h6>Admin Notes:</h6>
-                        <div class="border p-3 bg-info bg-opacity-10 rounded">
+                        <div class="border p-3 bg-info-subtle rounded">
                             {{ report.admin_notes }}
                         </div>
                     </div>
@@ -121,7 +121,7 @@
 
                     {% if report.reviewed_at %}
                     <div class="text-muted small">
-                        <i class="bi bi-clock me-1"></i>Reviewed: <span class="local-timestamp" data-timestamp="{{ format_utc_iso(report.reviewed_at) }}"></span>
+                        <span class="material-symbols-outlined me-1">schedule</span>Reviewed: <span class="local-timestamp" data-timestamp="{{ format_utc_iso(report.reviewed_at) }}"></span>
                     </div>
                     {% endif %}
                 </div>
@@ -130,7 +130,7 @@
             <!-- Technical Details -->
             <div class="card shadow-sm">
                 <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0"><i class="bi bi-terminal-fill me-2"></i>Technical Details</h5>
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">terminal</span>Technical Details</h5>
                 </div>
                 <div class="card-body">
                     <div class="mb-2">
@@ -149,7 +149,7 @@
             <!-- Update Status -->
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="bi bi-pencil-square me-2"></i>Update Report</h5>
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">edit_square</span>Update Report</h5>
                 </div>
                 <div class="card-body">
                     <form method="POST" action="{{ url_for('sysadmin.update_user_report', report_id=report.id) }}">
@@ -173,7 +173,7 @@
                         </div>
 
                         <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-save me-2"></i>Update Report
+                            <span class="material-symbols-outlined me-2">save</span>Update Report
                         </button>
                     </form>
                 </div>
@@ -183,12 +183,12 @@
             {% if report.user_type == 'student' and report._student_id %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-success text-white">
-                    <h5 class="mb-0"><i class="bi bi-gift-fill me-2"></i>Send Reward</h5>
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">redeem</span>Send Reward</h5>
                 </div>
                 <div class="card-body">
                     {% if report.reward_amount and report.reward_amount > 0 %}
                         <div class="alert alert-success">
-                            <i class="bi bi-check-circle-fill me-2"></i>
+                            <span class="material-symbols-outlined me-2">check_circle</span>
                             <strong>Reward Sent!</strong><br>
                             Amount: ${{ "%.2f"|format(report.reward_amount) }}<br>
                             <small class="text-muted">
@@ -205,7 +205,7 @@
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                             <div class="alert alert-info mb-3">
-                                <small><i class="bi bi-info-circle me-1"></i>The reward will be sent anonymously. The reporter will see it as a transaction in their account.</small>
+                                <small><span class="material-symbols-outlined me-1">info</span>The reward will be sent anonymously. The reporter will see it as a transaction in their account.</small>
                             </div>
 
                             <div class="mb-3">
@@ -216,7 +216,7 @@
 
                             <button type="submit" class="btn btn-success w-100"
                                     onclick="return confirm('Send reward to this reporter? This action cannot be undone.')">
-                                <i class="bi bi-send-fill me-2"></i>Send Reward
+                                <span class="material-symbols-outlined me-2">send</span>Send Reward
                             </button>
                         </form>
                     {% endif %}
@@ -225,11 +225,11 @@
             {% else %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Reward Info</h5>
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">info</span>Reward Info</h5>
                 </div>
                 <div class="card-body">
                     <p class="text-muted mb-0">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <span class="material-symbols-outlined me-2">warning</span>
                         Rewards can only be sent to student reports.
                     </p>
                 </div>
@@ -239,7 +239,7 @@
             <!-- Quick Stats -->
             <div class="card shadow-sm">
                 <div class="card-header bg-info text-white">
-                    <h5 class="mb-0"><i class="bi bi-bar-chart-fill me-2"></i>Reporter Stats</h5>
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">bar_chart</span>Reporter Stats</h5>
                 </div>
                 <div class="card-body">
                     {% set user_reports = report.__class__.query.filter_by(anonymous_code=report.anonymous_code).all() %}
