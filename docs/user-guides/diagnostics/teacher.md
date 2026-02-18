@@ -20,3 +20,8 @@ Here are some issues that teachers typically encounter.
 - [Rent and Insurance](teacher-rent-insurance)
 - [Hall Passes](teacher-hall-pass)
 - [Announcements and Issues](teacher-announcements-issues)
+
+
+## Direct Support Tickets
+
+Teachers can now submit class-scoped support tickets directly from **Help & Support** (`/admin/help-support`). Select the class scope (join code), describe the issue, and the ticket is delivered directly to system administration without a teacher triage step.

@@ -7949,64 +7949,84 @@ def deletion_requests():
 @admin_bp.route('/help-support', methods=['GET', 'POST'])
 @admin_required
 def help_support():
-    """Redirects to the admin help and support documentation."""
-    return redirect(url_for('docs.view_doc', doc_path='user-guides/diagnostics/teacher'))
+    """Teacher support center with direct ticket submission to sysadmin."""
+
+    admin_id = session.get('admin_id')
+    selected_join_code = request.values.get('join_code', '').strip()
+
+    teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
+    class_scope_map = {}
+    for seat in teacher_blocks:
+        if seat.join_code not in class_scope_map:
+            class_scope_map[seat.join_code] = seat.get_class_label()
+
+    class_scope_options = [
+        {'join_code': join_code, 'label': label}
+        for join_code, label in sorted(class_scope_map.items(), key=lambda item: item[1] or item[0])
+    ]
 
     if request.method == 'POST':
-        # Handle bug report submission
-        report_type = request.form.get('report_type', 'bug')
-        error_code = request.form.get('error_code', '')
+        issue_category = request.form.get('issue_category', 'general').strip()
         title = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip()
-        steps_to_reproduce = request.form.get('steps_to_reproduce', '').strip()
         expected_behavior = request.form.get('expected_behavior', '').strip()
         page_url = request.form.get('page_url', '').strip()
+        selected_join_code = request.form.get('join_code', '').strip()
 
-        # Validation
-        if not title or not description:
-            flash("Please provide both a title and description for your report.", "error")
+        class_label = class_scope_map.get(selected_join_code)
+
+        if not selected_join_code or selected_join_code not in class_scope_map:
+            flash("Please select one of your classes before submitting a support ticket.", "error")
             return redirect(url_for('admin.help_support'))
 
-        # Generate anonymous code (using admin ID)
+        if not title or not description or not issue_category:
+            flash("Please provide a category, title, and description for your support ticket.", "error")
+            return redirect(url_for('admin.help_support'))
+
         anonymous_code = generate_anonymous_code(f"admin:{admin_id}")
 
-        # Create report
+        scoped_description = f"Class Scope: {class_label} ({selected_join_code})\n\n{description}"
+
         try:
             report = UserReport(
                 anonymous_code=anonymous_code,
                 user_type='teacher',
-                report_type=report_type,
-                error_code=error_code if error_code else None,
+                report_type=issue_category,
+                error_code=selected_join_code,
                 title=title,
-                description=description,
-                steps_to_reproduce=steps_to_reproduce if steps_to_reproduce else None,
+                description=scoped_description,
                 expected_behavior=expected_behavior if expected_behavior else None,
                 page_url=page_url if page_url else None,
                 ip_address=get_real_ip(),
                 user_agent=request.headers.get('User-Agent'),
                 status='new'
             )
-            # Note: _student_id is null for teachers
 
             db.session.add(report)
             db.session.commit()
 
-            flash("Thank you for your report! It has been submitted to the system administrator.", "success")
-            return redirect(url_for('admin.help_support'))
-        except Exception as e:
+            flash("Your support ticket has been submitted directly to system administration.", "success")
+            return redirect(url_for('admin.help_support', join_code=selected_join_code))
+        except Exception:
             db.session.rollback()
             current_app.logger.error("Error submitting report", exc_info=True)
-            flash("An error occurred while submitting your report. Please try again.", "error")
+            flash("An error occurred while submitting your ticket. Please try again.", "error")
             return redirect(url_for('admin.help_support'))
 
-    # Get admin's previous reports (last 10)
     anonymous_code = generate_anonymous_code(f"admin:{admin_id}")
-    my_reports = UserReport.query.filter_by(anonymous_code=anonymous_code).order_by(UserReport.submitted_at.desc()).limit(10).all()
+    my_reports_query = UserReport.query.filter_by(anonymous_code=anonymous_code, user_type='teacher')
+    if selected_join_code:
+        my_reports_query = my_reports_query.filter_by(error_code=selected_join_code)
+    my_reports = my_reports_query.order_by(UserReport.submitted_at.desc()).limit(20).all()
 
-    return render_template('admin_help_support.html',
+    return render_template('admin_support_tickets.html',
                          current_page='help',
+                         page_title='Help & Support',
+                         class_scope_options=class_scope_options,
+                         selected_join_code=selected_join_code,
                          my_reports=my_reports,
-                         help_content=HELP_ARTICLES['teacher'])
+                         help_content=HELP_ARTICLES['teacher'],
+                         format_utc_iso=format_utc_iso)
 
 
 # -------------------- FEATURE SETTINGS --------------------
