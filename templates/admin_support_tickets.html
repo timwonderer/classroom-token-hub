@@ -55,7 +55,7 @@
                             <input type="text" class="form-control" id="page_url" name="page_url" maxlength="500" placeholder="/admin/students">
                         </div>
 
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-primary" id="submitTicketBtn">
                             <i class="bi bi-send-fill me-2"></i>Submit Ticket
                         </button>
                     </form>
@@ -112,4 +112,35 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const form = document.querySelector('form[action="{{ url_for(\'admin.help_support\') }}"]');
+    const submitBtn = document.getElementById('submitTicketBtn');
+    
+    if (form && submitBtn) {
+        form.addEventListener('submit', function(e) {
+            // Disable button to prevent double submission
+            submitBtn.disabled = true;
+            
+            // Store original button content
+            const originalContent = submitBtn.innerHTML;
+            
+            // Show loading state
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Submitting...';
+            
+            // Re-enable button if form validation fails or submission is cancelled
+            // This handles edge cases where submit might not actually proceed
+            setTimeout(() => {
+                if (submitBtn.disabled && form.checkValidity && !form.checkValidity()) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalContent;
+                }
+            }, 100);
+        });
+    }
+});
+</script>
 {% endblock %}
