@@ -123,10 +123,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if (form && submitBtn) {
         // Store original button content
         const originalContent = submitBtn.innerHTML;
+        let isSubmitting = false;
         
         form.addEventListener('submit', function(e) {
             // Only disable if form is valid
             if (form.checkValidity()) {
+                // Mark as submitting to prevent re-enabling
+                isSubmitting = true;
+                
                 // Disable button to prevent double submission
                 submitBtn.disabled = true;
                 
@@ -135,9 +139,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        // Re-enable button if HTML5 validation fails
+        // Re-enable button if HTML5 validation fails (but only if not already submitting)
         form.addEventListener('invalid', function(e) {
-            if (submitBtn.disabled) {
+            if (submitBtn.disabled && !isSubmitting) {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = originalContent;
             }
