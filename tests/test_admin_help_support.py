@@ -61,8 +61,8 @@ def test_teacher_can_submit_class_scoped_support_ticket(client):
     assert response.status_code == 200
     assert b"submitted directly to system administration" in response.data
 
-    report = UserReport.query.filter_by(user_type="teacher", error_code="ELA123").first()
+    report = UserReport.query.filter_by(user_type="teacher", title="Roster sync issue").first()
     assert report is not None
     assert report.title == "Roster sync issue"
-    assert report.report_type == "general"
-    assert report.description.startswith("Class Scope: ELA (ELA123)")
+    assert report.report_type == "comment"
+    assert report.description.startswith("SUPPORT_SCOPE|join_code=ELA123|class_label=ELA|category=general")

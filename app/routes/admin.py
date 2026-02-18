@@ -7965,8 +7965,41 @@ def help_support():
         for join_code, label in sorted(class_scope_map.items(), key=lambda item: item[1] or item[0])
     ]
 
+    category_to_report_type = {
+        'general': 'comment',
+        'bug': 'bug',
+        'feature': 'suggestion',
+    }
+
+    def _build_scope_metadata(join_code_value, class_label_value, category_value):
+        return (
+            f"SUPPORT_SCOPE|join_code={join_code_value}|class_label={class_label_value}|category={category_value}"
+        )
+
+    def _parse_scope_metadata(raw_description):
+        if not raw_description:
+            return None, None, None, raw_description
+
+        first_line, _, body = raw_description.partition("\n")
+        if not first_line.startswith("SUPPORT_SCOPE|"):
+            return None, None, None, raw_description
+
+        metadata = {}
+        for token in first_line.split("|")[1:]:
+            key, _, value = token.partition("=")
+            if key and value:
+                metadata[key] = value
+
+        cleaned_body = body.strip() if body else raw_description
+        return (
+            metadata.get('join_code'),
+            metadata.get('class_label'),
+            metadata.get('category'),
+            cleaned_body,
+        )
+
     if request.method == 'POST':
-        issue_category = request.form.get('issue_category', 'general').strip()
+        issue_category = request.form.get('issue_category', 'general').strip().lower()
         title = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip()
         expected_behavior = request.form.get('expected_behavior', '').strip()
@@ -7979,20 +8012,23 @@ def help_support():
             flash("Please select one of your classes before submitting a support ticket.", "error")
             return redirect(url_for('admin.help_support'))
 
-        if not title or not description or not issue_category:
+        if issue_category not in category_to_report_type:
+            flash("Please select a valid support ticket category.", "error")
+            return redirect(url_for('admin.help_support'))
+
+        if not title or not description:
             flash("Please provide a category, title, and description for your support ticket.", "error")
             return redirect(url_for('admin.help_support'))
 
         anonymous_code = generate_anonymous_code(f"admin:{admin_id}")
-
-        scoped_description = f"Class Scope: {class_label} ({selected_join_code})\n\n{description}"
+        metadata_header = _build_scope_metadata(selected_join_code, class_label or 'Unknown', issue_category)
+        scoped_description = f"{metadata_header}\n\n{description}"
 
         try:
             report = UserReport(
                 anonymous_code=anonymous_code,
                 user_type='teacher',
-                report_type=issue_category,
-                error_code=selected_join_code,
+                report_type=category_to_report_type[issue_category],
                 title=title,
                 description=scoped_description,
                 expected_behavior=expected_behavior if expected_behavior else None,
@@ -8015,9 +8051,22 @@ def help_support():
 
     anonymous_code = generate_anonymous_code(f"admin:{admin_id}")
     my_reports_query = UserReport.query.filter_by(anonymous_code=anonymous_code, user_type='teacher')
-    if selected_join_code:
-        my_reports_query = my_reports_query.filter_by(error_code=selected_join_code)
-    my_reports = my_reports_query.order_by(UserReport.submitted_at.desc()).limit(20).all()
+
+    reports = my_reports_query.order_by(UserReport.submitted_at.desc()).limit(50).all()
+    my_reports = []
+    for report in reports:
+        scope_join_code, class_label, issue_category, clean_description = _parse_scope_metadata(report.description)
+        if selected_join_code and scope_join_code != selected_join_code:
+            continue
+        my_reports.append({
+            'report': report,
+            'scope_join_code': scope_join_code,
+            'class_label': class_label,
+            'issue_category': issue_category,
+            'clean_description': clean_description,
+        })
+        if len(my_reports) >= 20:
+            break
 
     return render_template('admin_support_tickets.html',
                          current_page='help',
