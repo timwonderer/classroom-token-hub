@@ -31,7 +31,7 @@
         body {
 
             font-family: 'Inter', sans-serif;
-            color: #1a202c;
+            color: var(--text-primary);
             min-height: 100vh;
             padding: 2rem;
         }
@@ -45,13 +45,13 @@
             font-weight: 800;
             font-size: 2.5rem;
             color: white;
-            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+            text-shadow: 0 2px 10px color-mix(in srgb, black 20%, transparent);
             margin-bottom: 0.5rem;
         }
 
         .page-header p {
             font-size: 1.1rem;
-            color: rgba(255, 255, 255, 0.9);
+            color: color-mix(in srgb, white 90%, transparent);
             font-weight: 500;
         }
 
@@ -76,14 +76,14 @@
             background: white;
             border-radius: 24px;
             padding: 3rem;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 20px 60px color-mix(in srgb, black 30%, transparent);
             border: none;
         }
 
         .card-title {
             font-size: 1.8rem;
             font-weight: 700;
-            color: #2d3748;
+            color: var(--text-primary);
             margin-bottom: 1.5rem;
             text-align: center;
         }
@@ -91,12 +91,12 @@
         .form-label {
             font-weight: 600;
             font-size: 1.1rem;
-            color: #2d3748;
+            color: var(--text-primary);
             margin-bottom: 0.8rem;
         }
 
         .form-control {
-            border: 2px solid #e2e8f0;
+            border: 2px solid var(--border-color);
             border-radius: 12px;
             padding: 1rem;
             font-size: 1.1rem;
@@ -139,33 +139,33 @@
         }
 
         .btn-success {
-            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-            box-shadow: 0 4px 15px rgba(72, 187, 120, 0.4);
+            background: linear-gradient(135deg, var(--success) 0%, var(--success) 100%);
+            box-shadow: 0 4px 15px color-mix(in srgb, var(--success) 40%, transparent);
         }
 
         .btn-success:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(72, 187, 120, 0.6);
+            box-shadow: 0 6px 20px color-mix(in srgb, var(--success) 60%, transparent);
         }
 
         .btn-warning {
-            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+            background: linear-gradient(135deg, var(--warning) 0%, var(--warning) 100%);
             color: white;
-            box-shadow: 0 4px 15px rgba(237, 137, 54, 0.4);
+            box-shadow: 0 4px 15px color-mix(in srgb, var(--warning) 40%, transparent);
         }
 
         .btn-warning:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(237, 137, 54, 0.6);
+            box-shadow: 0 6px 20px color-mix(in srgb, var(--warning) 60%, transparent);
         }
 
         .btn-secondary {
-            background: #718096;
+            background: var(--text-secondary);
             color: white;
         }
 
         .btn-secondary:hover {
-            background: #4a5568;
+            background: var(--text-primary);
             transform: translateY(-2px);
         }
 
@@ -188,18 +188,18 @@
         }
 
         .alert-info {
-            background: linear-gradient(135deg, #e6fffa 0%, #b2f5ea 100%);
-            color: #234e52;
+            background: linear-gradient(135deg, var(--info-subtle) 0%, var(--info-subtle) 100%);
+            color: var(--info);
         }
 
         .alert-success {
-            background: linear-gradient(135deg, #f0fff4 0%, #c6f6d5 100%);
-            color: #22543d;
+            background: linear-gradient(135deg, var(--success-subtle) 0%, var(--success-subtle) 100%);
+            color: var(--success);
         }
 
         .alert-danger {
-            background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
-            color: #742a2a;
+            background: linear-gradient(135deg, var(--danger-subtle) 0%, var(--danger-subtle) 100%);
+            color: var(--danger);
         }
 
         .info-row {
@@ -209,7 +209,7 @@
         }
 
         .info-row strong {
-            color: #2d3748;
+            color: var(--text-primary);
         }
 
         /* Queue Styles */
@@ -221,7 +221,7 @@
         }
 
         .stat-box {
-            background: #f7fafc;
+            background: var(--surface);
             border-radius: 12px;
             padding: 1rem;
             text-align: center;
@@ -229,11 +229,11 @@
         }
 
         .stat-box.warning {
-            border-left-color: #ed8936;
+            border-left-color: var(--warning);
         }
 
         .stat-box.danger {
-            border-left-color: #f56565;
+            border-left-color: var(--danger);
         }
 
         .stat-number {
@@ -243,17 +243,17 @@
         }
 
         .stat-number.warning {
-            color: #ed8936;
+            color: var(--warning);
         }
 
         .stat-number.danger {
-            color: #f56565;
+            color: var(--danger);
         }
 
         .stat-label {
             font-size: 0.9rem;
             font-weight: 600;
-            color: #4a5568;
+            color: var(--text-primary);
             text-transform: uppercase;
             letter-spacing: 0.05em;
             margin-top: 0.3rem;
@@ -265,7 +265,7 @@
         }
 
         .queue-item {
-            background: #f7fafc;
+            background: var(--surface);
             border-radius: 12px;
             padding: 1rem;
             margin-bottom: 0.8rem;
@@ -286,24 +286,24 @@
         .queue-student-name {
             font-size: 1rem;
             font-weight: 600;
-            color: #2d3748;
+            color: var(--text-primary);
         }
 
         .queue-destination {
             font-size: 0.85rem;
-            color: #718096;
+            color: var(--text-secondary);
         }
 
         .queue-time {
             font-size: 0.8rem;
-            color: #a0aec0;
+            color: var(--text-secondary);
             text-align: right;
         }
 
         .empty-queue {
             text-align: center;
             padding: 2rem;
-            color: #718096;
+            color: var(--text-secondary);
         }
 
         .empty-queue-icon {
@@ -312,15 +312,15 @@
         }
 
         .limit-warning {
-            background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
-            color: #742a2a;
+            background: linear-gradient(135deg, var(--danger-subtle) 0%, var(--danger-subtle) 100%);
+            color: var(--danger);
             padding: 1rem;
             border-radius: 12px;
             margin-bottom: 1.5rem;
             text-align: center;
             font-weight: 600;
             font-size: 0.95rem;
-            border: 2px solid #fc8181;
+            border: 2px solid var(--danger);
         }
 
         @keyframes slideIn {

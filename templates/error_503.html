@@ -30,7 +30,7 @@
 
         .error-container {
             background: white;
-            box-shadow: 0 10px 10px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 10px 10px color-mix(in srgb, black 30%, transparent);
             max-width: 900px;
             width: 100%;
             overflow: hidden;
@@ -61,7 +61,7 @@
         }
 
         .status-box {
-            background: #f0f4ff;
+            background: var(--primary-subtle);
             border-left: 4px solid var(--primary);
             padding: 1.5rem;
             margin-bottom: 2rem;
@@ -75,12 +75,12 @@
 
         .status-box p,
         .status-box ul {
-            color: #555;
+            color: var(--text-secondary);
             line-height: 1.6;
         }
 
         .troubleshooting {
-            background: #f8f9fa;
+            background: var(--surface);
             padding: 1.5rem;
             margin-bottom: 2rem;
         }
@@ -88,8 +88,8 @@
        
 
         .auto-refresh {
-            background: #e8f5e9;
-            border: 1px solid #81c784;
+            background: var(--success-subtle);
+            border: 1px solid var(--success);
             padding: 1rem;
             margin-top: 1.5rem;
             text-align: center;
@@ -97,13 +97,13 @@
 
         .auto-refresh p {
             margin: 0;
-            color: #2e7d32;
+            color: var(--success);
             font-size: 0.95rem;
         }
 
         .countdown {
             font-weight: 700;
-            color: #1b5e20;
+            color: var(--success);
         }
 
         .actions {

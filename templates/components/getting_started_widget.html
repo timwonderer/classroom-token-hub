@@ -44,7 +44,7 @@
                 <!-- REQUIRED TASKS -->
                 <div class="gs-section-header">
 
-                    <span class="badge bg-danger" style="font-size: 0.9rem;"><i class="bi bi-exclamation-circle"></i>
+                    <span class="badge bg-danger" style="font-size: 0.9rem;"><span class="material-symbols-outlined">error</span>
                         REQUIRED TASKS</span>
                     <p class="text-danger small mt-2 mb-0">These tasks are required because your classroom economy
                         system won't function properly without them.</p>
@@ -88,7 +88,7 @@
 
                 <!-- OPTIONAL FEATURES -->
                 <div class="gs-section-header mt-3">
-                    <span class="badge bg-secondary" style="font-size: 0.9rem;"><i class="bi bi-bookmark-star"></i>
+                    <span class="badge bg-secondary" style="font-size: 0.9rem;"><span class="material-symbols-outlined">bookmark</span>
                         ADDITIONAL FEATURES</span>
                     <p class="text-primary small mt-2 mb-0">These features are optional but can enhance your classroom
                         economy experience. Feel free to skip any that don't fit your needs.</p>
@@ -269,7 +269,7 @@
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        box-shadow: 0 4px 12px #00000033;
+        box-shadow: 0 4px 12px color-mix(in srgb, black 20%, transparent);
         transition: all 0.3s ease;
         position: relative;
         animation: slideInUp 0.3s ease-out;
@@ -279,7 +279,7 @@
 
     .gs-bubble:hover {
         transform: scale(1.1);
-        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 6px 16px color-mix(in srgb, black 40%, transparent);
         animation: slideInUp 0.3s ease-out;
     }
 
@@ -319,7 +319,7 @@
         max-width: calc(100vw - 48px);
         background: white;
         border-radius: 12px;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+        box-shadow: 0 8px 32px color-mix(in srgb, black 15%, transparent);
         border: 3px solid var(--secondary);
         animation: slideInUp 0.3s ease-out;
     }
@@ -344,7 +344,7 @@
     }
 
     .gs-progress-badge {
-        background: rgba(255, 255, 255, 0.2);
+        background: color-mix(in srgb, white 20%, transparent);
         padding: 2px 8px;
         border-radius: 12px;
         font-size: 12px;

@@ -11,17 +11,17 @@
     }
 
     .stat-label {
-        color: #6c757d;
+        color: var(--text-secondary);
         font-size: 0.875rem;
         text-transform: uppercase;
     }
 
     .negative-balance {
-        color: #dc3545;
+        color: var(--danger);
     }
 
     .positive-balance {
-        color: #28a745;
+        color: var(--success);
     }
 </style>
 {% endblock %}
@@ -31,16 +31,16 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <a href="{{ url_for('admin.students') }}" class="btn btn-outline-secondary mb-2">
-            <i class="bi bi-arrow-left me-1"></i> Back to Students
+            <span class="material-symbols-outlined me-1">arrow_back</span> Back to Students
         </a>
         <h2 class="mb-0">
-            <i class="bi bi-person-circle me-2"></i>{{ student.full_name }}
+            <span class="material-symbols-outlined me-2">account_circle</span>{{ student.full_name }}
             <span class="badge bg-primary">Block {{ student.block|upper }}</span>
         </h2>
     </div>
     <div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#editBasicInfoModal">
-            <i class="bi bi-pencil me-1"></i> Edit Student
+            <span class="material-symbols-outlined me-1">edit</span> Edit Student
         </button>
     </div>
 </div>
@@ -94,14 +94,14 @@
 {% if rent_privileges and rent_privileges|length > 0 %}
 <div class="alert alert-light border mb-4">
     <h6 class="mb-3">
-        <i class="bi bi-award me-2"></i>Active Rent Privileges
+        <span class="material-symbols-outlined me-2">military_tech</span>Active Rent Privileges
         <small class="text-muted">(Per Rent Period Items)</small>
     </h6>
     <div class="d-flex flex-wrap gap-2">
         {% for privilege in rent_privileges %}
         <span class="badge bg-{% if privilege.source == 'rent' %}success{% else %}info{% endif %} px-3 py-2"
             style="font-size: 0.9rem;" {% if privilege.description %}title="{{ privilege.description }}" {% endif %}>
-            <i class="bi bi-{% if privilege.source == 'rent' %}check-circle{% else %}cart-check{% endif %} me-1"></i>
+            <span class="material-symbols-outlined me-1">{% if privilege.source == 'rent' %}check_circle{% else %}shopping_cart_checkout{% endif %}</span>
             {{ privilege.name }}
             {% if privilege.source == 'purchased' %}
             <small class="opacity-75">(Purchased)</small>
@@ -110,7 +110,7 @@
         {% endfor %}
     </div>
     <small class="text-muted d-block mt-2">
-        <i class="bi bi-info-circle me-1"></i>
+        <span class="material-symbols-outlined me-1">info</span>
         <strong class="text-success">Green badges</strong> = Covered by rent payment |
         <strong class="text-info">Blue badges</strong> = Purchased individually (valid until next rent due)
     </small>
@@ -122,46 +122,46 @@
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button"
             role="tab">
-            <i class="bi bi-info-circle me-1"></i>Overview
+            <span class="material-symbols-outlined me-1">info</span>Overview
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="transactions-tab" data-bs-toggle="tab" data-bs-target="#transactions" type="button"
             role="tab">
-            <i class="bi bi-receipt me-1"></i>Transactions
+            <span class="material-symbols-outlined me-1">receipt_long</span>Transactions
             <span class="badge bg-secondary">{{ transactions|length }}</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="items-tab" data-bs-toggle="tab" data-bs-target="#items" type="button" role="tab">
-            <i class="bi bi-bag me-1"></i>Items
+            <span class="material-symbols-outlined me-1">shopping_bag</span>Items
             <span class="badge bg-secondary">{{ student_items|length }}</span>
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="attendance-tab" data-bs-toggle="tab" data-bs-target="#attendance" type="button"
             role="tab">
-            <i class="bi bi-clock-history me-1"></i>Attendance
+            <span class="material-symbols-outlined me-1">history</span>Attendance
         </button>
     </li>
     {% if global_rent_enabled and student.is_rent_enabled %}
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="housing-tab" data-bs-toggle="tab" data-bs-target="#housing" type="button"
             role="tab">
-            <i class="bi bi-house me-1"></i>Rent
+            <span class="material-symbols-outlined me-1">home</span>Rent
         </button>
     </li>
     {% endif %}
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="payroll-tab" data-bs-toggle="tab" data-bs-target="#payroll" type="button"
             role="tab">
-            <i class="bi bi-cash-coin me-1"></i>Payroll
+            <span class="material-symbols-outlined me-1">payments</span>Payroll
         </button>
     </li>
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button"
             role="tab">
-            <i class="bi bi-gear me-1"></i>Settings
+            <span class="material-symbols-outlined me-1">settings</span>Settings
         </button>
     </li>
 </ul>
@@ -174,7 +174,7 @@
             <div class="col-lg-6 mb-4">
                 <div class="card shadow h-100">
                     <div class="card-header bg-info text-white">
-                        <h5 class="mb-0"><i class="bi bi-person me-2"></i>Student Information</h5>
+                        <h5 class="mb-0"><span class="material-symbols-outlined me-2">person</span>Student Information</h5>
                     </div>
                     <div class="card-body">
                         <table class="table table-borderless mb-0">
@@ -242,7 +242,7 @@
                         {% if reset_code_is_active %}
                         <div class="alert alert-danger mt-3 border-danger shadow-sm">
                             <h6 class="alert-heading fw-bold">
-                                <i class="bi bi-shield-exclamation me-2"></i>Account Recovery In Progress
+                                <span class="material-symbols-outlined me-2">shield</span>Account Recovery In Progress
                             </h6>
                             <p class="mb-2 small">Give this information to the student to recover their account:</p>
                             <div class="bg-white p-3 rounded border border-danger text-dark">
@@ -263,7 +263,7 @@
                                     </div>
                                     <div class="col-12 mt-2">
                                         <div class="small text-muted fst-italic">
-                                            <i class="bi bi-clock me-1"></i>Code expires at
+                                            <span class="material-symbols-outlined me-1">schedule</span>Code expires at
                                             <span class="utc-timestamp"
                                                 data-utc="{{ student.reset_code_expires_at.isoformat() if student.reset_code_expires_at else '' }}">
                                                 {{ student.reset_code_expires_at.strftime('%I:%M %p') if
@@ -282,7 +282,7 @@
                         {% if not student.has_completed_setup and student.recovery_status != 'to_be_claimed' %}
                         <div class="alert alert-warning mt-3 border-warning shadow-sm">
                             <h6 class="alert-heading fw-bold">
-                                <i class="bi bi-exclamation-triangle-fill me-2"></i>Account Recovery / Setup
+                                <span class="material-symbols-outlined me-2">warning</span>Account Recovery / Setup
                             </h6>
                             <p class="mb-2 small">Give this information to the student to claim their account:</p>
                             <div class="bg-white p-3 rounded border border-warning text-dark">
@@ -303,7 +303,7 @@
                                     </div>
                                     <div class="col-12 mt-2">
                                         <div class="small text-muted fst-italic">
-                                            <i class="bi bi-info-circle me-1"></i>Student must also enter their
+                                            <span class="material-symbols-outlined me-1">info</span>Student must also enter their
                                             <strong>Date of Birth</strong> as recorded in your roster.
                                         </div>
                                     </div>
@@ -319,7 +319,7 @@
             <div class="col-lg-6 mb-4">
                 <div class="card shadow h-100">
                     <div class="card-header bg-secondary text-white">
-                        <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Attendance</h5>
+                        <h5 class="mb-0"><span class="material-symbols-outlined me-2">history</span>Recent Attendance</h5>
                     </div>
                     <div class="card-body">
                         {% if latest_tap_event %}
@@ -368,7 +368,7 @@
     <div class="tab-pane fade" id="transactions" role="tabpanel">
         <div class="card shadow">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>Transaction History</h5>
+                <h5 class="mb-0"><span class="material-symbols-outlined me-2">receipt_long</span>Transaction History</h5>
                 <div>
                     <span class="badge bg-light text-dark me-2">{{ transactions|length }} total</span>
                 </div>
@@ -417,7 +417,7 @@
                                 <td>
                                     {% if not tx.is_void and tx.type != 'refund' %}
                                     <button class="btn btn-sm btn-outline-danger void-btn" data-id="{{ tx.id }}">
-                                        <i class="bi bi-x-circle"></i> Void
+                                        <span class="material-symbols-outlined">cancel</span> Void
                                     </button>
                                     {% endif %}
                                 </td>
@@ -428,7 +428,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-info mb-0">
-                    <i class="bi bi-info-circle me-2"></i>No transactions found for this student.
+                    <span class="material-symbols-outlined me-2">info</span>No transactions found for this student.
                 </div>
                 {% endif %}
             </div>
@@ -439,7 +439,7 @@
     <div class="tab-pane fade" id="items" role="tabpanel">
         <div class="card shadow">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="bi bi-bag me-2"></i>Purchased Items</h5>
+                <h5 class="mb-0"><span class="material-symbols-outlined me-2">shopping_bag</span>Purchased Items</h5>
             </div>
             <div class="card-body">
                 {% if student_items %}
@@ -492,7 +492,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-info mb-0">
-                    <i class="bi bi-info-circle me-2"></i>This student has not purchased any items yet.
+                    <span class="material-symbols-outlined me-2">info</span>This student has not purchased any items yet.
                 </div>
                 {% endif %}
             </div>
@@ -504,7 +504,7 @@
         <!-- Period Settings Card -->
         <div class="card shadow mb-4">
             <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="bi bi-toggles me-2"></i>Period Tap Settings</h5>
+                <h5 class="mb-0"><span class="material-symbols-outlined me-2">toggle_on</span>Period Tap Settings</h5>
             </div>
             <div class="card-body">
                 <p class="text-muted mb-3">Enable or disable tap in/out for each period. When disabled, the student
@@ -540,13 +540,13 @@
         <!-- Tap Entry Management Card -->
         <div class="card shadow mb-4">
             <div class="card-header bg-danger text-white">
-                <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Manage Tap Entries</h5>
+                <h5 class="mb-0"><span class="material-symbols-outlined me-2">warning</span>Manage Tap Entries</h5>
             </div>
             <div class="card-body">
                 <p class="text-muted mb-3">View and remove invalid or unpaired tap entries. Use this carefully as
                     deleting entries affects pay calculations.</p>
                 <button class="btn btn-primary" id="loadTapEntries">
-                    <i class="bi bi-arrow-clockwise me-1"></i>Load Tap Entries
+                    <span class="material-symbols-outlined me-1">refresh</span>Load Tap Entries
                 </button>
                 <div id="tapEntriesContainer" class="mt-3" style="display: none;">
                     <!-- Tap entries will be loaded here via JavaScript -->
@@ -556,7 +556,7 @@
 
         <div class="card shadow">
             <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Attendance History</h5>
+                <h5 class="mb-0"><span class="material-symbols-outlined me-2">history</span>Attendance History</h5>
             </div>
             <div class="card-body">
                 {% set tap_events = student.tap_events|sort(attribute='timestamp', reverse=True) %}
@@ -602,7 +602,7 @@
                 {% endif %}
                 {% else %}
                 <div class="alert alert-info mb-0">
-                    <i class="bi bi-info-circle me-2"></i>No attendance records found for this student.
+                    <span class="material-symbols-outlined me-2">info</span>No attendance records found for this student.
                 </div>
                 {% endif %}
             </div>
@@ -617,7 +617,7 @@
             <div class="col-lg-12 mb-4">
                 <div class="card shadow h-100">
                     <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><i class="bi bi-house-door me-2"></i>Rent Information</h5>
+                        <h5 class="mb-0"><span class="material-symbols-outlined me-2">home</span>Rent Information</h5>
                     </div>
                     <div class="card-body">
                         <table class="table table-borderless">
@@ -665,7 +665,7 @@
     <div class="tab-pane fade" id="payroll" role="tabpanel">
         <div class="card shadow">
             <div class="card-header bg-success text-white">
-                <h5 class="mb-0"><i class="bi bi-cash-coin me-2"></i>Earnings & Payroll</h5>
+                <h5 class="mb-0"><span class="material-symbols-outlined me-2">payments</span>Earnings & Payroll</h5>
             </div>
             <div class="card-body">
                 <div class="row mb-4">
@@ -721,7 +721,7 @@
                 </div>
                 {% else %}
                 <div class="alert alert-info mb-0">
-                    <i class="bi bi-info-circle me-2"></i>No earnings recorded yet.
+                    <span class="material-symbols-outlined me-2">info</span>No earnings recorded yet.
                 </div>
                 {% endif %}
             </div>
@@ -735,7 +735,7 @@
             <div class="col-lg-8 mb-4">
                 <div class="card shadow">
                     <div class="card-header bg-warning text-dark">
-                        <h5 class="mb-0"><i class="bi bi-ticket-perforated me-2"></i>Hall Pass Management</h5>
+                        <h5 class="mb-0"><span class="material-symbols-outlined me-2">confirmation_number</span>Hall Pass Management</h5>
                     </div>
                     <div class="card-body">
                         <p><strong>Current Balance:</strong> <span class="badge bg-primary fs-5">{{ student.hall_passes
@@ -750,12 +750,12 @@
                             </div>
                             <div class="col-md-6">
                                 <button type="submit" class="btn btn-warning btn-lg w-100">
-                                    <i class="bi bi-check-circle me-1"></i>Update Hall Passes
+                                    <span class="material-symbols-outlined me-1">check_circle</span>Update Hall Passes
                                 </button>
                             </div>
                         </form>
                         <div class="alert alert-info mt-3 mb-0">
-                            <small><i class="bi bi-info-circle me-2"></i>Other settings can be changed via the "Edit
+                            <small><span class="material-symbols-outlined me-2">info</span>Other settings can be changed via the "Edit
                                 Student" button at the top of the page.</small>
                         </div>
                     </div>
@@ -773,7 +773,7 @@
             <div class="modal-content">
                 <div class="modal-header bg-primary text-white">
                     <h5 class="modal-title" id="editBasicInfoModalLabel">
-                        <i class="bi bi-pencil me-2"></i>Edit Student Information
+                        <span class="material-symbols-outlined me-2">edit</span>Edit Student Information
                     </h5>
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
                         aria-label="Close"></button>
@@ -785,7 +785,7 @@
                     <!-- Basic Information -->
                     <div class="card border-primary mb-3">
                         <div class="card-header bg-primary-subtle">
-                            <h6 class="mb-0 text-primary"><i class="bi bi-person me-2"></i>Basic Information</h6>
+                            <h6 class="mb-0 text-primary"><span class="material-symbols-outlined me-2">person</span>Basic Information</h6>
                         </div>
                         <div class="card-body">
                             <div class="row">
@@ -813,7 +813,7 @@
                     <!-- Block Assignment -->
                     <div class="card border-info mb-3">
                         <div class="card-header bg-info-subtle">
-                            <h6 class="mb-0 text-info"><i class="bi bi-calendar-week me-2"></i>Block Assignment</h6>
+                            <h6 class="mb-0 text-info"><span class="material-symbols-outlined me-2">calendar_view_week</span>Block Assignment</h6>
                         </div>
                         <div class="card-body">
                             <p class="text-muted small mb-2">Select all blocks this student attends (can select
@@ -839,7 +839,7 @@
                     <!-- Account Recovery -->
                     <div class="card border-warning mb-3">
                         <div class="card-header bg-warning-subtle">
-                            <h6 class="mb-0 text-warning"><i class="bi bi-key me-2"></i>Account Recovery</h6>
+                            <h6 class="mb-0 text-warning"><span class="material-symbols-outlined me-2">key</span>Account Recovery</h6>
                         </div>
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-center">
@@ -856,7 +856,7 @@
                                 </div>
                             </div>
                             <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" style="display:none;">
-                                <small><i class="bi bi-exclamation-triangle me-2"></i>A reset code will be generated.
+                                <small><span class="material-symbols-outlined me-2">warning</span>A reset code will be generated.
                                     Give it to the student along with their join code. They will click
                                     <strong>"I can't log into my account"</strong> on the login page to begin
                                     recovery.</small>
@@ -865,7 +865,7 @@
                     </div>
 
                     <div class="alert alert-info mb-0">
-                        <small><i class="bi bi-info-circle me-2"></i><strong>Note:</strong> Changing the name will
+                        <small><span class="material-symbols-outlined me-2">info</span><strong>Note:</strong> Changing the name will
                             update what the student needs to enter during the account claim process.</small>
                     </div>
                 </div>
@@ -1001,7 +1001,7 @@
     const btn = this;
 
     btn.disabled = true;
-    btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
+    btn.innerHTML = '<span class="material-symbols-outlined me-1">hourglass_top</span>Loading...';
 
     try {
         const response = await fetch(`/api/admin/tap-entries/${studentId}`);
@@ -1017,7 +1017,7 @@
         showToast('Network error', true);
     } finally {
         btn.disabled = false;
-        btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Reload Tap Entries';
+        btn.innerHTML = '<span class="material-symbols-outlined me-1">refresh</span>Reload Tap Entries';
     }
     });
 
@@ -1078,7 +1078,7 @@
                                 <button class="btn btn-sm btn-danger delete-tap-entry"
                                         data-event-id="${event.id}"
                                         ${!isUnpaired ? 'title="Only unpaired entries should be deleted"' : ''}>
-                                    <i class="bi bi-trash"></i> Delete
+                                    <span class="material-symbols-outlined">delete</span> Delete
                                 </button>
                             ` : '<span class="text-muted">Deleted</span>'}
                         </td>

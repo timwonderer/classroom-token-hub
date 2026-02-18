@@ -56,8 +56,8 @@
         }
 
         .card-header {
-            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: linear-gradient(135deg, color-mix(in srgb, white 8%, transparent), color-mix(in srgb, white 2%, transparent));
+            border-bottom: 1px solid color-mix(in srgb, white 10%, transparent);
             padding: 0 1.75rem 1rem 1.75rem;
 
         }
@@ -66,8 +66,8 @@
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            background: rgba(255, 255, 255, 0.15);
-            color: #fff;
+            background: color-mix(in srgb, white 15%, transparent);
+            color: white;
             padding: 0.4rem 0.85rem;
 
             font-size: 0.95rem;
@@ -93,7 +93,7 @@
             width: 56px;
             height: 56px;
 
-            background: rgba(76, 111, 255, 0.12);
+            background: color-mix(in srgb, var(--primary) 12%, transparent);
             color: var(--gradient-start);
             display: grid;
             place-items: center;
@@ -122,13 +122,13 @@
             padding: 1rem;
             border-style: solid;
             border-width: 0 0 0 8px;
-            color: #000000;
+            color: black;
         }
 
         .badge-label {
             font-weight: 400;
             font-size: 12pt;
-            color: #ffffff;
+            color: white;
             padding: 3px 8px 3px 8px;
             width: fit-content;
 
@@ -147,13 +147,13 @@
         <div class="card-header d-flex justify-content-between align-items-center text-white" style="margin:0">
             <div>
                 <div class="status-pill">
-                    <span class="material-symbols-outlined" style="color: #1f306e; font-size:40px;vertical-align:-10%"
+                    <span class="material-symbols-outlined" style="color: var(--primary); font-size:40px;vertical-align:-10%"
                         aria-hidden="true">computer_cancel</span>
-                    <span style="color: #1f306e;font-size:25pt;vertical-align:middle">Classrooom Token Hub is <span
+                    <span style="color: var(--primary);font-size:25pt;vertical-align:middle">Classrooom Token Hub is <span
                             style="font-weight:300">{{ status_description or "Unavailable" }}</span></span>
                 </div>
                 <div
-                    style=" padding: 1rem; background-color: #0d6dfd28; border-style: solid; border-color: #0d6efd #0d6efd #0d6efd #0d6efd; border-width: 1px 1px 1px 8px; margin-top: 1rem; color: #000000;">
+                    style=" padding: 1rem; background-color: color-mix(in srgb, var(--primary) 16%, transparent); border-style: solid; border-color: var(--primary) var(--primary) var(--primary) var(--primary); border-width: 1px 1px 1px 8px; margin-top: 1rem; color: black;">
                     <div class="bg-primary text-white"
                         style="font-weight: 400; font-size: 12pt;  padding: 3px 8px 3px 8px; width: fit-content; text-align: center;">
                         <span class="material-symbols-outlined" style="font-size: 24px; vertical-align: -25%;"
@@ -207,7 +207,7 @@
                 <div class="col-md-8">
                     <div class="mt-2">
                         <a href="/sysadmin/login?next=%2F" class="btn btn-sm btn-outline-light"
-                            style="background:#1f306e;color:#fff;border-color:#1f306e">
+                            style="background:var(--primary);color:white;border-color:var(--primary)">
                             <span class="material-symbols-outlined" style="vertical-align:middle;font-size:20px"
                                 aria-hidden="true">admin_panel_settings</span>
                             System Admin: Sign In For Bypass
@@ -248,51 +248,51 @@
             maintenance: {
                 icon: 'construction',
                 text: 'SCHEDULED MAINTENANCE',
-                bgColor: '#ccdbff',
-                borderColor: '#011c5c',
-                labelBg: '#011c5c'
+                bgColor: 'var(--info-subtle)',
+                borderColor: 'var(--primary-hover)',
+                labelBg: 'var(--primary-hover)'
             },
             bug: {
                 icon: 'bug_report',
                 text: 'BUG FIX IN PROGRESS',
-                bgColor: '#fff3cd',
-                borderColor: '#856404',
-                labelBg: '#856404'
+                bgColor: 'var(--warning-subtle)',
+                borderColor: 'var(--warning)',
+                labelBg: 'var(--warning)'
             },
             security: {
                 icon: 'shield',
                 text: 'SECURITY PATCH',
-                bgColor: '#f8d7da',
-                borderColor: '#721c24',
-                labelBg: '#721c24'
+                bgColor: 'var(--danger-subtle)',
+                borderColor: 'var(--danger)',
+                labelBg: 'var(--danger)'
             },
             update: {
                 icon: 'system_update',
                 text: 'SYSTEM UPDATE',
-                bgColor: '#d1ecf1',
-                borderColor: '#0c5460',
-                labelBg: '#0c5460'
+                bgColor: 'var(--info-subtle)',
+                borderColor: 'var(--info)',
+                labelBg: 'var(--info)'
             },
             feature: {
                 icon: 'new_releases',
                 text: 'NEW FEATURE DEPLOYMENT',
-                bgColor: '#d4edda',
-                borderColor: '#155724',
-                labelBg: '#155724'
+                bgColor: 'var(--success-subtle)',
+                borderColor: 'var(--success)',
+                labelBg: 'var(--success)'
             },
             unavailable: {
                 icon: 'cloud_off',
                 text: 'SERVER UNAVAILABLE',
-                bgColor: '#f8d7da',
-                borderColor: '#721c24',
-                labelBg: '#721c24'
+                bgColor: 'var(--danger-subtle)',
+                borderColor: 'var(--danger)',
+                labelBg: 'var(--danger)'
             },
             error: {
                 icon: 'error',
                 text: 'UNEXPECTED ERROR',
-                bgColor: '#f8d7da',
-                borderColor: '#721c24',
-                labelBg: '#721c24'
+                bgColor: 'var(--danger-subtle)',
+                borderColor: 'var(--danger)',
+                labelBg: 'var(--danger)'
             }
         };
 

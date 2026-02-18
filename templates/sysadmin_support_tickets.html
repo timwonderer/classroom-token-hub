@@ -309,23 +309,23 @@
                                     <!-- Badges row -->
                                     <div class="d-flex flex-wrap gap-1 mb-2">
                                         <span class="badge bg-secondary" style="font-size:0.7rem;">
-                                            <i class="bi bi-person-fill me-1"></i>
+                                            <span class="material-symbols-outlined me-1">person</span>
                                             {{ issue.opaque_student_reference[:8] }}...
                                         </span>
                                         <span class="badge bg-light text-dark border" style="font-size:0.7rem;">
                                             {{ issue.category.name if issue.category else 'Unknown' }}
                                         </span>
                                         <span class="badge bg-primary" style="font-size:0.7rem;">
-                                            <i class="bi bi-person-badge me-1"></i>{{ issue.teacher.username }}
+                                            <span class="material-symbols-outlined me-1">badge</span>{{ issue.teacher.username }}
                                         </span>
                                         {% if issue.share_class_name_with_sysadmin and issue.class_label %}
                                         <span class="badge bg-info" style="font-size:0.7rem;">
-                                            <i class="bi bi-door-open me-1"></i>{{ issue.class_label }}
+                                            <span class="material-symbols-outlined me-1">door_front</span>{{ issue.class_label }}
                                         </span>
                                         {% endif %}
                                         {% if issue.eligible_for_reward %}
                                         <span class="badge bg-warning text-dark" style="font-size:0.7rem;">
-                                            <i class="bi bi-gift-fill me-1"></i>Reward Eligible
+                                            <span class="material-symbols-outlined me-1">redeem</span>Reward Eligible
                                         </span>
                                         {% endif %}
                                     </div>
@@ -338,15 +338,15 @@
                                     </div>
                                     <div class="text-muted mt-1" style="font-size:0.72rem;">
                                         {% if pill_id == 'pending' %}
-                                        <i class="bi bi-arrow-up-circle me-1"></i>
+                                        <span class="material-symbols-outlined me-1">arrow_circle_up</span>
                                         Escalated <span class="local-timestamp"
                                             data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
                                         {% elif pill_id == 'review' %}
-                                        <i class="bi bi-eye me-1"></i>
+                                        <span class="material-symbols-outlined me-1">visibility</span>
                                         In review since <span class="local-timestamp"
                                             data-timestamp="{{ format_utc_iso(issue.sysadmin_reviewed_at or issue.escalated_at) }}"></span>
                                         {% else %}
-                                        <i class="bi bi-check-circle me-1"></i>
+                                        <span class="material-symbols-outlined me-1">check_circle</span>
                                         Resolved <span class="local-timestamp"
                                             data-timestamp="{{ format_utc_iso(issue.sysadmin_resolved_at) }}"></span>
                                         {% endif %}

@@ -9,15 +9,15 @@
         border-left: 4px solid transparent;
     }
     .feature-card.enabled {
-        border-left-color: #10b981;
+        border-left-color: var(--success);
         border-left-width:4px;
-        background-color: #10b98110;
+        background-color: color-mix(in srgb, var(--success) 6%, transparent);
         color: var(--primary);
     }
     .feature-card.disabled {
-        border-left-color: #818181;
+        border-left-color: var(--text-secondary);
         border-left-width:4px;
-        color: #676767;
+        color: var(--text-secondary);
     }
 
   
@@ -206,7 +206,7 @@
 
                     <div class="feature-stack" id="periodFeatureToggles">
                         <!-- Payroll - Required Feature -->
-                        <div class="card h-100" style="border-left: 4px solid #3b82f6; background: linear-gradient(to right, #eff6ff 0%, #ffffff 100%);">
+                        <div class="card h-100" style="border-left: 4px solid var(--info); background: linear-gradient(to right, var(--primary-subtle) 0%, white 100%);">
                             <div class="card-body py-3 d-flex align-items-center justify-content-between gap-3">
                                 <div class="d-flex align-items-center gap-3">
                                     <span class="material-symbols-outlined text-primary">payments</span>
@@ -488,9 +488,9 @@ function updatePeriodFeature(toggle) {
             periodSettings[selectedPeriod][feature + '_enabled'] = enabled;
             
             // Show brief success indicator
-            toggle.parentElement.classList.add('bg-success', 'bg-opacity-10');
+            toggle.parentElement.classList.add('bg-success-subtle');
             setTimeout(() => {
-                toggle.parentElement.classList.remove('bg-success', 'bg-opacity-10');
+                toggle.parentElement.classList.remove('bg-success-subtle');
             }, 500);
         } else {
             alert('Error: ' + data.message);

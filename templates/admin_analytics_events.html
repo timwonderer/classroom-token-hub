@@ -21,7 +21,7 @@
   </div>
   {% endif %}
   <a href="{{ url_for('analytics.dashboard', join_code=join_code) }}" class="btn btn-outline-primary">
-    <i class="bi bi-arrow-left"></i> Back to Dashboard
+    <span class="material-symbols-outlined">arrow_back</span> Back to Dashboard
   </a>
 </div>
 {% endblock %}
@@ -78,13 +78,13 @@
                     {% if event.old_value is not none and event.new_value is not none %}
                     <span class="text-muted small">
                       <span class="text-decoration-line-through">${{ "%.2f"|format(event.old_value) }}</span>
-                      <i class="bi bi-arrow-right mx-1"></i>
+                      <span class="material-symbols-outlined mx-1">arrow_forward</span>
                       <span class="fw-medium">${{ "%.2f"|format(event.new_value) }}</span>
                     </span>
                     {% endif %}
                     {% if event.affected_students %}
                     <div class="small text-muted mt-1">
-                      <i class="bi bi-people"></i> Affected {{ event.affected_students }} student{{ 's' if event.affected_students != 1 else '' }}
+                      <span class="material-symbols-outlined">group</span> Affected {{ event.affected_students }} student{{ 's' if event.affected_students != 1 else '' }}
                     </div>
                     {% endif %}
                   </td>
@@ -101,7 +101,7 @@
   <div class="row">
     <div class="col-12">
       <div class="alert alert-info">
-        <i class="bi bi-info-circle me-2"></i>
+        <span class="material-symbols-outlined me-2">info</span>
         <strong>No events recorded yet.</strong> Economy events like rent changes, wage adjustments, or inflation will appear here.
       </div>
     </div>

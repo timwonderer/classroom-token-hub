@@ -9,7 +9,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#1a4d47">
+    <meta name="theme-color" content="teal">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -353,22 +353,22 @@
     <nav class="mobile-bottom-nav d-md-none">
         <a href="{{ url_for('admin.dashboard') }}" class="{{ 'active' if current_page == 'dashboard' else '' }}"
             aria-label="Dashboard">
-            <i class="bi bi-grid-fill"></i>
+            <span class="material-symbols-outlined">grid_view</span>
             <span>Dashboard</span>
         </a>
         <a href="{{ url_for('admin.attendance_log') }}" class="{{ 'active' if current_page == 'attendance' else '' }}"
             aria-label="Approvals">
-            <i class="bi bi-check2-square"></i>
+            <span class="material-symbols-outlined">fact_check</span>
             <span>Approvals</span>
         </a>
         <a href="{{ url_for('admin.students') }}" class="{{ 'active' if current_page == 'students' else '' }}"
             aria-label="Students">
-            <i class="bi bi-people"></i>
+            <span class="material-symbols-outlined">group</span>
             <span>Students</span>
         </a>
         <a href="{{ url_for('admin.store_management') }}" class="{{ 'active' if current_page == 'store' else '' }}"
             aria-label="Store">
-            <i class="bi bi-shop"></i>
+            <span class="material-symbols-outlined">storefront</span>
             <span>Store</span>
         </a>
     </nav>

@@ -40,7 +40,7 @@
             <p class="mb-3"><strong>Example:</strong> 20 students with $10 in checking and $5 in savings equals $300 in
               total deposits.</p>
             <div class="alert alert-info mb-0">
-              <strong><i class="bi bi-lightbulb-fill me-1"></i>Teaching Tip:</strong> Encourage at least 30% of students
+              <strong><span class="material-symbols-outlined me-1">lightbulb</span>Teaching Tip:</strong> Encourage at least 30% of students
               to use savings accounts. This teaches delayed gratification and financial planning!
             </div>
           </div>
@@ -96,7 +96,7 @@
         <div id="bankingGuideBreakdown" class="accordion-collapse collapse mt-2"
           aria-labelledby="bankingGuideHeadingBreakdown" data-bs-parent="#bankingGuideAccordion">
           <div class="accordion-body">
-            <p class="mb-2"><strong><i class="bi bi-gear-fill me-1"></i>Basic Settings:</strong></p>
+            <p class="mb-2"><strong><span class="material-symbols-outlined me-1">settings</span>Basic Settings:</strong></p>
             <ul class="mb-3">
               <li><strong>Class/Block selector:</strong> Configure settings independently for each class period.</li>
               <li><strong>Savings APY:</strong> Annual percentage yield (e.g., 5% APY means about $0.42 earned per $100
@@ -111,7 +111,7 @@
               </li>
             </ul>
 
-            <p class="mb-2"><strong><i class="bi bi-sliders me-1"></i>Advanced Settings:</strong></p>
+            <p class="mb-2"><strong><span class="material-symbols-outlined me-1">tune</span>Advanced Settings:</strong></p>
             <ul class="mb-3">
               <li><strong>Overdraft protection:</strong> When enabled, savings automatically covers checking shortfalls
                 (recommended for beginners)</li>
@@ -120,13 +120,13 @@
             </ul>
 
             <div class="alert alert-warning mt-3 mb-3">
-              <strong><i class="bi bi-exclamation-triangle-fill me-1"></i>Side effects:</strong> Rate changes only
+              <strong><span class="material-symbols-outlined me-1">warning</span>Side effects:</strong> Rate changes only
               affect future interest, not past payments. Interest schedule changes take effect on the next scheduled
               run.
             </div>
 
             <div class="alert alert-info mb-0">
-              <strong><i class="bi bi-lightbulb-fill me-1"></i>Recommended Setup:</strong> Start with 5% APY, weekly
+              <strong><span class="material-symbols-outlined me-1">lightbulb</span>Recommended Setup:</strong> Start with 5% APY, weekly
               payouts, and overdraft protection enabled. Adjust based on student engagement.
             </div>
           </div>
@@ -141,18 +141,18 @@
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button"
       role="tab">
-      <i class="bi bi-grid me-1"></i>Overview
+      <span class="material-symbols-outlined me-1">grid_view</span>Overview
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="transactions-tab" data-bs-toggle="tab" data-bs-target="#transactions" type="button"
       role="tab">
-      <i class="bi bi-receipt me-1"></i>Transactions
+      <span class="material-symbols-outlined me-1">receipt_long</span>Transactions
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">
-      <i class="bi bi-gear me-1"></i>Settings
+      <span class="material-symbols-outlined me-1">settings</span>Settings
     </button>
   </li>
 </ul>
@@ -165,7 +165,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Banking Statistics</h5>
+            <h5 class="mb-0"><span class="material-symbols-outlined me-2">trending_up</span>Banking Statistics</h5>
           </div>
           <div class="card-body">
             <div class="row text-center">
@@ -194,7 +194,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow">
           <div class="card-header bg-success text-white">
-            <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Current Settings</h5>
+            <h5 class="mb-0"><span class="material-symbols-outlined me-2">info</span>Current Settings</h5>
           </div>
           <div class="card-body">
             {% if settings %}
@@ -236,7 +236,7 @@
     <!-- Recent Activity -->
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Recent Transaction Activity</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2">history</span>Recent Transaction Activity</h5>
       </div>
       <div class="card-body">
         {% if transactions %}
@@ -305,7 +305,7 @@
   <div class="tab-pane fade" id="transactions" role="tabpanel">
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0"><i class="bi bi-receipt me-2"></i>All Banking Transactions</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2">receipt_long</span>All Banking Transactions</h5>
       </div>
       <div class="card-body">
         <!-- Filter Controls -->
@@ -360,10 +360,10 @@
           <div class="row mt-3">
             <div class="col-12">
               <button type="submit" class="btn btn-primary btn-sm me-2">
-                <i class="bi bi-funnel me-1"></i>Apply Filters
+                <span class="material-symbols-outlined me-1">filter_alt</span>Apply Filters
               </button>
               <a href="{{ url_for('admin.banking') }}" class="btn btn-outline-secondary btn-sm">
-                <i class="bi bi-x-circle me-1"></i>Clear Filters
+                <span class="material-symbols-outlined me-1">cancel</span>Clear Filters
               </a>
               <span class="ms-3 text-muted">
                 Showing {{ transactions|length }} of {{ total_transactions|default(0) }} transactions
@@ -426,7 +426,7 @@
                   {% if not tx.is_void %}
                   <button class="btn btn-sm btn-outline-danger" onclick="voidTransaction({{ tx.id }})"
                     title="Void transaction">
-                    <i class="bi bi-x-circle"></i>
+                    <span class="material-symbols-outlined">cancel</span>
                   </button>
                   {% else %}
                   <span class="text-muted small">Voided</span>
@@ -533,7 +533,7 @@
         <div class="col-lg-6 mb-4">
           <div class="card shadow h-100">
             <div class="card-header bg-primary text-white">
-              <h5 class="mb-0"><i class="bi bi-percent me-2"></i>Interest Settings</h5>
+              <h5 class="mb-0"><span class="material-symbols-outlined me-2">percent</span>Interest Settings</h5>
             </div>
             <div class="card-body">
               <!-- Rate Input Mode Toggle -->
@@ -544,14 +544,14 @@
                     settings or settings.savings_apy>= settings.savings_monthly_rate or form.rate_input_mode.data ==
                   'apy' %}checked{% endif %}>
                   <label class="btn btn-outline-primary" for="mode_apy">
-                    <i class="bi bi-calendar-year me-1"></i>Annual Rate (APY)
+                    <span class="material-symbols-outlined me-1">calendar_month</span>Annual Rate (APY)
                   </label>
 
                   <input type="radio" class="btn-check" name="rate_input_mode" id="mode_monthly" value="monthly" {% if
                     settings and settings.savings_monthly_rate> settings.savings_apy and form.rate_input_mode.data !=
                   'apy' %}checked{% endif %}>
                   <label class="btn btn-outline-primary" for="mode_monthly">
-                    <i class="bi bi-calendar-month me-1"></i>Monthly Rate
+                    <span class="material-symbols-outlined me-1">calendar_month</span>Monthly Rate
                   </label>
                 </div>
               </div>
@@ -567,7 +567,7 @@
                 <small class="text-muted">Annual Percentage Yield for savings accounts</small>
                 <div id="apyToMonthlyHint" class="mt-2 p-2 bg-light border rounded" style="display: none;">
                   <small class="text-info">
-                    <i class="bi bi-arrow-right-circle me-1"></i>
+                    <span class="material-symbols-outlined me-1">arrow_circle_right</span>
                     <strong>Calculated Monthly Rate:</strong> <span id="calculatedMonthlyFromAPY">0.00</span>%
                   </small>
                 </div>
@@ -584,7 +584,7 @@
                 <small class="text-muted">Monthly interest rate</small>
                 <div id="monthlyToAPYHint" class="mt-2 p-2 bg-light border rounded" style="display: none;">
                   <small class="text-info">
-                    <i class="bi bi-arrow-right-circle me-1"></i>
+                    <span class="material-symbols-outlined me-1">arrow_circle_right</span>
                     <strong>Calculated APY:</strong> <span id="calculatedAPYFromMonthly">0.00</span>%
                   </small>
                 </div>
@@ -592,7 +592,7 @@
 
               <!-- Interest Preview -->
               <div class="alert alert-info" id="interestPreview">
-                <h6 class="mb-2"><i class="bi bi-calculator me-1"></i>Interest Preview</h6>
+                <h6 class="mb-2"><span class="material-symbols-outlined me-1">calculate</span>Interest Preview</h6>
                 <div id="previewContent">
                   <small class="text-muted">Enter an interest rate to see estimated payouts</small>
                 </div>
@@ -645,7 +645,7 @@
         <div class="col-lg-6 mb-4">
           <div class="card shadow h-100">
             <div class="card-header bg-secondary ">
-              <h5 class="mb-0"><i class="bi bi-shield-exclamation me-2"></i>Overdraft Settings</h5>
+              <h5 class="mb-0"><span class="material-symbols-outlined me-2">shield</span>Overdraft Settings</h5>
             </div>
             <div class="card-body">
               <div class="mb-4">

@@ -193,7 +193,7 @@
         <!-- Tier Groups (if any) -->
         {% for tier_id, tier_data in tier_groups.items() %}
         <div class="card mb-4 border-{{ tier_data.color }} border-2">
-            <div class="card-header bg-{{ tier_data.color }} bg-opacity-10">
+            <div class="card-header bg-{{ tier_data.color }}-subtle">
                 <button class="btn btn-link text-decoration-none w-100 text-start p-0" type="button"
                     data-bs-toggle="collapse" data-bs-target="#tier-{{ tier_id }}" aria-expanded="true">
                     <h5 class="mb-0 text-{{ tier_data.color }}">
@@ -203,7 +203,7 @@
                     </h5>
                     <small class="text-muted">
                         {% if tier_id in enrolled_tiers %}
-                        <i class="bi bi-check-circle-fill me-1"></i>You have selected a policy from this tier
+                        <span class="material-symbols-outlined me-1">check_circle</span>You have selected a policy from this tier
                         {% else %}
                         Select ONE policy from this tier
                         {% endif %}
@@ -244,7 +244,7 @@
                     <div class="accordion-item {% if not can_buy and not is_enrolled %}opacity-50{% endif %}">
                         <h2 class="accordion-header" id="heading-{{ policy.id }}">
                             <button
-                                class="accordion-button {% if not loop.first %}collapsed{% endif %} {% if is_enrolled %}bg-success bg-opacity-10{% elif not can_buy %}bg-light text-muted{% endif %}"
+                                class="accordion-button {% if not loop.first %}collapsed{% endif %} {% if is_enrolled %}bg-success-subtle{% elif not can_buy %}bg-light text-muted{% endif %}"
                                 type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ policy.id }}"
                                 aria-expanded="{% if loop.first %}true{% else %}false{% endif %}"
                                 aria-controls="collapse-{{ policy.id }}">

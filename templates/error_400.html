@@ -30,7 +30,7 @@
 
         .error-container {
             background: white;
-            box-shadow: 0 10px 10px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 10px 10px color-mix(in srgb, black 30%, transparent);
             max-width: 900px;
             width: 100%;
             overflow: hidden;
@@ -61,14 +61,14 @@
         }
 
         .error-message {
-            background: #ffeeeeff;
-            border-left: 4px solid #ff0000ff;
+            background: var(--danger-subtle);
+            border-left: 4px solid var(--danger);
             padding: 1rem;
             margin-bottom: 1.5rem;
         }
 
         .error-message h5 {
-            color: #ff0000;
+            color: var(--danger);
             margin-bottom: 0.5rem;
         }
 
