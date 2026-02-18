@@ -984,7 +984,7 @@ def manage_teachers():
         if is_inactive:
             # Account-level deletion authorization
             for req in pending_requests:
-                if getattr(req, "request_type", None) == DeletionRequestType.ACCOUNT:
+                if req.request_type == DeletionRequestType.ACCOUNT:
                     can_delete_account = True
                     break
 
@@ -992,8 +992,8 @@ def manage_teachers():
             for period in periods:
                 for req in pending_requests:
                     if (
-                        getattr(req, "request_type", None) == DeletionRequestType.PERIOD
-                        and getattr(req, "period", None) == period
+                        req.request_type == DeletionRequestType.PERIOD
+                        and req.period == period
                     ):
                         authorized_periods.append(period)
                         break

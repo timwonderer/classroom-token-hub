@@ -13,6 +13,9 @@
 (function() {
     'use strict';
 
+    // Breakpoint for desktop layout (matches CSS media query)
+    const DESKTOP_BREAKPOINT = '992px';
+
     document.addEventListener('DOMContentLoaded', function() {
         // Get elements - works with both admin and student layouts
         const sidebar = document.querySelector('.sidebar, .student-sidebar');
@@ -206,7 +209,7 @@
         toggle.setAttribute('aria-expanded', 'false');
         
         // Set aria-hidden based on viewport: only hide on mobile (matches CSS breakpoint)
-        const desktopMediaQuery = window.matchMedia('(min-width: 992px)');
+        const desktopMediaQuery = window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT})`);
         if (desktopMediaQuery.matches) {
             // Desktop: sidebar always visible, so not hidden from screen readers
             sidebar.removeAttribute('aria-hidden');
