@@ -164,8 +164,8 @@ a:hover {
 }
 
 .btn-success:hover {
-    filter: brightness(90%);
-    border-color: var(--success);
+    background-color: var(--success-hover);
+    border-color: var(--success-hover);
     color: white;
 }
 
@@ -176,8 +176,8 @@ a:hover {
 }
 
 .btn-danger:hover {
-    filter: brightness(90%);
-    border-color: var(--danger);
+    background-color: var(--danger-hover);
+    border-color: var(--danger-hover);
     color: white;
 }
 
@@ -188,8 +188,8 @@ a:hover {
 }
 
 .btn-warning:hover {
-    filter: brightness(95%);
-    border-color: var(--warning);
+    background-color: var(--warning-hover);
+    border-color: var(--warning-hover);
     color: var(--neutral-900);
 }
 
@@ -200,8 +200,8 @@ a:hover {
 }
 
 .btn-info:hover {
-    filter: brightness(90%);
-    border-color: var(--info);
+    background-color: var(--info-hover);
+    border-color: var(--info-hover);
     color: white;
 }
 

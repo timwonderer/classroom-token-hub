@@ -62,7 +62,7 @@ Use `bg-*-subtle` utilities for containers, alerts, and sections. **DO NOT use o
 | Use Case | Correct Class | Incorrect (Legacy) |
 |---|---|---|
 | **Page Background** | `var(--background)` | `#f5f5f3` or `bg-light` |
-| **Card Header** | `bg-white` or `bg-surface` | `bg-white` |
+| **Card Header** | `bg-surface` | `bg-white` |
 | **Success Alert** | `bg-success-subtle` | `bg-success bg-opacity-10` |
 | **Info Box** | `bg-info-subtle` | `bg-info bg-opacity-10` |
 | **Primary Container** | `bg-primary` | `style="background-color: {{ theme_color }}"` |

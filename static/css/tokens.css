@@ -71,12 +71,16 @@
 
     /* Semantic Status Colors (Muted/Professional) */
     --success: #2e7d5b;
+    --success-hover: #276a4d;
     --success-subtle: #e6f4ed;
     --info: #3b7daa;
+    --info-hover: #336b92;
     --info-subtle: #e6f0f8;
     --warning: #c08c15;
+    --warning-hover: #a87912;
     --warning-subtle: #fef8e6;
     --danger: #c0392b;
+    --danger-hover: #a83024;
     --danger-subtle: #fce8e6;
 }
 
@@ -97,12 +101,16 @@ body.student-shell {
 
     /* Semantic Status Colors (Cooler Greens/Blues) */
     --success: #3a7d5c;
+    --success-hover: #316b4f;
     --success-subtle: #e6f4ed;
     --info: #4a7fb3;
+    --info-hover: #3f6d99;
     --info-subtle: #e8f0f8;
     --warning: #b58a1a;
+    --warning-hover: #9e7816;
     --warning-subtle: #fef8e6;
     --danger: #c44040;
+    --danger-hover: #aa3636;
     --danger-subtle: #fce8e6;
 }
 
@@ -123,11 +131,15 @@ body.sysadmin-shell {
 
     /* Semantic Status Colors (Shared with Teacher) */
     --success: #2e7d5b;
+    --success-hover: #276a4d;
     --success-subtle: #e6f4ed;
     --info: #3b7daa;
+    --info-hover: #336b92;
     --info-subtle: #e6f0f8;
     --warning: #c08c15;
+    --warning-hover: #a87912;
     --warning-subtle: #fef8e6;
     --danger: #c0392b;
+    --danger-hover: #a83024;
     --danger-subtle: #fce8e6;
 }
