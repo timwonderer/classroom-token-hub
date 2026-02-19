@@ -277,6 +277,20 @@ a:hover {
     color: white !important;
 }
 
+.btn-check:checked + .btn-outline-primary,
+.btn-outline-primary.active,
+.btn-outline-primary:active,
+.show > .btn-outline-primary.dropdown-toggle {
+    background-color: var(--primary) !important;
+    border-color: var(--primary) !important;
+    color: #fff !important;
+}
+
+.btn-check:focus + .btn-outline-primary,
+.btn-outline-primary:focus {
+    box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--primary) 25%, transparent) !important;
+}
+
 .btn-link {
     color: var(--primary);
     text-decoration: none;
@@ -1008,9 +1022,28 @@ body.sysadmin-shell .eyebrow {
     border-radius: 999px !important;
 }
 
+.border-primary {
+    border-color: var(--primary) !important;
+}
+
+.table-light {
+    --bs-table-bg: var(--neutral-100);
+    --bs-table-color: var(--text-primary);
+}
+
 /* ─── Icon Normalization ─── */
 .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.icon-circle {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
 }
 
 /* ─── Sysadmin Components ─── */

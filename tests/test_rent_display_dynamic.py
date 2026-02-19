@@ -193,6 +193,31 @@ def test_overdue_rent_payment_uses_coverage_month_in_transaction_description(cli
     assert 'late fee' in rent_txn.description
 
 
+def test_overdue_current_period_does_not_show_future_due_countdown(client, setup_rent_with_items, monkeypatch):
+    """When current coverage is overdue, status should not count down to a future period."""
+    data = setup_rent_with_items
+    fixed_now = datetime(2026, 2, 18, 12, 0, tzinfo=timezone.utc)
+
+    data['rent_settings'].first_rent_due_date = datetime(2026, 1, 28, tzinfo=timezone.utc)
+    data['rent_settings'].bill_preview_enabled = True
+    data['rent_settings'].bill_preview_days = 20
+    data['rent_settings'].grace_period_days = 5  # Keep this within grace to isolate due-date selection
+    data['student'].is_rent_enabled = True
+    db.session.commit()
+
+    monkeypatch.setattr('app.routes.student.utc_now', lambda: fixed_now)
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = data['student'].id
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+        sess['current_join_code'] = data['join_code']
+
+    response = client.get('/student/rent')
+    assert response.status_code == 200
+    assert b'Past due, pay now' in response.data
+    assert b'Rent will be due in' not in response.data
+
+
 def test_days_until_due_calculation(client, setup_rent_with_items):
     """Test that days_until_due is correctly calculated and passed to template."""
     data = setup_rent_with_items

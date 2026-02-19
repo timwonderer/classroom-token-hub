@@ -3949,14 +3949,15 @@ def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, 
         try:
             if value and value > 0:
                 from app.models import _quantize_currency
-                if unit == 'day':
+                normalized_unit = str(unit).lower().rstrip('s') if unit else None
+                if normalized_unit == 'day':
                     # Every N days -> scale to days per month
                     days_in_month = monthrange(current_year, current_month)[1]
                     return _quantize_currency(rent_settings.rent_amount * Decimal(days_in_month) / Decimal(value))
-                elif unit == 'week':
+                elif normalized_unit == 'week':
                     # Every N weeks -> scale to ~4 weeks per month
                     return _quantize_currency(rent_settings.rent_amount * Decimal('4') / Decimal(value))
-                elif unit == 'month':
+                elif normalized_unit == 'month':
                     # Every N months -> monthly share of that amount
                     return _quantize_currency(rent_settings.rent_amount / Decimal(value))
         except (TypeError, ValueError, ZeroDivisionError):
