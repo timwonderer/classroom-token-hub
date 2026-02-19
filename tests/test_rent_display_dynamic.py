@@ -393,3 +393,23 @@ def test_rent_items_show_store_availability(client, setup_rent_with_items):
     assert b'$20.00' in response.data  # Locker price
     assert b'per use' in response.data
     assert b'valid until next rent is due' in response.data
+
+
+def test_incremental_rent_form_shows_even_when_full_balance_is_short(client, setup_rent_with_items):
+    """Incremental mode should still render the payment form even if full amount isn't affordable."""
+    data = setup_rent_with_items
+
+    now = datetime.now(timezone.utc)
+    data['rent_settings'].first_rent_due_date = now - timedelta(days=1)
+    data['rent_settings'].allow_incremental_payment = True
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = data['student'].id
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+        sess['current_join_code'] = data['join_code']
+
+    response = client.get('/student/rent')
+    assert response.status_code == 200
+    assert b'Payment Amount' in response.data
+    assert b'Insufficient Funds' not in response.data
