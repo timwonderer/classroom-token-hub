@@ -151,9 +151,7 @@ class AnalyticsEngine:
             query
             .filter(Student.id.in_(sa.select(scoped_student_ids)))
             .filter(~Student.id.in_(sa.select(demo_student_ids)))
-            # NOTE: DISTINCT ON is PostgreSQL-specific.
-            # This analytics query is intentionally Postgres-only.
-            .distinct(Student.id)
+            .distinct()
             .all()
         )
     

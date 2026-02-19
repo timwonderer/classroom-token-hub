@@ -47,6 +47,10 @@ from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
 from app.attendance import get_all_block_statuses
 from app.payroll import get_pay_rate_for_block
 from app.utils.time import utc_now, ensure_utc, normalize_for_db
+from app.utils.insurance_eligibility import (
+    evaluate_claim_transaction_eligibility,
+    collect_reimbursed_source_tx_ids,
+)
 
 # Create blueprint
 student_bp = Blueprint('student', __name__, url_prefix='/student')
@@ -2185,24 +2189,45 @@ def file_claim(policy_id):
 
     eligible_transactions = []
     if policy.claim_type == 'transaction_monetary':
-        claimed_tx_subq = db.session.query(InsuranceClaim.transaction_id).filter(
-            InsuranceClaim.transaction_id.isnot(None)
-        )
-        cutoff_date = now_utc - timedelta(days=policy.claim_time_limit_days)
+        claim_time_limit_days = int(policy.claim_time_limit_days) if policy.claim_time_limit_days is not None else None
         tx_query = (
             Transaction.query
             .filter(Transaction.student_id == student.id)
             .filter(Transaction.is_void == False)
-            .filter(Transaction.timestamp >= cutoff_date)
-            .filter(~Transaction.id.in_(claimed_tx_subq))
+            .filter(Transaction.status == TransactionStatus.POSTED)
             .filter(Transaction.amount < Decimal('0'))
+            .filter(
+                ~func.lower(func.coalesce(Transaction.type, '')).in_(
+                    ['rent payment', 'insurance_premium', 'insurance_reimbursement', 'withdrawal', 'deposit']
+                )
+            )
         )
+        if claim_time_limit_days is not None and claim_time_limit_days > 0:
+            cutoff_date = now_utc - timedelta(days=claim_time_limit_days)
+            tx_query = tx_query.filter(Transaction.timestamp >= cutoff_date)
         if policy.teacher_id:
             tx_query = tx_query.filter(Transaction.teacher_id == policy.teacher_id)
-        if enrollment.coverage_start_date:
-            tx_query = tx_query.filter(Transaction.timestamp >= enrollment.coverage_start_date)
-
-        eligible_transactions = tx_query.order_by(Transaction.timestamp.desc()).all()
+        candidate_transactions = tx_query.order_by(Transaction.timestamp.desc()).all()
+        claimed_tx_ids = {
+            row[0]
+            for row in db.session.query(InsuranceClaim.transaction_id)
+            .filter(InsuranceClaim.transaction_id.isnot(None))
+            .all()
+            if row[0] is not None
+        }
+        reimbursed_tx_ids = collect_reimbursed_source_tx_ids(policy.id)
+        eligible_transactions = []
+        for tx in candidate_transactions:
+            tx_is_eligible, _reason = evaluate_claim_transaction_eligibility(
+                tx,
+                policy=policy,
+                enrollment=enrollment,
+                now_utc=now_utc,
+                claimed_tx_ids=claimed_tx_ids,
+                reimbursed_tx_ids=reimbursed_tx_ids,
+            )
+            if tx_is_eligible:
+                eligible_transactions.append(tx)
         form.transaction_id.choices = [
             (
                 tx.id,
@@ -2225,8 +2250,26 @@ def file_claim(policy_id):
                 flash("You must select a transaction for this claim type.", "danger")
                 return redirect(url_for('student.file_claim', policy_id=policy_id))
 
-            selected_transaction = next((tx for tx in eligible_transactions if tx.id == form.transaction_id.data), None)
+            selected_transaction = (
+                Transaction.query
+                .filter(Transaction.id == form.transaction_id.data)
+                .filter(Transaction.student_id == student.id)
+                .filter(Transaction.is_void == False)
+                .filter(Transaction.status == TransactionStatus.POSTED)
+                .filter(Transaction.amount < Decimal('0'))
+                .first()
+            )
             if not selected_transaction:
+                flash("Selected transaction is not eligible for claims.", "danger")
+                return redirect(url_for('student.file_claim', policy_id=policy_id))
+
+            transaction_is_eligible, _reason = evaluate_claim_transaction_eligibility(
+                selected_transaction,
+                policy=policy,
+                enrollment=enrollment,
+                now_utc=now_utc,
+            )
+            if not transaction_is_eligible:
                 flash("Selected transaction is not eligible for claims.", "danger")
                 return redirect(url_for('student.file_claim', policy_id=policy_id))
 

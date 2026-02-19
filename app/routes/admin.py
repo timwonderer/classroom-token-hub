@@ -29,7 +29,7 @@ from flask import (
 from urllib.parse import urlparse
 from sqlalchemy import desc, text, or_, and_, func
 from sqlalchemy.orm import joinedload
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import sqlalchemy as sa
 import pyotp
 import pytz
@@ -72,6 +72,19 @@ from app.utils.passwordless_client import (
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
 from app.attendance import get_last_payroll_time, calculate_unpaid_attendance_seconds, get_join_code_for_student_period
+from app.utils.insurance_eligibility import (
+    evaluate_claim_transaction_eligibility,
+    CLAIM_REASON_ALREADY_CLAIMED,
+    CLAIM_REASON_DELAY_USE_EXPIRED,
+    CLAIM_REASON_DELAY_USE_NOT_USED,
+    CLAIM_REASON_HARD_DENY_CATEGORY,
+    CLAIM_REASON_INTERNAL_TRANSFER,
+    CLAIM_REASON_PREMIUM_NOT_CURRENT,
+    CLAIM_REASON_REIMBURSEMENT_ALREADY_EXISTS,
+    CLAIM_REASON_TIME_LIMIT_EXCEEDED,
+    CLAIM_REASON_UNCLASSIFIED_TRANSACTION,
+    CLAIM_REASON_WAITING_PERIOD,
+)
 import time
 
 # Timezone
@@ -5090,6 +5103,28 @@ def process_claim(claim_id):
         if duplicate_claim:
             validation_errors.append("Another claim is already tied to this transaction")
 
+    if claim.policy.claim_type == 'transaction_monetary' and claim.transaction:
+        reason_to_message = {
+            CLAIM_REASON_HARD_DENY_CATEGORY: "Linked transaction category is never eligible for reimbursement",
+            CLAIM_REASON_INTERNAL_TRANSFER: "Internal transfer transactions are not eligible for reimbursement",
+            CLAIM_REASON_DELAY_USE_NOT_USED: "Delay-use purchase has not been used yet",
+            CLAIM_REASON_DELAY_USE_EXPIRED: "Delay-use purchase was used after expiration",
+            CLAIM_REASON_PREMIUM_NOT_CURRENT: "Premium payments are not current",
+            CLAIM_REASON_WAITING_PERIOD: "Coverage waiting period requirements are not satisfied",
+            CLAIM_REASON_TIME_LIMIT_EXCEEDED: "Claim is outside the filing time limit",
+            CLAIM_REASON_ALREADY_CLAIMED: "Another claim is already tied to this transaction",
+            CLAIM_REASON_REIMBURSEMENT_ALREADY_EXISTS: "A reimbursement already exists for this source transaction/policy",
+            CLAIM_REASON_UNCLASSIFIED_TRANSACTION: "Transaction could not be classified as eligible",
+        }
+        transaction_eligible, reason_code = evaluate_claim_transaction_eligibility(
+            claim.transaction,
+            policy=claim.policy,
+            enrollment=enrollment,
+            now_utc=utc_now(),
+        )
+        if not transaction_eligible:
+            validation_errors.append(reason_to_message.get(reason_code, "Linked transaction is not eligible"))
+
     incident_reference = claim.transaction.timestamp if claim.policy.claim_type == 'transaction_monetary' and claim.transaction else claim.incident_date
     # Ensure timezone-aware comparison
     if incident_reference and incident_reference.tzinfo is None:
@@ -5188,6 +5223,17 @@ def process_claim(claim_id):
             if claim.transaction_id:
                 transaction_description += f" linked to transaction #{claim.transaction_id}"
 
+            existing_reimbursement = Transaction.query.filter(
+                Transaction.type == 'insurance_reimbursement',
+                Transaction.original_transaction_id == claim.transaction_id,
+                Transaction.policy_id == claim.policy.id,
+                Transaction.is_void == False,
+            ).first()
+            if existing_reimbursement:
+                flash("Reimbursement already exists for this source transaction and policy.", "danger")
+                db.session.rollback()
+                return redirect(url_for('admin.process_claim', claim_id=claim_id))
+
             # CRITICAL FIX: Get join_code from the student's insurance enrollment
             student_insurance = db.session.get(StudentInsurance, claim.student_insurance_id)
             join_code = student_insurance.join_code if student_insurance else None
@@ -5200,6 +5246,8 @@ def process_claim(claim_id):
                 account_type='checking',
                 status=TransactionStatus.PENDING,
                 type='insurance_reimbursement',
+                original_transaction_id=claim.transaction_id,
+                policy_id=claim.policy.id,
                 description=transaction_description,
             )
             db.session.add(transaction)
@@ -5211,7 +5259,15 @@ def process_claim(claim_id):
         elif new_status == 'rejected':
             flash("Claim has been rejected.", "warning")
 
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError as exc:
+            db.session.rollback()
+            if 'uq_insurance_reimbursement_source_policy' in str(exc.orig):
+                flash("Reimbursement already exists for this source transaction and policy.", "danger")
+            else:
+                flash("Could not process the claim due to a concurrent update. Please retry.", "danger")
+            return redirect(url_for('admin.process_claim', claim_id=claim_id))
         return redirect(url_for('admin.insurance_management'))
 
     return render_template('admin_process_claim.html',
