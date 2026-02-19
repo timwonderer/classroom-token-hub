@@ -9,6 +9,7 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Added
+- **Admin Transaction Backfill** — One-time remediation page (`/admin/backfill-transactions`) that lets teachers fix student balances when past transactions lack a class-period `join_code`. Detected automatically on dashboard load; teachers select the correct period for each affected student and the system links all orphaned transactions to the right class context.
 - **Interactive Project Timeline** — New `/docs/timeline` page showcasing the full development history of Classroom Token Hub
   - Visual vertical timeline organized into four eras: Genesis, Crisis Resolution, Feature Expansion, and Refinement
   - Filter bar: All / Features / Fixes & Crises / Security / Architecture / Philosophy
