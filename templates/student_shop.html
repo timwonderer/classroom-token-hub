@@ -27,9 +27,11 @@
         {% if items %}
         <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
             {% for item in items %}
-            {% set rent_item_type = rent_item_type_by_store_id.get(item.id) %}
-            {% set is_rent_perk_item = rent_item_type is not none or item.is_rent_linked %}
-            {% set is_rent_covered = has_paid_rent and rent_item_type == 'privilege' %}
+            {% set rent_item_types = rent_item_types_by_store_id.get(item.id, []) %}
+            {% set is_privilege_rent_item = 'privilege' in rent_item_types %}
+            {% set is_per_use_rent_item = 'per_use' in rent_item_types %}
+            {% set is_rent_perk_item = (rent_item_types|length > 0) or item.is_rent_linked %}
+            {% set is_rent_covered = has_paid_rent and is_privilege_rent_item and not is_per_use_rent_item %}
             {% set rent_free_uses_remaining = rent_free_uses.get(item.id) %}
             {% set has_rent_free_purchase = rent_free_uses_remaining is not none and (rent_free_uses_remaining == -1 or rent_free_uses_remaining > 0) %}
             <div class="col">

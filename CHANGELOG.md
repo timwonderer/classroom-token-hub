@@ -39,6 +39,11 @@ and this project follows semantic versioning principles.
 - **`open_tickets` stat** on dashboard - Shows sum of new user reports + pending/in-review escalated issues
 
 ### Fixed
+- **Student rent/shop regression follow-up** - Addressed review-driven cleanup after the rent/store hotfix
+  - Added shared helper logic for determining whether a student's current rent coverage period is paid, and reused it across student rent/shop and API purchase flows to reduce duplicated validation code
+  - Kept incremental rent payment form available when incremental mode is enabled (even when full remaining balance exceeds checking), so partial payments are not blocked in the UI
+  - Corrected mixed rent-link behavior in student shop so privilege-only rent items are deactivated while per-use rent perks remain purchasable at `$0`
+  - Made the mixed rent-link regression test time-independent by using a relative due date instead of a fixed calendar date
 - **P0: Duplicate auto-tap-out events causing payroll overpayment** - Added idempotency check to prevent race conditions when multiple sources (student browser polling, scheduled job, admin dashboard) call auto-tap-out logic simultaneously. Previously, duplicate "Daily limit reached" tap-out events would be created, causing payroll to count the same session multiple times and resulting in massive overpayment. Now checks if a daily limit tap-out already exists before creating a new one. Includes cleanup script (`cleanup_duplicate_tapouts.py`) to fix existing duplicate records. See `DUPLICATE_TAPOUT_BUG_REPORT.md` for full details.
 - **Void redemption creating transactions without join_code** - Fixed `/api/reject-redemption` endpoint creating refund transactions with `join_code=NULL` when voiding redemptions for legacy StudentItem records. Added fallback logic to resolve join_code from TeacherBlock or current session when StudentItem.join_code is NULL, preventing balance fix warnings for teachers. This resolves the "Fix Student Balances" alert appearing after voiding old redemptions.
 - **Void transaction CSRF 400 error** - Fixed student detail page void transaction button failing with 400 error. Added missing X-CSRFToken header to fetch request in `voidTransaction()` JavaScript function. Teachers can now successfully void transactions from student detail pages.

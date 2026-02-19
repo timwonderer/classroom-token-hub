@@ -27,7 +27,13 @@ from app.models import (
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
-from app.routes.student import get_current_class_context, get_current_teacher_id, get_rent_settings_for_context
+from app.routes.student import (
+    get_current_class_context,
+    get_current_teacher_id,
+    get_rent_settings_for_context,
+    _calculate_rent_coverage_due_date,
+    _is_student_coverage_period_paid,
+)
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
@@ -266,8 +272,8 @@ def purchase_item():
             return jsonify({"status": "error", "message": "You have already purchased this whole class goal item."}), 400
 
     # Check rent late restrictions
-    from app.models import RentSettings, RentPayment, RentItem
-    from datetime import datetime, timedelta
+    from app.models import RentSettings, RentItem
+    from datetime import timedelta
 
     rent_settings = get_rent_settings_for_context(context)
     current_block = context.get('block', '').strip().upper()
@@ -276,20 +282,15 @@ def purchase_item():
     per_use_rent_item = None
 
     if rent_settings and rent_settings.is_enabled:
-        from app.routes.student import _calculate_rent_coverage_due_date, _filter_valid_rent_payments, _is_coverage_period_paid
         coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
         if coverage_due_date:
-            coverage_month = coverage_due_date.month
-            coverage_year = coverage_due_date.year
-            coverage_payments = RentPayment.query.filter(
-                RentPayment.student_id == student.id,
-                RentPayment.period == current_block,
-                RentPayment.coverage_month == coverage_month,
-                RentPayment.coverage_year == coverage_year,
-                RentPayment.join_code == join_code
-            ).all()
-            valid_payments = _filter_valid_rent_payments(coverage_payments, student.id, join_code)
-            has_paid_rent = _is_coverage_period_paid(rent_settings, valid_payments, coverage_due_date)
+            has_paid_rent = _is_student_coverage_period_paid(
+                rent_settings,
+                student.id,
+                current_block,
+                join_code,
+                coverage_due_date,
+            )
 
         per_use_rent_item = RentItem.query.filter(
             RentItem.rent_setting_id == rent_settings.id,
@@ -311,16 +312,13 @@ def purchase_item():
 
             # Check if past grace period
             if now > grace_end_date:
-                coverage_payments = RentPayment.query.filter(
-                    RentPayment.student_id == student.id,
-                    RentPayment.period == current_block,
-                    RentPayment.coverage_month == coverage_month,
-                    RentPayment.coverage_year == coverage_year,
-                    RentPayment.join_code == join_code
-                ).all()
-
-                valid_payments = _filter_valid_rent_payments(coverage_payments, student.id, join_code)
-                is_paid_for_coverage = _is_coverage_period_paid(rent_settings, valid_payments, coverage_due_date)
+                is_paid_for_coverage = _is_student_coverage_period_paid(
+                    rent_settings,
+                    student.id,
+                    current_block,
+                    join_code,
+                    coverage_due_date,
+                )
 
                 # Student is late if they haven't fully settled the coverage period
                 if not is_paid_for_coverage:
