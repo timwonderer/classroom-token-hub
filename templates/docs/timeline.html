@@ -463,7 +463,12 @@
             <div class="tl-entry" data-tags="philosophy architecture">
                 <div class="tl-dot dot-philosophy"></div>
                 <div class="tl-card">
-                    <div class="tl-card-header" onclick="toggleCard(this)">
+                    <div class="tl-card-header"
+                         role="button"
+                         tabindex="0"
+                         aria-expanded="false"
+                         onclick="toggleCard(this); this.setAttribute('aria-expanded', this.getAttribute('aria-expanded') === 'true' ? 'false' : 'true');"
+                         onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.click(); }">
                         <span class="tl-version-badge badge-era">Genesis</span>
                         <div class="tl-meta">
                             <div class="tl-title">The Original Problem &amp; Design Decisions</div>
