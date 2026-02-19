@@ -14,6 +14,7 @@ The classroom economy application has **CRITICAL multi-tenancy data leaks** that
 > The class join code should be the source of truth of how students are associated with a class. When student switch between classes, the join code is what determines the content they see, not teacher. Always use join code (scoped to specific class) as absolute source of truth.
 
 **CURRENT IMPLEMENTATION:**
+
 - Uses `teacher_id` stored in session as primary filter
 - Allows students to see aggregated data across ALL their classes
 - No proper join-code-based data isolation
@@ -179,6 +180,7 @@ def get_current_teacher_id():
 **Impact:** Hall passes are shared across all classes instead of per-class.
 
 **Fix Required:** Either:
+
 - Store hall passes per teacher in a separate table
 - Add JSON column tracking per-teacher hall pass counts
 

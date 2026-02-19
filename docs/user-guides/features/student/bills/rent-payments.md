@@ -19,6 +19,7 @@ Go to **Bills** from the student sidebar.
 ## Understanding Rent Coverage
 
 Rent payments now cover a specific date range, known as your **Coverage Period**.
+
 - **Start Date:** The rent due date the payment is applied to.
 - **End Date:** The day before the next rent due date.
 

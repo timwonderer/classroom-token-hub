@@ -19,6 +19,7 @@ Go to **Classroom > Students**.
 
 ## Add students
 You can add students with two methods:
+
 - Bulk upload with the template CSV for full rosters.
 - Individual add for single student updates.
 

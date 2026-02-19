@@ -80,6 +80,7 @@ prompt: |
 ```
 
 **Attack Vector:**
+
 - Trigger: Any user creates an issue (public trigger)
 - Injection: Malicious prompt in issue title/body
 - Execution: AI executes embedded commands
@@ -104,6 +105,7 @@ See `docs/security/PROMPTPWND_REMEDIATION.md` for full details.
 **Status:**  **OPEN** (High Priority)
 **Severity:** CRITICAL (CVSS 8.1)
 **Location:**
+
 - `.github/workflows/deploy.yml:35`
 - `.github/workflows/toggle-maintenance.yml:67`
 
@@ -391,11 +393,13 @@ def get_tips(user_type):
 #### Analysis
 
 **Pros:**
+
 - Legitimate use case (called on every login page)
 - Response is static (minimal server load)
 - No database queries involved
 
 **Cons:**
+
 - Can be abused for bandwidth attacks
 - No protection against automated abuse
 
@@ -490,6 +494,7 @@ current_app.logger.info(f" Admin access attempt: session = {dict(session)}")
 ```
 
 This logs the entire session dictionary, which may contain:
+
 - Session IDs
 - User identifiers
 - CSRF tokens
@@ -640,6 +645,7 @@ csrf.init_app(app)
 ```
 
 All forms include CSRF tokens (verified via grep):
+
 - 72 files contain CSRF token references
 - All POST/PUT/DELETE routes protected
 
@@ -657,6 +663,7 @@ All forms include CSRF tokens (verified via grep):
 The application uses SQLAlchemy ORM exclusively, preventing SQL injection:
 
 **No dangerous patterns found:**
+
 -  No raw SQL with string interpolation
 -  No `.execute()` with f-strings
 -  All queries use parameterized ORM methods
@@ -738,6 +745,7 @@ class PIIEncryptedType(TypeDecorator):
 ```
 
 **Encryption Key Management:**
+
 - Key stored in environment variable (`ENCRYPTION_KEY`)
 - Required to start application (validated in `app/__init__.py:23`)
 - Uses Fernet (AES-128-CBC with HMAC-SHA256)
@@ -771,11 +779,13 @@ teacher_id = context['teacher_id']
 ```
 
 **Security Benefits:**
+
 - Prevents data leakage between class periods
 - Students in multiple periods see only current period data
 - Teacher with multiple periods sees only selected period
 
 **Documented Extensively:**
+
 - `.claude/rules/multi-tenancy.md`
 - `docs/security/MULTI_TENANCY_AUDIT.md`
 - `../ai/CLAUDE.md` (Golden Rule)

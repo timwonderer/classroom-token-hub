@@ -11,22 +11,26 @@ searchable: false
 
 ### What are "Legacy Classes"?
 Legacy classes are classes that were created before the join code system was implemented. These classes have:
+
 -  Student records in the database
 -  NO TeacherBlock entries (seats)
 
 ### How Join Codes Work for Legacy Classes
 When a teacher with legacy students views their students page, the system:
+
 1. Detects that students exist but there are no TeacherBlock entries
 2. Automatically generates a join code for that block
 3. Creates a **placeholder TeacherBlock entry** to store the join code
 
 ### The Problem
 The placeholder TeacherBlock entry had these properties:
+
 - `first_name = "__JOIN_CODE_PLACEHOLDER__"` (special marker)
 - `is_claimed = False` (not claimed, since it's just a placeholder)
 - Used only to store the join code, NOT a real student seat
 
 The badge counting logic counted ALL `is_claimed=False` entries, including placeholders. This caused:
+
 -  Badge showing "1 unclaimed" when no real students were waiting
 -  Confusing UI for teachers (looked like a student hadn't claimed their account)
 
@@ -120,6 +124,7 @@ Block A (badge showing "1 unclaimed")
  **YES** - Students can sign in using join codes for legacy classes.
 
 The tests confirm:
+
 1. Join codes are generated and persisted for legacy classes
 2. Students can successfully claim accounts using these join codes
 3. The claim flow works correctly (redirects to username creation)
@@ -127,6 +132,7 @@ The tests confirm:
 
 ### Why the Issue Title Mentioned "Cannot Sign In"
 The issue title may have been:
+
 - Referring to the confusing badge display (making it seem like something was broken)
 - Or describing a transient state before join codes were fully implemented
 - The actual blocking issue was the **incorrect badge count**, not the sign-in functionality
@@ -134,6 +140,7 @@ The issue title may have been:
 ## Conclusion
 
 This fix ensures that:
+
 1.  Legacy classes show correct badge counts
 2.  Students can claim accounts using join codes
 3.  Real unclaimed seats are still tracked properly

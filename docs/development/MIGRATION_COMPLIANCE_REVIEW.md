@@ -157,6 +157,7 @@ def upgrade():
 ```
 
 **Why this is good:**
+
 - ✅ Defines helper function
 - ✅ Checks before adding
 - ✅ Informative logging
@@ -166,6 +167,7 @@ def upgrade():
 ### ✅ Excellent Example: `w2x3y4z5a6b7_add_teacher_id_to_settings_tables.py`
 
 This migration (reviewed earlier) demonstrates:
+
 - ✅ `column_exists()` helper
 - ✅ `foreign_key_exists()` helper
 - ✅ Checks before adding columns
@@ -260,6 +262,7 @@ Section: "Core Principle: Migrations Must Be Idempotent"
 Section 3.4: "Migration Robustness"
 
 Checklist items:
+
 - ❌ No constraint names are hardcoded
   - **Status:** VIOLATED (at least 1 migration uses hardcoded constraint name)
 - ❌ Constraints are discovered dynamically via inspection
@@ -282,6 +285,7 @@ Section 3.1: "Constraint Name Agnosticism"
 ### Are There Breaking Changes?
 
 **Definition of Breaking Change (per policy):**
+
 - Dropping or renaming a column
 - Dropping or renaming a table
 - Removing or changing foreign keys
@@ -290,6 +294,7 @@ Section 3.1: "Constraint Name Agnosticism"
 **Analysis of Recent Work:**
 
 ✅ **NO BREAKING CHANGES DETECTED** in:
+
 - Last 10 commits
 - Current working tree
 - Recent migrations
@@ -555,11 +560,13 @@ if __name__ == '__main__':
 **Approach:** Add idempotency checks to the 40+ non-compliant migrations.
 
 **Strategy:**
+
 1. Create a script to automatically add helpers to migrations
 2. Manually review each migration's upgrade/downgrade
 3. Test each migration individually
 
 **DO NOT** edit old migrations that have been deployed to production. Instead:
+
 - Document which migrations lack idempotency in this report
 - Add checks to NEW migrations going forward
 - For production: maintain a "skip list" of migrations that must be manually handled
@@ -706,12 +713,14 @@ However, the **comprehensive audit** revealed:
 Until all migrations are retrofitted:
 
 **For Production Deployments:**
+
 1. Maintain manual checklist of non-idempotent migrations
 2. Verify database state before running migrations
 3. Have rollback plan ready
 4. Test migrations on staging clone first
 
 **For Development:**
+
 1. Use migration linter on all new migrations
 2. Make idempotency helpers mandatory in PR reviews
 3. Add migration quality to code review checklist

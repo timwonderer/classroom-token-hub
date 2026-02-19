@@ -38,6 +38,7 @@ flask fix-missing-teacher-blocks
 ### Expected Output
 
 The command will:
+
 - Show how many students need fixing
 - List the first 10 students needing TeacherBlock entries
 - Create TeacherBlock entries for each student
@@ -105,6 +106,7 @@ After running the fix, you can verify it worked by:
    ```
 
    You should now see:
+
    - `Total TeacherBlock entries: 210` (27 existing + 183 new)
    - `Claimed: 183` (instead of 0)
    - The "Students WITH accounts but NO claimed TeacherBlock" warning should be gone
@@ -138,6 +140,7 @@ Add fix-missing-teacher-blocks CLI command
 ### Why This Happened
 
 The TeacherBlock system was added to support:
+
 - Join code-based account claiming (eliminates need for students to know teacher name)
 - Multi-school support (join codes implicitly partition schools)
 - Duplicate prevention (same student claiming across multiple teachers)
@@ -147,6 +150,7 @@ Legacy students who existed before this system (or were migrated improperly) hav
 ### The TeacherBlock Model
 
 Each TeacherBlock represents a "seat" in a teacher's period/block:
+
 - `teacher_id`: Which teacher owns this roster
 - `block`: Which period/block this is for
 - `student_id`: Which student claimed this seat (NULL if unclaimed)

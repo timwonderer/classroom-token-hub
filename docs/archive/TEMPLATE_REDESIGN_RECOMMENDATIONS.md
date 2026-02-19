@@ -9,12 +9,14 @@ This document outlines templates that have been redesigned or could benefit from
 **Status:**  Redesigned (2025-12-16)
 
 **Previous Issues:**
+
 - 2x2 grid layout caused severe overflow in the "Rules & Bundles" card
 - Grouped insurance section was too large for a single card
 - Page required horizontal scrolling on smaller screens
 - All sections always visible, making the page feel overwhelming
 
 **Redesign Approach:**
+
 - Changed from 2x2 grid to vertical stacked layout
 - Kept frequently-edited sections always visible:
   - Basic Information
@@ -29,6 +31,7 @@ This document outlines templates that have been redesigned or could benefit from
 - Better visual hierarchy and scannability
 
 **Benefits:**
+
 - No more overflow issues
 - Cleaner, more focused interface
 - Users only see what they need
@@ -60,6 +63,7 @@ This document outlines templates that have been redesigned or could benefit from
 **Status:**  Redesigned (2025-12-16)
 
 **Redesign Approach:**
+
 - Grouped settings into collapsible Accordion sections:
   - Rent Amount & Frequency (default open)
   - Due Date Settings
@@ -75,10 +79,12 @@ This document outlines templates that have been redesigned or could benefit from
 **Current Status:** Well-structured with tabs
 
 **Current Structure:**
+
 - Tab interface: Overview, Transactions, Settings
 - Settings tab is complex but organized
 
 **Recommended Changes:**
+
 - Optional: Group settings into collapsible sections:
   - Interest Settings
   - Overdraft Protection
@@ -94,10 +100,12 @@ This document outlines templates that have been redesigned or could benefit from
 **Current Status:** Good structure
 
 **Current Structure:**
+
 - Tab interface with feature cards
 - Each feature is a card with toggle
 
 **Recommended Changes:**
+
 - Could apply color-coding from insurance template for consistency
 - Could collapse feature cards that are disabled
 - Current design is already good
@@ -143,6 +151,7 @@ Based on the successful insurance policy redesign, use this pattern for complex 
 ## Implementation Checklist
 
 For any template redesign:
+
 - [ ] Read existing template and identify sections
 - [ ] Determine which sections are:
   - Always needed (keep visible)

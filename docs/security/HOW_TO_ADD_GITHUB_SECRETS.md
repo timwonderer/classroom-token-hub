@@ -129,6 +129,7 @@ Name *
 [________________]
 ```
 Type exactly: `KNOWN_HOSTS`
+
 - Must be ALL CAPS
 - Must be spelled exactly like this
 - No spaces
@@ -151,6 +152,7 @@ Paste the **ENTIRE contents** from Step 1.
 ```
 
 **Important:**
+
 - Include ALL lines (usually 2-4 lines)
 - Include the entire line including the `|1|...=` prefix
 - Do NOT add extra spaces or line breaks
@@ -232,6 +234,7 @@ git push
 **Option A:** Push a commit to main (triggers deploy.yml automatically)
 
 **Option B:** Manually trigger a workflow
+
 1. Go to: **Actions** tab in GitHub
 2. Click on **"Deploy to DO on push to main"** workflow
 3. Click **"Run workflow"** dropdown
@@ -266,6 +269,7 @@ Warning: Permanently added 'xxx.xxx.xxx.xxx' (ED25519) to the list of known host
 **Problem:** GitHub doesn't accept the secret name
 
 **Solution:**
+
 - Make sure it's exactly: `KNOWN_HOSTS` (all caps, underscore)
 - No leading/trailing spaces
 - No special characters
@@ -275,6 +279,7 @@ Warning: Permanently added 'xxx.xxx.xxx.xxx' (ED25519) to the list of known host
 **Problem:** The script didn't get any host keys
 
 **Possible causes:**
+
 1. Server IP is wrong
 2. Server is not reachable
 3. SSH is not running on port 22
@@ -297,11 +302,13 @@ ssh root@YOUR_SERVER_IP
 **Problem:** Workflow still fails with host key error
 
 **Possible causes:**
+
 1. Secret wasn't added correctly
 2. Secret has wrong content
 3. Workflow file wasn't updated
 
 **Solution:**
+
 1. **Verify secret exists:**
    - Go to Settings → Secrets and variables → Actions
    - Look for `KNOWN_HOSTS` in the list
@@ -328,6 +335,7 @@ ssh root@YOUR_SERVER_IP
 **Problem:** Workflow can't read the secret
 
 **Solution:**
+
 - Make sure workflow has `environment: production` (if using environments)
 - Check repository settings → Actions → General → Workflow permissions
 - Ensure "Read and write permissions" is enabled
@@ -337,10 +345,12 @@ ssh root@YOUR_SERVER_IP
 **Problem:** Don't see the option in Settings
 
 **Possible causes:**
+
 - You don't have admin access to the repository
 - Wrong repository (looking at a fork?)
 
 **Solution:**
+
 1. Make sure you're the repository owner or have admin access
 2. Check you're on the correct repository
 3. URL should be: `https://github.com/YOUR_USERNAME/YOUR_REPO/settings`

@@ -61,6 +61,7 @@
 **File**: `seed_multi_tenancy_test_data.py`
 
 **Creates**:
+
 - 4 teachers with 10 total class periods
 - 15 students with varied enrollment patterns
 - ~250 transactions (all with join_code!)
@@ -78,6 +79,7 @@ python seed_multi_tenancy_test_data.py
 **File**: `SEEDING_INSTRUCTIONS.md`
 
 Includes:
+
 - Step-by-step testing workflow
 - SQL queries for verification
 - Validation checklist
@@ -206,6 +208,7 @@ Follow the workflow in `SEEDING_INSTRUCTIONS.md`:
 ### 6. Success Criteria
 
 Must see ALL of these:
+
 -  All new transactions have join_code populated
 -  Balances calculated per join_code (not aggregated)
 -  Transactions filtered by current join_code
@@ -346,6 +349,7 @@ Rent Settings: 10 (one per period)
 
 ### Quick Rollback Plan
 If critical issues found:
+
 1. Do NOT run in production yet
 2. Document the specific issue
 3. Check if it's a deployment issue or code issue

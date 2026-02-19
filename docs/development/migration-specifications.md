@@ -23,6 +23,7 @@
 ### Core Principle: Migrations Must Be Idempotent
 
 **Idempotent migrations** can be run multiple times without causing errors or data corruption. This is critical because:
+
 1.  Schema changes may have been applied manually in production to fix urgent issues.
 2.  Previous migration runs may have partially completed before failing.
 3.  The same migration may exist in multiple branches that get merged.
@@ -123,6 +124,7 @@ Use descriptive names that clearly state changes:
 #### 1. Adding a Required Field to Existing Table
 **Problem:** Cannot add `nullable=False` to a table with existing data.
 **Solution:**
+
 1.  Add column as `nullable=True`.
 2.  Backfill data (UPDATE).
 3.  Alter column to `nullable=False`.
@@ -170,11 +172,13 @@ def upgrade():
 This gate is **PR‑blocking**.
 
 **Applies when:**
+
 - Dropping/Renaming columns or tables
 - Removing/Changing Foreign Keys
 - Replacing relations
 
 **PR Classification:**
+
 - [ ] **EXPAND** – Additive, backward-compatible
 - [ ] **CONTRACT (CODE ONLY)** – Model attribute removal
 - [ ] **CONTRACT (DATABASE)** – Destructive migration
@@ -182,16 +186,19 @@ This gate is **PR‑blocking**.
 ### Schema Contraction Policy ("Expand and Contract")
 
 **Phase 1: Expand (Release N)**
+
 - New elements exist alongside legacy.
 - Application supports both.
 - NO destructive migrations.
 
 **Phase 2: Contract Code (Release N+1)**
+
 - Legacy removed from Code models.
 - DB column remains.
 - Application operates without legacy.
 
 **Phase 3: Contract Database (Release N+2)**
+
 - Migration drops legacy column/table.
 - Isolated migration.
 
@@ -243,6 +250,7 @@ for fk in inspector.get_foreign_keys('students'):
 **Registry:** `docs/development/DEPRECATED_SYMBOLS.txt`
 
 **Deprecated Patterns:**
+
 - `datetime.utcnow()` → `datetime.now(datetime.UTC)`
 - `Query.get()` → `db.session.get(Model, id)`
 

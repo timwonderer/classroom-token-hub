@@ -47,6 +47,7 @@ default_rent = 2.25 × CWI
 ```
 
 **Implementation:**
+
 - **Location:** `app/utils/economy_balance.py`
 - **Constants:**
   ```python
@@ -54,6 +55,7 @@ default_rent = 2.25 × CWI
   RENT_MAX_RATIO = 2.5
   RENT_DEFAULT_RATIO = 2.25
   ```
+
 - **Validation:** `check_rent_balance()` method
 - **UI Integration:** Rent Settings page with real-time validation
 - **Block-Scoped:** Yes - different rent per block supported
@@ -80,6 +82,7 @@ default_utilities = 0.25 × CWI
 ```
 
 **Implementation:**
+
 - **Location:** `app/utils/economy_balance.py`
 - **Constants:**
   ```python
@@ -87,6 +90,7 @@ default_utilities = 0.25 × CWI
   UTILITIES_MAX_RATIO = 0.30
   UTILITIES_DEFAULT_RATIO = 0.25
   ```
+
 - **Recommendations:** Included in API response
 - **UI Integration:** Not yet implemented (utilities feature pending)
 
@@ -112,6 +116,7 @@ default_premium = 0.08 × CWI
 ```
 
 **Implementation:**
+
 - **Location:** `app/utils/economy_balance.py`
 - **Constants:**
   ```python
@@ -119,6 +124,7 @@ default_premium = 0.08 × CWI
   INSURANCE_MAX_RATIO = 0.12
   INSURANCE_DEFAULT_RATIO = 0.08
   ```
+
 - **Validation:** `check_insurance_balance()` method
 - **UI Integration:** Insurance Policy Editor with real-time validation
 - **Frequency Normalization:** Premiums normalized to weekly for comparison
@@ -153,6 +159,7 @@ default_fine = 0.10 × CWI
 ```
 
 **Implementation:**
+
 - **Location:** `app/utils/economy_balance.py`
 - **Constants:**
   ```python
@@ -160,6 +167,7 @@ default_fine = 0.10 × CWI
   FINE_MAX_RATIO = 0.15
   FINE_DEFAULT_RATIO = 0.10
   ```
+
 - **Validation:** `check_fines_balance()` method
 - **UI Integration:** API available, full UI integration pending
 - **Block-Scoped:** No (global amounts)
@@ -187,6 +195,7 @@ LUXURY:   0.25–0.50 × CWI
 ```
 
 **Implementation:**
+
 - **Location:** `app/utils/economy_balance.py`
 - **Constants:**
   ```python
@@ -197,6 +206,7 @@ LUXURY:   0.25–0.50 × CWI
       PricingTier.LUXURY: (0.25, 0.50),
   }
   ```
+
 - **Validation:** `check_store_items_balance()` method
 - **UI Integration:** Store Item Editor with tier display
 - **Block-Scoped:** No (global pricing, visibility-based block control)
@@ -223,12 +233,14 @@ weekly_savings >= 0.10 × CWI
 ```
 
 **Implementation:**
+
 - **Location:** `app/utils/economy_balance.py`
 - **Method:** `calculate_budget_survival()`
 - **Constant:**
   ```python
   MIN_WEEKLY_SAVINGS_RATIO = 0.10
   ```
+
 - **Store Spending Estimate:** 15% of CWI (conservative)
 - **Rent Normalization:** Supports all frequency types
 - **Insurance:** Uses cheapest active policy
@@ -253,11 +265,13 @@ weekly_savings = $75 - $168.75 - $6 - $11.25 = -$111
 **Specification:** Global rule ensuring economic stability
 
 **Implementation:**
+
 - **Deviation Thresholds:**
   ```python
   MINOR_DEVIATION_THRESHOLD = 0.15  # 15% = WARNING
   MAJOR_DEVIATION_THRESHOLD = 0.30  # 30% = CRITICAL
   ```
+
 - **Warning Levels:** INFO, WARNING, CRITICAL
 - **Validation:** All features checked against thresholds
 
@@ -272,14 +286,17 @@ weekly_savings = $75 - $168.75 - $6 - $11.25 = -$111
 **Impact:** Wrong CWI for different blocks/classes
 
 **Problem:**
+
 - JavaScript `analyzeEconomy()` didn't accept or send block parameter
 - Teachers with different pay rates per block saw incorrect CWI
 
 **Fix:**
+
 - Updated `economy-balance.js` to accept `block` parameter
 - Updated templates to pass current block: `analyzeEconomy(hours, block)`
 
 **Files Changed:**
+
 - `static/js/economy-balance.js`
 - `templates/admin_payroll.html`
 - `templates/admin_rent_settings.html`
@@ -291,6 +308,7 @@ weekly_savings = $75 - $168.75 - $6 - $11.25 = -$111
 **Impact:** Wrong payroll settings used for CWI calculation
 
 **Problem:**
+
 - `api_economy_analyze` endpoint didn't filter PayrollSettings by block
 - Even when block provided, used first payroll setting found
 
@@ -305,6 +323,7 @@ if block:
 ```
 
 **Files Changed:**
+
 - `app/routes/admin.py` (api_economy_analyze)
 - `app/routes/admin.py` (api_economy_validate)
 
@@ -315,6 +334,7 @@ if block:
 **Impact:** CWI not updating after changing expected weekly hours
 
 **Problem:**
+
 - API defaulted to 5.0 hours when `expected_weekly_hours` not in request
 - Pages didn't send this parameter, so DB updates were ignored
 
@@ -327,6 +347,7 @@ else:
 ```
 
 **Files Changed:**
+
 - `app/routes/admin.py` (api_economy_analyze)
 
 **User Impact:** "CWI wasn't updating once I changed it on payroll page" - NOW FIXED
@@ -338,6 +359,7 @@ else:
 **Impact:** Rent settings showed wrong CWI for selected block
 
 **Problem:**
+
 - `admin_rent_settings.html` didn't pass `settings_block` to `analyzeEconomy()`
 
 **Fix:**
@@ -347,6 +369,7 @@ economyChecker.analyzeEconomy(null, currentBlock).then(analysis => {
 ```
 
 **Files Changed:**
+
 - `templates/admin_rent_settings.html`
 
 ---
@@ -356,6 +379,7 @@ economyChecker.analyzeEconomy(null, currentBlock).then(analysis => {
 **Impact:** Payroll Overview tab showed wrong CWI when class selector changed
 
 **Problem:**
+
 - `admin_payroll.html` didn't retrieve and pass `cwi_block_input` value
 
 **Fix:**
@@ -365,6 +389,7 @@ const analysis = await cwiChecker.analyzeEconomy(expectedHours, currentBlock);
 ```
 
 **Files Changed:**
+
 - `templates/admin_payroll.html`
 
 ---
@@ -418,6 +443,7 @@ const analysis = await cwiChecker.analyzeEconomy(expectedHours, currentBlock);
 - **Fines:** Same amounts for all blocks
 
 **Design Rationale:**
+
 - Block-scoped features allow specialty schools (e.g., AP vs Regular classes) to have different economies
 - Global features maintain simplicity where per-block variation isn't needed
 - Visibility control allows showing/hiding features per block without duplicating data
@@ -499,6 +525,7 @@ Per AGENTS specification requirements:
 All features from the AGENTS financial setup document have been correctly implemented and are performing to specification. The 5 critical bugs identified during this review have been fixed, ensuring accurate block-scoped CWI calculations.
 
 The economy balancing system is production-ready and provides:
+
 - Accurate CWI calculations per block/class
 - Real-time validation and recommendations
 - Budget survival testing

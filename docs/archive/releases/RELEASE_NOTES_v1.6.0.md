@@ -45,6 +45,7 @@ Fixed critical bug where `HallPassSettings` records were created without `teache
 **Impact**: This could cause hall pass settings to be shared across teachers or fail to create entirely.
 
 **Resolution**:
+
 - Fixed `/api/hall-pass/settings` endpoint to scope settings by `teacher_id` from session
 - Fixed hall pass creation in `/tap` endpoint to retrieve `teacher_id` from `join_code` via `TeacherBlock` lookup
 - All `HallPassSettings` queries now properly scoped by `teacher_id` and `block`
@@ -175,6 +176,7 @@ Thank you to everyone who contributed to this release through code, testing, and
 ## Next Steps
 
 See [DEVELOPMENT.md](../../DEVELOPMENT.md) for the roadmap toward v1.7.0, which will focus on:
+
 - Completing collective goals feature in store system
 - Enhanced analytics and reporting
 - Continued security hardening

@@ -27,6 +27,7 @@ Each class section has a join code. Students must enter the join code when claim
 
 ## Keep roster data aligned
 The roster fields you enter are the exact values students must use to claim accounts. The key fields are:
+
 - First name
 - Last name
 - Date of birth

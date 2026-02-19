@@ -55,6 +55,7 @@ git show 261ec98:app/models.py | sed -n '512,517p'
 ```
 
 **Review Checklist:**
+
 - [ ] Unique constraint correctly targets `transaction_id` column
 - [ ] Constraint name is descriptive: `uq_insurance_claims_transaction_id`
 - [ ] No conflicts with existing constraints
@@ -68,6 +69,7 @@ git diff 584ac5f..261ec98 -- app/routes/student.py
 ```
 
 **Review Checklist:**
+
 - [ ] Row-level locking uses `with_for_update()` correctly
 - [ ] SQLite compatibility check is present (SQLite doesn't support FOR UPDATE)
 - [ ] IntegrityError exception handling is correct
@@ -77,6 +79,7 @@ git diff 584ac5f..261ec98 -- app/routes/student.py
 - [ ] Logic flow prevents duplicate claims in all cases
 
 **Key Questions:**
+
 1. Does the locking prevent race conditions between concurrent requests?
 2. Is the SQLite fallback acceptable for development/testing?
 3. Are there any edge cases where duplicate claims could still occur?
@@ -92,12 +95,14 @@ git diff 584ac5f..b7706d7 -- app/routes/admin.py | grep -A 20 "P0-3"
 **Review Checklist:**
 
 *P0-2 Void Transaction Check:*
+
 - [ ] Validation runs before claim approval
 - [ ] Checks both claim type AND transaction existence AND void status
 - [ ] Error message is clear to admin
 - [ ] Validation prevents approval (not just warning)
 
 *P0-3 Ownership Validation:*
+
 - [ ] Compares `claim.transaction.student_id` with `claim.student_id`
 - [ ] Security alert is logged to application logs
 - [ ] Error message includes diagnostic info (student IDs)
@@ -105,6 +110,7 @@ git diff 584ac5f..b7706d7 -- app/routes/admin.py | grep -A 20 "P0-3"
 - [ ] No race condition between check and approval
 
 **Key Questions:**
+
 1. Can an attacker bypass ownership check by manipulating the claim object?
 2. Is logging sufficient for security audit trail?
 3. Should there be additional alerts (email, Slack) for ownership mismatches?
@@ -118,6 +124,7 @@ git diff 261ec98..b7706d7 -- app/routes/admin.py | grep -B 5 -A 15 "P1-1"
 ```
 
 **Review Checklist:**
+
 - [ ] User input is validated with `datetime.strptime()`
 - [ ] Date format is strict: `%Y-%m-%d`
 - [ ] ValueError exception is caught
@@ -129,6 +136,7 @@ git diff 261ec98..b7706d7 -- app/routes/admin.py | grep -B 5 -A 15 "P1-1"
 - [ ] Both start_date and end_date are validated the same way
 
 **Key Questions:**
+
 1. Are there any other input vectors for SQL injection in this function?
 2. Is the date format validation sufficient?
 3. Could timezone issues cause incorrect filtering?
@@ -142,6 +150,7 @@ find migrations/versions -name "*enforce_unique_claim_transaction*" -exec cat {}
 ```
 
 **Review Checklist:**
+
 - [ ] Migration adds constraint on correct table (`insurance_claims`)
 - [ ] Migration adds constraint on correct column (`transaction_id`)
 - [ ] Constraint name matches model: `uq_insurance_claims_transaction_id`
@@ -150,6 +159,7 @@ find migrations/versions -name "*enforce_unique_claim_transaction*" -exec cat {}
 - [ ] No data loss occurs during migration
 
 **Key Questions:**
+
 1. What happens if existing data has duplicate `transaction_id` values?
 2. Should we add a data cleanup step before applying constraint?
 3. Is the downgrade safe to run if needed?
@@ -169,6 +179,7 @@ Layer 3 (Exception): IntegrityError caught and handled gracefully
 ```
 
 **Test mentally:**
+
 - [ ] If constraint fails, does app crash? (No - IntegrityError caught)
 - [ ] If locking disabled on SQLite, is there still protection? (Yes - constraint)
 - [ ] If two requests come simultaneously, which wins? (First to commit)
@@ -188,6 +199,7 @@ The ownership check should prevent this attack:
 ```
 
 **Verify in code:**
+
 - [ ] Check happens BEFORE approval decision
 - [ ] Check compares correct fields
 - [ ] Check logs to current_app.logger
@@ -199,6 +211,7 @@ The ownership check should prevent this attack:
 #### 1.5 Code Quality Review
 
 **General Code Quality Checklist:**
+
 - [ ] No code duplication introduced
 - [ ] Error messages are user-friendly
 - [ ] Security logging is appropriate (not too verbose, not too quiet)
@@ -330,6 +343,7 @@ pytest tests/ --cov=app --cov-report=html --cov-report=term
 ```
 
 **Test Success Criteria:**
+
 - [ ] All security tests pass
 - [ ] No new test failures introduced
 - [ ] Code coverage >= 80% for modified files
@@ -369,6 +383,7 @@ Expected Results:
 ```
 
 **Test Checklist:**
+
 - [ ] Claim form displays eligible transactions only
 - [ ] Transaction details shown in form
 - [ ] Claim submission shows success message
@@ -403,6 +418,7 @@ Expected Results:
 ```
 
 **Test Checklist:**
+
 - [ ] First claim submission works
 - [ ] Used transaction disappears from eligible list
 - [ ] Form manipulation attempt blocked
@@ -436,6 +452,7 @@ Expected Results:
 ```
 
 **Test Checklist:**
+
 - [ ] Test performed with <1 second timing
 - [ ] One claim created successfully
 - [ ] Second attempt blocked by constraint
@@ -472,6 +489,7 @@ Expected Results:
 ```
 
 **Test Checklist:**
+
 - [ ] Transaction void flag set correctly
 - [ ] Claim approval form shows validation error
 - [ ] Error message mentions "voided"
@@ -515,6 +533,7 @@ Expected Results:
 ```
 
 **Test Checklist:**
+
 - [ ] Database modification successful (confirms vulnerability would exist without fix)
 - [ ] Ownership validation runs during approval
 - [ ] Validation compares student IDs correctly
@@ -561,6 +580,7 @@ Expected Results:
 ```
 
 **Test Checklist:**
+
 - [ ] Normal date filtering works
 - [ ] Invalid date format rejected
 - [ ] SQL injection syntax rejected
@@ -597,6 +617,7 @@ Expected Results:
 ```
 
 **Test Checklist:**
+
 - [ ] Non-monetary claims unaffected by security fixes
 - [ ] No transaction field shown
 - [ ] Approval process unchanged
@@ -627,6 +648,7 @@ Expected Results:
 ```
 
 **Test Checklist:**
+
 - [ ] Legacy claim type still supported
 - [ ] No breaking changes to legacy workflow
 - [ ] Security fixes don't apply to legacy (as expected)
@@ -657,6 +679,7 @@ WHERE ic.id = 456;
 ```
 
 **Performance Checklist:**
+
 - [ ] Claim submission response time < 500ms
 - [ ] Claim approval response time < 500ms
 - [ ] Banking filter page load < 1 second (with date filters)
@@ -668,12 +691,14 @@ WHERE ic.id = 456;
 #### 2.5 Browser Compatibility Testing
 
 Test on multiple browsers:
+
 - [ ] Chrome (latest)
 - [ ] Firefox (latest)
 - [ ] Safari (if applicable)
 - [ ] Edge (latest)
 
 **Test checklist per browser:**
+
 - [ ] Claim form renders correctly
 - [ ] Transaction dropdown works
 - [ ] Date picker works (if used)
@@ -832,6 +857,7 @@ ORDER BY ic.transaction_id, ic.created_at;
    - Manually delete unwanted claims
 
 **Checklist:**
+
 - [ ] Query run to check for duplicates
 - [ ] If duplicates found, resolution plan decided
 - [ ] Duplicates cleaned up before migration
@@ -856,6 +882,7 @@ pg_restore --list backup_pre_migration_*.sql > /dev/null && echo "Backup OK"
 ```
 
 **Checklist:**
+
 - [ ] Backup created
 - [ ] Backup file size > 0 bytes
 - [ ] Backup file contains SQL content
@@ -904,6 +931,7 @@ flask db upgrade
 ```
 
 **Checklist:**
+
 - [ ] Migration SQL reviewed
 - [ ] SQL contains constraint creation
 - [ ] Migration executed successfully
@@ -954,6 +982,7 @@ ROLLBACK;  -- Clean up test data
 ```
 
 **Checklist:**
+
 - [ ] Constraint exists in database
 - [ ] Constraint is type 'u' (unique)
 - [ ] Constraint targets correct column
@@ -995,6 +1024,7 @@ curl http://staging-server/admin/login | grep -c "login"
 ```
 
 **Checklist:**
+
 - [ ] Application restarted successfully
 - [ ] No errors in application logs
 - [ ] Login page loads
@@ -1027,6 +1057,7 @@ psql classroom_economy_staging < backup_pre_migration_YYYYMMDD_HHMMSS.sql
 ```
 
 **When to rollback:**
+
 - Migration fails with error
 - Application won't start after migration
 - Constraint causes unexpected errors
@@ -1127,6 +1158,7 @@ Once all three tasks are successfully completed and approved:
 ### 1. Schedule Production Deployment
 
 **Recommended Timing:**
+
 - Low-traffic period (evening or weekend)
 - Have rollback window available (2-3 hours)
 - Developer on-call for monitoring
@@ -1171,6 +1203,7 @@ tail -f /var/log/classroom-economy/app.log
 ### 3. Post-Deployment Monitoring (First 24 Hours)
 
 **Monitor for:**
+
 - [ ] Application errors (500 errors)
 - [ ] Security log alerts (ownership mismatch)
 - [ ] IntegrityError exceptions (duplicate attempts)
@@ -1178,6 +1211,7 @@ tail -f /var/log/classroom-economy/app.log
 - [ ] User-reported issues
 
 **Success Metrics:**
+
 - Zero 500 errors
 - Duplicate claim attempts blocked successfully
 - No void transaction approvals

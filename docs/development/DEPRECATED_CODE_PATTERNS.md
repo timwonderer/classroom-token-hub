@@ -32,6 +32,7 @@ grep -r "datetime.utcnow()" --include="*.py" .
 ```
 
 **Primary locations:**
+
 - `app/models.py` - Model default timestamp columns
 - `app/routes/admin.py` - Transaction creation timestamps
 - `app/routes/student.py` - Student activity timestamps
@@ -78,6 +79,7 @@ grep -r "\.query\.get(" app/ --include="*.py"
 ```
 
 **Primary locations:**
+
 - `app/auth.py` - Authentication helper functions
 - `app/routes/admin.py` - Admin dashboard queries
 - `app/routes/student.py` - Student portal queries
@@ -191,6 +193,7 @@ After making deprecation fixes, verify:
 ---
 
 **Next Steps:**
+
 1. Create GitHub issues for each deprecation type
 2. Prioritize based on Python/SQLAlchemy version upgrade timeline
 3. Schedule dedicated refactoring time
@@ -199,6 +202,7 @@ After making deprecation fixes, verify:
 6. Merge after validation
 
 **Estimated Effort:**
+
 - datetime.utcnow() migration: ~2-3 hours
 - Query.get() migration: ~2-3 hours
 - Testing and validation: ~2 hours

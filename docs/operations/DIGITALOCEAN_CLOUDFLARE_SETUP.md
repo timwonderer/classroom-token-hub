@@ -5,6 +5,7 @@ This guide explains how to configure DigitalOcean firewall rules to work with Cl
 ## Overview
 
 When you enable Cloudflare's proxy for your domain:
+
 - All HTTP/HTTPS traffic flows through Cloudflare's edge network first
 - Your DigitalOcean droplet receives requests only from Cloudflare's IP addresses
 - The real visitor IP is passed in the `CF-Connecting-IP` header
@@ -66,6 +67,7 @@ For **each** of the following Cloudflare IPv4 ranges, create TWO rules (HTTP and
 ```
 
 **For each IP range:**
+
 - Type: Custom
 - Protocol: TCP
 - Port Range: 80 (for HTTP)
@@ -88,6 +90,7 @@ For **each** of the following Cloudflare IPv6 ranges, create TWO rules (HTTP and
 ```
 
 **For each IPv6 range:**
+
 - Type: Custom
 - Protocol: TCP
 - Port Range: 80 (for HTTP)
@@ -117,6 +120,7 @@ If you run other services (e.g., database, monitoring), add rules for those port
 By default, DigitalOcean allows all outbound traffic. This is usually fine for web applications.
 
 If you need to restrict outbound traffic:
+
 - ICMP for ping
 - TCP/UDP port 53 for DNS
 - TCP port 80/443 for HTTP/HTTPS (API calls, package updates)
@@ -206,6 +210,7 @@ If Cloudflare adds new IP ranges:
 ### 1. Restore Visitor IP Addresses
 
 The application automatically extracts real visitor IPs from the `CF-Connecting-IP` header. This ensures:
+
 - Accurate logging and analytics
 - Proper rate limiting and abuse detection
 - Correct geolocation data
@@ -236,12 +241,14 @@ This prevents anyone with Cloudflare IPs from directly accessing your origin.
 ### 5. Rate Limiting
 
 Use Cloudflare's rate limiting instead of application-level rate limiting:
+
 - Cloudflare blocks excessive requests before they reach your server
 - Configure in: **Security** → **WAF** → **Rate limiting rules**
 
 ### 6. Monitor Firewall Logs
 
 Regularly review logs for:
+
 - Blocked connection attempts
 - Non-Cloudflare traffic reaching your server
 - Unusual traffic patterns
@@ -295,6 +302,7 @@ def test_ip():
 ```
 
 Access `https://yourdomain.com/test-ip` and verify:
+
 - `real_ip` shows your actual IP
 - `remote_addr` shows a Cloudflare IP (173.245.x.x, 104.16.x.x, etc.)
 - `cloudflare_verified` is `true`
@@ -308,6 +316,7 @@ Access `https://yourdomain.com/test-ip` and verify:
 ### Monitor Cloudflare Analytics
 
 In Cloudflare dashboard → **Analytics & Logs**:
+
 - View request count, bandwidth, threats blocked
 - Check cache hit rate
 - Review security events

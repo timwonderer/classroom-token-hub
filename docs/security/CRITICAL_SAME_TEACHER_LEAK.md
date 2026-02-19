@@ -154,11 +154,13 @@ Transaction
 
 ### Option 1: Add join_code Column (RECOMMENDED)
 **Pros:**
+
 - Join code is the absolute source of truth
 - Directly maps to the user requirement
 - No ambiguity about which class
 
 **Cons:**
+
 - Migration required
 - Need to backfill existing data
 
@@ -179,10 +181,12 @@ transactions = Transaction.query.filter_by(
 
 ### Option 2: Add block Column
 **Pros:**
+
 - Simpler than join_code
 - Block name is more human-readable
 
 **Cons:**
+
 - Block alone isn't unique (multiple teachers can have "Period A")
 - Would need to filter by BOTH teacher_id AND block
 - Less precise than join_code
@@ -207,10 +211,12 @@ transactions = Transaction.query.filter_by(
 Create explicit ClassPeriod model linking join_code → teacher + block
 
 **Pros:**
+
 - Most explicit and normalized
 - Cleanest architecture
 
 **Cons:**
+
 - Requires new table
 - More complex migration
 - Larger refactor

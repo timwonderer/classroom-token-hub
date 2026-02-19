@@ -9,12 +9,14 @@ This document tracks the implementation of the new Issue Resolution & Escalation
 **File**: `app/models.py`
 
 Created 4 new models:
+
 - `IssueCategory` - Predefined categories for transaction and general issues
 - `Issue` - Core issue tracking with full audit trail
 - `IssueStatusHistory` - Complete status change history
 - `IssueResolutionAction` - Record of all resolution actions taken
 
 **Key Features**:
+
 - Non-identifying opaque student references for sysadmin review
 - Context snapshots capture ledger state at time of submission
 - Teacher reward eligibility flag for bug escalation
@@ -25,16 +27,19 @@ Created 4 new models:
 **Status**: Generated (user will run migration)
 
 Migration creates all new tables with proper indexes for:
+
 - Teacher issue querying by join_code and status
 - Student issue tracking
 - Opaque reference lookups for sysadmin
 
 ### 3. Utility Functions ✅
 **Files**:
+
 - `app/utils/issue_categories.py` - Default category initialization
 - `app/utils/issue_helpers.py` - Issue creation and management helpers
 
 **Functions**:
+
 - `init_default_categories()` - Seed database with default issue categories
 - `create_issue()` - Create issues with automatic context capture
 - `generate_opaque_student_reference()` - Non-reversible student IDs
@@ -47,6 +52,7 @@ Migration creates all new tables with proper indexes for:
 **File**: `forms.py`
 
 Added 2 new WTForms:
+
 - `StudentIssueSubmissionForm` - For general (non-transaction) issues
 - `TransactionIssueSubmissionForm` - For transaction-specific disputes
 
@@ -56,11 +62,13 @@ Both include character limits and validation per spec.
 **File**: `app/routes/student.py`
 
 Implemented 3 routes:
+
 - `GET /student/help-support` - Main help page with Knowledge Base and issue tracker
 - `GET/POST /student/help-support/submit-issue` - Submit general issues
 - `GET/POST /student/help-support/transaction/<id>/report` - Report transaction issues
 
 **Features**:
+
 - Automatic context snapshot capture
 - Opaque reference generation
 - Multi-tenancy scoping by join_code
@@ -68,6 +76,7 @@ Implemented 3 routes:
 
 ### 6. Student Templates ✅
 **Files**:
+
 - `templates/student_help_support_new.html` - Main help page with 3 tabs:
   - Knowledge Base (How-To + Troubleshooting)
   - Report an Issue (General vs Transaction)
@@ -86,6 +95,7 @@ Added help icons next to each transaction in Recent Activity section, linking di
 **File**: `app/routes/admin.py`
 
 Implemented 4 routes:
+
 - `GET /admin/issues` - Issue review queue (pending/resolved/escalated tabs)
 - `GET /admin/issues/<id>` - View issue details with full context
 - `POST /admin/issues/<id>/resolve` - Resolve issues with actions:
@@ -99,6 +109,7 @@ Implemented 4 routes:
   - **Eligible for reward checkbox** (per user requirement)
 
 **Features**:
+
 - Multi-tenancy scoped by join_code
 - Automatic status tracking to 'teacher_review' on first view
 - Full audit trail via resolution actions
@@ -108,6 +119,7 @@ Implemented 4 routes:
 
 ### 9. Teacher Templates ✅
 **Files Created**:
+
 - `templates/admin_issues_queue.html` - Queue with pending/resolved/escalated tabs
   - Stats cards showing counts for each tab
   - Bootstrap tabs interface
@@ -126,12 +138,14 @@ Implemented 4 routes:
 **File**: `app/routes/system_admin.py`
 
 Implemented 4 routes:
+
 - `GET /sysadmin/issues` - escalated_issues() (line 1760)
 - `GET /sysadmin/issues/<id>` - view_escalated_issue() (line 1786)
 - `POST /sysadmin/issues/<id>/start-review` - start_review_escalated_issue() (line 1809)
 - `POST /sysadmin/issues/<id>/resolve` - resolve_escalated_issue() (line 1836)
 
 **Features**:
+
 - Data minimization with opaque student references
 - Optional class name sharing (teacher-controlled)
 - Developer resolution workflow
@@ -139,6 +153,7 @@ Implemented 4 routes:
 
 ### 11. Sysadmin Templates ✅
 **Files Created**:
+
 - `templates/sysadmin_escalated_issues.html` - Issue queue view
 - `templates/sysadmin_view_escalated_issue.html` - Detailed issue view with data minimization UI
 
@@ -146,6 +161,7 @@ Implemented 4 routes:
 **Priority Test Coverage Needed**:
 
 **Unit Tests** (app/utils/issue_helpers.py):
+
 - ✅ Issue creation with context capture
 - ✅ Opaque reference generation (non-reversible)
 - ✅ Context snapshot creation (balances, transactions)
@@ -153,6 +169,7 @@ Implemented 4 routes:
 - ⏳ Audit trail recording
 
 **Integration Tests** (Full workflow):
+
 - ⏳ Student issue submission (general)
 - ⏳ Student transaction issue reporting
 - ⏳ Teacher resolution actions (reverse, manual adjustment, deny)
@@ -163,6 +180,7 @@ Implemented 4 routes:
 **Recommended Test File**: `tests/test_issue_resolution.py`
 
 **Test Priorities**:
+
 1. **Critical**: Multi-tenancy scoping tests (ensure join_code isolation)
 2. **High**: Teacher resolution actions (transaction voiding, status changes)
 3. **Medium**: Opaque reference generation (privacy compliance)
@@ -170,6 +188,7 @@ Implemented 4 routes:
 
 ### 13. Documentation ✅
 **Files Updated**:
+
 - ✅ `CHANGELOG.md` - Issue Resolution System documented in v1.5.0
 - ⏳ `docs/user-guides/teacher_manual.md` - Add issue review section
 - ⏳ `docs/user-guides/student_guide.md` - Update help & support section
@@ -194,6 +213,7 @@ Implemented 4 routes:
 **Implementation: 85% Complete** ✅
 
 ✅ **Completed**:
+
 - Database models and migration
 - Utility functions and helpers
 - Student routes and templates
@@ -203,6 +223,7 @@ Implemented 4 routes:
 - CHANGELOG documentation
 
 ⏳ **Remaining Work**:
+
 - Test coverage for Issue Resolution system
 - User guide documentation updates
 - Technical reference documentation
@@ -212,12 +233,14 @@ Implemented 4 routes:
 
 ### Priority 1: Test Coverage ⏳
 **Critical for production confidence:**
+
 - Multi-tenancy scoping tests (ensure join_code isolation)
 - Teacher resolution actions (void transactions, status updates)
 - Complete workflow integration tests
 - Opaque reference privacy compliance
 
 **Recommended approach:**
+
 1. Create `tests/test_issue_resolution.py`
 2. Add multi-tenancy scoping tests first (critical)
 3. Add workflow integration tests
@@ -225,18 +248,21 @@ Implemented 4 routes:
 
 ### Priority 2: User Documentation ⏳
 **Help users understand the system:**
+
 - Update `docs/user-guides/teacher_manual.md` with Issue Review section
 - Update `docs/user-guides/student_guide.md` with Help & Support usage
 - Create diagnostic guides if needed
 
 ### Priority 3: Technical Documentation ⏳
 **For developers and architects:**
+
 - Document issue resolution flow in `docs/technical-reference/architecture.md`
 - Document data minimization approach in `docs/security/`
 - Add privacy compliance notes
 
 ### Priority 4: Deployment Validation
 **Before production release:**
+
 - Run test suite and ensure passing
 - Verify multi-tenancy scoping manually
 - Test full workflow in staging environment
