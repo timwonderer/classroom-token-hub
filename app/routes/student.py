@@ -2189,14 +2189,22 @@ def file_claim(policy_id):
 
     eligible_transactions = []
     if policy.claim_type == 'transaction_monetary':
-        cutoff_date = now_utc - timedelta(days=policy.claim_time_limit_days)
+        claim_time_limit_days = int(policy.claim_time_limit_days) if policy.claim_time_limit_days is not None else None
         tx_query = (
             Transaction.query
             .filter(Transaction.student_id == student.id)
             .filter(Transaction.is_void == False)
-            .filter(Transaction.timestamp >= cutoff_date)
+            .filter(Transaction.status == TransactionStatus.POSTED)
             .filter(Transaction.amount < Decimal('0'))
+            .filter(
+                ~func.lower(func.coalesce(Transaction.type, '')).in_(
+                    ['rent payment', 'insurance_premium', 'insurance_reimbursement', 'withdrawal', 'deposit']
+                )
+            )
         )
+        if claim_time_limit_days is not None and claim_time_limit_days > 0:
+            cutoff_date = now_utc - timedelta(days=claim_time_limit_days)
+            tx_query = tx_query.filter(Transaction.timestamp >= cutoff_date)
         if policy.teacher_id:
             tx_query = tx_query.filter(Transaction.teacher_id == policy.teacher_id)
         candidate_transactions = tx_query.order_by(Transaction.timestamp.desc()).all()
@@ -2242,7 +2250,15 @@ def file_claim(policy_id):
                 flash("You must select a transaction for this claim type.", "danger")
                 return redirect(url_for('student.file_claim', policy_id=policy_id))
 
-            selected_transaction = next((tx for tx in eligible_transactions if tx.id == form.transaction_id.data), None)
+            selected_transaction = (
+                Transaction.query
+                .filter(Transaction.id == form.transaction_id.data)
+                .filter(Transaction.student_id == student.id)
+                .filter(Transaction.is_void == False)
+                .filter(Transaction.status == TransactionStatus.POSTED)
+                .filter(Transaction.amount < Decimal('0'))
+                .first()
+            )
             if not selected_transaction:
                 flash("Selected transaction is not eligible for claims.", "danger")
                 return redirect(url_for('student.file_claim', policy_id=policy_id))

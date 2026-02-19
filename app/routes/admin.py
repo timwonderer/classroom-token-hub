@@ -29,7 +29,7 @@ from flask import (
 from urllib.parse import urlparse
 from sqlalchemy import desc, text, or_, and_, func
 from sqlalchemy.orm import joinedload
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import sqlalchemy as sa
 import pyotp
 import pytz
@@ -5259,7 +5259,15 @@ def process_claim(claim_id):
         elif new_status == 'rejected':
             flash("Claim has been rejected.", "warning")
 
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError as exc:
+            db.session.rollback()
+            if 'uq_insurance_reimbursement_source_policy' in str(exc.orig):
+                flash("Reimbursement already exists for this source transaction and policy.", "danger")
+            else:
+                flash("Could not process the claim due to a concurrent update. Please retry.", "danger")
+            return redirect(url_for('admin.process_claim', claim_id=claim_id))
         return redirect(url_for('admin.insurance_management'))
 
     return render_template('admin_process_claim.html',

@@ -95,7 +95,7 @@ For `transaction_monetary` claims:
 
 Every reimbursement transaction must reference the source debit transaction:
 
-- `Transaction.related_transaction_id = <debit_transaction_id>`
+- `Transaction.original_transaction_id = <debit_transaction_id>`
 - `Transaction.type = 'insurance_reimbursement'`
 
 This enables idempotency and audit.
@@ -116,7 +116,7 @@ A debit transaction can be claimed at most once.
 ### INV-3: One Reimbursement Per Debit Transaction Per Policy
 A debit transaction can generate at most one reimbursement transaction for a given claim.
 
-- Enforce with `related_transaction_id` and uniqueness on (`type='insurance_reimbursement'`, `related_transaction_id`, `policy_id` if stored).
+- Enforce with `original_transaction_id` and uniqueness on (`type='insurance_reimbursement'`, `original_transaction_id`, `policy_id` if stored).
 
 ### INV-4: Pay-First, Reimburse-Later
 A claim must reference an existing debit transaction.
@@ -244,4 +244,3 @@ Transaction classification must be backfilled before enabling automation.
 
 ---
 # End of Architecture Specification
-

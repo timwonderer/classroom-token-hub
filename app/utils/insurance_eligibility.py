@@ -66,14 +66,16 @@ def _check_delay_use_rule(tx: Transaction, now_utc: datetime) -> Optional[str]:
 
     item_name = _extract_purchase_item_name(tx.description)
     if not item_name:
-        return CLAIM_REASON_UNCLASSIFIED_TRANSACTION
+        # Preserve claimability for legacy/manual purchase descriptions.
+        return None
 
     item_query = StoreItem.query.filter(StoreItem.name == item_name)
     if tx.teacher_id:
         item_query = item_query.filter(StoreItem.teacher_id == tx.teacher_id)
     store_item = item_query.order_by(StoreItem.id.desc()).first()
     if not store_item:
-        return CLAIM_REASON_UNCLASSIFIED_TRANSACTION
+        # Store item metadata may have changed; skip delay-use checks when unknown.
+        return None
     if store_item.item_type != "delayed":
         return None
 
@@ -100,7 +102,8 @@ def _check_delay_use_rule(tx: Transaction, now_utc: datetime) -> Optional[str]:
             fallback_query = fallback_query.filter(StudentItem.join_code == tx.join_code)
         item_row = fallback_query.order_by(StudentItem.purchase_date.desc()).first()
     if not item_row:
-        return CLAIM_REASON_UNCLASSIFIED_TRANSACTION
+        # Legacy data may not have a matching StudentItem row.
+        return None
 
     used_at = ensure_utc(item_row.redemption_date) if item_row.redemption_date else None
     if not used_at:
@@ -186,8 +189,10 @@ def evaluate_claim_transaction_eligibility(
     tx_ts = ensure_utc(tx.timestamp) if tx.timestamp else None
     if tx_ts is None:
         return False, CLAIM_REASON_UNCLASSIFIED_TRANSACTION
-    if (now_utc - tx_ts).days > int(policy.claim_time_limit_days or 0):
-        return False, CLAIM_REASON_TIME_LIMIT_EXCEEDED
+    claim_time_limit_days = int(policy.claim_time_limit_days) if policy.claim_time_limit_days is not None else None
+    if claim_time_limit_days is not None and claim_time_limit_days > 0:
+        if (now_utc - tx_ts).days > claim_time_limit_days:
+            return False, CLAIM_REASON_TIME_LIMIT_EXCEEDED
 
     if policy.teacher_id and tx.teacher_id != policy.teacher_id:
         return False, CLAIM_REASON_UNCLASSIFIED_TRANSACTION

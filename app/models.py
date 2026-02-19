@@ -737,11 +737,14 @@ class Transaction(db.Model):
     __table_args__ = (
         db.Index('ix_transaction_ledger_scope', 'join_code', 'student_id', 'status', 'account_type'),
         db.Index('ix_transaction_student_ledger', 'join_code', 'student_id'),
-        db.UniqueConstraint(
-            'type',
+        db.Index(
+            'uq_insurance_reimbursement_source_policy',
             'original_transaction_id',
             'policy_id',
-            name='uq_insurance_reimbursement_source_policy',
+            unique=True,
+            postgresql_where=sa.text(
+                "type = 'insurance_reimbursement' AND original_transaction_id IS NOT NULL AND policy_id IS NOT NULL"
+            ),
         ),
     )
 
