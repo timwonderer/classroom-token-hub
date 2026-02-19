@@ -8,6 +8,16 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Added
+- **Interactive Project Timeline** — New `/docs/timeline` page showcasing the full development history of Classroom Token Hub
+  - Visual vertical timeline organized into four eras: Genesis, Crisis Resolution, Feature Expansion, and Refinement
+  - Filter bar: All / Features / Fixes & Crises / Security / Architecture / Philosophy
+  - Expandable version cards with details on every release from v1.0.0 through current unreleased
+  - Design Philosophy section with all ten anti-goals and core educational principles
+  - Scroll-triggered entry animations with intersection observer
+  - Linked from the Help & Support Center (`/docs/`) index and Quick Links section
+  - Added `PROJECT_TIMELINE.md` to repository root as the source document
+
 ### Changed
 - **System Admin interface redesigned** - Complete redesign matching teacher/student interface patterns
   - **Mobile-friendly layout** - Fixed sidebar with hamburger toggle on mobile, mobile bottom navigation bar with quick access to Dashboard, Teachers, Support, Logs, and Announcements
