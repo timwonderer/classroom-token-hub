@@ -60,7 +60,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 
-<body class="sysadmin-shell bg-background {% if maintenance_bypass_active %}maintenance-active{% endif %}">
+<body class="sysadmin-shell d-flex bg-background {% if maintenance_bypass_active %}maintenance-active{% endif %}">
     <a href="#main-content" class="skip-link">Skip to main content</a>
     {% if maintenance_bypass_active %}
     <div class="maintenance-banner">
@@ -80,11 +80,9 @@
     <!-- Sidebar backdrop for mobile -->
     <div class="sysadmin-backdrop sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
 
-    <div class="container-fluid">
-        <div class="row min-vh-100">
-            <!-- Sidebar -->
-            <aside id="sidebar" class="col-md-3 col-lg-2 bg-primary sidebar sysadmin-sidebar" role="navigation"
-                aria-label="System admin navigation">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sysadmin-sidebar sidebar" role="navigation"
+        aria-label="System admin navigation">
                 <a class="sysadmin-brand" href="{{ url_for('sysadmin.dashboard') }}">
                     <div>
                         <div><span class="material-symbols-outlined"
@@ -152,10 +150,10 @@
                         <span class="material-symbols-outlined">logout</span> Sign Out
                     </a>
                 </nav>
-            </aside>
+    </aside>
 
-            <!-- Main Content -->
-            <main id="main-content" class="col-md-9 ms-sm-auto col-lg-10 px-md-4 sysadmin-main main-content">
+    <!-- Main Content -->
+    <main id="main-content" class="sysadmin-main main-content">
                 <div class="page-header">
                     <div>
                         <div class="eyebrow">Classroom Token Hub</div>
@@ -182,9 +180,7 @@
 
                     {% block content %}{% endblock %}
                 </div>
-            </main>
-        </div>
-    </div>
+    </main>
 
     <!-- Mobile Bottom Navigation -->
     <nav class="mobile-bottom-nav" role="navigation" aria-label="Quick navigation">

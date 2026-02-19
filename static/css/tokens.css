@@ -146,6 +146,15 @@ body.sysadmin-shell {
     --primary-hover: #1a1a1a;
     --primary-subtle: #e8e8e8;
 
+    /* Sysadmin alias variables (for backwards compatibility with template references) */
+    --sysadmin-primary: #303030;
+    --sysadmin-primary-dark: #1a1a1a;
+    --sysadmin-sidebar-bg: #2C2C2C;
+    --sysadmin-sidebar-text: #ffffff;
+    --sysadmin-accent: #D4A857;
+    --sysadmin-accent-bright: #FDB034;
+    --sysadmin-bottom-nav-height: 64px;
+
     /* Secondary: Bright Gold */
     --secondary: #D4A857;
     --secondary-hover: #c09840;

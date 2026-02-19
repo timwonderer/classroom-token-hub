@@ -75,10 +75,8 @@
     <!-- Sidebar Backdrop -->
     <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
 
-    <div class="container-fluid">
-        <div class="row min-vh-100">
-            <aside class="col-md-3 col-lg-2 bg-primary sidebar student-sidebar" id="studentSidebar" role="navigation"
-                aria-label="Student navigation" aria-hidden="true">
+    <aside class="student-sidebar" id="studentSidebar" role="navigation"
+            aria-label="Student navigation" aria-hidden="true">
                 <a class="student-brand" href="{{ url_for('student.dashboard') }}">
 
                     <div>
@@ -159,9 +157,9 @@
                         <span class="material-symbols-outlined">logout</span> Sign Out
                     </a>
                 </nav>
-            </aside>
+    </aside>
 
-            <main id="main-content" class="col-md-9 ms-sm-auto col-lg-10 px-md-4 student-main main-content">
+    <main id="main-content" class="student-main">
                 <div class="student-content">
                     {% set help_doc_map = {
                     'dashboard': 'user-guides/diagnostics/student',
@@ -222,9 +220,7 @@
                     {% block content %}{% endblock %}
                 </div>
 
-            </main>
-        </div>
-    </div>
+    </main>
 
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
