@@ -43,8 +43,8 @@
         <div class="row text-center">
             <div class="col-md-6">
                 <div class="p-3 bg-primary-subtle text-primary rounded">
-                    <h6 class="text-white mb-2">Checking</h6>
-                    <h3 class="text-white mb-0">${{ "%.2f"|format(checking_balance) }}</h3>
+                    <h6 class="text-primary mb-2">Checking</h6>
+                    <h3 class="text-primary mb-0">${{ "%.2f"|format(checking_balance) }}</h3>
                 </div>
             </div>
             <div class="col-md-6">
@@ -194,14 +194,7 @@
         {% endif %}
 
         {% if not status.is_paid %}
-        {% if checking_balance < status.remaining_amount %} <button class="btn btn-secondary w-100" disabled>
-            Insufficient Funds
-            </button>
-            <p class="text-danger mt-2 mb-0 small">
-                You need ${{ "%.2f"|format(status.remaining_amount - checking_balance) }} more to pay rent for Period {{
-                current_block|upper }}.
-            </p>
-            {% else %}
+            {% if settings.allow_incremental_payment or checking_balance >= status.remaining_amount %}
             <form action="{{ url_for('student.rent_pay', period=current_block) }}" method="POST">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                 {% if settings.allow_incremental_payment %}
@@ -222,6 +215,14 @@
                     {% endif %}
                 </button>
             </form>
+            {% else %}
+            <button class="btn btn-secondary w-100" disabled>
+                Insufficient Funds
+            </button>
+            <p class="text-danger mt-2 mb-0 small">
+                You need ${{ "%.2f"|format(status.remaining_amount - checking_balance) }} more to pay rent for Period {{
+                current_block|upper }}.
+            </p>
             {% endif %}
             {% endif %}
             {% endif %}

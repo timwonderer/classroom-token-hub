@@ -2439,7 +2439,7 @@ def shop():
     current_block = context.get('block')
     has_paid_rent = False
     per_period_rent_item_ids = set()
-    rent_item_type_by_store_id = {}
+    rent_item_types_by_store_id = {}
     per_use_limit_by_store_id = {}
 
     if teacher_id and join_code and current_block:
@@ -2477,11 +2477,13 @@ def shop():
                 RentItem.is_available_in_store == True,
                 RentItem.store_item_id.isnot(None),
             ).all()
-            rent_item_type_by_store_id = {
-                rent_item.store_item_id: rent_item.rent_item_type
-                for rent_item in rent_store_items
-                if rent_item.store_item_id
-            }
+            rent_item_types_by_store_id = {}
+            for rent_item in rent_store_items:
+                if not rent_item.store_item_id:
+                    continue
+                rent_item_types_by_store_id.setdefault(rent_item.store_item_id, set()).add(
+                    rent_item.rent_item_type
+                )
             per_use_limit_by_store_id = {
                 rent_item.store_item_id: (rent_item.use_limit if rent_item.use_limit else -1)
                 for rent_item in rent_store_items
@@ -2589,7 +2591,7 @@ def shop():
 
     return render_template('student_shop.html', student=student, items=items, student_items=student_items,
                          has_paid_rent=has_paid_rent, per_period_rent_item_ids=per_period_rent_item_ids,
-                         rent_item_type_by_store_id=rent_item_type_by_store_id,
+                         rent_item_types_by_store_id=rent_item_types_by_store_id,
                          rent_free_uses=rent_free_uses,
                          class_size=class_size, current_block=current_block,
                          collective_progress=collective_progress)

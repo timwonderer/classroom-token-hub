@@ -876,6 +876,92 @@ def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin
     assert 'disabled' not in per_use_button.group(0)
 
 
+def test_shop_keeps_item_purchasable_when_per_use_and_privilege_links_overlap(client, teacher_admin, student_in_class):
+    """If legacy data creates mixed rent item types for one store item, per-use access should remain purchasable."""
+    student = student_in_class
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Mixed Rent Link',
+        price=Decimal('8.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    db.session.add_all([
+        RentItem(
+            rent_setting_id=settings.id,
+            name='Mixed Rent Link Priv',
+            rent_item_type='privilege',
+            is_available_in_store=True,
+            store_price=Decimal('8.00'),
+            purchase_duration='per_period',
+            store_item_id=store_item.id,
+        ),
+        RentItem(
+            rent_setting_id=settings.id,
+            name='Mixed Rent Link Use',
+            rent_item_type='per_use',
+            is_available_in_store=True,
+            store_price=Decimal('8.00'),
+            purchase_duration='per_use',
+            use_limit=2,
+            store_item_id=store_item.id,
+        ),
+    ])
+
+    now = datetime.now(timezone.utc)
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=now.month,
+        period_year=now.year,
+        coverage_month=now.month,
+        coverage_year=now.year,
+        payment_date=now,
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent for Period A',
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    html = resp.data.decode('utf-8')
+    button = re.search(rf'data-item-id="{store_item.id}"[^>]*>', html, re.DOTALL)
+    assert button is not None
+    assert 'disabled' not in button.group(0)
+
+
 def test_shop_displays_rent_perk_price_as_free(client, teacher_admin, student_in_class):
     """Rent perk items with active free uses should display $0 pricing in the student shop."""
     student = student_in_class
