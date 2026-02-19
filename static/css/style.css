@@ -877,6 +877,8 @@ body.sysadmin-shell .eyebrow {
 
     .student-main {
         margin-left: 0 !important;
+        width: 100% !important;
+        padding: 1rem 0.85rem 5.5rem;
     }
 }
 

@@ -2470,12 +2470,7 @@ def shop():
                     join_code
                 )
 
-                if valid_payments:
-                    total_paid = sum(p.amount_paid for p in valid_payments)
-                    grace_for_coverage = coverage_due_date + timedelta(days=rent_settings.grace_period_days)
-                    late_fee_applies = now > grace_for_coverage
-                    required = rent_settings.rent_amount + (rent_settings.late_fee if late_fee_applies else Decimal('0'))
-                    has_paid_rent = total_paid >= required
+                has_paid_rent = _is_coverage_period_paid(rent_settings, valid_payments, coverage_due_date)
 
             rent_store_items = RentItem.query.filter(
                 RentItem.rent_setting_id == rent_settings.id,
@@ -2839,6 +2834,30 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
     return valid_payments
 
 
+def _is_coverage_period_paid(settings, valid_payments, coverage_due_date):
+    """
+    Return True when a coverage period is fully paid.
+
+    Late fee is required only when rent was not fully paid by grace.
+    """
+    if not settings or not coverage_due_date:
+        return False
+    if settings.rent_amount <= Decimal('0.00'):
+        return True
+    if not valid_payments:
+        return False
+
+    total_paid = sum((p.amount_paid for p in valid_payments), Decimal('0.00'))
+    grace_for_coverage = coverage_due_date + timedelta(days=settings.grace_period_days)
+    paid_by_grace = _total_paid_by_grace(valid_payments, grace_for_coverage)
+
+    required_total = settings.rent_amount
+    if paid_by_grace < settings.rent_amount:
+        required_total += settings.late_fee
+
+    return total_paid >= required_total
+
+
 def _calculate_rent_coverage_due_date(settings, reference_date=None):
     """
     Return the most recently passed due date for coverage tracking.
@@ -2942,13 +2961,7 @@ def rent():
             join_code
         )
 
-        if valid_payments:
-            total_paid_current = sum(p.amount_paid for p in valid_payments)
-            # Check if fully paid (including late fee if applicable)
-            grace_for_coverage = coverage_due_date + timedelta(days=settings.grace_period_days)
-            late_fee_applies = now > grace_for_coverage
-            required = settings.rent_amount + (settings.late_fee if late_fee_applies else Decimal('0'))
-            current_coverage_paid = total_paid_current >= required
+        current_coverage_paid = _is_coverage_period_paid(settings, valid_payments, coverage_due_date)
 
     # Only allow preview period if current coverage is already paid
     is_preview_period = is_preview_period_candidate and current_coverage_paid
@@ -3133,13 +3146,7 @@ def rent_pay(period):
             join_code
         )
 
-        if valid_payments:
-            total_paid = sum(p.amount_paid for p in valid_payments)
-            # Check if fully paid (including late fee if applicable)
-            grace_for_coverage = coverage_due_date + timedelta(days=settings.grace_period_days)
-            late_fee_applies = now > grace_for_coverage
-            required = settings.rent_amount + (settings.late_fee if late_fee_applies else Decimal('0'))
-            current_coverage_paid = total_paid >= required
+        current_coverage_paid = _is_coverage_period_paid(settings, valid_payments, coverage_due_date)
 
     # Determine which due date this payment should cover
     # Only allow preview period if current coverage is already paid

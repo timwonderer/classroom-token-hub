@@ -56,6 +56,10 @@
 
     const menu = document.createElement('ul');
     menu.className = 'dropdown-menu w-100';
+    menu.style.maxHeight = '16rem';
+    menu.style.overflowY = 'auto';
+    menu.style.overscrollBehavior = 'contain';
+    menu.style.webkitOverflowScrolling = 'touch';
 
     wrapper.appendChild(button);
     wrapper.appendChild(menu);
@@ -80,6 +84,21 @@
       li.appendChild(optionButton);
       menu.appendChild(li);
     });
+
+    menu.addEventListener('wheel', (event) => {
+      const canScroll = menu.scrollHeight > menu.clientHeight;
+      if (!canScroll) return;
+
+      const atTop = menu.scrollTop <= 0;
+      const atBottom = Math.ceil(menu.scrollTop + menu.clientHeight) >= menu.scrollHeight;
+      const scrollingUp = event.deltaY < 0;
+      const scrollingDown = event.deltaY > 0;
+
+      if ((atTop && scrollingUp) || (atBottom && scrollingDown)) {
+        event.preventDefault();
+      }
+      event.stopPropagation();
+    }, { passive: false });
 
     selectEl.addEventListener('change', updateButton);
     updateButton();

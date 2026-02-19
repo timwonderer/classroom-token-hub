@@ -42,10 +42,10 @@
                         <div class="row g-3">
                             <div class="col-md-6">
                                 <div class="text-center p-4 bg-primary-subtle rounded">
-                                    <span class="material-symbols-outlined text-white"
+                                    <span class="material-symbols-outlined text-primary"
                                         style="font-size: 2.5rem;">account_balance_wallet</span>
-                                    <h6 class="text-white mt-2 mb-1">Checking</h6>
-                                    <h3 class="text-white mb-0">${{ "%.2f"|format(checking_balance) }}</h3>
+                                    <h6 class="text-primary mt-2 mb-1">Checking</h6>
+                                    <h3 class="text-primary mb-0">${{ "%.2f"|format(checking_balance) }}</h3>
                                 </div>
                             </div>
                             <div class="col-md-6">
@@ -163,8 +163,8 @@
                         <div class="row">
                             <div class="col-6">
                                 <div class="text-center p-3 bg-primary-subtle rounded">
-                                    <h6 class="text-white mb-2">Checking</h6>
-                                    <h4 class="text-white mb-0">${{ "%.2f"|format(checking_balance) }}</h4>
+                                    <h6 class="text-primary mb-2">Checking</h6>
+                                    <h4 class="text-primary mb-0">${{ "%.2f"|format(checking_balance) }}</h4>
                                 </div>
                             </div>
                             <div class="col-6">
@@ -461,57 +461,59 @@
     // Savings Projection Chart
     const ctx = document.getElementById('savingsProjectionChart');
     if (ctx) {
-        const projectionMonths = {{ projection_months| tojson
-    }};
-    const projectionBalances = {{ projection_balances| tojson }};
+        const projectionMonths = {{ projection_months|tojson }};
+        const projectionBalances = {{ projection_balances|tojson }};
+        const css = getComputedStyle(document.documentElement);
+        const successColor = css.getPropertyValue('--success').trim() || '#198754';
+        const successSubtle = css.getPropertyValue('--success-subtle').trim() || '#d1e7dd';
 
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: projectionMonths.map(m => m === 0 ? 'Now' : `Month ${m}`),
-            datasets: [{
-                label: 'Projected Savings Balance',
-                data: projectionBalances,
-                borderColor: 'var(--success)',
-                backgroundColor: 'var(--success-subtle)',
-                fill: true,
-                tension: 0.3,
-                pointRadius: 4,
-                pointHoverRadius: 6
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function (context) {
-                            return 'Balance: $' + context.parsed.y.toFixed(2);
-                        }
-                    }
-                }
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: projectionMonths.map(m => m === 0 ? 'Now' : `Month ${m}`),
+                datasets: [{
+                    label: 'Projected Savings Balance',
+                    data: projectionBalances,
+                    borderColor: successColor,
+                    backgroundColor: successSubtle,
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function (value) {
-                            return '$' + value.toFixed(0);
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                return 'Balance: $' + context.parsed.y.toFixed(2);
+                            }
                         }
                     }
                 },
-                x: {
-                    grid: {
-                        display: false
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function (value) {
+                                return '$' + value.toFixed(0);
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
                     }
                 }
             }
-        }
-    });
+        });
     }
 </script>
 {% endblock %}

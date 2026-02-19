@@ -96,7 +96,7 @@
     inset: 0;
     background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 }
-.timeline-hero h1 { font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 700; margin-bottom: 0.5rem; }
+.timeline-hero h1 { font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 700; margin-bottom: 0.5rem; color: white; }
 .timeline-hero .subtitle { font-size: 1.1rem; opacity: 0.8; max-width: 600px; margin: 0 auto 1.5rem; }
 .timeline-hero .badge-row { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
 .timeline-hero .stat-badge {
@@ -331,6 +331,8 @@
     color: white;
     padding: 1.2rem 1.5rem;
 }
+
+.philosophy-section h5 {color: white;}
 .philosophy-section .ph-body { padding: 1.25rem 1.5rem; }
 .anti-goal-grid {
     display: grid;
@@ -356,13 +358,13 @@
     border-radius: var(--radius-lg);
     padding: 1.5rem;
     margin-top: 2rem;
-    text-align: center;
+
 }
 .project-quote blockquote {
     font-size: 0.95rem;
     line-height: 1.75;
     color: var(--text-primary);
-    font-style: italic;
+
     margin: 0 0 1rem;
 }
 .project-quote cite { font-size: 0.8rem; color: var(--text-muted); font-style: normal; }
@@ -402,16 +404,9 @@
     <!-- Hero -->
     <div class="timeline-hero">
         <div class="container position-relative">
-            <span class="material-symbols-outlined" style="font-size:2.5rem; opacity:0.6; display:block; margin-bottom:0.5rem;">timeline</span>
-            <h1>Project Timeline</h1>
-            <p class="subtitle">The story of Classroom Token Hub — from classroom idea to production platform</p>
-            <div class="badge-row">
-                <span class="stat-badge">v1.8.0 Current</span>
-                <span class="stat-badge">8 Major Versions</span>
-                <span class="stat-badge">83+ Migrations</span>
-                <span class="stat-badge">41 Models</span>
-                <span class="stat-badge">4 Eras</span>
-            </div>
+            <h1>The History of Classroom Token Hub</h1>
+            <p class="subtitle">Where we come from and how did we get here</p>
+
         </div>
     </div>
 
@@ -452,7 +447,7 @@
             <div class="era-divider-line"></div>
             <span class="era-badge era-i">
                 <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">auto_awesome</span>
-                Era I — Genesis &amp; Foundation
+                What if, I just build it myself?
             </span>
             <div class="era-divider-line"></div>
         </div>
@@ -542,7 +537,7 @@
             <div class="era-divider-line"></div>
             <span class="era-badge era-ii">
                 <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">crisis_alert</span>
-                Era II — Stability &amp; Crisis Resolution
+                Oh no, why can I see other classes?
             </span>
             <div class="era-divider-line"></div>
         </div>
@@ -597,7 +592,7 @@
                     <div class="tl-card-header" onclick="toggleCard(this)">
                         <span class="tl-version-badge badge-milestone">v1.0.0</span>
                         <div class="tl-meta">
-                            <div class="tl-title">First Stable Release 🎉</div>
+                            <div class="tl-title">First Stable Release</div>
                             <div class="tl-date">November–December 2025</div>
                             <div class="tl-tags">
                                 <span class="tl-tag tag-features">Features</span>
@@ -691,7 +686,7 @@
             <div class="era-divider-line"></div>
             <span class="era-badge era-iii">
                 <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">rocket_launch</span>
-                Era III — Feature Expansion &amp; Security Hardening
+                Wouldn't it be nice to have that too?
             </span>
             <div class="era-divider-line"></div>
         </div>
@@ -967,7 +962,7 @@
             <div class="era-divider-line"></div>
             <span class="era-badge era-iv">
                 <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">verified</span>
-                Era IV — Refinement &amp; Production Hardening
+                This is Classroom Token Hub. Your classroom economy, reimagined.
             </span>
             <div class="era-divider-line"></div>
         </div>
@@ -1085,61 +1080,61 @@
             <div class="ph-header">
                 <h5 style="margin:0; font-weight:700;">
                     <span class="material-symbols-outlined" style="vertical-align:middle; margin-right:0.4rem;">lightbulb</span>
-                    Design Philosophy — What We Refuse to Build
+                    No, we are not about that life
                 </h5>
-                <p style="margin:0.3rem 0 0; opacity:0.8; font-size:0.85rem;">Ten deliberate absences that define Classroom Token Hub as much as what it includes</p>
+                <p style="margin:0.3rem 0 0; opacity:0.8; font-size:0.85rem;">Classroom Token Hub was created as a classroom economy system that fosters responsibility and shared accountability. Flashy features and gamification are antithesis to our design principles. The following features were intentially omitted to preserve the integrity and consistency with our philosophy.</p>
             </div>
             <div class="ph-body">
                 <div class="anti-goal-grid">
                     <div class="anti-goal-item">
-                        <span class="ag-no">❌ NO XP BARS OR STREAKS</span>
-                        Earned wages and time-based pay — not gamification
-                        <span class="ag-yes">✅ Instead: Real wages, real consequences</span>
+                        <span class="ag-no">NO XP BARS OR STREAKS</span>
+                        Earned wages and time-based pay. We reward consistency through tangible outcomes that students can understand.
+                        <span class="ag-yes">What we build: Real wages derived from time with real consequences</span>
                     </div>
                     <div class="anti-goal-item">
-                        <span class="ag-no">❌ NO PERFECT ATTENDANCE BONUSES</span>
-                        Life interferes; punishment isn't realism
-                        <span class="ag-yes">✅ Instead: Insurance system handles legitimate absences</span>
+                        <span class="ag-no">NO PERFECT ATTENDANCE BONUSES</span>
+                        Realign attendance and productivity as baseline expectations while insurance protects against unexpected deviation from baseline.
+                        <span class="ag-yes">What we build: Insurance system handles legitimate absences and personal lapses in responsibilities</span>
                     </div>
                     <div class="anti-goal-item">
-                        <span class="ag-no">❌ NO INVISIBLE TEACHER OVERRIDES</span>
-                        No silent balance edits; no hidden forgiveness
-                        <span class="ag-yes">✅ Instead: All actions logged and visible to students</span>
+                        <span class="ag-no">NO INVISIBLE TEACHER OVERRIDES</span>
+                        Mysterious teacher action erodes trust in the system and trivializes consequences as "as teacher wishes"
+                        <span class="ag-yes">What we build: All actions logged and visible to students</span>
                     </div>
                     <div class="anti-goal-item">
-                        <span class="ag-no">❌ NO BEHAVIOR SCORES</span>
+                        <span class="ag-no">NO BEHAVIOR SCORES</span>
                         No engagement ratings or compliance metrics
-                        <span class="ag-yes">✅ Instead: Neutral logs supporting teacher conversations</span>
+                        <span class="ag-yes">What we build: Neutral logs supporting teacher conversations</span>
                     </div>
                     <div class="anti-goal-item">
-                        <span class="ag-no">❌ NO AI JUDGMENTS OF INTENT</span>
+                        <span class="ag-no">NO AI JUDGMENTS OF INTENT</span>
                         No motivation predictions or effort ratings
-                        <span class="ag-yes">✅ Instead: Neutral logs that don't infer character</span>
+                        <span class="ag-yes">What we build: Neutral logs that don't infer character</span>
                     </div>
                     <div class="anti-goal-item">
-                        <span class="ag-no">❌ NO UNLIMITED CONFIG KNOBS</span>
+                        <span class="ag-no">NO UNLIMITED CONFIG KNOBS</span>
                         Arbitrary overrides break system coherence
-                        <span class="ag-yes">✅ Instead: Guardrailed settings that preserve integrity</span>
+                        <span class="ag-yes">What we build : Guardrailed settings that preserve integrity</span>
                     </div>
                     <div class="anti-goal-item">
-                        <span class="ag-no">❌ NO FRICTIONLESS SHORTCUTS</span>
-                        One-click forgiveness undermines the system
-                        <span class="ag-yes">✅ Instead: Deliberate processes requiring acknowledgment</span>
+                        <span class="ag-no">NO FRICTIONLESS SHORTCUTS</span>
+                        When process slows down and forces cognitive engagement, mistakes become rarity
+                        <span class="ag-yes">What we build: Deliberate processes requiring acknowledgment</span>
                     </div>
                     <div class="anti-goal-item">
-                        <span class="ag-no">❌ NO LEADERBOARDS</span>
+                        <span class="ag-no">NO LEADERBOARDS</span>
                         Public rankings don't belong in classrooms
-                        <span class="ag-yes">✅ Instead: Private balances protect student dignity</span>
+                        <span class="ag-yes">What we build: Private balances protect student dignity</span>
                     </div>
                     <div class="anti-goal-item">
-                        <span class="ag-no">❌ NO NEUTRALITY CLAIM</span>
-                        All systems have assumptions
-                        <span class="ag-yes">✅ Instead: Visible assumptions open to class discussion</span>
+                        <span class="ag-no">NO NEUTRALITY CLAIM</span>
+                        All systems have assumptions, visible assumptions allow for discussions and adjustments while hidden assumptions breed resentment and distrust when they inevitably surface.
+                        <span class="ag-yes">What we build: Visible assumptions open to class discussion</span>
                     </div>
                     <div class="anti-goal-item">
-                        <span class="ag-no">❌ NO DIRECT STUDENT → SYSADMIN TICKETS</span>
-                        Teachers are the first line of support
-                        <span class="ag-yes">✅ Instead: Teacher-mediated escalation preserves authority</span>
+                        <span class="ag-no">NO UNSUPERVISED STUDENT ACCESS</span>
+                        Teachers should always be the first person to resolve student issues.
+                        <span class="ag-yes">What we build: Student support tickets are triaged by teacher first, always.</span>
                     </div>
                 </div>
             </div>
@@ -1148,8 +1143,16 @@
         <!-- Closing Quote -->
         <div class="project-quote">
             <blockquote>
-                "Classroom Token Hub was created to fill the void of a platform that simulates an economy more realistically than what is available on the market. It also functions as a classroom management tool that teaches students personal responsibility. Most of all, it respects data privacy and security like no other. The friction you experience when creating, claiming, and resetting accounts was intentional. Classroom Token Hub does not ask, 'How can we defend ourselves?' It was designed to anticipate, 'What if the bad actor gets in?'"
-            </blockquote>
+<h3>In reflection</h3>
+<p>The system you are looking at today is conceptualized, designed, built, tested, maintained, and updated by a full-time high school teacher who lives by the motto <i>“I will just make it myself.”</i></p>
+
+<p>Becoming an app developer was never part of the plan, but rather a side project that has “gone out of hand.” Every feature and design you see today was a product of countless 500 errors, tears, students’ incessant <i>“Mr., it’s not working!”</i>, and, of course, the satisfaction of seeing the puzzle pieces click into place.</p>
+
+<p>This project would not have been possible without the best beta testers in the world: real students. Every impatient double click, negative deposit, “what if I do this instead?”, and middle-of-the-night transaction exposed bugs and vulnerabilities that would have remained silent for now, but would fail loudly in production.</p>
+
+<p>Classroom Token Hub was created to fill the void of a platform that simulates an economy more realistically than what is available on the market. It also functions as a classroom management tool that teaches students personal responsibility. Most of all, it respects data privacy and security like no other. The friction you experience when creating, claiming, and resetting accounts was intentional. Classroom Token Hub does not ask, “How can we defend ourselves?” It was designed to anticipate, “What if the bad actor gets in?”</p>
+
+<p><strong>Welcome to the Classroom Economy System, reimagined.</strong></p>            </blockquote>
             <cite>— From <a href="{{ url_for('docs.view_doc', doc_path='archive/project/PROJECT_HISTORY') }}" class="text-decoration-none">Project History &amp; Philosophy</a></cite>
         </div>
 
