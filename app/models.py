@@ -726,6 +726,7 @@ class Transaction(db.Model):
     # Stored as IDs to keep compatibility simple across backends/migrations.
     original_transaction_id = db.Column(db.Integer, nullable=True, index=True)
     reversal_transaction_id = db.Column(db.Integer, nullable=True, index=True)
+    policy_id = db.Column(db.Integer, db.ForeignKey('insurance_policies.id'), nullable=True, index=True)
     type = db.Column(db.String(50))  # optional field to describe the transaction type
     # All times stored as UTC
     date_funds_available = db.Column(db.DateTime(timezone=True), default=utc_now)
@@ -736,6 +737,15 @@ class Transaction(db.Model):
     __table_args__ = (
         db.Index('ix_transaction_ledger_scope', 'join_code', 'student_id', 'status', 'account_type'),
         db.Index('ix_transaction_student_ledger', 'join_code', 'student_id'),
+        db.Index(
+            'uq_insurance_reimbursement_source_policy',
+            'original_transaction_id',
+            'policy_id',
+            unique=True,
+            postgresql_where=sa.text(
+                "type = 'insurance_reimbursement' AND original_transaction_id IS NOT NULL AND policy_id IS NOT NULL"
+            ),
+        ),
     )
 
 

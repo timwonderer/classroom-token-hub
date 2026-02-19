@@ -18,7 +18,7 @@
   }
 
   .warning-banner {
-    border-left: 4px solid #ffc107;
+    border-left: 4px solid var(--warning);
   }
 </style>
 {% endblock %}
@@ -143,17 +143,17 @@
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button"
       role="tab">
-      <i class="bi bi-grid me-1"></i>Overview
+      <span class="material-symbols-outlined me-1">grid_view</span>Overview
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">
-      <i class="bi bi-gear me-1"></i>Settings
+      <span class="material-symbols-outlined me-1">settings</span>Settings
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="waivers-tab" data-bs-toggle="tab" data-bs-target="#waivers" type="button" role="tab">
-      <i class="bi bi-calendar-x me-1"></i>Waivers
+      <span class="material-symbols-outlined me-1">event_busy</span>Waivers
     </button>
   </li>
 </ul>
@@ -193,7 +193,7 @@
     <!-- System Disabled Message -->
     <div class="alert alert-warning border-warning">
       <div class="d-flex align-items-center mb-3">
-        <i class="bi bi-power fs-1 me-3"></i>
+        <span class="material-symbols-outlined fs-1 me-3">power_settings_new</span>
         <div>
           <h4 class="mb-1">Rent System is Currently Disabled</h4>
           <p class="mb-0">The rent feature is turned off. Students cannot see or interact with rent-related features.
@@ -210,7 +210,7 @@
       </ul>
       <div class="mt-3">
         <a href="#settings-tab" class="btn btn-primary" data-bs-toggle="tab" data-bs-target="#settings">
-          <i class="bi bi-gear me-2"></i>Go to Settings to Enable
+          <span class="material-symbols-outlined me-2">settings</span>Go to Settings to Enable
         </a>
       </div>
     </div>
@@ -220,7 +220,7 @@
     <div class="card shadow">
       <div
         class="card-header {% if settings.is_enabled %}bg-primary text-white{% else %}bg-secondary text-white{% endif %}">
-        <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Current Rent Configuration</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2">info</span>Current Rent Configuration</h5>
       </div>
       <div class="card-body">
         {% if settings.is_enabled %}
@@ -295,7 +295,7 @@
         </div>
         {% else %}
         <div class="alert alert-warning mb-0">
-          <i class="bi bi-exclamation-triangle me-2"></i>Rent system is currently <strong>disabled</strong>. Enable it
+          <span class="material-symbols-outlined me-2">warning</span>Rent system is currently <strong>disabled</strong>. Enable it
           in the Settings tab to activate rent collection.
         </div>
         {% endif %}
@@ -307,7 +307,7 @@
     {% if not rent_active_for_period %}
     <div class="card shadow mt-4">
       <div class="card-header bg-secondary text-white">
-        <h5 class="mb-0"><i class="bi bi-hourglass me-2"></i>No Rent Due</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2">hourglass_empty</span>No Rent Due</h5>
       </div>
       <div class="card-body">
         <p class="mb-0">Rent is not yet due for this period (based on First Due Date setting).</p>
@@ -316,7 +316,7 @@
     {% elif unpaid_students|length > 0 %}
     <div class="card shadow mt-4">
       <div class="card-header bg-warning text-dark">
-        <h5 class="mb-0"><i class="bi bi-exclamation-triangle me-2"></i>Students with Unpaid Rent ({{
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2">warning</span>Students with Unpaid Rent ({{
           unpaid_students|length }})</h5>
       </div>
       <div class="card-body">
@@ -352,7 +352,7 @@
                   {% for item in class_info.unpaid_students %}
                   <tr>
                     <td>
-                      <a href="{{ url_for('admin.student_detail', student_id=item.student.id) }}">
+                      <a href="{{ url_for('admin.student_detail', student_id=item.student.id, join_code=join_codes_by_block.get(item.student.block, '')) }}">
                         {{ item.student.full_name }}
                       </a>
                     </td>
@@ -374,7 +374,7 @@
     {% else %}
     <div class="card shadow mt-4">
       <div class="card-header bg-success text-white">
-        <h5 class="mb-0"><i class="bi bi-check-circle me-2"></i>All Rent Paid</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2">check_circle</span>All Rent Paid</h5>
       </div>
       <div class="card-body">
         <p class="mb-0">All students with rent enabled have paid their rent for this period. Great job!</p>
@@ -418,7 +418,7 @@
       <!-- Main Toggle Card -->
       <div class="card shadow mb-4">
         <div class="card-header bg-primary text-white">
-          <h5 class="mb-0"><i class="bi bi-power me-2"></i>Rent System Control</h5>
+          <h5 class="mb-0"><span class="material-symbols-outlined me-2">power_settings_new</span>Rent System Control</h5>
         </div>
         <div class="card-body">
           <div class="form-check form-switch">
@@ -436,7 +436,7 @@
       <!-- Warning Banner (if applicable) -->
       {% if payroll_warning %}
       <div class="alert alert-warning warning-banner mb-4">
-        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <span class="material-symbols-outlined me-2">warning</span>
         <strong>Warning:</strong> {{ payroll_warning }}
       </div>
       {% endif %}
@@ -450,7 +450,7 @@
             <h2 class="accordion-header" id="headingAmount">
               <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAmount"
                 aria-expanded="true" aria-controls="collapseAmount">
-                <i class="bi bi-currency-dollar me-2"></i><strong>Rent Amount & Frequency</strong>
+                <span class="material-symbols-outlined me-2">attach_money</span><strong>Rent Amount & Frequency</strong>
                 <span class="badge bg-info ms-2 d-none" id="customFrequencyBadge">Custom</span>
               </button>
             </h2>
@@ -522,7 +522,7 @@
             <h2 class="accordion-header" id="headingDueDate">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                 data-bs-target="#collapseDueDate" aria-expanded="false" aria-controls="collapseDueDate">
-                <i class="bi bi-calendar-event me-2"></i><strong>Due Date Settings</strong>
+                <span class="material-symbols-outlined me-2">event</span><strong>Due Date Settings</strong>
                 <span class="badge bg-success ms-2 d-none" id="dueDateBadge">Active</span>
               </button>
             </h2>
@@ -555,7 +555,7 @@
             <h2 class="accordion-header" id="headingPenalties">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                 data-bs-target="#collapsePenalties" aria-expanded="false" aria-controls="collapsePenalties">
-                <i class="bi bi-exclamation-triangle me-2"></i><strong>Grace Period & Late Penalties</strong>
+                <span class="material-symbols-outlined me-2">warning</span><strong>Grace Period & Late Penalties</strong>
                 <span class="badge bg-warning text-dark ms-2 d-none" id="penaltiesBadge">Active</span>
               </button>
             </h2>
@@ -608,7 +608,7 @@
             <h2 class="accordion-header" id="headingOptions">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                 data-bs-target="#collapseOptions" aria-expanded="false" aria-controls="collapseOptions">
-                <i class="bi bi-person-check me-2"></i><strong>Student Payment Options</strong>
+                <span class="material-symbols-outlined me-2">payments</span><strong>Student Payment Options</strong>
                 <span class="badge bg-primary ms-2 d-none" id="paymentOptionsBadge">Active</span>
               </button>
             </h2>
@@ -680,7 +680,7 @@
             <h2 class="accordion-header" id="headingItemization">
               <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
                 data-bs-target="#collapseItemization" aria-expanded="false" aria-controls="collapseItemization">
-                <i class="bi bi-list-check me-2"></i><strong>Rent Itemization (Optional)</strong>
+                <span class="material-symbols-outlined me-2">checklist</span><strong>Rent Itemization (Optional)</strong>
                 <span class="badge bg-info ms-2">{% if rent_items|length > 0 %}{{ rent_items|length }} items{% else
                   %}Not configured{% endif %}</span>
               </button>
@@ -689,7 +689,7 @@
               data-bs-parent="#rentSettingsAccordion">
               <div class="accordion-body">
                 <div class="alert alert-info">
-                  <i class="bi bi-info-circle me-2"></i>
+                  <span class="material-symbols-outlined me-2">info</span>
                   <strong>What is Rent Itemization?</strong><br>
                   Specify what rent pays for (e.g., "Desk", "Chair", "Locker"). Optionally, you can make these items
                   available in the store as single-purchase alternatives. This creates an incentive for students to pay
@@ -699,7 +699,7 @@
                 <div id="rentItemsContainer">
                   {% if rent_items|length == 0 %}
                   <div class="text-center text-muted py-4" id="noItemsPlaceholder">
-                    <i class="bi bi-inbox fs-1"></i>
+                    <span class="material-symbols-outlined fs-1">inbox</span>
                     <p class="mb-0">No rent items configured yet. Click "Add Item" to get started.</p>
                   </div>
                   {% else %}
@@ -707,9 +707,9 @@
                   <div class="card mb-3 rent-item-card" data-item-index="{{ loop.index0 }}">
                     <div class="card-body">
                       <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h6 class="mb-0"><i class="bi bi-grip-vertical me-2"></i>Item #{{ loop.index }}</h6>
+                        <h6 class="mb-0"><span class="material-symbols-outlined me-2">drag_indicator</span>Item #{{ loop.index }}</h6>
                         <button type="button" class="btn btn-sm btn-danger" onclick="removeRentItem(this)">
-                          <i class="bi bi-trash"></i> Remove
+                          <span class="material-symbols-outlined">delete</span> Remove
                         </button>
                       </div>
 
@@ -735,23 +735,23 @@
                             Item Type
                             <span class="ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
                               data-bs-title="Privileges are ongoing, non-countable benefits (sit in teacher's chair, choose music). Per-use items are countable services or goods (print worksheet, borrow pencil, phone call home, late work pass).">
-                              <i class="bi bi-info-circle"></i>
+                              <span class="material-symbols-outlined">info</span>
                             </span>
                           </label>
                           <div class="btn-group w-100" role="group">
                             <input type="radio" class="btn-check" name="rent_item_type_{{ loop.index0 }}" id="type_privilege_{{ loop.index0 }}" value="privilege" {% if not item.rent_item_type or item.rent_item_type == 'privilege' %}checked{% endif %} onchange="toggleItemType({{ loop.index0 }})">
                             <label class="btn btn-outline-primary" for="type_privilege_{{ loop.index0 }}">
-                              <i class="bi bi-star me-1"></i> Privilege
+                              <span class="material-symbols-outlined me-1">star</span> Privilege
                             </label>
 
                             <input type="radio" class="btn-check" name="rent_item_type_{{ loop.index0 }}" id="type_per_use_{{ loop.index0 }}" value="per_use" {% if item.rent_item_type == 'per_use' %}checked{% endif %} onchange="toggleItemType({{ loop.index0 }})">
                             <label class="btn btn-outline-success" for="type_per_use_{{ loop.index0 }}">
-                              <i class="bi bi-box-seam me-1"></i> Per-Use Item
+                              <span class="material-symbols-outlined me-1">inventory_2</span> Per-Use Item
                             </label>
 
                             <input type="radio" class="btn-check" name="rent_item_type_{{ loop.index0 }}" id="type_hall_pass_{{ loop.index0 }}" value="hall_pass" {% if item.rent_item_type == 'hall_pass' %}checked{% endif %} onchange="toggleItemType({{ loop.index0 }})">
                             <label class="btn btn-outline-secondary" for="type_hall_pass_{{ loop.index0 }}">
-                              <i class="bi bi-ticket-perforated me-1"></i> Hall Pass
+                              <span class="material-symbols-outlined me-1">confirmation_number</span> Hall Pass
                             </label>
                           </div>
                           <small class="text-muted d-block mt-2" id="type_desc_{{ loop.index0 }}">
@@ -808,12 +808,12 @@
                 </div>
 
                 <button type="button" class="btn btn-success mt-2" onclick="addRentItem()">
-                  <i class="bi bi-plus-circle me-2"></i>Add Rent Item
+                  <span class="material-symbols-outlined me-2">add_circle</span>Add Rent Item
                 </button>
 
                 {% if rent_items|length > 0 %}
                 <div class="alert alert-warning mt-3">
-                  <i class="bi bi-exclamation-triangle me-2"></i>
+                  <span class="material-symbols-outlined me-2">warning</span>
                   <strong>Note:</strong> Items marked as "Available in Store" will be automatically added to your class
                   store when you save. If you uncheck this option, the store item will be deactivated.
                 </div>
@@ -826,7 +826,7 @@
 
         <div class="text-end">
           <button type="submit" class="btn btn-primary btn-lg">
-            <i class="bi bi-save me-2"></i>Save Settings
+            <span class="material-symbols-outlined me-2">save</span>Save Settings
           </button>
         </div>
       </div>
@@ -840,7 +840,7 @@
       <div class="col-lg-5 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"><i class="bi bi-plus-circle me-2"></i>Add Rent Waiver</h5>
+            <h5 class="mb-0"><span class="material-symbols-outlined me-2">add_circle</span>Add Rent Waiver</h5>
           </div>
           <div class="card-body">
             <form method="POST" action="{{ url_for('admin.add_rent_waiver') }}">
@@ -870,7 +870,7 @@
               </div>
 
               <button type="submit" class="btn btn-primary w-100">
-                <i class="bi bi-check-circle me-2"></i>Add Waiver
+                <span class="material-symbols-outlined me-2">check_circle</span>Add Waiver
               </button>
             </form>
           </div>
@@ -881,7 +881,7 @@
       <div class="col-lg-7 mb-4">
         <div class="card shadow">
           <div class="card-header bg-info text-white">
-            <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Active Rent Waivers</h5>
+            <h5 class="mb-0"><span class="material-symbols-outlined me-2">format_list_bulleted</span>Active Rent Waivers</h5>
           </div>
           <div class="card-body">
             {% if active_waivers %}
@@ -912,7 +912,7 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
                         <button type="submit" class="btn btn-sm btn-danger"
                           onclick="return confirm('Remove this waiver?')">
-                          <i class="bi bi-trash"></i>
+                          <span class="material-symbols-outlined">delete</span>
                         </button>
                       </form>
                     </td>
@@ -1110,9 +1110,9 @@
     itemCard.innerHTML = `
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <h6 class="mb-0"><i class="bi bi-grip-vertical me-2"></i>Item #${rentItemCounter + 1}</h6>
+          <h6 class="mb-0"><span class="material-symbols-outlined me-2">drag_indicator</span>Item #${rentItemCounter + 1}</h6>
           <button type="button" class="btn btn-sm btn-danger" onclick="removeRentItem(this)">
-            <i class="bi bi-trash"></i> Remove
+            <span class="material-symbols-outlined">delete</span> Remove
           </button>
         </div>
 
@@ -1134,23 +1134,23 @@
               Item Type
               <span class="ms-1 text-muted" data-bs-toggle="tooltip" data-bs-placement="top"
                 data-bs-title="Privileges are ongoing, non-countable benefits (sit in teacher's chair, choose music). Per-use items are countable services or goods (print worksheet, borrow pencil, phone call home, late work pass).">
-                <i class="bi bi-info-circle"></i>
+                <span class="material-symbols-outlined">info</span>
               </span>
             </label>
             <div class="btn-group w-100" role="group">
               <input type="radio" class="btn-check" name="rent_item_type_${rentItemCounter}" id="type_privilege_${rentItemCounter}" value="privilege" checked onchange="toggleItemType(${rentItemCounter})">
               <label class="btn btn-outline-primary" for="type_privilege_${rentItemCounter}">
-                <i class="bi bi-star me-1"></i> Privilege
+                <span class="material-symbols-outlined me-1">star</span> Privilege
               </label>
 
               <input type="radio" class="btn-check" name="rent_item_type_${rentItemCounter}" id="type_per_use_${rentItemCounter}" value="per_use" onchange="toggleItemType(${rentItemCounter})">
               <label class="btn btn-outline-success" for="type_per_use_${rentItemCounter}">
-                <i class="bi bi-box-seam me-1"></i> Per-Use Item
+                <span class="material-symbols-outlined me-1">inventory_2</span> Per-Use Item
               </label>
 
               <input type="radio" class="btn-check" name="rent_item_type_${rentItemCounter}" id="type_hall_pass_${rentItemCounter}" value="hall_pass" onchange="toggleItemType(${rentItemCounter})">
               <label class="btn btn-outline-secondary" for="type_hall_pass_${rentItemCounter}">
-                <i class="bi bi-ticket-perforated me-1"></i> Hall Pass
+                <span class="material-symbols-outlined me-1">confirmation_number</span> Hall Pass
               </label>
             </div>
             <small class="text-muted d-block mt-2" id="type_desc_${rentItemCounter}">
@@ -1281,7 +1281,7 @@
     cards.forEach((card, index) => {
       const header = card.querySelector('h6');
       if (header) {
-        header.innerHTML = `<i class="bi bi-grip-vertical me-2"></i>Item #${index + 1}`;
+        header.innerHTML = `<span class="material-symbols-outlined me-2">drag_indicator</span>Item #${index + 1}`;
       }
     });
   }

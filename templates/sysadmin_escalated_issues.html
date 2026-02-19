@@ -15,7 +15,7 @@
                             <h6 class="text-muted mb-1">Pending Review</h6>
                             <h3 class="mb-0">{{ pending_issues|length }}</h3>
                         </div>
-                        <i class="bi bi-clock-history fs-1 text-warning"></i>
+                        <span class="material-symbols-outlined fs-1 text-warning">history</span>
                     </div>
                 </div>
             </div>
@@ -28,7 +28,7 @@
                             <h6 class="text-muted mb-1">In Review</h6>
                             <h3 class="mb-0">{{ in_review_issues|length }}</h3>
                         </div>
-                        <i class="bi bi-eye-fill fs-1 text-info"></i>
+                        <span class="material-symbols-outlined fs-1 text-info">visibility</span>
                     </div>
                 </div>
             </div>
@@ -41,7 +41,7 @@
                             <h6 class="text-muted mb-1">Resolved</h6>
                             <h3 class="mb-0">{{ resolved_issues|length }}</h3>
                         </div>
-                        <i class="bi bi-check-circle-fill fs-1 text-success"></i>
+                        <span class="material-symbols-outlined fs-1 text-success">check_circle</span>
                     </div>
                 </div>
             </div>
@@ -52,7 +52,7 @@
     <ul class="nav nav-tabs mb-4" id="issuesTabs" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" type="button" role="tab">
-                <i class="bi bi-clock-history me-2"></i>Pending Review
+                <span class="material-symbols-outlined me-2">history</span>Pending Review
                 {% if pending_issues|length > 0 %}
                 <span class="badge bg-warning text-dark ms-2">{{ pending_issues|length }}</span>
                 {% endif %}
@@ -60,7 +60,7 @@
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="review-tab" data-bs-toggle="tab" data-bs-target="#review" type="button" role="tab">
-                <i class="bi bi-eye me-2"></i>In Review
+                <span class="material-symbols-outlined me-2">visibility</span>In Review
                 {% if in_review_issues|length > 0 %}
                 <span class="badge bg-info ms-2">{{ in_review_issues|length }}</span>
                 {% endif %}
@@ -68,7 +68,7 @@
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="resolved-tab" data-bs-toggle="tab" data-bs-target="#resolved" type="button" role="tab">
-                <i class="bi bi-check-circle me-2"></i>Resolved
+                <span class="material-symbols-outlined me-2">check_circle</span>Resolved
             </button>
         </li>
     </ul>
@@ -84,16 +84,16 @@
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
                                     <h6 class="mb-0 me-2">
-                                        <i class="bi bi-person-fill me-1"></i>
+                                        <span class="material-symbols-outlined me-1">person</span>
                                         {{ issue.opaque_student_reference[:8] }}...
                                     </h6>
                                     <span class="badge bg-secondary">{{ issue.category.name if issue.category else 'Unknown' }}</span>
                                     <span class="badge bg-primary ms-2">
-                                        <i class="bi bi-person-badge me-1"></i>{{ issue.teacher.username }}
+                                        <span class="material-symbols-outlined me-1">badge</span>{{ issue.teacher.username }}
                                     </span>
                                     {% if issue.share_class_name_with_sysadmin and issue.class_label %}
                                     <span class="badge bg-info ms-2">
-                                        <i class="bi bi-door-open me-1"></i>{{ issue.class_label }}
+                                        <span class="material-symbols-outlined me-1">door_front</span>{{ issue.class_label }}
                                     </span>
                                     {% endif %}
                                 </div>
@@ -102,7 +102,7 @@
                                     {{ issue.student_explanation[:200] }}{% if issue.student_explanation|length > 200 %}...{% endif %}
                                 </p>
                                 <small class="text-muted">
-                                    <i class="bi bi-arrow-up-circle me-1"></i>
+                                    <span class="material-symbols-outlined me-1">arrow_circle_up</span>
                                     Escalated <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
                                 </small>
                             </div>
@@ -118,7 +118,7 @@
             {% else %}
                 <div class="card">
                     <div class="card-body text-center py-5">
-                        <i class="bi bi-check-circle-fill fs-1 text-success mb-3"></i>
+                        <span class="material-symbols-outlined fs-1 text-success mb-3">check_circle</span>
                         <h5 class="text-muted">No pending issues</h5>
                         <p class="text-muted mb-0">All escalated issues have been reviewed.</p>
                     </div>
@@ -136,16 +136,16 @@
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
                                     <h6 class="mb-0 me-2">
-                                        <i class="bi bi-person-fill me-1"></i>
+                                        <span class="material-symbols-outlined me-1">person</span>
                                         {{ issue.opaque_student_reference[:8] }}...
                                     </h6>
                                     <span class="badge bg-secondary">{{ issue.category.name if issue.category else 'Unknown' }}</span>
                                     <span class="badge bg-primary ms-2">
-                                        <i class="bi bi-person-badge me-1"></i>{{ issue.teacher.username }}
+                                        <span class="material-symbols-outlined me-1">badge</span>{{ issue.teacher.username }}
                                     </span>
                                     {% if issue.share_class_name_with_sysadmin and issue.class_label %}
                                     <span class="badge bg-info ms-2">
-                                        <i class="bi bi-door-open me-1"></i>{{ issue.class_label }}
+                                        <span class="material-symbols-outlined me-1">door_front</span>{{ issue.class_label }}
                                     </span>
                                     {% endif %}
                                 </div>
@@ -154,7 +154,7 @@
                                     {{ issue.student_explanation[:200] }}{% if issue.student_explanation|length > 200 %}...{% endif %}
                                 </p>
                                 <small class="text-muted">
-                                    <i class="bi bi-eye me-1"></i>
+                                    <span class="material-symbols-outlined me-1">visibility</span>
                                     In review since <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.sysadmin_reviewed_at or issue.escalated_at) }}"></span>
                                 </small>
                             </div>
@@ -170,7 +170,7 @@
             {% else %}
                 <div class="card">
                     <div class="card-body text-center py-5">
-                        <i class="bi bi-inbox fs-1 text-muted mb-3"></i>
+                        <span class="material-symbols-outlined fs-1 text-muted mb-3">inbox</span>
                         <h5 class="text-muted">No issues in review</h5>
                         <p class="text-muted mb-0">Issues currently being reviewed will appear here.</p>
                     </div>
@@ -188,16 +188,16 @@
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
                                     <h6 class="mb-0 me-2">
-                                        <i class="bi bi-person-fill me-1"></i>
+                                        <span class="material-symbols-outlined me-1">person</span>
                                         {{ issue.opaque_student_reference[:8] }}...
                                     </h6>
                                     <span class="badge bg-secondary">{{ issue.category.name if issue.category else 'Unknown' }}</span>
                                     <span class="badge bg-primary ms-2">
-                                        <i class="bi bi-person-badge me-1"></i>{{ issue.teacher.username }}
+                                        <span class="material-symbols-outlined me-1">badge</span>{{ issue.teacher.username }}
                                     </span>
                                     {% if issue.eligible_for_reward %}
                                     <span class="badge bg-warning text-dark ms-2">
-                                        <i class="bi bi-gift-fill me-1"></i>Reward Eligible
+                                        <span class="material-symbols-outlined me-1">redeem</span>Reward Eligible
                                     </span>
                                     {% endif %}
                                 </div>
@@ -205,7 +205,7 @@
                                     {{ issue.student_explanation[:200] }}{% if issue.student_explanation|length > 200 %}...{% endif %}
                                 </p>
                                 <small class="text-muted">
-                                    <i class="bi bi-check-circle me-1"></i>
+                                    <span class="material-symbols-outlined me-1">check_circle</span>
                                     Resolved <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.sysadmin_resolved_at) }}"></span>
                                 </small>
                             </div>
@@ -219,7 +219,7 @@
             {% else %}
                 <div class="card">
                     <div class="card-body text-center py-5">
-                        <i class="bi bi-inbox fs-1 text-muted mb-3"></i>
+                        <span class="material-symbols-outlined fs-1 text-muted mb-3">inbox</span>
                         <h5 class="text-muted">No resolved issues</h5>
                         <p class="text-muted mb-0">Issues you've resolved will appear here.</p>
                     </div>

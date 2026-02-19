@@ -41,7 +41,7 @@
           <button type="submit" class="btn btn-primary">Filter</button>
         </div>
       </form>
-      <div class="table-responsive" style="max-height:600px; overflow-y:auto; border-style:solid; border-color:#2f4f4f; border-width:2px;"> 
+      <div class="table-responsive" style="max-height:600px; overflow-y:auto; border-style:solid; border-color:var(--primary); border-width:2px;"> 
        <table id="transactionsTable" class="table table-striped styled-table" >
           <thead class="table-dark sticky-top">
             <tr>
@@ -71,7 +71,7 @@
               <td>{{ tx.reason or '—' }}</td>
               <td>
                 {% if not tx.is_void %}
-                  <button type="button" class="btn btn-sm btn-outline-danger void-btn" data-id="{{ tx.id }}"><i class="bi bi-x-circle me-1"></i>Void</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger void-btn" data-id="{{ tx.id }}"><span class="material-symbols-outlined me-1">cancel</span>Void</button>
                 {% else %}
                   <span class="badge bg-secondary">Voided</span>
                 {% endif %}

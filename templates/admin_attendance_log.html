@@ -3,9 +3,10 @@
 {% block title %}Attendance Log{% endblock %}
 {% block page_icon %}fact_check{% endblock %}
 {% block page_header_actions %}
-  <button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas" data-bs-target="#attendanceGuide" aria-controls="attendanceGuide">
+<button class="btn btn-primary d-flex align-items-center gap-2" type="button" data-bs-toggle="offcanvas"
+    data-bs-target="#attendanceGuide" aria-controls="attendanceGuide">
     <span class="material-symbols-outlined">quick_reference_all</span> <span>Need Help?</span>
-  </button>
+</button>
 {% endblock %}
 {% block content %}
 
@@ -19,43 +20,59 @@
         <div class="accordion mt-4 mb-4" id="attendanceGuideAccordion">
             <div class="accordion-item">
                 <h2 class="accordion-header" id="attendanceGuideHeadingControls">
-                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#attendanceGuideControls" aria-expanded="false" aria-controls="attendanceGuideControls">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">toggle_on</span>
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#attendanceGuideControls" aria-expanded="false"
+                        aria-controls="attendanceGuideControls">
+                        <span class="material-symbols-outlined me-2"
+                            style="font-size:25pt; vertical-align:middle;">toggle_on</span>
                         <strong>Attendance Controls</strong>
                     </button>
                 </h2>
-                <div id="attendanceGuideControls" class="accordion-collapse collapse mt-2" aria-labelledby="attendanceGuideHeadingControls" data-bs-parent="#attendanceGuideAccordion">
+                <div id="attendanceGuideControls" class="accordion-collapse collapse mt-2"
+                    aria-labelledby="attendanceGuideHeadingControls" data-bs-parent="#attendanceGuideAccordion">
                     <div class="accordion-body">
-                        <p>Use the class toggles to enable or pause Start Work, Break, and Done taps for each class period.</p>
+                        <p>Use the class toggles to enable or pause Start Work, Break, and Done taps for each class
+                            period.</p>
                         <div class="alert alert-info mb-0">
-                            <strong>Tip:</strong> Pausing a class prevents new taps but does not change existing records.
+                            <strong>Tip:</strong> Pausing a class prevents new taps but does not change existing
+                            records.
                         </div>
                     </div>
                 </div>
             </div>
             <div class="accordion-item">
                 <h2 class="accordion-header" id="attendanceGuideHeadingFilters">
-                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#attendanceGuideFilters" aria-expanded="false" aria-controls="attendanceGuideFilters">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">filter_alt</span>
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#attendanceGuideFilters" aria-expanded="false"
+                        aria-controls="attendanceGuideFilters">
+                        <span class="material-symbols-outlined me-2"
+                            style="font-size:25pt; vertical-align:middle;">filter_alt</span>
                         <strong>Filter Attendance History</strong>
                     </button>
                 </h2>
-                <div id="attendanceGuideFilters" class="accordion-collapse collapse mt-2" aria-labelledby="attendanceGuideHeadingFilters" data-bs-parent="#attendanceGuideAccordion">
+                <div id="attendanceGuideFilters" class="accordion-collapse collapse mt-2"
+                    aria-labelledby="attendanceGuideHeadingFilters" data-bs-parent="#attendanceGuideAccordion">
                     <div class="accordion-body">
-                        <p>Use the filters to narrow by period, class, event type, and date range, then click Apply Filters.</p>
+                        <p>Use the filters to narrow by period, class, event type, and date range, then click Apply
+                            Filters.</p>
                     </div>
                 </div>
             </div>
             <div class="accordion-item">
                 <h2 class="accordion-header" id="attendanceGuideHeadingReview">
-                    <button class="accordion-button collapsed bg-secondary text-muted" type="button" data-bs-toggle="collapse" data-bs-target="#attendanceGuideReview" aria-expanded="false" aria-controls="attendanceGuideReview">
-                        <span class="material-symbols-outlined me-2" style="font-size:25pt; vertical-align:middle;">history</span>
+                    <button class="accordion-button collapsed bg-secondary text-muted" type="button"
+                        data-bs-toggle="collapse" data-bs-target="#attendanceGuideReview" aria-expanded="false"
+                        aria-controls="attendanceGuideReview">
+                        <span class="material-symbols-outlined me-2"
+                            style="font-size:25pt; vertical-align:middle;">history</span>
                         <strong>Review Records</strong>
                     </button>
                 </h2>
-                <div id="attendanceGuideReview" class="accordion-collapse collapse mt-2" aria-labelledby="attendanceGuideHeadingReview" data-bs-parent="#attendanceGuideAccordion">
+                <div id="attendanceGuideReview" class="accordion-collapse collapse mt-2"
+                    aria-labelledby="attendanceGuideHeadingReview" data-bs-parent="#attendanceGuideAccordion">
                     <div class="accordion-body">
-                        <p>Review the table for start/end times, totals, and notes. Use the pagination to move through results.</p>
+                        <p>Review the table for start/end times, totals, and notes. Use the pagination to move through
+                            results.</p>
                         <div class="alert alert-warning mb-0">
                             <strong>Missing data?</strong> Clear filters or expand the date range if no records appear.
                         </div>
@@ -71,7 +88,8 @@
     <div class="card-body py-3">
         <div class="row align-items-center g-3">
             <div class="col-auto">
-                <span class="material-symbols-outlined" style="font-size: 2rem; color: var(--brand-primary);">summarize</span>
+                <span class="material-symbols-outlined"
+                    style="font-size: 2rem; color: var(--brand-primary);">summarize</span>
             </div>
             <div class="col">
                 <div class="row g-3">
@@ -128,27 +146,24 @@
             </div>
             <div class="card-body">
                 {% if blocks %}
-                    <p class="text-muted small mb-3">Disable Start Work / Break / Done per class to pause attendance for that block.</p>
-                    <div class="list-group list-group-flush">
-                        {% for block in blocks %}
-                        <div class="list-group-item d-flex justify-content-between align-items-center px-0">
-                            <div>
-                                <div class="fw-semibold">{{ class_labels_by_block.get(block, block) }}</div>
-                                <div class="text-muted small">Block {{ block }}</div>
-                            </div>
-                            <div class="form-check form-switch m-0">
-                                <input
-                                    class="form-check-input block-tap-toggle"
-                                    type="checkbox"
-                                    id="blockTapToggle{{ loop.index }}"
-                                    data-block="{{ block|upper }}"
-                                    checked>
-                            </div>
+                <p class="text-muted small mb-3">Disable Start Work / Break / Done per class to pause attendance for
+                    that block.</p>
+                <div class="list-group list-group-flush">
+                    {% for block in blocks %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                        <div>
+                            <div class="fw-semibold">{{ class_labels_by_block.get(block, block) }}</div>
+                            <div class="text-muted small">Block {{ block }}</div>
                         </div>
-                        {% endfor %}
+                        <div class="form-check form-switch m-0">
+                            <input class="form-check-input block-tap-toggle" type="checkbox"
+                                id="blockTapToggle{{ loop.index }}" data-block="{{ block|upper }}" checked>
+                        </div>
                     </div>
+                    {% endfor %}
+                </div>
                 {% else %}
-                    <p class="text-muted mb-0">No classes available yet.</p>
+                <p class="text-muted mb-0">No classes available yet.</p>
                 {% endif %}
             </div>
         </div>
@@ -204,7 +219,8 @@
                     </div>
                     <div class="col-12 d-flex align-items-center gap-2">
                         <button class="btn btn-sm btn-primary" onclick="loadAttendanceHistory()">
-                            <span class="material-symbols-outlined" style="font-size: 1rem; vertical-align: text-bottom;">filter_alt</span>
+                            <span class="material-symbols-outlined"
+                                style="font-size: 1rem; vertical-align: text-bottom;">filter_alt</span>
                             Apply
                         </button>
                         <button class="btn btn-sm btn-outline-secondary" onclick="resetFilters()" title="Reset filters">
@@ -226,7 +242,8 @@
                 <div id="attendanceTableContainer">
                     <div class="table-responsive">
                         <table class="table table-hover align-middle mb-0" id="attendanceTable">
-                            <thead style="background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-blue) 100%); color: white; position: sticky; top: 0; z-index: 10;">
+                            <thead
+                                style="background: linear-gradient(135deg, var(--brand-primary) 0%, var(--brand-blue) 100%); color: white; position: sticky; top: 0; z-index: 10;">
                                 <tr>
                                     <th class="ps-4">Student</th>
                                     <th>Class</th>
@@ -243,7 +260,8 @@
                     </div>
 
                     <div id="emptyState" class="text-center py-5 text-muted d-none">
-                        <span class="material-symbols-outlined d-block mb-2" style="font-size: 3rem; opacity: 0.3;">search_off</span>
+                        <span class="material-symbols-outlined d-block mb-2"
+                            style="font-size: 3rem; opacity: 0.3;">search_off</span>
                         <p class="mb-0">No attendance records found</p>
                         <small>Try adjusting your filters</small>
                     </div>
@@ -270,211 +288,208 @@
 
 {% block extra_scripts %}
 <script>
-// Global state
-let currentPage = 1;
-let totalPages = 1;
-let totalRecords = 0;
-const pageSize = 50;
+    // Global state
+    let currentPage = 1;
+    let totalPages = 1;
+    let totalRecords = 0;
+    const pageSize = 50;
 
-// HTML escape function to prevent XSS
-function escapeHtml(text) {
-    if (text == null) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
+    // HTML escape function to prevent XSS
+    function escapeHtml(text) {
+        if (text == null) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
 
-// Use centralized timezone utility for timestamp formatting
-const formatTimestamp = window.TimezoneUtils.formatTimestamp;
+    // Use centralized timezone utility for timestamp formatting
+    const formatTimestamp = window.TimezoneUtils.formatTimestamp;
 
-function initTapToggles() {
-    document.querySelectorAll('.block-tap-toggle').forEach(function(toggle) {
-        const block = toggle.getAttribute('data-block');
+    function initTapToggles() {
+        document.querySelectorAll('.block-tap-toggle').forEach(function (toggle) {
+            const block = toggle.getAttribute('data-block');
 
-        fetch(`/api/admin/block-tap-settings?block=${block}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.tap_enabled !== undefined) {
-                    toggle.checked = data.tap_enabled;
-                }
-            })
-            .catch(error => console.error('Error loading tap settings:', error));
-
-        toggle.addEventListener('change', function() {
-            const isEnabled = this.checked;
-            fetch('/api/admin/block-tap-settings', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': document.querySelector('meta[name=\"csrf-token\"]')?.getAttribute('content')
-                },
-                body: JSON.stringify({
-                    block: block,
-                    tap_enabled: isEnabled
+            fetch(`/api/admin/block-tap-settings?block=${block}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.tap_enabled !== undefined) {
+                        toggle.checked = data.tap_enabled;
+                    }
                 })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'ok') {
-                    const toast = document.createElement('div');
-                    toast.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
-                    toast.style.zIndex = '9999';
+                .catch(error => console.error('Error loading tap settings:', error));
 
-                    // Create elements safely to prevent XSS
-                    const icon = document.createElement('span');
-                    icon.className = 'material-symbols-outlined me-2';
-                    icon.style.verticalAlign = 'middle';
-                    icon.textContent = 'check_circle';
+            toggle.addEventListener('change', function () {
+                const isEnabled = this.checked;
+                fetch('/api/admin/block-tap-settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('meta[name=\"csrf-token\"]')?.getAttribute('content')
+                    },
+                    body: JSON.stringify({
+                        block: block,
+                        tap_enabled: isEnabled
+                    })
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'ok') {
+                            const toast = document.createElement('div');
+                            toast.className = 'alert alert-success alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3';
+                            toast.style.zIndex = '9999';
 
-                    const message = document.createTextNode(
-                        isEnabled ? `Tap in/out enabled for Block ${block}` : `Tap in/out disabled for Block ${block}`
-                    );
+                            // Create elements safely to prevent XSS
+                            const icon = document.createElement('span');
+                            icon.className = 'material-symbols-outlined me-2';
+                            icon.style.verticalAlign = 'middle';
+                            icon.textContent = 'check_circle';
 
-                    const closeBtn = document.createElement('button');
-                    closeBtn.type = 'button';
-                    closeBtn.className = 'btn-close';
-                    closeBtn.setAttribute('data-bs-dismiss', 'alert');
+                            const message = document.createTextNode(
+                                isEnabled ? `Tap in/out enabled for Block ${block}` : `Tap in/out disabled for Block ${block}`
+                            );
 
-                    toast.appendChild(icon);
-                    toast.appendChild(message);
-                    toast.appendChild(closeBtn);
+                            const closeBtn = document.createElement('button');
+                            closeBtn.type = 'button';
+                            closeBtn.className = 'btn-close';
+                            closeBtn.setAttribute('data-bs-dismiss', 'alert');
 
-                    document.body.appendChild(toast);
-                    setTimeout(() => toast.remove(), 3000);
-                } else {
-                    alert('Error updating tap settings: ' + (data.message || 'Unknown error'));
-                    toggle.checked = !isEnabled;
-                }
-            })
-            .catch(error => {
-                console.error('Error updating tap settings:', error);
-                alert('Network error occurred while updating tap settings.');
-                toggle.checked = !isEnabled;
+                            toast.appendChild(icon);
+                            toast.appendChild(message);
+                            toast.appendChild(closeBtn);
+
+                            document.body.appendChild(toast);
+                            setTimeout(() => toast.remove(), 3000);
+                        } else {
+                            alert('Error updating tap settings: ' + (data.message || 'Unknown error'));
+                            toggle.checked = !isEnabled;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error updating tap settings:', error);
+                        alert('Network error occurred while updating tap settings.');
+                        toggle.checked = !isEnabled;
+                    });
             });
         });
-    });
-}
-
-// Get status badge HTML (status is validated server-side but we escape for defense in depth)
-function getStatusBadge(status) {
-    const escapedStatus = escapeHtml(status);
-    if (status === 'active') {
-        return '<span class="badge bg-success"><span class="material-symbols-outlined" style="font-size: 0.875rem; vertical-align: text-bottom;">login</span> Start Work</span>';
-    } else if (status === 'inactive') {
-        return '<span class="badge bg-danger"><span class="material-symbols-outlined" style="font-size: 0.875rem; vertical-align: text-bottom;">logout</span> Break / Done</span>';
     }
-    return '<span class="badge bg-secondary">' + escapedStatus + '</span>';
-}
 
-// Load attendance history with filters
-async function loadAttendanceHistory(page = 1) {
-    currentPage = page;
-
-    // Show loading indicator
-    document.getElementById('loadingIndicator').classList.remove('d-none');
-    document.getElementById('attendanceTableContainer').classList.add('d-none');
-
-    // Build query parameters
-    const params = new URLSearchParams({
-        page: page,
-        page_size: pageSize
-    });
-
-    // Add filters
-    const period = document.getElementById('filterPeriod').value;
-    const block = document.getElementById('filterBlock').value;
-    const status = document.getElementById('filterStatus').value;
-    const startDate = document.getElementById('filterStartDate').value;
-    const endDate = document.getElementById('filterEndDate').value;
-
-    if (period) params.append('period', period);
-    if (block) params.append('block', block);
-    if (status) params.append('status', status);
-    if (startDate) params.append('start_date', startDate);
-    if (endDate) params.append('end_date', endDate);
-
-    try {
-        const response = await fetch(`/api/attendance/history?${params.toString()}`);
-        const data = await response.json();
-
-        if (data.status === 'success') {
-            totalRecords = data.total;
-            totalPages = data.total_pages;
-            renderAttendanceTable(data.records);
-            renderPagination();
-            updateStats(data.records);
-        } else {
-            console.error('Error loading attendance history:', data.message);
-            showEmptyState();
+    // Get status badge HTML (status is validated server-side but we escape for defense in depth)
+    function getStatusBadge(status) {
+        const escapedStatus = escapeHtml(status);
+        if (status === 'active') {
+            return '<span class="badge bg-success"><span class="material-symbols-outlined" style="font-size: 0.875rem; vertical-align: text-bottom;">login</span> Start Work</span>';
+        } else if (status === 'inactive') {
+            return '<span class="badge bg-danger"><span class="material-symbols-outlined" style="font-size: 0.875rem; vertical-align: text-bottom;">logout</span> Break / Done</span>';
         }
-    } catch (error) {
-        console.error('Error fetching attendance history:', error);
-        showEmptyState();
-    } finally {
-        // Hide loading indicator
-        document.getElementById('loadingIndicator').classList.add('d-none');
-        document.getElementById('attendanceTableContainer').classList.remove('d-none');
-    }
-}
-
-// Render attendance table
-function renderAttendanceTable(records) {
-    const tbody = document.getElementById('attendanceTableBody');
-
-    if (records.length === 0) {
-        tbody.innerHTML = '';
-        document.getElementById('emptyState').classList.remove('d-none');
-        return;
+        return '<span class="badge bg-secondary">' + escapedStatus + '</span>';
     }
 
-    document.getElementById('emptyState').classList.add('d-none');
+    // Load attendance history with filters
+    async function loadAttendanceHistory(page = 1) {
+        currentPage = page;
 
-    tbody.innerHTML = records.map(record => `
+        // Show loading indicator
+        document.getElementById('loadingIndicator').classList.remove('d-none');
+        document.getElementById('attendanceTableContainer').classList.add('d-none');
+
+        // Build query parameters
+        const params = new URLSearchParams({
+            page: page,
+            page_size: pageSize
+        });
+
+        // Add filters
+        const period = document.getElementById('filterPeriod').value;
+        const block = document.getElementById('filterBlock').value;
+        const status = document.getElementById('filterStatus').value;
+        const startDate = document.getElementById('filterStartDate').value;
+        const endDate = document.getElementById('filterEndDate').value;
+
+        if (period) params.append('period', period);
+        if (block) params.append('block', block);
+        if (status) params.append('status', status);
+        if (startDate) params.append('start_date', startDate);
+        if (endDate) params.append('end_date', endDate);
+
+        try {
+            const response = await fetch(`/api/attendance/history?${params.toString()}`);
+            const data = await response.json();
+
+            if (data.status === 'success') {
+                totalRecords = data.total;
+                totalPages = data.total_pages;
+                renderAttendanceTable(data.records);
+                renderPagination();
+                updateStats(data.records);
+            } else {
+                console.error('Error loading attendance history:', data.message);
+                showEmptyState();
+            }
+        } catch (error) {
+            console.error('Error fetching attendance history:', error);
+            showEmptyState();
+        } finally {
+            // Hide loading indicator
+            document.getElementById('loadingIndicator').classList.add('d-none');
+            document.getElementById('attendanceTableContainer').classList.remove('d-none');
+        }
+    }
+
+    // Render attendance table
+    function renderAttendanceTable(records) {
+        const tbody = document.getElementById('attendanceTableBody');
+
+        if (records.length === 0) {
+            tbody.innerHTML = '';
+            document.getElementById('emptyState').classList.remove('d-none');
+            return;
+        }
+
+        document.getElementById('emptyState').classList.add('d-none');
+
+        tbody.innerHTML = records.map(record => `
         <tr>
             <td class="ps-4">
-                <div class="d-flex align-items-center">
-                    <span class="material-symbols-outlined me-2 text-muted" style="font-size: 1.25rem;">person</span>
-                    <span class="fw-medium">${escapeHtml(record.student_name)}</span>
-                </div>
+                <span class="fw-medium">${escapeHtml(record.student_name)}</span>
             </td>
-            <td><span class="badge bg-primary bg-opacity-10 text-white">${escapeHtml(record.student_class_label) || '—'}</span></td>
-            <td><span class="badge bg-info bg-opacity-10 text-info">${escapeHtml(record.period)}</span></td>
+            <td><span class="badge bg-primary-subtle text-primary">${escapeHtml(record.student_class_label) || '—'}</span></td>
+            <td><span class="badge bg-info-subtle text-info">${escapeHtml(record.period)}</span></td>
             <td><span class="text-muted small">${formatTimestamp(record.timestamp)}</span></td>
             <td>${getStatusBadge(record.status)}</td>
             <td class="text-muted small">${escapeHtml(record.reason) || '—'}</td>
         </tr>
     `).join('');
-}
+    }
 
-// Update stats summary
-function updateStats(records) {
-    const tapIns = records.filter(r => r.status === 'active').length;
-    const tapOuts = records.filter(r => r.status === 'inactive').length;
+    // Update stats summary
+    function updateStats(records) {
+        const tapIns = records.filter(r => r.status === 'active').length;
+        const tapOuts = records.filter(r => r.status === 'inactive').length;
 
-    document.getElementById('totalRecords').textContent = totalRecords.toLocaleString();
-    document.getElementById('tapInCount').textContent = tapIns.toLocaleString();
-    document.getElementById('tapOutCount').textContent = tapOuts.toLocaleString();
+        document.getElementById('totalRecords').textContent = totalRecords.toLocaleString();
+        document.getElementById('tapInCount').textContent = tapIns.toLocaleString();
+        document.getElementById('tapOutCount').textContent = tapOuts.toLocaleString();
 
-    const start = (currentPage - 1) * pageSize + 1;
-    const end = Math.min(currentPage * pageSize, totalRecords);
-    document.getElementById('showingRange').textContent = totalRecords > 0 ? `${start} - ${end}` : '—';
-}
+        const start = (currentPage - 1) * pageSize + 1;
+        const end = Math.min(currentPage * pageSize, totalRecords);
+        document.getElementById('showingRange').textContent = totalRecords > 0 ? `${start} - ${end}` : '—';
+    }
 
-// Render pagination controls
-function renderPagination() {
-    const paginationControls = document.getElementById('paginationControls');
-    const paginationInfo = document.getElementById('paginationInfo');
+    // Render pagination controls
+    function renderPagination() {
+        const paginationControls = document.getElementById('paginationControls');
+        const paginationInfo = document.getElementById('paginationInfo');
 
-    // Update info text
-    const start = (currentPage - 1) * pageSize + 1;
-    const end = Math.min(currentPage * pageSize, totalRecords);
-    paginationInfo.textContent = `Showing ${start.toLocaleString()} - ${end.toLocaleString()} of ${totalRecords.toLocaleString()} records`;
+        // Update info text
+        const start = (currentPage - 1) * pageSize + 1;
+        const end = Math.min(currentPage * pageSize, totalRecords);
+        paginationInfo.textContent = `Showing ${start.toLocaleString()} - ${end.toLocaleString()} of ${totalRecords.toLocaleString()} records`;
 
-    // Build pagination buttons
-    let html = '';
+        // Build pagination buttons
+        let html = '';
 
-    // Previous button
-    html += `
+        // Previous button
+        html += `
         <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
             <a class="page-link" href="#" onclick="loadAttendanceHistory(${currentPage - 1}); return false;">
                 <span class="material-symbols-outlined" style="font-size: 1rem;">chevron_left</span>
@@ -482,39 +497,39 @@ function renderPagination() {
         </li>
     `;
 
-    // Page numbers (show smart pagination)
-    const maxVisible = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
-    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+        // Page numbers (show smart pagination)
+        const maxVisible = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisible - 1);
 
-    if (endPage - startPage < maxVisible - 1) {
-        startPage = Math.max(1, endPage - maxVisible + 1);
-    }
-
-    if (startPage > 1) {
-        html += `<li class="page-item"><a class="page-link" href="#" onclick="loadAttendanceHistory(1); return false;">1</a></li>`;
-        if (startPage > 2) {
-            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        if (endPage - startPage < maxVisible - 1) {
+            startPage = Math.max(1, endPage - maxVisible + 1);
         }
-    }
 
-    for (let i = startPage; i <= endPage; i++) {
-        html += `
+        if (startPage > 1) {
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="loadAttendanceHistory(1); return false;">1</a></li>`;
+            if (startPage > 2) {
+                html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+            html += `
             <li class="page-item ${i === currentPage ? 'active' : ''}">
                 <a class="page-link" href="#" onclick="loadAttendanceHistory(${i}); return false;">${i}</a>
             </li>
         `;
-    }
-
-    if (endPage < totalPages) {
-        if (endPage < totalPages - 1) {
-            html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
         }
-        html += `<li class="page-item"><a class="page-link" href="#" onclick="loadAttendanceHistory(${totalPages}); return false;">${totalPages}</a></li>`;
-    }
 
-    // Next button
-    html += `
+        if (endPage < totalPages) {
+            if (endPage < totalPages - 1) {
+                html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+            }
+            html += `<li class="page-item"><a class="page-link" href="#" onclick="loadAttendanceHistory(${totalPages}); return false;">${totalPages}</a></li>`;
+        }
+
+        // Next button
+        html += `
         <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
             <a class="page-link" href="#" onclick="loadAttendanceHistory(${currentPage + 1}); return false;">
                 <span class="material-symbols-outlined" style="font-size: 1rem;">chevron_right</span>
@@ -522,34 +537,34 @@ function renderPagination() {
         </li>
     `;
 
-    paginationControls.innerHTML = html;
-}
+        paginationControls.innerHTML = html;
+    }
 
-// Show empty state
-function showEmptyState() {
-    document.getElementById('attendanceTableBody').innerHTML = '';
-    document.getElementById('emptyState').classList.remove('d-none');
-    document.getElementById('totalRecords').textContent = '0';
-    document.getElementById('tapInCount').textContent = '0';
-    document.getElementById('tapOutCount').textContent = '0';
-    document.getElementById('showingRange').textContent = '—';
-}
+    // Show empty state
+    function showEmptyState() {
+        document.getElementById('attendanceTableBody').innerHTML = '';
+        document.getElementById('emptyState').classList.remove('d-none');
+        document.getElementById('totalRecords').textContent = '0';
+        document.getElementById('tapInCount').textContent = '0';
+        document.getElementById('tapOutCount').textContent = '0';
+        document.getElementById('showingRange').textContent = '—';
+    }
 
-// Reset filters
-function resetFilters() {
-    document.getElementById('filterPeriod').value = '';
-    document.getElementById('filterBlock').value = '';
-    document.getElementById('filterStatus').value = '';
-    document.getElementById('filterStartDate').value = '';
-    document.getElementById('filterEndDate').value = '';
-    loadAttendanceHistory(1);
-}
+    // Reset filters
+    function resetFilters() {
+        document.getElementById('filterPeriod').value = '';
+        document.getElementById('filterBlock').value = '';
+        document.getElementById('filterStatus').value = '';
+        document.getElementById('filterStartDate').value = '';
+        document.getElementById('filterEndDate').value = '';
+        loadAttendanceHistory(1);
+    }
 
-// Load data on page load
-document.addEventListener('DOMContentLoaded', () => {
-    initTapToggles();
-    loadAttendanceHistory(1);
-});
+    // Load data on page load
+    document.addEventListener('DOMContentLoaded', () => {
+        initTapToggles();
+        loadAttendanceHistory(1);
+    });
 </script>
 
 {% endblock %}

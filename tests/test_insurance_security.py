@@ -4,7 +4,17 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.exc import IntegrityError
 
 from app import db
-from app.models import Admin, InsurancePolicy, StudentInsurance, InsuranceClaim, Transaction
+from app.models import (
+    Admin,
+    InsurancePolicy,
+    StudentInsurance,
+    InsuranceClaim,
+    Transaction,
+    TransactionStatus,
+    StoreItem,
+    RentSettings,
+    RentItem,
+)
 
 
 @pytest.fixture
@@ -132,3 +142,205 @@ def test_voided_transaction_cannot_be_approved(client, test_student, admin_user)
     db.session.refresh(claim)
     assert claim.status == "pending"
     assert b"voided" in response.data
+
+
+def test_hard_deny_transaction_type_cannot_be_approved(client, test_student, admin_user):
+    from app.models import StudentTeacher
+
+    st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
+    db.session.add(st)
+    db.session.commit()
+
+    policy = _create_policy(admin_user.id)
+    enrollment = _enroll_student(test_student.id, policy.id)
+    rent_tx = Transaction(
+        student_id=test_student.id,
+        teacher_id=admin_user.id,
+        amount=-40.0,
+        account_type="checking",
+        status=TransactionStatus.POSTED,
+        type="Rent Payment",
+        description="Rent for Period A",
+    )
+    db.session.add(rent_tx)
+    db.session.commit()
+
+    claim = _build_claim(enrollment, policy, test_student.id, rent_tx)
+    db.session.add(claim)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["is_admin"] = True
+        sess["admin_id"] = admin_user.id
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    response = client.post(
+        f"/admin/insurance/claim/{claim.id}",
+        data={
+            "status": "approved",
+            "approved_amount": "",
+            "rejection_reason": "",
+            "admin_notes": "",
+        },
+        follow_redirects=True,
+    )
+
+    db.session.refresh(claim)
+    assert claim.status == "pending"
+    assert b"Resolve validation errors before approving or paying out this claim." in response.data
+
+
+def test_duplicate_reimbursement_for_same_source_and_policy_blocked(client, test_student, admin_user):
+    policy = _create_policy(admin_user.id)
+    source_tx = Transaction(
+        student_id=test_student.id,
+        teacher_id=admin_user.id,
+        amount=-12.0,
+        account_type="checking",
+        status=TransactionStatus.PENDING,
+        type="purchase",
+        description="Purchase: Pen",
+    )
+    db.session.add(source_tx)
+    db.session.commit()
+
+    reimbursement_one = Transaction(
+        student_id=test_student.id,
+        teacher_id=admin_user.id,
+        amount=12.0,
+        account_type="checking",
+        status=TransactionStatus.PENDING,
+        type="insurance_reimbursement",
+        original_transaction_id=source_tx.id,
+        policy_id=policy.id,
+        description="Insurance reimbursement #1",
+    )
+    reimbursement_two = Transaction(
+        student_id=test_student.id,
+        teacher_id=admin_user.id,
+        amount=12.0,
+        account_type="checking",
+        status=TransactionStatus.PENDING,
+        type="insurance_reimbursement",
+        original_transaction_id=source_tx.id,
+        policy_id=policy.id,
+        description="Insurance reimbursement #2",
+    )
+    db.session.add(reimbursement_one)
+    db.session.commit()
+    db.session.add(reimbursement_two)
+
+    with pytest.raises(IntegrityError):
+        db.session.commit()
+
+    db.session.rollback()
+
+
+def test_pending_transaction_cannot_be_approved(client, test_student, admin_user):
+    from app.models import StudentTeacher
+
+    st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
+    db.session.add(st)
+    db.session.commit()
+
+    policy = _create_policy(admin_user.id)
+    enrollment = _enroll_student(test_student.id, policy.id)
+    pending_tx = Transaction(
+        student_id=test_student.id,
+        teacher_id=admin_user.id,
+        amount=-20.0,
+        account_type="checking",
+        status=TransactionStatus.PENDING,
+        type="purchase",
+        description="Purchase: Notebook",
+    )
+    db.session.add(pending_tx)
+    db.session.commit()
+
+    claim = _build_claim(enrollment, policy, test_student.id, pending_tx)
+    db.session.add(claim)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["is_admin"] = True
+        sess["admin_id"] = admin_user.id
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    response = client.post(
+        f"/admin/insurance/claim/{claim.id}",
+        data={"status": "approved", "approved_amount": "", "rejection_reason": "", "admin_notes": ""},
+        follow_redirects=True,
+    )
+
+    db.session.refresh(claim)
+    assert claim.status == "pending"
+    assert b"Resolve validation errors before approving or paying out this claim." in response.data
+
+
+def test_rent_privilege_purchase_cannot_be_approved(client, test_student, admin_user):
+    from app.models import StudentTeacher
+
+    st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
+    db.session.add(st)
+    db.session.commit()
+
+    policy = _create_policy(admin_user.id)
+    enrollment = _enroll_student(test_student.id, policy.id)
+
+    store_item = StoreItem(
+        teacher_id=admin_user.id,
+        name="Desk Pass",
+        price=5.0,
+        item_type="delayed",
+        is_active=True,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    rent_settings = RentSettings(
+        teacher_id=admin_user.id,
+        is_enabled=True,
+        rent_amount=10.0,
+    )
+    db.session.add(rent_settings)
+    db.session.flush()
+
+    db.session.add(
+        RentItem(
+            rent_setting_id=rent_settings.id,
+            store_item_id=store_item.id,
+            name=store_item.name,
+            rent_item_type="privilege",
+        )
+    )
+
+    privilege_purchase = Transaction(
+        student_id=test_student.id,
+        teacher_id=admin_user.id,
+        amount=-5.0,
+        account_type="checking",
+        status=TransactionStatus.POSTED,
+        type="purchase",
+        description="Purchase: Desk Pass",
+    )
+    db.session.add(privilege_purchase)
+    db.session.commit()
+
+    claim = _build_claim(enrollment, policy, test_student.id, privilege_purchase)
+    db.session.add(claim)
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["is_admin"] = True
+        sess["admin_id"] = admin_user.id
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+
+    response = client.post(
+        f"/admin/insurance/claim/{claim.id}",
+        data={"status": "approved", "approved_amount": "", "rejection_reason": "", "admin_notes": ""},
+        follow_redirects=True,
+    )
+
+    db.session.refresh(claim)
+    assert claim.status == "pending"
+    assert b"never eligible" in response.data

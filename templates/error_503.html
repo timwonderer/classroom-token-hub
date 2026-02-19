@@ -10,6 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Google+Sans+Code:ital,wght@0,300..800;1,300..800&family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
         * {
@@ -30,7 +31,7 @@
 
         .error-container {
             background: white;
-            box-shadow: 0 10px 10px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 10px 10px color-mix(in srgb, black 30%, transparent);
             max-width: 900px;
             width: 100%;
             overflow: hidden;
@@ -61,7 +62,7 @@
         }
 
         .status-box {
-            background: #f0f4ff;
+            background: var(--primary-subtle);
             border-left: 4px solid var(--primary);
             padding: 1.5rem;
             margin-bottom: 2rem;
@@ -75,12 +76,12 @@
 
         .status-box p,
         .status-box ul {
-            color: #555;
+            color: var(--text-secondary);
             line-height: 1.6;
         }
 
         .troubleshooting {
-            background: #f8f9fa;
+            background: var(--surface);
             padding: 1.5rem;
             margin-bottom: 2rem;
         }
@@ -88,8 +89,8 @@
        
 
         .auto-refresh {
-            background: #e8f5e9;
-            border: 1px solid #81c784;
+            background: var(--success-subtle);
+            border: 1px solid var(--success);
             padding: 1rem;
             margin-top: 1.5rem;
             text-align: center;
@@ -97,13 +98,13 @@
 
         .auto-refresh p {
             margin: 0;
-            color: #2e7d32;
+            color: var(--success);
             font-size: 0.95rem;
         }
 
         .countdown {
             font-weight: 700;
-            color: #1b5e20;
+            color: var(--success);
         }
 
         .actions {

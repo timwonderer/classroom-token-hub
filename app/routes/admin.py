@@ -29,7 +29,7 @@ from flask import (
 from urllib.parse import urlparse
 from sqlalchemy import desc, text, or_, and_, func
 from sqlalchemy.orm import joinedload
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 import sqlalchemy as sa
 import pyotp
 import pytz
@@ -72,6 +72,19 @@ from app.utils.passwordless_client import (
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
 from app.attendance import get_last_payroll_time, calculate_unpaid_attendance_seconds, get_join_code_for_student_period
+from app.utils.insurance_eligibility import (
+    evaluate_claim_transaction_eligibility,
+    CLAIM_REASON_ALREADY_CLAIMED,
+    CLAIM_REASON_DELAY_USE_EXPIRED,
+    CLAIM_REASON_DELAY_USE_NOT_USED,
+    CLAIM_REASON_HARD_DENY_CATEGORY,
+    CLAIM_REASON_INTERNAL_TRANSFER,
+    CLAIM_REASON_PREMIUM_NOT_CURRENT,
+    CLAIM_REASON_REIMBURSEMENT_ALREADY_EXISTS,
+    CLAIM_REASON_TIME_LIMIT_EXCEEDED,
+    CLAIM_REASON_UNCLASSIFIED_TRANSACTION,
+    CLAIM_REASON_WAITING_PERIOD,
+)
 import time
 
 # Timezone
@@ -213,6 +226,22 @@ def _get_class_labels_for_blocks(admin_id, blocks):
         labels.setdefault(block, block)
 
     return labels
+
+
+def _get_join_codes_by_block(admin_id, blocks):
+    """Return mapping of block -> join_code for the given admin without N+1 queries."""
+
+    if not blocks:
+        return {}
+
+    teacher_blocks = (
+        TeacherBlock.query
+        .filter(TeacherBlock.teacher_id == admin_id, TeacherBlock.block.in_(blocks))
+        .all()
+    )
+    join_codes = {tb.block: tb.join_code for tb in teacher_blocks if tb.join_code}
+
+    return join_codes
 
 
 def _student_scope_subquery(include_unassigned=True):
@@ -2288,7 +2317,47 @@ def set_current_class():
 def student_detail(student_id):
     """View detailed information for a specific student."""
     student = _get_student_or_404(student_id)
-    join_code = session.get('current_join_code')
+    teacher_id = session.get('admin_id')
+    requested_join_code = (request.args.get('join_code') or '').strip() or None
+
+    # Resolve the effective class context for this student detail page.
+    # This prevents stale `session['current_join_code']` values from hiding data
+    # when teachers open students from a different class tab.
+    student_join_codes_query = TeacherBlock.query.filter_by(
+        teacher_id=teacher_id,
+        student_id=student.id,
+        is_claimed=True,
+    ).with_entities(TeacherBlock.join_code)
+    student_join_codes = {
+        join_code for (join_code,) in student_join_codes_query.all() if join_code
+    }
+
+    join_code = None
+    if requested_join_code and requested_join_code in student_join_codes:
+        join_code = requested_join_code
+    else:
+        session_join_code = session.get('current_join_code')
+        if session_join_code in student_join_codes:
+            join_code = session_join_code
+        elif student_join_codes:
+            # Prefer the student's most recent transaction context, then a stable fallback.
+            latest_tx_join_code = (
+                Transaction.query.filter(
+                    Transaction.student_id == student.id,
+                    Transaction.join_code.in_(student_join_codes),
+                )
+                .order_by(Transaction.timestamp.desc())
+                .with_entities(Transaction.join_code)
+                .first()
+            )
+            if latest_tx_join_code and latest_tx_join_code[0]:
+                join_code = latest_tx_join_code[0]
+            else:
+                join_code = sorted(student_join_codes)[0]
+
+    if join_code:
+        session['current_join_code'] = join_code
+
     # Remove deprecated last_tap_in/last_tap_out logic; rely on TapEvent backend.
     # Fetch last rent payment
     rent_query = Transaction.query.filter_by(student_id=student.id, type="rent")
@@ -2331,7 +2400,6 @@ def student_detail(student_id):
     latest_tap_event = latest_tap_event_query.order_by(TapEvent.timestamp.desc()).first()
 
     # Get student's active insurance policy (scoped to current teacher)
-    teacher_id = session.get('admin_id')
     active_insurance = student.get_active_insurance(teacher_id)
 
     # Get all blocks for the edit modal
@@ -3894,14 +3962,15 @@ def _calculate_base_rent_amount(rent_settings: RentSettings, current_year: int, 
         try:
             if value and value > 0:
                 from app.models import _quantize_currency
-                if unit == 'day':
+                normalized_unit = str(unit).lower().rstrip('s') if unit else None
+                if normalized_unit == 'day':
                     # Every N days -> scale to days per month
                     days_in_month = monthrange(current_year, current_month)[1]
                     return _quantize_currency(rent_settings.rent_amount * Decimal(days_in_month) / Decimal(value))
-                elif unit == 'week':
+                elif normalized_unit == 'week':
                     # Every N weeks -> scale to ~4 weeks per month
                     return _quantize_currency(rent_settings.rent_amount * Decimal('4') / Decimal(value))
-                elif unit == 'month':
+                elif normalized_unit == 'month':
                     # Every N months -> monthly share of that amount
                     return _quantize_currency(rent_settings.rent_amount / Decimal(value))
         except (TypeError, ValueError, ZeroDivisionError):
@@ -4216,16 +4285,10 @@ def rent_settings():
     all_students = _scoped_students().order_by(Student.first_name).all()
 
     # Build class_labels_by_block dictionary
-    class_labels_by_block = {}
-    for block in teacher_blocks:
-        teacher_block_rec = TeacherBlock.query.filter_by(
-            teacher_id=admin_id,
-            block=block
-        ).first()
-        if teacher_block_rec:
-            class_labels_by_block[block] = teacher_block_rec.get_class_label()
-        else:
-            class_labels_by_block[block] = block
+    class_labels_by_block = _get_class_labels_for_blocks(admin_id, teacher_blocks)
+
+    # Build join_codes_by_block dictionary
+    join_codes_by_block = _get_join_codes_by_block(admin_id, teacher_blocks)
 
     # Calculate payroll warning
     payroll_warning = None
@@ -4402,6 +4465,7 @@ def rent_settings():
                           settings_block=settings_block,
                           teacher_blocks=teacher_blocks,
                           class_labels_by_block=class_labels_by_block,
+                          join_codes_by_block=join_codes_by_block,
                           rent_items=rent_items,
                           unpaid_students=unpaid_students,
                           unpaid_students_by_class=unpaid_students_by_class,
@@ -4938,10 +5002,17 @@ def view_student_policy(enrollment_id):
         InsuranceClaim.filed_date.desc()
     ).all()
 
+    # Get join_code for the student's block
+    admin_id = session.get("admin_id")
+    student = enrollment.student
+    join_codes_by_block = _get_join_codes_by_block(admin_id, [student.block] if student.block else [])
+    join_code = join_codes_by_block.get(student.block, '')
+
     return render_template('admin_view_student_policy.html',
                           enrollment=enrollment,
                           policy=enrollment.policy,
-                          student=enrollment.student,
+                          student=student,
+                          join_code=join_code,
                           claims=claims)
 
 
@@ -5031,6 +5102,28 @@ def process_claim(claim_id):
         ).first()
         if duplicate_claim:
             validation_errors.append("Another claim is already tied to this transaction")
+
+    if claim.policy.claim_type == 'transaction_monetary' and claim.transaction:
+        reason_to_message = {
+            CLAIM_REASON_HARD_DENY_CATEGORY: "Linked transaction category is never eligible for reimbursement",
+            CLAIM_REASON_INTERNAL_TRANSFER: "Internal transfer transactions are not eligible for reimbursement",
+            CLAIM_REASON_DELAY_USE_NOT_USED: "Delay-use purchase has not been used yet",
+            CLAIM_REASON_DELAY_USE_EXPIRED: "Delay-use purchase was used after expiration",
+            CLAIM_REASON_PREMIUM_NOT_CURRENT: "Premium payments are not current",
+            CLAIM_REASON_WAITING_PERIOD: "Coverage waiting period requirements are not satisfied",
+            CLAIM_REASON_TIME_LIMIT_EXCEEDED: "Claim is outside the filing time limit",
+            CLAIM_REASON_ALREADY_CLAIMED: "Another claim is already tied to this transaction",
+            CLAIM_REASON_REIMBURSEMENT_ALREADY_EXISTS: "A reimbursement already exists for this source transaction/policy",
+            CLAIM_REASON_UNCLASSIFIED_TRANSACTION: "Transaction could not be classified as eligible",
+        }
+        transaction_eligible, reason_code = evaluate_claim_transaction_eligibility(
+            claim.transaction,
+            policy=claim.policy,
+            enrollment=enrollment,
+            now_utc=utc_now(),
+        )
+        if not transaction_eligible:
+            validation_errors.append(reason_to_message.get(reason_code, "Linked transaction is not eligible"))
 
     incident_reference = claim.transaction.timestamp if claim.policy.claim_type == 'transaction_monetary' and claim.transaction else claim.incident_date
     # Ensure timezone-aware comparison
@@ -5130,6 +5223,17 @@ def process_claim(claim_id):
             if claim.transaction_id:
                 transaction_description += f" linked to transaction #{claim.transaction_id}"
 
+            existing_reimbursement = Transaction.query.filter(
+                Transaction.type == 'insurance_reimbursement',
+                Transaction.original_transaction_id == claim.transaction_id,
+                Transaction.policy_id == claim.policy.id,
+                Transaction.is_void == False,
+            ).first()
+            if existing_reimbursement:
+                flash("Reimbursement already exists for this source transaction and policy.", "danger")
+                db.session.rollback()
+                return redirect(url_for('admin.process_claim', claim_id=claim_id))
+
             # CRITICAL FIX: Get join_code from the student's insurance enrollment
             student_insurance = db.session.get(StudentInsurance, claim.student_insurance_id)
             join_code = student_insurance.join_code if student_insurance else None
@@ -5142,6 +5246,8 @@ def process_claim(claim_id):
                 account_type='checking',
                 status=TransactionStatus.PENDING,
                 type='insurance_reimbursement',
+                original_transaction_id=claim.transaction_id,
+                policy_id=claim.policy.id,
                 description=transaction_description,
             )
             db.session.add(transaction)
@@ -5153,7 +5259,15 @@ def process_claim(claim_id):
         elif new_status == 'rejected':
             flash("Claim has been rejected.", "warning")
 
-        db.session.commit()
+        try:
+            db.session.commit()
+        except IntegrityError as exc:
+            db.session.rollback()
+            if 'uq_insurance_reimbursement_source_policy' in str(exc.orig):
+                flash("Reimbursement already exists for this source transaction and policy.", "danger")
+            else:
+                flash("Could not process the claim due to a concurrent update. Please retry.", "danger")
+            return redirect(url_for('admin.process_claim', claim_id=claim_id))
         return redirect(url_for('admin.insurance_management'))
 
     return render_template('admin_process_claim.html',
@@ -5693,6 +5807,9 @@ def payroll_history():
     admin_id = session.get("admin_id")
     class_labels_by_block = _get_class_labels_for_blocks(admin_id, blocks)
 
+    # Build join_codes_by_block dictionary
+    join_codes_by_block = _get_join_codes_by_block(admin_id, blocks)
+
     payroll_records = []
     for tx in payroll_transactions:
         student = student_lookup.get(tx.student_id)
@@ -5703,7 +5820,9 @@ def payroll_history():
             'block': student_block,
             'class_label': class_labels_by_block.get(student_block, student_block) if student_block != 'Unknown' else 'Unknown',
             'student_id': student.id if student else tx.student_id,
+            'student': student,
             'student_name': student.full_name if student else 'Unknown',
+            'join_code': join_codes_by_block.get(student_block, ''),
             'amount': tx.amount,
             'notes': tx.description,
         })
@@ -5719,6 +5838,7 @@ def payroll_history():
         payroll_history=payroll_records,
         blocks=blocks,
         class_labels_by_block=class_labels_by_block,
+        join_codes_by_block=join_codes_by_block,
         current_page="payroll_history",
         selected_block=block,
         selected_start=start_date_str,
@@ -5903,6 +6023,9 @@ def payroll():
     # Build class_labels_by_block dictionary
     class_labels_by_block = _get_class_labels_for_blocks(admin_id, blocks)
 
+    # Build join_codes_by_block dictionary
+    join_codes_by_block = _get_join_codes_by_block(admin_id, blocks)
+
     # Next payroll by block
     next_payroll_by_block = []
     for block in blocks:
@@ -6000,6 +6123,7 @@ def payroll():
             'student_id': tx.student_id,
             'student': student,
             'student_name': student.full_name if student else 'Unknown',
+            'join_code': join_codes_by_block.get(student_block, ''),
             'amount': tx.amount,
             'notes': tx.description or '',
             'is_void': tx.is_void
@@ -6028,6 +6152,7 @@ def payroll():
         # Overview tab
         recent_payrolls=recent_payrolls,
         join_code_to_label=join_code_to_label, # Pass lookup map
+        join_codes_by_block=join_codes_by_block, # Pass block to join_code map
         next_payroll_date=next_pay_date_utc,  # Pass UTC timestamp
         next_payroll_by_block=next_payroll_by_block,
         total_payroll_estimate=total_payroll_estimate,
@@ -7668,6 +7793,9 @@ def banking():
     # Build class_labels_by_block dictionary
     class_labels_by_block = _get_class_labels_for_blocks(admin_id, blocks)
 
+    # Build join_codes_by_block dictionary
+    join_codes_by_block = _get_join_codes_by_block(admin_id, blocks)
+
     # Get transaction types for filter (filtered to this teacher's students)
     transaction_types = (
         db.session.query(Transaction.type)
@@ -7693,6 +7821,7 @@ def banking():
         average_savings_balance=average_savings_balance,
         blocks=blocks,
         class_labels_by_block=class_labels_by_block,
+        join_codes_by_block=join_codes_by_block,
         transaction_types=transaction_types,
         page=page,
         total_pages=total_pages,
@@ -7877,64 +8006,189 @@ def deletion_requests():
 @admin_bp.route('/help-support', methods=['GET', 'POST'])
 @admin_required
 def help_support():
-    """Redirects to the admin help and support documentation."""
-    return redirect(url_for('docs.view_doc', doc_path='user-guides/diagnostics/teacher'))
+    """Teacher support center with direct ticket submission to sysadmin."""
+
+    admin_id = session.get('admin_id')
+    selected_join_code = request.values.get('join_code', '').strip()
+
+    teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
+    class_scope_map = {}
+    for seat in teacher_blocks:
+        if seat.join_code not in class_scope_map:
+            class_scope_map[seat.join_code] = seat.get_class_label()
+
+    class_scope_options = [
+        {'join_code': join_code, 'label': label}
+        for join_code, label in sorted(class_scope_map.items(), key=lambda item: item[1] or item[0])
+    ]
+
+    category_to_report_type = {
+        'general': 'comment',
+        'bug': 'bug',
+        'feature': 'suggestion',
+    }
+
+    def _build_scope_metadata(join_code_value, class_label_value, category_value):
+        return (
+            f"SUPPORT_SCOPE|join_code={join_code_value}|class_label={class_label_value}|category={category_value}"
+        )
+
+    def _parse_scope_metadata(raw_description):
+        if not raw_description:
+            return None, None, None, raw_description
+
+        first_line, _, body = raw_description.partition("\n")
+        if not first_line.startswith("SUPPORT_SCOPE|"):
+            return None, None, None, raw_description
+
+        metadata = {}
+        for token in first_line.split("|")[1:]:
+            key, _, value = token.partition("=")
+            if key and value:
+                metadata[key] = value
+
+        cleaned_body = body.strip() if body else raw_description
+        return (
+            metadata.get('join_code'),
+            metadata.get('class_label'),
+            metadata.get('category'),
+            cleaned_body,
+        )
+
+    if not class_scope_options and request.method == 'GET':
+        # Inform teachers who have no classes that they must create one before submitting tickets.
+        flash(
+            "You don't have any classes yet. Please add a class from your dashboard before submitting a support ticket.",
+            "info",
+        )
 
     if request.method == 'POST':
-        # Handle bug report submission
-        report_type = request.form.get('report_type', 'bug')
-        error_code = request.form.get('error_code', '')
+        # If the teacher has no classes, prevent submission and provide a clear message.
+        if not class_scope_options:
+            flash(
+                "You cannot submit a support ticket until you have at least one class. "
+                "Please add a class from your dashboard first.",
+                "error",
+            )
+            return redirect(url_for('admin.help_support'))
+        issue_category = request.form.get('issue_category', 'general').strip().lower()
         title = request.form.get('title', '').strip()
         description = request.form.get('description', '').strip()
-        steps_to_reproduce = request.form.get('steps_to_reproduce', '').strip()
         expected_behavior = request.form.get('expected_behavior', '').strip()
         page_url = request.form.get('page_url', '').strip()
+        selected_join_code = request.form.get('join_code', '').strip()
 
-        # Validation
-        if not title or not description:
-            flash("Please provide both a title and description for your report.", "error")
+        class_label = class_scope_map.get(selected_join_code)
+
+        if not selected_join_code or selected_join_code not in class_scope_map:
+            flash("Please select one of your classes before submitting a support ticket.", "error")
             return redirect(url_for('admin.help_support'))
 
-        # Generate anonymous code (using admin ID)
-        anonymous_code = generate_anonymous_code(f"admin:{admin_id}")
+        if issue_category not in category_to_report_type:
+            flash("Please select a valid support ticket category.", "error")
 
-        # Create report
+            anonymous_code = generate_anonymous_code(f"admin:{admin_id}")
+            my_reports_query = UserReport.query.filter_by(anonymous_code=anonymous_code, user_type='teacher')
+            if selected_join_code:
+                my_reports_query = my_reports_query.filter_by(error_code=selected_join_code)
+            my_reports = my_reports_query.order_by(UserReport.submitted_at.desc()).limit(20).all()
+
+            return render_template(
+                'admin_support_tickets.html',
+                current_page='help',
+                page_title='Help & Support',
+                class_scope_options=class_scope_options,
+                selected_join_code=selected_join_code,
+                my_reports=my_reports,
+                help_content=HELP_ARTICLES['teacher'],
+                format_utc_iso=format_utc_iso,
+                form_issue_category=issue_category,
+                form_title=title,
+                form_description=description,
+                form_expected_behavior=expected_behavior,
+                form_page_url=page_url,
+            )
+
+        if not title or not description or not issue_category:
+            flash("Please provide a category, title, and description for your support ticket.", "error")
+
+            anonymous_code = generate_anonymous_code(f"admin:{admin_id}")
+            my_reports_query = UserReport.query.filter_by(anonymous_code=anonymous_code, user_type='teacher')
+            if selected_join_code:
+                my_reports_query = my_reports_query.filter_by(error_code=selected_join_code)
+            my_reports = my_reports_query.order_by(UserReport.submitted_at.desc()).limit(20).all()
+
+            return render_template(
+                'admin_support_tickets.html',
+                current_page='help',
+                page_title='Help & Support',
+                class_scope_options=class_scope_options,
+                selected_join_code=selected_join_code,
+                my_reports=my_reports,
+                help_content=HELP_ARTICLES['teacher'],
+                format_utc_iso=format_utc_iso,
+                form_issue_category=issue_category,
+                form_title=title,
+                form_description=description,
+                form_expected_behavior=expected_behavior,
+                form_page_url=page_url,
+            )
+        anonymous_code = generate_anonymous_code(f"admin:{admin_id}")
+        metadata_header = _build_scope_metadata(selected_join_code, class_label or 'Unknown', issue_category)
+        scoped_description = f"{metadata_header}\n\n{description}"
+
         try:
             report = UserReport(
                 anonymous_code=anonymous_code,
                 user_type='teacher',
-                report_type=report_type,
-                error_code=error_code if error_code else None,
+                report_type=category_to_report_type[issue_category],
                 title=title,
-                description=description,
-                steps_to_reproduce=steps_to_reproduce if steps_to_reproduce else None,
+                description=scoped_description,
                 expected_behavior=expected_behavior if expected_behavior else None,
                 page_url=page_url if page_url else None,
                 ip_address=get_real_ip(),
                 user_agent=request.headers.get('User-Agent'),
                 status='new'
             )
-            # Note: _student_id is null for teachers
 
             db.session.add(report)
             db.session.commit()
 
-            flash("Thank you for your report! It has been submitted to the system administrator.", "success")
-            return redirect(url_for('admin.help_support'))
-        except Exception as e:
+            flash("Your support ticket has been submitted directly to system administration.", "success")
+            return redirect(url_for('admin.help_support', join_code=selected_join_code))
+        except SQLAlchemyError:
             db.session.rollback()
             current_app.logger.error("Error submitting report", exc_info=True)
-            flash("An error occurred while submitting your report. Please try again.", "error")
+            flash("An error occurred while submitting your ticket. Please try again.", "error")
             return redirect(url_for('admin.help_support'))
 
-    # Get admin's previous reports (last 10)
     anonymous_code = generate_anonymous_code(f"admin:{admin_id}")
-    my_reports = UserReport.query.filter_by(anonymous_code=anonymous_code).order_by(UserReport.submitted_at.desc()).limit(10).all()
+    my_reports_query = UserReport.query.filter_by(anonymous_code=anonymous_code, user_type='teacher')
 
-    return render_template('admin_help_support.html',
+    reports = my_reports_query.order_by(UserReport.submitted_at.desc()).limit(50).all()
+    my_reports = []
+    for report in reports:
+        scope_join_code, class_label, issue_category, clean_description = _parse_scope_metadata(report.description)
+        if selected_join_code and scope_join_code != selected_join_code:
+            continue
+        my_reports.append({
+            'report': report,
+            'scope_join_code': scope_join_code,
+            'class_label': class_label,
+            'issue_category': issue_category,
+            'clean_description': clean_description,
+        })
+        if len(my_reports) >= 20:
+            break
+
+    return render_template('admin_support_tickets.html',
                          current_page='help',
+                         page_title='Help & Support',
+                         class_scope_options=class_scope_options,
+                         selected_join_code=selected_join_code,
                          my_reports=my_reports,
-                         help_content=HELP_ARTICLES['teacher'])
+                         help_content=HELP_ARTICLES['teacher'],
+                         format_utc_iso=format_utc_iso)
 
 
 # -------------------- FEATURE SETTINGS --------------------

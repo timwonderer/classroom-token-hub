@@ -23,7 +23,7 @@
                 </div>
 
                 <h3 class="mb-3">Your Recovery Code:</h3>
-                <div class="p-4 mb-4" style="background: #f8f9fa; border: 3px solid #28a745; border-radius: 10px;">
+                <div class="p-4 mb-4" style="background: var(--surface); border: 3px solid var(--success); border-radius: 10px;">
                     <h1 class="display-3 font-weight-bold text-success mb-0" style="letter-spacing: 0.3em;">
                         {{ generated_code }}
                     </h1>
@@ -58,7 +58,7 @@
                     <p class="mb-0">To protect everyone's account security, we need you to confirm this is really you by entering your passphrase.</p>
                 </div>
 
-                <div class="mb-3 p-3" style="background: #fff4e2; border-left: 4px solid #ffc107; border-radius: 4px;">
+                <div class="mb-3 p-3" style="background: var(--warning-subtle); border-left: 4px solid var(--warning); border-radius: 4px;">
                     <h6><span class="material-symbols-outlined" style="vertical-align: middle;">schedule</span> This request expires on:</h6>
                     <p class="mb-0"><strong>{{ recovery_code.recovery_request.expires_at.strftime('%B %d, %Y at %I:%M %p') }}</strong></p>
                 </div>

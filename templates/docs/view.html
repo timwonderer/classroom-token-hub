@@ -351,17 +351,17 @@
     height: 100%;
     max-height: none;
     overflow-y: auto;
-    border-right: 1px solid #e5e5e3;
+    border-right: 1px solid var(--border-color);
 }
 
 .docs-layout .docs-sidebar .nav-link {
-    color: #212529;
+    color: var(--text-primary);
     padding: 0.25rem 1rem;
     font-size: 0.9rem;
 }
 
 .docs-layout .docs-sidebar .nav-link:hover {
-    background-color: rgba(0, 0, 0, 0.05);
+    background-color: color-mix(in srgb, black 5%, transparent);
 }
 
 .docs-layout .docs-sidebar .nav-link.active {
@@ -392,7 +392,7 @@
     font-size: 2.5rem;
     margin-bottom: 1.5rem;
     padding-bottom: 0.5rem;
-    border-bottom: 2px solid #dee2e6;
+    border-bottom: 2px solid var(--border-color);
 }
 
 .markdown-content h2 {
@@ -414,16 +414,16 @@
 }
 
 .markdown-content code {
-    background-color: #f8f9fa;
+    background-color: var(--surface);
     padding: 0.2rem 0.4rem;
     border-radius: 0.25rem;
     font-size: 0.9em;
-    color: #e83e8c;
+    color: var(--secondary);
 }
 
 .markdown-content pre {
-    background-color: #2d2d2d;
-    color: #f8f8f2;
+    background-color: var(--neutral-900);
+    color: var(--surface);
     padding: 1rem;
     border-radius: 0.5rem;
     overflow-x: auto;
@@ -440,7 +440,7 @@
     max-width: 100%;
     height: auto;
     border-radius: 0.5rem;
-    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    box-shadow: 0 0.125rem 0.25rem color-mix(in srgb, black 7.5%, transparent);
     margin: 1rem 0;
 }
 
@@ -453,11 +453,11 @@
 .markdown-content table th,
 .markdown-content table td {
     padding: 0.75rem;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--border-color);
 }
 
 .markdown-content table th {
-    background-color: #f8f9fa;
+    background-color: var(--surface);
     font-weight: 600;
 }
 
@@ -465,7 +465,7 @@
     border-left: 4px solid var(--primary);
     padding-left: 1rem;
     margin: 1rem 0;
-    color: #6c757d;
+    color: var(--text-secondary);
 }
 
 .markdown-content ul,
@@ -498,12 +498,12 @@
 
 
 .toc-wrapper a {
-    color: #212529;
+    color: var(--text-primary);
     text-decoration: none;
 }
 
 .toc-wrapper a:hover {
-    background-color: rgba(26, 77, 71, 0.2);
+    background-color: color-mix(in srgb, var(--primary) 20%, transparent);
     font-weight:600;
 }
 
@@ -522,7 +522,7 @@
 }
 
 .btn-primary:hover {
-    background-color: #d3af37;
+    background-color: var(--secondary);
     color: var(--primary);
 }
 
@@ -589,13 +589,13 @@
 
     .docs-layout .docs-sidebar.show {
         transform: translateX(0);
-        box-shadow: 0 0 30px rgba(0, 0, 0, 0.25);
+        box-shadow: 0 0 30px color-mix(in srgb, black 25%, transparent);
     }
 
     .docs-layout .docs-backdrop {
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.35);
+        background: color-mix(in srgb, black 35%, transparent);
         z-index: 1030;
         opacity: 0;
         visibility: hidden;

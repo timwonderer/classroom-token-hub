@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,7 +8,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#303030">
+    <meta name="theme-color" content="black">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -22,10 +23,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
     <!-- Preload Material Symbols font for faster icon rendering -->
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" as="style">
+    <link rel="preload"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+        as="style">
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+        rel="stylesheet">
 
     <!-- Material Symbols fallback CSS -->
     <style>
@@ -49,14 +54,13 @@
 
     <!-- CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
-    <link href="{{ static_url('css/sysadmin-theme.css') }}" rel="stylesheet">
 
     {% block extra_head %}{% endblock %}
 </head>
-<body class="sysadmin-shell d-flex {% if maintenance_bypass_active %}maintenance-active{% endif %}">
+
+<body class="sysadmin-shell d-flex bg-background {% if maintenance_bypass_active %}maintenance-active{% endif %}">
     <a href="#main-content" class="skip-link">Skip to main content</a>
     {% if maintenance_bypass_active %}
     <div class="maintenance-banner">
@@ -65,110 +69,156 @@
     </div>
     {% endif %}
 
-    <div id="flashToastContainer" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1050;"></div>
+    <div id="flashToastContainer" class="position-fixed bottom-0 end-0 p-3" style="z-index: 1100;"></div>
+
+    <!-- Mobile hamburger toggle -->
+    <button class="sysadmin-mobile-toggle" id="mobileMenuToggle" aria-label="Toggle navigation menu"
+        aria-controls="sidebar" aria-expanded="false">
+        <span class="material-symbols-outlined">menu</span>
+    </button>
+
+    <!-- Sidebar backdrop for mobile -->
+    <div class="sysadmin-backdrop sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
 
     <!-- Sidebar -->
-    <aside class="sysadmin-sidebar">
-        <a class="sysadmin-brand" href="{{ url_for('sysadmin.dashboard') }}">
-            <div>
-                <div><span class="material-symbols-outlined" style="font-size: 30px; vertical-align: middle; font-weight:200; color: var(--sysadmin-accent)">local_atm</span> Classroom</div>
-                <div><span class="material-symbols-outlined" style="font-size: 30px; vertical-align: middle; font-weight:200; color: var(--sysadmin-accent-bright)">store</span> Token</div>
-                <div><span class="material-symbols-outlined" style="font-size: 30px; vertical-align: middle; font-weight:200; color: var(--sysadmin-accent)">finance_mode</span> Hub</div>
-            </div>
-        </a>
-
-        <div class="sysadmin-identity text-white" style="font-size: 20x;">
-            {{ current_sysadmin.username if current_sysadmin else "System Administrator" }}
-            <div class="mt-0" style="font-size:10pt; color: rgba(212, 168, 87, 0.6)">
-                System Administrator
-            </div>
-        </div>
-
-        <nav class="sysadmin-nav">
-            <a href="{{ url_for('sysadmin.dashboard') }}" class="{% if current_page == 'dashboard' %}active{% endif %}">
-                <span class="material-symbols-outlined">dashboard</span> Dashboard
-            </a>
-
-
-            <a href="{{ url_for('sysadmin.manage_teachers') }}" class="{% if current_page == 'teachers' %}active{% endif %}">
-                <span class="material-symbols-outlined">group</span> Teacher Management
-            </a>
-
-            <a href="{{ url_for('sysadmin.teacher_overview') }}" class="{% if current_page == 'teacher_overview' %}active{% endif %}">
-                <span class="material-symbols-outlined">hub</span> Teacher Overview
-            </a>
-
-            <a href="{{ url_for('sysadmin.announcements') }}" class="{% if current_page == 'announcements' %}active{% endif %}">
-                <span class="material-symbols-outlined">campaign</span> System Announcements
-            </a>
-
-            <a href="/sysadmin/grafana" class="{% if current_page == 'grafana' %}active{% endif %}" target="_blank">
-                <span class="material-symbols-outlined">monitoring</span> Grafana
-            </a>
-
-            <a href="{{ url_for('sysadmin.logs_testing') }}" class="{% if current_page == 'logs' %}active{% endif %}">
-                <span class="material-symbols-outlined">description</span> Logs &amp; Testing
-            </a>
-
-            <a href="{{ url_for('sysadmin.network_activity') }}" class="{% if current_page == 'network_activity' %}active{% endif %}">
-                <span class="material-symbols-outlined">network_check</span> Network Activity
-            </a>
-
-            <a href="{{ url_for('sysadmin.user_reports') }}" class="{% if current_page == 'user_reports' %}active{% endif %}">
-                <span class="material-symbols-outlined">bug_report</span> User Reports
-            </a>
-
-            <a href="{{ url_for('sysadmin.escalated_issues') }}" class="{% if current_page == 'issues' %}active{% endif %}">
-                <span class="material-symbols-outlined">support_agent</span> Escalated Issues
-            </a>
-
-            <div style="margin-top: auto;">
-                <hr style="border-color: rgba(212, 168, 87, 0.2); margin: 1rem 0;">
-                <a href="{{ url_for('sysadmin.passkey_settings') }}" class="{% if current_page == 'passkey_settings' %}active{% endif %}">
-                    <span class="material-symbols-outlined">fingerprint</span> Passkey Settings
+    <aside id="sidebar" class="sysadmin-sidebar sidebar" role="navigation"
+        aria-label="System admin navigation">
+                <a class="sysadmin-brand" href="{{ url_for('sysadmin.dashboard') }}">
+                    <div>
+                        <div><span class="material-symbols-outlined"
+                                style="font-size: 30px; vertical-align: middle; font-weight:200; color: var(--sysadmin-accent)">local_atm</span>
+                            Classroom</div>
+                        <div><span class="material-symbols-outlined"
+                                style="font-size: 30px; vertical-align: middle; font-weight:200; color: var(--sysadmin-accent-bright)">store</span>
+                            Token</div>
+                        <div><span class="material-symbols-outlined"
+                                style="font-size: 30px; vertical-align: middle; font-weight:200; color: var(--sysadmin-accent)">finance_mode</span>
+                            Hub</div>
+                    </div>
                 </a>
-                <a href="{{ url_for('sysadmin.logout') }}" class="text-danger">
-                    <span class="material-symbols-outlined">logout</span> Sign Out
-                </a>
-            </div>
-        </nav>
+
+                <div class="sysadmin-identity">
+                    <span class="material-symbols-outlined"
+                        style="font-size:16px; color: var(--sysadmin-accent); vertical-align:middle;">admin_panel_settings</span>
+                    {{ current_sysadmin.username if current_sysadmin else "System Administrator" }}
+                    <div class="mt-0"
+                        style="font-size:10pt; color: color-mix(in srgb, var(--secondary) 60%, transparent)">
+                        System Administrator
+                    </div>
+                </div>
+
+                <nav class="sysadmin-nav">
+                    <a href="{{ url_for('sysadmin.dashboard') }}"
+                        class="{% if current_page == 'dashboard' %}active{% endif %}">
+                        <span class="material-symbols-outlined">dashboard</span> Dashboard
+                    </a>
+
+                    <a href="{{ url_for('sysadmin.manage_teachers') }}"
+                        class="{% if current_page in ['teachers', 'teacher_overview'] %}active{% endif %}">
+                        <span class="material-symbols-outlined">group</span> Teacher Management
+                    </a>
+
+                    <a href="{{ url_for('sysadmin.support_tickets') }}"
+                        class="{% if current_page in ['support_tickets', 'user_reports', 'issues'] %}active{% endif %}">
+                        <span class="material-symbols-outlined">support_agent</span> Support Tickets
+                    </a>
+
+                    <a href="{{ url_for('sysadmin.combined_logs') }}"
+                        class="{% if current_page in ['logs', 'sysadmin_error_logs', 'network_activity'] %}active{% endif %}">
+                        <span class="material-symbols-outlined">description</span> Logs
+                    </a>
+
+                    <a href="{{ url_for('sysadmin.announcements') }}"
+                        class="{% if current_page == 'announcements' %}active{% endif %}">
+                        <span class="material-symbols-outlined">campaign</span> Announcements
+                    </a>
+
+                    <a href="/sysadmin/grafana" target="_blank" rel="noopener noreferrer">
+                        <span class="material-symbols-outlined">monitoring</span> Grafana
+                        <span class="material-symbols-outlined ms-auto"
+                            style="font-size:14px; opacity:0.5">open_in_new</span>
+                    </a>
+
+                    <div class="sysadmin-nav-spacer"></div>
+                    <hr class="sysadmin-nav-divider">
+
+                    <a href="{{ url_for('sysadmin.passkey_settings') }}"
+                        class="{% if current_page == 'passkey_settings' %}active{% endif %}">
+                        <span class="material-symbols-outlined">fingerprint</span> Passkey Settings
+                    </a>
+                    <a href="{{ url_for('sysadmin.logout') }}" class="sysadmin-nav-signout">
+                        <span class="material-symbols-outlined">logout</span> Sign Out
+                    </a>
+                </nav>
     </aside>
 
     <!-- Main Content -->
-    <main id="main-content" class="sysadmin-main flex-grow-1">
-        <div class="page-header">
-            <div>
-                <div class="eyebrow">Classroom Token Hub</div>
-                <h1 class="d-flex align-items-center gap-2 mb-1">
-                    <span class="material-symbols-outlined">{% block page_icon %}dashboard{% endblock %}</span>
-                    {{ self.page_title() }}
-                </h1>
-                <div class="meta" id="current-time"></div>
-               
-            </div>
-        </div>
+    <main id="main-content" class="sysadmin-main main-content">
+                <div class="page-header">
+                    <div>
+                        <div class="eyebrow">Classroom Token Hub</div>
+                        <h1 class="d-flex align-items-center gap-2 mb-1">
+                            <span class="material-symbols-outlined">{% block page_icon %}dashboard{% endblock %}</span>
+                            {{ self.page_title() }}
+                        </h1>
+                        <div class="meta" id="current-time"></div>
+                    </div>
+                </div>
 
-        <div class="sysadmin-content">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
+                <div class="sysadmin-content">
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
                     {% for category, message in messages %}
-                        <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm border-0 mb-4" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                        </div>
+                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm border-0 mb-4"
+                        role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
                     {% endfor %}
-                {% endif %}
-            {% endwith %}
+                    {% endif %}
+                    {% endwith %}
 
-            {% block content %}{% endblock %}
-        </div>
+                    {% block content %}{% endblock %}
+                </div>
     </main>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-bottom-nav" role="navigation" aria-label="Quick navigation">
+        <a href="{{ url_for('sysadmin.dashboard') }}" class="{% if current_page == 'dashboard' %}active{% endif %}"
+            aria-label="Dashboard">
+            <span class="material-symbols-outlined">dashboard</span>
+            <span>Dashboard</span>
+        </a>
+        <a href="{{ url_for('sysadmin.manage_teachers') }}"
+            class="{% if current_page in ['teachers', 'teacher_overview'] %}active{% endif %}" aria-label="Teachers">
+            <span class="material-symbols-outlined">group</span>
+            <span>Teachers</span>
+        </a>
+        <a href="{{ url_for('sysadmin.support_tickets') }}"
+            class="{% if current_page in ['support_tickets', 'user_reports', 'issues'] %}active{% endif %}"
+            aria-label="Support">
+            <span class="material-symbols-outlined">support_agent</span>
+            <span>Support</span>
+        </a>
+        <a href="{{ url_for('sysadmin.combined_logs') }}"
+            class="{% if current_page in ['logs', 'sysadmin_error_logs', 'network_activity'] %}active{% endif %}"
+            aria-label="Logs">
+            <span class="material-symbols-outlined">description</span>
+            <span>Logs</span>
+        </a>
+        <a href="{{ url_for('sysadmin.announcements') }}"
+            class="{% if current_page == 'announcements' %}active{% endif %}" aria-label="Announcements">
+            <span class="material-symbols-outlined">campaign</span>
+            <span>Announce</span>
+        </a>
+    </nav>
 
     <script type="application/json" id="flashMessages">
         {{ get_flashed_messages(with_categories=true) | tojson }}
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ static_url('js/timezone-utils.js') }}"></script>
+    <script src="{{ static_url('js/mobile-sidebar-toggle.js') }}"></script>
     <script>
         function updateTime() {
             const now = new Date();
@@ -177,50 +227,49 @@
             const optionsDate = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
             const optionsTime = { hour: 'numeric', minute: 'numeric', hour12: true };
             timeElement.textContent = now.toLocaleDateString(undefined, optionsDate) + ' ' +
-                                      now.toLocaleTimeString(undefined, optionsTime);
+                now.toLocaleTimeString(undefined, optionsTime);
         }
         setInterval(updateTime, 1000);
         updateTime();
     </script>
     <script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const container = document.getElementById('flashToastContainer');
-        const msgsEl = document.getElementById('flashMessages');
-        if (container && msgsEl) {
-            const msgs = JSON.parse(msgsEl.textContent || '[]');
-            msgs.forEach(([category, message]) => {
-                const toastEl = document.createElement('div');
-                const type = category === 'success' ? 'success' : (category === 'error' ? 'danger' : 'warning');
-                toastEl.className = 'toast align-items-center text-bg-' + type + ' border-0 mb-2';
-                toastEl.setAttribute('role', 'alert');
-                toastEl.setAttribute('aria-live', 'assertive');
-                toastEl.setAttribute('aria-atomic', 'true');
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('flashToastContainer');
+            const msgsEl = document.getElementById('flashMessages');
+            if (container && msgsEl) {
+                const msgs = JSON.parse(msgsEl.textContent || '[]');
+                msgs.forEach(([category, message]) => {
+                    const toastEl = document.createElement('div');
+                    const type = category === 'success' ? 'success' : (category === 'error' ? 'danger' : 'warning');
+                    toastEl.className = 'toast align-items-center text-bg-' + type + ' border-0 mb-2';
+                    toastEl.setAttribute('role', 'alert');
+                    toastEl.setAttribute('aria-live', 'assertive');
+                    toastEl.setAttribute('aria-atomic', 'true');
 
-                // Create elements safely to prevent XSS
-                const flexDiv = document.createElement('div');
-                flexDiv.className = 'd-flex';
+                    const flexDiv = document.createElement('div');
+                    flexDiv.className = 'd-flex';
 
-                const toastBody = document.createElement('div');
-                toastBody.className = 'toast-body';
-                toastBody.textContent = message; // Use textContent instead of innerHTML
+                    const toastBody = document.createElement('div');
+                    toastBody.className = 'toast-body';
+                    toastBody.textContent = message;
 
-                const closeBtn = document.createElement('button');
-                closeBtn.type = 'button';
-                closeBtn.className = 'btn-close btn-close-white me-2 m-auto';
-                closeBtn.setAttribute('data-bs-dismiss', 'toast');
-                closeBtn.setAttribute('aria-label', 'Close');
+                    const closeBtn = document.createElement('button');
+                    closeBtn.type = 'button';
+                    closeBtn.className = 'btn-close btn-close-white me-2 m-auto';
+                    closeBtn.setAttribute('data-bs-dismiss', 'toast');
+                    closeBtn.setAttribute('aria-label', 'Close');
 
-                flexDiv.appendChild(toastBody);
-                flexDiv.appendChild(closeBtn);
-                toastEl.appendChild(flexDiv);
+                    flexDiv.appendChild(toastBody);
+                    flexDiv.appendChild(closeBtn);
+                    toastEl.appendChild(flexDiv);
 
-                container.appendChild(toastEl);
-                const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
-                toast.show();
-                toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
-            });
-        }
-    });
+                    container.appendChild(toastEl);
+                    const toast = new bootstrap.Toast(toastEl, { delay: 3000 });
+                    toast.show();
+                    toastEl.addEventListener('hidden.bs.toast', () => toastEl.remove());
+                });
+            }
+        });
     </script>
     <!-- Service Worker Registration for PWA -->
     <script>
@@ -238,4 +287,5 @@
     </script>
     {% block extra_scripts %}{% endblock %}
 </body>
+
 </html>

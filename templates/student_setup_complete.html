@@ -9,10 +9,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
         body {
-            background: linear-gradient(135deg, #4a9eff 0%, #00afdf 50%, #00d4ff 100%);
+            background: linear-gradient(135deg, var(--info) 0%, var(--info) 50%, var(--info) 100%);
             display: flex;
             justify-content: center;
             align-items: center;
@@ -23,7 +24,7 @@
         .card {
             padding: 2rem;
             border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 79, 158, 0.25);
+            box-shadow: 0 20px 60px color-mix(in srgb, var(--primary) 25%, transparent);
             background-color: white;
             text-align: center;
             max-width: 520px;
@@ -32,24 +33,24 @@
         h1 {
             font-size: 1.75rem;
             margin-bottom: 1rem;
-            color: #274174;
+            color: var(--primary);
             font-weight: 700;
         }
         p {
-            color: #516173;
+            color: var(--text-secondary);
             margin: 0;
         }
         .btn-primary {
             margin-top: 1.5rem;
-            background: linear-gradient(135deg, #00d4ff 0%, #00afdf 100%);
+            background: linear-gradient(135deg, var(--info) 0%, var(--info) 100%);
             border: none;
             font-weight: 600;
             padding: 0.85rem 1.25rem;
             border-radius: 12px;
-            box-shadow: 0 8px 24px rgba(74, 158, 255, 0.3);
+            box-shadow: 0 8px 24px color-mix(in srgb, var(--info) 30%, transparent);
         }
         .btn-primary:hover {
-            background: linear-gradient(135deg, #00afdf 0%, #035397 100%);
+            background: linear-gradient(135deg, var(--info) 0%, var(--primary-hover) 100%);
         }
         @media (max-width: 576px) {
             body {
@@ -73,7 +74,7 @@
 </head>
 <body class="student-theme">
     <div class="card">
-         <span class="material-symbols-outlined" style="font-size:50pt; color:#0e751e">check_circle</span><br>
+         <span class="material-symbols-outlined" style="font-size:50pt; color:var(--success)">check_circle</span><br>
         <h1>Hello, {{ student_name }}!</h1>
         <p style="font-size:15pt">Welcome to <strong>Classroom Token Hub</strong></p>
         <a href="{{ url_for('student.dashboard') }}" class="btn btn-primary">Thanks, Let's Go!</a>

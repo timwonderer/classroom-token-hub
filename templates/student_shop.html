@@ -76,7 +76,7 @@
                         {% if item.is_bundle %}
                         <div class="mb-2">
                             <span class="badge bg-warning text-dark">
-                                <i class="bi bi-box-seam"></i> Bundle: {{ item.bundle_quantity }} items
+                                <span class="material-symbols-outlined">inventory_2</span> Bundle: {{ item.bundle_quantity }} items
                             </span>
                         </div>
                         {% endif %}
@@ -84,7 +84,7 @@
                         {% if item.bulk_discount_enabled %}
                         <div class="mb-2">
                             <span class="badge bg-success">
-                                <i class="bi bi-percent"></i> {{ item.bulk_discount_percentage }}% off when you buy {{ item.bulk_discount_quantity }}+
+                                <span class="material-symbols-outlined">percent</span> {{ item.bulk_discount_percentage }}% off when you buy {{ item.bulk_discount_quantity }}+
                             </span>
                         </div>
                         {% endif %}
@@ -117,7 +117,7 @@
                             {% if not progress.is_complete %}
                                 <small class="text-muted">{{ progress.remaining }} more needed!</small>
                             {% else %}
-                                <small class="text-success"><i class="bi bi-check-circle"></i> Goal reached! Item will unlock soon.</small>
+                                <small class="text-success"><span class="material-symbols-outlined">check_circle</span> Goal reached! Item will unlock soon.</small>
                             {% endif %}
                         </div>
                         {% endif %}
@@ -315,7 +315,7 @@
 
                 <!-- Item Type Explanation -->
                 <div id="itemTypeExplanation" class="alert mb-3" style="display: none;">
-                    <h6 class="alert-heading mb-2"><i class="bi bi-info-circle me-2"></i>How This Item Works</h6>
+                    <h6 class="alert-heading mb-2"><span class="material-symbols-outlined me-2">info</span>How This Item Works</h6>
                     <p id="explanationText" class="mb-0"></p>
                 </div>
 
@@ -342,7 +342,7 @@
                     <div class="alert alert-success" id="totalPriceDisplay">
                         <strong>Total Price:</strong> $<span id="totalPrice">0.00</span>
                         <span id="savingsDisplay" style="display: none;">
-                            <br><small class="text-success"><i class="bi bi-check-circle"></i> You save $<span id="savingsAmount">0.00</span>!</small>
+                            <br><small class="text-success"><span class="material-symbols-outlined">check_circle</span> You save $<span id="savingsAmount">0.00</span>!</small>
                         </span>
                     </div>
 

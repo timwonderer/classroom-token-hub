@@ -8,17 +8,20 @@
 <!-- Tabs -->
 <ul class="nav nav-tabs mb-4" id="financesTabs" role="tablist">
     <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="accounts-tab" data-bs-toggle="tab" data-bs-target="#accounts" type="button" role="tab">
+        <button class="nav-link active" id="accounts-tab" data-bs-toggle="tab" data-bs-target="#accounts" type="button"
+            role="tab">
             <span class="material-symbols-outlined">account_balance</span> Accounts
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="transfer-tab" data-bs-toggle="tab" data-bs-target="#transfer" type="button" role="tab">
+        <button class="nav-link" id="transfer-tab" data-bs-toggle="tab" data-bs-target="#transfer" type="button"
+            role="tab">
             <span class="material-symbols-outlined">swap_horiz</span> Transfer
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="transactions-tab" data-bs-toggle="tab" data-bs-target="#transactions" type="button" role="tab">
+        <button class="nav-link" id="transactions-tab" data-bs-toggle="tab" data-bs-target="#transactions" type="button"
+            role="tab">
             <span class="material-symbols-outlined">receipt_long</span> Transactions
         </button>
     </li>
@@ -38,15 +41,17 @@
                     <div class="card-body">
                         <div class="row g-3">
                             <div class="col-md-6">
-                                <div class="text-center p-4 bg-primary bg-opacity-10 rounded">
-                                    <span class="material-symbols-outlined text-white" style="font-size: 2.5rem;">account_balance_wallet</span>
+                                <div class="text-center p-4 bg-primary-subtle rounded">
+                                    <span class="material-symbols-outlined text-white"
+                                        style="font-size: 2.5rem;">account_balance_wallet</span>
                                     <h6 class="text-white mt-2 mb-1">Checking</h6>
                                     <h3 class="text-white mb-0">${{ "%.2f"|format(checking_balance) }}</h3>
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <div class="text-center p-4 bg-info bg-opacity-10 rounded">
-                                    <span class="material-symbols-outlined text-primary" style="font-size: 2.5rem;">savings</span>
+                                <div class="text-center p-4 bg-info-subtle rounded">
+                                    <span class="material-symbols-outlined text-primary"
+                                        style="font-size: 2.5rem;">savings</span>
                                     <h6 class="text-primary mt-2 mb-1">Savings</h6>
                                     <h3 class="text-primary mb-0">${{ "%.2f"|format(savings_balance) }}</h3>
                                 </div>
@@ -77,7 +82,8 @@
                         <div class="mb-3 pb-3 border-bottom">
                             <div class="d-flex justify-content-between align-items-center">
                                 <span class="text-muted">Monthly Interest Rate</span>
-                                <h5 class="mb-0 text-primary">{% if settings %}{{ "%.2f"|format(settings.savings_monthly_rate) }}%{% else %}4.5%{% endif %}</h5>
+                                <h5 class="mb-0 text-primary">{% if settings %}{{
+                                    "%.2f"|format(settings.savings_monthly_rate) }}%{% else %}4.5%{% endif %}</h5>
                             </div>
                         </div>
                         <div class="mb-3 pb-3 border-bottom">
@@ -89,7 +95,8 @@
                         <div>
                             <div class="d-flex justify-content-between align-items-center">
                                 <span class="text-muted">Total Transactions</span>
-                                <h5 class="mb-0">{%if transactions %}{{ transactions|length }}{% else %}0{% endif %}</h5>
+                                <h5 class="mb-0">{%if transactions %}{{ transactions|length }}{% else %}0{% endif %}
+                                </h5>
                             </div>
                         </div>
                     </div>
@@ -106,8 +113,10 @@
                 <canvas id="savingsProjectionChart" height="80"></canvas>
                 <div class="mt-3 text-center">
                     <small class="text-muted">
-                        Projection based on current balance of <strong>${{ "%.2f"|format(savings_balance) }}</strong> with
-                        {{ "%.2f"|format((settings.savings_apy if settings else 4.5)) }}% annual {{ calculation_type }} interest
+                        Projection based on current balance of <strong>${{ "%.2f"|format(savings_balance) }}</strong>
+                        with
+                        {{ "%.2f"|format((settings.savings_apy if settings else 4.5)) }}% annual {{ calculation_type }}
+                        interest
                         {% if calculation_type == 'compound' %}(compounded {{ compound_frequency }}){% endif %}
                     </small>
                 </div>
@@ -127,7 +136,8 @@
                         </button>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <button class="btn btn-outline-primary w-100" onclick="document.getElementById('transactions-tab').click()">
+                        <button class="btn btn-outline-primary w-100"
+                            onclick="document.getElementById('transactions-tab').click()">
                             <span class="material-symbols-outlined">receipt_long</span> View Transactions
                         </button>
                     </div>
@@ -152,13 +162,13 @@
                     <div class="card-body">
                         <div class="row">
                             <div class="col-6">
-                                <div class="text-center p-3 bg-primary bg-opacity-10 rounded">
+                                <div class="text-center p-3 bg-primary-subtle rounded">
                                     <h6 class="text-white mb-2">Checking</h6>
                                     <h4 class="text-white mb-0">${{ "%.2f"|format(checking_balance) }}</h4>
                                 </div>
                             </div>
                             <div class="col-6">
-                                <div class="text-center p-3 bg-info bg-opacity-10 rounded">
+                                <div class="text-center p-3 bg-info-subtle rounded">
                                     <h6 class="text-primary mb-2">Savings</h6>
                                     <h4 class="text-primary mb-0">${{ "%.2f"|format(savings_balance) }}</h4>
                                 </div>
@@ -193,7 +203,8 @@
                                 <label for="amount" class="form-label">Amount</label>
                                 <div class="input-group">
                                     <span class="input-group-text">$</span>
-                                    <input type="number" class="form-control" id="amount" name="amount" step="0.01" min="0.01" placeholder="0.00" required>
+                                    <input type="number" class="form-control" id="amount" name="amount" step="0.01"
+                                        min="0.01" placeholder="0.00" required>
                                 </div>
                             </div>
 
@@ -207,12 +218,12 @@
                 <div class="alert alert-info mt-3">
                     <span class="material-symbols-outlined">info</span> <strong>Tip:</strong> Your savings account earns
                     {% if settings %}
-                        {{ '%.2f'|format(settings.savings_apy) }}% annual {{ calculation_type }} interest
-                        {% if calculation_type == 'compound' %}
-                            (compounded {{ compound_frequency }})
-                        {% endif %}
+                    {{ '%.2f'|format(settings.savings_apy) }}% annual {{ calculation_type }} interest
+                    {% if calculation_type == 'compound' %}
+                    (compounded {{ compound_frequency }})
+                    {% endif %}
                     {% else %}
-                        4.5% annual simple interest
+                    4.5% annual simple interest
                     {% endif %}
                     (approximately ${{ '%.2f'|format(forecast_interest) }}/month).
                 </div>
@@ -225,15 +236,19 @@
         <!-- Nested tabs for Checking vs Savings -->
         <ul class="nav nav-pills mb-3" id="transactionTypeTabs" role="tablist">
             <li class="nav-item" role="presentation">
-                <button class="nav-link active" id="checking-history-tab" data-bs-toggle="tab" data-bs-target="#checking-history" type="button" role="tab">
+                <button class="nav-link active" id="checking-history-tab" data-bs-toggle="tab"
+                    data-bs-target="#checking-history" type="button" role="tab">
                     <span class="material-symbols-outlined">account_balance_wallet</span> Checking
-                    <span class="badge bg-secondary">{% if checking_transactions %}{{ checking_transactions|length }}{% else %}0{% endif %}</span>
+                    <span class="badge bg-secondary">{% if checking_transactions %}{{ checking_transactions|length }}{%
+                        else %}0{% endif %}</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link" id="savings-history-tab" data-bs-toggle="tab" data-bs-target="#savings-history" type="button" role="tab">
+                <button class="nav-link" id="savings-history-tab" data-bs-toggle="tab" data-bs-target="#savings-history"
+                    type="button" role="tab">
                     <span class="material-symbols-outlined">savings</span> Savings
-                    <span class="badge bg-secondary">{% if savings_transactions %}{{ savings_transactions|length }}{% else %}0{% endif %}</span>
+                    <span class="badge bg-secondary">{% if savings_transactions %}{{ savings_transactions|length }}{%
+                        else %}0{% endif %}</span>
                 </button>
             </li>
         </ul>
@@ -242,120 +257,122 @@
             <!-- Checking Transactions -->
             <div class="tab-pane fade show active" id="checking-history" role="tabpanel">
                 {% if checking_transactions %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Type</th>
-                                    <th>Amount</th>
-                                    <th>Description</th>
-                                    <th>Status</th>
-                                    <th>Report</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for tx in checking_transactions[:50] %}
-                                <tr {% if tx.is_void %}class="table-secondary text-decoration-line-through"{% endif %}>
-                                    <td>
-                                        {% if tx.timestamp %}
-                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
-                                        {% else %}
-                                            N/A
-                                        {% endif %}
-                                    </td>
-                                    <td><span class="badge bg-info">{{ tx.type|title if tx.type else 'General' }}</span></td>
-                                    <td class="{% if tx.amount < 0 %}text-danger{% else %}text-success{% endif %} fw-bold">
-                                        ${{ "%.2f"|format(tx.amount) }}
-                                    </td>
-                                    <td>{{ tx.description or 'N/A' }}</td>
-                                    <td>
-                                        {% if tx.is_void %}
-                                            <span class="badge bg-secondary">Voided</span>
-                                        {% else %}
-                                            <span class="badge bg-success">Active</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <a href="{{ url_for('student.report_transaction_issue', transaction_id=tx.id) }}"
-                                           class="btn btn-sm btn-link text-muted p-0"
-                                           title="Report an issue with this transaction"
-                                           data-bs-toggle="tooltip">
-                                            <span class="material-symbols-outlined fs-6">help</span>
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% if checking_transactions|length > 50 %}
-                        <p class="text-muted text-center">Showing most recent 50 transactions</p>
-                    {% endif %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>Description</th>
+                                <th>Status</th>
+                                <th>Report</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tx in checking_transactions[:50] %}
+                            <tr {% if tx.is_void %}class="table-secondary text-decoration-line-through" {% endif %}>
+                                <td>
+                                    {% if tx.timestamp %}
+                                    <span class="local-timestamp"
+                                        data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
+                                    {% else %}
+                                    N/A
+                                    {% endif %}
+                                </td>
+                                <td><span class="badge bg-info">{{ tx.type|title if tx.type else 'General' }}</span>
+                                </td>
+                                <td class="{% if tx.amount < 0 %}text-danger{% else %}text-success{% endif %} fw-bold">
+                                    ${{ "%.2f"|format(tx.amount) }}
+                                </td>
+                                <td>{{ tx.description or 'N/A' }}</td>
+                                <td>
+                                    {% if tx.is_void %}
+                                    <span class="badge bg-secondary">Voided</span>
+                                    {% else %}
+                                    <span class="badge bg-success">Active</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('student.report_transaction_issue', transaction_id=tx.id) }}"
+                                        class="btn btn-sm btn-link text-muted p-0"
+                                        title="Report an issue with this transaction" data-bs-toggle="tooltip">
+                                        <span class="material-symbols-outlined fs-6">help</span>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if checking_transactions|length > 50 %}
+                <p class="text-muted text-center">Showing most recent 50 transactions</p>
+                {% endif %}
                 {% else %}
-                    <div class="alert alert-info">
-                        <span class="material-symbols-outlined">info</span> No checking transactions yet.
-                    </div>
+                <div class="alert alert-info">
+                    <span class="material-symbols-outlined">info</span> No checking transactions yet.
+                </div>
                 {% endif %}
             </div>
 
             <!-- Savings Transactions -->
             <div class="tab-pane fade" id="savings-history" role="tabpanel">
                 {% if savings_transactions %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Type</th>
-                                    <th>Amount</th>
-                                    <th>Description</th>
-                                    <th>Status</th>
-                                    <th>Report</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for tx in savings_transactions[:50] %}
-                                <tr {% if tx.is_void %}class="table-secondary text-decoration-line-through"{% endif %}>
-                                    <td>
-                                        {% if tx.timestamp %}
-                                            <span class="local-timestamp" data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
-                                        {% else %}
-                                            N/A
-                                        {% endif %}
-                                    </td>
-                                    <td><span class="badge bg-info">{{ tx.type|title if tx.type else 'General' }}</span></td>
-                                    <td class="{% if tx.amount < 0 %}text-danger{% else %}text-success{% endif %} fw-bold">
-                                        ${{ "%.2f"|format(tx.amount) }}
-                                    </td>
-                                    <td>{{ tx.description or 'N/A' }}</td>
-                                    <td>
-                                        {% if tx.is_void %}
-                                            <span class="badge bg-secondary">Voided</span>
-                                        {% else %}
-                                            <span class="badge bg-success">Active</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <a href="{{ url_for('student.report_transaction_issue', transaction_id=tx.id) }}"
-                                           class="btn btn-sm btn-link text-muted p-0"
-                                           title="Report an issue with this transaction"
-                                           data-bs-toggle="tooltip">
-                                            <span class="material-symbols-outlined fs-6">help</span>
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% if savings_transactions|length > 50 %}
-                        <p class="text-muted text-center">Showing most recent 50 transactions</p>
-                    {% endif %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>Description</th>
+                                <th>Status</th>
+                                <th>Report</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tx in savings_transactions[:50] %}
+                            <tr {% if tx.is_void %}class="table-secondary text-decoration-line-through" {% endif %}>
+                                <td>
+                                    {% if tx.timestamp %}
+                                    <span class="local-timestamp"
+                                        data-timestamp="{{ format_utc_iso(tx.timestamp) }}"></span>
+                                    {% else %}
+                                    N/A
+                                    {% endif %}
+                                </td>
+                                <td><span class="badge bg-info">{{ tx.type|title if tx.type else 'General' }}</span>
+                                </td>
+                                <td class="{% if tx.amount < 0 %}text-danger{% else %}text-success{% endif %} fw-bold">
+                                    ${{ "%.2f"|format(tx.amount) }}
+                                </td>
+                                <td>{{ tx.description or 'N/A' }}</td>
+                                <td>
+                                    {% if tx.is_void %}
+                                    <span class="badge bg-secondary">Voided</span>
+                                    {% else %}
+                                    <span class="badge bg-success">Active</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('student.report_transaction_issue', transaction_id=tx.id) }}"
+                                        class="btn btn-sm btn-link text-muted p-0"
+                                        title="Report an issue with this transaction" data-bs-toggle="tooltip">
+                                        <span class="material-symbols-outlined fs-6">help</span>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if savings_transactions|length > 50 %}
+                <p class="text-muted text-center">Showing most recent 50 transactions</p>
+                {% endif %}
                 {% else %}
-                    <div class="alert alert-info">
-                        <span class="material-symbols-outlined">info</span> No savings transactions yet.
-                    </div>
+                <div class="alert alert-info">
+                    <span class="material-symbols-outlined">info</span> No savings transactions yet.
+                </div>
                 {% endif %}
             </div>
         </div>
@@ -381,7 +398,8 @@
                     </div>
                     <div class="mb-3">
                         <label for="passphrase" class="form-label">Enter your passphrase to confirm:</label>
-                        <input type="password" class="form-control" name="passphrase" id="passphrase" autocomplete="current-password" required autofocus>
+                        <input type="password" class="form-control" name="passphrase" id="passphrase"
+                            autocomplete="current-password" required autofocus>
                     </div>
                     <input type="hidden" name="from_account" id="modal_from_account">
                     <input type="hidden" name="to_account" id="modal_to_account">
@@ -443,56 +461,57 @@
     // Savings Projection Chart
     const ctx = document.getElementById('savingsProjectionChart');
     if (ctx) {
-        const projectionMonths = {{ projection_months|tojson }};
-        const projectionBalances = {{ projection_balances|tojson }};
+        const projectionMonths = {{ projection_months| tojson
+    }};
+    const projectionBalances = {{ projection_balances| tojson }};
 
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: projectionMonths.map(m => m === 0 ? 'Now' : `Month ${m}`),
-                datasets: [{
-                    label: 'Projected Savings Balance',
-                    data: projectionBalances,
-                    borderColor: 'rgb(25, 135, 84)',
-                    backgroundColor: 'rgba(25, 135, 84, 0.1)',
-                    fill: true,
-                    tension: 0.3,
-                    pointRadius: 4,
-                    pointHoverRadius: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return 'Balance: $' + context.parsed.y.toFixed(2);
-                            }
-                        }
-                    }
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: projectionMonths.map(m => m === 0 ? 'Now' : `Month ${m}`),
+            datasets: [{
+                label: 'Projected Savings Balance',
+                data: projectionBalances,
+                borderColor: 'var(--success)',
+                backgroundColor: 'var(--success-subtle)',
+                fill: true,
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            callback: function(value) {
-                                return '$' + value.toFixed(0);
-                            }
-                        }
-                    },
-                    x: {
-                        grid: {
-                            display: false
+                tooltip: {
+                    callbacks: {
+                        label: function (context) {
+                            return 'Balance: $' + context.parsed.y.toFixed(2);
                         }
                     }
                 }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function (value) {
+                            return '$' + value.toFixed(0);
+                        }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
             }
-        });
+        }
+    });
     }
 </script>
 {% endblock %}

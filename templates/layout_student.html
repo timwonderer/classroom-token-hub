@@ -1,6 +1,7 @@
 {% import "macros/help.html" as help %}
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,7 +10,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#2F4F7F">
+    <meta name="theme-color" content="slateblue">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -24,10 +25,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
     <!-- Preload Material Symbols font for faster icon rendering -->
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" as="style">
+    <link rel="preload"
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+        as="style">
 
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+        rel="stylesheet">
 
     <!-- Material Symbols fallback CSS -->
     <style>
@@ -51,149 +56,170 @@
 
     <!-- CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
 
     {% block extra_styles %}{% endblock %}
     {% block extra_head %}{% endblock %}
 </head>
+
 <body class="student-shell">
     <a href="#main-content" class="skip-link">Skip to main content</a>
 
     <!-- Mobile Menu Toggle Button -->
-    <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle navigation menu" aria-controls="studentSidebar" aria-expanded="false">
+    <button class="mobile-menu-toggle" id="mobileMenuToggle" aria-label="Toggle navigation menu"
+        aria-controls="studentSidebar" aria-expanded="false">
         <span class="material-symbols-outlined">menu</span>
     </button>
 
     <!-- Sidebar Backdrop -->
     <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
 
-    <aside class="student-sidebar" id="studentSidebar" role="navigation" aria-label="Student navigation" aria-hidden="true">
-        <a class="student-brand" href="{{ url_for('student.dashboard') }}">
-            
-            <div>
-                <div > <span class="material-symbols-outlined student-home-icon-bill" style="font-size: 30px; vertical-align: middle; font-weight:200">local_atm</span>Classroom</div>
-                <div ><span class="material-symbols-outlined student-home-icon-store" style="font-size: 30px; vertical-align: middle; font-weight:200">store</span>Token</div>
-                <div > <span class="material-symbols-outlined student-home-icon-stock" style="font-size: 30px; vertical-align: middle; font-weight:200"> finance_mode</span>Hub</div></div>
-            </a>
-        <hr>
-         {% if student %}
-        <div class="student-identity" style="font-size: 24px;"> 
-            {{ student.first_name }}
-            <div class="mt-0" style="font-size:10pt; color:white">
-                Student
-            </div>
-        </div>
-        {% endif %}
-        {% if available_classes %}
-        <div class="class-switcher mb-3">
-            <div class="d-flex align-items-center justify-content-between mb-1">
-                <label for="class-switcher-select" class="small mb-0 text-white text-uppercase">current class</label>
-                
-            </div>
-            <select id="class-switcher-select" class="form-select form-select-sm">
-                {% for class_option in available_classes %}
-                <option value="{{ class_option.join_code }}" {% if class_option.is_current %}selected{% endif %}>
-                    {{ class_option.block_display }} with {{ class_option.teacher_name }}
-                </option>
-                {% endfor %}
-            </select>
-            
-            <div id="class-switch-error" class="alert alert-warning small py-2 px-3 mt-2 d-none">
-                <span class="material-symbols-outlined align-middle me-1" style="font-size: 18px;">error</span>
-                <span class="class-switch-error-text"></span>
-            </div>
-        </div>
-        {% endif %}
-        
-        <nav class="student-nav">
-            <a href="{{ url_for('student.dashboard') }}" class="{% if request.endpoint == 'student.dashboard' %}active{% endif %}">
-                <span class="material-symbols-outlined">home</span> Dashboard
-            </a>
-            <a href="{{ url_for('student.transfer') }}" class="{% if request.endpoint == 'student.transfer' %}active{% endif %}">
-                <span class="material-symbols-outlined">account_balance_wallet</span> Accounts
-            </a>
-            <a href="{{ url_for('student.shop') }}" class="{% if request.endpoint == 'student.shop' %}active{% endif %}">
-                <span class="material-symbols-outlined">storefront</span> Store
-            </a>
-            <a href="{{ url_for('student.payroll') }}" class="{% if request.endpoint == 'student.payroll' %}active{% endif %}">
-                <span class="material-symbols-outlined">credit_score</span> Work &amp; Pay
-            </a>
-            {% if feature_settings.rent_enabled or feature_settings.insurance_enabled %}
-            <a href="{% if feature_settings.rent_enabled %}{{ url_for('student.rent') }}{% else %}{{ url_for('student.student_insurance') }}{% endif %}" class="{% if request.endpoint in ['student.rent', 'student.student_insurance'] %}active{% endif %}">
-                <span class="material-symbols-outlined">receipt_long</span> Bills
-            </a>
-            {% endif %}
-            <a href="{{ url_for('student.add_class') }}" class="{% if request.endpoint == 'student.add_class' %}active{% endif %}">
-                <span class="material-symbols-outlined">group_add</span> Add Class
-            </a>
-            <a href="{{ url_for('student.help_support') }}" class="{% if request.endpoint in ['student.help_support', 'student.submit_general_issue', 'student.report_transaction_issue', 'student.report_tap_event_issue'] %}active{% endif %}">
-                <span class="material-symbols-outlined">support_agent</span> Help &amp; Support
-            </a>
-            <a href="{{ url_for('student.logout') }}">
-                <span class="material-symbols-outlined">logout</span> Sign Out
-            </a>
-        </nav>
+    <aside class="student-sidebar" id="studentSidebar" role="navigation"
+            aria-label="Student navigation">
+                <a class="student-brand" href="{{ url_for('student.dashboard') }}">
+
+                    <div>
+                        <div> <span class="material-symbols-outlined student-home-icon-bill"
+                                style="font-size: 30px; vertical-align: middle; font-weight:200">local_atm</span>Classroom
+                        </div>
+                        <div><span class="material-symbols-outlined student-home-icon-store"
+                                style="font-size: 30px; vertical-align: middle; font-weight:200">store</span>Token</div>
+                        <div> <span class="material-symbols-outlined student-home-icon-stock"
+                                style="font-size: 30px; vertical-align: middle; font-weight:200"> finance_mode</span>Hub
+                        </div>
+                    </div>
+                </a>
+                <hr>
+                {% if student %}
+                <div class="student-identity" style="font-size: 24px;">
+                    {{ student.first_name }}
+                    <div class="mt-0" style="font-size:10pt; color:white">
+                        Student
+                    </div>
+                </div>
+                {% endif %}
+                {% if available_classes %}
+                <div class="class-switcher mb-3">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <label for="class-switcher-select" class="small mb-0 text-white text-uppercase">current
+                            class</label>
+
+                    </div>
+                    <select id="class-switcher-select" class="form-select form-select-sm">
+                        {% for class_option in available_classes %}
+                        <option value="{{ class_option.join_code }}" {% if class_option.is_current %}selected{% endif
+                            %}>
+                            {{ class_option.block_display }} with {{ class_option.teacher_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+
+                    <div id="class-switch-error" class="alert alert-warning small py-2 px-3 mt-2 d-none">
+                        <span class="material-symbols-outlined align-middle me-1" style="font-size: 18px;">error</span>
+                        <span class="class-switch-error-text"></span>
+                    </div>
+                </div>
+                {% endif %}
+
+                <nav class="student-nav">
+                    <a href="{{ url_for('student.dashboard') }}"
+                        class="{% if request.endpoint == 'student.dashboard' %}active{% endif %}">
+                        <span class="material-symbols-outlined">home</span> Dashboard
+                    </a>
+                    <a href="{{ url_for('student.transfer') }}"
+                        class="{% if request.endpoint == 'student.transfer' %}active{% endif %}">
+                        <span class="material-symbols-outlined">account_balance_wallet</span> Accounts
+                    </a>
+                    <a href="{{ url_for('student.shop') }}"
+                        class="{% if request.endpoint == 'student.shop' %}active{% endif %}">
+                        <span class="material-symbols-outlined">storefront</span> Store
+                    </a>
+                    <a href="{{ url_for('student.payroll') }}"
+                        class="{% if request.endpoint == 'student.payroll' %}active{% endif %}">
+                        <span class="material-symbols-outlined">credit_score</span> Work &amp; Pay
+                    </a>
+                    {% if feature_settings.rent_enabled or feature_settings.insurance_enabled %}
+                    <a href="{% if feature_settings.rent_enabled %}{{ url_for('student.rent') }}{% else %}{{ url_for('student.student_insurance') }}{% endif %}"
+                        class="{% if request.endpoint in ['student.rent', 'student.student_insurance'] %}active{% endif %}">
+                        <span class="material-symbols-outlined">receipt_long</span> Bills
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('student.add_class') }}"
+                        class="{% if request.endpoint == 'student.add_class' %}active{% endif %}">
+                        <span class="material-symbols-outlined">group_add</span> Add Class
+                    </a>
+                    <a href="{{ url_for('student.help_support') }}"
+                        class="{% if request.endpoint in ['student.help_support', 'student.submit_general_issue', 'student.report_transaction_issue', 'student.report_tap_event_issue'] %}active{% endif %}">
+                        <span class="material-symbols-outlined">support_agent</span> Help &amp; Support
+                    </a>
+                    <a href="{{ url_for('student.logout') }}">
+                        <span class="material-symbols-outlined">logout</span> Sign Out
+                    </a>
+                </nav>
     </aside>
 
     <main id="main-content" class="student-main">
-        <div class="student-content">
-            {% set help_doc_map = {
-                'dashboard': 'user-guides/diagnostics/student',
-                'profile': 'user-guides/diagnostics/student-classes',
-                'help': 'user-guides/diagnostics/student-support',
-                'student.dashboard': 'user-guides/diagnostics/student',
-                'student.transfer': 'user-guides/diagnostics/student-money',
-                'student.shop': 'user-guides/diagnostics/student-store',
-                'student.payroll': 'user-guides/diagnostics/student-attendance',
-                'student.rent': 'user-guides/diagnostics/student-rent-insurance',
-                'student.student_insurance': 'user-guides/diagnostics/student-rent-insurance',
-                'student.help_support': 'user-guides/diagnostics/student-support',
-                'student.claim_account': 'user-guides/diagnostics/student-classes',
-                'student.complete_profile': 'user-guides/diagnostics/student-classes'
-            } %}
-            {% set help_doc_key = current_page or request.endpoint %}
-            {% set help_doc_path = help_doc_map.get(help_doc_key) %}
-            {% if not help_doc_path and request.endpoint %}
-                {% set help_doc_path = help_doc_map.get(request.endpoint) %}
-            {% endif %}
-            {% set resolved_page_icon = (self.page_icon() | trim) or 'school' %}
-            <div class="page-header">
-                <div>
-                    <div class="eyebrow">Classroom Token Hub</div>
-                    <h1 class="d-flex align-items-center gap-2 mb-1">
-                        <span class="material-symbols-outlined">{{ resolved_page_icon }}</span>
-                        {{ resolved_page_title }}
-                    </h1>
-                    <div class="meta" id="student-current-time"></div>
-                    {% if current_class_context %}
-                    <div class="meta text-muted">
-                        {{ current_class_context.teacher_name }} • {{ current_class_context.block_display }}
-                        <span class="badge bg-light text-dark ms-2">Join Code: {{ current_class_context.join_code }}</span>
-                    </div>
+                <div class="student-content">
+                    {% set help_doc_map = {
+                    'dashboard': 'user-guides/diagnostics/student',
+                    'profile': 'user-guides/diagnostics/student-classes',
+                    'help': 'user-guides/diagnostics/student-support',
+                    'student.dashboard': 'user-guides/diagnostics/student',
+                    'student.transfer': 'user-guides/diagnostics/student-money',
+                    'student.shop': 'user-guides/diagnostics/student-store',
+                    'student.payroll': 'user-guides/diagnostics/student-attendance',
+                    'student.rent': 'user-guides/diagnostics/student-rent-insurance',
+                    'student.student_insurance': 'user-guides/diagnostics/student-rent-insurance',
+                    'student.help_support': 'user-guides/diagnostics/student-support',
+                    'student.claim_account': 'user-guides/diagnostics/student-classes',
+                    'student.complete_profile': 'user-guides/diagnostics/student-classes'
+                    } %}
+                    {% set help_doc_key = current_page or request.endpoint %}
+                    {% set help_doc_path = help_doc_map.get(help_doc_key) %}
+                    {% if not help_doc_path and request.endpoint %}
+                    {% set help_doc_path = help_doc_map.get(request.endpoint) %}
                     {% endif %}
-                </div>
-                <div class="page-header-actions">
-                    {% if help_doc_path %}
-                        {{ help.help_link(help_doc_path, text="Guide", tooltip="View guide") }}
-                    {% endif %}
-                </div>
-            </div>
-
-            {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                    {% for category, message in messages %}
-                        <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm border-0 mb-4" role="alert">
-                            {{ message }}
-                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    {% set resolved_page_icon = (self.page_icon() | trim) or 'school' %}
+                    <div class="page-header">
+                        <div>
+                            <div class="eyebrow">Classroom Token Hub</div>
+                            <h1 class="d-flex align-items-center gap-2 mb-1">
+                                <span class="material-symbols-outlined">{{ resolved_page_icon }}</span>
+                                {{ resolved_page_title }}
+                            </h1>
+                            <div class="meta" id="student-current-time"></div>
+                            {% if current_class_context %}
+                            <div class="meta text-muted">
+                                {{ current_class_context.teacher_name }} • {{ current_class_context.block_display }}
+                                <span class="badge bg-light text-dark ms-2">Join Code: {{
+                                    current_class_context.join_code
+                                    }}</span>
+                            </div>
+                            {% endif %}
                         </div>
-                    {% endfor %}
-                {% endif %}
-            {% endwith %}
+                        <div class="page-header-actions">
+                            {% if help_doc_path %}
+                            {{ help.help_link(help_doc_path, text="Guide", tooltip="View guide") }}
+                            {% endif %}
+                        </div>
+                    </div>
 
-            {% block content %}{% endblock %}
-        </div>
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                    {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ category if category != 'error' else 'danger' }} alert-dismissible fade show shadow-sm border-0 mb-4"
+                        role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                    {% endwith %}
+
+                    {% block content %}{% endblock %}
+                </div>
+
     </main>
 
     <!-- Scripts -->
@@ -207,19 +233,19 @@
             const optionsDate = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
             const optionsTime = { hour: 'numeric', minute: 'numeric', hour12: true };
             timeElement.textContent = now.toLocaleDateString(undefined, optionsDate) + ' ' +
-                                      now.toLocaleTimeString(undefined, optionsTime);
+                now.toLocaleTimeString(undefined, optionsTime);
         }
         setInterval(updateStudentTime, 1000);
         updateStudentTime();
 
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             const classSwitcher = document.getElementById('class-switcher-select');
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
             const errorBox = document.getElementById('class-switch-error');
             const errorText = document.querySelector('.class-switch-error-text');
 
             if (classSwitcher) {
-                classSwitcher.addEventListener('change', function() {
+                classSwitcher.addEventListener('change', function () {
                     const joinCode = this.value;
                     if (!joinCode || !csrfToken) return;
 
@@ -272,4 +298,5 @@
     <script src="{{ static_url('js/mobile-sidebar-toggle.js') }}"></script>
     {% block extra_scripts %}{% endblock %}
 </body>
+
 </html>
