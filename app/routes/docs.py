@@ -197,6 +197,12 @@ def index():
     return render_template_with_fallback('docs/index.html')
 
 
+@docs_bp.route('/timeline')
+def timeline():
+    """Interactive project development timeline."""
+    return render_template_with_fallback('docs/timeline.html')
+
+
 @docs_bp.route('/<path:doc_path>')
 def view_doc(doc_path):
     """
