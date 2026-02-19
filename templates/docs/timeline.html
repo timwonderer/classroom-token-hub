@@ -6,6 +6,75 @@
 
 {% block extra_head %}
 <style>
+/* ── Page-scoped timeline tokens ──────────────────────────────────────────────
+   All category/era colors are defined once here as CSS custom properties.
+   No hex codes appear in any rule below — every color reference uses var().
+   Per design-system.md: "NEVER use hex codes in templates."
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+    /* Features (green) */
+    --tl-features:         #2e7d5b;
+    --tl-features-bg:      #e6f4ed;
+
+    /* Fixes / crises (red) */
+    --tl-fixes:            #c0392b;
+    --tl-fixes-bg:         #fef2f2;
+    --tl-fixes-border:     #fca5a5;
+
+    /* Security (orange) */
+    --tl-security:         #d35400;
+    --tl-security-text:    #c05621;
+    --tl-security-bg:      #fff7ed;
+
+    /* Architecture (blue) */
+    --tl-arch:             #2980b9;
+    --tl-arch-text:        #2563eb;
+    --tl-arch-bg:          #eff6ff;
+
+    /* Philosophy / Era I (purple) */
+    --tl-phil:             #7d3c98;
+    --tl-phil-dark:        #5b2d7e;
+    --tl-phil-text:        #7c3aed;
+    --tl-phil-bg:          #faf5ff;
+    --tl-phil-bg-light:    #f3e8ff;
+    --tl-phil-border:      #d8b4fe;
+
+    /* Mobile (sky) */
+    --tl-mobile-bg:        #e0f2fe;
+    --tl-mobile-text:      #0369a1;
+
+    /* Analytics (leaf green) */
+    --tl-analytics-bg:     #f0fdf4;
+    --tl-analytics-text:   #15803d;
+
+    /* Warning / lesson (amber) */
+    --tl-warning-bg:       #fefce8;
+    --tl-warning-text:     #854d0e;
+    --tl-warning-border:   #fde68a;
+
+    /* Patch badge (light green) */
+    --tl-patch-bg:         #f0f9f5;
+    --tl-patch-border:     #b2dfcc;
+
+    /* Era II background (amber) */
+    --tl-era-ii-bg:        #fff3e0;
+    --tl-era-ii-border:    #fdba74;
+
+    /* Era III background (sky) */
+    --tl-era-iii-bg:       #e0f2fe;
+    --tl-era-iii-border:   #7dd3fc;
+
+    /* Era IV background (leaf green) */
+    --tl-era-iv-bg:        #dcfce7;
+    --tl-era-iv-border:    #86efac;
+
+    /* Release badge border (teal-tinted) */
+    --tl-release-border:   #b2d0cc;
+
+    /* Hero darkening shade (deep teal for gradient end) */
+    --tl-hero-dark:        #0d2e2a;
+}
+
 /* ── Timeline Page Layout ── */
 .timeline-page {
     background: var(--neutral-100);
@@ -14,7 +83,7 @@
 
 /* ── Hero ── */
 .timeline-hero {
-    background: linear-gradient(135deg, var(--primary) 0%, #0d2e2a 100%);
+    background: linear-gradient(135deg, var(--primary) 0%, var(--tl-hero-dark) 100%);
     color: white;
     padding: 3.5rem 0 2.5rem;
     text-align: center;
@@ -31,8 +100,9 @@
 .timeline-hero .subtitle { font-size: 1.1rem; opacity: 0.8; max-width: 600px; margin: 0 auto 1.5rem; }
 .timeline-hero .badge-row { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
 .timeline-hero .stat-badge {
-    background: rgba(255,255,255,0.12);
-    border: 1px solid rgba(255,255,255,0.2);
+    /* White tint over dark primary background — white overlay, not Bootstrap opacity utility */
+    background: color-mix(in srgb, white 12%, transparent);
+    border: 1px solid color-mix(in srgb, white 20%, transparent);
     border-radius: var(--radius-pill);
     padding: 0.25rem 0.85rem;
     font-size: 0.82rem;
@@ -61,12 +131,12 @@
     transition: all 0.15s ease;
 }
 .filter-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-subtle); }
-.filter-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
-.filter-btn[data-filter="features"].active { background: #2e7d5b; border-color: #2e7d5b; }
-.filter-btn[data-filter="fixes"].active { background: #c0392b; border-color: #c0392b; }
-.filter-btn[data-filter="security"].active { background: #d35400; border-color: #d35400; }
-.filter-btn[data-filter="architecture"].active { background: #2980b9; border-color: #2980b9; }
-.filter-btn[data-filter="philosophy"].active { background: #7d3c98; border-color: #7d3c98; }
+.filter-btn.active                              { background: var(--primary);      color: white; border-color: var(--primary); }
+.filter-btn[data-filter="features"].active      { background: var(--tl-features);  border-color: var(--tl-features); }
+.filter-btn[data-filter="fixes"].active         { background: var(--tl-fixes);     border-color: var(--tl-fixes); }
+.filter-btn[data-filter="security"].active      { background: var(--tl-security);  border-color: var(--tl-security); }
+.filter-btn[data-filter="architecture"].active  { background: var(--tl-arch);      border-color: var(--tl-arch); }
+.filter-btn[data-filter="philosophy"].active    { background: var(--tl-phil);      border-color: var(--tl-phil); }
 
 /* ── Main Timeline Container ── */
 .timeline-wrap { max-width: 900px; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
@@ -88,10 +158,10 @@
     text-transform: uppercase;
     white-space: nowrap;
 }
-.era-i   { background: #f3e8ff; color: #7d3c98; border: 1px solid #d8b4fe; }
-.era-ii  { background: #fff3e0; color: #c0392b; border: 1px solid #fdba74; }
-.era-iii { background: #e0f2fe; color: #2980b9; border: 1px solid #7dd3fc; }
-.era-iv  { background: #dcfce7; color: #2e7d5b; border: 1px solid #86efac; }
+.era-i   { background: var(--tl-phil-bg-light); color: var(--tl-phil);     border: 1px solid var(--tl-phil-border); }
+.era-ii  { background: var(--tl-era-ii-bg);     color: var(--tl-fixes);    border: 1px solid var(--tl-era-ii-border); }
+.era-iii { background: var(--tl-era-iii-bg);    color: var(--tl-arch);     border: 1px solid var(--tl-era-iii-border); }
+.era-iv  { background: var(--tl-era-iv-bg);     color: var(--tl-features); border: 1px solid var(--tl-era-iv-border); }
 
 /* ── Timeline Track ── */
 .timeline-track {
@@ -132,12 +202,12 @@
     z-index: 1;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-.tl-dot.dot-features   { background: #2e7d5b; box-shadow: 0 0 0 2px #2e7d5b; }
-.tl-dot.dot-fixes      { background: #c0392b; box-shadow: 0 0 0 2px #c0392b; }
-.tl-dot.dot-security   { background: #d35400; box-shadow: 0 0 0 2px #d35400; }
-.tl-dot.dot-architecture { background: #2980b9; box-shadow: 0 0 0 2px #2980b9; }
-.tl-dot.dot-philosophy { background: #7d3c98; box-shadow: 0 0 0 2px #7d3c98; }
-.tl-dot.dot-milestone  { background: var(--secondary); box-shadow: 0 0 0 2px var(--secondary); width: 1.3rem; height: 1.3rem; left: -2.6rem; top: 0.9rem; }
+.tl-dot.dot-features     { background: var(--tl-features); box-shadow: 0 0 0 2px var(--tl-features); }
+.tl-dot.dot-fixes        { background: var(--tl-fixes);    box-shadow: 0 0 0 2px var(--tl-fixes); }
+.tl-dot.dot-security     { background: var(--tl-security); box-shadow: 0 0 0 2px var(--tl-security); }
+.tl-dot.dot-architecture { background: var(--tl-arch);     box-shadow: 0 0 0 2px var(--tl-arch); }
+.tl-dot.dot-philosophy   { background: var(--tl-phil);     box-shadow: 0 0 0 2px var(--tl-phil); }
+.tl-dot.dot-milestone    { background: var(--secondary);   box-shadow: 0 0 0 2px var(--secondary); width: 1.3rem; height: 1.3rem; left: -2.6rem; top: 0.9rem; }
 
 .tl-entry:hover .tl-dot { transform: scale(1.3); }
 
@@ -172,12 +242,12 @@
     flex-shrink: 0;
     margin-top: 0.15rem;
 }
-.badge-release  { background: var(--primary-subtle); color: var(--primary); border: 1px solid #b2d0cc; }
-.badge-patch    { background: #f0f9f5; color: #2e7d5b; border: 1px solid #b2dfcc; }
-.badge-crisis   { background: #fef2f2; color: #c0392b; border: 1px solid #fca5a5; }
-.badge-milestone{ background: #fefce8; color: #854d0e; border: 1px solid #fde68a; }
-.badge-future   { background: #f3e8ff; color: #7d3c98; border: 1px solid #d8b4fe; }
-.badge-era      { background: #f8fafc; color: var(--text-secondary); border: 1px solid var(--neutral-200); font-style: italic; }
+.badge-release  { background: var(--primary-subtle);    color: var(--primary);          border: 1px solid var(--tl-release-border); }
+.badge-patch    { background: var(--tl-patch-bg);       color: var(--tl-features);      border: 1px solid var(--tl-patch-border); }
+.badge-crisis   { background: var(--tl-fixes-bg);       color: var(--tl-fixes);         border: 1px solid var(--tl-fixes-border); }
+.badge-milestone{ background: var(--tl-warning-bg);     color: var(--tl-warning-text);  border: 1px solid var(--tl-warning-border); }
+.badge-future   { background: var(--tl-phil-bg-light);  color: var(--tl-phil);          border: 1px solid var(--tl-phil-border); }
+.badge-era      { background: var(--neutral-50);        color: var(--text-secondary);   border: 1px solid var(--neutral-200); font-style: italic; }
 
 .tl-meta { flex: 1; min-width: 0; }
 .tl-title { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin: 0 0 0.25rem; }
@@ -191,14 +261,14 @@
     border-radius: var(--radius-pill);
     letter-spacing: 0.03em;
 }
-.tag-features     { background: #e6f4ed; color: #2e7d5b; }
-.tag-fixes        { background: #fef2f2; color: #c0392b; }
-.tag-security     { background: #fff7ed; color: #c05621; }
-.tag-architecture { background: #eff6ff; color: #2563eb; }
-.tag-philosophy   { background: #faf5ff; color: #7c3aed; }
-.tag-mobile       { background: #e0f2fe; color: #0369a1; }
-.tag-analytics    { background: #f0fdf4; color: #15803d; }
-.tag-docs         { background: #fafaf9; color: var(--neutral-600); border: 1px solid var(--neutral-200); }
+.tag-features     { background: var(--tl-features-bg);  color: var(--tl-features); }
+.tag-fixes        { background: var(--tl-fixes-bg);      color: var(--tl-fixes); }
+.tag-security     { background: var(--tl-security-bg);   color: var(--tl-security-text); }
+.tag-architecture { background: var(--tl-arch-bg);       color: var(--tl-arch-text); }
+.tag-philosophy   { background: var(--tl-phil-bg);       color: var(--tl-phil-text); }
+.tag-mobile       { background: var(--tl-mobile-bg);     color: var(--tl-mobile-text); }
+.tag-analytics    { background: var(--tl-analytics-bg);  color: var(--tl-analytics-text); }
+.tag-docs         { background: var(--neutral-50);       color: var(--neutral-600); border: 1px solid var(--neutral-200); }
 
 .tl-chevron {
     flex-shrink: 0;
@@ -222,23 +292,23 @@
 .tl-card-body ul { padding-left: 1.25rem; margin: 0.5rem 0; }
 .tl-card-body li { margin-bottom: 0.3rem; line-height: 1.5; }
 .tl-card-body .lesson-box {
-    background: #fefce8;
+    background: var(--tl-warning-bg);
     border-left: 3px solid var(--secondary);
     padding: 0.6rem 0.9rem;
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     margin-top: 0.75rem;
     font-size: 0.82rem;
 }
-.tl-card-body .lesson-box strong { color: #854d0e; }
+.tl-card-body .lesson-box strong { color: var(--tl-warning-text); }
 .tl-card-body .crisis-box {
-    background: #fef2f2;
-    border-left: 3px solid #c0392b;
+    background: var(--tl-fixes-bg);
+    border-left: 3px solid var(--tl-fixes);
     padding: 0.6rem 0.9rem;
     border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     margin-top: 0.75rem;
     font-size: 0.82rem;
 }
-.tl-card-body .crisis-box strong { color: #c0392b; }
+.tl-card-body .crisis-box strong { color: var(--tl-fixes); }
 
 /* ── No results ── */
 .no-results {
@@ -257,7 +327,7 @@
     margin-top: 2.5rem;
 }
 .philosophy-section .ph-header {
-    background: linear-gradient(135deg, #7d3c98, #5b2d7e);
+    background: linear-gradient(135deg, var(--tl-phil), var(--tl-phil-dark));
     color: white;
     padding: 1.2rem 1.5rem;
 }
@@ -276,13 +346,13 @@
     font-size: 0.82rem;
     line-height: 1.5;
 }
-.anti-goal-item .ag-no  { color: #c0392b; font-weight: 700; font-size: 0.7rem; letter-spacing: 0.05em; display: block; margin-bottom: 0.2rem; }
-.anti-goal-item .ag-yes { color: #2e7d5b; font-size: 0.75rem; margin-top: 0.25rem; display: block; }
+.anti-goal-item .ag-no  { color: var(--tl-fixes);    font-weight: 700; font-size: 0.7rem; letter-spacing: 0.05em; display: block; margin-bottom: 0.2rem; }
+.anti-goal-item .ag-yes { color: var(--tl-features);  font-size: 0.75rem; margin-top: 0.25rem; display: block; }
 
 /* ── Quote ── */
 .project-quote {
-    background: linear-gradient(135deg, var(--primary-subtle), #f0f9ff);
-    border: 1px solid #b2d0cc;
+    background: var(--primary-subtle);
+    border: 1px solid var(--tl-release-border);
     border-radius: var(--radius-lg);
     padding: 1.5rem;
     margin-top: 2rem;
