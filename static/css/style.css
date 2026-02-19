@@ -23,6 +23,16 @@ h6 {
     letter-spacing: -0.02em;
 }
 
+/* Header headings should inherit section color (fix dark-on-dark card headers) */
+.card-header h1,
+.card-header h2,
+.card-header h3,
+.card-header h4,
+.card-header h5,
+.card-header h6 {
+    color: inherit;
+}
+
 a {
     color: var(--primary);
     text-decoration: none;
@@ -112,6 +122,46 @@ a:hover {
 
 .text-dark {
     color: var(--neutral-900) !important;
+}
+
+/* Keep interactive controls aligned to theme colors */
+.nav-tabs .nav-link {
+    color: var(--primary);
+}
+
+.nav-tabs .nav-link:hover {
+    color: var(--primary-hover);
+    border-color: var(--border-color) var(--border-color) transparent;
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--primary);
+    background-color: var(--surface);
+    border-color: var(--border-color) var(--border-color) var(--surface);
+    font-weight: 600;
+}
+
+.form-check-input:checked {
+    background-color: var(--primary);
+    border-color: var(--primary);
+}
+
+.form-check-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.page-link {
+    color: var(--primary);
+}
+
+.page-link:hover {
+    color: var(--primary-hover);
+}
+
+.page-item.active .page-link {
+    background-color: var(--primary);
+    border-color: var(--primary);
 }
 
 /* Buttons */

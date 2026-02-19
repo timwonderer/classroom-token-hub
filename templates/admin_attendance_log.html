@@ -450,10 +450,7 @@
         tbody.innerHTML = records.map(record => `
         <tr>
             <td class="ps-4">
-                <div class="d-flex align-items-center">
-                    <span class="material-symbols-outlined me-2 text-muted" style="font-size: 1.25rem;">person</span>
-                    <span class="fw-medium">${escapeHtml(record.student_name)}</span>
-                </div>
+                <span class="fw-medium">${escapeHtml(record.student_name)}</span>
             </td>
             <td><span class="badge bg-primary-subtle text-primary">${escapeHtml(record.student_class_label) || '—'}</span></td>
             <td><span class="badge bg-info-subtle text-info">${escapeHtml(record.period)}</span></td>

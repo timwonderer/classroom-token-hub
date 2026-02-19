@@ -55,7 +55,7 @@
     /* Text - Role Agnostic */
     --text-primary: var(--neutral-800);
     --text-secondary: var(--neutral-500);
-    --text-muted: var(--neutral-400);
+    --text-muted: var(--neutral-500);
     --text-inverse: #ffffff;
 }
 
