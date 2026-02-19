@@ -160,7 +160,8 @@ class EconomyBalanceChecker:
             unit = (custom_frequency_unit or 'days').lower()
             freq_value = custom_frequency_value or Decimal('1')
             if unit == 'weeks':
-                return _quantize_currency(value * (Decimal('7') / freq_value))
+                # Value is "per N weeks", so weekly equivalent is value / N
+                return _quantize_currency(value / freq_value)
             if unit == 'months':
                 return _quantize_currency(value / (Decimal(str(self.AVERAGE_WEEKS_PER_MONTH)) * freq_value))
             return _quantize_currency(value * (Decimal('7') / freq_value))

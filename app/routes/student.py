@@ -2829,20 +2829,24 @@ def rent():
     # Calculate due dates
     due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
     coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
+    period_delta = _get_rent_period_delta(settings)
+    upcoming_due_date = due_date
+    if coverage_due_date:
+        upcoming_due_date = _add_rent_period(coverage_due_date, period_delta)
 
     # Calculate preview start date if preview is enabled
     preview_start_date = None
     if settings.bill_preview_enabled and settings.bill_preview_days:
-        preview_start_date = due_date - timedelta(days=settings.bill_preview_days)
+        preview_start_date = upcoming_due_date - timedelta(days=settings.bill_preview_days)
 
-    # Check if rent is active (due date has arrived or preview period has started)
+    # Rent is active if current coverage is due/overdue, or if we're in preview for next period.
     rent_is_active = False
     is_preview_period_candidate = False
-    if preview_start_date and now >= preview_start_date:
+    if coverage_due_date and now >= coverage_due_date:
         rent_is_active = True
-        is_preview_period_candidate = now < due_date
-    elif coverage_due_date and now >= coverage_due_date:
+    if preview_start_date and now >= preview_start_date and now < upcoming_due_date:
         rent_is_active = True
+        is_preview_period_candidate = True
 
     # CRITICAL FIX: Before allowing preview period, check if current coverage is paid
     # Students must pay overdue periods before pre-paying for upcoming periods
@@ -2880,15 +2884,15 @@ def rent():
     # Calculate which coverage period we're checking for (pre-paid system)
     # CRITICAL FIX: Determine which due date to show for payment (matches payment route logic)
     if is_preview_period:
-        coverage_month = due_date.month
-        coverage_year = due_date.year
-        grace_end_date_for_status = grace_end_date
-        payment_due_date = due_date  # Paying for upcoming period
+        coverage_month = upcoming_due_date.month
+        coverage_year = upcoming_due_date.year
+        grace_end_date_for_status = upcoming_due_date + timedelta(days=settings.grace_period_days)
+        payment_due_date = upcoming_due_date  # Paying for upcoming period
     else:
-        coverage_month = coverage_due_date.month if coverage_due_date else due_date.month
-        coverage_year = coverage_due_date.year if coverage_due_date else due_date.year
+        coverage_month = coverage_due_date.month if coverage_due_date else upcoming_due_date.month
+        coverage_year = coverage_due_date.year if coverage_due_date else upcoming_due_date.year
         grace_end_date_for_status = (coverage_due_date + timedelta(days=settings.grace_period_days)) if coverage_due_date else grace_end_date
-        payment_due_date = coverage_due_date if coverage_due_date else due_date  # Paying for overdue/current period
+        payment_due_date = coverage_due_date if coverage_due_date else upcoming_due_date  # Paying for overdue/current period
 
     period_status = {}
 
@@ -2959,6 +2963,7 @@ def rent():
         rent_items = RentItem.query.filter_by(rent_setting_id=settings.id).order_by(RentItem.order_index).all()
 
     # Calculate days until rent is due for dynamic display
+    due_date = upcoming_due_date
     days_until_due = None
     if due_date:
         days_until_due = (due_date - now).days
@@ -3017,14 +3022,19 @@ def rent_pay(period):
     # Calculate due dates and preview period
     due_date, grace_end_date = _calculate_rent_deadlines(settings, now)
     coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
+    period_delta = _get_rent_period_delta(settings)
+    upcoming_due_date = due_date
+    if coverage_due_date:
+        upcoming_due_date = _add_rent_period(coverage_due_date, period_delta)
+
     preview_start_date = None
     if settings.bill_preview_enabled and settings.bill_preview_days:
-        preview_start_date = due_date - timedelta(days=settings.bill_preview_days)
+        preview_start_date = upcoming_due_date - timedelta(days=settings.bill_preview_days)
 
     rent_is_active = False
-    if preview_start_date and now >= preview_start_date:
+    if coverage_due_date and now >= coverage_due_date:
         rent_is_active = True
-    elif coverage_due_date and now >= coverage_due_date:
+    if preview_start_date and now >= preview_start_date and now < upcoming_due_date:
         rent_is_active = True
 
     if not rent_is_active:
@@ -3032,7 +3042,7 @@ def rent_pay(period):
             available_date = preview_start_date
             message = f"Rent is not due yet. You can start paying on {available_date.strftime('%B %d, %Y')}."
         else:
-            message = f"Rent is not due yet. Payment opens on {due_date.strftime('%B %d, %Y')}."
+            message = f"Rent is not due yet. Payment opens on {upcoming_due_date.strftime('%B %d, %Y')}."
         flash(message, "info")
         return redirect(url_for('student.rent'))
 
@@ -3075,9 +3085,11 @@ def rent_pay(period):
         current_coverage_paid and
         preview_start_date and
         now >= preview_start_date and
-        now < due_date
+        now < upcoming_due_date
     )
-    payment_due_date = due_date if is_preview_period else coverage_due_date
+    payment_due_date = upcoming_due_date if is_preview_period else coverage_due_date
+    if not payment_due_date:
+        payment_due_date = upcoming_due_date
 
     # Calculate coverage period (pre-paid system)
     coverage_month = payment_due_date.month
