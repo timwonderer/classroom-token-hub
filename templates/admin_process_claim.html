@@ -41,7 +41,7 @@
             {% elif claim.policy.claim_type == 'non_monetary' %}
               <span class="badge bg-warning text-dark">[NON-MONETARY]</span>
             {% else %}
-              <span class="badge bg-primary">[LEGACY]</span>
+              <span class="badge bg-primary">[CUSTOM]</span>
             {% endif %}
           </dd>
 
@@ -130,7 +130,7 @@
           {% elif claim.policy.claim_type == 'non_monetary' %}
             <span class="badge bg-warning text-dark">[NON-MONETARY]</span>
           {% else %}
-            <span class="badge bg-primary">[LEGACY]</span>
+            <span class="badge bg-primary">[CUSTOM]</span>
           {% endif %}
         </p>
 

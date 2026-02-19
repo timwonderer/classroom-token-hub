@@ -461,60 +461,59 @@
     // Savings Projection Chart
     const ctx = document.getElementById('savingsProjectionChart');
     if (ctx) {
-    const projectionMonths = {{ projection_months| tojson
-    }};
-    const projectionBalances = {{ projection_balances| tojson }};
-    const css = getComputedStyle(document.documentElement);
-    const successColor = css.getPropertyValue('--success').trim() || '#198754';
-    const successSubtle = css.getPropertyValue('--success-subtle').trim() || '#d1e7dd';
+        const projectionMonths = {{ projection_months|tojson }};
+        const projectionBalances = {{ projection_balances|tojson }};
+        const css = getComputedStyle(document.documentElement);
+        const successColor = css.getPropertyValue('--success').trim() || '#198754';
+        const successSubtle = css.getPropertyValue('--success-subtle').trim() || '#d1e7dd';
 
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: projectionMonths.map(m => m === 0 ? 'Now' : `Month ${m}`),
-            datasets: [{
-                label: 'Projected Savings Balance',
-                data: projectionBalances,
-                borderColor: successColor,
-                backgroundColor: successSubtle,
-                fill: true,
-                tension: 0.3,
-                pointRadius: 4,
-                pointHoverRadius: 6
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    display: false
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function (context) {
-                            return 'Balance: $' + context.parsed.y.toFixed(2);
-                        }
-                    }
-                }
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: projectionMonths.map(m => m === 0 ? 'Now' : `Month ${m}`),
+                datasets: [{
+                    label: 'Projected Savings Balance',
+                    data: projectionBalances,
+                    borderColor: successColor,
+                    backgroundColor: successSubtle,
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        callback: function (value) {
-                            return '$' + value.toFixed(0);
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function (context) {
+                                return 'Balance: $' + context.parsed.y.toFixed(2);
+                            }
                         }
                     }
                 },
-                x: {
-                    grid: {
-                        display: false
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function (value) {
+                                return '$' + value.toFixed(0);
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
                     }
                 }
             }
-        }
-    });
+        });
     }
 </script>
 {% endblock %}

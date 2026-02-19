@@ -299,7 +299,6 @@ def purchase_item():
 
     if rent_settings and rent_settings.is_enabled and rent_settings.prevent_purchase_when_late:
         # Check if student is late on rent
-        from app.routes.student import _calculate_rent_coverage_due_date, _filter_valid_rent_payments, _is_coverage_period_paid
         coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
 
         if coverage_due_date:

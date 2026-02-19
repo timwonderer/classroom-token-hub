@@ -2840,7 +2840,11 @@ def _is_coverage_period_paid(settings, valid_payments, coverage_due_date):
 
     Late fee is required only when rent was not fully paid by grace.
     """
-    if not settings or not coverage_due_date or not valid_payments:
+    if not settings or not coverage_due_date:
+        return False
+    if settings.rent_amount <= Decimal('0.00'):
+        return True
+    if not valid_payments:
         return False
 
     total_paid = sum((p.amount_paid for p in valid_payments), Decimal('0.00'))
