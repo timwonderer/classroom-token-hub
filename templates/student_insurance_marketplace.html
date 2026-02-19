@@ -119,8 +119,8 @@
                             <span class="badge bg-warning text-dark"><span class="material-symbols-outlined"
                                     style="font-size: 1rem;">redeem</span> Non-monetary</span>
                             {% else %}
-                            <span class="badge bg-primary"><span class="material-symbols-outlined"
-                                    style="font-size: 1rem;">payments</span> Legacy monetary</span>
+                                <span class="badge bg-primary"><span class="material-symbols-outlined"
+                                    style="font-size: 1rem;">payments</span> Custom monetary reimbursement</span>
                             {% endif %}
                             {% if enrollment.coverage_start_date %}
                             <span class="badge bg-success">
@@ -323,7 +323,7 @@
                                         {% elif policy.claim_type == 'non_monetary' %}
                                         <span class="badge bg-warning text-dark">Non-monetary</span>
                                         {% else %}
-                                        <span class="badge bg-primary">Legacy monetary</span>
+                                        <span class="badge bg-primary">Custom monetary reimbursement</span>
                                         {% endif %}
                                     </li>
                                     <li>Waiting period: {{ policy.waiting_period_days }} days</li>

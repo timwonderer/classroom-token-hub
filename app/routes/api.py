@@ -276,7 +276,7 @@ def purchase_item():
     per_use_rent_item = None
 
     if rent_settings and rent_settings.is_enabled:
-        from app.routes.student import _calculate_rent_coverage_due_date
+        from app.routes.student import _calculate_rent_coverage_due_date, _filter_valid_rent_payments, _is_coverage_period_paid
         coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
         if coverage_due_date:
             coverage_month = coverage_due_date.month
@@ -288,14 +288,8 @@ def purchase_item():
                 RentPayment.coverage_year == coverage_year,
                 RentPayment.join_code == join_code
             ).all()
-            from app.routes.student import _filter_valid_rent_payments
             valid_payments = _filter_valid_rent_payments(coverage_payments, student.id, join_code)
-            if valid_payments:
-                total_paid = sum(p.amount_paid for p in valid_payments)
-                grace_for_coverage = coverage_due_date + timedelta(days=rent_settings.grace_period_days)
-                late_fee_applies = now > grace_for_coverage
-                required = rent_settings.rent_amount + (rent_settings.late_fee if late_fee_applies else Decimal('0'))
-                has_paid_rent = total_paid >= required
+            has_paid_rent = _is_coverage_period_paid(rent_settings, valid_payments, coverage_due_date)
 
         per_use_rent_item = RentItem.query.filter(
             RentItem.rent_setting_id == rent_settings.id,
@@ -305,7 +299,7 @@ def purchase_item():
 
     if rent_settings and rent_settings.is_enabled and rent_settings.prevent_purchase_when_late:
         # Check if student is late on rent
-        from app.routes.student import _calculate_rent_coverage_due_date
+        from app.routes.student import _calculate_rent_coverage_due_date, _filter_valid_rent_payments, _is_coverage_period_paid
         coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
 
         if coverage_due_date:
@@ -318,17 +312,19 @@ def purchase_item():
 
             # Check if past grace period
             if now > grace_end_date:
-                # Check if rent is paid for current coverage period
-                total_paid = db.session.query(db.func.sum(RentPayment.amount_paid)).filter(
+                coverage_payments = RentPayment.query.filter(
                     RentPayment.student_id == student.id,
                     RentPayment.period == current_block,
                     RentPayment.coverage_month == coverage_month,
                     RentPayment.coverage_year == coverage_year,
                     RentPayment.join_code == join_code
-                ).scalar() or 0
+                ).all()
 
-                # Student is late if they haven't paid full rent
-                if total_paid < rent_settings.rent_amount:
+                valid_payments = _filter_valid_rent_payments(coverage_payments, student.id, join_code)
+                is_paid_for_coverage = _is_coverage_period_paid(rent_settings, valid_payments, coverage_due_date)
+
+                # Student is late if they haven't fully settled the coverage period
+                if not is_paid_for_coverage:
                     # Check if itemization is enabled
                     rent_items = RentItem.query.filter_by(rent_setting_id=rent_settings.id).all()
 
