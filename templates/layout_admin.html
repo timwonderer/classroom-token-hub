@@ -81,15 +81,15 @@
     <div class="sidebar-backdrop" id="sidebarBackdrop" aria-hidden="true"></div>
 
     <!-- Sidebar -->
-    <aside id="sidebar" class="sidebar d-flex flex-column" role="navigation" aria-label="Navigation menu" aria-hidden="true">
+    <aside id="sidebar" class="sidebar d-flex flex-column" role="navigation" aria-label="Navigation menu">
         <div class="sidebar-brand">
             <div>
                 <div> <span class="material-symbols-outlined" style="font-size: 30px; vertical-align: middle; font-weight:200">local_atm</span>Classroom</div>
                 <div><span class="material-symbols-outlined" style="font-size: 30px; vertical-align: middle; font-weight:200">store</span>Token</div>
                 <div> <span class="material-symbols-outlined" style="font-size: 30px; vertical-align: middle; font-weight:200"> finance_mode</span>Hub</div>
                 <hr>
-                 {% if current_admin %}
-                <div class="text-white-55  mb-0" style="font-size: 20px;">{{ current_admin.get_display_name() }}</div>
+                {% if current_admin %}
+                <div class="text-white-55 mb-0" style="font-size: 20px;">{{ current_admin.get_display_name() }}</div>
                 {% endif %}
                 <div class="mt-0" style="font-size: 12px; font-weight:300">Teacher</div>
             </div>
@@ -206,8 +206,8 @@
 
             </div>
 
-            <!-- Docs Home Link -->
-            <a href="{{ url_for('docs.index') }}" class="nav-link d-flex align-items-center gap-2">
+            <!-- Docs & Help Link -->
+            <a href="{{ url_for('admin.help_support') }}" class="nav-link d-flex align-items-center gap-2">
                 <span class="material-symbols-outlined">menu_book</span> Docs &amp; Help
             </a>
 
@@ -328,6 +328,7 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ static_url('js/timezone-utils.js') }}"></script>
+    <script src="{{ static_url('js/mobile-sidebar-toggle.js') }}"></script>
     <script>
         function updateTime() {
             const now = new Date();
