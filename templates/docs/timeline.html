@@ -1176,9 +1176,13 @@
 
     filterBtns.forEach(btn => {
         btn.addEventListener('click', function () {
-            // Update active button
-            filterBtns.forEach(b => b.classList.remove('active'));
+            // Update active button and ARIA pressed state
+            filterBtns.forEach(b => {
+                b.classList.remove('active');
+                b.setAttribute('aria-pressed', 'false');
+            });
             this.classList.add('active');
+            this.setAttribute('aria-pressed', 'true');
 
             const filter = this.dataset.filter;
 
