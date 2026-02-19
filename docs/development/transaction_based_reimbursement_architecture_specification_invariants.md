@@ -38,6 +38,7 @@ It does not define behavior for:
 The ledger is the sole authority on spending and payouts.
 
 Responsibilities:
+
 - Record all debits (store, fines, fees).
 - Record all reimbursements as credits.
 - Provide stable identifiers (`transaction_id`).
@@ -57,12 +58,14 @@ Eligibility is determined by a **layered ruleset**:
 4. **Policy Limits** (waiting period, time window, caps)
 
 This layer must be callable from:
+
 - Student claim UI (to hide transactions)
 - Manual review workflow (to validate claims)
 
 ### 3.4 Claim Service
 
 Responsibilities:
+
 - Create claims (manual or automated).
 - Enforce 1:1 transaction→claim.
 - Store decision state (pending/approved/paid/rejected).
@@ -144,6 +147,7 @@ For a claim, approved amount must be:
 `min(raw_cost, per_claim_cap, remaining_period_cap)`
 
 Where:
+
 - `raw_cost = abs(debit_transaction.amount)`
 - `per_claim_cap = policy.max_claim_amount`
 - `remaining_period_cap = policy_period_cap - sum(approved in period)`

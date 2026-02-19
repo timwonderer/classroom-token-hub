@@ -26,6 +26,7 @@ User visits classroomtokenhub.com
 ```
 
 **Key Points:**
+
 - Landing page hosted on GitHub Pages (free, reliable)
 - Served at root of `classroomtokenhub.com` via reverse proxy
 - Sign-in links use relative paths (`/student/login`) so they work on same domain
@@ -104,11 +105,13 @@ User visits classroomtokenhub.com
 ## Sign-In Links Configuration
 
 **Landing Page Sign-In Links:**
+
 - Student: `/student/login`
 - Teacher: `/admin/login`
 - System Admin: `/sysadmin/login`
 
 **Why Relative Paths:**
+
 - Works on both `classroomtokenhub.com` and `github.io` URLs
 - Nginx/Apache proxy handles routing to Flask app
 - User stays on same domain throughout flow
@@ -295,6 +298,7 @@ Add to features grid section (around line 416):
 ### Update Screenshots
 
 Replace images in `/static/images/`:
+
 - `student_dashboard.png`
 - `student store view.png`
 

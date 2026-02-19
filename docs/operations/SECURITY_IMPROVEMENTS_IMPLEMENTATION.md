@@ -110,10 +110,12 @@ Implemented Flask-Limiter for rate limiting sensitive endpoints.
 ### Configuration
 
 **Global Limits** (app/extensions.py:40-45):
+
 - 200 requests per day per IP
 - 50 requests per hour per IP
 
 **Login Endpoint Limits:**
+
 - Admin login: 10 attempts per minute
 - System admin login: 10 attempts per minute
 - Student login: 15 attempts per minute (higher for classroom use)
@@ -121,6 +123,7 @@ Implemented Flask-Limiter for rate limiting sensitive endpoints.
 ### Cloudflare Integration
 
 The rate limiter uses Cloudflare-aware IP detection (`get_real_ip_for_limiter()`) to:
+
 1. Check `CF-Connecting-IP` header first (real client IP)
 2. Fall back to `X-Forwarded-For` if available
 3. Use `request.remote_addr` as final fallback
@@ -169,6 +172,7 @@ To change limits, edit the decorator in the route file:
 ### Rate Limit Response
 
 When rate limit is exceeded, users see:
+
 - HTTP 429 (Too Many Requests)
 - Retry-After header with seconds to wait
 - Default Flask-Limiter error page (can be customized)
@@ -180,6 +184,7 @@ When rate limit is exceeded, users see:
 ### What Was Added
 
 Created `.github/dependabot.yml` to automatically check for:
+
 - Python package security updates (weekly)
 - GitHub Actions updates (weekly)
 
@@ -206,6 +211,7 @@ updates:
 ### Managing Dependabot PRs
 
 **Best Practices:**
+
 - Review security PRs within 24-48 hours
 - Check for breaking changes in major version updates
 - Run tests before merging (GitHub Actions will do this)
@@ -233,6 +239,7 @@ ignore:
 ### What Was Added
 
 Created two scripts for database backup/restore:
+
 - `scripts/backup-database.sh` - Daily automated backups
 - `scripts/restore-database.sh` - Emergency restore
 
@@ -299,6 +306,7 @@ ls -lh /root/backups/postgresql/
 ```
 
 The restore script will:
+
 1. Verify backup file integrity
 2. Show backup details
 3. Ask for confirmation (must type "YES")

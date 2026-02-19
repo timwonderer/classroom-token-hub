@@ -6,6 +6,7 @@
 
 ### 1. Dependencies Installation
  All Python dependencies installed successfully
+
 - Flask-Migrate: 4.1.0
 - Alembic: 1.15.2
 - SQLAlchemy: 2.0.44
@@ -81,6 +82,7 @@ An older migration (`9e7a8d4f5c6b_encrypt_student_first_name.py`) uses ALTER COL
 
 ##  Conclusion
 All new migrations for the student-verified teacher recovery system are:
+
 1.  Properly structured
 2.  Correctly chained
 3.  Syntactically valid

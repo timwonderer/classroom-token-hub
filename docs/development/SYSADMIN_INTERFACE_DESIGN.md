@@ -17,11 +17,13 @@ The System Admin interface is the super-user control panel for the Classroom Tok
 ## Design Philosophy
 
 **Simplified Role Separation:**
+
 - **System Admins** manage teachers and system-wide settings
 - **Teachers (Admins)** manage their own students
 - **Students** use the system
 
 **Key Decision:** Sysadmins should NOT see individual student data. This maintains:
+
 - Clear separation of responsibilities
 - Simplified interface
 - Privacy boundaries
@@ -35,6 +37,7 @@ The System Admin interface is the super-user control panel for the Classroom Tok
 **Route:** `/sysadmin/admins`
 
 **Features (Implemented):**
+
 -  View all admin accounts with details:
   - Username
   - Signup date (created_at)
@@ -50,6 +53,7 @@ The System Admin interface is the super-user control panel for the Classroom Tok
   - No reassignment options (keeps interface simple)
 
 **Features (Future):**
+
 - [ ] Reset Admin TOTP (for emergency access if authenticator lost)
 - [ ] View Admin Activity (recent actions, payroll runs, etc.)
 - [ ] Total login count tracking
@@ -57,6 +61,7 @@ The System Admin interface is the super-user control panel for the Classroom Tok
 
 **Design Rationale:**
 The simplified delete approach (always delete students with teacher) is intentional:
+
 - Keeps interface simple and predictable
 - Matches real-world use case (teacher leaves = class ends)
 - Avoids complex reassignment logic before multi-tenancy
@@ -66,6 +71,7 @@ The simplified delete approach (always delete students with teacher) is intentio
 **Design Decision:** Sysadmins do NOT manage students directly.
 
 **Reasoning:**
+
 - Students belong to teachers, not system admins
 - Deleting a teacher automatically handles their students
 - Keeps sysadmin interface focused on system management
@@ -73,6 +79,7 @@ The simplified delete approach (always delete students with teacher) is intentio
 - Maintains proper role hierarchy
 
 **If you need student management:**
+
 - Log in as the teacher who owns the students
 - Or delete the teacher (which deletes all their students)
 
@@ -80,6 +87,7 @@ The simplified delete approach (always delete students with teacher) is intentio
 **Route:** `/sysadmin/cleanup`
 
 **Features:**
+
 - Identify orphaned records:
   - Students with no teacher (after multi-tenancy)
   - Transactions with deleted students
@@ -95,6 +103,7 @@ The simplified delete approach (always delete students with teacher) is intentio
 **Route:** `/sysadmin/stats`
 
 **Features:**
+
 - **Overview Cards:**
   - Total System Admins
   - Total Admins (Teachers)
@@ -119,6 +128,7 @@ The simplified delete approach (always delete students with teacher) is intentio
 **Route:** `/sysadmin/config`
 
 **Features:**
+
 - **Global Settings:**
   - Session timeout duration
   - Token to display ($ or tokens)
@@ -144,6 +154,7 @@ The simplified delete approach (always delete students with teacher) is intentio
 **Route:** `/sysadmin/audit`
 
 **Features:**
+
 - Track critical actions:
   - Admin account creation/deletion
   - Student account deletion
@@ -164,6 +175,7 @@ The simplified delete approach (always delete students with teacher) is intentio
 **Route:** `/sysadmin/maintenance`
 
 **Features:**
+
 - **Backup/Export:**
   - Export full database to SQL dump
   - Export student data to CSV
@@ -184,6 +196,7 @@ The simplified delete approach (always delete students with teacher) is intentio
 **Route:** `/sysadmin/announcements`
 
 **Features:**
+
 - System-wide announcements
 - Maintenance notifications
 - Emergency alerts

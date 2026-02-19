@@ -226,6 +226,7 @@ def _claim_base_amount(target_claim):
 #### Attack Scenario
 
 **Via Database Tampering:**
+
 1. Student A files claim #100 for their $20 transaction (#500)
 2. Attacker gains database access (SQL injection, compromised credentials, etc.)
 3. Attacker updates claim #100: `UPDATE insurance_claims SET transaction_id = 999 WHERE id = 100`
@@ -235,6 +236,7 @@ def _claim_base_amount(target_claim):
 
 **Via Multi-Tenancy Violation:**
 In a multi-teacher environment, if transaction filtering is inadequate:
+
 1. Student A (Teacher 1's class) files claim
 2. Claim gets linked to Student B's transaction (Teacher 2's class)
 3. Cross-economy financial fraud
@@ -422,6 +424,7 @@ db.session.commit()
 #### Attack Scenario
 
 **Setup:**
+
 - Policy has $100/month cap
 - Currently $90 paid this month
 - Two pending claims: Claim A ($20) and Claim B ($20)
@@ -490,6 +493,7 @@ Add a version column to track concurrent modifications and retry on conflict.
 **Option 3: Accept Risk**
 
 Document this as a known limitation. In practice:
+
 - Most classrooms have single admin
 - Concurrent approvals are rare
 - Overage would be minimal (one claim's worth)
@@ -586,11 +590,13 @@ claimed_tx_subq = db.session.query(InsuranceClaim.transaction_id).filter(
 ```
 
 Without index:
+
 - Full table scan on `insurance_claims` table
 - O(n) complexity where n = total claims
 - Degrades linearly as claims accumulate
 
 With index:
+
 - O(log n) lookup via B-tree
 - Constant time for duplicate checks
 
@@ -647,6 +653,7 @@ The following were reviewed and found to be secure:
 ### Phase 1: Critical Fixes (Before Merge) - Est. 2-4 hours
 
 **Must Fix:**
+
 1. **P0-1:** Add unique constraint on `transaction_id`
    - Create migration with unique index
    - Test concurrent submission scenario
@@ -666,6 +673,7 @@ The following were reviewed and found to be secure:
 ### Phase 2: High Priority (Next Sprint) - Est. 2-3 hours
 
 **Should Fix:**
+
 5. **P1-2:** Add row-level locking for period caps
    - Use `.with_for_update()` on enrollment
    - Recalculate within locked transaction
@@ -681,6 +689,7 @@ The following were reviewed and found to be secure:
 ### Phase 3: Testing & Validation - Est. 4 hours
 
 **Testing Required:**
+
 - Write concurrency tests for duplicate claim prevention
 - Test void transaction rejection
 - SQL injection fuzzing on date parameters

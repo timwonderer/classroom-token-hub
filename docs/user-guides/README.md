@@ -21,6 +21,7 @@ Feature walkthroughs live under `features/`:
 - [Student Feature Guides](features/student/index.md)
 
 Legacy deep dives:
+
 - [Analytics](features/analytics/interpreting-analytics.md)
 - [Banking](features/banking/transferring-money.md)
 - [Payroll](features/payroll/running-payroll.md)

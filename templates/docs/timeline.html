@@ -1,0 +1,1236 @@
+{% extends "base.html" %}
+{% set full_width = true %}
+{% set show_sysadmin_link = false %}
+
+{% block title %}Project Timeline — Classroom Token Hub{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Page-scoped timeline tokens ──────────────────────────────────────────────
+   All category/era colors are defined once here as CSS custom properties.
+   No hex codes appear in any rule below — every color reference uses var().
+   Per design_system.md: "NEVER use hex codes in templates."
+   ─────────────────────────────────────────────────────────────────────────── */
+:root {
+    /* Features (green) */
+    --tl-features:         #2e7d5b;
+    --tl-features-bg:      #e6f4ed;
+
+    /* Fixes / crises (red) */
+    --tl-fixes:            #c0392b;
+    --tl-fixes-bg:         #fef2f2;
+    --tl-fixes-border:     #fca5a5;
+
+    /* Security (orange) */
+    --tl-security:         #d35400;
+    --tl-security-text:    #c05621;
+    --tl-security-bg:      #fff7ed;
+
+    /* Architecture (blue) */
+    --tl-arch:             #2980b9;
+    --tl-arch-text:        #2563eb;
+    --tl-arch-bg:          #eff6ff;
+
+    /* Philosophy / Era I (purple) */
+    --tl-phil:             #7d3c98;
+    --tl-phil-dark:        #5b2d7e;
+    --tl-phil-text:        #7c3aed;
+    --tl-phil-bg:          #faf5ff;
+    --tl-phil-bg-light:    #f3e8ff;
+    --tl-phil-border:      #d8b4fe;
+
+    /* Mobile (sky) */
+    --tl-mobile-bg:        #e0f2fe;
+    --tl-mobile-text:      #0369a1;
+
+    /* Analytics (leaf green) */
+    --tl-analytics-bg:     #f0fdf4;
+    --tl-analytics-text:   #15803d;
+
+    /* Warning / lesson (amber) */
+    --tl-warning-bg:       #fefce8;
+    --tl-warning-text:     #854d0e;
+    --tl-warning-border:   #fde68a;
+
+    /* Patch badge (light green) */
+    --tl-patch-bg:         #f0f9f5;
+    --tl-patch-border:     #b2dfcc;
+
+    /* Era II background (amber) */
+    --tl-era-ii-bg:        #fff3e0;
+    --tl-era-ii-border:    #fdba74;
+
+    /* Era III background (sky) */
+    --tl-era-iii-bg:       #e0f2fe;
+    --tl-era-iii-border:   #7dd3fc;
+
+    /* Era IV background (leaf green) */
+    --tl-era-iv-bg:        #dcfce7;
+    --tl-era-iv-border:    #86efac;
+
+    /* Release badge border (teal-tinted) */
+    --tl-release-border:   #b2d0cc;
+
+    /* Hero darkening shade (deep teal for gradient end) */
+    --tl-hero-dark:        #0d2e2a;
+}
+
+/* ── Timeline Page Layout ── */
+.timeline-page {
+    background: var(--neutral-100);
+    min-height: 100vh;
+}
+
+/* ── Hero ── */
+.timeline-hero {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--tl-hero-dark) 100%);
+    color: white;
+    padding: 3.5rem 0 2.5rem;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+}
+.timeline-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.04'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+.timeline-hero h1 { font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 700; margin-bottom: 0.5rem; }
+.timeline-hero .subtitle { font-size: 1.1rem; opacity: 0.8; max-width: 600px; margin: 0 auto 1.5rem; }
+.timeline-hero .badge-row { display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap; }
+.timeline-hero .stat-badge {
+    /* White tint over dark primary background — white overlay, not Bootstrap opacity utility */
+    background: color-mix(in srgb, white 12%, transparent);
+    border: 1px solid color-mix(in srgb, white 20%, transparent);
+    border-radius: var(--radius-pill);
+    padding: 0.25rem 0.85rem;
+    font-size: 0.82rem;
+    font-weight: 500;
+}
+
+/* ── Filters ── */
+.timeline-filters {
+    background: var(--surface);
+    border-bottom: 1px solid var(--neutral-200);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    padding: 0.75rem 0;
+}
+.filter-group { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: center; }
+.filter-btn {
+    border: 1.5px solid var(--neutral-300);
+    background: transparent;
+    color: var(--text-secondary);
+    border-radius: var(--radius-pill);
+    padding: 0.3rem 1rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.filter-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-subtle); }
+.filter-btn.active                              { background: var(--primary);      color: white; border-color: var(--primary); }
+.filter-btn[data-filter="features"].active      { background: var(--tl-features);  border-color: var(--tl-features); }
+.filter-btn[data-filter="fixes"].active         { background: var(--tl-fixes);     border-color: var(--tl-fixes); }
+.filter-btn[data-filter="security"].active      { background: var(--tl-security);  border-color: var(--tl-security); }
+.filter-btn[data-filter="architecture"].active  { background: var(--tl-arch);      border-color: var(--tl-arch); }
+.filter-btn[data-filter="philosophy"].active    { background: var(--tl-phil);      border-color: var(--tl-phil); }
+
+/* ── Main Timeline Container ── */
+.timeline-wrap { max-width: 900px; margin: 0 auto; padding: 2.5rem 1rem 4rem; }
+
+/* ── Era Dividers ── */
+.era-divider {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 2.5rem 0 1.5rem;
+}
+.era-divider-line { flex: 1; height: 1px; background: var(--neutral-200); }
+.era-badge {
+    border-radius: var(--radius-pill);
+    padding: 0.4rem 1.2rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+.era-i   { background: var(--tl-phil-bg-light); color: var(--tl-phil);     border: 1px solid var(--tl-phil-border); }
+.era-ii  { background: var(--tl-era-ii-bg);     color: var(--tl-fixes);    border: 1px solid var(--tl-era-ii-border); }
+.era-iii { background: var(--tl-era-iii-bg);    color: var(--tl-arch);     border: 1px solid var(--tl-era-iii-border); }
+.era-iv  { background: var(--tl-era-iv-bg);     color: var(--tl-features); border: 1px solid var(--tl-era-iv-border); }
+
+/* ── Timeline Track ── */
+.timeline-track {
+    position: relative;
+    padding-left: 2.5rem;
+}
+.timeline-track::before {
+    content: '';
+    position: absolute;
+    left: 0.65rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--neutral-200), var(--neutral-300), var(--neutral-200));
+}
+
+/* ── Timeline Entry ── */
+.tl-entry {
+    position: relative;
+    margin-bottom: 1.25rem;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.tl-entry.hidden {
+    display: none;
+}
+
+/* ── Dot on the line ── */
+.tl-dot {
+    position: absolute;
+    left: -2.5rem;
+    top: 1rem;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    border: 2.5px solid var(--surface);
+    box-shadow: 0 0 0 2px var(--neutral-300);
+    background: var(--neutral-400);
+    z-index: 1;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.tl-dot.dot-features     { background: var(--tl-features); box-shadow: 0 0 0 2px var(--tl-features); }
+.tl-dot.dot-fixes        { background: var(--tl-fixes);    box-shadow: 0 0 0 2px var(--tl-fixes); }
+.tl-dot.dot-security     { background: var(--tl-security); box-shadow: 0 0 0 2px var(--tl-security); }
+.tl-dot.dot-architecture { background: var(--tl-arch);     box-shadow: 0 0 0 2px var(--tl-arch); }
+.tl-dot.dot-philosophy   { background: var(--tl-phil);     box-shadow: 0 0 0 2px var(--tl-phil); }
+.tl-dot.dot-milestone    { background: var(--secondary);   box-shadow: 0 0 0 2px var(--secondary); width: 1.3rem; height: 1.3rem; left: -2.6rem; top: 0.9rem; }
+
+.tl-entry:hover .tl-dot { transform: scale(1.3); }
+
+/* ── Card ── */
+.tl-card {
+    background: var(--surface);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.2s ease;
+}
+.tl-entry:hover .tl-card { box-shadow: var(--shadow-md); }
+
+.tl-card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.9rem 1rem;
+    cursor: pointer;
+    user-select: none;
+}
+.tl-card-header:hover { background: var(--neutral-50); }
+
+.tl-version-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.2rem 0.55rem;
+    border-radius: var(--radius-sm);
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+}
+.badge-release  { background: var(--primary-subtle);    color: var(--primary);          border: 1px solid var(--tl-release-border); }
+.badge-patch    { background: var(--tl-patch-bg);       color: var(--tl-features);      border: 1px solid var(--tl-patch-border); }
+.badge-crisis   { background: var(--tl-fixes-bg);       color: var(--tl-fixes);         border: 1px solid var(--tl-fixes-border); }
+.badge-milestone{ background: var(--tl-warning-bg);     color: var(--tl-warning-text);  border: 1px solid var(--tl-warning-border); }
+.badge-future   { background: var(--tl-phil-bg-light);  color: var(--tl-phil);          border: 1px solid var(--tl-phil-border); }
+.badge-era      { background: var(--neutral-50);        color: var(--text-secondary);   border: 1px solid var(--neutral-200); font-style: italic; }
+
+.tl-meta { flex: 1; min-width: 0; }
+.tl-title { font-size: 0.95rem; font-weight: 600; color: var(--text-primary); margin: 0 0 0.25rem; }
+.tl-date  { font-size: 0.75rem; color: var(--text-muted); }
+
+.tl-tags { display: flex; gap: 0.3rem; flex-wrap: wrap; margin-top: 0.3rem; }
+.tl-tag  {
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 0.1rem 0.45rem;
+    border-radius: var(--radius-pill);
+    letter-spacing: 0.03em;
+}
+.tag-features     { background: var(--tl-features-bg);  color: var(--tl-features); }
+.tag-fixes        { background: var(--tl-fixes-bg);      color: var(--tl-fixes); }
+.tag-security     { background: var(--tl-security-bg);   color: var(--tl-security-text); }
+.tag-architecture { background: var(--tl-arch-bg);       color: var(--tl-arch-text); }
+.tag-philosophy   { background: var(--tl-phil-bg);       color: var(--tl-phil-text); }
+.tag-mobile       { background: var(--tl-mobile-bg);     color: var(--tl-mobile-text); }
+.tag-analytics    { background: var(--tl-analytics-bg);  color: var(--tl-analytics-text); }
+.tag-docs         { background: var(--neutral-50);       color: var(--neutral-600); border: 1px solid var(--neutral-200); }
+
+.tl-chevron {
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    line-height: 1;
+    margin-top: 0.1rem;
+}
+.tl-card.expanded .tl-chevron { transform: rotate(180deg); }
+
+.tl-card-body {
+    border-top: 1px solid var(--neutral-100);
+    padding: 1rem;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    display: none;
+}
+.tl-card.expanded .tl-card-body { display: block; }
+
+.tl-card-body ul { padding-left: 1.25rem; margin: 0.5rem 0; }
+.tl-card-body li { margin-bottom: 0.3rem; line-height: 1.5; }
+.tl-card-body .lesson-box {
+    background: var(--tl-warning-bg);
+    border-left: 3px solid var(--secondary);
+    padding: 0.6rem 0.9rem;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    margin-top: 0.75rem;
+    font-size: 0.82rem;
+}
+.tl-card-body .lesson-box strong { color: var(--tl-warning-text); }
+.tl-card-body .crisis-box {
+    background: var(--tl-fixes-bg);
+    border-left: 3px solid var(--tl-fixes);
+    padding: 0.6rem 0.9rem;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    margin-top: 0.75rem;
+    font-size: 0.82rem;
+}
+.tl-card-body .crisis-box strong { color: var(--tl-fixes); }
+
+/* ── No results ── */
+.no-results {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: var(--text-muted);
+    display: none;
+}
+
+/* ── Philosophy Section ── */
+.philosophy-section {
+    background: var(--surface);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    margin-top: 2.5rem;
+}
+.philosophy-section .ph-header {
+    background: linear-gradient(135deg, var(--tl-phil), var(--tl-phil-dark));
+    color: white;
+    padding: 1.2rem 1.5rem;
+}
+.philosophy-section .ph-body { padding: 1.25rem 1.5rem; }
+.anti-goal-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 0.75rem;
+    margin-top: 0.75rem;
+}
+.anti-goal-item {
+    background: var(--neutral-50);
+    border: 1px solid var(--neutral-200);
+    border-radius: var(--radius-md);
+    padding: 0.7rem 0.9rem;
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+.anti-goal-item .ag-no  { color: var(--tl-fixes);    font-weight: 700; font-size: 0.7rem; letter-spacing: 0.05em; display: block; margin-bottom: 0.2rem; }
+.anti-goal-item .ag-yes { color: var(--tl-features);  font-size: 0.75rem; margin-top: 0.25rem; display: block; }
+
+/* ── Quote ── */
+.project-quote {
+    background: var(--primary-subtle);
+    border: 1px solid var(--tl-release-border);
+    border-radius: var(--radius-lg);
+    padding: 1.5rem;
+    margin-top: 2rem;
+    text-align: center;
+}
+.project-quote blockquote {
+    font-size: 0.95rem;
+    line-height: 1.75;
+    color: var(--text-primary);
+    font-style: italic;
+    margin: 0 0 1rem;
+}
+.project-quote cite { font-size: 0.8rem; color: var(--text-muted); font-style: normal; }
+
+/* ── Back link ── */
+.back-bar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--neutral-200);
+    padding: 0.6rem 1rem;
+}
+.back-bar a { color: var(--text-secondary); font-size: 0.82rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem; }
+.back-bar a:hover { color: var(--primary); }
+
+/* ── Responsive ── */
+@media (max-width: 576px) {
+    .timeline-track { padding-left: 2rem; }
+    .timeline-track::before { left: 0.5rem; }
+    .tl-dot { left: -2rem; width: 0.9rem; height: 0.9rem; top: 1.1rem; }
+    .tl-dot.dot-milestone { left: -2.15rem; width: 1.1rem; height: 1.1rem; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="timeline-page">
+
+    <!-- Back navigation -->
+    <div class="back-bar">
+        <div class="container">
+            <a href="{{ url_for('docs.index') }}">
+                <span class="material-symbols-outlined" style="font-size:1rem;">arrow_back</span>
+                Help & Support
+            </a>
+        </div>
+    </div>
+
+    <!-- Hero -->
+    <div class="timeline-hero">
+        <div class="container position-relative">
+            <span class="material-symbols-outlined" style="font-size:2.5rem; opacity:0.6; display:block; margin-bottom:0.5rem;">timeline</span>
+            <h1>Project Timeline</h1>
+            <p class="subtitle">The story of Classroom Token Hub — from classroom idea to production platform</p>
+            <div class="badge-row">
+                <span class="stat-badge">v1.8.0 Current</span>
+                <span class="stat-badge">8 Major Versions</span>
+                <span class="stat-badge">83+ Migrations</span>
+                <span class="stat-badge">41 Models</span>
+                <span class="stat-badge">4 Eras</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="timeline-filters">
+        <div class="container">
+            <div class="filter-group">
+                <button class="filter-btn active" data-filter="all" aria-pressed="true">All</button>
+                <button class="filter-btn" data-filter="features" aria-pressed="false">
+                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">add_circle</span>
+                    Features
+                </button>
+                <button class="filter-btn" data-filter="fixes" aria-pressed="false">
+                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">build</span>
+                    Fixes & Crises
+                </button>
+                <button class="filter-btn" data-filter="security" aria-pressed="false">
+                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">security</span>
+                    Security
+                </button>
+                <button class="filter-btn" data-filter="architecture" aria-pressed="false">
+                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">schema</span>
+                    Architecture
+                </button>
+                <button class="filter-btn" data-filter="philosophy" aria-pressed="false">
+                    <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">lightbulb</span>
+                    Philosophy
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="timeline-wrap">
+
+        <!-- ── ERA I ── -->
+        <div class="era-divider" data-era="all philosophy architecture">
+            <div class="era-divider-line"></div>
+            <span class="era-badge era-i">
+                <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">auto_awesome</span>
+                Era I — Genesis &amp; Foundation
+            </span>
+            <div class="era-divider-line"></div>
+        </div>
+
+        <div class="timeline-track">
+
+            <!-- Genesis -->
+            <div class="tl-entry" data-tags="philosophy architecture">
+                <div class="tl-dot dot-philosophy"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header"
+                         role="button"
+                         tabindex="0"
+                         aria-expanded="false"
+                         onclick="toggleCard(this); this.setAttribute('aria-expanded', this.getAttribute('aria-expanded') === 'true' ? 'false' : 'true');"
+                         onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.click(); }">
+                        <span class="tl-version-badge badge-era">Genesis</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">The Original Problem &amp; Design Decisions</div>
+                            <div class="tl-date">Pre-2024 → November 2025</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-philosophy">Philosophy</span>
+                                <span class="tl-tag tag-architecture">Architecture</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <p>The project began as a full-time high school teacher's answer to a gap in educational technology: no platform simulated classroom economies realistically while respecting student data privacy.</p>
+                        <p><em>"I will just make it myself."</em></p>
+                        <strong>Five Core Design Decisions Crystallized:</strong>
+                        <ul>
+                            <li><strong>Experience Before Explanation</strong> — Students understand systems after feeling them, not from lectures</li>
+                            <li><strong>Join Code as Source of Truth</strong> — Early designs tied students to teacher accounts and failed in multi-teacher classrooms; join code became the absolute source of class isolation, reshaping the entire data model</li>
+                            <li><strong>Teacher Authority with Transparency</strong> — No invisible overrides; all teacher actions visible to students</li>
+                            <li><strong>Classroom Wage Index (CWI)</strong> — Macro-level stabilizer to prevent runaway wages and economic collapse</li>
+                            <li><strong>Insurance as Reality Response</strong> — Attendance isn't purely a moral choice; punishment disguised as realism is neither accurate nor educational</li>
+                        </ul>
+                        <strong>The Name Change: "Classroom Economy" → "Classroom Token Hub"</strong>
+                        <p style="margin-top:0.5rem">Not just a rebrand — a philosophical shift from a gimmick to a persistent, interconnected system. A hub for comprehensive financial literacy.</p>
+                        <div class="lesson-box">
+                            <strong>Key Learning:</strong> Real students find real bugs that simulated testing misses. Security must be foundational, not retrofitted.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pre-release foundation -->
+            <div class="tl-entry" data-tags="architecture features">
+                <div class="tl-dot dot-architecture"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-era">Pre-Release</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">Building the Foundation</div>
+                            <div class="tl-date">Pre-2024 → 2025</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-architecture">Architecture</span>
+                                <span class="tl-tag tag-features">Features</span>
+                                <span class="tl-tag tag-security">Security</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <p>Real classroom testing and iterative development produced the core platform:</p>
+                        <ul>
+                            <li>Modular blueprint architecture (refactored from 4,500-line monolith)</li>
+                            <li>41 SQLAlchemy models with explicit economic state</li>
+                            <li>PII encryption at rest (Fernet AES-128-CBC)</li>
+                            <li>TOTP 2FA for all admin accounts</li>
+                            <li>Password hashing with bcrypt + pepper (layered defense)</li>
+                            <li>Multi-tenancy architecture (join_code as source of truth)</li>
+                            <li>55 comprehensive test files</li>
+                            <li>83 Alembic migrations with idempotency helpers</li>
+                            <li>Dual accounts: checking + savings with interest</li>
+                            <li>Classroom store, hall pass system, insurance policies, rent collection</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /timeline-track -->
+
+        <!-- ── ERA II ── -->
+        <div class="era-divider" data-era="all fixes security architecture">
+            <div class="era-divider-line"></div>
+            <span class="era-badge era-ii">
+                <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">crisis_alert</span>
+                Era II — Stability &amp; Crisis Resolution
+            </span>
+            <div class="era-divider-line"></div>
+        </div>
+
+        <div class="timeline-track">
+
+            <!-- P0 Crisis -->
+            <div class="tl-entry" data-tags="fixes security">
+                <div class="tl-dot dot-fixes"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-crisis">P0 Crisis</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">Same-Teacher Multi-Period Data Leak</div>
+                            <div class="tl-date">November 2025</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-fixes">Critical Fix</span>
+                                <span class="tl-tag tag-security">Security</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <div class="crisis-box">
+                            <strong>Impact:</strong> Students in multiple class periods with the same teacher saw aggregated financial data across all periods — a fundamental privacy and fairness violation.
+                        </div>
+                        <br>
+                        <strong>Root Cause:</strong>
+                        <ul>
+                            <li><code>Transaction</code> model had <code>teacher_id</code> but not <code>join_code</code></li>
+                            <li>All queries filtered by <code>teacher_id</code> only, returning data across all periods</li>
+                        </ul>
+                        <strong>Resolution:</strong>
+                        <ul>
+                            <li>Added <code>join_code</code> to all financial tables</li>
+                            <li>Updated session management to track <code>current_join_code</code></li>
+                            <li>Modified ALL queries to scope by <code>join_code</code></li>
+                            <li>Created interactive backfill for legacy transactions</li>
+                            <li>Added comprehensive multi-tenancy regression tests</li>
+                        </ul>
+                        <div class="lesson-box">
+                            <strong>Lesson:</strong> Multi-tenancy must be enforced at the database level, not the application level. <code>join_code</code> is non-negotiable.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- v1.0.0 -->
+            <div class="tl-entry" data-tags="features architecture">
+                <div class="tl-dot dot-milestone"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-milestone">v1.0.0</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">First Stable Release 🎉</div>
+                            <div class="tl-date">November–December 2025</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-features">Features</span>
+                                <span class="tl-tag tag-architecture">Architecture</span>
+                                <span class="tl-tag tag-security">Security</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <p>All critical security issues resolved. Production-ready platform.</p>
+                        <strong>Ships with:</strong>
+                        <ul>
+                            <li>Multi-tenancy with join-code isolation (P0 fix)</li>
+                            <li>Python 3.12+ &amp; SQLAlchemy 2.0+ compatibility (52 deprecated patterns updated)</li>
+                            <li>Teacher account recovery (student-verified codes)</li>
+                            <li>System admin portal with error logging</li>
+                            <li>Comprehensive transaction audit trails</li>
+                            <li>Insurance policies (enrollment, claims, reimbursement)</li>
+                            <li>Rent collection system</li>
+                            <li>TOTP 2FA for all admins</li>
+                            <li>Dual accounts (checking + savings with interest)</li>
+                            <li>Classroom store with bundles</li>
+                            <li>Hall pass system with time tracking</li>
+                            <li>PII encryption at rest</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- v1.1.0 -->
+            <div class="tl-entry" data-tags="features">
+                <div class="tl-dot dot-features"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-release">v1.1.0</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">Analytics &amp; UI Redesign</div>
+                            <div class="tl-date">December 13, 2025</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-features">Features</span>
+                                <span class="tl-tag tag-analytics">Analytics</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <ul>
+                            <li><strong>Student Analytics Dashboard</strong> — Weekly statistics: days attended, earnings tracking, spending</li>
+                            <li><strong>Savings Projection Graph</strong> — 12-month interactive growth visualization using Chart.js</li>
+                            <li><strong>Long-Term Goal Items</strong> — Expensive class rewards exempt from CWI balance checks</li>
+                            <li><strong>Economy Health Dashboard</strong> — Specific recommended ranges with actionable guidance</li>
+                            <li><strong>Complete UI Redesign</strong> — Modern card layouts, softer colors, sticky sidebar navigation</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- v1.1.1 -->
+            <div class="tl-entry" data-tags="security fixes">
+                <div class="tl-dot dot-security"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-patch">v1.1.1</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">Security Hardening v1</div>
+                            <div class="tl-date">December 14–15, 2025</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-security">Security</span>
+                                <span class="tl-tag tag-fixes">Fixes</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <ul>
+                            <li>Secured teacher recovery verification with hashed date-of-birth</li>
+                            <li>Hardened student login redirects (UTC-normalized dashboard calculations)</li>
+                            <li>Fixed insurance management crashes for legacy forms</li>
+                            <li>Added cache-busting static asset helpers</li>
+                            <li>Applied green theme consistently to standalone auth pages</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /timeline-track -->
+
+        <!-- ── ERA III ── -->
+        <div class="era-divider" data-era="all features security architecture">
+            <div class="era-divider-line"></div>
+            <span class="era-badge era-iii">
+                <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">rocket_launch</span>
+                Era III — Feature Expansion &amp; Security Hardening
+            </span>
+            <div class="era-divider-line"></div>
+        </div>
+
+        <div class="timeline-track">
+
+            <!-- v1.2.0 -->
+            <div class="tl-entry" data-tags="features architecture">
+                <div class="tl-dot dot-features"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-release">v1.2.0</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">PWA, Mobile &amp; Accessibility</div>
+                            <div class="tl-date">December 18, 2025</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-features">Features</span>
+                                <span class="tl-tag tag-mobile">Mobile</span>
+                                <span class="tl-tag tag-architecture">Architecture</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <ul>
+                            <li><strong>Progressive Web App</strong> — Fully installable on iOS/Android with offline fallback</li>
+                            <li><strong>Service Worker</strong> — Intelligent caching, auto-cleanup, version management</li>
+                            <li><strong>Mobile-First Experience</strong> — Dedicated templates, bottom tab navigation, 44×44px touch targets</li>
+                            <li><strong>WCAG 2.1 AA Accessibility</strong> — ARIA labels, enhanced keyboard navigation, improved color contrast, skip-to-content links</li>
+                            <li><strong>Terminology Update</strong> — "Tap In/Out" → "Start Work/Break Done" for clarity</li>
+                        </ul>
+                        <div class="crisis-box">
+                            <strong>Bug Fixed:</strong> Multi-tenancy payroll bug leaking calculations across class periods.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- v1.2.1 -->
+            <div class="tl-entry" data-tags="architecture fixes">
+                <div class="tl-dot dot-architecture"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-patch">v1.2.1</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">Legacy Account Migration</div>
+                            <div class="tl-date">December 21, 2025</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-architecture">Architecture</span>
+                                <span class="tl-tag tag-fixes">Migration</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <ul>
+                            <li>Comprehensive migration script: <code>teacher_id</code> → claim-based enrollment</li>
+                            <li>5-phase migration: students, associations, blocks, join codes, related tables</li>
+                            <li>Critical: Transaction backfill matches on BOTH <code>student_id</code> AND <code>teacher_id</code></li>
+                            <li>Join code schema audit tool for multi-tenancy compliance</li>
+                            <li>Full test coverage for all migration phases</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- v1.3.0 -->
+            <div class="tl-entry" data-tags="security features">
+                <div class="tl-dot dot-security"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-release">v1.3.0</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">Passwordless Auth &amp; Security Audit</div>
+                            <div class="tl-date">December 25, 2025</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-security">Security</span>
+                                <span class="tl-tag tag-features">Features</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <ul>
+                            <li><strong>WebAuthn/FIDO2 Passkey Authentication</strong> — YubiKey, Touch ID, Face ID, Windows Hello, synced passkeys; available for teachers and system admins</li>
+                            <li><strong>Encrypted TOTP Secrets at Rest</strong> — Fernet (AES-128-CBC); database compromise alone insufficient for 2FA</li>
+                            <li><strong>Comprehensive Security Audit</strong> — 16 findings: 2 critical, 2 high, 3 medium, 4 low, 5 informational</li>
+                            <li><strong>PromptPwnd Fixed</strong> — Critical AI prompt injection in GitHub Actions (workflow disabled, no exploitation detected)</li>
+                            <li>Removed sensitive information (usernames, PII) from application logs</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- v1.4.0 -->
+            <div class="tl-entry" data-tags="features security">
+                <div class="tl-dot dot-features"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-release">v1.4.0</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">Announcements &amp; UI/UX Enhancements</div>
+                            <div class="tl-date">December 27, 2025</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-features">Features</span>
+                                <span class="tl-tag tag-security">Security</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <ul>
+                            <li><strong>Announcement System</strong> — Per-period announcements with rich formatting; global system-admin announcements</li>
+                            <li><strong>Personalized Greetings</strong> — Time-aware greetings on teacher and student dashboards</li>
+                            <li><strong>Accordion Navigation</strong> — Collapsible sidebar with Classroom / Economy / Bills / Settings sections</li>
+                            <li><strong>Streamlined Authentication Flow</strong> — Two-method buttons with smooth TOTP/passkey toggle</li>
+                            <li><strong>CodeQL Remediation</strong> — 62 security alerts addressed: DOM XSS, TOTP logging, workflow permissions, URL redirection</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- v1.5.0 -->
+            <div class="tl-entry" data-tags="features">
+                <div class="tl-dot dot-features"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-release">v1.5.0</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">Issue Resolution &amp; Escalation System</div>
+                            <div class="tl-date">December 29, 2025</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-features">Features</span>
+                                <span class="tl-tag tag-security">Privacy</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <ul>
+                            <li><strong>Student Submission Interface</strong> — Knowledge Base, Report Issue, My Issues tabs; automatic context capture (balances, history)</li>
+                            <li><strong>Transaction &amp; Attendance Issue Reporting</strong> — Report buttons on every transaction and tap event</li>
+                            <li><strong>Teacher Review Queue</strong> — Resolve via void/adjustment/denial; escalate with diagnostic notes and optional bug-bounty reward</li>
+                            <li><strong>Privacy-Conscious Design</strong> — Opaque student references (non-reversible hashes) for sysadmin views</li>
+                            <li><strong>4 New Models</strong> — <code>Issue</code>, <code>IssueCategory</code>, <code>IssueStatusHistory</code>, <code>IssueResolutionAction</code></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- v1.6.0 -->
+            <div class="tl-entry" data-tags="architecture fixes">
+                <div class="tl-dot dot-architecture"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-patch">v1.6.0</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">Repository Organization &amp; Stability</div>
+                            <div class="tl-date">January 1, 2026</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-architecture">Architecture</span>
+                                <span class="tl-tag tag-docs">Docs</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <ul>
+                            <li>Consolidated duplicate scripts into <code>scripts/</code> directory</li>
+                            <li>Fixed HallPassSettings NOT NULL multi-tenancy violation</li>
+                            <li>Passkey authentication environment variable path fix</li>
+                            <li>Getting Started widget: database persistence instead of localStorage (cross-device sync)</li>
+                            <li>Comprehensive documentation accuracy fixes (10 inaccuracies corrected)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- v1.7.0 -->
+            <div class="tl-entry" data-tags="features analytics">
+                <div class="tl-dot dot-features"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-release">v1.7.0</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">Analytics Dashboard, Rent Itemization &amp; Mobile Nav</div>
+                            <div class="tl-date">January 9, 2026</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-features">Features</span>
+                                <span class="tl-tag tag-analytics">Analytics</span>
+                                <span class="tl-tag tag-mobile">Mobile</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <ul>
+                            <li><strong>Analytics Dashboard (CWI-Relative Metrics)</strong> — Participation rate, money velocity, CWI deviation bands, budget survival; 3 new models; 5-second readability design: <em>"Something is drifting — and I know what lever to pull"</em></li>
+                            <li><strong>Mobile Navigation Enhancement</strong> — Floating hamburger with slide-in animation and backdrop overlay; icons-only on mobile</li>
+                            <li><strong>Rent Itemization MVP</strong> — <code>RentItem</code> model; per-period or per-use purchase duration; optional store integration; itemized breakdown in student view</li>
+                            <li><strong>Rent Privilege Badges</strong> — Green (rent-covered) and blue (individually purchased) badges on student detail pages</li>
+                            <li>ToS Acknowledgment Modal during admin sign-up</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Decimal Crisis -->
+            <div class="tl-entry" data-tags="fixes">
+                <div class="tl-dot dot-fixes"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-crisis">Crisis</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">The Great Decimal Precision Crisis</div>
+                            <div class="tl-date">January 2026</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-fixes">Critical Fix</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <div class="crisis-box">
+                            <strong>Symptoms:</strong> Zero-balance transfers triggering $35 overdraft fees &bull; Partial rent payments leaving unpayable tiny balances ($0.0000001) &bull; Dashboard interest calculations crashing with TypeErrors
+                        </div>
+                        <br>
+                        <strong>Root Cause:</strong>
+                        <ul>
+                            <li><code>Transaction.amount</code> stored as <code>Float</code> instead of <code>Numeric</code></li>
+                            <li>IEEE 754 floating-point: 0.1 + 0.2 ≠ 0.3</li>
+                            <li>Mixed Decimal/float arithmetic caused TypeErrors</li>
+                        </ul>
+                        <div class="lesson-box">
+                            <strong>Lesson:</strong> Financial systems MUST use <code>Decimal</code> type, never <code>Float</code>. Precision errors compound invisibly and become hidden bugs.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- v1.7.1 -->
+            <div class="tl-entry" data-tags="fixes">
+                <div class="tl-dot dot-fixes"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-patch">v1.7.1</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">Decimal Precision — Financial Accuracy Restored</div>
+                            <div class="tl-date">January 22–25, 2026</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-fixes">Fixes</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <ul>
+                            <li><code>Float</code> → <code>Numeric(12, 2)</code> database migration across all financial models</li>
+                            <li>Systematic Decimal refactoring of ALL financial calculations</li>
+                            <li>Near-zero balance normalization (|balance| &lt; $0.01 → $0.00)</li>
+                            <li>Decimal precision maintained throughout; converts to float only at serialization boundary</li>
+                            <li>Fixed savings interest, dashboard earnings/spending, rent calculations</li>
+                            <li>All financial calculations now mathematically exact</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /timeline-track -->
+
+        <!-- ── ERA IV ── -->
+        <div class="era-divider" data-era="all features fixes">
+            <div class="era-divider-line"></div>
+            <span class="era-badge era-iv">
+                <span class="material-symbols-outlined" style="font-size:0.85rem;vertical-align:middle;">verified</span>
+                Era IV — Refinement &amp; Production Hardening
+            </span>
+            <div class="era-divider-line"></div>
+        </div>
+
+        <div class="timeline-track">
+
+            <!-- v1.8.0 -->
+            <div class="tl-entry" data-tags="features fixes security">
+                <div class="tl-dot dot-milestone"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-release">v1.8.0</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">Rent Item Types &amp; Coverage Period Tracking</div>
+                            <div class="tl-date">February 8–9, 2026</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-features">Features</span>
+                                <span class="tl-tag tag-fixes">Fixes</span>
+                                <span class="tl-tag tag-security">Security</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <ul>
+                            <li><strong>Three Rent Item Types:</strong>
+                                <ul>
+                                    <li><em>Privilege</em> — Shows badge on roster when rent paid; optionally in store</li>
+                                    <li><em>Per-Use</em> — Grants free store redemptions via <code>uses_remaining</code> tracking</li>
+                                    <li><em>Hall Pass</em> — Tops off passes via <code>StudentBlock.rent_hall_passes</code></li>
+                                </ul>
+                            </li>
+                            <li><strong>Pre-Paid Coverage Period Tracking</strong> — <code>coverage_month</code>/<code>coverage_year</code> on <code>RentPayment</code>; all checks use coverage-based lookups</li>
+                            <li><strong>Mid-Period Edit Guardrail</strong> — Item type and use limits locked once any student pays; only cosmetic edits allowed</li>
+                            <li>Insurance class selector multi-tenancy fix (was aggregating all periods)</li>
+                            <li>Grafana proxy XSS protection (case-insensitive MIME blocking)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Unreleased / Current -->
+            <div class="tl-entry" data-tags="features architecture">
+                <div class="tl-dot dot-architecture"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-future">Unreleased</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">System Admin Redesign &amp; Design System Unification</div>
+                            <div class="tl-date">February 2026 — In Progress</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-features">Features</span>
+                                <span class="tl-tag tag-architecture">Architecture</span>
+                                <span class="tl-tag tag-fixes">Fixes (P0)</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <ul>
+                            <li><strong>System Admin Interface Redesigned</strong> — Mobile-friendly with hamburger nav, revamped dashboard, consolidated logs, unified support tickets</li>
+                            <li><strong>Template Design System Unification</strong> — Material Symbols replacing legacy Bootstrap icons; semantic subtle backgrounds; token-driven theming</li>
+                            <li><strong>P0 Fixed:</strong> Duplicate auto-tap-out events causing payroll overpayment (idempotency check added)</li>
+                            <li><strong>P0 Fixed:</strong> Rent payment applying to wrong period when bill preview enabled</li>
+                            <li>Void transaction CSRF 400 error fixed</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Future -->
+            <div class="tl-entry" data-tags="features">
+                <div class="tl-dot dot-features"></div>
+                <div class="tl-card">
+                    <div class="tl-card-header" onclick="toggleCard(this)">
+                        <span class="tl-version-badge badge-future">v1.9+</span>
+                        <div class="tl-meta">
+                            <div class="tl-title">Planned Roadmap</div>
+                            <div class="tl-date">2026 — Upcoming</div>
+                            <div class="tl-tags">
+                                <span class="tl-tag tag-features">Upcoming</span>
+                            </div>
+                        </div>
+                        <span class="material-symbols-outlined tl-chevron">expand_more</span>
+                    </div>
+                    <div class="tl-card-body">
+                        <strong>High Priority (v1.9):</strong>
+                        <ul>
+                            <li>Multi-teacher hardening (finalize <code>student_teachers</code> migration)</li>
+                            <li>Remove legacy <code>students.teacher_id</code> column (3-phase migration)</li>
+                            <li>Operational safety documentation and runbooks</li>
+                            <li>Migration compliance re-audit</li>
+                        </ul>
+                        <strong>Deferred Features (Post-v1.0, pending):</strong>
+                        <ul>
+                            <li>Jobs Feature (models created pre-v1.0, ready to restore)</li>
+                            <li>Custom Condition Builder</li>
+                            <li>Parent Portal (privacy-controlled)</li>
+                            <li>Internationalization (multi-language support)</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /timeline-track -->
+
+        <!-- No results message -->
+        <div class="no-results" id="noResults">
+            <span class="material-symbols-outlined" style="font-size:2.5rem; color:var(--neutral-300); display:block; margin-bottom:0.5rem;">search_off</span>
+            No entries match this filter. Try a different category.
+        </div>
+
+        <!-- Philosophy Section -->
+        <div class="philosophy-section">
+            <div class="ph-header">
+                <h5 style="margin:0; font-weight:700;">
+                    <span class="material-symbols-outlined" style="vertical-align:middle; margin-right:0.4rem;">lightbulb</span>
+                    Design Philosophy — What We Refuse to Build
+                </h5>
+                <p style="margin:0.3rem 0 0; opacity:0.8; font-size:0.85rem;">Ten deliberate absences that define Classroom Token Hub as much as what it includes</p>
+            </div>
+            <div class="ph-body">
+                <div class="anti-goal-grid">
+                    <div class="anti-goal-item">
+                        <span class="ag-no">❌ NO XP BARS OR STREAKS</span>
+                        Earned wages and time-based pay — not gamification
+                        <span class="ag-yes">✅ Instead: Real wages, real consequences</span>
+                    </div>
+                    <div class="anti-goal-item">
+                        <span class="ag-no">❌ NO PERFECT ATTENDANCE BONUSES</span>
+                        Life interferes; punishment isn't realism
+                        <span class="ag-yes">✅ Instead: Insurance system handles legitimate absences</span>
+                    </div>
+                    <div class="anti-goal-item">
+                        <span class="ag-no">❌ NO INVISIBLE TEACHER OVERRIDES</span>
+                        No silent balance edits; no hidden forgiveness
+                        <span class="ag-yes">✅ Instead: All actions logged and visible to students</span>
+                    </div>
+                    <div class="anti-goal-item">
+                        <span class="ag-no">❌ NO BEHAVIOR SCORES</span>
+                        No engagement ratings or compliance metrics
+                        <span class="ag-yes">✅ Instead: Neutral logs supporting teacher conversations</span>
+                    </div>
+                    <div class="anti-goal-item">
+                        <span class="ag-no">❌ NO AI JUDGMENTS OF INTENT</span>
+                        No motivation predictions or effort ratings
+                        <span class="ag-yes">✅ Instead: Neutral logs that don't infer character</span>
+                    </div>
+                    <div class="anti-goal-item">
+                        <span class="ag-no">❌ NO UNLIMITED CONFIG KNOBS</span>
+                        Arbitrary overrides break system coherence
+                        <span class="ag-yes">✅ Instead: Guardrailed settings that preserve integrity</span>
+                    </div>
+                    <div class="anti-goal-item">
+                        <span class="ag-no">❌ NO FRICTIONLESS SHORTCUTS</span>
+                        One-click forgiveness undermines the system
+                        <span class="ag-yes">✅ Instead: Deliberate processes requiring acknowledgment</span>
+                    </div>
+                    <div class="anti-goal-item">
+                        <span class="ag-no">❌ NO LEADERBOARDS</span>
+                        Public rankings don't belong in classrooms
+                        <span class="ag-yes">✅ Instead: Private balances protect student dignity</span>
+                    </div>
+                    <div class="anti-goal-item">
+                        <span class="ag-no">❌ NO NEUTRALITY CLAIM</span>
+                        All systems have assumptions
+                        <span class="ag-yes">✅ Instead: Visible assumptions open to class discussion</span>
+                    </div>
+                    <div class="anti-goal-item">
+                        <span class="ag-no">❌ NO DIRECT STUDENT → SYSADMIN TICKETS</span>
+                        Teachers are the first line of support
+                        <span class="ag-yes">✅ Instead: Teacher-mediated escalation preserves authority</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Closing Quote -->
+        <div class="project-quote">
+            <blockquote>
+                "Classroom Token Hub was created to fill the void of a platform that simulates an economy more realistically than what is available on the market. It also functions as a classroom management tool that teaches students personal responsibility. Most of all, it respects data privacy and security like no other. The friction you experience when creating, claiming, and resetting accounts was intentional. Classroom Token Hub does not ask, 'How can we defend ourselves?' It was designed to anticipate, 'What if the bad actor gets in?'"
+            </blockquote>
+            <cite>— From <a href="{{ url_for('docs.view_doc', doc_path='archive/project/PROJECT_HISTORY') }}" class="text-decoration-none">Project History &amp; Philosophy</a></cite>
+        </div>
+
+    </div><!-- /timeline-wrap -->
+</div><!-- /timeline-page -->
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+    'use strict';
+
+    // ── Toggle card expand/collapse ──
+    window.toggleCard = function(header) {
+        const card = header.closest('.tl-card');
+        card.classList.toggle('expanded');
+    };
+
+    // ── Filter logic ──
+    const filterBtns = document.querySelectorAll('.filter-btn');
+    const entries    = document.querySelectorAll('.tl-entry');
+    const eraDivs   = document.querySelectorAll('.era-divider');
+    const noResults  = document.getElementById('noResults');
+
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', function () {
+            // Update active button and ARIA pressed state
+            filterBtns.forEach(b => {
+                b.classList.remove('active');
+                b.setAttribute('aria-pressed', 'false');
+            });
+            this.classList.add('active');
+            this.setAttribute('aria-pressed', 'true');
+
+            const filter = this.dataset.filter;
+
+            // Show/hide entries
+            let visible = 0;
+            entries.forEach(entry => {
+                const tags = (entry.dataset.tags || '').split(' ');
+                const show = filter === 'all' || tags.includes(filter);
+                entry.classList.toggle('hidden', !show);
+                if (show) visible++;
+            });
+
+            // Show/hide era dividers based on whether there are visible entries after them
+            eraDivs.forEach(div => {
+                const eraData = div.dataset.era || 'all';
+                const show = eraData === 'all' || filter === 'all' || eraData.includes(filter);
+                div.style.display = show ? '' : 'none';
+            });
+
+            // No results message
+            noResults.style.display = visible === 0 ? 'block' : 'none';
+        });
+    });
+
+    // ── Smooth scroll to top on logo click ──
+    document.querySelector('.timeline-hero')?.addEventListener('click', function (e) {
+        if (e.target === this) window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    // ── Animate entries into view ──
+    if ('IntersectionObserver' in window) {
+        const observer = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                    observer.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.1 });
+
+        document.querySelectorAll('.tl-entry').forEach(el => {
+            el.style.opacity = '0';
+            el.style.transform = 'translateY(12px)';
+            el.style.transition = 'opacity 0.35s ease, transform 0.35s ease';
+            observer.observe(el);
+        });
+    }
+})();
+</script>
+{% endblock %}

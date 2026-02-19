@@ -14,6 +14,7 @@ Please see: [`../../CLAUDE.md`](../../CLAUDE.md)
 ---
 
 **Why at the root?**
+
 - AI assistants typically scan root-level files first
 - Keeps development guidelines easily accessible
 - Reduces duplication and maintenance burden

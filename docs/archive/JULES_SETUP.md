@@ -14,6 +14,7 @@ cd classroom-economy
 ```
 
 The setup script will:
+
 1.  Verify Python 3.10+ is installed
 2.  Check for PostgreSQL and Redis
 3.  Create a virtual environment (`venv/`)
@@ -272,6 +273,7 @@ cp classroom_economy_backup_20251204.db classroom_economy.db
 ## Security Notes
 
  **Important:**
+
 - Never commit `.env` to version control (already in `.gitignore`)
 - Keep `SECRET_KEY`, `ENCRYPTION_KEY`, and `PEPPER_KEY` secure
 - Use strong, randomly generated keys in production
@@ -281,6 +283,7 @@ cp classroom_economy_backup_20251204.db classroom_economy.db
 ## Next Steps
 
 After setup:
+
 1. Access the application at `http://localhost:5000`
 2. Login with your system admin credentials
 3. Enable TOTP authentication with your authenticator app
@@ -297,6 +300,7 @@ After setup:
 ## Support
 
 For issues or questions:
+
 - Check existing documentation in `/docs/`
 - Review test files in `/tests/` for usage examples
 - Open an issue on GitHub with detailed error messages

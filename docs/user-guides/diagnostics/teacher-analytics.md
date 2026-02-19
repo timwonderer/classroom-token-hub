@@ -24,11 +24,13 @@ audience: teachers
 ### Quick Fixes
 
 **1. Check if analytics data exists:**
+
 - Navigate to different time window (try monthly if weekly doesn't work)
 - Ensure you have transactions in the selected period
 - Wait 24 hours after first setup for initial data computation
 
 **2. Verify you're viewing correct class:**
+
 - Check class selector in header
 - Switch to a class with active students
 - Ensure class has join_code properly configured
@@ -40,11 +42,13 @@ Select "Cached images and files" → Clear data
 ```
 
 **4. Try different browser:**
+
 - Test in incognito/private mode
 - Switch to different browser (Chrome, Firefox, Safari)
 
 ### Still Not Working?
 Report via Help & Support with:
+
 - Browser and version
 - Screenshot of error (if any)
 - Which class period you're viewing
@@ -61,21 +65,25 @@ Report via Help & Support with:
 ### Causes & Solutions
 
 **Cause 1: No Student Activity**
+
 - **Check:** Do students have any transactions?
 - **Fix:** Run a test transaction (manual adjustment)
 - **Fix:** Ensure students are tapping in/out
 
 **Cause 2: Wrong Time Window**
+
 - **Check:** Are you viewing weekly data for a month-old period?
 - **Fix:** Switch to monthly view
 - **Fix:** Select "current week" or "current month"
 
 **Cause 3: Data Not Yet Computed**
+
 - **Check:** Is this a brand new class?
 - **Fix:** Wait 24 hours for initial computation
 - **Fix:** Make some transactions to trigger calculations
 
 **Cause 4: All Students Inactive**
+
 - **Check:** Number of enrolled students vs. active students
 - **Fix:** Review student roster - mark inactive students appropriately
 - **Fix:** Ensure students know how to participate
@@ -87,12 +95,14 @@ Report via Help & Support with:
 ### Participation Rate Issues
 
 **Too Low (below expected):**
+
 - Check if students understand how to tap in/out
 - Verify tap devices/buttons working
 - Review recent absences (holiday, testing week?)
 - Check if inactive students included in calculation
 
 **Too High (100% seems wrong):**
+
 - Verify student count is correct
 - Check for test/dummy accounts
 - Review active vs. inactive student flags
@@ -100,12 +110,14 @@ Report via Help & Support with:
 ### Money Velocity Issues
 
 **Too Low (stagnant economy):**
+
 - Are store items appealing?
 - Is rent too high (students hoarding)?
 - Check if students know how to make purchases
 - Review store item availability
 
 **Too High (chaotic activity):**
+
 - Check for unusual transaction patterns
 - Look for test transactions or errors
 - Review if prices need adjustment
@@ -113,11 +125,13 @@ Report via Help & Support with:
 ### CWI Deviation Issues
 
 **Metrics say balanced but doesn't feel right:**
+
 - Recalculate your CWI - has economy changed?
 - Check if you're comparing to old CWI
 - Verify CWI setting in Economy Health page
 
 **All students deviating:**
+
 - **Strong indicator:** CWI needs recalibration
 - Compare current average balance to CWI
 - Adjust CWI to match new reality
@@ -126,6 +140,7 @@ Report via Help & Support with:
 ### Budget Survival Rate Issues
 
 **Rate dropping suddenly:**
+
 - Check recent rent/insurance changes
 - Review if wage changes needed
 - Look for unexpected fees accumulating
@@ -142,16 +157,19 @@ Report via Help & Support with:
 ### Causes & Solutions
 
 **Cause 1: Metrics in Healthy Range**
+
 - **Good news:** Economy is balanced!
 - **Action:** Monitor for changes
 - **Note:** Alerts only show when action needed
 
 **Cause 2: Alert Dismissed**
+
 - **Check:** Were alerts previously dismissed?
 - **Fix:** Alerts may reappear if condition worsens
 - **Note:** Dismissed alerts can be reviewed in history
 
 **Cause 3: Not Meeting Alert Thresholds**
+
 - **Details:** Alerts trigger at specific levels:
   - Critical: Survival <50%, Participation <40%
   - Warning: Deviation >20%, Velocity dropping 50%+
@@ -168,16 +186,19 @@ Report via Help & Support with:
 ### Causes & Solutions
 
 **Cause 1: Events Not Auto-Tracked Yet**
+
 - **Currently:** Some changes don't auto-generate events
 - **Workaround:** Track major changes manually in notes
 - **Future:** More auto-tracking coming in v1.8
 
 **Cause 2: Wrong Time Window**
+
 - **Check:** Are you viewing weekly but made changes last month?
 - **Fix:** Switch to monthly view
 - **Fix:** Adjust date range if available
 
 **Cause 3: Change Type Not Tracked**
+
 - **Tracked:** Rent changes, wage changes, bonus payroll
 - **Not Tracked:** Individual store item changes, minor tweaks
 - **Note:** Major economy events tracked, minor changes aren't
@@ -193,11 +214,13 @@ Report via Help & Support with:
 ### Explanation
 
 **Trend Detection Requirements:**
+
 - Needs 2-4 weeks of data to identify trends
 - Compares current period to previous period
 - "Stable" means <10% change
 
 **Solutions:**
+
 - **Wait:** Give it 2+ weeks after major changes
 - **Check:** Look at actual metric values, not just trend
 - **Remember:** Stable can be good if metrics healthy
@@ -209,21 +232,25 @@ Report via Help & Support with:
 ### Common Misunderstandings
 
 **"Participation shows 80% but only 15/25 students active"**
+
 - **Explanation:** Percentage of students with ANY activity
 - **Check:** Are 20 students active? 20/25 = 80%
 - **Note:** Doesn't measure frequency, just participation
 
 **"Money velocity shows 3.2 but I see way more transactions"**
+
 - **Explanation:** Average transactions PER STUDENT
 - **Math:** If 100 total transactions ÷ 30 students = 3.3
 - **Note:** Not total transactions, per-student average
 
 **"CWI deviation shows 25% but I think more students off-track"**
+
 - **Explanation:** % of students MORE than 50% away from CWI
 - **Example:** If CWI is $100, students at $40-$160 not counted
 - **Note:** Only counts significant deviations (>50%)
 
 **"Survival rate 90% but I know students struggling"**
+
 - **Explanation:** Can afford rent+insurance RIGHT NOW
 - **Example:** Student has $60, rent+insurance=$50 → counts as surviving
 - **Note:** Doesn't mean thriving, just surviving current cycle
@@ -240,21 +267,25 @@ Report via Help & Support with:
 ### Quick Fixes
 
 **1. Switch Time Window:**
+
 - Try weekly (faster) vs. monthly (more data)
 - Monthly view processes more transactions
 
 **2. Check Network:**
+
 - Slow internet connection?
 - Try different WiFi network
 - Use wired connection if possible
 
 **3. Browser Issues:**
+
 - Close other tabs
 - Restart browser
 - Update to latest version
 - Disable browser extensions temporarily
 
 **4. Device Resources:**
+
 - Close other applications
 - Check if device running slow overall
 - Restart computer if needed
@@ -271,11 +302,13 @@ Report via Help & Support with:
 ### "Unable to load analytics data"
 
 **Causes:**
+
 - Server error during computation
 - Database connection issue
 - Permission problem
 
 **Solutions:**
+
 1. Refresh page (F5)
 2. Try again in 5 minutes
 3. Switch to different class then back
@@ -286,6 +319,7 @@ Report via Help & Support with:
 **Meaning:** Cached data is old
 
 **Solutions:**
+
 - Normal if just made major changes
 - Wait 1 hour for recomputation
 - Data updates daily automatically
@@ -296,6 +330,7 @@ Report via Help & Support with:
 **Meaning:** Need more historical data
 
 **Solutions:**
+
 - Need 2+ weeks of data
 - Continue normal operations
 - Check back in a week
@@ -314,6 +349,7 @@ Report to Help & Support if:
 - Error messages persisting after troubleshooting
 
 **Include in Report:**
+
 - Screenshot of issue
 - Which class/join_code
 - Time window selected

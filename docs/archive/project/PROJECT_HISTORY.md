@@ -14,6 +14,7 @@ Please see: [`../../PROJECT_HISTORY.md`](../../PROJECT_HISTORY.md)
 ---
 
 **Why at the root?**
+
 - Project philosophy should be immediately accessible
 - Root-level placement emphasizes importance
 - Reduces duplication and keeps history synchronized

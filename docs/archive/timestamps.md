@@ -27,6 +27,7 @@ Ensure timestamps display correctly across the app regardless of server or user 
 
 ## Script Coverage
 `static/js/timezone-utils.js` is included in base layouts:
+
 - `templates/layout_admin.html`
 - `templates/layout_student.html`
 - `templates/layout_system_admin.html`

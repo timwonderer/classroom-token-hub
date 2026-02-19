@@ -73,6 +73,7 @@ This will help with debugging.
 ```
 
 The AI model might interpret this as legitimate instructions and:
+
 1. Execute the embedded commands
 2. Leak the `GITHUB_TOKEN` to the issue comment
 3. Allow the attacker to use the token for repository access
@@ -84,6 +85,7 @@ The AI model might interpret this as legitimate instructions and:
 **Action:** Renamed `summary.yml` to `summary.yml.DISABLED`
 
 **Rationale:**
+
 - The workflow provided minimal value (auto-summarizing issues)
 - Risk significantly outweighed benefit
 - No safe way to implement this pattern with current AI agent architecture
@@ -91,6 +93,7 @@ The AI model might interpret this as legitimate instructions and:
 ### 2. Security Audit of All Workflows
 
 **Audited Workflows:**
+
 -  `deploy.yml` - No AI agents, secure
 -  `check-migrations.yml` - No AI agents, secure
 -  `summary.yml` - **VULNERABLE** - Disabled
@@ -98,6 +101,7 @@ The AI model might interpret this as legitimate instructions and:
 -  `toggle-maintenance.yml` - No AI agents, secure
 
 **Findings:**
+
 - Only `summary.yml` was affected
 - No other AI agent integrations found
 

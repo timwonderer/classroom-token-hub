@@ -29,22 +29,26 @@ Admin templates redesigned with collapsible accordion sections for better organi
 The application now functions as a Progressive Web App with the following capabilities:
 
 **Installation**
+
 - Install directly to home screen on mobile devices (iOS and Android)
 - Works as standalone app with dedicated icon and splash screen
 - Eliminates browser chrome for immersive experience
 
 **Offline Support**
+
 - Intelligent caching strategy for static assets
 - Offline fallback page with clear user guidance
 - Automatic cache cleanup and version management
 - Multi-tenancy-safe caching (excludes authenticated routes)
 
 **Performance**
+
 - Faster load times through aggressive asset caching
 - Reduced network requests for static resources
 - Service worker manages cache lifecycle automatically
 
 **Technical Implementation**
+
 - Web app manifest with comprehensive metadata
 - Service worker with dual caching strategy:
   - Cache-first for local static assets
@@ -54,6 +58,7 @@ The application now functions as a Progressive Web App with the following capabi
 ### Mobile Experience Enhancements
 
 **Student Portal Mobile Templates**
+
 - Dedicated mobile-optimized layouts
 - Simplified single-column dashboard
 - Larger touch targets for tap in/out buttons
@@ -61,18 +66,21 @@ The application now functions as a Progressive Web App with the following capabi
 - Bottom navigation bar for quick access
 
 **Responsive Navigation**
+
 - Mobile-friendly navigation across all pages
 - Bottom tab bar on mobile devices
 - Collapsible menus for space efficiency
 - Touch-optimized interaction patterns
 
 **Mobile Dashboard**
+
 - Clean, focused layout prioritizing key information
 - Prominent attendance card with status
 - Easy-access tap buttons
 - Weekly statistics in mobile-friendly format
 
 **Mobile Store**
+
 - Optimized item list with larger purchase buttons
 - Simplified checkout flow
 - Better image handling on small screens
@@ -81,24 +89,28 @@ The application now functions as a Progressive Web App with the following capabi
 ### Accessibility Improvements (Following WCAG 2.1 AA Guidelines)
 
 **ARIA Support**
+
 - Comprehensive ARIA labels on interactive elements
 - Proper role assignments for semantic HTML
 - Screen reader announcements for dynamic content
 - ARIA landmarks for page regions
 
 **Keyboard Navigation**
+
 - Enhanced keyboard accessibility throughout application
 - Logical tab order on all pages
 - Skip-to-content links
 - Focus indicators on interactive elements
 
 **Visual Accessibility**
+
 - Improved color contrast ratios following AA guidelines
 - Larger touch targets (minimum 44x44px)
 - Clear focus states
 - Better visual hierarchy
 
 **Screen Reader Compatibility**
+
 - Enhanced compatibility with NVDA, JAWS, and VoiceOver
 - Meaningful alt text for images
 - Descriptive link text
@@ -135,12 +147,14 @@ Redesigned admin templates with collapsible accordion patterns for better organi
   - Clearer enable/disable controls
 
 **Mobile Responsiveness**
+
 - All admin templates now responsive on mobile
 - Sidebar auto-hides on narrow viewports
 - Overflow-x protection prevents horizontal scrolling
 - Proper viewport handling across devices
 
 **Theme Consistency**
+
 - Unified color scheme across mobile and desktop
 - Consistent Material Symbols icon usage
 - Aligned spacing and typography
@@ -149,6 +163,7 @@ Redesigned admin templates with collapsible accordion patterns for better organi
 ### Terminology Updates
 
 **Attendance System**
+
 - Renamed "Tap In" → "Start Work"
 - Renamed "Tap Out" → "Break / Done"
 - More intuitive for students and teachers
@@ -158,10 +173,12 @@ Redesigned admin templates with collapsible accordion patterns for better organi
 ### Documentation
 
 **New Documentation**
+
 - `docs/PWA_ICON_REQUIREMENTS.md` - PWA icon asset generation guide
 - `TEMPLATE_REDESIGN_RECOMMENDATIONS.md` - UI design patterns and guidelines
 
 **Improved Guidance**
+
 - Best practices for accordion/collapsible patterns
 - Color scheme guidelines for consistency
 - Responsive design recommendations
@@ -174,6 +191,7 @@ Redesigned admin templates with collapsible accordion patterns for better organi
 ### Critical Fixes
 
 **Multi-Tenancy Payroll Bug (#664)**
+
 - **Issue**: Payroll calculations could leak data across class periods
 - **Fix**: Ensured all payroll queries properly scoped by join_code
 - **Impact**: Critical security fix for multi-period teachers
@@ -182,12 +200,14 @@ Redesigned admin templates with collapsible accordion patterns for better organi
 ### High-Priority Fixes
 
 **Payroll JSON Error (#668)**
+
 - **Issue**: "Run Payroll Now" button returned HTML instead of JSON
 - **Error**: "Unexpected token '<!DOCTYPE'"
 - **Fix**: Endpoint now properly returns JSON for AJAX requests
 - **Result**: Smooth payroll execution without page reload
 
 **Timezone Handling (#666)**
+
 - **Issue**: Timezone comparison errors in payroll calculation
 - **Fix**: Corrected UTC normalization for scheduling
 - **Result**: Fixes edge cases with daylight saving transitions
@@ -195,18 +215,21 @@ Redesigned admin templates with collapsible accordion patterns for better organi
 ### PWA-Specific Fixes
 
 **Icon Rendering Issues (#672, #676)**
+
 - **Root Cause**: Service Worker intercepting Google Fonts with incorrect caching
 - **Solution**: Service Worker now bypasses Google Fonts entirely
 - **Implementation**: Browser handles font loading natively
 - **Additional**: Font preload and fallback CSS for reliability
 
 **Mobile Navigation (#674)**
+
 - **Fix**: Restored Material Symbols icons on mobile
 - **Fix**: Removed horizontal scrolling on small screens
 - **Fix**: Tightened bottom navigation layout
 - **Result**: Clean, functional mobile navigation
 
 **Desktop PWA Support (#675)**
+
 - **Fix**: Added PWA support to desktop templates
 - **Addition**: PWA meta tags (theme-color, apple-mobile-web-app-capable)
 - **Addition**: Mobile bottom navigation when sidebar hidden
@@ -215,6 +238,7 @@ Redesigned admin templates with collapsible accordion patterns for better organi
 ### Test Fixes
 
 **Auto Tap-Out Regression (#670)**
+
 - **Issue**: Test failures due to missing teacher_id context
 - **Fix**: Proper context injection for auto tap-out logic
 - **Result**: All tap flow tests passing
@@ -278,16 +302,19 @@ The service worker will automatically update for users on their next visit. No m
 ### Mobile Installation
 
 **For Students and Teachers:**
+
 1. Visit the site on mobile browser
 2. Look for "Add to Home Screen" prompt
 3. Install for app-like experience
 
 **iOS Instructions:**
+
 1. Open site in Safari
 2. Tap Share button
 3. Select "Add to Home Screen"
 
 **Android Instructions:**
+
 1. Open site in Chrome
 2. Tap menu (three dots)
 3. Select "Install app" or "Add to Home Screen"
@@ -313,12 +340,14 @@ The service worker will automatically update for users on their next visit. No m
 ### Browser Compatibility
 
 **Desktop:**
+
 - Chrome 90+
 - Firefox 88+
 - Safari 14+
 - Edge 90+
 
 **Mobile:**
+
 - iOS Safari 14+
 - Chrome Mobile 90+
 - Samsung Internet 14+
@@ -326,6 +355,7 @@ The service worker will automatically update for users on their next visit. No m
 ### Device Testing
 
 **Tested On:**
+
 - iPhone (iOS 14+)
 - iPad (iPadOS 14+)
 - Android phones (Android 10+)
@@ -374,18 +404,21 @@ The service worker will automatically update for users on their next visit. No m
 ### What's New
 
 **Mobile App Experience**
+
 - Install Classroom Token Hub on your phone
 - Quick access from home screen
 - Faster load times
 - Works offline for basic viewing
 
 **Improved Admin Interface**
+
 - Cleaner, more organized settings pages
 - Less scrolling with accordion layouts
 - Visual badges show active features
 - Better mobile access to admin panel
 
 **Clearer Terminology**
+
 - "Start Work" instead of "Tap In"
 - "Break / Done" instead of "Tap Out"
 - More intuitive for students
@@ -404,17 +437,20 @@ The service worker will automatically update for users on their next visit. No m
 ### What's New
 
 **Mobile App**
+
 - Add Classroom Token Hub to your phone's home screen
 - Looks and feels like a real app
 - Faster and easier to use
 
 **Easier Navigation**
+
 - Bigger buttons for tapping in/out
 - Simpler store layout
 - Quick menu at bottom of screen
 - Everything easier to find
 
 **New Names**
+
 - "Start Work" when you arrive to class
 - "Break / Done" when you leave or take a break
 - Same actions, clearer names!

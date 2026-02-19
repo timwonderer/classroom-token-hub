@@ -43,6 +43,7 @@ This registry exists to convert past incidents into permanent guardrails.
 ## Relationship to Schema Policy
 
 This registry derives its authority from:
+
 - **Schema Contraction & Destructive Migration Policy**
 - **Schema Change Gate (PR-Blocking Checklist)**
 

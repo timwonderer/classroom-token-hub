@@ -3,6 +3,7 @@
 **Date:** 2026-01-12
 **Severity:** Critical (Production Regression)
 **Impact:** 
+
 - Students unable to claim accounts (Validation Error 200 OK)
 - Students unable to transfer funds (Internal Server Error)
 - Admin/System Admin crash on legacy cleanup logic (Internal Server Error)
@@ -18,6 +19,7 @@ While the immediate cause was lingering code references, the underlying failure 
 
 ### Canonical Failure Pattern
 This incident followed a repeatable dangerous pattern:
+
 1.  **Schema Pivot:** Transition from single-tenant (`teacher_id`) to multi-tenant (`StudentTeacher`) association.
 2.  **False Cleanliness:** Audit via `grep` appeared clean, missing indirect usages.
 3.  **Mechanical Test Fixes:** Tests were adjusted to match the new constructor signature without validating if the logic *inside* needed the data.
@@ -28,6 +30,7 @@ This incident followed a repeatable dangerous pattern:
 
 ### A. Enforceable Schema Change Gate
 All schema-affecting changes must pass the **Expand / Contract** gate:
+
 1.  **Release 1 (Expand):** Application reads new schema; old schema exists and is populated/ignored.
 2.  **Release 2 (Contract Code):** Attribute removed from SQLAlchemy Model. DB column REMAINS. Application must run fully without it.
 3.  **Release 3 (Contract DB):** Migration drops the column.

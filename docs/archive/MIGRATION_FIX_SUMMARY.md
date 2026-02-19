@@ -12,20 +12,24 @@
 
 **Problem:**
 Two migration files had the same revision ID `a1b2c3d4e5f6`:
+
 - `a1b2c3d4e5f6_add_rent_system.py` (created 2025-11-16)
 - `a1b2c3d4e5f6_add_join_code_to_transaction.py` (created 2025-11-29)
 
 This caused a critical conflict in the migration chain, as:
+
 - `a2b3c4d5e6f7_add_insurance_system_tables.py` referenced `a1b2c3d4e5f6` as its parent
 - Alembic would be unable to determine which migration to use
 
 **Root Cause:**
 The `add_join_code_to_transaction` migration was created with:
+
 - A manually chosen revision ID that happened to collide with an existing one
 - `down_revision = None` (making it an orphaned root migration)
 - Placeholder text "Revises: (get from alembic)" indicating incomplete setup
 
 **Fix Applied:**
+
 - Generated new unique revision ID: `00212c18b0ac`
 - Updated the migration file to use the new revision ID
 - Set `down_revision = 'b6bc11a3a665'` (the previous head)
@@ -64,6 +68,7 @@ The `add_join_code_to_transaction` migration was created with:
 ## Verification
 
 All migrations were verified using custom Python scripts:
+
 1. **check_migrations.py** - Analyzed revision chain for structural issues
 2. **scripts/check_syntax.py** - Validated Python syntax of all migration files
 3. **verify_chain.py** - Verified complete traversal path from root to head

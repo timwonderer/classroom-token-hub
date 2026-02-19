@@ -3,6 +3,7 @@
 **Validation Date:** 2025-11-26  
 **Validator:** GitHub Copilot Security Analysis  
 **Reports Reviewed:**
+
 - Network Infrastructure Vulnerability & Mitigation Strategy
 - Access Control, Secrets, & Codebase Vulnerability & Mitigation Strategy
 - Source Code Vulnerability & Mitigation Strategy
@@ -34,6 +35,7 @@ This validation confirms that all reported vulnerabilities are **ACCURATE and pr
 **Validation:** The application does NOT use `werkzeug.middleware.proxy_fix.ProxyFix`. All requests behind Cloudflare will show Cloudflare's IP addresses instead of actual client IPs.
 
 **Impact Confirmed:**
+
 - Logs in error handlers (lines 184, 261, 294, 312, 333) capture `request.remote_addr`
 - This will be Cloudflare's IP, not the actual user's IP
 - Cloudflare Turnstile verification cannot properly identify bot patterns
@@ -51,6 +53,7 @@ This validation confirms that all reported vulnerabilities are **ACCURATE and pr
 ```
 
 **Validation:** Cannot verify firewall rules or direct IP access from code review alone. This requires:
+
 1. Network scanning from external host
 2. Review of DigitalOcean/cloud firewall settings
 3. Web server (nginx/apache) configuration on production server
@@ -91,6 +94,7 @@ totp_secret = db.Column(db.String(32), nullable=False)
 **Validation:** TOTP secrets are stored as **plaintext strings** in the database without encryption.
 
 **Attack Scenario Confirmed:**
+
 1. Attacker gains read access to database (SQL injection, backup leak, insider threat)
 2. Attacker retrieves `totp_secret` from `admins` or `system_admins` table
 3. Attacker generates valid 2FA codes using stolen secret → Full account takeover
@@ -120,6 +124,7 @@ def _get_pepper() -> bytes:
 **Validation:** Critical secrets are loaded from environment variables with **no additional protection layer**.
 
 **Risk Confirmed:**
+
 - Any process with access to `/proc/<pid>/environ` can read keys
 - Local File Inclusion (LFI) vulnerabilities could expose environment
 - Server compromise gives immediate access to all secrets
@@ -149,6 +154,7 @@ def hash_username_lookup(username: str) -> str:
 **Validation:** `username_lookup_hash` uses **ONLY the global PEPPER_KEY** without per-user salts (by design for lookups).
 
 **Risk Assessment:**
+
 - If `PEPPER_KEY` is compromised, attacker can perform dictionary attack on all usernames
 - No per-user salt means same username always produces same hash
 - Mitigation: Determinism is intentional for O(1) lookups vs O(N) scan
@@ -169,12 +175,14 @@ drwxrwxr-x  7 runner runner  4096 Nov 26 13:34 .git
 **Validation:** The `.git` directory **exists in the repository** and would be deployed to production servers unless explicitly excluded.
 
 **Risk Confirmed:**
+
 - If web server misconfiguration allows static file serving from root
 - Attacker can download `.git` directory via HTTP requests
 - Tools like `git-dumper` can reconstruct entire source code + commit history
 - Old commits may contain accidentally committed secrets
 
 **Mitigation Required:**
+
 - Ensure nginx/gunicorn denies access to `/.git/*`
 - Add server configuration to block `.git`, `.env`, `*.py` source files
 
@@ -221,6 +229,7 @@ The code does **NOT** use `with_for_update()` on the student balance check (line
 4. **Found one use of locking:** `with_for_update()` exists in `app/routes/student.py` (grep result) but not in the purchase flow
 
 **Attack Scenario:**
+
 1. Student has $100 balance
 2. Two concurrent requests to buy $80 items
 3. Both requests pass the `if student.checking_balance < total_price` check simultaneously
@@ -258,6 +267,7 @@ if not student:
 **Validation:** Legacy fallback loop **confirmed present**.
 
 **DoS Attack Vector:**
+
 1. Attacker floods login endpoint with invalid usernames
 2. Each request fails fast lookup (`username_lookup_hash` not found)
 3. Code falls back to O(N) iteration over all legacy students
@@ -301,6 +311,7 @@ period_states_json = json.dumps(period_states, separators=(',', ':'))
 **Risk Assessment:** **HIGH RISK** - If log messages can contain user-controlled data or are constructed from database fields, this is a **stored XSS vulnerability**.
 
 **Attack Scenario:**
+
 1. Attacker triggers error with malicious payload in request
 2. Error logging captures malicious string: `log.message = "<script>alert('XSS')</script>"`
 3. System admin views logs page
@@ -322,6 +333,7 @@ if item.inventory is not None:
 **Validation:** Inventory is decremented **in application memory** (ORM attribute update) without atomic database operation.
 
 **Race Condition Scenario:**
+
 1. Item has 5 units in stock
 2. Two concurrent requests for 4 units each
 3. Both read `item.inventory = 5`
