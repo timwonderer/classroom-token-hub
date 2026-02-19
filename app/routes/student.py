@@ -2452,25 +2452,13 @@ def shop():
 
             
             if coverage_due_date:
-                coverage_month = coverage_due_date.month
-                coverage_year = coverage_due_date.year
-
-                # Check if current coverage period is fully paid (exclude voided transactions)
-                coverage_payments = RentPayment.query.filter(
-                    RentPayment.student_id == student.id,
-                    RentPayment.period == current_block,
-                    RentPayment.coverage_month == coverage_month,
-                    RentPayment.coverage_year == coverage_year,
-                    RentPayment.join_code == join_code
-                ).all()
-
-                valid_payments = _filter_valid_rent_payments(
-                    coverage_payments,
+                has_paid_rent = _is_student_coverage_period_paid(
+                    rent_settings,
                     student.id,
-                    join_code
+                    current_block,
+                    join_code,
+                    coverage_due_date,
                 )
-
-                has_paid_rent = _is_coverage_period_paid(rent_settings, valid_payments, coverage_due_date)
 
             rent_store_items = RentItem.query.filter(
                 RentItem.rent_setting_id == rent_settings.id,
@@ -2860,6 +2848,27 @@ def _is_coverage_period_paid(settings, valid_payments, coverage_due_date):
     return total_paid >= required_total
 
 
+def _is_student_coverage_period_paid(settings, student_id, period, join_code, coverage_due_date):
+    """Return True when a student's specific coverage period is fully paid."""
+    if not settings or not coverage_due_date or not join_code:
+        return False
+
+    coverage_payments = RentPayment.query.filter(
+        RentPayment.student_id == student_id,
+        RentPayment.period == period,
+        RentPayment.coverage_month == coverage_due_date.month,
+        RentPayment.coverage_year == coverage_due_date.year,
+        RentPayment.join_code == join_code,
+    ).all()
+
+    valid_payments = _filter_valid_rent_payments(
+        coverage_payments,
+        student_id,
+        join_code
+    )
+    return _is_coverage_period_paid(settings, valid_payments, coverage_due_date)
+
+
 def _calculate_rent_coverage_due_date(settings, reference_date=None):
     """
     Return the most recently passed due date for coverage tracking.
@@ -2948,22 +2957,13 @@ def rent():
         # No prior coverage period to settle; allow preview payments
         current_coverage_paid = True
     elif is_preview_period_candidate and coverage_due_date:
-        # Check if current coverage period is already paid
-        current_coverage_payments = RentPayment.query.filter(
-            RentPayment.student_id == student.id,
-            RentPayment.period == current_block,
-            RentPayment.coverage_month == coverage_due_date.month,
-            RentPayment.coverage_year == coverage_due_date.year,
-            RentPayment.join_code == join_code,
-        ).all()
-
-        valid_payments = _filter_valid_rent_payments(
-            current_coverage_payments,
+        current_coverage_paid = _is_student_coverage_period_paid(
+            settings,
             student.id,
-            join_code
+            current_block,
+            join_code,
+            coverage_due_date,
         )
-
-        current_coverage_paid = _is_coverage_period_paid(settings, valid_payments, coverage_due_date)
 
     # Only allow preview period if current coverage is already paid
     is_preview_period = is_preview_period_candidate and current_coverage_paid
@@ -3133,22 +3133,13 @@ def rent_pay(period):
         # No prior coverage period to settle; allow preview payments
         current_coverage_paid = True
     else:
-        # Check if current coverage period is already paid
-        current_coverage_payments = RentPayment.query.filter(
-            RentPayment.student_id == student.id,
-            RentPayment.period == period,
-            RentPayment.coverage_month == coverage_due_date.month,
-            RentPayment.coverage_year == coverage_due_date.year,
-            RentPayment.join_code == join_code,
-        ).all()
-
-        valid_payments = _filter_valid_rent_payments(
-            current_coverage_payments,
+        current_coverage_paid = _is_student_coverage_period_paid(
+            settings,
             student.id,
-            join_code
+            period,
+            join_code,
+            coverage_due_date,
         )
-
-        current_coverage_paid = _is_coverage_period_paid(settings, valid_payments, coverage_due_date)
 
     # Determine which due date this payment should cover
     # Only allow preview period if current coverage is already paid

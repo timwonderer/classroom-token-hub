@@ -3,7 +3,7 @@ import re
 from decimal import Decimal
 from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher
 from app.extensions import db
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 @pytest.fixture
 def teacher_admin(client):
@@ -879,6 +879,7 @@ def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin
 def test_shop_keeps_item_purchasable_when_per_use_and_privilege_links_overlap(client, teacher_admin, student_in_class):
     """If legacy data creates mixed rent item types for one store item, per-use access should remain purchasable."""
     student = student_in_class
+    anchor_now = datetime.now(timezone.utc)
 
     settings = RentSettings(
         teacher_id=teacher_admin.id,
@@ -886,7 +887,7 @@ def test_shop_keeps_item_purchasable_when_per_use_and_privilege_links_overlap(cl
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
-        first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        first_rent_due_date=anchor_now - timedelta(days=60),
         grace_period_days=3,
         late_penalty_amount=Decimal('0.00'),
     )
