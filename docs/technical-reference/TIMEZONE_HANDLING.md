@@ -18,6 +18,7 @@ The application uses a centralized JavaScript utility (`static/js/timezone-utils
 All timestamps are stored and transmitted from the server as UTC (ISO 8601 format with 'Z' suffix). The client-side JavaScript utility converts these to the user's local timezone for display.
 
 **Benefits:**
+
 - Accurate timezone detection using browser APIs
 - No server-side configuration needed
 - Respects user's system timezone settings
@@ -92,6 +93,7 @@ TimezoneUtils.convertAllTimestamps();
    ```python
    {{ timestamp.isoformat() }}Z
    ```
+
 3. **Include timezone-utils.js** in base layout templates (already done)
 
 ### Updated Templates
@@ -118,6 +120,7 @@ All base layout templates include the utility:
 ## Timezone Abbreviations
 
 The utility attempts to determine the appropriate timezone abbreviation (e.g., PST, PDT, EST, EDT) based on:
+
 - The user's detected timezone
 - The specific date/time being formatted (handles DST automatically)
 
@@ -148,6 +151,7 @@ The utility automatically syncs the detected timezone to the server on page load
 ## Future Enhancements
 
 Potential improvements:
+
 - User preference for timezone (stored in database)
 - Server-side timezone conversion option
 - Additional format options (relative time, custom formats)

@@ -18,12 +18,14 @@ Successfully implemented **COMPLETE multi-tenancy isolation** using **join_code 
 
 ### Phase 1: Cross-Teacher Isolation 
 **Commit:** `5bcad94`
+
 - Fixed data leaks between DIFFERENT teachers
 - Added `teacher_id` to all transactions
 - Scoped queries by `teacher_id`
 
 ### Phase 2: Same-Teacher Multi-Period Isolation 
 **Commit:** `84a1f12` (THIS FIX)
+
 - Fixed data leaks between SAME teacher's different periods
 - Added `join_code` to all transactions
 - Scoped queries by `join_code` (guaranteed unique)
@@ -468,6 +470,7 @@ SELECT COUNT(*) FROM transaction WHERE join_code IS NULL;
 ##  Support
 
 **For questions:**
+
 - See `CRITICAL_SAME_TEACHER_LEAK.md` for technical details
 - See `MULTI_TENANCY_AUDIT.md` for original audit
 - Review commits: `5bcad94`, `4abf02f`, `84a1f12`
@@ -492,12 +495,14 @@ We have successfully implemented **complete multi-tenancy isolation** using **jo
 -  Comprehensive documentation
 
 **Students can now:**
+
 - Enroll in multiple classes safely
 - See isolated balances per class
 - Switch between classes without data leakage
 - Trust that join code determines their view
 
 **The system now:**
+
 - Respects join code as source of truth
 - Isolates all financial data by class
 - Prevents all cross-class data leaks

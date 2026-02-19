@@ -280,6 +280,7 @@ After fixes, ensure tests cover:
 ---
 
 **Next Steps:**
+
 1. Review this audit with team
 2. Create branches for each fix phase
 3. Implement fixes systematically

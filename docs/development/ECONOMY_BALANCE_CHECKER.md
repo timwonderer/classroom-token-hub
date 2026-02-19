@@ -13,6 +13,7 @@ The Economy Balance Checker is a centralized system that validates all economy s
 Teachers must specify their **expected weekly hours** (or minutes) in payroll settings. This value represents how many hours per week students typically attend class. This is used **ONLY** for economy balance checking, not for actual payroll calculations.
 
 **Example:**
+
 - A class that meets 5 days/week for 1 hour each = 5 hours/week
 - A class that meets 3 days/week for 90 minutes each = 4.5 hours/week
 
@@ -23,6 +24,7 @@ This field is stored in `PayrollSettings.expected_weekly_hours` (default: 5.0 ho
 ### 1. Backend Utility (`app/utils/economy_balance.py`)
 
 Core Python module that:
+
 - Calculates CWI dynamically based on payroll settings
 - Validates economy settings against standard ratios
 - Generates teacher recommendations
@@ -266,6 +268,7 @@ The balance checker is currently integrated into:
 ## Budget Survival Test
 
 The system performs a "Budget Survival Test" to ensure students can:
+
 - Pay rent
 - Afford insurance (cheapest option)
 - Purchase store items
@@ -331,31 +334,37 @@ To test the balance checker:
 ## Troubleshooting
 
 **Issue: "Payroll not configured yet" message**
+
 - Solution: Configure payroll settings first
 
 **Issue: Warnings not appearing**
+
 - Check browser console for errors
 - Verify `economy-balance.js` is loaded
 - Ensure `data-economy-validate` attributes are present
 
 **Issue: Incorrect CWI calculation**
+
 - Verify payroll settings are correct
 - Check pay rate is stored as per-minute in database
 - Verify expected_weekly_hours parameter
 
 **Issue: CWI not updating after changing expected weekly hours** (FIXED in latest commit)
+
 - **Symptom**: Changing expected weekly hours on payroll page doesn't update CWI on other pages
 - **Root Cause**: API was defaulting to 5.0 hours instead of using value from database
 - **Fix**: API now reads `expected_weekly_hours` from `payroll_settings` when not provided in request
 - **Action**: Update to latest version and refresh pages
 
 **Issue: Wrong CWI for different blocks/classes** (FIXED in latest commit)
+
 - **Symptom**: All blocks show same CWI even with different pay rates
 - **Root Cause**: Block parameter wasn't being passed from frontend to backend API
 - **Fix**: JavaScript now passes current block to `analyzeEconomy()`, API filters by block
 - **Action**: Update to latest version and test with block selector
 
 **Issue: Rent settings showing wrong CWI** (FIXED in latest commit)
+
 - **Symptom**: Rent settings page shows incorrect CWI for selected block
 - **Root Cause**: Template wasn't passing `settings_block` to API call
 - **Fix**: Updated template to pass current block parameter
@@ -380,11 +389,13 @@ To test the balance checker:
 - **Fines** are NOT block-scoped: Fine amounts are the same across all blocks
 
 When calculating CWI:
+
 - The API endpoints accept an optional `block` parameter
 - If provided, the endpoint uses the payroll settings for that specific block
 - If not provided, the endpoint uses the first active payroll setting found
 
 **Example Use Cases:**
+
 - AP Chemistry: $0.30/min pay rate, 5 hours/week → CWI = $90/week
 - Regular Chemistry: $0.25/min pay rate, 3 hours/week → CWI = $45/week
 - Honors Chemistry: $0.25/min pay rate, 4 hours/week → CWI = $60/week
@@ -401,6 +412,7 @@ economyChecker.analyzeEconomy(expectedHours, currentBlock).then(analysis => {
 ```
 
 **Known Limitation:**
+
 - Insurance and Store Item pages show CWI based on first payroll setting if teacher has multiple blocks
 - This is by design since these features are not block-scoped in pricing
 - Teachers should ensure consistent pay rates if using shared pricing across blocks

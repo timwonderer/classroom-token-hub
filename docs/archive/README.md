@@ -16,6 +16,7 @@ Individual bug fix reports, migration summaries, and implementation reports from
 ## Purpose
 
 Archive documentation:
+
 - Preserves context for historical decisions
 - Documents resolved issues and their fixes
 - Provides migration path references
@@ -24,6 +25,7 @@ Archive documentation:
 ## Usage
 
 Reference archive documentation when:
+
 - Understanding why a decision was made
 - Investigating similar bugs or issues
 - Learning about the system's evolution

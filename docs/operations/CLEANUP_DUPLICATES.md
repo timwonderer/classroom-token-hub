@@ -40,6 +40,7 @@ python scripts/cleanup_duplicates_flask.py --delete
 ```
 
 This automatically:
+
 - **Migrates ALL related data** (transactions, attendance, hall passes, etc.) from duplicate → student being kept
 - **Deletes the duplicate** safely (no foreign key violations)
 - **Preserves all financial and attendance history**
@@ -90,6 +91,7 @@ python scripts/cleanup_duplicates_flask.py --delete
 
 ### Cleanup Phase (`--delete`)
 For each set of duplicates:
+
 1. **Keeps** the student with the lowest ID (created first)
 2. **Migrates** all related records from duplicates to the kept student:
    - Transactions (preserves financial history)

@@ -20,11 +20,13 @@
 Refactored all financial logic to use Python's `Decimal` type throughout, not just for database storage.
 
 **Fixed Issues**:
+
 - Floating-point rounding errors causing "unpayable" residual balances (e.g., $0.0000001)
 - Phantom overdraft fees triggered by -0.00 balances
 - Interest calculation type errors mixing float and Decimal
 
 **Changes**:
+
 - Updated all balance calculation methods to return Decimal
 - Refactored interest, rent, and payroll calculations to use Decimal arithmetic
 - Added near-zero balance normalization (|balance| < $0.01 → $0.00)
@@ -81,6 +83,7 @@ None. This release is fully backward compatible.
 ## Testing
 
 All fixes have been verified with:
+
 - New regression tests for Decimal/float type mixing
 - Enhanced multitenancy test suite for payroll
 - Manual verification of dashboard calculations

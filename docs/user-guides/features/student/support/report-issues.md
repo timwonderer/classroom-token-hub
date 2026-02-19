@@ -27,6 +27,7 @@ You can report two main types of issues:
 
 ### Reporting a Transaction Issue
 The best way to report a money problem is from the transaction list itself:
+
 1.  Go to **Banking**.
 2.  Find the transaction that is wrong.
 3.  Click the **Report Issue** (flag) icon next to it.

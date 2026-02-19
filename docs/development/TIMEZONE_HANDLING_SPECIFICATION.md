@@ -9,6 +9,7 @@ This document defines the authoritative rules for how datetimes are created, sto
 The intent is not to eliminate all datetime bugs (time is chaos), but to dramatically reduce ambiguity, enforce consistency, and make violations immediately visible and diagnosable.
 
 This specification applies to:
+
 - Backend (Python / Flask)
 - Database schema
 - APIs
@@ -62,6 +63,7 @@ No direct calls to `datetime.utcnow()` or `datetime.now()` are permitted anywher
 ### 4.2 Datetime Storage (Database)
 
 All database datetime columns MUST:
+
 - Store values in UTC
 - Be timezone-aware
 - Declare intent explicitly
@@ -77,6 +79,7 @@ created_at = db.Column(
 ```
 
 Notes:
+
 - `timezone=True` is mandatory.
 - Defaults MUST reference `utc_now`, not inline datetime calls.
 - Existing naive columns are considered technical debt and should be normalized opportunistically.
@@ -97,6 +100,7 @@ def ensure_utc(dt):
 ```
 
 Rules:
+
 - Normalization occurs at system boundaries.
 - Normalization MUST happen before comparison or serialization.
 - Ad-hoc normalization logic is prohibited.
@@ -123,6 +127,7 @@ Any comparison capable of raising offset-naive vs offset-aware is considered a s
 ### 4.5 API Serialization
 
 All datetimes returned by APIs MUST:
+
 - Be UTC
 - Be ISO 8601 compliant
 - Include timezone information (Z suffix)
@@ -134,6 +139,7 @@ Example:
 ```
 
 APIs MUST NOT:
+
 - Localize timestamps
 - Return browser-dependent formats
 - Omit timezone information
@@ -152,12 +158,14 @@ UTC is the only temporal language spoken across the network boundary.
 Localization is handled exclusively by `timezone-utils.js`.
 
 Responsibilities include:
+
 - Browser timezone detection
 - Fallback handling
 - Display formatting
 - Optional session synchronization (`/api/set-timezone`)
 
 No other client-side code may:
+
 - Perform timezone math
 - Format timestamps independently
 - Assume local time semantics
@@ -165,6 +173,7 @@ No other client-side code may:
 ### 5.3 Approved Client Utilities
 
 All timestamp rendering MUST use:
+
 - `TimezoneUtils.formatTimestamp`
 - `TimezoneUtils.formatDate`
 - `TimezoneUtils.formatTime`
@@ -198,6 +207,7 @@ TypeError: can't compare offset-naive and offset-aware datetimes
 ```
 
 These errors:
+
 - MUST be logged at ERROR level
 - MUST include route and request_id
 - Indicate a breach of this specification
@@ -207,6 +217,7 @@ Repeated occurrences require investigation and remediation.
 ## 8. Enforcement & Review
 
 **Code Review Checklist**
+
 - No use of `datetime.utcnow()` or `datetime.now()`
 - All datetime columns use `timezone=True`
 - Datetime comparisons normalize inputs
@@ -219,11 +230,13 @@ If you’re unsure whether a datetime is UTC-aware, assume it isn’t and normal
 ## 9. Rationale
 
 Time bugs are:
+
 - Silent
 - Environment-dependent
 - Extremely expensive to debug
 
 This specification:
+
 - Eliminates ambiguity
 - Centralizes responsibility
 - Makes violations obvious

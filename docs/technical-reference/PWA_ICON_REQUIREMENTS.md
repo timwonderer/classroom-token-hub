@@ -71,6 +71,7 @@ svg2png(url='static/images/brand-logo.svg',
 ### Maskable Icons
 
 The icons use `"purpose": "any maskable"` which means:
+
 - The icon should have important content in the "safe zone" (center 80% of the image)
 - The outer 20% may be cropped on some devices
 - Background should be solid color (#1a4d47 - brand primary color)
@@ -78,6 +79,7 @@ The icons use `"purpose": "any maskable"` which means:
 ### Testing
 
 After generating icons:
+
 1. Test PWA installation on Android (Chrome > Menu > Install app)
 2. Test PWA installation on iOS (Safari > Share > Add to Home Screen)
 3. Verify icons appear correctly on home screen

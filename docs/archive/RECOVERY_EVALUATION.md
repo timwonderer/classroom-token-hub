@@ -27,6 +27,7 @@ The "student-assisted" account recovery method allows a teacher to reset their c
 **Issue:** The `dob_sum` (Sum of MM+DD+YYYY) is stored as a raw integer in the `admins` table.
 **Impact:** If the database is compromised, this PII is exposed.
 **Fix:**
+
 *   Add `dob_sum_hash` (String) and `salt` (Binary) columns to the `Admin` model.
 *   Migrate existing data by hashing the integer values.
 *   Drop the plaintext `dob_sum` column.
@@ -36,6 +37,7 @@ The "student-assisted" account recovery method allows a teacher to reset their c
 **Issue:** The form instructs teachers to select "one student from each class," but the backend only verifies that the students belong to the *same* teacher. It does not enforce class diversity.
 **Impact:** A teacher could select just one student (or students from a single class), weakening the security model.
 **Fix:**
+
 *   Identify all active periods (blocks) associated with the teacher.
 *   Verify that the set of blocks represented by the selected students fully covers the teacher's active blocks.
 *   Enforce a minimum number of students equal to the number of active blocks.
@@ -43,6 +45,7 @@ The "student-assisted" account recovery method allows a teacher to reset their c
 ### 4. Legacy Account Support
 **Issue:** Teachers who created accounts before this update will have no `dob_sum` stored (since it was nullable or plaintext and now we require hashed), effectively locking them out of the recovery feature.
 **Fix:**
+
 *   Added logic to detect if `dob_sum_hash` is missing.
 *   Added a dashboard prompt urging teachers to "Setup Account Recovery".
 *   Implemented a self-serve flow to input and hash the DOB sum post-registration.

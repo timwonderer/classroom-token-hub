@@ -23,6 +23,7 @@ This branch implements **both solutions** for maximum reliability:
 2. **Fallback (Flask)**: Works in all environments, no Nginx required
 
 **How it works:**
+
 - With Nginx configured: Nginx intercepts requests → Grafana ( fastest)
 - Without Nginx / Dev mode: Flask proxy handles requests ( reliable fallback)
 
@@ -71,6 +72,7 @@ sudo systemctl reload nginx
 This solution uses a Flask route to proxy Grafana requests, bypassing the Nginx issue entirely.
 
 **Advantages:**
+
 - Works without modifying Nginx configuration
 - Maintains system admin authentication
 - Graceful error handling
@@ -91,6 +93,7 @@ GRAFANA_URL=http://localhost:3000
 If not set, defaults to `http://localhost:3000`.
 
 **How it works:**
+
 1. User clicks "Grafana" in sysadmin dashboard
 2. Request goes to Flask route `/sysadmin/grafana`
 3. Flask validates authentication via `@system_admin_required`
@@ -158,15 +161,18 @@ After implementing either solution, test by:
 ## Troubleshooting
 
 **Still seeing redirects?**
+
 - Check Grafana is running: `sudo systemctl status grafana-server`
 - Verify Grafana config has correct `root_url`
 - Check Flask logs for proxy errors
 
 **Grafana loads but shows "connection refused" for resources?**
+
 - Ensure `serve_from_sub_path = true` in Grafana config
 - Check browser console for failed resource URLs
 
 **Authentication not working?**
+
 - Verify `SESSION_COOKIE_PATH="/"` in Flask config
 - Check session cookies in browser DevTools
 - Ensure `/sysadmin/auth-check` endpoint returns 200

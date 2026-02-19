@@ -5,6 +5,7 @@ This guide explains how to set up UptimeRobot monitoring for your Classroom Econ
 ## Why UptimeRobot?
 
 Your app already has public health check endpoints that don't require authentication. UptimeRobot can monitor these endpoints and provide:
+
 - **Uptime monitoring** - Get alerted when your app goes down
 - **Public status page** - Users can check status even when your app is down
 - **Response time tracking** - Monitor app performance over time
@@ -196,6 +197,7 @@ Configure when you get notified:
 **Purpose:** Monitoring tools (like UptimeRobot) can't sign in - they need public endpoints.
 
 **Security:** The endpoints only expose:
+
 - Database connectivity status
 - Table row counts (not actual data)
 - No student information
@@ -203,6 +205,7 @@ Configure when you get notified:
 - No sensitive business logic
 
 **What they don't expose:**
+
 - Student names, balances, or PINs
 - Admin accounts or TOTP secrets
 - Transaction details
@@ -214,11 +217,13 @@ Configure when you get notified:
 If you want to monitor that authentication works:
 
 **Option 1:** Monitor the login page loads (no actual login)
+
 - Monitor `/student/login` endpoint
 - Check for 200 status
 - Verifies web server + template rendering work
 
 **Option 2:** Synthetic monitoring (paid services)
+
 - Services like Pingdom, Uptime.com
 - Actually fill in forms and test login
 - ~$10-50/month depending on features
@@ -256,6 +261,7 @@ If you want to monitor that authentication works:
 ### Monitor shows "Down" but app works fine
 
 **Possible causes:**
+
 - Firewall blocking UptimeRobot IPs
 - Rate limiting on your server
 - SSL certificate issues
@@ -271,6 +277,7 @@ If you want to monitor that authentication works:
 ```
 
 **Fix - Option 2: Manual**
+
 - Get your firewall ID: `doctl compute firewall list`
 - Add each UptimeRobot IP from `scripts/firewall-ips.json`
 - Or follow the instructions in `docs/operations/DIGITALOCEAN_CLOUDFLARE_SETUP.md`
@@ -286,11 +293,13 @@ doctl compute firewall get <firewall-id> | grep -E "46.137|52.62|54.79"
 ### Health check fails with 500 error
 
 **Possible causes:**
+
 - Database connection issues
 - Missing environment variables
 - Table doesn't exist (migrations not run)
 
 **Fix:**
+
 - Check application logs
 - Verify database is running
 - Run migrations: `flask db upgrade`
@@ -298,11 +307,13 @@ doctl compute firewall get <firewall-id> | grep -E "46.137|52.62|54.79"
 ### Status page not updating
 
 **Possible causes:**
+
 - Monitor is paused
 - Status page not linked to monitor
 - Cache delay (can take 1-2 minutes)
 
 **Fix:**
+
 - Verify monitor is active in dashboard
 - Check "Public Status Pages" → your page → ensure monitors are selected
 - Wait a few minutes for cache to clear

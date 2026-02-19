@@ -252,6 +252,7 @@ Prevents invalid data from reaching database
 **Scenario:** Two students submit claims for same transaction simultaneously
 
 **Handling:**
+
 1. Both pass application-level duplicate check (race condition)
 2. Both attempt database insert
 3. First commit succeeds
@@ -264,6 +265,7 @@ Prevents invalid data from reaching database
 **Scenario:** Student files claim, teacher voids transaction, admin approves claim
 
 **Handling:**
+
 1. Claim filed with valid transaction 
 2. Transaction marked void 
 3. Admin approval checks `transaction.is_void` 
@@ -275,6 +277,7 @@ Prevents invalid data from reaching database
 **Scenario:** Attacker changes claim.transaction_id in database to another student's transaction
 
 **Handling:**
+
 1. Claim in database with wrong transaction_id
 2. Admin attempts approval
 3. Ownership check: `claim.transaction.student_id != claim.student_id` 
@@ -287,6 +290,7 @@ Prevents invalid data from reaching database
 **Scenario:** Student files multiple non-monetary claims (transaction_id = NULL for all)
 
 **Handling:**
+
 1. All claims have transaction_id = NULL
 2. Unique constraint allows multiple NULLs 
 3. Claims processed independently 
@@ -297,6 +301,7 @@ Prevents invalid data from reaching database
 **Scenario:** Admin enters malicious SQL in date filter
 
 **Handling:**
+
 1. Input: `2024-01-01'); DROP TABLE transactions; --`
 2. `datetime.strptime()` fails with ValueError 
 3. Exception caught 
@@ -326,6 +331,7 @@ query.filter(Transaction.timestamp < end_date_inclusive) # SQLAlchemy parameteri
 ```
 
 **Validation:**
+
 -  String parsing validates format strictly
 -  Only YYYY-MM-DD format accepted
 -  SQLAlchemy parameterizes datetime objects
@@ -338,11 +344,13 @@ query.filter(Transaction.timestamp < end_date_inclusive) # SQLAlchemy parameteri
 **Attack Vector:** Concurrent claim submission
 
 **Protection Layers:**
+
 1. **Application Check:** `transaction_already_claimed` query
 2. **Database Constraint:** `UNIQUE (transaction_id)`
 3. **Exception Handling:** `IntegrityError` catch
 
 **Validation:**
+
 -  Layer 1 prevents most duplicates (timing dependent)
 -  Layer 2 prevents ALL duplicates (database enforced)
 -  Layer 3 handles gracefully (user-friendly)
@@ -354,10 +362,12 @@ query.filter(Transaction.timestamp < end_date_inclusive) # SQLAlchemy parameteri
 **Attack Vector:** Cross-student claim filing
 
 **Protection Layers:**
+
 1. **Submission Phase:** Transactions filtered by `student_id` (line 1042)
 2. **Approval Phase:** Ownership validated (line 1775)
 
 **Validation:**
+
 -  Student cannot submit claim for others' transactions
 -  Admin cannot approve mismatched ownership
 -  Attempts logged for security audit
@@ -371,16 +381,19 @@ query.filter(Transaction.timestamp < end_date_inclusive) # SQLAlchemy parameteri
 ### Database Query Efficiency
 
 **Unique Constraint Index:**
+
 - Automatically creates index on `transaction_id` 
 - Speeds up duplicate checks 
 - Minimal overhead on inserts 
 
 **Row Locking Performance:**
+
 - Adds ~1-5ms to claim submission (negligible)
 - Only on PostgreSQL (SQLite skips it)
 - Worth the (minor) cost for production
 
 **Date Filtering:**
+
 - Python date parsing: Fast (microseconds)
 - Parameterized queries: Properly indexed
 - No performance degradation
@@ -394,10 +407,12 @@ query.filter(Transaction.timestamp < end_date_inclusive) # SQLAlchemy parameteri
 ### Automated Tests 
 
 **Security Tests:** 2/2 passing
+
 - `test_duplicate_transaction_claim_blocked` - Tests P0-1 
 - `test_voided_transaction_cannot_be_approved` - Tests P0-2 
 
 **Missing Tests (Recommendations for Future):**
+
 - Test P0-3: Cross-student ownership validation
 - Test P1-1: SQL injection prevention
 - Test concurrent race condition (integration test)
@@ -436,6 +451,7 @@ query.filter(Transaction.timestamp < end_date_inclusive) # SQLAlchemy parameteri
 **Recommendation:** **APPROVED FOR PRODUCTION DEPLOYMENT**
 
 All critical security issues are properly fixed. The two minor issues found are:
+
 1. UX improvement opportunity (date validation)
 2. Informational note about row locking effectiveness
 
