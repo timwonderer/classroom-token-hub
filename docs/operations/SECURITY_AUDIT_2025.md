@@ -11,11 +11,13 @@ Your server has **strong foundational security** with multiple layers of protect
 ### Overall Security Score: 8.5/10 
 
 **Strengths:**
+
 - Infrastructure hardening is excellent
 - Application-level security (PII encryption, RLS, CSRF) is robust
 - Active intrusion prevention working correctly
 
 **Areas for Improvement:**
+
 - Missing HTTP security headers
 - No application-level rate limiting
 - Database security could be enhanced
@@ -51,6 +53,7 @@ Max retries: 3 failed attempts
 ```
 
 **Analysis:**
+
 -  Actively blocking malicious IPs from various hosting providers
 -  4.3 attempts per ban is normal (accounts for ban expiration and retries)
 -  GitHub Actions deployments not affected
@@ -79,6 +82,7 @@ bantime = 86400  # 24 hours instead of 1 hour
 
 ### 1.4 Cloudflare Proxy  Active
 **Features:**
+
 -  DDoS protection
 -  Bot mitigation with Turnstile
 -  Origin IP hidden
@@ -94,12 +98,14 @@ bantime = 86400  # 24 hours instead of 1 hour
 ### 2.1 Data Protection  Excellent
 
 **PII Encryption:**
+
 -  AES encryption at rest (Fernet) for student names
 -  Separate encryption key (`ENCRYPTION_KEY`)
 -  Peppered password hashing (`PEPPER_KEY`)
 -  SQLAlchemy custom type decorators
 
 **Database Security:**
+
 -  PostgreSQL Row-Level Security (RLS) policies
 -  Multi-tenant data isolation
 -  Automatic tenant context setting per request
@@ -125,6 +131,7 @@ bantime = 86400  # 24 hours instead of 1 hour
 ### 2.3 Missing: HTTP Security Headers  **ACTION NEEDED**
 
 **Currently Missing:**
+
 -  Strict-Transport-Security (HSTS)
 -  Content-Security-Policy (CSP)
 -  X-Frame-Options (clickjacking protection)
@@ -133,6 +140,7 @@ bantime = 86400  # 24 hours instead of 1 hour
 -  Permissions-Policy
 
 **Impact:** Medium risk
+
 - Vulnerable to clickjacking attacks
 - No HTTPS enforcement at application level
 - XSS attack surface not minimized
@@ -144,11 +152,13 @@ bantime = 86400  # 24 hours instead of 1 hour
 ### 2.4 Missing: Application-Level Rate Limiting 
 
 **Currently Missing:**
+
 -  No rate limiting on login endpoints
 -  No API rate limiting
 -  No brute-force protection beyond fail2ban
 
 **Impact:** Low-Medium risk
+
 - Fail2ban provides network-level protection
 - Application could benefit from per-user rate limits
 
@@ -159,12 +169,14 @@ bantime = 86400  # 24 hours instead of 1 hour
 ## 3. Database Security  GOOD
 
 **Strengths:**
+
 -  Connection over localhost (not exposed)
 -  Row-Level Security policies
 -  PII encryption at rest
 -  PostgreSQL parameterized queries (SQLAlchemy)
 
 **Potential Improvements:**
+
 -  Database credentials in `.env` file
 -  No database connection encryption (not critical for localhost)
 -  No automated backups documented
@@ -174,12 +186,14 @@ bantime = 86400  # 24 hours instead of 1 hour
 ## 4. Dependency Security
 
 **Current Setup:**
+
 -  All major dependencies included in `requirements.txt`
 -  Using maintained packages (Flask, SQLAlchemy, etc.)
 -  No automated security updates
 -  No dependency vulnerability scanning
 
 **Recommendations:**
+
 - Set up GitHub Dependabot for automated security updates
 - Run `pip-audit` regularly to check for known vulnerabilities
 
@@ -188,6 +202,7 @@ bantime = 86400  # 24 hours instead of 1 hour
 ## 5. Monitoring & Logging  Good
 
 **Current Capabilities:**
+
 -  Error logging to database (`ErrorLog` table)
 -  Failed authentication tracking
 -  Cloudflare request validation logging
@@ -195,6 +210,7 @@ bantime = 86400  # 24 hours instead of 1 hour
 -  404/500 error logging
 
 **Potential Improvements:**
+
 - Consider adding intrusion detection alerts
 - Set up fail2ban notification emails
 
@@ -390,6 +406,7 @@ apt list --upgradable 2>/dev/null | grep -i security
 ---
 
 **Next Steps:**
+
 1. Implement HTTP security headers (HIGH priority - 30 min)
 2. Enable GitHub Dependabot (HIGH priority - 10 min)
 3. Set up database backups (MEDIUM priority - 1 hour)

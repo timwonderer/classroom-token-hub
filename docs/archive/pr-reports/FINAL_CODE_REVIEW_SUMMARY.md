@@ -26,15 +26,18 @@ This code review was requested by @timwonderer for a final review before merging
 ### Files Reviewed
 
 **Core Application Files:**
+
 - `app/models.py` (lines 512-517) - Unique constraint
 - `app/routes/student.py` (lines 1081-1150) - Race condition prevention
 - `app/routes/admin.py` (lines 1770-1784, 3289-3305) - Void check, ownership validation, SQL injection fix
 
 **Migration Files:**
+
 - `migrations/versions/a4b4c5d6e7f9_enforce_unique_claim_transaction.py` - Security constraint
 - `migrations/versions/e7f8g9h0i1j2_merge_all_production_heads.py` - Merge migration
 
 **Test Files:**
+
 - `tests/test_insurance_security.py` - Security test suite
 
 ---
@@ -53,6 +56,7 @@ __table_args__ = (
         name='uq_insurance_claims_transaction_id'),
 )
 ```
+
 -  Constraint correctly targets `transaction_id` column
 -  Descriptive name for debugging: `uq_insurance_claims_transaction_id`
 -  No conflicts with existing constraints
@@ -70,6 +74,7 @@ if use_row_locking:
         .with_for_update()
     ).scalar_one_or_none()
 ```
+
 -  Uses `.where()` (not `.filter()`) with `select()` - correct SQLAlchemy 2.0 syntax
 -  Proper SQLite compatibility check (SQLite doesn't support `FOR UPDATE`)
 -  Fallback to non-locking query for SQLite
@@ -88,6 +93,7 @@ except SQLAlchemyError:
     db.session.rollback()
     flash("Something went wrong...", "danger")
 ```
+
 -  IntegrityError caught specifically for constraint violations
 -  Database session properly rolled back on error
 -  User-friendly error messages
@@ -111,6 +117,7 @@ if claim.policy.claim_type == 'transaction_monetary' and \
 ```
 
 **Verification:**
+
 -  Validation runs during claim approval (admin-side)
 -  Checks claim type AND transaction exists AND is_void flag
 -  Error message is clear to admin
@@ -118,6 +125,7 @@ if claim.policy.claim_type == 'transaction_monetary' and \
 -  No payment can be issued for voided transactions
 
 **Test Coverage:**
+
 -  `test_voided_transaction_cannot_be_approved` - PASSING
 -  Manual testing documented in PR description
 
@@ -145,6 +153,7 @@ if claim.policy.claim_type == 'transaction_monetary' and claim.transaction:
 ```
 
 **Verification:**
+
 -  Validates `claim.transaction.student_id == claim.student_id`
 -  Clear security warning for admin with diagnostic info
 -  Security alert logged with forensic details
@@ -152,6 +161,7 @@ if claim.policy.claim_type == 'transaction_monetary' and claim.transaction:
 -  f-string safely used (not in SQL context)
 
 **Security Features:**
+
 -  Logs include claim ID and both student IDs for investigation
 -  Error message explicitly states "SECURITY:" prefix
 -  Admin sees clear diagnostic information
@@ -182,6 +192,7 @@ if end_date:
 ```
 
 **Verification:**
+
 -  Removed unsafe `text(f"'{end_date}'::date + interval '1 day'")` pattern
 -  User input validated with strict `datetime.strptime()` format
 -  Invalid dates rejected immediately (ValueError caught)
@@ -192,6 +203,7 @@ if end_date:
 -  `timedelta` is properly imported in line 20
 
 **Attack Vectors Blocked:**
+
 -  SQL injection via malformed date strings
 -  Special characters in date parameters
 -  PostgreSQL-specific syntax injection
@@ -217,6 +229,7 @@ pytest tests/test_insurance_security.py -v
 ```
 
 **Test Coverage:**
+
 -  `test_duplicate_transaction_claim_blocked` - Verifies P0-1 fix (unique constraint)
 -  `test_voided_transaction_cannot_be_approved` - Verifies P0-2 fix (void check)
 -  All 27 existing tests pass - No regressions detected
@@ -311,6 +324,7 @@ def downgrade():
 ```
 
 **Verification:**
+
 -  Revision ID matches docstring and variable
 -  Down revision correctly points to parent migration
 -  Upgrade adds constraint
@@ -334,6 +348,7 @@ def downgrade():
 ```
 
 **Verification:**
+
 -  Merge migration with no schema changes
 -  Both upgrade and downgrade are pass statements
 -  Correctly merges multiple heads
@@ -464,6 +479,7 @@ def downgrade():
 ###  **APPROVED FOR MERGE**
 
 **Justification:**
+
 1. All 4 critical security vulnerabilities properly fixed
 2. Defense-in-depth approach provides multiple layers of protection
 3. Comprehensive test coverage with no regressions
@@ -473,6 +489,7 @@ def downgrade():
 7. Production deployment documentation complete
 
 **Next Steps:**
+
 1.  Merge this PR into parent branch
 2. Deploy to staging for final validation
 3. Backup production database
@@ -480,6 +497,7 @@ def downgrade():
 5. Monitor for 24 hours post-deployment
 
 **Post-Deployment Monitoring:**
+
 - Watch for IntegrityError exceptions (duplicate attempts blocked - expected)
 - Monitor security logs for ownership mismatch alerts
 - Verify claim submission success rate remains high
@@ -513,6 +531,7 @@ def downgrade():
 **Status:**  **APPROVED**
 
 **Confidence Level:** **HIGH**
+
 - All security fixes verified through code inspection
 - Test coverage validated (27/27 tests passing)
 - Pre-migration checks completed successfully

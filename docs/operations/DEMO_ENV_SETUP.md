@@ -15,15 +15,18 @@ This guide describes how to stand up the read-only style demo endpoints that pow
 
 ## Steps: Stand up the demo deployment
 1) **Deploy a fresh instance**  
+
    - Use a separate Postgres database. Run `flask db upgrade` to ensure the `demo_students` table exists.  
    - Create a system admin with `flask create-sysadmin` and log in to create a dedicated teacher (e.g., `demo_teacher`).
 
 2) **Seed safe sample data**  
+
    - Option A: Upload a CSV using `student_upload_template.csv`.  
    - Option B: Run `python scripts/seed_dummy_students.py` for quick placeholder students (no real PII).  
    - Add a few store items and attendance/payroll settings via the admin UI to make the teacher dashboard feel real.
 
 3) **Create a live demo student session (for the iframe)**  
+
    - Log in as the demo teacher in the demo deployment (session cookie required).  
    - Call the built-in endpoint (returns `redirect_url` like `/student/demo-login/<session_id>`):
      ```bash
@@ -32,13 +35,16 @@ This guide describes how to stand up the read-only style demo endpoints that pow
        -b "session=<YOUR_ADMIN_SESSION_COOKIE>" \
        -d '{"period":1,"starting_balance":150,"pay_rate":10}'
      ```
+
    - Use the returned `redirect_url` for the **Student Demo** iframe/button. The session will auto-expire in 10 minutes and clean itself up (via `cleanup_demo_student_data`).
 
 4) **Point the landing page to the demo URLs**  
+
    - Update `docs/index.html` demo links/iframes to the live demo host (e.g., `https://demo.classroomtokenhub.com/student/demo-login/<session_id>` for student, `https://demo.classroomtokenhub.com/admin` for teacher).  
    - The iframe sandbox is already set in `docs/index.html` (`sandbox="allow-same-origin allow-scripts allow-forms"`).
 
 5) **Optional hardening so users cannot alter data**  
+
    - Run the demo against a database snapshot that refreshes nightly.  
    - Restrict the demo teacher to a dedicated tenant with dummy students only.  
    - Monitor demo cleanup in logs; if a session sticks, follow `docs/operations/DEMO_SESSIONS.md` to clean it manually.

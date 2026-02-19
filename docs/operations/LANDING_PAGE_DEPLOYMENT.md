@@ -259,6 +259,7 @@ async function handleRequest(request) {
 Visit: `https://classroomtokenhub.com/`
 
 **Expected:**
+
 - ✅ Landing page loads
 - ✅ Shows v1.7.0 version badge
 - ✅ All sections visible (features, screenshots, sign-in)
@@ -269,6 +270,7 @@ Visit: `https://classroomtokenhub.com/`
 Click "Sign In as Student":
 
 **Expected:**
+
 - ✅ Redirects to `/student/login`
 - ✅ Flask app login page loads
 - ✅ URL shows `classroomtokenhub.com/student/login`
@@ -280,6 +282,7 @@ Repeat for Teacher and Admin sign-in.
 Visit directly: `https://classroomtokenhub.com/student/login`
 
 **Expected:**
+
 - ✅ Flask login page loads
 - ✅ Can log in successfully
 
@@ -288,6 +291,7 @@ Visit directly: `https://classroomtokenhub.com/student/login`
 Visit: `https://classroomtokenhub.com/health`
 
 **Expected:**
+
 - ✅ Shows "ok"
 - ✅ 200 status code
 
@@ -300,6 +304,7 @@ Visit: `https://classroomtokenhub.com/health`
 **Cause:** GitHub Pages not deployed or proxy misconfigured
 
 **Fix:**
+
 1. Verify GitHub Pages is enabled: `Settings` → `Pages` → Source: `main` branch, `/docs` folder
 2. Check deployment: https://github.com/timwonderer/classroom-economy/actions
 3. Test GitHub Pages directly: https://timwonderer.github.io/classroom-economy/
@@ -310,6 +315,7 @@ Visit: `https://classroomtokenhub.com/health`
 **Cause:** Flask app routes not proxied correctly
 
 **Fix:**
+
 1. Check Flask app is running: `systemctl status classroom-economy`
 2. Test Flask directly: `curl http://127.0.0.1:5000/student/login`
 3. Check Nginx location blocks match all Flask routes
@@ -320,6 +326,7 @@ Visit: `https://classroomtokenhub.com/health`
 **Cause:** Static files not proxied
 
 **Fix:**
+
 1. Check `/static` location block in Nginx
 2. Verify Flask static folder exists
 3. Check file permissions: `ls -la app/static/`
@@ -329,6 +336,7 @@ Visit: `https://classroomtokenhub.com/health`
 **Cause:** Some resources loaded over HTTP
 
 **Fix:**
+
 1. Ensure all internal links use relative paths (`/path` not `http://domain/path`)
 2. Check `proxy_set_header X-Forwarded-Proto $scheme;` in Nginx config
 3. Verify Flask respects `X-Forwarded-Proto` header
@@ -404,6 +412,7 @@ location = / {
 ### 2. DDoS Protection
 
 Use Cloudflare:
+
 - Enable "Under Attack Mode" if needed
 - Set up rate limiting rules
 - Enable bot protection
@@ -464,6 +473,7 @@ journalctl -u classroom-economy -f
 ---
 
 **Questions or Issues?**
+
 - Check the troubleshooting section above
 - Review Nginx error logs: `/var/log/nginx/classroomtokenhub_error.log`
 - Verify GitHub Pages deployment: https://github.com/timwonderer/classroom-economy/actions

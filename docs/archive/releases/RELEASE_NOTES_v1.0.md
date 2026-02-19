@@ -18,12 +18,14 @@ Classroom Token Hub enables teachers to create simulated classroom economies whe
 ### Core Platform Features
 
 **Multi-Tenancy Support**
+
 - Full support for students enrolled in multiple class periods
 - Proper data isolation between different class sections taught by the same teacher
 - Join-code-based class isolation ensures accurate per-period balances and transactions
 - Seamless class switching for students participating in multiple classroom economies
 
 **Teacher Administration**
+
 - System admin portal for platform-wide management and monitoring
 - Teacher dashboard with comprehensive student, financial, and attendance management
 - Bulk roster uploads via CSV with secure join-code claiming system
@@ -32,6 +34,7 @@ Classroom Token Hub enables teachers to create simulated classroom economies whe
 - Teacher account recovery via student-verified codes (no email/phone required)
 
 **Student Experience**
+
 - Intuitive student portal with real-time balance tracking
 - Attendance tracking via tap in/out system with automatic time logging
 - Classroom store with support for virtual/physical items, bundles, and expiration dates
@@ -39,6 +42,7 @@ Classroom Token Hub enables teachers to create simulated classroom economies whe
 - Student-to-student token transfers
 
 **Financial Systems**
+
 - Automated payroll with configurable schedules, rates, and block-specific settings
 - Dual account system: checking and savings with interest calculations
 - Insurance policies with enrollment, claims, and reimbursement workflows
@@ -46,6 +50,7 @@ Classroom Token Hub enables teachers to create simulated classroom economies whe
 - Complete transaction audit trails scoped by class period
 
 **Security & Authentication**
+
 - TOTP (Time-based One-Time Password) two-factor authentication for all admin accounts
 - **Teacher Account Recovery** — Student-verified recovery system where teachers verify their identity using their date-of-birth sum and student usernames.
   - Multi-student verification requirement for enhanced security
@@ -76,6 +81,7 @@ Classroom Token Hub enables teachers to create simulated classroom economies whe
 ### P1: Deprecated Code Patterns (Completed 2025-12-06)
 
 **Updated for Python 3.12+ and SQLAlchemy 2.0+ compatibility:**
+
 - Replaced all 52 occurrences of deprecated `datetime.utcnow()` with `datetime.now(timezone.utc)`
 - Migrated all `Query.get()` calls to modern `db.session.get(Model, id)` pattern
 - Resolved SQLAlchemy subquery coercion warnings
@@ -89,6 +95,7 @@ Classroom Token Hub enables teachers to create simulated classroom economies whe
 ### Account Recovery Systems
 
 **Teacher Self-Recovery (Added 2025-12-12)**
+
 - Implemented student-verified account recovery system for teachers who lose access to 2FA
 - Teachers initiate recovery by providing their date-of-birth sum and a list of their student usernames.
 - Students authenticate with their passphrase and generate unique 6-digit recovery codes
@@ -98,6 +105,7 @@ Classroom Token Hub enables teachers to create simulated classroom economies whe
 - Routes: `/admin/recover`, `/admin/recovery-status`, `/student/verify-recovery/<code_id>`
 
 **System Admin Recovery Tools (Added 2025-12-12)**
+
 - System administrators can reset teacher TOTP credentials via admin panel
 - Added "Reset 2FA" functionality in teacher management interface
 - Secure confirmation workflow to prevent accidental resets
@@ -107,12 +115,14 @@ Classroom Token Hub enables teachers to create simulated classroom economies whe
 ### Privacy & Legal Updates (2025-12-11)
 
 **Privacy Page Revamp**
+
 - Redesigned privacy policy page with improved UX and visual design
 - Enhanced clarity around data handling and encryption practices
 - Added detailed explanations of PII protection measures
 - Improved readability and user-friendly language
 
 **Terms of Service Revision**
+
 - Updated Terms of Service for clarity and privacy emphasis
 - Made ToS more accessible and user-friendly
 - Improved guidance on acceptable use and user responsibilities
@@ -121,16 +131,19 @@ Classroom Token Hub enables teachers to create simulated classroom economies whe
 ### Bug Fixes & Stability Improvements
 
 **Attendance System (2025-12-10)**
+
 - Fixed auto-tap-out bug where missing join_code prevented students from accumulating tokens
 - Improved join_code resolution for students with multiple teachers
 - Enhanced rate limiting to prevent false positives during legitimate classroom usage
 
 **Hall Pass System (2025-12-10)**
+
 - Fixed missing timestamp updates on hall pass verification
 - Added proper teacher scoping to hall pass queries
 - Resolved network error handling issues
 
 **Multi-Tenancy Refinements (2025-12-09)**
+
 - Fixed tap event scoping to ensure proper join_code association
 - Improved payroll data scoping for students in multiple class periods
 - Enhanced class-switching UI for multi-class students
@@ -140,12 +153,14 @@ Classroom Token Hub enables teachers to create simulated classroom economies whe
 ## Technical Improvements
 
 **Architecture**
+
 - Modular Flask Blueprint structure (refactored from 4,500-line monolithic `app.py`)
 - 35 SQLAlchemy models with comprehensive relationship mapping (including new RecoveryRequest and StudentRecoveryCode models)
 - 83 Alembic migrations managing schema evolution
 - Scoped query helpers for tenant-aware data access
 
 **Testing**
+
 - 55 comprehensive test files covering core functionality
 - Foreign key constraint testing enabled
 - Multi-tenancy validation tests
@@ -153,6 +168,7 @@ Classroom Token Hub enables teachers to create simulated classroom economies whe
 - Account recovery system tests (teacher and admin recovery flows)
 
 **Deployment**
+
 - GitHub Actions CI/CD pipeline
 - PostgreSQL database with migration automation
 - Gunicorn WSGI server with gevent workers
@@ -162,6 +178,7 @@ Classroom Token Hub enables teachers to create simulated classroom economies whe
 - Maintenance mode with bypass tokens for administrative access
 
 **Documentation**
+
 - Comprehensive user guides for students and teachers
 - Technical reference documentation (architecture, database schema, API)
 - Operations guides for deployment and maintenance
@@ -248,16 +265,19 @@ If upgrading from a pre-1.0 version:
 Development continues with planned features for future releases:
 
 **v1.1 - Analytics & Insights**
+
 - Enhanced dashboard visualizations
 - Class economy health metrics
 - CSV export capabilities for reports
 
 **v1.2 - Mobile Experience**
+
 - Progressive Web App (PWA) support
 - Improved touch interfaces
 - Offline attendance tracking
 
 **v1.5+ - Extended Features**
+
 - In-app communication and announcements
 - Jobs feature (classroom job market)
 - Custom condition builder for advanced rules

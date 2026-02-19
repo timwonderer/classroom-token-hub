@@ -25,6 +25,7 @@ Configure how rent is collected, set amounts, and manage schedules for your clas
 
 ### 1. Per-Block Settings
 Rent settings can be customized for each class block. Use the **Class Selector** (e.g., "Period 1", "Period 2") at the top of the settings form to switch between blocks. You can:
+
 - Enable rent for one block but keep it disabled for another.
 - Set different rent amounts for different blocks (e.g., AP classes pay more).
 - Use different due dates or frequencies.
@@ -37,6 +38,7 @@ Rent settings can be customized for each class block. Use the **Class Selector**
 
 ### 3. Rent Coverage Tracking
 Rent payments now cover a specific date range, known as the **Coverage Period**:
+
 - **Start Date:** The rent due date the payment is applied to. If payment is made after that due date, coverage starts on the payment date (no backdating).
 - **End Date:** The day before the next rent due date after the Start Date.
 - **Rent Active Status:** Students are only considered "Rent Active" (and receive privileges) if the current date falls within a paid coverage period.

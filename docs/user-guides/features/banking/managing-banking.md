@@ -17,6 +17,7 @@ Customize how the banking system works for your students, including interest typ
 
 ### 1. Interest Configuration
 Encourage saving by paying interest on balances.
+
 - **Savings APY**: The annual percentage yield. A 5% APY means students earn approximately 5% of their average balance over a year.
 - **Interest Type**: Choose how interest is calculated:
     - **Simple**: Interest is calculated only on the principal amount. Easier for younger students to understand.
@@ -25,6 +26,7 @@ Encourage saving by paying interest on balances.
 
 ### 2. Per-Block Configuration
 Banking settings are independent per class block. Use the **Class/Block Selector** to:
+
 - Set different interest rates for different classes.
 - Experiment with Simple interest in one block and Compound in another to compare results.
 

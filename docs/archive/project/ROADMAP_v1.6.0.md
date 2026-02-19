@@ -22,6 +22,7 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
 **Status**: 60% complete - Backend and API implemented, teacher UI needs work
 
 **What Exists**:
+
 - Database columns: `StoreItem.collective_goal_type` and `collective_goal_target`
 - Migration: `o2p3q4r5s6t7_add_collective_goal_settings.py` (November 2025)
 - Form validation: `StoreItemForm` includes collective goal fields with proper validators
@@ -29,6 +30,7 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
 - Student UI: `student_shop.html` displays collective goal progress and types
 
 **What's Missing**:
+
 - [ ] Teacher UI for creating collective goal items in store management interface
 - [ ] Visual progress indicators on teacher store management dashboard
 - [ ] Notification system when collective goals are met/achieved
@@ -38,10 +40,12 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
 - [ ] Documentation in student guide about how collective goals work
 
 **Functionality**:
+
 - **Fixed Type**: Requires specific number of purchases (e.g., "10 students must purchase")
 - **Whole Class Type**: Requires all enrolled students to purchase
 
 **Use Cases**:
+
 - Class Pizza Party requiring all students to contribute
 - Outdoor Learning Day requiring 20 student purchases
 - Team building exercises tied to collective financial participation
@@ -57,12 +61,14 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
 **Status**: Removed but preserved in git history - Awaiting reimplementation
 
 **Git History**:
+
 - Started: commit `0800640` (models)
 - Expanded: commits `c9378b7` (forms), `e2de8bd` (routes, 514 lines)
 - Tested: commit `8a1b0bd` (comprehensive tests)
 - Removed: commit `a04b574` (December 2025, kept merge migration only)
 
 **What Existed Before Removal**:
+
 - 5 database models: `JobTemplate`, `Job`, `JobApplication`, `JobEmployee`, `JobContract`
 - Complete admin routes file: `app/routes/admin_jobs.py` (514 lines)
 - Flask forms for all job operations
@@ -85,6 +91,7 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
    - Quick turnaround for short-term tasks
 
 **Use Cases**:
+
 - Classroom Helper earning weekly salary
 - Technology Assistant managing devices
 - Project bounties for one-time tasks
@@ -127,6 +134,7 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
 **Effort**: 2-3 weeks
 
 **Tasks**:
+
 1. Add collective goal UI to store item creation/edit forms
 2. Show collective goal progress on teacher store dashboard
 3. Implement notification system for goal completion
@@ -140,6 +148,7 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
 **Effort**: 3-4 weeks
 
 **Tasks**:
+
 1. Enhanced transaction reporting and filtering
 2. Class-wide financial health dashboard
 3. Student progress reports (downloadable)
@@ -152,6 +161,7 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
 **Effort**: 2-3 weeks
 
 **Tasks**:
+
 1. Optimize PWA performance
 2. Improve offline functionality
 3. Enhance touch interfaces
@@ -164,6 +174,7 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
 **Effort**: 2-3 weeks
 
 **Tasks**:
+
 1. Database query optimization
 2. Caching improvements
 3. Static asset optimization
@@ -180,6 +191,7 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
 **Effort**: 6-8 weeks
 
 **Approach**:
+
 1. Restore models from git history
 2. Update for current multi-tenancy patterns (join_code scoping)
 3. Modernize forms and routes
@@ -189,6 +201,7 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
 7. Document thoroughly
 
 **Benefits**:
+
 - Diverse earning opportunities for students
 - Teaching work ethic and responsibility
 - More engaging classroom economy
@@ -197,12 +210,14 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
 **Effort**: 12-18 weeks
 
 **Phases**:
+
 1. JSON-based rules engine (4-6 weeks)
 2. Simple form builder UI (2-3 weeks)
 3. Drag-and-drop enhancement (2-3 weeks)
 4. Full visual programming with Blockly (4-6 weeks)
 
 **Benefits**:
+
 - Power users can create complex rules
 - Custom triggers across all economy features
 - Greater flexibility without code changes
@@ -293,6 +308,7 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
 The v1.6.0 audit revealed a well-organized, feature-rich platform with clear paths forward. The collective goals feature is the obvious quick win for v1.7.0, being 60% complete and highly valuable. The jobs feature, while currently removed, represents a significant educational opportunity for future releases when resources permit.
 
 Focus for next releases should be on:
+
 1. Completing half-built features (collective goals)
 2. Enhancing existing features (analytics, mobile experience)
 3. Optimizing performance and stability

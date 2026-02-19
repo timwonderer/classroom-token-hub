@@ -9,6 +9,7 @@
 The Classroom Token Hub codebase has been evaluated for multi-tenancy readiness based on the project roadmap (MULTI_TENANCY_TODO.md) and system admin design (SYSADMIN_INTERFACE_DESIGN.md). 
 
 **Key Findings:**
+
 -  Multi-tenancy infrastructure is **fully implemented and working**
 -  System admin interface properly isolates student data (shows only teachers + counts)
 -  All admin routes use tenant-scoped queries
@@ -16,6 +17,7 @@ The Classroom Token Hub codebase has been evaluated for multi-tenancy readiness 
 -  Comprehensive test coverage validates tenant isolation
 
 **Issues Identified and Resolved:**
+
 1.  System admin showed incorrect student counts → **FIXED**
 2.  Attendance history API not scoped to admin's students → **FIXED**
 
@@ -58,11 +60,13 @@ Students ←→ StudentTeachers ←→ Admins (Teachers)
 **Problem:** System admin showed total student count for ALL students under each teacher.
 
 **Solution:** Added `_get_teacher_student_count()` helper function that:
+
 - Counts students linked via `student_teachers` table
 - Includes legacy `teacher_id` ownership
 - Uses UNION to avoid double-counting shared students
 
 **Files Modified:**
+
 - `app/routes/system_admin.py`
 
 **Impact:** System admins now see accurate per-teacher student counts.
@@ -72,11 +76,13 @@ Students ←→ StudentTeachers ←→ Admins (Teachers)
 **Problem:** `attendance_history` API endpoint showed all students' attendance data to any admin.
 
 **Solution:** Added tenant scoping using `get_admin_student_query()`:
+
 - Regular admins see only their students' attendance
 - Shared students visible to all linked teachers
 - System admins retain full visibility
 
 **Files Modified:**
+
 - `app/routes/api.py`
 
 **Impact:** Prevents cross-tenant data leaks via API endpoints.
@@ -115,6 +121,7 @@ Students ←→ StudentTeachers ←→ Admins (Teachers)
 ### Scoped Query Helper Usage
 
 All admin routes use the centralized helpers from `app/auth.py`:
+
 - `get_admin_student_query()` - Returns scoped Student query
 - `get_student_for_admin()` - Gets single student if accessible
 - `get_current_admin()` - Gets logged-in admin
@@ -122,6 +129,7 @@ All admin routes use the centralized helpers from `app/auth.py`:
 ### Intentionally Global Queries
 
 Some queries are **intentionally global** and correct:
+
 1. **Duplicate detection** in admin.py - Prevents duplicate students across teachers
 2. **System admin operations** - Requires global visibility for management
 3. **Student-authenticated routes** - No tenant scoping needed
@@ -131,6 +139,7 @@ Some queries are **intentionally global** and correct:
 ### System Admin Data Visibility
 
  **COMPLIANT with design specification:**
+
 - System admins see teacher usernames and student counts
 - System admins do **NOT** see individual student names or PII
 - Exception: `/sysadmin/student-ownership` for ownership management only
@@ -138,6 +147,7 @@ Some queries are **intentionally global** and correct:
 ### Cross-Tenant Isolation
 
  **VALIDATED:**
+
 - Teachers cannot access other teachers' exclusive students
 - API endpoints properly scoped
 - Shared students visible to all linked teachers (by design)
@@ -145,6 +155,7 @@ Some queries are **intentionally global** and correct:
 ### Test Coverage
 
  **COMPREHENSIVE:**
+
 - 10 new tests specifically for multi-tenancy
 - Tests verify isolation boundaries
 - Tests verify shared student access

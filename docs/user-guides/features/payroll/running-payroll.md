@@ -35,19 +35,23 @@ That's it! Tokens are automatically distributed to student checking accounts.
 ### Prerequisites
 
  **Payroll Settings configured**:
+
 - Pay rate set (e.g., $10/hour)
 - Pay frequency planned (e.g., weekly, bi-weekly)
 
  **Students have attendance data**:
+
 - Students have clocked in/out during the period
 - Attendance log shows work sessions
 
  **Banking feature enabled**:
+
 - Students must have checking accounts to receive pay
 
 ### Check Your Settings
 
 Visit **Payroll** → **Settings** to verify:
+
 - **Pay Rate**: How much students earn per hour
 - **Block-Specific Rates**: Different pay for different periods (configured via class selector in Settings)
 
@@ -84,6 +88,7 @@ When you run payroll, the system:
 ### Example Calculation
 
 Student worked 180 minutes (3 hours) at $10/hour:
+
 - Base pay: 3 hours × $10 = $30.00
 - Bonus reward: +$5.00 (good behavior)
 - Fine: -$2.00 (late to class)
@@ -94,6 +99,7 @@ Student worked 180 minutes (3 hours) at $10/hour:
 ### 1. Navigate to Payroll
 
 From admin dashboard:
+
 1. Click **Payroll** in the sidebar
 2. You'll see the payroll dashboard with:
    - Last payroll run date
@@ -103,6 +109,7 @@ From admin dashboard:
 ### 2. Review Payroll Preview
 
 Before running, check the preview table:
+
 - **Student names**: Who will be paid
 - **Hours worked**: Time since last payroll
 - **Base pay**: Hours × pay rate
@@ -110,6 +117,7 @@ Before running, check the preview table:
 - **Net pay**: Total deposit amount
 
 **Red flags to watch for**:
+
 -  Student with 0 hours (didn't clock in)
 -  Unusually high hours (forgot to clock out?)
 -  Negative pay (too many fines)
@@ -124,6 +132,7 @@ Before running, check the preview table:
 ### 4. Verify Results
 
 After running:
+
 - Check **Payroll History** to see the run
 - Spot-check a few students:
   - Go to **Students** → Click a student
@@ -137,16 +146,19 @@ After running:
 ### Best Practices for Consistency
 
 **Set a recurring reminder**:
+
 - Weekly: Every Friday at the same time
 - Bi-weekly: Every other Friday
 - Use your calendar app to create a recurring event
 
 **Communicate your schedule**:
+
 - Post your payroll day on the classroom board
 - Announce before running: "Paychecks processing!"
 - Be consistent so students know when to expect pay
 
 **Tips**:
+
 - Run payroll same day/time each week
 - Run before students want to shop in the store
 - Friday afternoons work well (students see earnings before weekend)
@@ -158,6 +170,7 @@ After running:
 **Problem**: Student shows 24+ hours worked (left session open overnight)
 
 **Solution**:
+
 1. Go to **Attendance Log**
 2. Find the student's unclosed session
 3. Manually close it with correct time
@@ -168,6 +181,7 @@ After running:
 **Problem**: Student's fines exceed their earnings
 
 **Options**:
+
 1. **Allow negative**: Checking balance goes negative (becomes debt)
 2. **Waive fines**: Remove some fines before running payroll
 3. **Adjust pay**: Give manual bonus to offset
@@ -177,6 +191,7 @@ After running:
 **Problem**: You forgot to run payroll last week
 
 **Solution**:
+
 - Just run payroll now
 - System calculates all time since last run
 - Students get full back pay automatically
@@ -185,6 +200,7 @@ After running:
 ### Student Not Receiving Pay
 
 **Checklist**:
+
 -  Student has checking account?
 -  Student actually worked (clocked in/out)?
 -  Student in the correct class period?
@@ -194,6 +210,7 @@ After running:
 ## Payroll History
 
 View past payroll runs:
+
 1. Go to **Payroll** → **Payroll History**
 2. See list of all runs with:
    - Date/time of run
@@ -202,6 +219,7 @@ View past payroll runs:
    - Filter by date or block
 
 Click on a specific run to see:
+
 - Which students were paid
 - How much each received
 - Breakdown of hours/rate/adjustments

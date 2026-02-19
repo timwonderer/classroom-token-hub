@@ -32,6 +32,7 @@ API endpoints are protected based on user roles. The required authentication is 
       "timezone": "America/New_York"
     }
     ```
+
 -   **Responses**:
     -   **200 OK**:
         ```json
@@ -40,6 +41,7 @@ API endpoints are protected based on user roles. The required authentication is 
           "message": "Timezone set to America/New_York"
         }
         ```
+
     -   **400 Bad Request**:
         ```json
         {
@@ -72,6 +74,7 @@ These endpoints require an active student login session.
       "passphrase": "student-secret-passphrase"
     }
     ```
+
 -   **Responses**:
     -   **200 OK**:
         ```json
@@ -80,14 +83,17 @@ These endpoints require an active student login session.
           "message": "You purchased Example Item!"
         }
         ```
+
     -   **400 Bad Request**: Insufficient funds, purchase limit reached, etc.
         ```json
         { "status": "error", "message": "Insufficient funds." }
         ```
+
     -   **403 Forbidden**: Incorrect passphrase.
         ```json
         { "status": "error", "message": "Incorrect passphrase." }
         ```
+
     -   **404 Not Found**: Item does not exist or is not active.
         ```json
         { "status": "error", "message": "This item is not available." }
@@ -105,6 +111,7 @@ These endpoints require an active student login session.
       "redemption_details": "I would like to use this for the upcoming assignment."
     }
     ```
+
 -   **Responses**:
     -   **200 OK**:
         ```json
@@ -113,10 +120,12 @@ These endpoints require an active student login session.
           "message": "Your request to use Example Item has been submitted for approval."
         }
         ```
+
     -   **400 Bad Request**: Item cannot be used in its current state.
         ```json
         { "status": "error", "message": "This item cannot be used (status: processing)." }
         ```
+
     -   **403 Forbidden**: Student does not own this item.
         ```json
         { "status": "error", "message": "You do not own this item." }
@@ -144,6 +153,7 @@ These endpoints require an active student login session.
       "reason": "done"
     }
     ```
+
 -   **Responses**:
     -   **200 OK**:
         ```json
@@ -153,10 +163,12 @@ These endpoints require an active student login session.
           "duration": 3600
         }
         ```
+
     -   **400 Bad Request**: Invalid period or action.
         ```json
         { "error": "Invalid period or action" }
         ```
+
     -   **403 Forbidden**: Invalid PIN.
         ```json
         { "error": "Invalid PIN" }
@@ -211,6 +223,7 @@ These endpoints require an active administrator login session.
       "student_item_id": 1
     }
     ```
+
 -   **Responses**:
     -   **200 OK**:
         ```json
@@ -219,6 +232,7 @@ These endpoints require an active administrator login session.
           "message": "Redemption approved."
         }
         ```
+
     -   **404 Not Found**: The student item does not exist or is not in the 'processing' state.
         ```json
         {
@@ -226,6 +240,7 @@ These endpoints require an active administrator login session.
           "message": "Invalid or already processed item."
         }
         ```
+
     -   **500 Internal Server Error**:
         ```json
         {

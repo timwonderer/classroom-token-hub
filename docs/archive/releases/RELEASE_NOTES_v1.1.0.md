@@ -111,6 +111,7 @@ Future Value = Principal × (1 + rate × time)
 ```
 
 The graph projects 12 months forward and updates dynamically based on:
+
 - Current savings balance
 - Annual percentage yield (APY)
 - Compounding frequency
@@ -128,6 +129,7 @@ The graph projects 12 months forward and updates dynamically based on:
 5. Save the item
 
 Perfect for:
+
 - Class pizza parties ($200+)
 - Field trips ($500+)
 - Special privileges (priceless!)
@@ -135,6 +137,7 @@ Perfect for:
 
 ### Using the Enhanced Economy Health
 The improved Economy Health page now shows:
+
 - **Specific dollar ranges** for each setting
 - **Direct links** to fix issues
 - **Color-coded warnings** (Critical, Warning, Info)

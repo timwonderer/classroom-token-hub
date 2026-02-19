@@ -35,6 +35,7 @@ Stores student records and credentials.
 | `dob_sum` | Integer | Non-reversible DOB sum used for username generation. |
 
 **Relationships**
+
 - `teachers`: many-to-many link via `student_teachers` (authoritative ownership model).
 - `transactions`, `tap_events`, `items`, `rent_payments`, `rent_waivers`, `reports` backrefs.
 
@@ -52,6 +53,7 @@ Teacher/admin accounts.
 | `has_assigned_students` | Boolean | One-time setup flag. |
 
 **Helper Methods**
+
 - `get_display_name()`: Returns display_name if set, otherwise username.
 
 ### `system_admins`
@@ -94,6 +96,7 @@ Roster seats created during CSV uploads so students can self-claim via join code
 | `is_claimed` | Boolean | Claim status. |
 
 **Helper Methods**
+
 - `get_class_label()`: Returns class_label if set, otherwise block.
 | `claimed_at` | DateTime | Claim timestamp. |
 
@@ -331,6 +334,7 @@ Itemized breakdown of what rent payment covers.
 **Store Integration:** When `purchase_available=True`, automatically creates/updates corresponding StoreItem with appropriate purchase limits based on `purchase_duration`.
 
 **Relationships:**
+
 - Automatically manages StoreItem sync
 - Used to calculate rent privilege badges
 

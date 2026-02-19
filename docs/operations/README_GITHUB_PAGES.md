@@ -43,6 +43,7 @@ The `/docs` directory serves two purposes:
 ### `index.html`
 
 Minimal sign-in hub:
+
 - Student sign-in link
 - Teacher sign-in link
 - About page link
@@ -50,6 +51,7 @@ Minimal sign-in hub:
 ### `about.html`
 
 Marketing and feature overview page:
+
 - Version banner and release highlights
 - Feature grid and system stats
 - Screenshots section
@@ -62,11 +64,13 @@ Marketing and feature overview page:
 **App Domain:** `https://app.classroomtokenhub.com`
 
 Sign-in links:
+
 - Student → `https://app.classroomtokenhub.com/student/login`
 - Teacher → `https://app.classroomtokenhub.com/admin/login`
 - System Admin → `https://app.classroomtokenhub.com/sysadmin/login` (about page only)
 
 Docs links:
+
 - App docs → `https://app.classroomtokenhub.com/docs`
 - GitHub docs → repository markdown URLs
 

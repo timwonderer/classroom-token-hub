@@ -171,6 +171,7 @@ ALWAYS use **Material Symbols Outlined**.
 
 ## Adding New Tokens
 If you need a new constant value (e.g., a specific chart color), add it to `tokens.css`.
+
 1.  Is it shared? Add to `:root` (Base).
 2.  Is it theme-dependent? Add to the theme blocks (`.student-shell`, etc.).
 3.  **Naming Convention**: `--{category}-{property}-{modifier}` (e.g., `--chart-primary-fill`).

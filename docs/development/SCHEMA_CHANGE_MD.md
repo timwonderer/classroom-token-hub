@@ -6,6 +6,7 @@ This document defines the **Schema Change Gate** — a mandatory checklist that 
 This gate is **PR‑blocking by design**. A schema-affecting PR that does not explicitly pass this gate **MUST NOT** be merged.
 
 This checklist derives its authority from:
+
 - [Schema Contraction & Destructive Migration Policy](./SCHEMA_CONTRACTION_AND_DESTRUCTIVE_MIGRATION_POLICY.md)
 
 ---
@@ -79,6 +80,7 @@ All items below MUST be checked before merge.
 - [ ] `downgrade` succeeds **or** migration declared irreversible
 
 **If rehearsal not performed:**
+
 - [ ] PR labeled **UNSAFE: NO MIGRATION REHEARSAL**
 - [ ] Elevated risk explicitly acknowledged
 
@@ -90,6 +92,7 @@ All items below MUST be checked before merge.
 - [ ] Tests affected by schema change were re-evaluated for intent
 
 **Mandatory workflows verified:**
+
 - [ ] Account claiming
 - [ ] Money transfer
 - [ ] Student creation / association
@@ -119,11 +122,13 @@ This gate is enforced through **process and automation**:
 ### 4.2 Automation Enforcement (Recommended)
 
 At minimum, CI SHOULD:
+
 - Detect schema-affecting files (models, migrations)
 - Fail if PR classification is missing
 - Fail if deprecated symbols appear in application code
 
 Optional advanced enforcement:
+
 - Require successful migration rehearsal job
 - Require explicit approval for UNSAFE-labeled PRs
 

@@ -16,6 +16,7 @@ Please see: [`../archive/IMPLEMENTATION_PROGRESS.md`](../archive/IMPLEMENTATION_
 **Status:** Completed and archived (December 2025)
 
 For current development priorities, see:
+
 - [`../DEVELOPMENT.md`](../DEVELOPMENT.md) - Current roadmap and priorities
 - [`../CHANGELOG.md`](../../CHANGELOG.md) - Recent changes and releases
 

@@ -26,17 +26,20 @@ Resolved persistent browser console errors from the Service Worker attempting to
 Teachers can now use passkeys for secure, phishing-resistant authentication:
 
 **Supported Authenticators**
+
 - Hardware security keys (YubiKey, Google Titan Key, SoloKeys, etc.)
 - Platform authenticators (Touch ID, Face ID, Windows Hello)
 - Synced passkeys across devices (Apple Keychain, Google Password Manager, Bitwarden)
 
 **Benefits**
+
 - **Phishing-resistant**: Passkeys are domain-bound and cannot be phished
 - **Convenient**: No need to remember passwords or type 6-digit codes
 - **Fast**: One touch or glance to authenticate
 - **Secure**: Public-key cryptography eliminates password database breaches
 
 **Implementation**
+
 - New `/admin/passkey/settings` page for passkey management
 - Register multiple passkeys with friendly names
 - View passkey usage history (created date, last used)
@@ -44,6 +47,7 @@ Teachers can now use passkeys for secure, phishing-resistant authentication:
 - TOTP remains available as backup authentication method
 
 **Technical Details**
+
 - Backend routes: `passkey_register_start`, `passkey_register_finish`, `passkey_auth_start`, `passkey_auth_finish`
 - Database model: `AdminCredential` stores passkey metadata
 - Full CSRF protection and rate limiting on all endpoints
@@ -55,12 +59,14 @@ Teachers can now use passkeys for secure, phishing-resistant authentication:
 System administrators now have the same passkey authentication capabilities as teachers:
 
 **Same Features as Teachers**
+
 - Support for hardware keys, platform authenticators, and synced passkeys
 - Phishing-resistant, domain-bound credentials
 - Management UI at `/sysadmin/passkey/settings`
 - TOTP remains available alongside passkeys
 
 **Technical Details**
+
 - Backend routes: Same structure as teacher passkeys
 - Database model: `SystemAdminCredential` stores passkey metadata
 - Self-hosted ready: Infrastructure designed to migrate to py-webauthn library
@@ -75,17 +81,20 @@ System administrators now have the same passkey authentication capabilities as t
 TOTP 2FA secrets are now encrypted in the database using Fernet (AES-128-CBC):
 
 **Benefits**
+
 - Database compromise alone no longer sufficient to generate valid 2FA codes
 - Defense in depth: Additional layer of protection beyond database security
 - Backward compatible: Handles both encrypted and legacy plaintext secrets
 
 **Implementation**
+
 - Added `encrypt_totp()` and `decrypt_totp()` helper functions in `app/utils/encryption.py`
 - All new admin/system admin accounts store encrypted TOTP secrets (base64-encoded)
 - Transparent decryption: No changes required to authentication flow
 - Migration required: Column length expanded from VARCHAR(32) to VARCHAR(200)
 
 **Security Note**
+
 - Encryption key stored in `ENCRYPTION_KEY` environment variable
 - Future migration to AWS Secrets Manager or HashiCorp Vault recommended
 
@@ -94,11 +103,13 @@ TOTP 2FA secrets are now encrypted in the database using Fernet (AES-128-CBC):
 Eliminated PII from application logs to prevent accidental exposure:
 
 **What Was Removed**
+
 - Username logging from student login, admin login, admin signup, and admin recovery flows
 - Partial hash logging from student authentication
 - Student name and DOB sum logging from bulk upload process
 
 **Impact**
+
 - Prevents accidental exposure in development logs, log files, or screenshots
 - Production deployments should configure `LOG_LEVEL=WARNING` or higher
 
@@ -110,6 +121,7 @@ Passkey authentication endpoints now use generic error messages:
 **After**: "Invalid credentials"
 
 **Impact**
+
 - Prevents reconnaissance attacks to enumerate valid usernames
 - Matches security best practice for authentication error messages
 
@@ -118,10 +130,12 @@ Passkey authentication endpoints now use generic error messages:
 Passkey authentication endpoints now bypass maintenance mode:
 
 **Endpoints Exempted**
+
 - `/sysadmin/passkey/auth/start` and `/sysadmin/passkey/auth/finish`
 - `/admin/passkey/auth/start` and `/admin/passkey/auth/finish` (via Flask)
 
 **Impact**
+
 - System administrators and teachers can authenticate during maintenance windows
 - Matches existing behavior for standard login endpoints
 
@@ -142,6 +156,7 @@ Passkey authentication endpoints now bypass maintenance mode:
 Full security review of codebase, CI/CD, and infrastructure:
 
 **Audit Scope**
+
 - GitHub Actions workflows
 - Authentication and authorization
 - Encryption and secrets management
@@ -150,10 +165,12 @@ Full security review of codebase, CI/CD, and infrastructure:
 - API security
 
 **Findings**
+
 - 16 total findings (2 critical, 2 high, 3 medium, 4 low, 5 informational)
 - Critical issues: AI prompt injection (fixed), SSH host key verification disabled (open)
 
 **Strengths**
+
 - Excellent CSRF protection
 - Strong SQL injection prevention
 - Effective XSS mitigation
@@ -161,6 +178,7 @@ Full security review of codebase, CI/CD, and infrastructure:
 - Robust multi-tenancy isolation
 
 **Documentation**
+
 - See `docs/security/COMPREHENSIVE_ATTACK_SURFACE_AUDIT_2025.md` for complete report
 - Security remediation guide: `docs/security/SECURITY_REMEDIATION_GUIDE.md`
 
@@ -173,6 +191,7 @@ Full security review of codebase, CI/CD, and infrastructure:
 Fixed persistent browser console errors from Service Worker:
 
 **Issues Resolved**
+
 1. **Chrome Extension Errors**: Service Worker attempted to cache `chrome-extension://` URLs
    - Error: `Failed to execute 'put' on 'Cache': Request scheme 'chrome-extension' is unsupported`
    - Fix: Added `shouldCache()` helper that filters non-HTTP(S) requests
@@ -186,6 +205,7 @@ Fixed persistent browser console errors from Service Worker:
    - Fix: Removed from static assets cache list
 
 **Technical Changes**
+
 - Created `shouldCache()` helper function to centralize cache eligibility logic
 - Updated both `networkFirst()` and `cacheFirst()` strategies
 - Bumped cache version to v7 to force fresh cache on next page load
@@ -195,10 +215,12 @@ Fixed persistent browser console errors from Service Worker:
 Fixed JavaScript error preventing passkey registration from completing:
 
 **Issue**
+
 - Variable was renamed from `credId` to `credentialId` but one reference wasn't updated
 - Would cause all passkey registration attempts to fail with `ReferenceError: credId is not defined`
 
 **Fix**
+
 - Updated line 208 in `templates/admin_passkey_settings.html` to use correct variable name
 - Caught by AI code review tools (GitHub Copilot and Google Gemini)
 
@@ -207,11 +229,13 @@ Fixed JavaScript error preventing passkey registration from completing:
 Fixed corrupted `cacheFirst()` function from bad merge:
 
 **Issue**
+
 - Function had duplicate `shouldCache()` checks
 - Missing cache lookup logic
 - Orphaned code fragments
 
 **Fix**
+
 - Restored proper cache-first strategy:
   1. Check `shouldCache()` - early return if not cacheable
   2. Try cache match first
@@ -228,15 +252,18 @@ Fixed corrupted `cacheFirst()` function from bad merge:
 Replaced "Active Store Items" section with more actionable information:
 
 **Before**
+
 - Displayed list of active store items (not very useful)
 
 **After**
+
 - **Pending Redemption Requests** table showing items awaiting teacher approval
   - Student name, item, request time, details, and quick review link
 - **Recent Purchases** table with 10 most recent student purchases
   - Student name, item, price, purchase time, and current status
 
 **Additional Fixes**
+
 - Fixed markdown rendering issue in item descriptions (was showing raw `####` syntax)
 
 ---
@@ -246,16 +273,19 @@ Replaced "Active Store Items" section with more actionable information:
 ### Required Migrations
 
 **1. TOTP Secret Encryption**
+
 - Column: `admins.totp_secret` and `system_admins.totp_secret`
 - Change: VARCHAR(32) → VARCHAR(200)
 - See: `../../security/MIGRATION_TOTP_ENCRYPTION.md`
 
 **2. Admin Credentials Table**
+
 - Table: `admin_credentials`
 - Purpose: Store teacher passkey metadata
 - Columns: `id`, `admin_id`, `credential_id`, `public_key`, `sign_count`, `transports`, `authenticator_name`, `aaguid`, `created_at`, `last_used`
 
 **3. System Admin Credentials Table** (if not already applied)
+
 - Table: `system_admin_credentials`
 - Purpose: Store system admin passkey metadata
 - Same structure as `admin_credentials`

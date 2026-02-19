@@ -11,10 +11,12 @@ Systematic audit revealed **15 instances** of multi-tenancy violations across **
 ## Impact
 
 **Affected Users:**
+
 - Students enrolled in multiple periods with the same or different teachers
 - Teachers viewing student details or payroll for multi-period students
 
 **Data Leak:**
+
 - Students see combined balances from all periods
 - Teachers see aggregated balances that don't match any single period
 - Financial reports are inaccurate for multi-period scenarios
@@ -54,11 +56,13 @@ Systematic audit revealed **15 instances** of multi-tenancy violations across **
 **Severity:** MEDIUM (Student-facing, affects understanding of earnings)
 
 **Lines:**
+
 - Line unknown: `student.total_earnings` (appears twice)
 
 **Issue:** Student sees total earnings from ALL periods instead of current period.
 
 **Recommended Fix:**
+
 1. Get current period's `join_code` from session (`current_join_code`)
 2. Use `student.get_total_earnings(join_code=join_code)`
 
@@ -70,11 +74,13 @@ Systematic audit revealed **15 instances** of multi-tenancy violations across **
 **Severity:** MEDIUM (Student-facing, but informational only)
 
 **Lines:**
+
 - Line unknown: `student.total_earnings`
 
 **Issue:** Transfer page shows total earnings from all periods.
 
 **Recommended Fix:**
+
 1. Get current period's `join_code` from session
 2. Use `student.get_total_earnings(join_code=join_code)`
 
@@ -86,6 +92,7 @@ Systematic audit revealed **15 instances** of multi-tenancy violations across **
 **Severity:** HIGH (Primary student view on mobile)
 
 **Lines:**
+
 - Line unknown: `student.checking_balance` - Dashboard card
 - Line unknown: `student.savings_balance` - Dashboard card
 - Line unknown: `student.checking_balance + student.savings_balance` - Total calculation
@@ -93,6 +100,7 @@ Systematic audit revealed **15 instances** of multi-tenancy violations across **
 **Issue:** Mobile dashboard shows aggregated balances from all periods.
 
 **Recommended Fix:**
+
 1. Get current period's `join_code` from session
 2. Use scoped balance methods:
    - `student.get_checking_balance(join_code=join_code)`
@@ -106,14 +114,17 @@ Systematic audit revealed **15 instances** of multi-tenancy violations across **
 **Severity:** CRITICAL (Affects rent payment validation)
 
 **Lines:**
+
 - Line unknown: `student.checking_balance` - Display balance
 - Line unknown: `student.checking_balance < status.remaining_amount` - Payment validation
 
 **Issue:**
+
 - Shows wrong balance for rent payment
 - **Payment validation may incorrectly allow/deny rent payments** based on aggregated balance
 
 **Recommended Fix:**
+
 1. Get current period's `join_code` from session
 2. Use `student.get_checking_balance(join_code=join_code)`
 3. **Critical:** Ensure backend rent payment also validates with scoped balance
@@ -126,12 +137,14 @@ Systematic audit revealed **15 instances** of multi-tenancy violations across **
 **Severity:** HIGH (Affects payroll decisions)
 
 **Lines:**
+
 - Line unknown: `student.checking_balance` - Payroll table
 - Line unknown: `student.savings_balance` - Payroll table
 
 **Issue:** Payroll page shows aggregated balances instead of period-specific balances.
 
 **Recommended Fix:**
+
 1. Get current period's `join_code` from session (already stored in admin session)
 2. Calculate scoped balances in `payroll()` route
 3. Pass scoped balances to template
@@ -218,6 +231,7 @@ Currently (BROKEN):
 ## Documentation Updates Needed
 
 After all fixes:
+
 - [ ] Update `.claude/rules/multi-tenancy.md` with template patterns
 - [ ] Update `docs/security/MULTI_TENANCY_AUDIT.md`
 - [ ] Add test cases to `tests/test_multi_tenancy.py`
@@ -234,6 +248,7 @@ After all fixes:
 ---
 
 **Next Steps:**
+
 1. Review and approve this audit
 2. Implement fixes in priority order
 3. Create comprehensive test suite

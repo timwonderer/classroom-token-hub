@@ -30,6 +30,7 @@ Issues appear in one of three tabs based on their status:
 ### Reviewing an Issue
 
 Click on any issue card to see the full details:
+
 - **Student Description:** What the student says happened.
 - **Category:** The type of issue (e.g., "Transaction Error", "Login Issue").
 - **Related Record:** Direct link to the transaction, tap event, or store purchase in question.
@@ -43,18 +44,21 @@ You have several tools to resolve issues directly from the issue detail page:
 
 ### 1. Void Transaction
 If a student reports an incorrect charge or duplicate transaction:
+
 - Click **Void Transaction**.
 - This marks the original transaction as void and refunds the amount.
 - The issue is automatically marked as **Resolved**.
 
 ### 2. Manual Adjustment
 If you need to fix a balance without voiding a specific transaction:
+
 - Go to the student's detail page (link provided in the issue).
 - Use **Manage Money** to credit/debit the correct amount.
 - Return to the issue and mark it as **Resolved**.
 
 ### 3. Deny Issue
 If the student is incorrect or the report is invalid:
+
 - Select **Deny / No Action**.
 - Provide a reason (visible to the student).
 - The issue is marked as **Resolved** (Closed).
@@ -72,6 +76,7 @@ If an issue seems to be a technical bug (e.g., "I clicked buy but didn't get the
 5.  **Student Reward:** Check **"Student eligible for bug reward"** if you want the student to receive a bonus for finding a legitimate bug.
 
 **What happens next?**
+
 - The issue moves to the **Escalated** tab.
 - The System Admin reviews it.
 - When resolved, you will see the admin's notes and the final status.
@@ -81,6 +86,7 @@ If an issue seems to be a technical bug (e.g., "I clicked buy but didn't get the
 ## Student Communication
 
 Students see the status of their issues on their **Help & Support** page.
+
 - **Pending:** "Teacher Review"
 - **Resolved:** "Resolved" (They can see your resolution note)
 - **Escalated:** "Elevated" -> "Developer Review"

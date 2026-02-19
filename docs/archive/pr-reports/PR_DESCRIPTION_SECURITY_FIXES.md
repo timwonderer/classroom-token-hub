@@ -91,6 +91,7 @@ except IntegrityError:
 
 **The Problem:**
 Students could:
+
 1. Make a $100 purchase
 2. Get teacher refund (transaction marked void)
 3. File insurance claim for the voided transaction
@@ -107,15 +108,18 @@ if claim.policy.claim_type == 'transaction_monetary' and \
 ```
 
 **How It Works:**
+
 - Validation runs during claim approval process (admin side)
 - Checks if linked transaction has `is_void=True`
 - Blocks approval completely with clear error message
 - Admin sees validation error before making decision
 
 **Files Changed:**
+
 - `app/routes/admin.py:1770-1771` - Add void check
 
 **Testing:**
+
 -  `tests/test_insurance_security.py::test_voided_transaction_cannot_be_approved`
 -  Manual test: Void transaction → Attempt approval → Blocked
 
@@ -125,6 +129,7 @@ if claim.policy.claim_type == 'transaction_monetary' and \
 
 **The Problem:**
 Transaction ownership was never validated during claim approval. An attacker could:
+
 1. File claim for their own $20 transaction (legitimate)
 2. Use DB access to change `claim.transaction_id` to point to another student's $500 transaction
 3. Admin approves without noticing the ownership mismatch
@@ -148,15 +153,18 @@ if claim.policy.claim_type == 'transaction_monetary' and claim.transaction:
 ```
 
 **Security Features:**
+
 - Validates `claim.transaction.student_id == claim.student_id`
 - Blocks approval with explicit security warning
 - Logs security alert with forensic details (student IDs, claim ID)
 - Admin sees clear error message with diagnostic info
 
 **Files Changed:**
+
 - `app/routes/admin.py:1773-1784` - Add ownership validation + security logging
 
 **Testing:**
+
 -  Code review verified logic
 -  Manual test: Modify DB → Attempt approval → Blocked with security alert
 
@@ -199,6 +207,7 @@ if end_date:
 ```
 
 **Security Improvements:**
+
 -  User input validated with `datetime.strptime()` (strict format)
 -  Invalid dates rejected immediately (no SQL execution)
 -  Date arithmetic moved from SQL to Python
@@ -207,9 +216,11 @@ if end_date:
 -  Applies same fix to both `start_date` and `end_date`
 
 **Files Changed:**
+
 - `app/routes/admin.py:3289-3305` - Replace unsafe SQL with safe date parsing
 
 **Testing:**
+
 -  Code review verified parameterization
 -  Manual test: Injection attempts return "Invalid date format" error
 -  Normal date filtering still works correctly
@@ -221,6 +232,7 @@ if end_date:
 **Migration File:** `a4b4c5d6e7f9_enforce_unique_claim_transaction.py`
 
 **What it does:**
+
 - Adds unique constraint on `insurance_claims.transaction_id`
 - Prevents duplicate claims at database level
 - Required for P0-1 fix to work
@@ -298,6 +310,7 @@ pytest tests/ -v
 ```
 
 **Test Results:**
+
 -  `test_duplicate_transaction_claim_blocked` - PASS
 -  `test_voided_transaction_cannot_be_approved` - PASS
 -  Full test suite: 27/27 passed
@@ -315,6 +328,7 @@ This PR includes comprehensive validation documentation:
 **Result:**  **APPROVED for production deployment**
 
 **Findings:**
+
 -  All security fixes verified correct
 -  Defense-in-depth approach validated
 -  No critical or medium issues found
@@ -327,6 +341,7 @@ This PR includes comprehensive validation documentation:
 **Result:**  **APPROVED for production deployment**
 
 **Test Results:**
+
 - Automated Tests: 27/27 passed
 - Security Tests: 2/2 passed
 - Manual Test Cases: 8/8 passed
@@ -340,6 +355,7 @@ This PR includes comprehensive validation documentation:
 **Result:**  **SUCCESS**
 
 **Validation:**
+
 -  Unique constraint verified
 -  Application stable after migration
 -  Migration graph conflicts resolved
@@ -348,6 +364,7 @@ This PR includes comprehensive validation documentation:
 **File:** `PRODUCTION_DEPLOYMENT_INSTRUCTIONS.md` (1,240 lines)
 
 **Includes:**
+
 - Step-by-step code review instructions (30-45 min)
 - Comprehensive regression testing guide (60-90 min)
 - Database migration procedures (15-30 min)
@@ -362,6 +379,7 @@ This PR includes comprehensive validation documentation:
 **File:** `SECURITY_AUDIT_INSURANCE_OVERHAUL.md` (795 lines)
 
 **Discovered Vulnerabilities:**
+
 - 3 P0 (Critical) issues
 - 2 P1 (High) issues
 - Detailed exploit scenarios
@@ -377,6 +395,7 @@ This PR includes comprehensive validation documentation:
 **File:** `SECURITY_FIXES_CONSOLIDATED.md` (392 lines)
 
 **Includes:**
+
 - Branch consolidation overview
 - Implementation details for each fix
 - Production readiness checklist
@@ -395,6 +414,7 @@ This PR includes comprehensive validation documentation:
 ### Manual Security Tests
 
 **P0-1: Duplicate Claim Prevention**
+
 - [x] Normal claim submission works
 - [x] Duplicate claim blocked with error message
 - [x] Transaction disappears from eligible list after claim filed
@@ -402,6 +422,7 @@ This PR includes comprehensive validation documentation:
 - [x] Database has only one claim per transaction
 
 **P0-2: Void Transaction Rejection**
+
 - [x] Transaction can be marked as void
 - [x] Claim approval blocked for voided transaction
 - [x] Error message mentions "voided"
@@ -409,6 +430,7 @@ This PR includes comprehensive validation documentation:
 - [x] Claim remains in pending status
 
 **P0-3: Ownership Validation**
+
 - [x] Normal ownership cases work
 - [x] Cross-student fraud attempt blocked
 - [x] Security alert logged
@@ -416,6 +438,7 @@ This PR includes comprehensive validation documentation:
 - [x] No payment issued to wrong student
 
 **P1-1: SQL Injection Prevention**
+
 - [x] Normal date filtering works
 - [x] SQL injection syntax rejected
 - [x] "Invalid date format" error shown
@@ -442,16 +465,19 @@ This PR includes comprehensive validation documentation:
 ### Pre-Deployment Requirements
 
 **1. Code Review**  (Complete)
+
 - Second developer reviewed all security fixes
 - All validation checklists passed
 - Report: `CODE_REVIEW_SECURITY_FIXES.md`
 
 **2. Regression Testing**  (Complete)
+
 - Full test suite executed on staging
 - All 8 manual security test cases passed
 - Report: `REGRESSION_TEST_REPORT_STAGING.md`
 
 **3. Database Migration**  (Complete)
+
 - Migration validated on staging
 - No duplicate data detected
 - Report: `MIGRATION_REPORT_STAGING.md`
@@ -482,6 +508,7 @@ curl -I https://production-url/
 ### Post-Deployment Monitoring (First 24 Hours)
 
 **Monitor application logs for:**
+
 -  Zero 500 errors
 -  IntegrityError exceptions (duplicate attempts blocked)
 -  Security alerts (ownership mismatch attempts)
@@ -506,6 +533,7 @@ curl -I https://production-url/
 ### Before This PR - CRITICAL RISK
 
 **Financial Fraud Vulnerabilities:**
+
 - Students could file unlimited duplicate claims (race condition)
 - Students could claim refunded purchases (double payment)
 - Students could claim other students' transactions (theft)
@@ -516,6 +544,7 @@ curl -I https://production-url/
 ### After This PR - PRODUCTION READY
 
 **Security Hardening:**
+
 - Duplicate claims physically impossible (database constraint)
 - Void transactions automatically rejected
 - Cross-student fraud blocked with security alerts
@@ -563,30 +592,36 @@ This PR consolidates security fixes from multiple branches:
 ### Core Application Files (8 files)
 
 **Models & Database:**
+
 - `app/models.py` - Add unique constraint to InsuranceClaim
 - `migrations/versions/a4b4c5d6e7f9_enforce_unique_claim_transaction.py` - New migration
 - `migrations/versions/e7f8g9h0i1j2_merge_all_production_heads.py` - Merge migration
 
 **Routes & Logic:**
+
 - `app/routes/student.py` - Add row locking + exception handling for duplicate prevention
 - `app/routes/admin.py` - Add void check, ownership validation, SQL injection fix
 
 **Tests:**
+
 - `tests/test_insurance_security.py` - New security test suite (126 lines)
 
 ### Documentation Files (7 files)
 
 **Security Audit:**
+
 - `SECURITY_AUDIT_INSURANCE_OVERHAUL.md` - Original vulnerability assessment (795 lines)
 - `SECURITY_FIX_VERIFICATION_UPDATED.md` - Fix verification report (358 lines)
 - `SECURITY_FIXES_CONSOLIDATED.md` - Consolidation summary (392 lines)
 
 **Validation Reports:**
+
 - `CODE_REVIEW_SECURITY_FIXES.md` - Code review approval (33 lines)
 - `REGRESSION_TEST_REPORT_STAGING.md` - Testing validation (42 lines)
 - `MIGRATION_REPORT_STAGING.md` - Migration success report (40 lines)
 
 **Deployment Guide:**
+
 - `PRODUCTION_DEPLOYMENT_INSTRUCTIONS.md` - Complete deployment guide (1,240 lines)
 
 **Total Lines Changed:** ~3,000+ lines (including documentation)
@@ -606,10 +641,12 @@ This PR consolidates security fixes from multiple branches:
 ## Performance Impact
 
 **Positive:**
+
 -  Unique constraint adds database index → faster duplicate checks
 -  Date parsing in Python (vs SQL text()) → better query optimization
 
 **Neutral:**
+
 - Row locking adds ~1-5ms per claim submission (negligible)
 - Ownership validation adds one field comparison (microseconds)
 
@@ -620,17 +657,20 @@ This PR consolidates security fixes from multiple branches:
 ## Related Issues
 
 **Fixes:**
+
 - P0-1: Race condition in duplicate claim prevention
 - P0-2: Void transaction bypass allowing double payment
 - P0-3: Transaction ownership not validated on approval
 - P1-1: SQL injection in date filtering
 
 **Implements:**
+
 - Defense-in-depth security architecture
 - Comprehensive security test suite
 - Production deployment validation process
 
 **Documentation:**
+
 - Complete security audit trail
 - Code review and testing validation
 - Emergency rollback procedures
@@ -668,6 +708,7 @@ rm /var/www/classroom-economy/maintenance_mode
 ## Success Metrics (Post-Deployment)
 
 **Security Indicators (First 7 Days):**
+
 -  Zero duplicate claims created
 -  Zero void transaction approvals
 -  Zero cross-student fraud attempts successful
@@ -675,12 +716,14 @@ rm /var/www/classroom-economy/maintenance_mode
 -  Security alerts logged for any fraud attempts
 
 **Stability Indicators:**
+
 -  Zero 500 errors related to insurance claims
 -  Claim submission success rate > 99%
 -  Claim approval success rate unchanged
 -  Response times within SLA (< 500ms)
 
 **User Experience:**
+
 -  User-friendly error messages for duplicate attempts
 -  No customer complaints about claim submission
 -  No admin confusion about validation errors
@@ -690,16 +733,19 @@ rm /var/www/classroom-economy/maintenance_mode
 ## Notes
 
 **Security Logging:**
+
 - Transaction ownership mismatches logged to `current_app.logger.error()`
 - Includes claim ID and student IDs for forensic investigation
 - Monitor logs for patterns indicating systematic fraud attempts
 
 **SQLite Compatibility:**
+
 - Row locking (`SELECT FOR UPDATE`) skipped on SQLite
 - Relies on unique constraint only (still secure)
 - Use PostgreSQL in production for full defense-in-depth
 
 **Future Enhancements:**
+
 - Consider adding email alerts for security incidents
 - Add admin dashboard showing security alerts
 - Implement rate limiting for claim submissions
@@ -734,6 +780,7 @@ rm /var/www/classroom-economy/maintenance_mode
 **Questions or Concerns?**
 
 Refer to:
+
 - `PRODUCTION_DEPLOYMENT_INSTRUCTIONS.md` - Deployment procedures
 - `SECURITY_FIXES_CONSOLIDATED.md` - Implementation details
 - `SECURITY_AUDIT_INSURANCE_OVERHAUL.md` - Original vulnerability assessment

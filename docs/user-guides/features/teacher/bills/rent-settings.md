@@ -26,6 +26,7 @@ Rent payments now cover specific date ranges ("Coverage Periods"). Students are 
 
 ## Rent Item Types (v1.8+)
 You can break rent down into specific items to show value. Items can be:
+
 - **Privilege:** Ongoing access (Desk, Locker) valid for the rent period.
 - **Per-Use:** Consumables (Pencils) or services. Can grant free uses to rent payers.
 - **Hall Pass:** Adds passes to the student's balance upon payment.
@@ -34,6 +35,7 @@ See the [Rent Itemization Guide](/docs/user-guides/features/rent/itemization-gui
 
 ## Penalties and restrictions
 Enable late penalties and decide whether overdue rent blocks store purchases.
+
 - **Dynamic Purchase Blocking:** If you use Itemized Rent, late students can still buy "Rent Alternative" items (like a desk pass) but are blocked from other store purchases.
 
 ## Related guides

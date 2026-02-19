@@ -55,12 +55,14 @@ Legacy data includes:
 ### Why This Migration is Critical
 
 **Before Migration:**
+
 - Legacy students may not appear in teacher rosters correctly
 - Data isolation may fail for legacy records
 - Cannot safely deprecate `Student.teacher_id` column
 - Cannot enforce NOT NULL constraint on `join_code` columns
 
 **After Migration:**
+
 - All students properly enrolled via claim-based system
 - Complete data isolation by `join_code`
 - Ready to deprecate `teacher_id`-based queries
@@ -77,6 +79,7 @@ scripts/comprehensive_legacy_migration.py
 ```
 
 This script combines and extends the functionality of three previous migration scripts:
+
 - `migrate_legacy_students.py` - Creates StudentTeacher and TeacherBlock entries
 - `backfill_join_codes.py` - Backfills TeacherBlock join codes
 - `fix_missing_student_teacher_associations.py` - Creates missing associations
@@ -93,6 +96,7 @@ The migration runs in 5 sequential phases:
 **Purpose:** Create proper associations for students with `teacher_id`
 
 **Steps:**
+
 1. Find all students with `Student.teacher_id` set
 2. Check for existing `StudentTeacher` associations
 3. Create missing `StudentTeacher(student_id, admin_id)` records
@@ -113,6 +117,7 @@ Student: John Doe (ID: 123, teacher_id: 5, block: "Period 1")
 **Purpose:** Ensure all TeacherBlock entries have join codes
 
 **Steps:**
+
 1. Find all `TeacherBlock` entries with NULL or empty `join_code`
 2. Group by `(teacher_id, block)` combination
 3. For each group:
@@ -133,6 +138,7 @@ TeacherBlock entries for Teacher 5, Period 1:
 **Purpose:** Backfill `join_code` for all transactions
 
 **Strategy:**
+
 - Match transactions to `TeacherBlock` entries by BOTH `student_id` AND `teacher_id`
 - Use the `join_code` from the corresponding claimed seat
 - Bulk SQL update for performance
@@ -316,6 +322,7 @@ PHASE 1: LEGACY STUDENT MIGRATION
 ================================================================================
 
 Found 15 legacy students to migrate:
+
   - John Doe (ID: 123, Teacher: 5, Block: Period 1)
   - Jane Smith (ID: 124, Teacher: 5, Block: Period 1)
   ...
@@ -365,6 +372,7 @@ PHASE 1: LEGACY STUDENT MIGRATION
 ================================================================================
 
 Found 15 legacy students to migrate:
+
   - John Doe (ID: 123, Teacher: 5, Block: Period 1)
   ...
 

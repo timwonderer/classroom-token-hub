@@ -23,6 +23,7 @@ It models a classroom economy with attendance, payroll, store purchases, rent, i
 and hall passes. The system is designed for multi-class isolation using join codes.
 
 High-level components:
+
 - Flask app factory in `app/__init__.py`.
 - Blueprints in `app/routes/` for role-specific pages and API endpoints.
 - SQLAlchemy models in `app/models.py` with Alembic migrations.
@@ -32,11 +33,13 @@ High-level components:
 ## Request and Data Flow
 
 Typical request flow:
+
 - Browser -> Flask route -> SQLAlchemy -> Jinja template or JSON response.
 - Role checks happen in `app/auth.py` decorators.
 - Financial changes always create `Transaction` rows.
 
 Key flows:
+
 - Attendance: tap in/out creates `TapEvent` rows, payroll converts those into `Transaction` rows.
 - Store: purchases create `StudentItem` and `Transaction` rows, redemptions are state transitions.
 - Hall passes: approvals generate a pass number and create attendance tap-out/tap-in records.

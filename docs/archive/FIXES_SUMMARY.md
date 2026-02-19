@@ -38,6 +38,7 @@ Successfully identified and fixed **CRITICAL P0 multi-tenancy data leaks** affec
 **Lines:** 538-726
 
 **Changes:**
+
 -  Added `teacher_id = get_current_teacher_id()` with validation
 -  Scoped transactions query: `filter_by(student_id=student.id, teacher_id=teacher_id)`
 -  Scoped student items with JOIN to StoreItem: `StoreItem.teacher_id == teacher_id`
@@ -53,6 +54,7 @@ Successfully identified and fixed **CRITICAL P0 multi-tenancy data leaks** affec
 **Lines:** 773-905
 
 **Changes:**
+
 -  Added teacher context validation
 -  Added `teacher_id` parameter to ALL Transaction creations:
   - Withdrawal transaction
@@ -69,6 +71,7 @@ Successfully identified and fixed **CRITICAL P0 multi-tenancy data leaks** affec
 **Lines:** 996-1007
 
 **Changes:**
+
 -  Added `teacher_id` to interest transaction creation
 
 **Security Impact:** Ensures interest is attributed to correct class economy
@@ -79,6 +82,7 @@ Successfully identified and fixed **CRITICAL P0 multi-tenancy data leaks** affec
 **Lines:** 1012-1083
 
 **Changes:**
+
 -  Added teacher context validation
 -  Scoped `my_policies` to current teacher: `InsurancePolicy.teacher_id == teacher_id`
 -  Changed from `.in_(teacher_ids)` to `== teacher_id` (single class only)
@@ -93,6 +97,7 @@ Successfully identified and fixed **CRITICAL P0 multi-tenancy data leaks** affec
 **Lines:** 1118-1214
 
 **Changes:**
+
 -  Added teacher context validation
 -  Changed policy verification from `in teacher_ids` to `== teacher_id`
 -  Used scoped balance check: `get_checking_balance(teacher_id)`
@@ -106,6 +111,7 @@ Successfully identified and fixed **CRITICAL P0 multi-tenancy data leaks** affec
 **Lines:** 1485-1518
 
 **Changes:**
+
 -  Added teacher context validation
 -  Scoped student items query with JOIN to StoreItem
 -  Filter: `StoreItem.teacher_id == teacher_id`
@@ -118,6 +124,7 @@ Successfully identified and fixed **CRITICAL P0 multi-tenancy data leaks** affec
 **Lines:** 1867-1933
 
 **Changes:**
+
 -  Added `teacher_id` to rent payment transaction
 -  Added `teacher_id` to overdraft protection transfer transactions (both withdraw and deposit)
 
@@ -131,6 +138,7 @@ Successfully identified and fixed **CRITICAL P0 multi-tenancy data leaks** affec
 **Lines:** 207-343
 
 **Changes:**
+
 -  Added `teacher_id` to purchase transaction: `Transaction(..., teacher_id=teacher_id, ...)`
 -  Added `teacher_id` to overdraft protection transfers (2 transactions)
 -  Ensures all store purchases properly scoped
@@ -143,6 +151,7 @@ Successfully identified and fixed **CRITICAL P0 multi-tenancy data leaks** affec
 **Lines:** 448-461
 
 **Changes:**
+
 -  Derives `teacher_id` from `student_item.store_item.teacher_id`
 -  Added `teacher_id` to redemption transaction
 
@@ -155,6 +164,7 @@ Successfully identified and fixed **CRITICAL P0 multi-tenancy data leaks** affec
 **New File - Comprehensive Security Audit**
 
 **Contents:**
+
 - Executive summary of vulnerabilities
 - Core principle violations explained
 - 10 critical data leaks identified with code examples
@@ -412,6 +422,7 @@ Expected:
 ##  Contact
 
 For questions about these fixes:
+
 - Review the commit: `5bcad94`
 - See detailed audit: `MULTI_TENANCY_AUDIT.md`
 - Branch: `claude/fix-multi-tenancy-leaks-015yz9WmT5SE8EFgAzU8Au32`

@@ -152,13 +152,17 @@ States
 	•	archived
 
 Allowed Transitions
+
 	1.	active → to_be_claimed
 	•	Trigger: Teacher initiates reset
+
 	2.	to_be_claimed → active
 	•	Trigger: Successful reclaim
+
 	3.	to_be_claimed → active
 	•	Trigger: reset_code expiration
 	•	Action: Clear reset_code and expiration
+
 	4.	active → archived
 	•	Trigger: Teacher deletes student or class
 

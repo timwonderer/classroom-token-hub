@@ -89,12 +89,14 @@ The **licensor** is the individual or entity offering these terms, and the **sof
 ## Quick Summary
 
 **Permitted Uses:**
+
 - Use in classrooms, clubs, and nonprofit educational settings
 - Modify for school use, assignments, or personal learning
 - Share with students or other educators
 - Use for research or academic presentations (non-commercial)
 
 **Prohibited Uses:**
+
 - Use as part of a commercial product or SaaS platform
 - Host a paid service or subscription
 - Incorporate into revenue-generating offerings

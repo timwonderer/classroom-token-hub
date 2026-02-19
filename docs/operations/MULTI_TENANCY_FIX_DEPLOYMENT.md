@@ -15,10 +15,12 @@ This document provides step-by-step instructions for deploying the multi-tenancy
 
 ### Root Cause
 The `get_admin_student_query()` function was filtering by both:
+
 1. `Student.teacher_id` column (deprecated, can have stale data)
 2. `StudentTeacher` association table
 
 This dual-filtering approach caused a security leak when:
+
 - Student records had incorrect `teacher_id` values
 - A new teacher's ID matched a deleted teacher's ID (ID reuse)
 - Data migration issues left orphaned student records

@@ -14,6 +14,7 @@ Please see: [`../CHANGELOG.md`](../CHANGELOG.md)
 ---
 
 **Why at the root?**
+
 - Keep a Changelog standard recommends `CHANGELOG.md` at repository root
 - Easier for developers to find
 - Single source of truth for version history
