@@ -170,6 +170,46 @@ def _get_teacher_blocks():
     ))
 
 
+def _get_students_needing_transaction_backfill(teacher_id):
+    """
+    Get students who have transactions missing join_code scoping.
+
+    These are orphaned transactions created before join_code was enforced.
+    Without a join_code, transactions cannot be properly scoped to a class
+    period, causing students' displayed balances to appear lower than they
+    should be.
+
+    Args:
+        teacher_id: The teacher's admin ID (used for audit logging only;
+                    student scope is resolved via session context)
+
+    Returns:
+        list: Student objects that have at least one transaction with no join_code
+    """
+    student_ids_query = _scoped_students().with_entities(Student.id).all()
+    student_ids = [sid[0] for sid in student_ids_query]
+
+    if not student_ids:
+        return []
+
+    transactions_needing_backfill = (
+        Transaction.query
+        .filter(
+            Transaction.student_id.in_(student_ids),
+            Transaction.join_code.is_(None)
+        )
+        .with_entities(Transaction.student_id)
+        .distinct()
+        .all()
+    )
+
+    if not transactions_needing_backfill:
+        return []
+
+    affected_student_ids = [tx.student_id for tx in transactions_needing_backfill]
+    return Student.query.filter(Student.id.in_(affected_student_ids)).all()
+
+
 
 def _populate_policy_from_form(policy, form, *, next_tier_category_id=None):
     """Populate insurance policy fields from form data."""
@@ -749,6 +789,28 @@ def dashboard():
         return onboarding_redirect
     current_admin_id = session.get('admin_id')
 
+    # Check if any students have transactions missing join_code scoping.
+    # If so, redirect to the backfill page so the teacher can associate
+    # those orphaned transactions with the correct class period before
+    # proceeding to the dashboard.
+    students_needing_backfill = _get_students_needing_transaction_backfill(current_admin_id)
+    if students_needing_backfill:
+        has_blocks = (
+            TeacherBlock.query
+            .filter_by(teacher_id=current_admin_id, is_claimed=True)
+            .filter(TeacherBlock.join_code.isnot(None))
+            .count()
+        )
+        if has_blocks:
+            return redirect(url_for('admin.backfill_transactions'))
+        else:
+            flash(
+                "Some of your students have transactions that need to be assigned to class periods, "
+                "but you don't yet have any claimed class blocks with join codes. "
+                "Set up at least one class block with a join code, then return here to finish assigning transactions.",
+                "warning",
+            )
+
     student_ids_subq = _student_scope_subquery()
     # Auto-tapout students who have exceeded their daily limit
     auto_tapout_all_over_limit()
@@ -1035,6 +1097,132 @@ def give_bonus_all():
         message += f" Overdraft fee charged for {fee_count}."
     flash(message, "warning" if declined_count else "success")
     return redirect(url_for('admin.dashboard'))
+
+
+# -------------------- TRANSACTION BACKFILL --------------------
+
+@admin_bp.route('/backfill-transactions', methods=['GET', 'POST'])
+@admin_required
+def backfill_transactions():
+    """
+    Let teachers fix orphaned transactions that are missing join_code.
+
+    join_code is the source of truth for class-period scoping. Transactions
+    created before join_code was fully enforced may have join_code=None, which
+    causes student balances to appear lower than they really are.  This one-time
+    remediation page lets the teacher assign each affected student to their
+    correct period so that all past transactions can be linked to a join_code.
+    """
+    current_admin_id = session.get('admin_id')
+    students_needing_backfill = _get_students_needing_transaction_backfill(current_admin_id)
+
+    if not students_needing_backfill:
+        return redirect(url_for('admin.dashboard'))
+
+    # Build block → join_code mapping from claimed TeacherBlocks.
+    teacher_blocks = (
+        TeacherBlock.query
+        .filter_by(teacher_id=current_admin_id, is_claimed=True)
+        .filter(TeacherBlock.join_code.isnot(None))
+        .with_entities(TeacherBlock.block, TeacherBlock.join_code)
+        .all()
+    )
+
+    # Multiple TeacherBlocks can share the same block label but have different
+    # join_codes (e.g. legacy data). Choose the most frequently occurring join_code
+    # per block to avoid silently picking an arbitrary one.
+    join_code_counts: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for block, join_code in teacher_blocks:
+        if block and join_code:
+            join_code_counts[block][join_code] += 1
+
+    block_to_join_code: dict[str, str] = {}
+    for block, counts in join_code_counts.items():
+        # Select the join_code with the highest count; break ties with lexicographic order.
+        block_to_join_code[block] = max(
+            counts.items(),
+            key=lambda item: (item[1], item[0]),
+        )[0]
+
+    if not block_to_join_code:
+        flash("No class periods found. Please set up your class periods first.", "error")
+        return redirect(url_for('admin.dashboard'))
+
+    if request.method == 'POST':
+        # Re-fetch to capture any new orphaned transactions created since GET.
+        students_needing_backfill = _get_students_needing_transaction_backfill(current_admin_id)
+
+        # Validate that every affected student has a valid block selected before
+        # processing anything, so no student is silently skipped.
+        missing_selections = []
+        for student in students_needing_backfill:
+            selected_block = request.form.get(f"student_{student.id}_block")
+            if not selected_block or selected_block not in block_to_join_code:
+                missing_selections.append(f"{student.first_name} {student.last_initial}.")
+        if missing_selections:
+            flash(
+                f"Please assign a valid period for: {', '.join(missing_selections)}.",
+                "error",
+            )
+            return render_template(
+                'admin_backfill_join_codes.html',
+                students=students_needing_backfill,
+                available_blocks=sorted(block_to_join_code.keys()),
+            )
+
+        try:
+            backfilled_count = 0
+            for student in students_needing_backfill:
+                selected_block = request.form.get(f"student_{student.id}_block")
+                join_code = block_to_join_code[selected_block]
+
+                # Update all join_code-less transactions for this student in bulk.
+                result = db.session.execute(
+                    sa.update(Transaction)
+                    .where(
+                        Transaction.student_id == student.id,
+                        Transaction.join_code.is_(None),
+                    )
+                    .values(join_code=join_code)
+                )
+                # rowcount can be -1 on some DB drivers when the count is unavailable.
+                updated_count = max(result.rowcount or 0, 0)
+
+                # Keep student.block in sync with the selected period.
+                student.block = selected_block
+
+                # Ensure the student-teacher link exists.
+                _link_student_to_admin(student, current_admin_id)
+
+                current_app.logger.info(
+                    "Backfilled join_code=%s for %d transactions (student_id=%d, teacher_id=%d)",
+                    join_code, updated_count, student.id, current_admin_id,
+                )
+                backfilled_count += 1
+
+            db.session.commit()
+            flash(
+                f"Balances restored for {backfilled_count} student(s). "
+                "Past transactions are now correctly linked to your class period.",
+                "success",
+            )
+            return redirect(url_for('admin.dashboard'))
+
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            current_app.logger.error("Error backfilling transactions: %s", e, exc_info=True)
+            flash("An error occurred while fixing balances. Please try again.", "error")
+            return render_template(
+                'admin_backfill_join_codes.html',
+                students=students_needing_backfill,
+                available_blocks=sorted(block_to_join_code.keys()),
+            )
+
+    return render_template(
+        'admin_backfill_join_codes.html',
+        students=students_needing_backfill,
+        available_blocks=sorted(block_to_join_code.keys()),
+    )
 
 
 # -------------------- AUTHENTICATION --------------------
