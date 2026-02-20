@@ -4,7 +4,7 @@ from decimal import Decimal
 from werkzeug.security import generate_password_hash
 
 from app.extensions import db
-from app.models import Admin, StoreItem, Student, StudentItem, StudentTeacher, TeacherBlock, Transaction
+from app.models import Admin, StoreItem, StoreItemBlock, Student, StudentItem, StudentTeacher, TeacherBlock, Transaction
 
 
 def _login_student(client, student_id, join_code):
@@ -85,6 +85,113 @@ def test_student_shop_collective_progress_counts_current_class_only(client):
     assert resp.status_code == 200
     # Must show progress for class A only, not include class B purchases.
     assert b'1/2' in resp.data
+
+
+def test_student_shop_filters_items_by_store_item_block_visibility(client):
+    teacher = Admin(username='teacher_block_visibility_shop', totp_secret='secret')
+    db.session.add(teacher)
+    db.session.flush()
+
+    student_a = _create_student(teacher, 'Alex', 'JOINA111', block='A')
+    _create_student(teacher, 'Bri', 'JOIND222', block='D')
+    db.session.flush()
+
+    a_item = StoreItem(
+        teacher_id=teacher.id,
+        name='A Only Item',
+        price=Decimal('6.00'),
+        is_active=True,
+    )
+    d_item = StoreItem(
+        teacher_id=teacher.id,
+        name='D Only Item',
+        price=Decimal('7.00'),
+        is_active=True,
+    )
+    unscoped_item = StoreItem(
+        teacher_id=teacher.id,
+        name='Unscoped Item',
+        price=Decimal('5.00'),
+        is_active=True,
+    )
+    db.session.add_all([unscoped_item, a_item, d_item])
+    db.session.flush()
+    db.session.add_all([
+        StoreItemBlock(store_item_id=a_item.id, block='A'),
+        StoreItemBlock(store_item_id=d_item.id, block='D'),
+    ])
+    db.session.commit()
+
+    _login_student(client, student_a.id, 'JOINA111')
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    assert b'Unscoped Item' not in resp.data
+    assert b'A Only Item' in resp.data
+    assert b'D Only Item' not in resp.data
+
+
+def test_purchase_item_rejects_items_not_visible_to_current_block(client):
+    teacher = Admin(username='teacher_block_visibility_purchase', totp_secret='secret')
+    db.session.add(teacher)
+    db.session.flush()
+
+    student_a = _create_student(teacher, 'Casey', 'JOINA333', block='A')
+    db.session.flush()
+
+    d_only_item = StoreItem(
+        teacher_id=teacher.id,
+        name='D Scoped Item',
+        price=Decimal('8.00'),
+        is_active=True,
+    )
+    db.session.add(d_only_item)
+    db.session.flush()
+    db.session.add(StoreItemBlock(store_item_id=d_only_item.id, block='D'))
+    db.session.commit()
+
+    _login_student(client, student_a.id, 'JOINA333')
+    resp = client.post('/api/purchase-item', json={
+        'item_id': d_only_item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+    })
+    assert resp.status_code == 404
+    assert StudentItem.query.filter_by(
+        student_id=student_a.id,
+        store_item_id=d_only_item.id,
+        join_code='JOINA333',
+    ).count() == 0
+
+
+def test_purchase_item_rejects_unscoped_item_without_block_visibility(client):
+    teacher = Admin(username='teacher_unscoped_purchase', totp_secret='secret')
+    db.session.add(teacher)
+    db.session.flush()
+
+    student_a = _create_student(teacher, 'Devon', 'JOINA444', block='A')
+    db.session.flush()
+
+    unscoped_item = StoreItem(
+        teacher_id=teacher.id,
+        name='Unscoped Hidden Item',
+        price=Decimal('4.00'),
+        is_active=True,
+    )
+    db.session.add(unscoped_item)
+    db.session.commit()
+
+    _login_student(client, student_a.id, 'JOINA444')
+    resp = client.post('/api/purchase-item', json={
+        'item_id': unscoped_item.id,
+        'passphrase': 'password',
+        'quantity': 1,
+    })
+    assert resp.status_code == 404
+    assert StudentItem.query.filter_by(
+        student_id=student_a.id,
+        store_item_id=unscoped_item.id,
+        join_code='JOINA444',
+    ).count() == 0
 
 
 def test_collective_unlock_scoped_to_join_code_and_goal_type(client):
@@ -432,5 +539,3 @@ def test_whole_class_collective_allows_purchase_per_class_for_same_teacher(clien
     items_class2 = StudentItem.query.filter_by(store_item_id=item.id, join_code='JOINMULTI2').all()
     assert len(items_class1) == 1
     assert len(items_class2) == 1
-
-

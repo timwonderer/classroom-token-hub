@@ -235,8 +235,10 @@ def get_all_block_statuses(student, join_code=None):
             is_claimed=True
         ).all()
         student_blocks = [seat.block.strip() for seat in claimed_seats if seat.block]
+        teacher_id = claimed_seats[0].teacher_id if claimed_seats else None
     else:
         student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
+        teacher_id = None
     period_states = {}
 
     last_payroll_time = get_last_payroll_time(student_id=student.id)
@@ -272,7 +274,7 @@ def get_all_block_statuses(student, join_code=None):
         duration = calculate_unpaid_attendance_seconds(student.id, blk, last_payroll_time, join_code=join_code)
 
         # Use block-specific payroll settings (fallback handled in helper)
-        rate_per_second = get_pay_rate_for_block(block_original)
+        rate_per_second = get_pay_rate_for_block(block_original, teacher_id=teacher_id)
         projected_pay = duration * rate_per_second
 
         # Get latest relevant hall pass for this period

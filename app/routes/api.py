@@ -14,7 +14,7 @@ from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 
 from flask import Blueprint, request, jsonify, session, current_app
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, false
 import sqlalchemy as sa
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from werkzeug.security import check_password_hash
@@ -23,7 +23,7 @@ from app.extensions import db, limiter
 from app.models import (
     Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
     HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
-    StudentTeacher, TeacherBlock, StudentBlock, DemoStudent,
+    StudentTeacher, TeacherBlock, StudentBlock, DemoStudent, StoreItemBlock,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
@@ -253,8 +253,22 @@ def purchase_item():
 
     join_code = context['join_code']
     teacher_id = context['teacher_id']
+    current_block = context.get('block', '').strip().upper()
 
-    item = StoreItem.query.filter_by(id=item_id, teacher_id=teacher_id).first()
+    item_visibility_filter = false()
+    if current_block:
+        item_visibility_filter = StoreItem.visible_blocks.any(
+            func.upper(StoreItemBlock.block) == current_block
+        )
+    item = (
+        StoreItem.query
+        .filter(
+            StoreItem.id == item_id,
+            StoreItem.teacher_id == teacher_id,
+            item_visibility_filter,
+        )
+        .first()
+    )
 
     # 2. Validate item and purchase conditions
     if not item or not item.is_active:
@@ -276,10 +290,12 @@ def purchase_item():
     from datetime import timedelta
 
     rent_settings = get_rent_settings_for_context(context)
-    current_block = context.get('block', '').strip().upper()
     now = utc_now()
     has_paid_rent = False
     per_use_rent_item = None
+    has_privilege_link = False
+    has_per_use_link = False
+    legacy_rent_perk_free_fallback = False
 
     if rent_settings and rent_settings.is_enabled:
         coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
@@ -292,11 +308,34 @@ def purchase_item():
                 coverage_due_date,
             )
 
-        per_use_rent_item = RentItem.query.filter(
+        rent_item_links = RentItem.query.filter(
             RentItem.rent_setting_id == rent_settings.id,
-            RentItem.rent_item_type == 'per_use',
             RentItem.store_item_id == item.id
-        ).first()
+        ).all()
+        has_per_use_link = any(
+            ri.rent_item_type == 'per_use' or (ri.rent_item_type == 'privilege' and ri.purchase_duration == 'per_use')
+            for ri in rent_item_links
+        )
+        has_privilege_link = any(
+            ri.rent_item_type == 'privilege' and ri.purchase_duration != 'per_use'
+            for ri in rent_item_links
+        )
+        per_use_rent_item = next(
+            (ri for ri in rent_item_links
+             if ri.rent_item_type == 'per_use' or (ri.rent_item_type == 'privilege' and ri.purchase_duration == 'per_use')),
+            None
+        )
+        legacy_rent_perk_free_fallback = bool(
+            has_paid_rent and item.is_rent_linked and not has_privilege_link and not has_per_use_link
+        )
+
+    # Privilege-only rent items are already included when rent is paid and
+    # should not be purchasable.
+    if has_paid_rent and has_privilege_link and not has_per_use_link:
+        return jsonify({
+            "status": "error",
+            "message": "This item is already included in your rent for this period."
+        }), 400
 
     if rent_settings and rent_settings.is_enabled and rent_settings.prevent_purchase_when_late:
         # Check if student is late on rent
@@ -345,7 +384,7 @@ def purchase_item():
 
     # Check if student has free uses remaining from rent (per-use rent items).
     # Also recover gracefully if a paid-rent student is missing the grant row.
-    if quantity == 1 and (item.is_rent_linked or per_use_rent_item):
+    if quantity == 1 and (item.is_rent_linked or per_use_rent_item or legacy_rent_perk_free_fallback):
         # Look for an active StudentItem with uses_remaining for this store item
         rent_item_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
@@ -392,10 +431,15 @@ def purchase_item():
                 uses_remaining=per_use_rent_item.use_limit if per_use_rent_item.use_limit else -1
             )
             db.session.add(active_rent_item)
+        elif not active_rent_item and legacy_rent_perk_free_fallback:
+            # Legacy fallback: item is rent-linked and rent is paid, but there is no
+            # per-use grant row or explicit per-use rent linkage in this period.
+            # Allow $0 purchase without mutating uses_remaining grants.
+            active_rent_item = None
 
-        if active_rent_item:
+        if active_rent_item or legacy_rent_perk_free_fallback:
             # Free purchase from rent perk - decrement available free uses unless unlimited (-1)
-            if active_rent_item.uses_remaining != -1:
+            if active_rent_item and active_rent_item.uses_remaining != -1:
                 active_rent_item.uses_remaining -= 1
 
             # For rent perks, purchasing is $0 and usage is logged later on /use-item.
@@ -427,6 +471,9 @@ def purchase_item():
                 uses_remaining=None,
             ))
             db.session.commit()
+
+            if legacy_rent_perk_free_fallback and not active_rent_item:
+                return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk)."})
 
             remaining = active_rent_item.uses_remaining
             if remaining == -1:
