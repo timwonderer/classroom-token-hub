@@ -979,6 +979,7 @@ def test_shop_treats_legacy_privilege_with_per_use_duration_as_per_use(client, t
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -1061,6 +1062,7 @@ def test_api_allows_zero_cost_rent_linked_purchase_when_paid_without_per_use_map
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -1532,6 +1534,7 @@ def test_per_use_free_purchase_recovers_from_exhausted_grant_row_when_rent_paid(
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',

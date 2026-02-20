@@ -69,7 +69,7 @@ timestamp = datetime.now(timezone.utc)
 The `Query.get()` method is deprecated in SQLAlchemy 2.0+ in favor of `session.get(Model, id)`.
 
 ### Current Status
-- **~20+ occurrences** across the codebase
+- **~20+ occurrences** across the codebase (Tests have been migrated as of 2026-02-19)
 - Affects: `app/auth.py`, `app/routes/*.py`
 
 ### Files Affected
@@ -183,7 +183,7 @@ After making deprecation fixes, verify:
 ## Progress Tracking
 
 - [ ] Create issue for datetime.utcnow() migration
-- [ ] Create issue for Query.get() migration
+- [x] Create issue for Query.get() migration (In Progress: Tests migrated)
 - [ ] Assign to milestone (pre-1.0 or post-1.0)
 - [ ] Schedule refactoring sprint
 - [ ] Complete implementation

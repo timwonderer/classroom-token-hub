@@ -27,22 +27,67 @@ def with_teacher_id_fallback(func):
 
 
 @with_teacher_id_fallback
-def get_pay_rate_for_block(block, teacher_id=None):
+def get_pay_rate_for_block(block, teacher_id=None, join_code=None):
     """
-    Get the pay rate for a specific block from settings, falling back to global/default.
-
-    CRITICAL: Scopes query by teacher_id to prevent multi-tenancy leaks.
-
+    Get the pay rate for a specific block from settings.
+    
+    CRITICAL: Enforces strict join_code scoping when provided.
+    
     Args:
         block (str): The block/period identifier.
-        teacher_id (int, optional): The teacher's ID. If not provided, uses session.
-
+        teacher_id (int, optional): The teacher's ID. 
+        join_code (str, optional): The authoritative class join code. 
+                                  REQUIRED for student context.
+    
     Returns:
-        Decimal: The pay rate per second as Decimal for precise financial calculations.
+        Decimal: The pay rate per second as Decimal.
     """
     from decimal import Decimal
+    from sqlalchemy import or_
     
-    # Can't lookup settings without a teacher_id - return default
+    # 1. Authoritative Join Code Lookup (Strict Scoping)
+    if join_code:
+        # STRICT: Must match join_code exactly.
+        # We do NOT use teacher_id here if join_code is present, 
+        # as join_code is globally unique and authoritative.
+        # But for query speed/index usage, we might include teacher_id if available,
+        # keeping it strict to the join_code is safer.
+        
+        query = PayrollSettings.query.filter_by(
+            join_code=join_code,
+            is_active=True
+        )
+        
+        # Block-specific override within this join_code?
+        # Note: Phase 3 design implies join_code + block might be redundant if 
+        # class is already "Period 1", but typically PayrollSettings might have 
+        # granularity. However, for a specific ClassEconomy (join_code), 
+        # there's usually just one setting or maybe block overrides if the class 
+        # itself has sub-blocks (unlikely in current model).
+        # Assuming one setting per join_code for now, or matching block if present.
+        
+        # Try specific block match first if block provided
+        if block:
+             setting = query.filter_by(block=block).first()
+             if setting and setting.pay_rate is not None:
+                 return setting.pay_rate / Decimal('60')
+        
+        # Try generic match for this join_code (block=None or fallback)
+        # In strictly scoped world, maybe we don't have "join_code global" vs "join_code block",
+        # but let's support finding *any* valid setting for this join_code.
+        setting = query.filter(
+            or_(PayrollSettings.block == None, PayrollSettings.block == block)
+        ).order_by(PayrollSettings.block.desc()).first() # Prefer specific block (not None) if both exist
+        
+        if setting and setting.pay_rate is not None:
+            return setting.pay_rate / Decimal('60')
+            
+        # STRICT FALLBACK: If join_code provided but no setting found, 
+        # RETURN DEFAULT. Do NOT fall back to teacher global.
+        return Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))
+
+    # 2. Legacy/Teacher-Scoped Fallback (Only if no join_code provided)
+    # This path is for backward compatibility or admin context only.
     if teacher_id is None:
         return Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))
 
@@ -51,40 +96,84 @@ def get_pay_rate_for_block(block, teacher_id=None):
         setting = PayrollSettings.query.filter_by(
             teacher_id=teacher_id,
             block=block,
+            join_code=None, # Explicitly no join_code
             is_active=True
         ).first()
-        if setting and setting.pay_rate:
-            # Convert per-minute to per-second using Decimal arithmetic
+        if setting and setting.pay_rate is not None:
             return setting.pay_rate / Decimal('60')
 
     # Fall back to global settings for this teacher
     global_setting = PayrollSettings.query.filter_by(
         teacher_id=teacher_id,
         block=None,
+        join_code=None, # Explicitly no join_code
         is_active=True
     ).first()
-    if global_setting and global_setting.pay_rate:
+    if global_setting and global_setting.pay_rate is not None:
         return global_setting.pay_rate / Decimal('60')
 
-    # Ultimate fallback to hardcoded default
+    # Ultimate fallback
     return Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))
 
 
 @with_teacher_id_fallback
-def get_daily_limit_seconds(block, teacher_id=None):
+def get_daily_limit_seconds(block, teacher_id=None, join_code=None):
     """
-    Get the daily time limit in seconds for a specific block from settings.
-
-    CRITICAL: Scopes query by teacher_id to prevent multi-tenancy leaks.
-
+    Get the daily time limit in seconds.
+    
+    CRITICAL: Enforces strict join_code scoping when provided.
+    
     Args:
         block (str): The block/period identifier.
-        teacher_id (int, optional): The teacher's ID. If not provided, uses session.
+        teacher_id (int, optional): The teacher's ID.
+        join_code (str, optional): The authoritative class join code.
 
     Returns:
-        int or None: The daily limit in seconds, or None if no limit is set.
+        int or None: The daily limit in seconds, or None if no limit.
     """
-    # Can't lookup settings without a teacher_id - return no limit
+    from sqlalchemy import or_
+
+    # Helper to calculate limit from setting
+    def _calculate_limit(setting):
+        if not setting:
+            return None
+            
+        if setting.settings_mode == 'simple' and setting.daily_limit_hours:
+            return int(setting.daily_limit_hours * 3600)
+            
+        elif setting.settings_mode == 'advanced' and setting.max_time_per_day:
+            unit_to_seconds = {
+                'seconds': 1,
+                'minutes': 60,
+                'hours': 3600,
+                'days': 86400
+            }
+            # Default to seconds if unit invalid/missing
+            multiplier = unit_to_seconds.get(setting.max_time_per_day_unit, 1) 
+            return int(setting.max_time_per_day * multiplier)
+            
+        return None
+
+    # 1. Authoritative Join Code Lookup (Strict Scoping)
+    if join_code:
+        query = PayrollSettings.query.filter_by(
+            join_code=join_code,
+            is_active=True
+        )
+        
+        setting = None
+        if block:
+            setting = query.filter_by(block=block).first()
+        
+        if not setting:
+             setting = query.filter(
+                or_(PayrollSettings.block == None, PayrollSettings.block == block)
+            ).order_by(PayrollSettings.block.desc()).first()
+            
+        # Return calculated limit or None (Strict: no fallback to teacher global)
+        return _calculate_limit(setting)
+
+    # 2. Legacy/Teacher-Scoped Fallback
     if teacher_id is None:
         return None
 
@@ -93,44 +182,23 @@ def get_daily_limit_seconds(block, teacher_id=None):
         setting = PayrollSettings.query.filter_by(
             teacher_id=teacher_id,
             block=block,
+            join_code=None,
             is_active=True
         ).first()
-        if setting:
-            # Simple mode: daily_limit_hours
-            if setting.settings_mode == 'simple' and setting.daily_limit_hours:
-                return int(setting.daily_limit_hours * 3600)  # Convert hours to seconds
-            # Advanced mode: max_time_per_day
-            elif setting.settings_mode == 'advanced' and setting.max_time_per_day:
-                unit_to_seconds = {
-                    'seconds': 1,
-                    'minutes': 60,
-                    'hours': 3600,
-                    'days': 86400
-                }
-                multiplier = unit_to_seconds.get(setting.max_time_per_day_unit, 3600)
-                return int(setting.max_time_per_day * multiplier)
+        
+        limit = _calculate_limit(setting)
+        if limit is not None:
+            return limit
 
-    # Fall back to global settings for this teacher
+    # Fall back to global
     global_setting = PayrollSettings.query.filter_by(
         teacher_id=teacher_id,
         block=None,
+        join_code=None,
         is_active=True
     ).first()
-    if global_setting:
-        if global_setting.settings_mode == 'simple' and global_setting.daily_limit_hours:
-            return int(global_setting.daily_limit_hours * 3600)
-        elif global_setting.settings_mode == 'advanced' and global_setting.max_time_per_day:
-            unit_to_seconds = {
-                'seconds': 1,
-                'minutes': 60,
-                'hours': 3600,
-                'days': 86400
-            }
-            multiplier = unit_to_seconds.get(global_setting.max_time_per_day_unit, 3600)
-            return int(global_setting.max_time_per_day * multiplier)
-
-    # No limit set
-    return None
+    
+    return _calculate_limit(global_setting)
 
 
 @with_teacher_id_fallback

@@ -27,7 +27,7 @@ def test_teacher():
 def teacher_block(test_teacher):
     """Create a teacher block with join code."""
     # Create ClassEconomy first for FK constraint
-    if not ClassEconomy.query.get('TEST123'):
+    if not db.session.get(ClassEconomy, 'TEST123'):
         economy = ClassEconomy(
             join_code='TEST123',
             display_name='Test Announcements Class',

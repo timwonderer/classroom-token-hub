@@ -31,7 +31,7 @@ def _create_unclaimed_teacher_block(first_name: str, teacher: Admin, block: str 
     join_code = f"TEST{teacher.id}{block}"
     
     # Create ClassEconomy for FK constraint if it doesn't exist
-    if not ClassEconomy.query.get(join_code):
+    if not db.session.get(ClassEconomy, join_code):
         economy = ClassEconomy(
             join_code=join_code,
             display_name=f'Test Class {teacher.id}{block}',

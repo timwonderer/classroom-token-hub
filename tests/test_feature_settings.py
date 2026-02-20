@@ -327,9 +327,9 @@ class TestTeacherDeletionCascade:
         teacher_id = admin.id
 
         # Ensure ClassEconomy exists for FK constraints
-        if not ClassEconomy.query.get('TEST123'):
+        if not db.session.get(ClassEconomy, 'TEST123'):
             db.session.add(ClassEconomy(join_code='TEST123', display_name='Class TEST123'))
-        if not ClassEconomy.query.get('TEST456'):
+        if not db.session.get(ClassEconomy, 'TEST456'):
             db.session.add(ClassEconomy(join_code='TEST456', display_name='Class TEST456'))
         db.session.commit()
 

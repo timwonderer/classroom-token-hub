@@ -85,7 +85,7 @@ def _create_tap_event(student: Student, status: str = "active", join_code: str =
 def _setup_class_context(teacher_id: int, join_code: str, student_ids: list[int] = None):
     """Create ClassEconomy and ClassMembership for testing strict scoping."""
     # Ensure ClassEconomy exists
-    if not ClassEconomy.query.get(join_code):
+    if not db.session.get(ClassEconomy, join_code):
         db.session.add(ClassEconomy(
             join_code=join_code,
             status="active",

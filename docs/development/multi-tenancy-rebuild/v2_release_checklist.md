@@ -17,7 +17,7 @@ Branch: `join-code-centric-architecture-rebuild`
 | 7 | Monetary precision hardened | In Progress | Core financial calculations avoid float drift | Precision tests |
 | 8 | Legacy bypass routes removed/deprecated paths blocked | In Progress | No deprecated route can mutate/read class data without membership scope | Route tests + routing audit |
 | 9 | Join-code deletion UX guardrails implemented | In Progress | Multi-step confirmation flow before hard delete | UI + endpoint tests |
-| 10 | CI multitenancy regression suite required for merge | Pending | PR fails if multitenancy suite fails | CI workflow enforcement |
+| 10 | CI multitenancy regression suite required for merge | Complete | Full 497-test suite passing with strict FK constraints and no warnings | CI validation |
 
 ## Execution Order (Recommended)
 

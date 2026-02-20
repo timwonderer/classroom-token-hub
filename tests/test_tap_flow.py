@@ -18,7 +18,7 @@ def create_claimed_seat(teacher_id, student_id, block, join_code, salt=None):
         salt = get_random_salt()
 
     # Ensure ClassEconomy exists for FK constraint
-    if not ClassEconomy.query.get(join_code):
+    if not db.session.get(ClassEconomy, join_code):
         db.session.add(ClassEconomy(join_code=join_code, display_name=f"Class {join_code}"))
         db.session.flush()
 

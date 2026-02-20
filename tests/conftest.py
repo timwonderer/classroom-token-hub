@@ -66,6 +66,8 @@ def client(app):
     ctx.push()
     
     # Create all tables for the test
+    db.session.remove()
+    db.drop_all()
     db.create_all()
     
     client = flask_app.test_client()

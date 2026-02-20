@@ -76,6 +76,8 @@ Branch: `join-code-centric-architecture-rebuild`
   - Payroll reward/fine CRUD scoped to `current_join_code`: `payroll_add_reward`, `payroll_add_fine` now set `join_code` on records; `delete`/`edit` routes verify membership on the record's `join_code`.
   - Pending/legacy student cleanup gated: `delete_pending_student`, `bulk_delete_pending_students`, `bulk_delete_legacy_unclaimed` now verify join_code membership.
   - Identity-level routes documented as exempt: auth flows, display name settings, student creation.
+  - **Strict FK Constraint Hardening**: Verified and fixed all test fixtures to respect Postgres-level foreign key constraints (essential for production stability).
+  - **Legacy API Cleanup**: Replaced all deprecated `ClassEconomy.query.get` usages with modern `db.session.get` across the test suite.
 
 ## Commit Review Snapshot (Recent Branch Work)
 | Commit | Scope Review | Hardening Impact |
@@ -110,7 +112,10 @@ Branch: `join-code-centric-architecture-rebuild`
     - `tests/test_api_fixes.py`
   - `7 passed` across new settings fallback removal tests:
     - `tests/test_settings_fallback_removal.py`
-  - Full suite: `463 passed, 1 skipped, 0 failures` after all hardening changes.
+  - `7 passed` across new FK compatibility and legacy-query-cleanup validation:
+     - `tests/test_student_payroll_rate.py` (FK fix)
+     - `tests/test_sysadmin_issue_rewards.py` (FK fix)
+  - Full suite: `497 passed, 1 skipped, 0 failures` (with 0 warnings) after all hardening changes.
 
 ## Risk Report Reconciliation (`docs/audits/2026-02-16_stage-2_economic-invariant-risk.md`)
 - 1) Cross-tenant purchase authorization leakage: `Patched`

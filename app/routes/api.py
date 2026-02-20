@@ -2425,7 +2425,7 @@ def handle_tap():
             is_active = True
             last_payroll_time = get_last_payroll_time(student_id=student.id)
             duration = calculate_unpaid_attendance_seconds(student.id, period, last_payroll_time, join_code=join_code)
-            rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period))
+            rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period), join_code=join_code)
             projected_pay = duration * rate_per_second
 
             return jsonify({
@@ -2498,7 +2498,7 @@ def handle_tap():
             from app.payroll import get_daily_limit_seconds
             from app.attendance import calculate_period_attendance_utc_range
 
-            daily_limit = get_daily_limit_seconds(period)
+            daily_limit = get_daily_limit_seconds(period, join_code=join_code)
             if daily_limit:
                 # Use Pacific timezone for daily reset
                 pacific = pytz.timezone('America/Los_Angeles')
@@ -2586,7 +2586,7 @@ def handle_tap():
     last_payroll_time = get_last_payroll_time(student_id=student.id)
     duration = calculate_unpaid_attendance_seconds(student.id, period, last_payroll_time, join_code=join_code)
 
-    rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period))
+    rate_per_second = get_pay_rate_for_block(block_lookup.get(period, period), join_code=join_code)
     projected_pay = duration * rate_per_second
 
     return jsonify({

@@ -4,6 +4,7 @@ from decimal import Decimal
 from app.extensions import db
 from app.models import (
     Admin,
+    ClassEconomy,
     Issue,
     IssueCategory,
     IssueResolutionAction,
@@ -23,7 +24,8 @@ def test_sysadmin_resolve_issue_issues_bug_reward_transaction(client):
         category_type="general",
         is_active=True,
     )
-    db.session.add_all([teacher, sysadmin, student, category])
+    economy = ClassEconomy(join_code="JOINBUG123", status="active")
+    db.session.add_all([teacher, sysadmin, student, category, economy])
     db.session.flush()
 
     issue = Issue(

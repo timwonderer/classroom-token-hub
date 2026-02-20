@@ -481,14 +481,14 @@ def resolve_join_code(join_code):
     from app.models import ClassEconomy, ClassJoinCodeAlias
 
     # First, try direct lookup
-    economy = ClassEconomy.query.get(join_code)
+    economy = db.session.get(ClassEconomy, join_code)
     if economy:
         return join_code, economy
 
     # Check if it's an old/aliased code
     alias = ClassJoinCodeAlias.query.filter_by(old_code=join_code).first()
     if alias:
-        economy = ClassEconomy.query.get(alias.current_join_code)
+        economy = db.session.get(ClassEconomy, alias.current_join_code)
         if economy:
             return alias.current_join_code, economy
 

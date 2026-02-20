@@ -53,7 +53,7 @@ def _create_student_with_teacher_block(first_name: str, teacher: Admin, block: s
     
     # Create ClassEconomy for FK constraint
     join_code = f"TEST{teacher.id}{block}"
-    if not ClassEconomy.query.get(join_code):
+    if not db.session.get(ClassEconomy, join_code):
         economy = ClassEconomy(
             join_code=join_code,
             display_name=f'Test Class {teacher.id}{block}',
