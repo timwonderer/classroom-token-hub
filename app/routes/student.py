@@ -15,7 +15,7 @@ from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 
 from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app
-from sqlalchemy import or_, func, select, and_, false
+from sqlalchemy import or_, func, select, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
 import pytz
@@ -2419,20 +2419,22 @@ def shop():
     teacher_id = context['teacher_id']
 
     current_block = (context.get('block') or '').strip().upper()
-    block_visibility_filter = false()
-    if current_block:
-        block_visibility_filter = StoreItem.visible_blocks.any(
-            func.upper(StoreItemBlock.block) == current_block
-        )
 
     now = utc_now()
     now_db = normalize_for_db(now)
-    items = StoreItem.query.filter(
+    items_query = StoreItem.query.filter(
         StoreItem.teacher_id == teacher_id,
         StoreItem.is_active == True,
         or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now_db),
-        block_visibility_filter,
-    ).order_by(StoreItem.name).all()
+    )
+    if current_block:
+        items_query = items_query.filter(
+            or_(
+                StoreItem.visible_blocks.any(func.upper(StoreItemBlock.block) == current_block),
+                ~StoreItem.visible_blocks.any(),
+            )
+        )
+    items = items_query.order_by(StoreItem.name).all()
 
     # FIX: Fetch student's purchased items scoped to current teacher's store
     student_items = student.items.join(

@@ -221,7 +221,7 @@ def get_all_block_statuses(student, join_code=None):
     """
     Gets the status for all blocks assigned to a student for the /api/student-status endpoint.
     """
-    from app.models import TapEvent, HallPassLog, TeacherBlock
+    from app.models import TapEvent, HallPassLog, TeacherBlock, StudentTeacher
     from sqlalchemy import func
     from datetime import datetime, timezone
     from app.payroll import get_pay_rate_for_block
@@ -235,10 +235,19 @@ def get_all_block_statuses(student, join_code=None):
             is_claimed=True
         ).all()
         student_blocks = [seat.block.strip() for seat in claimed_seats if seat.block]
-        teacher_id = claimed_seats[0].teacher_id if claimed_seats else None
+        teacher_ids = {seat.teacher_id for seat in claimed_seats if seat.teacher_id is not None}
+        teacher_id = next(iter(teacher_ids)) if len(teacher_ids) == 1 else None
     else:
         student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
-        teacher_id = None
+        mapped_teacher_ids = {
+            row.admin_id
+            for row in StudentTeacher.query.with_entities(StudentTeacher.admin_id)
+            .filter(StudentTeacher.student_id == student.id)
+            .distinct()
+            .all()
+            if row.admin_id is not None
+        }
+        teacher_id = next(iter(mapped_teacher_ids)) if len(mapped_teacher_ids) == 1 else None
     period_states = {}
 
     last_payroll_time = get_last_payroll_time(student_id=student.id)

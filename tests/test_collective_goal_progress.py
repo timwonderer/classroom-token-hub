@@ -125,7 +125,7 @@ def test_student_shop_filters_items_by_store_item_block_visibility(client):
     _login_student(client, student_a.id, 'JOINA111')
     resp = client.get('/student/shop')
     assert resp.status_code == 200
-    assert b'Unscoped Item' not in resp.data
+    assert b'Unscoped Item' in resp.data
     assert b'A Only Item' in resp.data
     assert b'D Only Item' not in resp.data
 
@@ -163,7 +163,7 @@ def test_purchase_item_rejects_items_not_visible_to_current_block(client):
     ).count() == 0
 
 
-def test_purchase_item_rejects_unscoped_item_without_block_visibility(client):
+def test_purchase_item_allows_unscoped_item_without_block_visibility(client):
     teacher = Admin(username='teacher_unscoped_purchase', totp_secret='secret')
     db.session.add(teacher)
     db.session.flush()
@@ -186,12 +186,12 @@ def test_purchase_item_rejects_unscoped_item_without_block_visibility(client):
         'passphrase': 'password',
         'quantity': 1,
     })
-    assert resp.status_code == 404
+    assert resp.status_code == 200
     assert StudentItem.query.filter_by(
         student_id=student_a.id,
         store_item_id=unscoped_item.id,
         join_code='JOINA444',
-    ).count() == 0
+    ).count() == 1
 
 
 def test_collective_unlock_scoped_to_join_code_and_goal_type(client):

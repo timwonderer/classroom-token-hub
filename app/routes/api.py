@@ -14,7 +14,7 @@ from decimal import Decimal
 from dateutil.relativedelta import relativedelta
 
 from flask import Blueprint, request, jsonify, session, current_app
-from sqlalchemy import func, or_, false
+from sqlalchemy import func, or_
 import sqlalchemy as sa
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from werkzeug.security import check_password_hash
@@ -255,18 +255,20 @@ def purchase_item():
     teacher_id = context['teacher_id']
     current_block = context.get('block', '').strip().upper()
 
-    item_visibility_filter = false()
+    item_filters = [
+        StoreItem.id == item_id,
+        StoreItem.teacher_id == teacher_id,
+    ]
     if current_block:
-        item_visibility_filter = StoreItem.visible_blocks.any(
-            func.upper(StoreItemBlock.block) == current_block
+        item_filters.append(
+            or_(
+                StoreItem.visible_blocks.any(func.upper(StoreItemBlock.block) == current_block),
+                ~StoreItem.visible_blocks.any(),
+            )
         )
     item = (
         StoreItem.query
-        .filter(
-            StoreItem.id == item_id,
-            StoreItem.teacher_id == teacher_id,
-            item_visibility_filter,
-        )
+        .filter(*item_filters)
         .first()
     )
 
