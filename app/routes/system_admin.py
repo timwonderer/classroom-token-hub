@@ -29,7 +29,7 @@ from app.models import (
     DeletionRequestType, DeletionRequestStatus, TeacherBlock, StudentBlock, UserReport,
     FeatureSettings, TeacherOnboarding, RentSettings, BankingSettings,
     DemoStudent, HallPassSettings, PayrollFine, PayrollReward,
-    PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory
+    PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction
 )
 from app.auth import system_admin_required, SESSION_TIMEOUT_MINUTES
 from app.forms import SystemAdminLoginForm, SystemAdminInviteForm
@@ -2138,32 +2138,78 @@ def resolve_escalated_issue(issue_id):
     resolution_note = request.form.get('resolution_note', '').strip()
     eligible_for_reward = request.form.get('eligible_for_reward') == 'on'
     reward_amount = request.form.get('reward_amount', '').strip()
+    sysadmin_id = session.get('sysadmin_id')
+
+    if not sysadmin_id:
+        flash("System admin session is invalid. Please log in again.", "error")
+        return redirect(url_for('sysadmin.login', next=request.path))
 
     try:
+        reward_amount_value = None
+        if eligible_for_reward:
+            if not reward_amount:
+                flash("Reward amount is required when reward eligibility is selected.", "error")
+                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+            try:
+                from app.models import _quantize_currency
+                reward_amount_value = _quantize_currency(reward_amount)
+            except (ValueError, InvalidOperation):
+                flash("Invalid reward amount. Please enter a valid number.", "error")
+                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+            if reward_amount_value <= Decimal('0'):
+                flash("Reward amount must be greater than 0.", "error")
+                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+
         old_status = issue.status
         issue.status = 'developer_resolved'
         issue.sysadmin_resolved_at = utc_now()
         issue.sysadmin_notes = resolution_note
-        issue.sysadmin_id = session.get('sysadmin_id')
+        issue.sysadmin_id = sysadmin_id
         issue.eligible_for_reward = eligible_for_reward
 
-        # Set reward amount if eligible
-        if eligible_for_reward and reward_amount:
-            try:
-                from app.models import _quantize_currency
-                issue.reward_amount = _quantize_currency(reward_amount)
-            except (ValueError, InvalidOperation):
-                flash("Invalid reward amount. Please enter a valid number.", "error")
-                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
-        else:
-            issue.reward_amount = None
+        reward_transaction = None
+        if eligible_for_reward and reward_amount_value is not None:
+            reward_transaction = Transaction(
+                student_id=issue.student_id,
+                teacher_id=issue.teacher_id,
+                join_code=issue.join_code,
+                amount=reward_amount_value,
+                account_type='checking',
+                description=f"Bug Reward (Issue #{issue.id})",
+                timestamp=utc_now(),
+                status=TransactionStatus.PENDING,
+                type='bug_reward',
+                is_void=False,
+            )
+            db.session.add(reward_transaction)
+            db.session.flush()
+
+            db.session.add(IssueResolutionAction(
+                issue_id=issue.id,
+                action_type='bug_reward_issued',
+                action_description=f"Issued bug reward while resolving issue #{issue.id}",
+                performed_by_type='sysadmin',
+                performed_by_id=sysadmin_id,
+                related_transaction_id=reward_transaction.id,
+                amount_changed=float(reward_amount_value),
+                before_value='0.00',
+                after_value=str(reward_amount_value),
+            ))
 
         # Record status change
         from app.utils.issue_helpers import record_status_change
-        record_status_change(issue, old_status, 'developer_resolved', 'sysadmin', session.get('sysadmin_id'))
+        status_note = (
+            f"Bug reward issued: ${reward_amount_value:.2f}"
+            if reward_amount_value is not None
+            else None
+        )
+        record_status_change(issue, old_status, 'developer_resolved', 'sysadmin', sysadmin_id, notes=status_note)
 
         db.session.commit()
-        flash("Issue has been marked as resolved.", "success")
+        if reward_amount_value is not None:
+            flash(f"Issue resolved and reward of ${reward_amount_value:.2f} was issued.", "success")
+        else:
+            flash("Issue has been marked as resolved.", "success")
 
     except Exception as e:
         db.session.rollback()

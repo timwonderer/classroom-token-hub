@@ -23,7 +23,7 @@ from dateutil.relativedelta import relativedelta
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
+    Student, Transaction, TransactionStatus, TapEvent, StoreItem, StoreItemBlock, StudentItem,
     RentSettings, RentPayment, InsurancePolicy, StudentInsurance, InsuranceClaim,
     BankingSettings, UserReport, FeatureSettings, Issue
 )
@@ -1441,6 +1441,7 @@ def payroll():
 
     current_block = (context.get('block') or '').upper()
     join_code = context.get('join_code')
+    teacher_id = context.get('teacher_id')
     period_states = get_all_block_statuses(student, join_code=join_code)
 
     # Scope dashboard data to the selected class context only
@@ -1448,7 +1449,7 @@ def payroll():
     student_blocks = [current_block]
 
     # Determine the pay rate for the current block (per minute)
-    pay_rate_per_second = get_pay_rate_for_block(current_block)
+    pay_rate_per_second = get_pay_rate_for_block(current_block, teacher_id=teacher_id)
     pay_rate_per_minute = round(pay_rate_per_second * 60, 2)
 
     unpaid_seconds_per_block = {
@@ -2417,13 +2418,23 @@ def shop():
 
     teacher_id = context['teacher_id']
 
+    current_block = (context.get('block') or '').strip().upper()
+
     now = utc_now()
     now_db = normalize_for_db(now)
-    items = StoreItem.query.filter(
+    items_query = StoreItem.query.filter(
         StoreItem.teacher_id == teacher_id,
         StoreItem.is_active == True,
-        or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now_db)
-    ).order_by(StoreItem.name).all()
+        or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now_db),
+    )
+    if current_block:
+        items_query = items_query.filter(
+            or_(
+                StoreItem.visible_blocks.any(func.upper(StoreItemBlock.block) == current_block),
+                ~StoreItem.visible_blocks.any(),
+            )
+        )
+    items = items_query.order_by(StoreItem.name).all()
 
     # FIX: Fetch student's purchased items scoped to current teacher's store
     student_items = student.items.join(
@@ -2469,13 +2480,19 @@ def shop():
             for rent_item in rent_store_items:
                 if not rent_item.store_item_id:
                     continue
-                rent_item_types_by_store_id.setdefault(rent_item.store_item_id, set()).add(
-                    rent_item.rent_item_type
-                )
+                effective_type = rent_item.rent_item_type
+                # Backward compatibility: legacy rows can still carry privilege as the
+                # default type while semantically behaving per-use via duration.
+                if effective_type == 'privilege' and rent_item.purchase_duration == 'per_use':
+                    effective_type = 'per_use'
+                rent_item_types_by_store_id.setdefault(rent_item.store_item_id, set()).add(effective_type)
             per_use_limit_by_store_id = {
                 rent_item.store_item_id: (rent_item.use_limit if rent_item.use_limit else -1)
                 for rent_item in rent_store_items
-                if rent_item.store_item_id and rent_item.rent_item_type == 'per_use'
+                if rent_item.store_item_id and (
+                    rent_item.rent_item_type == 'per_use' or
+                    (rent_item.rent_item_type == 'privilege' and rent_item.purchase_duration == 'per_use')
+                )
             }
 
             # Get privilege-type per-period rent items (only these are included/disabled).
@@ -2484,6 +2501,7 @@ def shop():
                 rent_item_type='privilege',
                 is_available_in_store=True
             ).all()
+            per_period_items = [item for item in per_period_items if item.purchase_duration != 'per_use']
 
             # Collect store item IDs (only privilege items get the "Included in your rent!" badge)
             per_period_rent_item_ids = {item.store_item_id for item in per_period_items if item.store_item_id}

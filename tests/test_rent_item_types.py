@@ -963,6 +963,165 @@ def test_shop_keeps_item_purchasable_when_per_use_and_privilege_links_overlap(cl
     assert 'disabled' not in button.group(0)
 
 
+def test_shop_treats_legacy_privilege_with_per_use_duration_as_per_use(client, teacher_admin, student_in_class):
+    """Legacy privilege+per_use-duration rows should render as purchasable rent perks, not included/disabled."""
+    student = student_in_class
+    anchor_now = datetime.now(timezone.utc)
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=anchor_now - timedelta(days=60),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Legacy Per Use Link',
+        price=Decimal('9.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    db.session.add(RentItem(
+        rent_setting_id=settings.id,
+        name='Legacy Per Use Link',
+        rent_item_type='privilege',   # legacy default
+        purchase_duration='per_use',  # actual semantics
+        is_available_in_store=True,
+        store_price=Decimal('9.00'),
+        use_limit=1,
+        store_item_id=store_item.id,
+    ))
+
+    from app.routes.student import _calculate_rent_coverage_due_date
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, anchor_now)
+    assert coverage_due_date is not None
+
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=anchor_now.month,
+        period_year=anchor_now.year,
+        coverage_month=coverage_due_date.month,
+        coverage_year=coverage_due_date.year,
+        payment_date=anchor_now,
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent for Period A',
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    html = resp.data.decode('utf-8')
+    button = re.search(rf'data-item-id="{store_item.id}"[^>]*>', html, re.DOTALL)
+    assert button is not None
+    assert 'disabled' not in button.group(0)
+    assert 'Rent Perk price: $0.00' in html
+
+
+def test_api_allows_zero_cost_rent_linked_purchase_when_paid_without_per_use_mapping(client, teacher_admin, student_in_class):
+    """Paid-rent students can still buy non-privilege rent-linked perks for $0 when mapping rows are missing."""
+    student = student_in_class
+    from werkzeug.security import generate_password_hash
+    student.passphrase_hash = generate_password_hash('password')
+    anchor_now = datetime.now(timezone.utc)
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=anchor_now - timedelta(days=60),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    # Rent-linked store item without a RentItem mapping row (legacy/stale linkage).
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Link Only Perk',
+        price=Decimal('12.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(store_item)
+
+    from app.routes.student import _calculate_rent_coverage_due_date
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, anchor_now)
+    assert coverage_due_date is not None
+
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=anchor_now.month,
+        period_year=anchor_now.year,
+        coverage_month=coverage_due_date.month,
+        coverage_year=coverage_due_date.year,
+        payment_date=anchor_now,
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent for Period A',
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        amount=Decimal('100.00'),
+        account_type='checking',
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+    ))
+    db.session.commit()
+
+    starting_balance = student.checking_balance
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.post('/api/purchase-item', json={'item_id': store_item.id, 'passphrase': 'password', 'quantity': 1})
+    assert resp.status_code == 200
+    assert '$0' in resp.json['message'] or 'rent perk' in resp.json['message'].lower()
+
+    db.session.refresh(student)
+    assert student.checking_balance == starting_balance
+
+
 def test_shop_displays_rent_perk_price_as_free(client, teacher_admin, student_in_class):
     """Rent perk items with active free uses should display $0 pricing in the student shop."""
     student = student_in_class
