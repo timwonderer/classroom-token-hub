@@ -41,7 +41,7 @@
                     </div>
                     {% elif action == 'Edit' and teacher_block %}
                     <div class="alert alert-info mb-3">
-                        <i class="bi bi-info-circle me-2"></i>
+                        <span class="material-symbols-outlined me-2">info</span>
                         <strong>Class Period:</strong> {{ teacher_block.get_class_label() }} (Period {{ teacher_block.block }})
                         <br><small>You cannot change the period for an existing announcement. To post to other periods, create a new announcement.</small>
                     </div>
@@ -106,7 +106,7 @@
 
                     <div class="d-flex justify-content-between">
                         <a href="{{ url_for('admin.announcements') }}" class="btn btn-secondary">
-                            <i class="bi bi-x-circle me-1"></i>Cancel
+                            <span class="material-symbols-outlined me-1">cancel</span>Cancel
                         </a>
                         {{ form.submit(class="btn btn-primary") }}
                     </div>
@@ -117,7 +117,7 @@
         {% if action == 'Edit' and announcement %}
         <div class="card shadow mt-3">
             <div class="card-header bg-light">
-                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Preview</h5>
+                <h5 class="mb-0"><span class="material-symbols-outlined me-2">info</span>Preview</h5>
             </div>
             <div class="card-body">
                 <div class="alert {{ announcement.get_priority_class() }} mb-0">

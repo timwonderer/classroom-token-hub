@@ -32,6 +32,7 @@ This directory contains historical pull request reports and documentation that w
 ## Purpose
 
 These reports were moved here during repository housekeeping to:
+
 1. Keep the root directory clean and focused on active documentation
 2. Preserve historical development artifacts for reference
 3. Maintain a clear audit trail of security reviews and fixes

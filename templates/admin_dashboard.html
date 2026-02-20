@@ -48,10 +48,10 @@
 <div class="row g-4 mb-4">
     <!-- Key Metrics -->
     <div class="col-12 col-md-6 col-lg-3">
-        <div class="card h-100 border-0 shadow-sm bg-primary bg-opacity-50 text-white">
+        <div class="card h-100 border-0 shadow-sm bg-primary text-white">
             <div class="card-body p-4">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="icon-circle bg-white bg-opacity-25 text-white me-3">
+                    <div class="icon-circle bg-primary-subtle text-primary me-3">
                         <span class="material-symbols-outlined">group</span>
                     </div>
                     <span class="text-white text-opacity-75 fw-medium">Active Students</span>
@@ -65,7 +65,7 @@
         <div class="card h-100 border-0 shadow-sm">
             <div class="card-body p-4">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="icon-circle bg-success bg-opacity-10 text-success me-3">
+                    <div class="icon-circle bg-success-subtle text-success me-3">
                         <span class="material-symbols-outlined">savings</span>
                     </div>
                     <span class="text-secondary fw-medium">Total Economy Value</span>
@@ -84,7 +84,7 @@
         <div class="card h-100 border-0 shadow-sm">
             <div class="card-body p-4">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="icon-circle bg-warning bg-opacity-10 text-warning me-3">
+                    <div class="icon-circle bg-warning-subtle text-warning me-3">
                         <span class="material-symbols-outlined">pending_actions</span>
                     </div>
                     <span class="text-secondary fw-medium">Pending Tasks</span>
@@ -111,7 +111,7 @@
         <div class="card h-100 border-0 shadow-sm">
             <div class="card-body p-4">
                 <div class="d-flex align-items-center mb-3">
-                    <div class="icon-circle bg-info bg-opacity-10 text-info me-3">
+                    <div class="icon-circle bg-info-subtle text-info me-3">
                         <span class="material-symbols-outlined">calendar_clock</span>
                     </div>
                     <span class="text-secondary fw-medium">Next Payroll</span>
@@ -210,7 +210,8 @@
                 <li class="nav-item" role="presentation">
                     <button class="nav-link active" id="redemptions-tab" data-bs-toggle="tab"
                         data-bs-target="#redemptions" type="button" role="tab">
-                        <i class="bi bi-gift me-1"></i>Redemptions <span class="badge bg-danger ms-1">{{
+                        <span class="material-symbols-outlined me-1">redeem</span>Redemptions <span
+                            class="badge bg-danger ms-1">{{
                             pending_redemptions_count }}</span>
                     </button>
                 </li>
@@ -220,7 +221,8 @@
                     <button class="nav-link {% if pending_redemptions_count == 0 %}active{% endif %}"
                         id="hall-passes-tab" data-bs-toggle="tab" data-bs-target="#hall-passes" type="button"
                         role="tab">
-                        <i class="bi bi-door-open me-1"></i>Hall Passes <span class="badge bg-danger ms-1">{{
+                        <span class="material-symbols-outlined me-1">door_front</span>Hall Passes <span
+                            class="badge bg-danger ms-1">{{
                             pending_hall_passes_count }}</span>
                     </button>
                 </li>
@@ -230,7 +232,8 @@
                     <button
                         class="nav-link {% if pending_redemptions_count == 0 and pending_hall_passes_count == 0 %}active{% endif %}"
                         id="claims-tab" data-bs-toggle="tab" data-bs-target="#claims" type="button" role="tab">
-                        <i class="bi bi-shield-check me-1"></i>Claims <span class="badge bg-danger ms-1">{{
+                        <span class="material-symbols-outlined me-1">verified_user</span>Claims <span
+                            class="badge bg-danger ms-1">{{
                             pending_insurance_claims_count }}</span>
                     </button>
                 </li>
@@ -259,11 +262,11 @@
                                 <button class="btn btn-sm btn-outline-danger reject-redemption-btn"
                                     data-student-item-id="{{ req.id }}" data-bs-toggle="tooltip"
                                     title="Refund and remove" aria-label="Refund and remove">
-                                    <i class="bi bi-x-circle"></i>
+                                    <span class="material-symbols-outlined">cancel</span>
                                 </button>
                                 <button class="btn btn-sm btn-success approve-redemption-btn"
                                     data-student-item-id="{{ req.id }}">
-                                    <i class="bi bi-check-circle me-1"></i>Approve
+                                    <span class="material-symbols-outlined me-1">check_circle</span>Approve
                                 </button>
                             </div>
                         </div>
@@ -290,7 +293,8 @@
                                 <strong>{{ student_lookup.get(pass.student_id).full_name if
                                     student_lookup.get(pass.student_id) else 'Unknown' }}</strong>
                                 <br>
-                                <small class="text-muted"><i class="bi bi-signpost me-1"></i>{{ pass.reason }}</small>
+                                <small class="text-muted"><span class="material-symbols-outlined me-1">signpost</span>{{
+                                    pass.reason }}</small>
                                 <br>
                                 <small class="text-muted">
                                     <span class="local-timestamp"
@@ -299,7 +303,7 @@
                             </div>
                             <div>
                                 <a href="{{ url_for('admin.hall_pass') }}" class="btn btn-sm btn-primary">
-                                    <i class="bi bi-box-arrow-up-right"></i> View
+                                    <span class="material-symbols-outlined">open_in_new</span> View
                                 </a>
                             </div>
                         </div>
@@ -339,7 +343,7 @@
                             </div>
                             <div>
                                 <a href="{{ url_for('admin.insurance_management') }}" class="btn btn-sm btn-primary">
-                                    <i class="bi bi-box-arrow-up-right"></i> View
+                                    <span class="material-symbols-outlined">open_in_new</span> View
                                 </a>
                             </div>
                         </div>
@@ -386,9 +390,6 @@
                                 <td class="ps-4">
                                     <div class="d-flex align-items-center">
                                         {% set student = student_lookup.get(tx.student_id) %}
-                                        <div class="avatar-circle bg-light text-primary me-2 small fw-bold">
-                                            {{ student.first_name[0] if student else '?' }}
-                                        </div>
                                         <div>
                                             <div class="fw-medium text-dark">
                                                 {{ student.full_name if student else 'Unknown' }}
@@ -604,7 +605,7 @@
                     if (redemptionsPane) {
                         redemptionsPane.innerHTML = `
                             <div class="text-center text-muted py-4">
-                                <i class="bi bi-check-circle" style="font-size: 2rem;"></i>
+                                <span class="material-symbols-outlined" style="font-size: 2rem;">check_circle</span>
                                 <p class="mb-0 mt-2">No pending redemptions</p>
                             </div>
                         `;
@@ -673,7 +674,7 @@
 
             // Disable button and show loading state
             button.disabled = true;
-            button.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+            button.innerHTML = '<span class="material-symbols-outlined">hourglass_top</span> Processing...';
 
             fetch('/api/approve-redemption', {
                 method: 'POST',
@@ -698,14 +699,14 @@
                     } else {
                         showToast('Approval failed: ' + data.message, 'danger');
                         button.disabled = false;
-                        button.innerHTML = '<i class="bi bi-check-circle me-1"></i>Approve';
+                        button.innerHTML = '<span class="material-symbols-outlined me-1">check_circle</span>Approve';
                     }
                 })
                 .catch(error => {
                     console.error('Approval error:', error);
                     showToast('An unexpected error occurred.', 'danger');
                     button.disabled = false;
-                    button.innerHTML = '<i class="bi bi-check-circle me-1"></i>Approve';
+                    button.innerHTML = '<span class="material-symbols-outlined me-1">check_circle</span>Approve';
                 });
         });
     });

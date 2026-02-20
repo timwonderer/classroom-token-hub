@@ -17,6 +17,7 @@ Comprehensive audit of the classroom-economy repository completed in preparation
 ### 1. Obsolete Files
 
 **Found and Removed (8 files)**:
+
 - `seed_dummy_students.py` (duplicate of scripts/seed_dummy_students.py)
 - `create_admin.py` (duplicate of scripts/create_admin.py)
 - `add_join_code_column.py` (duplicate of scripts/add_join_code_column.py)
@@ -31,6 +32,7 @@ Comprehensive audit of the classroom-economy repository completed in preparation
 ### 2. Misplaced Files
 
 **Found and Fixed (1 file)**:
+
 - `app/resources/student_upload_template.csv` - Code referenced root location, docs referenced app/resources. Removed app/resources duplicate, updated docs to reference root location.
 
 **Status**:  Fixed
@@ -38,6 +40,7 @@ Comprehensive audit of the classroom-economy repository completed in preparation
 ### 3. Outdated Documentation
 
 **Found and Updated**:
+
 - Version numbers inconsistent (1.4.0 in README, 1.5.0 in CHANGELOG, targeting 1.6.0)
 - DEVELOPMENT.md listed announcements as "not yet implemented" but released in v1.4.0
 - Recent releases section missing v1.5.0 and v1.6.0
@@ -50,6 +53,7 @@ Comprehensive audit of the classroom-economy repository completed in preparation
 **Feature: Collective Goals (Store Items)**
 
 **Status**: 60% Complete
+
 -  Database migration (o2p3q4r5s6t7_add_collective_goal_settings.py)
 -  Model fields (StoreItem.collective_goal_type, collective_goal_target)
 -  Forms with validation (StoreItemForm)
@@ -65,6 +69,7 @@ Comprehensive audit of the classroom-economy repository completed in preparation
 **Feature: Jobs System**
 
 **Status**: Intentionally Removed (preserved in git history)
+
 - Removed in commit a04b574 (December 2025)
 - Complete implementation existed (models, forms, routes, tests)
 - Preserved in git history for future restoration

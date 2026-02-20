@@ -9,6 +9,7 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Added
+### Added
 - **ClassEconomy Architecture** - New join_code-centric multi-tenancy foundation
   - `ClassEconomy` model: Primary container for class economies with `join_code` as primary key
   - `ClassMembership` model: Role-based authorization (admin/observer/student) per class
@@ -16,6 +17,19 @@ and this project follows semantic versioning principles.
   - `actor_membership_id` on Transaction: Audit trail for who performed each transaction
   - `join_code` foreign keys added to settings tables: PayrollSettings, RentSettings, BankingSettings, HallPassSettings, FeatureSettings, InsurancePolicy, StoreItem, PayrollReward, PayrollFine
   - Authorization helpers in `app/auth.py`: `check_membership_access()`, `membership_required()` decorator, `get_or_create_membership()`
+- **Admin Transaction Backfill** — One-time remediation page (`/admin/backfill-transactions`) that lets teachers fix student balances when past transactions lack a class-period `join_code`. Detected automatically on dashboard load; teachers select the correct period for each affected student and the system links all orphaned transactions to the right class context.
+- **Interactive Project Timeline** — New `/docs/timeline` page showcasing the full development history of Classroom Token Hub
+  - Visual vertical timeline organized into four eras: Genesis, Crisis Resolution, Feature Expansion, and Refinement
+  - Filter bar: All / Features / Fixes & Crises / Security / Architecture / Philosophy
+  - Expandable version cards with details on every release from v1.0.0 through current unreleased
+  - Design Philosophy section with all ten anti-goals and core educational principles
+  - Scroll-triggered entry animations with intersection observer
+  - Linked from the Help & Support Center (`/docs/`) index and Quick Links section
+  - Added `PROJECT_TIMELINE.md` to repository root as the source document
+- **`void_invite_code` route** (`/sysadmin/manage-teachers/void/<id>`) - Allows sysadmin to void unused invite codes directly from the Teacher Management page
+- **`combined_logs` route** (`/sysadmin/combined-logs`) - New consolidated log viewer combining error logs and network activity
+- **`support_tickets` route** (`/sysadmin/support`) - New consolidated support ticket view combining user reports and escalated issues
+- **`open_tickets` stat** on dashboard - Shows sum of new user reports + pending/in-review escalated issues
 
 ### Changed
 - **Student Routes** - Updated to use join_code as primary lookup
@@ -25,12 +39,36 @@ and this project follows semantic versioning principles.
 - **API Routes** - Updated for join_code-centric class isolation
   - `purchase_item`: Uses join_code for StoreItem and BankingSettings lookups
   - `get_active_hall_passes`: Now requires join_code or teacher_id (prevents global data leak)
+- **System Admin interface redesigned** - Complete redesign matching teacher/student interface patterns
+  - **Mobile-friendly layout** - Fixed sidebar with hamburger toggle on mobile, mobile bottom navigation bar with quick access to Dashboard, Teachers, Support, Logs, and Announcements
+  - **Dashboard revamped** - Stat cards (Total Teachers, Total Students, Active Invites, Open Tickets), 6 quick-action buttons, recent teacher registrations and errors panels, system admins table
+  - **Teacher Management consolidated** - Unified page combining invite code generation/voiding (with copy-to-clipboard and void button), teacher accounts with class badges, student counts, last login, status, and per-period/account deletion actions; pending deletion requests displayed in a dedicated table
+  - **Logs consolidated** - New combined `/sysadmin/combined-logs` page with tabbed Error Logs and Network Activity views; raw system log viewer removed (Grafana available instead)
+  - **Support Tickets unified** - New combined `/sysadmin/support` page showing both User Reports (teachers + students) and Escalated Issues in tabs; bug bounty reward workflow preserved; detail views link back to the unified page
+- **Template Design System Unification** - Standardized template styling across teacher, student, and sysadmin views
+  - Replaced legacy Bootstrap icon usage (`bi-*`) with Material Symbols in templates and JS-rendered button states
+  - Removed legacy opacity utility patterns (`bg-opacity-*`) in favor of semantic subtle backgrounds (`bg-*-subtle`)
+  - Replaced hardcoded inline color literals in template style contexts with token/semantic values
+  - Normalized standalone and shell templates to use consistent token-driven theming behavior
 
 ### Fixed
+- **Student rent/shop regression follow-up** - Addressed review-driven cleanup after the rent/store hotfix
+  - Added shared helper logic for determining whether a student's current rent coverage period is paid, and reused it across student rent/shop and API purchase flows to reduce duplicated validation code
+  - Kept incremental rent payment form available when incremental mode is enabled (even when full remaining balance exceeds checking), so partial payments are not blocked in the UI
+  - Corrected mixed rent-link behavior in student shop so privilege-only rent items are deactivated while per-use rent perks remain purchasable at `$0`
+  - Made the mixed rent-link regression test time-independent by using a relative due date instead of a fixed calendar date
+- **Student store block scoping** - Student shop and purchase APIs now enforce block visibility while preserving the existing "no block mapping = visible to all blocks" semantics for unscoped legacy items
+- **Student markdown toolbar icons restored** - Reintroduced Font Awesome in the student layout so markdown editor toolbar icons render correctly on student issue forms
+- **Student payroll rate lookup** - Student payroll page and status projections now pass teacher context into pay-rate resolution so block-specific teacher rates display correctly instead of defaulting
 - **P0: Duplicate auto-tap-out events causing payroll overpayment** - Added idempotency check to prevent race conditions when multiple sources (student browser polling, scheduled job, admin dashboard) call auto-tap-out logic simultaneously. Previously, duplicate "Daily limit reached" tap-out events would be created, causing payroll to count the same session multiple times and resulting in massive overpayment. Now checks if a daily limit tap-out already exists before creating a new one. Includes cleanup script (`cleanup_duplicate_tapouts.py`) to fix existing duplicate records. See `DUPLICATE_TAPOUT_BUG_REPORT.md` for full details.
 - **Void redemption creating transactions without join_code** - Fixed `/api/reject-redemption` endpoint creating refund transactions with `join_code=NULL` when voiding redemptions for legacy StudentItem records. Added fallback logic to resolve join_code from TeacherBlock or current session when StudentItem.join_code is NULL, preventing balance fix warnings for teachers. This resolves the "Fix Student Balances" alert appearing after voiding old redemptions.
 - **Void transaction CSRF 400 error** - Fixed student detail page void transaction button failing with 400 error. Added missing X-CSRFToken header to fetch request in `voidTransaction()` JavaScript function. Teachers can now successfully void transactions from student detail pages.
 - **P0: Rent payment applied to wrong period with bill preview enabled** - Fixed critical bug where students with unpaid overdue rent were allowed to pre-pay for future periods instead of paying overdue amounts first. When bill preview was enabled with a long preview period (e.g., 30 days), the system incorrectly classified overdue students as being in "preview period" for next month's rent. This caused payments to be recorded for the wrong coverage period (next month instead of current/overdue month), preventing students from receiving rent benefits even after paying. Now verifies current coverage period is fully paid before allowing preview period payments. Students must pay oldest overdue period first, and benefits are granted immediately when current period is paid. Also fixed rent page to display correct period being paid for with OVERDUE badge when applicable.
+- **Rent transaction month label now matches the coverage period being paid** - Fixed rent payment transaction descriptions to use the selected coverage due date (e.g., January 2026 for overdue January rent paid on February 17) instead of the wall-clock payment month. This keeps late-fee transactions aligned with the actual rent period and avoids showing overdue January payments as February charges.
+- **Recovery and Claim Page Styling Not Applying** - Fixed account claim/recovery pages that referenced design tokens but did not load `tokens.css`
+  - Added missing `tokens.css` includes in standalone recovery/claim templates
+  - Corrected student recovery layout shell class from `student-theme` to `student-shell`
+  - Restored valid template syntax in `student_detail.html` that affected recovery-related page rendering/tests
 
 ## [1.8.0] - 2026-02-09
 

@@ -157,7 +157,7 @@
                     {% elif policy.claim_type == 'non_monetary' %}
                         <span class="badge bg-warning text-dark">[NON-MONETARY] Approval only</span>
                     {% else %}
-                        <span class="badge bg-primary">[LEGACY] Manual amount</span>
+                        <span class="badge bg-primary">[CUSTOM] Monetary reimbursement</span>
                     {% endif %}
                 </p>
 
@@ -178,17 +178,17 @@
 
                 {% if enrollment.coverage_start_date %}
                     <div class="alert alert-success py-2 small">
-                        <i class="bi bi-check-circle-fill me-1"></i>Coverage active since {{ enrollment.coverage_start_date.strftime('%b %d, %Y') }}
+                        <span class="material-symbols-outlined me-1">check_circle</span>Coverage active since {{ enrollment.coverage_start_date.strftime('%b %d, %Y') }}
                     </div>
                 {% else %}
                     <div class="alert alert-warning py-2 small">
-                        <i class="bi bi-exclamation-triangle-fill me-1"></i>Still in {{ policy.waiting_period_days }}-day waiting period
+                        <span class="material-symbols-outlined me-1">warning</span>Still in {{ policy.waiting_period_days }}-day waiting period
                     </div>
                 {% endif %}
 
                 {% if not enrollment.payment_current %}
                     <div class="alert alert-danger py-2 small">
-                        <i class="bi bi-exclamation-octagon-fill me-1"></i>Payment overdue ({{ enrollment.days_unpaid }} days)
+                        <span class="material-symbols-outlined me-1">dangerous</span>Payment overdue ({{ enrollment.days_unpaid }} days)
                     </div>
                 {% endif %}
             </div>
@@ -213,7 +213,7 @@
 
                     {% if policy.max_claims_count and (claims_this_period|length >= policy.max_claims_count) %}
                         <div class="alert alert-warning py-2 small mt-2">
-                            <i class="bi bi-exclamation-triangle-fill me-1"></i>You've reached the maximum number of claims for this {{ policy.max_claims_period }}.
+                            <span class="material-symbols-outlined me-1">warning</span>You've reached the maximum number of claims for this {{ policy.max_claims_period }}.
                         </div>
                     {% endif %}
                 {% else %}

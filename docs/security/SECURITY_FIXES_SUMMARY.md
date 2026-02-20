@@ -13,6 +13,7 @@ This document summarizes the resolution of 62 CodeQL security alerts across the 
 **Issue:** TOTP secrets were being printed to console/logs in multiple files.
 
 **Files Fixed:**
+
 - `scripts/create_admin.py` (lines 47, 50, 90, 93)
 - `wsgi.py` (line 117)
 - `scripts/seed_multi_tenancy_test_data.py` (lines 711-712)
@@ -42,11 +43,13 @@ This document summarizes the resolution of 62 CodeQL security alerts across the 
 **Issue:** GitHub Actions workflows lacked explicit permission declarations (principle of least privilege).
 
 **Files Fixed:**
+
 - `.github/workflows/toggle-maintenance.yml`
 - `.github/workflows/check-migrations.yml`
 - `.github/workflows/deploy.yml`
 
 **Fix:** Added explicit `permissions:` blocks to each workflow:
+
 - `contents: read` for all workflows
 - `pull-requests: write` for check-migrations.yml (needs to comment on PRs)
 
@@ -77,6 +80,7 @@ This document summarizes the resolution of 62 CodeQL security alerts across the 
 **Status:** Already mitigated with `# nosec` comments and `is_safe_url()` validation.
 
 **Analysis:**
+
 - All redirect URLs are validated using `_is_safe_url()` function before redirecting
 - The function performs same-origin checks to prevent open redirects
 - Developers explicitly marked these as safe with `# nosec` comments
@@ -93,6 +97,7 @@ This document summarizes the resolution of 62 CodeQL security alerts across the 
 **Status:** Standard Flask error handling patterns.
 
 **Analysis:**
+
 - Alerts are for standard `abort(404)` and `abort(403)` calls
 - These are Flask's standard error handling mechanisms
 - Error handlers in `wsgi.py` catch these and show user-friendly error pages
@@ -112,6 +117,7 @@ This document summarizes the resolution of 62 CodeQL security alerts across the 
 ```python
 response = Response(resp.iter_content(chunk_size=8192), resp.status_code, response_headers)
 ```
+
 - This creates a Flask Response object for proxying Grafana requests
 - Content comes from internal Grafana service (controlled by admin)
 - Headers are filtered to exclude dangerous headers like `content-encoding`

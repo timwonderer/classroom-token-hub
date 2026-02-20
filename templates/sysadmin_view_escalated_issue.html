@@ -5,8 +5,8 @@
 {% block content %}
 <div class="container-fluid">
     <!-- Back Button -->
-    <a href="{{ url_for('sysadmin.escalated_issues') }}" class="btn btn-outline-secondary mb-3">
-        <i class="bi bi-arrow-left me-2"></i>Back to Escalated Issues
+    <a href="{{ url_for('sysadmin.support_tickets') }}?tab=issues" class="btn btn-outline-secondary mb-3">
+        <span class="material-symbols-outlined me-2">arrow_back</span>Back to Escalated Issues
     </a>
 
     <div class="row">
@@ -16,7 +16,7 @@
                 <div class="card-header bg-primary text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h4 class="mb-0">
-                            <i class="bi bi-flag-fill me-2"></i>Issue #{{ issue.id }}
+                            <span class="material-symbols-outlined me-2">flag</span>Issue #{{ issue.id }}
                         </h4>
                         <span class="badge
                             {% if issue.status == 'elevated' %}bg-warning text-dark
@@ -32,7 +32,7 @@
                     <div class="mb-3">
                         <h6 class="text-muted mb-2">Escalated By</h6>
                         <p class="mb-0">
-                            <i class="bi bi-person-badge me-2"></i>
+                            <span class="material-symbols-outlined me-2">badge</span>
                             <strong>{{ issue.teacher.username }}</strong>
                             {% if issue.share_class_name_with_sysadmin and issue.class_label %}
                             <span class="text-muted">| {{ issue.class_label }}</span>
@@ -46,7 +46,7 @@
                     <div class="mb-3">
                         <h6 class="text-muted mb-2">Student Reference</h6>
                         <p class="mb-0">
-                            <i class="bi bi-hash me-2"></i>
+                            <span class="material-symbols-outlined me-2">tag</span>
                             <code>{{ issue.opaque_student_reference }}</code>
                             <small class="text-muted d-block mt-1">
                                 Non-reversible identifier for privacy protection
@@ -69,7 +69,7 @@
                     <div class="mb-3">
                         <h6 class="text-muted mb-2">Bug Bounty Reward Eligibility</h6>
                         <p class="mb-0">
-                            <i class="bi bi-gift me-2"></i>
+                            <span class="material-symbols-outlined me-2">redeem</span>
                             {% if issue.eligible_for_reward %}
                                 <span class="badge bg-warning text-dark">Yes</span>
                                 {% if issue.reward_amount %}
@@ -127,7 +127,7 @@
                         <div class="col-md-6 mb-3">
                             <h6 class="text-muted mb-2">Escalated</h6>
                             <p class="mb-0">
-                                <i class="bi bi-arrow-up-circle me-2"></i>
+                                <span class="material-symbols-outlined me-2">arrow_circle_up</span>
                                 <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
                             </p>
                         </div>
@@ -135,7 +135,7 @@
                         <div class="col-md-6 mb-3">
                             <h6 class="text-muted mb-2">Reviewed</h6>
                             <p class="mb-0">
-                                <i class="bi bi-eye me-2"></i>
+                                <span class="material-symbols-outlined me-2">visibility</span>
                                 <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.sysadmin_reviewed_at) }}"></span>
                             </p>
                         </div>
@@ -160,7 +160,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="bi bi-info-circle me-2"></i>System Context Snapshot
+                        <span class="material-symbols-outlined me-2">info</span>System Context Snapshot
                     </h5>
                 </div>
                 <div class="card-body">
@@ -199,7 +199,7 @@
                     <p class="mb-0 mt-2"><strong>Description:</strong> {{ issue.context_snapshot.transaction.description }}</p>
                     {% if issue.context_snapshot.transaction.is_void %}
                     <div class="alert alert-danger mt-2 mb-0">
-                        <i class="bi bi-x-circle-fill me-2"></i>Transaction was voided
+                        <span class="material-symbols-outlined me-2">cancel</span>Transaction was voided
                     </div>
                     {% endif %}
                     {% endif %}
@@ -215,7 +215,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-info text-white">
                     <h5 class="mb-0">
-                        <i class="bi bi-play-circle me-2"></i>Start Review
+                        <span class="material-symbols-outlined me-2">play_circle</span>Start Review
                     </h5>
                 </div>
                 <div class="card-body">
@@ -223,7 +223,7 @@
                     <form method="POST" action="{{ url_for('sysadmin.start_review_escalated_issue', issue_id=issue.id) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-info w-100">
-                            <i class="bi bi-play-circle me-2"></i>Start Review
+                            <span class="material-symbols-outlined me-2">play_circle</span>Start Review
                         </button>
                     </form>
                 </div>
@@ -235,7 +235,7 @@
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-success text-white">
                     <h5 class="mb-0">
-                        <i class="bi bi-check-circle me-2"></i>Resolve Issue
+                        <span class="material-symbols-outlined me-2">check_circle</span>Resolve Issue
                     </h5>
                 </div>
                 <div class="card-body">
@@ -267,7 +267,7 @@
                         </div>
 
                         <button type="submit" class="btn btn-success w-100">
-                            <i class="bi bi-check-circle me-2"></i>Mark as Resolved
+                            <span class="material-symbols-outlined me-2">check_circle</span>Mark as Resolved
                         </button>
                     </form>
                 </div>
@@ -279,7 +279,7 @@
             <div class="card shadow-sm">
                 <div class="card-header">
                     <h5 class="mb-0">
-                        <i class="bi bi-clock-history me-2"></i>Status History
+                        <span class="material-symbols-outlined me-2">history</span>Status History
                     </h5>
                 </div>
                 <div class="card-body">

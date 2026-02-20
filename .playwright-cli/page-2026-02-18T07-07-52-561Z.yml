@@ -1,0 +1,44 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - text: TEACHER PORTAL
+        - heading "Welcome, Teacher!" [level=1] [ref=e5]
+        - paragraph [ref=e6]: Please log in to manage your class.
+      - generic [ref=e7]: You must be an admin to view this page.
+      - generic [ref=e8]:
+        - generic [ref=e9]:
+          - generic [ref=e10]: Username
+          - textbox "Enter your username" [ref=e11]:
+            - /placeholder: "Enter your\n                    username"
+            - text: teacher_render
+        - generic [ref=e12]:
+          - generic [ref=e13]: Authenticator Code
+          - textbox "Enter 6-digit code" [ref=e14]: "367883"
+        - generic [ref=e15]:
+          - button "Log In" [ref=e16] [cursor=pointer]
+          - button "fingerprint Sign in with Passkey" [ref=e17] [cursor=pointer]:
+            - generic [ref=e18]: fingerprint
+            - text: Sign in with Passkey
+        - generic [ref=e19]:
+          - link "I need to recover my teacher account" [ref=e20] [cursor=pointer]:
+            - /url: /admin/recover
+          - link "I need to finish my account recovery" [ref=e21] [cursor=pointer]:
+            - /url: /admin/resume-credentials
+          - link "I am a student" [ref=e22] [cursor=pointer]:
+            - /url: /student/login
+          - link "I need a new teacher account" [ref=e23] [cursor=pointer]:
+            - /url: /admin/signup
+        - generic [ref=e24]:
+          - link "Privacy" [ref=e25] [cursor=pointer]:
+            - /url: /privacy
+          - text: •
+          - link "Terms" [ref=e26] [cursor=pointer]:
+            - /url: /terms
+    - img "Logo" [ref=e28]
+  - dialog [active] [ref=e29]:
+    - generic [ref=e31]:
+      - status [ref=e32]:
+        - generic [ref=e33]: Loading...
+      - heading "Pro Tip" [level=5] [ref=e34]
+      - paragraph [ref=e35]: Export your class data regularly for backup and analysis purposes.

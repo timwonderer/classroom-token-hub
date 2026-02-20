@@ -7,6 +7,7 @@
     <title>Classroom Token Hub - TOTP Setup</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
         * {
@@ -34,7 +35,7 @@
             display:flex;
             align-items: center;
             justify-content: center;
-            background: #ffffff;
+            background: white;
             height: 100vh;
         }
 
@@ -159,13 +160,13 @@
 
         .btn-primary:hover {
             background: var(--secondary);
-            color: #2c2c2c;
+            color: var(--text-primary);
         }
 
         .footer-info {
             margin-top: 20px;
 
-            color: #6c757d;
+            color: var(--text-secondary);
            
             font-size:8pt;
         }
@@ -173,12 +174,12 @@
        
         .form-label {
             font-weight: 500;
-            color: #495057;
+            color: var(--text-primary);
         }
 
         .form-control:focus {
             border-color: var(--primary);
-            box-shadow: 0 0 0 0.2rem rgba(0, 105, 92, 0.25);
+            box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--primary) 25%, transparent);
         }
 
         .form-group {

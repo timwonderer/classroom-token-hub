@@ -426,7 +426,7 @@ function loadQueueSettings() {
 // Update the status label text based on queue state
 function updateQueueStatusLabel(enabled) {
     queueStatusLabel.textContent = enabled ? 'Queue System' : 'Queue System';
-    queueStatusLabel.style.color = enabled ? '#198754' : '#dc3545';
+    queueStatusLabel.style.color = enabled ? 'var(--success)' : 'var(--danger)';
 }
 
 // Save queue settings

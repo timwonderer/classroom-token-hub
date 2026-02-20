@@ -29,7 +29,7 @@ from app.models import (
     DeletionRequestType, DeletionRequestStatus, TeacherBlock, StudentBlock, UserReport,
     FeatureSettings, TeacherOnboarding, RentSettings, BankingSettings,
     DemoStudent, HallPassSettings, PayrollFine, PayrollReward,
-    PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory
+    PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction
 )
 from app.auth import system_admin_required, SESSION_TIMEOUT_MINUTES
 from app.forms import SystemAdminLoginForm, SystemAdminInviteForm
@@ -452,6 +452,13 @@ def dashboard():
     active_invites = AdminInviteCode.query.filter_by(used=False).count()
     system_admin_count = SystemAdmin.query.count()
 
+    # Open tickets = new user reports + pending/in-review escalated issues
+    new_reports_count = UserReport.query.filter_by(status='new').count()
+    open_issues_count = Issue.query.filter(
+        Issue.status.in_(['elevated', 'developer_review'])
+    ).count()
+    open_tickets = new_reports_count + open_issues_count
+
     # Recent teachers (last 5)
     recent_teachers = Admin.query.order_by(Admin.created_at.desc()).limit(5).all()
 
@@ -467,6 +474,7 @@ def dashboard():
         total_students=total_students,
         active_invites=active_invites,
         system_admin_count=system_admin_count,
+        open_tickets=open_tickets,
         recent_teachers=recent_teachers,
         recent_errors=recent_errors,
         system_admins=system_admins
@@ -474,6 +482,70 @@ def dashboard():
 
 
 # -------------------- LOGGING AND MONITORING --------------------
+
+@sysadmin_bp.route('/combined-logs')
+@system_admin_required
+def combined_logs():
+    """
+    Unified log viewer with two tabs: Error Logs and Network Activity.
+    Replaces the separate error-logs and network-activity pages.
+    """
+    active_tab = request.args.get('tab', 'errors')
+    per_page = 50
+
+    # ── Error Logs (Tab 1) ──
+    error_type_filter = request.args.get('error_type', '')
+    error_page = request.args.get('page', 1, type=int)
+    error_query = ErrorLog.query
+    if error_type_filter:
+        error_query = error_query.filter(ErrorLog.error_type == error_type_filter)
+    error_pagination = error_query.order_by(ErrorLog.timestamp.desc()).paginate(
+        page=error_page, per_page=per_page, error_out=False
+    )
+    error_logs = error_pagination.items
+
+    # Get all distinct error types for filter
+    error_types = [et[0] for et in db.session.query(ErrorLog.error_type).distinct().all() if et[0]]
+
+    # ── Network Activity (Tab 2) ──
+    ip_filter = request.args.get('ip', '')
+    net_page = request.args.get('net_page', 1, type=int)
+    net_query = ErrorLog.query
+    if ip_filter:
+        net_query = net_query.filter(ErrorLog.ip_address == ip_filter)
+    net_pagination = net_query.order_by(ErrorLog.timestamp.desc()).paginate(
+        page=net_page, per_page=per_page, error_out=False
+    )
+    network_logs = net_pagination.items
+
+    ip_addresses = [ip[0] for ip in db.session.query(ErrorLog.ip_address).distinct().all() if ip[0]]
+    total_requests = ErrorLog.query.count()
+    total_errors = ErrorLog.query.filter(ErrorLog.error_type.isnot(None)).count()
+    unique_ips = db.session.query(ErrorLog.ip_address).distinct().count()
+    error_type_stats = db.session.query(
+        ErrorLog.error_type,
+        db.func.count(ErrorLog.id).label('count')
+    ).group_by(ErrorLog.error_type).order_by(db.func.count(ErrorLog.id).desc()).all()
+
+    return render_template(
+        "sysadmin_combined_logs.html",
+        current_page="logs",
+        active_tab=active_tab,
+        # Error tab
+        error_logs=error_logs,
+        error_pagination=error_pagination,
+        error_types=error_types,
+        current_error_type=error_type_filter,
+        total_errors=total_errors,
+        # Network tab
+        network_logs=network_logs,
+        net_pagination=net_pagination,
+        ip_addresses=ip_addresses,
+        current_ip=ip_filter,
+        total_requests=total_requests,
+        unique_ips=unique_ips,
+        error_type_stats=error_type_stats,
+    )
 
 @sysadmin_bp.route('/logs')
 @system_admin_required
@@ -837,8 +909,8 @@ def delete_admin(admin_id):
 @system_admin_required
 def manage_teachers():
     """
-    Combined page for teacher management and invite codes.
-    Allows creation of invite codes and viewing all teachers.
+    Unified teacher management page: invite codes + teacher overview with stats.
+    Merges the old manage_teachers and teacher_overview into a single page.
     """
     # Handle invite code form submission
     form = SystemAdminInviteForm()
@@ -854,18 +926,141 @@ def manage_teachers():
         flash(f"Invite code '{code}' created successfully.", "success")
         return redirect(url_for("sysadmin.manage_teachers") + "#invite-codes")
 
-    # Get all invite codes
-    invites = AdminInviteCode.query.order_by(AdminInviteCode.created_at.desc()).all()
+    # Get all invite codes and categorize them
+    all_invites = AdminInviteCode.query.order_by(AdminInviteCode.created_at.desc()).all()
+    
+    # Categorize invites: active, expired, or used
+    active_invites = []
+    expired_invites = []
+    used_invites = []
+    
+    current_time = utc_now()
+    
+    for invite in all_invites:
+        if invite.used:
+            used_invites.append(invite)
+        elif invite.expires_at and invite.expires_at < current_time:
+            expired_invites.append(invite)
+        else:
+            active_invites.append(invite)
 
-    # Get all teachers
-    teachers = Admin.query.order_by(Admin.created_at.desc()).all()
+    # Build rich teacher data (from teacher_overview logic)
+    all_teachers = Admin.query.order_by(Admin.username.asc()).all()
+    inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
+
+    # Batch query: teacher-student relationships
+    if all_teachers:
+        teacher_ids = [t.id for t in all_teachers]
+        teacher_students = db.session.query(
+            StudentTeacher.admin_id.label('teacher_id'),
+            Student.id.label('student_id'),
+            Student.block.label('block')
+        ).join(Student, Student.id == StudentTeacher.student_id).filter(
+            StudentTeacher.admin_id.in_(teacher_ids)
+        ).subquery()
+
+        teacher_student_count_rows = db.session.query(
+            teacher_students.c.teacher_id,
+            db.func.count(teacher_students.c.student_id).label('count')
+        ).group_by(teacher_students.c.teacher_id).all()
+        teacher_student_counts = {row.teacher_id: row.count for row in teacher_student_count_rows}
+
+        period_counts_query = db.session.query(
+            teacher_students.c.teacher_id,
+            teacher_students.c.block,
+            db.func.count(teacher_students.c.student_id).label('count')
+        ).group_by(teacher_students.c.teacher_id, teacher_students.c.block).all()
+
+        teacher_periods = {}
+        for teacher_id, block, count in period_counts_query:
+            if teacher_id not in teacher_periods:
+                teacher_periods[teacher_id] = {}
+            teacher_periods[teacher_id][block] = count
+
+        all_pending_requests = DeletionRequest.query.filter(
+            DeletionRequest.admin_id.in_(teacher_ids),
+            DeletionRequest.status == DeletionRequestStatus.PENDING
+        ).all()
+        teacher_pending_requests = {}
+        for req in all_pending_requests:
+            teacher_pending_requests.setdefault(req.admin_id, []).append(req)
+    else:
+        teacher_student_counts = {}
+        teacher_periods = {}
+        teacher_pending_requests = {}
+
+    teachers = []
+    for teacher in all_teachers:
+        total_students = teacher_student_counts.get(teacher.id, 0)
+        periods = teacher_periods.get(teacher.id, {})
+        pending_requests = teacher_pending_requests.get(teacher.id, [])
+
+        is_inactive = False
+        if teacher.last_login:
+            last_login = teacher.last_login
+            if last_login.tzinfo is None:
+                last_login = last_login.replace(tzinfo=timezone.utc)
+            is_inactive = last_login < inactivity_threshold
+        else:
+            is_inactive = True
+
+        # Determine authorization using preloaded pending requests and inactivity flag
+        can_delete_account = False
+        authorized_periods = []
+
+        if is_inactive and pending_requests:
+            # Build lookup for O(1) access: separate account and period requests
+            account_requests = [req for req in pending_requests if req.request_type == DeletionRequestType.ACCOUNT]
+            period_requests_by_period = {
+                req.period: req 
+                for req in pending_requests 
+                if req.request_type == DeletionRequestType.PERIOD and req.period is not None
+            }
+            
+            # Check account-level authorization
+            can_delete_account = len(account_requests) > 0
+            
+            # Check period-level authorization using lookup
+            authorized_periods = [
+                period for period in periods 
+                if period in period_requests_by_period
+            ]
+
+        teachers.append({
+            'id': teacher.id,
+            'username': teacher.username,
+            'last_login': teacher.last_login,
+            'is_inactive': is_inactive,
+            'total_students': total_students,
+            'periods': periods,
+            'pending_requests': pending_requests,
+            'can_delete_account': can_delete_account,
+            'authorized_periods': authorized_periods,
+        })
 
     return render_template(
         "system_admin_manage_teachers.html",
         form=form,
-        invites=invites,
-        teachers=teachers
+        active_invites=active_invites,
+        expired_invites=expired_invites,
+        used_invites=used_invites,
+        teachers=teachers,
+        inactivity_threshold_days=INACTIVITY_THRESHOLD_DAYS,
     )
+
+
+@sysadmin_bp.route('/manage-teachers/void/<int:code_id>', methods=['POST'])
+@system_admin_required
+def void_invite_code(code_id):
+    """Void (mark as used) an unused invite code so it can no longer be claimed."""
+    invite = db.get_or_404(AdminInviteCode, code_id)
+    if invite.used:
+        flash("This invite code has already been used or voided.", "warning")
+    else:
+        invite.used = True
+        db.session.commit()
+        flash(f"Invite code '{invite.code}' has been voided.", "success")
+    return redirect(url_for("sysadmin.manage_teachers") + "#invite-codes")
 
 
 @sysadmin_bp.route('/teacher-overview', methods=['GET'])
@@ -1019,7 +1214,6 @@ def delete_period(admin_id, period):
     if not re.match(r'^[a-zA-Z0-9\s\-_]+$', period):
         flash("Invalid period format", "error")
         return redirect(url_for('sysadmin.teacher_overview'))
-
     admin = db.get_or_404(Admin, admin_id)
 
     # Try to resolve as join_code first (new architecture)
@@ -1064,7 +1258,7 @@ def delete_period(admin_id, period):
             f"Teacher must request deletion or be inactive for 6+ months.",
             "error"
         )
-        return redirect(url_for('sysadmin.teacher_overview'))
+        return redirect(url_for('sysadmin.manage_teachers'))
 
     try:
         removed_count = 0
@@ -1142,7 +1336,7 @@ def delete_period(admin_id, period):
         current_app.logger.exception(f"Error deleting period {period} for teacher {admin_id}")
         flash(f"Error deleting period: {str(e)}", "error")
 
-    return redirect(url_for('sysadmin.teacher_overview'))
+    return redirect(url_for('sysadmin.manage_teachers'))
 
 
 @sysadmin_bp.route('/manage-teachers/delete/<int:admin_id>', methods=['POST'])
@@ -1168,7 +1362,7 @@ def delete_teacher(admin_id):
             f"Teacher must request deletion or be inactive for 6+ months.",
             "error"
         )
-        return redirect(url_for('sysadmin.teacher_overview'))
+        return redirect(url_for('sysadmin.manage_teachers'))
 
     try:
         from app.models import ClassEconomy
@@ -1241,7 +1435,64 @@ def delete_teacher(admin_id):
         current_app.logger.exception(f"Error deleting teacher {admin_id}")
         flash(f"Error deleting teacher: {str(e)}", "error")
 
-    return redirect(url_for('sysadmin.teacher_overview'))
+    return redirect(url_for('sysadmin.manage_teachers'))
+
+
+# -------------------- SUPPORT TICKETS (COMBINED VIEW) --------------------
+
+@sysadmin_bp.route('/support')
+@system_admin_required
+def support_tickets():
+    """
+    Unified support ticket dashboard combining user reports and escalated issues.
+    Tab 1: User Reports (bugs/suggestions from teachers and students)
+    Tab 2: Escalated Issues (student-escalated issues awaiting developer review)
+    """
+    active_tab = request.args.get('tab', 'reports')
+
+    # ── User Reports (Tab 1) ──
+    status_filter = request.args.get('status', 'all')
+    report_type_filter = request.args.get('type', 'all')
+    report_query = UserReport.query
+    if status_filter != 'all':
+        report_query = report_query.filter(UserReport.status == status_filter)
+    if report_type_filter != 'all':
+        report_query = report_query.filter(UserReport.report_type == report_type_filter)
+    reports = report_query.order_by(UserReport.submitted_at.desc()).all()
+
+    from sqlalchemy import func as sqlfunc
+    status_counts = dict(
+        db.session.query(UserReport.status, sqlfunc.count(UserReport.id))
+        .group_by(UserReport.status).all()
+    )
+    new_reports = status_counts.get('new', 0)
+    rewarded_reports = status_counts.get('rewarded', 0)
+
+    # ── Escalated Issues (Tab 2) ──
+    all_issues = Issue.query.filter(
+        Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
+    ).order_by(Issue.escalated_at.desc()).all()
+    issues_pending = [i for i in all_issues if i.status == 'elevated']
+    issues_in_review = [i for i in all_issues if i.status == 'developer_review']
+    issues_resolved = [i for i in all_issues if i.status == 'developer_resolved']
+
+    return render_template(
+        'sysadmin_support_tickets.html',
+        current_page='support_tickets',
+        active_tab=active_tab,
+        # User reports
+        reports=reports,
+        status_filter=status_filter,
+        report_type_filter=report_type_filter,
+        new_reports=new_reports,
+        rewarded_reports=rewarded_reports,
+        # Escalated issues
+        issues_pending=issues_pending,
+        issues_in_review=issues_in_review,
+        issues_resolved=issues_resolved,
+        pending_issues=len(issues_pending),
+        in_review_issues=len(issues_in_review),
+    )
 
 
 # -------------------- USER REPORTS --------------------
@@ -1958,32 +2209,78 @@ def resolve_escalated_issue(issue_id):
     resolution_note = request.form.get('resolution_note', '').strip()
     eligible_for_reward = request.form.get('eligible_for_reward') == 'on'
     reward_amount = request.form.get('reward_amount', '').strip()
+    sysadmin_id = session.get('sysadmin_id')
+
+    if not sysadmin_id:
+        flash("System admin session is invalid. Please log in again.", "error")
+        return redirect(url_for('sysadmin.login', next=request.path))
 
     try:
+        reward_amount_value = None
+        if eligible_for_reward:
+            if not reward_amount:
+                flash("Reward amount is required when reward eligibility is selected.", "error")
+                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+            try:
+                from app.models import _quantize_currency
+                reward_amount_value = _quantize_currency(reward_amount)
+            except (ValueError, InvalidOperation):
+                flash("Invalid reward amount. Please enter a valid number.", "error")
+                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+            if reward_amount_value <= Decimal('0'):
+                flash("Reward amount must be greater than 0.", "error")
+                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+
         old_status = issue.status
         issue.status = 'developer_resolved'
         issue.sysadmin_resolved_at = utc_now()
         issue.sysadmin_notes = resolution_note
-        issue.sysadmin_id = session.get('sysadmin_id')
+        issue.sysadmin_id = sysadmin_id
         issue.eligible_for_reward = eligible_for_reward
 
-        # Set reward amount if eligible
-        if eligible_for_reward and reward_amount:
-            try:
-                from app.models import _quantize_currency
-                issue.reward_amount = _quantize_currency(reward_amount)
-            except (ValueError, InvalidOperation):
-                flash("Invalid reward amount. Please enter a valid number.", "error")
-                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
-        else:
-            issue.reward_amount = None
+        reward_transaction = None
+        if eligible_for_reward and reward_amount_value is not None:
+            reward_transaction = Transaction(
+                student_id=issue.student_id,
+                teacher_id=issue.teacher_id,
+                join_code=issue.join_code,
+                amount=reward_amount_value,
+                account_type='checking',
+                description=f"Bug Reward (Issue #{issue.id})",
+                timestamp=utc_now(),
+                status=TransactionStatus.PENDING,
+                type='bug_reward',
+                is_void=False,
+            )
+            db.session.add(reward_transaction)
+            db.session.flush()
+
+            db.session.add(IssueResolutionAction(
+                issue_id=issue.id,
+                action_type='bug_reward_issued',
+                action_description=f"Issued bug reward while resolving issue #{issue.id}",
+                performed_by_type='sysadmin',
+                performed_by_id=sysadmin_id,
+                related_transaction_id=reward_transaction.id,
+                amount_changed=float(reward_amount_value),
+                before_value='0.00',
+                after_value=str(reward_amount_value),
+            ))
 
         # Record status change
         from app.utils.issue_helpers import record_status_change
-        record_status_change(issue, old_status, 'developer_resolved', 'sysadmin', session.get('sysadmin_id'))
+        status_note = (
+            f"Bug reward issued: ${reward_amount_value:.2f}"
+            if reward_amount_value is not None
+            else None
+        )
+        record_status_change(issue, old_status, 'developer_resolved', 'sysadmin', sysadmin_id, notes=status_note)
 
         db.session.commit()
-        flash("Issue has been marked as resolved.", "success")
+        if reward_amount_value is not None:
+            flash(f"Issue resolved and reward of ${reward_amount_value:.2f} was issued.", "success")
+        else:
+            flash("Issue has been marked as resolved.", "success")
 
     except Exception as e:
         db.session.rollback()

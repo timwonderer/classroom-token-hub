@@ -39,6 +39,7 @@ flask db upgrade
 ## Backward Compatibility
 
 The `decrypt_totp()` function handles both:
+
 - **Legacy plaintext** TOTP secrets (32 chars, base32 alphabet)
 - **New encrypted** TOTP secrets (base64-encoded)
 

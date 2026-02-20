@@ -38,11 +38,11 @@
             </ul>
 
             <div class="alert alert-success mb-3">
-              <strong><i class="bi bi-cash-coin me-1"></i>Why CWI Matters:</strong> Use it to balance your economy. Rent should be 20-40% of CWI; store items should generally range from 10-200% of CWI depending on desirability.
+              <strong><span class="material-symbols-outlined me-1">payments</span>Why CWI Matters:</strong> Use it to balance your economy. Rent should be 20-40% of CWI; store items should generally range from 10-200% of CWI depending on desirability.
             </div>
 
             <div class="alert alert-info mb-0">
-              <strong><i class="bi bi-gear-fill me-1"></i>Setup:</strong> If payroll is not configured yet, set it up first to unlock CWI calculations.
+              <strong><span class="material-symbols-outlined me-1">settings</span>Setup:</strong> If payroll is not configured yet, set it up first to unlock CWI calculations.
             </div>
           </div>
         </div>
@@ -134,7 +134,7 @@
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-start mb-2">
             <div>
-              <h5 class="mb-1"><i class="bi bi-graph-up-arrow me-2"></i>Classroom Wage Index</h5>
+              <h5 class="mb-1"><span class="material-symbols-outlined me-2">trending_up</span>Classroom Wage Index</h5>
               <p class="text-muted mb-0">Based on payroll rate and expected hours per week</p>
             </div>
             {% if cwi_calc %}
@@ -199,7 +199,7 @@
         <div class="card-body">
           <div class="d-flex justify-content-between align-items-start mb-2">
             <div>
-              <h5 class="mb-1"><i class="bi bi-heart-pulse me-2"></i>Balance Snapshot</h5>
+              <h5 class="mb-1"><span class="material-symbols-outlined me-2">ecg_heart</span>Balance Snapshot</h5>
               <p class="text-muted mb-0">How well rent, insurance, fines, and store align to your CWI</p>
             </div>
             {% if analysis and analysis.is_balanced %}
@@ -249,7 +249,7 @@
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
         <div class="card-header d-flex justify-content-between align-items-center">
-          <div><i class="bi bi-piggy-bank me-2"></i>Banking & Interest</div>
+          <div><span class="material-symbols-outlined me-2">savings</span>Banking & Interest</div>
           {% if banking_summary.level == 'success' %}
             <span class="badge bg-success">Healthy</span>
           {% else %}
@@ -267,7 +267,7 @@
     </div>
     <div class="col-lg-6">
       <div class="card h-100 shadow-sm">
-        <div class="card-header"><i class="bi bi-lightbulb me-2"></i>Quick recommendations</div>
+        <div class="card-header"><span class="material-symbols-outlined me-2">lightbulb</span>Quick recommendations</div>
         <div class="card-body">
           {% if recommendations %}
           <ul class="mb-2">
@@ -293,7 +293,7 @@
 
   <div class="card shadow-sm">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <div><i class="bi bi-clipboard2-pulse me-2"></i>Detailed warnings</div>
+      <div><span class="material-symbols-outlined me-2">monitor_heart</span>Detailed warnings</div>
       <small class="text-muted">Sorted by severity</small>
     </div>
     <div class="card-body">

@@ -39,6 +39,7 @@ python seed_multi_tenancy_test_data.py
 ```
 
 The script will:
+
 - Create 4 teachers with 2-3 class periods each (10 total class periods)
 - Create 15 students with various enrollment patterns
 - Generate 8-15 transactions per enrollment (all with join_code)
@@ -155,6 +156,7 @@ All login credentials are written to `TEST_CREDENTIALS.txt`:
 
 ### Teacher Login
 Teachers use TOTP (Time-based One-Time Passwords). The credentials file includes:
+
 - Username
 - TOTP secret (for generating codes)
 - TOTP provisioning URL (for QR code generation)
@@ -174,6 +176,7 @@ print(totp.now())  # Current 6-digit code
 ```
 
 Or use an authenticator app:
+
 - Scan the QR code from the provisioning URL
 - Or manually enter the secret
 
@@ -202,6 +205,7 @@ After seeding, test the following scenarios:
 **Test Case**: Emma Evans enrolled in ms_johnson Periods A & B
 
 Steps:
+
 1. Login as Emma (username: `emmae2009`, password: `E2009`)
 2. Select Period A context
 3. Note the checking balance (e.g., $150)
@@ -211,6 +215,7 @@ Steps:
 7. Transaction history should show ONLY Period B transactions
 
 **Expected Result**:  Complete isolation between periods
+
 - Balances are different for each period
 - Transactions filtered by join_code
 - No mixing of data
@@ -222,6 +227,7 @@ Steps:
 **Test Case**: Carol Chen enrolled with ms_johnson and mr_smith
 
 Steps:
+
 1. Login as Carol
 2. Select ms_johnson's class
 3. Note balance and transactions
@@ -235,6 +241,7 @@ Steps:
 **Test Case**: Period-specific vs. shared items
 
 Steps:
+
 1. Login as teacher ms_johnson
 2. Check store items for Period A
 3. Some items should be visible to all periods (Homework Pass, Extra Credit)
@@ -247,6 +254,7 @@ Steps:
 **Test Case**: Tiered policies and block visibility
 
 Steps:
+
 1. View insurance marketplace as student in different periods
 2. Check which policies are available
 3. Verify tiered policies (Paycheck Protection Basic/Standard/Premium) are grouped
@@ -276,6 +284,7 @@ ORDER BY count DESC;
 **Test Case**: Manual balance verification
 
 Steps:
+
 1. For a multi-period student, query database directly:
 ```sql
 SELECT
@@ -317,6 +326,7 @@ flask db upgrade
 **Error**: `duplicate key value violates unique constraint`
 
 **Solution**: Either:
+
 1. Clear existing test data first (CAREFUL - only in development!)
 2. Or modify the script to use different usernames/codes
 

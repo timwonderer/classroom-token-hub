@@ -9,11 +9,13 @@ This directory contains operational guides and troubleshooting documentation for
 Guide for identifying and safely removing duplicate student records that may have been created due to roster upload issues.
 
 **Use this when:**
+
 - You notice duplicate students in the system
 - Students appear multiple times in different blocks
 - After fixing a roster upload bug
 
 **Key features:**
+
 - Uses Flask script to properly handle encrypted fields
 - Preserves all transaction history and related data
 - Safe migration of data from duplicates to primary records
@@ -24,11 +26,13 @@ Guide for identifying and safely removing duplicate student records that may hav
 How to monitor and clean demo student sessions that power the admin "view as student" experience.
 
 **Use this when:**
+
 - You need to verify demo sessions are expiring after the 10-minute limit
 - An expired demo student remains visible in the admin UI
 - The background cleanup job is paused or failing
 
 **Key features:**
+
 - Documents automatic cleanup paths (logout, scheduled job, route guard)
 - Provides a manual cleanup snippet using `cleanup_demo_student_data`
 - Notes the foreign-key-safe deletion order and required transaction commit
@@ -38,11 +42,13 @@ How to monitor and clean demo student sessions that power the admin "view as stu
 How to stand up the landing-page demo endpoints (teacher and student) using the built-in demo session lifecycle and seeded data.
 
 **Use this when:**
+
 - You need the `docs/index.html` demo iframes/buttons to point at a live demo
 - Standing up a separate demo deployment that is isolated from production data
 - Creating disposable demo student sessions for public previews
 
 **Key features:**
+
 - Reuses `create_demo_student` and the 10-minute auto-cleanup pipeline
 - References existing scheduler job and schema
 - Provides curl example to mint a demo session URL for embedding
@@ -52,12 +58,14 @@ How to stand up the landing-page demo endpoints (teacher and student) using the 
 Complete guide for setting up UptimeRobot monitoring and creating a public status page.
 
 **Use this when:**
+
 - Setting up uptime monitoring for production
 - Creating a public status page for users
 - Configuring maintenance windows
 - Troubleshooting monitoring issues
 
 **Key features:**
+
 - Health endpoint configuration (`/health`, `/health/deep`)
 - Public status page setup
 - Firewall configuration for UptimeRobot IPs
@@ -68,6 +76,7 @@ Complete guide for setting up UptimeRobot monitoring and creating a public statu
 Infrastructure setup guide for production deployment.
 
 **Use this when:**
+
 - Setting up production infrastructure
 - Configuring firewall rules
 - Managing Cloudflare proxy settings
@@ -77,6 +86,7 @@ Infrastructure setup guide for production deployment.
 Review of personally identifiable information handling in the multi-tenancy system.
 
 **Use this when:**
+
 - Conducting privacy audits
 - Reviewing data handling practices
 - Verifying PII encryption implementation

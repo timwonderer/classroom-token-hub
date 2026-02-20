@@ -41,6 +41,7 @@ Staging branch had **three files with overlapping issues**:
 **Removed the duplicate file:** `migrations/versions/a1b2c3d4e5f6_add_join_code_to_transaction.py`
 
 **Kept the correct files:**
+
 - `a1b2c3d4e5f6_add_rent_system.py` (original, correct)
 - `00212c18b0ac_add_join_code_to_transaction.py` (fixed version)
 
@@ -69,6 +70,7 @@ Duplicate Revisions: None
 ## Migration Chain Status
 
  **All Checks Passed:**
+
 -  Single root migration
 -  Single head migration
 -  No duplicate revision IDs
@@ -111,6 +113,7 @@ INFO  [alembic.runtime.migration] Running upgrade b6bc11a3a665 -> 00212c18b0ac, 
    \d transaction
    ```
    Should show:
+
    - `join_code` column (varchar(20), nullable)
    - `ix_transaction_join_code` index
    - `ix_transaction_student_join_code` index
@@ -126,20 +129,24 @@ INFO  [alembic.runtime.migration] Running upgrade b6bc11a3a665 -> 00212c18b0ac, 
 ## Important Notes
 
  **After Migration:**
+
 - Existing transactions will have `join_code = NULL`
 - Application should handle NULL join_code during transition
 - Plan backfill strategy before making join_code NOT NULL
 
  **For Production:**
+
 - This same fix should be applied to main/production
 - Already fixed on branch: `claude/fix-migration-issues-01YRwKEH1gsZs4Uhhb7TCunF`
 
 ## Files Modified
 
 **Deleted:**
+
 - `migrations/versions/a1b2c3d4e5f6_add_join_code_to_transaction.py`
 
 **Branch:**
+
 - `claude/fix-staging-migration-duplicates-01YRwKEH1gsZs4Uhhb7TCunF`
 
 ## Commit

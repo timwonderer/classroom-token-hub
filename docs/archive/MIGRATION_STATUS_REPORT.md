@@ -42,6 +42,7 @@ Working Branch:
 ## Verification
 
  **Migration head on working branch correctly extends from main's head**
+
 - Main head: `b6bc11a3a665` (add_block_column_to_banking_settings)
 - New migration: `00212c18b0ac` (add_join_code_to_transaction)
 - Relationship: `00212c18b0ac.down_revision = 'b6bc11a3a665'` 
@@ -51,6 +52,7 @@ Working Branch:
 ### Issue Analyzed: `claude/fix-multi-tenancy-leaks-015yz9WmT5SE8EFgAzU8Au32`
 
 The original branch had a **duplicate revision ID** issue:
+
 - Two migrations used the same ID `a1b2c3d4e5f6`
 - This was fixed by generating a new unique ID `00212c18b0ac`
 - The fixed migration was added to our working branch
@@ -78,6 +80,7 @@ When this branch is merged to main, the migration path will be:
 ### About the New Migration (`00212c18b0ac`)
 
 This migration adds critical multi-tenancy isolation features:
+
 - Adds `join_code` column to `transaction` table
 - Creates indexes for performance (`ix_transaction_join_code`, `ix_transaction_student_join_code`)
 - ** IMPORTANT:** Existing transactions will have NULL join_code values
@@ -86,6 +89,7 @@ This migration adds critical multi-tenancy isolation features:
 ### Migration Safety
 
  **All Pre-Merge Checks Passed:**
+
 - Single migration head (no multiple heads)
 - No missing migrations in chain
 - No orphaned migrations
@@ -136,6 +140,7 @@ This migration adds critical multi-tenancy isolation features:
 ## Conclusion
 
  **The migration chain is production-ready:**
+
 - Properly extends from main branch head
 - No structural issues detected
 - All verification checks passed

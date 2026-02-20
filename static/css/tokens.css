@@ -1,0 +1,188 @@
+/* Classroom Token Hub — Unified Design Tokens Theme Names: Advisor Green (Teacher),
+   Steward Blue (Student),
+   Guardian Gray (Sysadmin) */
+
+/* ─── Shared Base Layer ─── */
+:root {
+    /* Perspective: Professional yet warm */
+    --font-family: 'Inter', system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+    /* Bootstrap Overrides - Base */
+    --bs-body-font-family: var(--font-family);
+    --bs-body-bg: var(--background);
+    --bs-body-color: var(--text-primary);
+
+    /* Radius — Minimal / Crisp */
+    --radius-xs: 2px;
+    --radius-sm: 4px;
+    /* Cards, Inputs, Dropdowns */
+    --radius-md: 6px;
+    /* Buttons */
+    --radius-lg: 8px;
+    /* Modals, Large Containers */
+    --radius-pill: 999px;
+    /* Status Badges, Chips */
+
+    /* Elevation — Subtle */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+
+    /* Layout */
+    --sidebar-width: 260px;
+
+    /* Neutral Palette (Warm Tinted) */
+    --neutral-50: #fafaf9;
+    --neutral-100: #f5f5f3;
+    /* Main App Background */
+    --neutral-200: #e8e8e5;
+    /* Borders */
+    --neutral-300: #d4d4d0;
+    --neutral-400: #a3a3a0;
+    --neutral-500: #737370;
+    --neutral-600: #525250;
+    --neutral-700: #404040;
+    --neutral-800: #262626;
+    /* Primary Text */
+    --neutral-900: #171717;
+    /* Headings / Pure Contrast */
+
+    /* Semantic Surfaces - Role Agnostic */
+    --background: var(--neutral-100);
+    --surface: #ffffff;
+    --border-color: var(--neutral-200);
+
+    /* Text - Role Agnostic */
+    --text-primary: var(--neutral-800);
+    --text-secondary: var(--neutral-500);
+    --text-muted: var(--neutral-500);
+    --text-inverse: #ffffff;
+}
+
+/* ─── Teacher Theme (Advisor Green) ─── */
+:root {
+    /* Primary: Deep Teal */
+    --primary: #1a4d47;
+    --primary-hover: #15403b;
+    --primary-subtle: #e8f0ef;
+
+    /* Secondary: Gold */
+    --secondary: #d3af37;
+    --secondary-hover: #c49f2e;
+    --secondary-text: var(--neutral-900);
+    --secondary-subtle: #f9f5e6;
+    /* Dark text on gold */
+    --accent: var(--secondary);
+
+    /* Semantic Status Colors (Muted/Professional) */
+    --success: #2e7d5b;
+    --success-hover: #276a4d;
+    --success-subtle: #e6f4ed;
+    --info: #3b7daa;
+    --info-hover: #336b92;
+    --info-subtle: #e6f0f8;
+    --warning: #c08c15;
+    --warning-hover: #a87912;
+    --warning-subtle: #fef8e6;
+    --danger: #c0392b;
+    --danger-hover: #a83024;
+    --danger-subtle: #fce8e6;
+
+    /* Bootstrap Variable Mapping (Teacher Default) */
+    --bs-primary: var(--primary);
+    --bs-secondary: var(--secondary);
+    --bs-success: var(--success);
+    --bs-info: var(--info);
+    --bs-warning: var(--warning);
+    --bs-danger: var(--danger);
+    /* RGB values approximated for components using rgba() */
+    --bs-primary-rgb: 26, 77, 71;
+    --bs-secondary-rgb: 211, 175, 55;
+}
+
+/* ─── Student Theme (Steward Blue) ─── */
+body.student-shell {
+    /* Primary: Dark Slate Blue */
+    --primary: #2F4F7F;
+    --primary-hover: #253f66;
+    --primary-subtle: #e8edf4;
+
+    /* Secondary: Bronze/Brown */
+    --secondary: #ac8255;
+    --secondary-hover: #9a7349;
+    --secondary-text: var(--text-inverse);
+    --secondary-subtle: #f4efe9;
+    /* White text on brown */
+    --accent: var(--secondary);
+
+    /* Semantic Status Colors (Cooler Greens/Blues) */
+    --success: #3a7d5c;
+    --success-hover: #316b4f;
+    --success-subtle: #e6f4ed;
+    --info: #4a7fb3;
+    --info-hover: #3f6d99;
+    --info-subtle: #e8f0f8;
+    --warning: #b58a1a;
+    --warning-hover: #9e7816;
+    --warning-subtle: #fef8e6;
+    --danger: #c44040;
+    --danger-hover: #aa3636;
+    --danger-subtle: #fce8e6;
+
+    /* Bootstrap Variable Mapping */
+    --bs-primary: var(--primary);
+    --bs-secondary: var(--secondary);
+    --bs-success: var(--success);
+    --bs-info: var(--info);
+    --bs-warning: var(--warning);
+    --bs-danger: var(--danger);
+    --bs-primary-rgb: 47, 79, 127;
+}
+
+/* ─── System Admin Theme (Guardian Gray) ─── */
+body.sysadmin-shell {
+    /* Primary: Dark Gray */
+    --primary: #303030;
+    --primary-hover: #1a1a1a;
+    --primary-subtle: #e8e8e8;
+
+    /* Sysadmin alias variables (for backwards compatibility with template references) */
+    --sysadmin-primary: #303030;
+    --sysadmin-primary-dark: #1a1a1a;
+    --sysadmin-sidebar-bg: #2C2C2C;
+    --sysadmin-sidebar-text: #ffffff;
+    --sysadmin-accent: #D4A857;
+    --sysadmin-accent-bright: #FDB034;
+    --sysadmin-bottom-nav-height: 64px;
+
+    /* Secondary: Bright Gold */
+    --secondary: #D4A857;
+    --secondary-hover: #c09840;
+    --secondary-text: var(--neutral-900);
+    --secondary-subtle: #f9f5e6;
+    /* Dark text on gold */
+    --accent: #FDB034;
+
+    /* Semantic Status Colors (Shared with Teacher) */
+    --success: #2e7d5b;
+    --success-hover: #276a4d;
+    --success-subtle: #e6f4ed;
+    --info: #3b7daa;
+    --info-hover: #336b92;
+    --info-subtle: #e6f0f8;
+    --warning: #c08c15;
+    --warning-hover: #a87912;
+    --warning-subtle: #fef8e6;
+    --danger: #c0392b;
+    --danger-hover: #a83024;
+    --danger-subtle: #fce8e6;
+
+    /* Bootstrap Variable Mapping */
+    --bs-primary: var(--primary);
+    --bs-secondary: var(--secondary);
+    --bs-success: var(--success);
+    --bs-info: var(--info);
+    --bs-warning: var(--warning);
+    --bs-danger: var(--danger);
+    --bs-primary-rgb: 48, 48, 48;
+}

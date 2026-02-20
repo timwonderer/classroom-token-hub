@@ -41,7 +41,7 @@ def test_ledger_flow(client):
     
     # 3. Verify Settlement Effects
     db.session.expire_all()
-    tx = Transaction.query.get(tx.id)
+    tx = db.session.get(Transaction, tx.id)
     assert tx.status == TransactionStatus.POSTED
     assert tx.posted_at is not None
     
@@ -89,7 +89,7 @@ def test_void_pending(client):
 
     # Verify pending transaction was settled as VOID.
     db.session.expire_all()
-    tx = Transaction.query.get(tx.id)
+    tx = db.session.get(Transaction, tx.id)
     assert tx.status == TransactionStatus.VOID
     assert tx.voided_at is not None
     
@@ -124,7 +124,7 @@ def test_void_posted_with_reversal(client):
     student.get_checking_balance(join_code=join_code) # Trigger settlement
     
     db.session.expire_all()
-    tx = Transaction.query.get(tx.id)
+    tx = db.session.get(Transaction, tx.id)
     assert tx.status == TransactionStatus.POSTED
     
     # 2. Simulate Void Logic (Admin Button)
@@ -155,7 +155,7 @@ def test_void_posted_with_reversal(client):
     # Check cache.
     
     db.session.expire_all()
-    reversal = Transaction.query.get(reversal.id)
+    reversal = db.session.get(Transaction, reversal.id)
     assert reversal.status == TransactionStatus.POSTED
     
     cache = BalanceCache.query.filter_by(student_id=student.id, join_code=join_code).first()

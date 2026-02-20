@@ -3,7 +3,7 @@ import re
 from decimal import Decimal
 from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher, ClassEconomy, ClassMembership
 from app.extensions import db
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 @pytest.fixture
 def teacher_admin(client):
@@ -884,6 +884,252 @@ def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin
     assert 'disabled' not in per_use_button.group(0)
 
 
+def test_shop_keeps_item_purchasable_when_per_use_and_privilege_links_overlap(client, teacher_admin, student_in_class):
+    """If legacy data creates mixed rent item types for one store item, per-use access should remain purchasable."""
+    student = student_in_class
+    anchor_now = datetime.now(timezone.utc)
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=anchor_now - timedelta(days=60),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Mixed Rent Link',
+        price=Decimal('8.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    db.session.add_all([
+        RentItem(
+            rent_setting_id=settings.id,
+            name='Mixed Rent Link Priv',
+            rent_item_type='privilege',
+            is_available_in_store=True,
+            store_price=Decimal('8.00'),
+            purchase_duration='per_period',
+            store_item_id=store_item.id,
+        ),
+        RentItem(
+            rent_setting_id=settings.id,
+            name='Mixed Rent Link Use',
+            rent_item_type='per_use',
+            is_available_in_store=True,
+            store_price=Decimal('8.00'),
+            purchase_duration='per_use',
+            use_limit=2,
+            store_item_id=store_item.id,
+        ),
+    ])
+
+    now = datetime.now(timezone.utc)
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=now.month,
+        period_year=now.year,
+        coverage_month=now.month,
+        coverage_year=now.year,
+        payment_date=now,
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent for Period A',
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    html = resp.data.decode('utf-8')
+    button = re.search(rf'data-item-id="{store_item.id}"[^>]*>', html, re.DOTALL)
+    assert button is not None
+    assert 'disabled' not in button.group(0)
+
+
+def test_shop_treats_legacy_privilege_with_per_use_duration_as_per_use(client, teacher_admin, student_in_class):
+    """Legacy privilege+per_use-duration rows should render as purchasable rent perks, not included/disabled."""
+    student = student_in_class
+    anchor_now = datetime.now(timezone.utc)
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=anchor_now - timedelta(days=60),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Legacy Per Use Link',
+        price=Decimal('9.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    db.session.add(RentItem(
+        rent_setting_id=settings.id,
+        name='Legacy Per Use Link',
+        rent_item_type='privilege',   # legacy default
+        purchase_duration='per_use',  # actual semantics
+        is_available_in_store=True,
+        store_price=Decimal('9.00'),
+        use_limit=1,
+        store_item_id=store_item.id,
+    ))
+
+    from app.routes.student import _calculate_rent_coverage_due_date
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, anchor_now)
+    assert coverage_due_date is not None
+
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=anchor_now.month,
+        period_year=anchor_now.year,
+        coverage_month=coverage_due_date.month,
+        coverage_year=coverage_due_date.year,
+        payment_date=anchor_now,
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent for Period A',
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.get('/student/shop')
+    assert resp.status_code == 200
+    html = resp.data.decode('utf-8')
+    button = re.search(rf'data-item-id="{store_item.id}"[^>]*>', html, re.DOTALL)
+    assert button is not None
+    assert 'disabled' not in button.group(0)
+    assert 'Rent Perk price: $0.00' in html
+
+
+def test_api_allows_zero_cost_rent_linked_purchase_when_paid_without_per_use_mapping(client, teacher_admin, student_in_class):
+    """Paid-rent students can still buy non-privilege rent-linked perks for $0 when mapping rows are missing."""
+    student = student_in_class
+    from werkzeug.security import generate_password_hash
+    student.passphrase_hash = generate_password_hash('password')
+    anchor_now = datetime.now(timezone.utc)
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=anchor_now - timedelta(days=60),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    # Rent-linked store item without a RentItem mapping row (legacy/stale linkage).
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Link Only Perk',
+        price=Decimal('12.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(store_item)
+
+    from app.routes.student import _calculate_rent_coverage_due_date
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, anchor_now)
+    assert coverage_due_date is not None
+
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=anchor_now.month,
+        period_year=anchor_now.year,
+        coverage_month=coverage_due_date.month,
+        coverage_year=coverage_due_date.year,
+        payment_date=anchor_now,
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent for Period A',
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        amount=Decimal('100.00'),
+        account_type='checking',
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+    ))
+    db.session.commit()
+
+    starting_balance = student.checking_balance
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.post('/api/purchase-item', json={'item_id': store_item.id, 'passphrase': 'password', 'quantity': 1})
+    assert resp.status_code == 200
+    assert '$0' in resp.json['message'] or 'rent perk' in resp.json['message'].lower()
+
+    db.session.refresh(student)
+    assert student.checking_balance == starting_balance
+
+
 def test_shop_displays_rent_perk_price_as_free(client, teacher_admin, student_in_class):
     """Rent perk items with active free uses should display $0 pricing in the student shop."""
     student = student_in_class
@@ -1272,3 +1518,168 @@ def test_late_fee_only_when_unpaid_by_grace(client, teacher_admin, student_in_cl
         late_fee3 = settings.late_penalty_amount
     
     assert late_fee3 == Decimal('2.00'), "Late fee should apply when payment is after grace deadline"
+
+
+def test_per_use_free_purchase_recovers_from_exhausted_grant_row_when_rent_paid(client, teacher_admin, student_in_class, monkeypatch):
+    """Paid-rent students should not be charged if a stale exhausted grant row is the only row present."""
+    student = student_in_class
+    from werkzeug.security import generate_password_hash
+    student.passphrase_hash = generate_password_hash('password')
+
+    fixed_now = datetime(2026, 2, 10, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr('app.routes.api.utc_now', lambda: fixed_now)
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    store_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Unlimited Pencil',
+        price=Decimal('5.00'),
+        is_active=True,
+        item_type='delayed',
+        is_rent_linked=True,
+    )
+    db.session.add(store_item)
+    db.session.flush()
+
+    db.session.add(RentItem(
+        rent_setting_id=settings.id,
+        name='Unlimited Pencil',
+        rent_item_type='per_use',
+        is_available_in_store=True,
+        store_price=Decimal('5.00'),
+        purchase_duration='per_use',
+        use_limit=None,  # unlimited
+        store_item_id=store_item.id,
+    ))
+
+    # Simulate current-period rent fully paid
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=fixed_now.month,
+        period_year=fixed_now.year,
+        coverage_month=fixed_now.month,
+        coverage_year=fixed_now.year,
+        payment_date=fixed_now,
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent for Period A',
+        timestamp=fixed_now,
+    ))
+
+    # Stale legacy row: exhausted grant still present
+    db.session.add(StudentItem(
+        student_id=student.id,
+        store_item_id=store_item.id,
+        join_code='JOINCODE123',
+        purchase_date=fixed_now,
+        status='purchased',
+        uses_remaining=0,
+    ))
+
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('100.00'),
+        account_type='checking',
+        type='Deposit',
+        description='Seed funds',
+    ))
+    db.session.commit()
+
+    starting_balance = student.checking_balance
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.post('/api/purchase-item', json={'item_id': store_item.id, 'passphrase': 'password', 'quantity': 1})
+    assert resp.status_code == 200
+    assert '$0' in resp.json['message'] or 'rent perk' in resp.json['message'].lower()
+
+    db.session.refresh(student)
+    assert student.checking_balance == starting_balance
+
+
+def test_rent_payment_hall_pass_top_off_recovers_from_stale_counter(client, teacher_admin, student_in_class, monkeypatch):
+    """Hall-pass grant should still top-off when rent_hall_passes counter drifted above actual passes."""
+    student = student_in_class
+    fixed_now = datetime(2026, 2, 10, 12, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr('app.routes.student.utc_now', lambda: fixed_now)
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    db.session.add(RentItem(
+        rent_setting_id=settings.id,
+        name='Hall Pass Bonus',
+        rent_item_type='hall_pass',
+        hall_pass_count=3,
+        is_available_in_store=False,
+    ))
+
+    # Stale state: counter says 3 rent passes, but student has 0 actual passes.
+    db.session.add(StudentBlock(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        rent_hall_passes=3,
+    ))
+
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('100.00'),
+        account_type='checking',
+        type='Deposit',
+        description='Seed funds',
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.post('/student/rent/pay/A', follow_redirects=False)
+    assert resp.status_code == 302
+
+    db.session.refresh(student)
+    assert student.hall_passes == 3
+
+    sb = StudentBlock.query.filter_by(student_id=student.id, period='A').first()
+    assert sb is not None
+    assert sb.rent_hall_passes == 3

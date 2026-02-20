@@ -24,7 +24,7 @@
 
 <div class="card shadow mb-4">
     <div class="card-header bg-primary text-white">
-        <h5 class="mb-0"><i class="bi bi-pencil me-2"></i>Edit: {{ item.name }}</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2">edit</span>Edit: {{ item.name }}</h5>
     </div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('admin.edit_store_item', item_id=item.id) }}">
@@ -124,7 +124,7 @@
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="headingBundle">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBundle" aria-expanded="false" aria-controls="collapseBundle">
-                            <i class="bi bi-box-seam me-2"></i><strong>Bundle Settings</strong>
+                            <span class="material-symbols-outlined me-2">inventory_2</span><strong>Bundle Settings</strong>
                             <span class="badge bg-success ms-2 bundle-badge" style="display:none;">Active</span>
                         </button>
                     </h2>
@@ -152,7 +152,7 @@
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="headingBulkDiscount">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBulkDiscount" aria-expanded="false" aria-controls="collapseBulkDiscount">
-                            <i class="bi bi-percent me-2"></i><strong>Bulk Discount Settings</strong>
+                            <span class="material-symbols-outlined me-2">percent</span><strong>Bulk Discount Settings</strong>
                             <span class="badge bg-success ms-2 bulk-discount-badge" style="display:none;">Active</span>
                         </button>
                     </h2>
@@ -185,7 +185,7 @@
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="headingAdvanced">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAdvanced" aria-expanded="false" aria-controls="collapseAdvanced">
-                            <i class="bi bi-gear me-2"></i><strong>Advanced Settings</strong>
+                            <span class="material-symbols-outlined me-2">settings</span><strong>Advanced Settings</strong>
                         </button>
                     </h2>
                     <div id="collapseAdvanced" class="accordion-collapse collapse" aria-labelledby="headingAdvanced" data-bs-parent="#itemSettingsAccordion">
@@ -215,7 +215,7 @@
 
             <div class="d-flex justify-content-between">
                 <a href="{{ url_for('admin.store_management') }}" class="btn btn-secondary">
-                    <i class="bi bi-arrow-left me-2"></i>Back to Store
+                    <span class="material-symbols-outlined me-2">arrow_back</span>Back to Store
                 </a>
                 {{ form.submit(class="btn btn-primary btn-lg") }}
             </div>

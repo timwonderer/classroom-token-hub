@@ -283,11 +283,13 @@ Add to `deploy.yml`:
 ```
 
 **Pros:**
+
 - Handles host key verification automatically
 - Cleaner YAML syntax
 - Better error handling
 
 **Cons:**
+
 - Depends on third-party action
 - Requires testing and validation
 
@@ -306,6 +308,7 @@ Latest: Check pypi.org
 ```
 
 The cryptography package is used for:
+
 - PII encryption (Fernet AES)
 - TOTP 2FA generation
 - Password hashing (via bcrypt)
@@ -428,6 +431,7 @@ echo "TURNSTILE_SECRET_KEY=${TURNSTILE_SECRET}" >> .env
 ```
 
 **Risks:**
+
 - Plain text secrets on filesystem
 - Potential log exposure
 - No file permission hardening
@@ -498,6 +502,7 @@ sudo systemctl restart gunicorn
 4. **Use Secrets Manager (Optional but Best):**
 
 If using DigitalOcean:
+
 - Store secrets in DigitalOcean Secrets Manager
 - Reference them in your app configuration
 - No secrets in code or config files
@@ -606,6 +611,7 @@ def get_tips(user_type):
 ```
 
 **Benefits:**
+
 - Reduces server load
 - Faster response times
 - Still exempt from rate limiting (safe due to caching)
@@ -749,17 +755,20 @@ If you encounter issues:
 ## Summary
 
 **Immediate Actions (Before Next Deploy):**
+
 1.  Add `KNOWN_HOSTS` secret to GitHub
 2.  Update `deploy.yml` and `toggle-maintenance.yml`
 3.  Test deployment on test branch
 4.  Deploy to production
 
 **This Week:**
+
 1. Update `cryptography` package
 2. Test thoroughly
 3. Deploy
 
 **This Month:**
+
 1. Harden .env file permissions
 2. Add rate limiting or caching to /api/tips
 3. Consider secrets manager for long-term

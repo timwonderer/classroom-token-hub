@@ -77,7 +77,8 @@ def setup_student_with_legacy_transactions(client):
     db.session.add(seat)
     db.session.commit()
 
-    # Legacy transaction without join_code should be ignored by scoped balance checks.
+    # Add first transaction as a legacy row with NULL join_code.
+    # It should be excluded from class-scoped balance calculations.
     tx1 = Transaction(
         student_id=student.id,
         teacher_id=teacher.id,
@@ -85,11 +86,11 @@ def setup_student_with_legacy_transactions(client):
         amount=100.0,
         account_type='checking',
         status=TransactionStatus.POSTED,
-        type='Legacy',
-        description='Legacy pre-join transaction'
+        type='Initial',
+        description='Legacy balance without join_code'
     )
     
-    # Class-scoped transaction is the only spendable balance in current context.
+    # Add second transaction with current class join_code.
     tx2 = Transaction(
         student_id=student.id,
         teacher_id=teacher.id,

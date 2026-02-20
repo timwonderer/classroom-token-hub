@@ -3,7 +3,7 @@
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-chat-square-text-fill me-2"></i>User Reports</h2>
+        <h2><span class="material-symbols-outlined me-2">forum</span>User Reports</h2>
         <div>
             <span class="badge bg-primary me-2">New: {{ new_count }}</span>
             <span class="badge bg-info me-2">Reviewed: {{ reviewed_count }}</span>
@@ -116,7 +116,7 @@
                                 <td>
                                     <a href="{{ url_for('sysadmin.view_user_report', report_id=report.id) }}"
                                        class="btn btn-sm btn-primary">
-                                        <i class="bi bi-eye"></i> View
+                                        <span class="material-symbols-outlined">visibility</span> View
                                     </a>
                                 </td>
                             </tr>
@@ -126,7 +126,7 @@
                 </div>
             {% else %}
                 <div class="alert alert-info">
-                    <i class="bi bi-info-circle me-2"></i>No reports found with the selected filters.
+                    <span class="material-symbols-outlined me-2">info</span>No reports found with the selected filters.
                 </div>
             {% endif %}
         </div>

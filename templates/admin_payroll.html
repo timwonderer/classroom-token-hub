@@ -77,7 +77,7 @@
         <div id="payrollGuideSettingsBreakdown" class="accordion-collapse collapse mt-2"
           aria-labelledby="payrollGuideHeadingSettingsBreakdown" data-bs-parent="#payrollGuideAccordion">
           <div class="accordion-body">
-            <p class="mb-2"><strong><i class="bi bi-gear-fill me-1"></i>Basic Settings:</strong></p>
+            <p class="mb-2"><strong><span class="material-symbols-outlined me-1">settings</span>Basic Settings:</strong></p>
             <ul class="mb-3">
               <li><strong>Pay rate:</strong> How much students earn per time unit
                 <ul class="small mt-1">
@@ -95,7 +95,7 @@
               </li>
             </ul>
 
-            <p class="mb-2"><strong><i class="bi bi-calendar-week me-1"></i>Schedule Settings:</strong></p>
+            <p class="mb-2"><strong><span class="material-symbols-outlined me-1">calendar_view_week</span>Schedule Settings:</strong></p>
             <ul class="mb-3">
               <li><strong>Pay schedule:</strong> When payroll runs automatically
                 <ul class="small mt-1">
@@ -109,18 +109,18 @@
               <li><strong>Schedule example:</strong> Weekly on Fridays, or bi-weekly every other Friday.</li>
             </ul>
 
-            <p class="mb-2"><strong><i class="bi bi-sliders me-1"></i>Advanced Settings:</strong></p>
+            <p class="mb-2"><strong><span class="material-symbols-outlined me-1">tune</span>Advanced Settings:</strong></p>
             <ul class="mb-3">
               <li><strong>Attendance rules:</strong> Choose which tap types count (Start Work, Break, Done)</li>
             </ul>
 
             <div class="alert alert-warning mt-3 mb-3">
-              <strong><i class="bi bi-exclamation-triangle-fill me-1"></i>Side effects:</strong> Rate or schedule
+              <strong><span class="material-symbols-outlined me-1">warning</span>Side effects:</strong> Rate or schedule
               changes only affect future payroll runs. Past payments remain unchanged.
             </div>
 
             <div class="alert alert-info mb-0">
-              <strong><i class="bi bi-lightbulb-fill me-1"></i>Recommended Start:</strong> $10/hour, weekly schedule, 5
+              <strong><span class="material-symbols-outlined me-1">lightbulb</span>Recommended Start:</strong> $10/hour, weekly schedule, 5
               expected hours/week. This creates a $50 weekly CWI that is easy for students to work with.
             </div>
           </div>
@@ -200,29 +200,29 @@
   <li class="nav-item" role="presentation">
     <button class="nav-link active" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview" type="button"
       role="tab">
-      <i class="bi bi-grid me-1"></i>Overview
+      <span class="material-symbols-outlined me-1">grid_view</span>Overview
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">
-      <i class="bi bi-clock-history me-1"></i>History
+      <span class="material-symbols-outlined me-1">history</span>History
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab">
-      <i class="bi bi-gear me-1"></i>Settings
+      <span class="material-symbols-outlined me-1">settings</span>Settings
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="rewards-fines-tab" data-bs-toggle="tab" data-bs-target="#rewards-fines" type="button"
       role="tab">
-      <i class="bi bi-star me-1"></i>Rewards & Fines
+      <span class="material-symbols-outlined me-1">star</span>Rewards & Fines
     </button>
   </li>
   <li class="nav-item" role="presentation">
     <button class="nav-link" id="manual-payment-tab" data-bs-toggle="tab" data-bs-target="#manual-payment" type="button"
       role="tab">
-      <i class="bi bi-cash-coin me-1"></i>Manual
+      <span class="material-symbols-outlined me-1">payments</span>Manual
     </button>
   </li>
 </ul>
@@ -235,7 +235,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary ">
-            <h5 class="mb-0 text-white"> <i class="bi bi-calendar-event me-2 text-white"></i>Next Payroll by Class</h5>
+            <h5 class="mb-0 text-white"> <span class="material-symbols-outlined me-2 text-white">event</span>Next Payroll by Class</h5>
           </div>
           <div class="card-body">
             {% if next_payroll_by_block %}
@@ -277,7 +277,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow">
           <div class="card-header bg-success text-white">
-            <h5 class="mb-0 text-white"><i class="bi bi-graph-up me-2 text-white"></i>Quick Stats</h5>
+            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white">trending_up</span>Quick Stats</h5>
           </div>
           <div class="card-body">
             <div class="row text-center">
@@ -307,7 +307,7 @@
             </div>
             <hr>
             <button id="runPayrollBtn" class="btn btn-primary w-100">
-              <i class="bi bi-play-circle me-2"></i>Run Payroll Now
+              <span class="material-symbols-outlined me-2">play_circle</span>Run Payroll Now
             </button>
           </div>
         </div>
@@ -316,7 +316,7 @@
     <!-- Recent Payroll Activity -->
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Recent Payroll Activity</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2">format_list_bulleted</span>Recent Payroll Activity</h5>
       </div>
       <div class="card-body">
         {% if recent_payrolls %}
@@ -343,7 +343,8 @@
                 </td>
                 <td>
                   {% if record.student %}
-                  <a href="{{ url_for('admin.student_detail', student_id=record.student_id) }}">
+                  <a
+                    href="{{ url_for('admin.student_detail', student_id=record.student_id, join_code=record.join_code) }}">
                     {{ record.student.full_name }}
                   </a>
                   {% else %}
@@ -376,7 +377,7 @@
   <div class="tab-pane fade" id="history" role="tabpanel">
     <div class="card shadow">
       <div class="card-header">
-        <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Payroll History</h5>
+        <h5 class="mb-0"><span class="material-symbols-outlined me-2">history</span>Payroll History</h5>
       </div>
       <div class="card-body">
         <!-- Filter and Actions -->
@@ -392,7 +393,7 @@
           </div>
           <div class="col-md-8 text-end">
             <button id="voidSelectedBtn" class="btn btn-danger" disabled>
-              <i class="bi bi-x-circle me-2"></i>Void Selected (<span id="voidCount">0</span>)
+              <span class="material-symbols-outlined me-2">cancel</span>Void Selected (<span id="voidCount">0</span>)
             </button>
           </div>
         </div>
@@ -440,7 +441,8 @@
                 <td>{{ entry.class_label }}</td>
                 <td>
                   {% if entry.student %}
-                  <a href="{{ url_for('admin.student_detail', student_id=entry.student_id) }}">
+                  <a
+                    href="{{ url_for('admin.student_detail', student_id=entry.student_id, join_code=entry.join_code) }}">
                     {{ entry.student_name }}
                   </a>
                   {% else %}
@@ -457,7 +459,7 @@
                 <td>
                   {% if not entry.is_void %}
                   <button class="btn btn-sm btn-outline-danger" onclick="voidTransaction({{ entry.transaction_id }})">
-                    <i class="bi bi-x-circle"></i> Void
+                    <span class="material-symbols-outlined">cancel</span> Void
                   </button>
                   {% else %}
                   <span class="text-muted small">Voided</span>
@@ -484,10 +486,10 @@
       {% if show_setup_banner %}
       <div class="col-12 mb-3">
         <div class="alert alert-warning alert-dismissible fade show" role="alert">
-          <h5 class="alert-heading"><i class="bi bi-exclamation-triangle me-2"></i>No Payroll Settings</h5>
+          <h5 class="alert-heading"><span class="material-symbols-outlined me-2">warning</span>No Payroll Settings</h5>
           <p class="mb-2">No Payroll Setting has been created yet. Do you want to use preset amounts?</p>
           <button type="button" class="btn btn-sm btn-warning" id="usePresetBtn">
-            <i class="bi bi-check-circle me-1"></i>Yes, Use Preset Values
+            <span class="material-symbols-outlined me-1">check_circle</span>Yes, Use Preset Values
           </button>
           <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
@@ -495,7 +497,7 @@
       {% elif block_settings %}
       <div class="col-12 mb-3">
         <div class="alert alert-info alert-dismissible fade show" role="alert">
-          <i class="bi bi-info-circle me-2"></i>
+          <span class="material-symbols-outlined me-2">info</span>
           Payroll settings have been set on <strong>{{ block_settings[0].created_at.strftime('%B %d, %Y') if
             block_settings[0].created_at else 'unknown date' }}</strong>. Any changes here will override the previous
           settings.
@@ -508,7 +510,7 @@
       <div class="col-lg-8 mb-4">
         <div class="card shadow">
           <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-            <h5 class="mb-0 text-white"><i class="bi bi-gear me-2 text-white"></i>Payroll Settings</h5>
+            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white">settings</span>Payroll Settings</h5>
             <!-- Mode Toggle -->
             <div class="form-check form-switch">
               <input class="form-check-input" type="checkbox" id="settingsModeToggle" role="switch" {% if
@@ -520,7 +522,7 @@
             <!-- Current Settings Display -->
             {% if block_settings %}
             <div class="alert alert-secondary mb-3">
-              <h6 class="fw-bold mb-2"><i class="bi bi-info-circle me-2"></i>Current Settings:</h6>
+              <h6 class="fw-bold mb-2"><span class="material-symbols-outlined me-2">info</span>Current Settings:</h6>
               {% if default_setting %}
               <div class="mb-2">
                 <strong>Global Default:</strong>
@@ -565,7 +567,7 @@
               <div id="simpleModeFields" {% if default_setting and default_setting.settings_mode=='advanced'
                 %}style="display:none;" {% endif %}>
                 <div class="alert alert-info">
-                  <i class="bi bi-info-circle me-2"></i>
+                  <span class="material-symbols-outlined me-2">info</span>
                   <strong>Simple Mode:</strong> Easy-to-use settings for basic payroll configuration.
                 </div>
 
@@ -661,7 +663,7 @@
               <div id="advancedModeFields" {% if default_setting and default_setting.settings_mode=='advanced'
                 %}style="display:block;" {% else %}style="display:none;" {% endif %}>
                 <div class="alert alert-warning">
-                  <i class="bi bi-exclamation-triangle me-2"></i>
+                  <span class="material-symbols-outlined me-2">warning</span>
                   <strong>Advanced Mode:</strong> Full control over payroll calculations with detailed options.
                 </div>
 
@@ -694,7 +696,7 @@
 
                 <!-- Overtime Settings -->
                 <div class="card mb-3 border-info">
-                  <div class="card-header bg-info bg-opacity-10">
+                  <div class="card-header bg-info-subtle">
                     <div class="form-check form-switch">
                       <input class="form-check-input" type="checkbox" id="advOvertimeEnabled"
                         name="adv_overtime_enabled" {% if default_setting and default_setting.overtime_enabled
@@ -769,7 +771,7 @@
                       </select>
                     </div>
                   </div>
-                  <small class="text-muted text-warning"><i class="bi bi-exclamation-triangle"></i> This overrides
+                  <small class="text-muted text-warning"><span class="material-symbols-outlined">warning</span> This overrides
                     overtime calculations</small>
                 </div>
 
@@ -867,14 +869,14 @@
 
               <!-- Validation Errors Display -->
               <div id="validationErrors" class="alert alert-danger" style="display:none;">
-                <strong><i class="bi bi-exclamation-circle me-2"></i>Conflicting Settings:</strong>
+                <strong><span class="material-symbols-outlined me-2">error</span>Conflicting Settings:</strong>
                 <ul id="validationErrorList" class="mb-0"></ul>
               </div>
 
               <!-- Save Button -->
               <div class="text-end">
                 <button type="submit" class="btn btn-primary btn-lg">
-                  <i class="bi bi-save me-2"></i>Save Settings
+                  <span class="material-symbols-outlined me-2">save</span>Save Settings
                 </button>
               </div>
             </form>
@@ -886,7 +888,7 @@
       <div class="col-lg-4 mb-4">
         <div class="card shadow border-success">
           <div class="card-header bg-success text-white">
-            <h5 class="mb-0 text-white"><i class="bi bi-calculator me-2 text-white"></i>Pay Simulator</h5>
+            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white">calculate</span>Pay Simulator</h5>
           </div>
           <div class="card-body">
             <p class="text-muted small">Estimate student earnings based on your current settings.</p>
@@ -903,7 +905,7 @@
             </div>
 
             <button type="button" class="btn btn-success w-100 mb-3" id="calculatePayBtn">
-              <i class="bi bi-calculator me-2"></i>Calculate
+              <span class="material-symbols-outlined me-2">calculate</span>Calculate
             </button>
 
             <!-- Results -->
@@ -929,7 +931,7 @@
 
             <!-- Settings Summary (Plain English) -->
             <div class="mt-4 pt-3 border-top" id="settingsSummary">
-              <h6 class="fw-bold mb-2"><i class="bi bi-file-text me-2"></i>Current Settings:</h6>
+              <h6 class="fw-bold mb-2"><span class="material-symbols-outlined me-2">description</span>Current Settings:</h6>
               <div id="settingsSummaryText" class="small text-muted">
                 <p class="mb-0"><em>Configure your payroll settings above to see a summary here.</em></p>
               </div>
@@ -947,7 +949,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow h-100">
           <div class="card-header bg-success text-white">
-            <h5 class="mb-0 text-white"><i class="bi bi-award me-2 text-white"></i>Rewards</h5>
+            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white">military_tech</span>Rewards</h5>
           </div>
           <div class="card-body">
             <!-- Add Reward Form -->
@@ -997,7 +999,7 @@
                   <br>
                   <button class="btn btn-sm btn-outline-primary mt-1 me-1"
                     onclick="editReward({{ reward.id }}, '{{ reward.name|replace("'", "\\'") }}', '{{ reward.description|replace("'", "\\'")|default('') }}', {{ reward.amount }}, {{ reward.is_active|lower }})">
-                    <i class="bi bi-pencil me-1"></i>Edit
+                    <span class="material-symbols-outlined me-1">edit</span>Edit
                   </button>
                   <button class="btn btn-sm btn-outline-danger mt-1"
                     onclick="deleteReward({{ reward.id }})">Delete</button>
@@ -1016,7 +1018,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow h-100">
           <div class="card-header bg-danger ">
-            <h5 class="mb-0 text-white"><i class="bi bi-exclamation-triangle me-2 text-white"></i>Fines</h5>
+            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white">warning</span>Fines</h5>
           </div>
           <div class="card-body">
             <!-- Add Fine Form -->
@@ -1065,7 +1067,7 @@
                   <br>
                   <button class="btn btn-sm btn-outline-primary mt-1 me-1"
                     onclick="editFine({{ fine.id }}, '{{ fine.name|replace("'", "\\'") }}', '{{ fine.description|replace("'", "\\'")|default('') }}', {{ fine.amount }}, {{ fine.is_active|lower }})">
-                    <i class="bi bi-pencil me-1"></i>Edit
+                    <span class="material-symbols-outlined me-1">edit</span>Edit
                   </button>
                   <button class="btn btn-sm btn-outline-danger mt-1" onclick="deleteFine({{ fine.id }})">Delete</button>
                 </div>
@@ -1088,7 +1090,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow h-100">
           <div class="card-header bg-primary text-white">
-            <h5 class="mb-0 text-white"><i class="bi bi-people me-2 text-white"></i>Select Students</h5>
+            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white">group</span>Select Students</h5>
           </div>
           <div class="card-body">
             <!-- Class Filter -->
@@ -1157,7 +1159,7 @@
             </div>
 
             <div class="alert alert-info mt-3 mb-0">
-              <i class="bi bi-info-circle me-2"></i>
+              <span class="material-symbols-outlined me-2">info</span>
               <strong>Selected:</strong> <span id="selectedCount">0</span> student(s)
             </div>
           </div>
@@ -1168,7 +1170,7 @@
       <div class="col-lg-6 mb-4">
         <div class="card shadow h-100">
           <div class="card-header bg-success text-white">
-            <h5 class="mb-0 text-white"><i class="bi bi-cash-coin me-2 text-white"></i>Payment Details</h5>
+            <h5 class="mb-0 text-white"><span class="material-symbols-outlined me-2 text-white">payments</span>Payment Details</h5>
           </div>
           <div class="card-body">
             <form id="manualPaymentForm">
@@ -1233,10 +1235,10 @@
               <!-- Action Buttons -->
               <div class="d-grid gap-2">
                 <button type="button" id="applyToSelected" class="btn btn-primary btn-lg">
-                  <i class="bi bi-check-circle me-2"></i>Apply to Selected
+                  <span class="material-symbols-outlined me-2">check_circle</span>Apply to Selected
                 </button>
                 <button type="button" id="applyToAll" class="btn btn-outline-primary">
-                  <i class="bi bi-check-circle-fill me-2"></i>Apply to All in Period
+                  <span class="material-symbols-outlined me-2">check_circle</span>Apply to All in Period
                 </button>
               </div>
             </form>

@@ -69,6 +69,7 @@ except IntegrityError:
 ```
 
 **Defense Layers:**
+
 1.  Database unique constraint (prevents all duplicates)
 2.  Row-level locking with FOR UPDATE (prevents race conditions)
 3.  IntegrityError exception handling (graceful degradation)
@@ -106,6 +107,7 @@ if claim.policy.claim_type == 'transaction_monetary' and claim.transaction and c
 ```
 
 **How It Works:**
+
 1. Check runs during claim approval validation
 2. Blocks approval if linked transaction is voided
 3. Validation errors prevent payout (enforced at line 1828)
@@ -155,12 +157,14 @@ def _claim_base_amount(target_claim):
 ```
 
 **Verification:**
+
 -  No check that `claim.transaction.student_id == claim.student_id`
 -  No validation error for ownership mismatch
 -  No test case for cross-student fraud
 
 **Attack Still Possible:**
 Via database manipulation:
+
 1. Student A files claim for their $20 transaction
 2. Attacker modifies database: `UPDATE insurance_claims SET transaction_id = 999` (Student B's $500 transaction)
 3. Admin approves → Student A gets $500 for Student B's purchase
@@ -260,6 +264,7 @@ if end_date:
 ### P0-1 Fix Quality: **EXCELLENT** 
 
 The race condition fix demonstrates **best practices**:
+
 1. **Defense in Depth:** Multiple layers (DB constraint + locking + exceptions)
 2. **Database Compatibility:** Handles SQLite gracefully (no FOR UPDATE support)
 3. **Proper Exception Handling:** Catches IntegrityError specifically
@@ -269,6 +274,7 @@ The race condition fix demonstrates **best practices**:
 ### P0-2 Fix Quality: **GOOD** 
 
 The void transaction fix is:
+
 1. **Simple:** Single, clear validation check
 2. **Effective:** Blocks the attack vector completely
 3. **Integrated:** Uses existing validation framework

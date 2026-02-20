@@ -41,7 +41,7 @@
             {% elif claim.policy.claim_type == 'non_monetary' %}
               <span class="badge bg-warning text-dark">[NON-MONETARY]</span>
             {% else %}
-              <span class="badge bg-primary">[LEGACY]</span>
+              <span class="badge bg-primary">[CUSTOM]</span>
             {% endif %}
           </dd>
 
@@ -107,12 +107,12 @@
 
         {% if claim.rejection_reason %}
         <h6>Rejection Reason:</h6>
-        <div class="bg-danger bg-opacity-10 p-3 rounded text-danger">{{ claim.rejection_reason | markdown }}</div>
+        <div class="bg-danger-subtle p-3 rounded text-danger">{{ claim.rejection_reason | markdown }}</div>
         {% endif %}
 
         {% if claim.admin_notes %}
         <h6>Admin Notes:</h6>
-        <div class="bg-info bg-opacity-10 p-3 rounded">{{ claim.admin_notes | markdown }}</div>
+        <div class="bg-info-subtle p-3 rounded">{{ claim.admin_notes | markdown }}</div>
         {% endif %}
       </div>
     </div>
@@ -130,7 +130,7 @@
           {% elif claim.policy.claim_type == 'non_monetary' %}
             <span class="badge bg-warning text-dark">[NON-MONETARY]</span>
           {% else %}
-            <span class="badge bg-primary">[LEGACY]</span>
+            <span class="badge bg-primary">[CUSTOM]</span>
           {% endif %}
         </p>
 
@@ -188,7 +188,7 @@
             <div class="alert alert-danger py-2 small">{{ error }}</div>
           {% endfor %}
         {% else %}
-          <div class="alert alert-success py-2 small"><i class="bi bi-check-circle-fill me-1"></i>Claim meets all requirements</div>
+          <div class="alert alert-success py-2 small"><span class="material-symbols-outlined me-1">check_circle</span>Claim meets all requirements</div>
         {% endif %}
       </div>
     </div>

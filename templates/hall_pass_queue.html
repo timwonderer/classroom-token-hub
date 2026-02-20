@@ -9,6 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
     <style>
         .material-symbols-outlined {
@@ -24,9 +25,9 @@
         }
 
         body {
-            background: linear-gradient(135deg, #1a4d47 0%, #2a5d57 100%);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            color: #1a202c;
+            color: var(--text-primary);
             padding: 2rem;
             min-height: 100vh;
         }
@@ -37,13 +38,13 @@
             margin-bottom: 0.5rem;
             font-size: 3rem;
             color: white;
-            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            text-shadow: 0 2px 10px color-mix(in srgb, black 20%, transparent);
         }
 
         .subtitle {
             text-align: center;
             font-size: 1.3rem;
-            color: rgba(255, 255, 255, 0.9);
+            color: color-mix(in srgb, white 90%, transparent);
             margin-bottom: 2.5rem;
             font-weight: 500;
         }
@@ -64,7 +65,7 @@
             background: white;
             border-radius: 20px;
             padding: 2rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 10px 30px color-mix(in srgb, black 15%, transparent);
             text-align: center;
         }
 
@@ -72,7 +73,7 @@
         .stat-number {
             font-size: 3.5rem;
             font-weight: 800;
-            background: linear-gradient(135deg, #1a4d47 0%, #2a5d57 100%);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-hover) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -80,14 +81,14 @@
         }
 
         .stat-number.warning {
-            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+            background: linear-gradient(135deg, var(--warning) 0%, var(--warning) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
 
         .stat-number.danger {
-            background: linear-gradient(135deg, #f56565 0%, #c53030 100%);
+            background: linear-gradient(135deg, var(--danger) 0%, var(--danger) 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -96,7 +97,7 @@
         .stat-label {
             font-size: 1.1rem;
             font-weight: 600;
-            color: #4a5568;
+            color: var(--text-primary);
             text-transform: uppercase;
             letter-spacing: 0.05em;
         }
@@ -105,16 +106,16 @@
             background: white;
             border-radius: 20px;
             padding: 2.5rem;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            box-shadow: 0 10px 30px color-mix(in srgb, black 15%, transparent);
         }
 
         .queue-list-header {
             font-size: 1.8rem;
             font-weight: 700;
-            color: #2d3748;
+            color: var(--text-primary);
             margin-bottom: 2rem;
             padding-bottom: 1rem;
-            border-bottom: 3px solid #e2e8f0;
+            border-bottom: 3px solid var(--border-color);
         }
 
         .queue-item {
@@ -124,41 +125,41 @@
             align-items: center;
             padding: 1.5rem;
             margin-bottom: 1rem;
-            background: #f7fafc;
+            background: var(--surface);
             border-radius: 12px;
-            border-left: 4px solid #1a4d47;
+            border-left: 4px solid var(--primary);
         }
 
 
         .queue-position {
             font-size: 1.8rem;
             font-weight: 800;
-            color: #1a4d47;
+            color: var(--primary);
             text-align: center;
         }
 
         .queue-student-name {
             font-size: 1.2rem;
             font-weight: 600;
-            color: #2d3748;
+            color: var(--text-primary);
         }
 
         .queue-destination {
             font-size: 1rem;
-            color: #718096;
+            color: var(--text-secondary);
             font-weight: 500;
         }
 
         .queue-time {
             font-size: 0.9rem;
-            color: #a0aec0;
+            color: var(--text-secondary);
             text-align: right;
         }
 
         .empty-queue {
             text-align: center;
             padding: 4rem 2rem;
-            color: #718096;
+            color: var(--text-secondary);
         }
 
         .empty-queue-icon {
@@ -172,15 +173,15 @@
         }
 
         .limit-warning {
-            background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
-            color: #742a2a;
+            background: linear-gradient(135deg, var(--danger-subtle) 0%, var(--danger-subtle) 100%);
+            color: var(--danger);
             padding: 1.5rem;
             border-radius: 16px;
             margin-bottom: 2rem;
             text-align: center;
             font-weight: 600;
             font-size: 1.1rem;
-            border: 2px solid #fc8181;
+            border: 2px solid var(--danger);
         }
 
         @keyframes fadeIn {
@@ -227,7 +228,7 @@
             <div class="queue-list-header">Queue (Approved, Not Yet Checked Out)</div>
             <div id="queueList"></div>
             <div id="emptyQueue" class="empty-queue" style="display: none;">
-                <div class="empty-queue-icon"><span class="material-symbols-outlined" style="font-size: 5rem; color: #48bb78;">check_circle</span></div>
+                <div class="empty-queue-icon"><span class="material-symbols-outlined" style="font-size: 5rem; color: var(--success);">check_circle</span></div>
                 <div class="empty-queue-text">No one in queue</div>
             </div>
         </div>

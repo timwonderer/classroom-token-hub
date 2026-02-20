@@ -66,6 +66,7 @@
    flask db upgrade
    ```
    **New migrations**:
+
    - `c2d9cf951ddc` (rent item types)
    - `9b0e06f05fcf` (rent item types support)
    - `2765a36d76ff` (rent item types support)

@@ -25,13 +25,19 @@ from app.models import (
     Admin, Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
     HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
     StudentTeacher, TeacherBlock, StudentBlock, DemoStudent, ClassMembership,
-    RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource
+    RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource, StoreItemBlock
 )
 from app.auth import (
     login_required, admin_required, membership_required, check_membership_access,
     get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
 )
-from app.routes.student import get_current_class_context, get_rent_settings_for_context, calculate_scoped_balances
+from app.routes.student import (
+    get_current_class_context,
+    get_rent_settings_for_context,
+    calculate_scoped_balances,
+    _calculate_rent_coverage_due_date,
+    _is_student_coverage_period_paid,
+)
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
@@ -256,7 +262,24 @@ def purchase_item():
     # CRITICAL: Use teacher_id and handle visibility blocks.
     # StoreItem is usually teacher-scoped, not join-code scoped (unless explicitly set).
     # We filter by teacher_id from context to ensure the item belongs to the class's admin.
-    item = StoreItem.query.filter_by(id=item_id, teacher_id=teacher_id).first()
+    current_block = context.get('block', '').strip().upper()
+
+    item_filters = [
+        StoreItem.id == item_id,
+        StoreItem.teacher_id == teacher_id,
+    ]
+    if current_block:
+        item_filters.append(
+            or_(
+                StoreItem.visible_blocks.any(func.upper(StoreItemBlock.block) == current_block),
+                ~StoreItem.visible_blocks.any(),
+            )
+        )
+    item = (
+        StoreItem.query
+        .filter(*item_filters)
+        .first()
+    )
 
     if not item or not item.is_active:
         return jsonify({"status": "error", "message": "This item is not available."}), 404
@@ -280,46 +303,59 @@ def purchase_item():
             return jsonify({"status": "error", "message": "You have already purchased this whole class goal item."}), 400
 
     # Check rent late restrictions
-    from app.models import RentSettings, RentPayment, RentItem
-    from datetime import datetime, timedelta
+    from app.models import RentSettings, RentItem
+    from datetime import timedelta
 
     rent_settings = get_rent_settings_for_context(context)
-    current_block = context.get('block', '').strip().upper()
     now = utc_now()
     has_paid_rent = False
     per_use_rent_item = None
+    has_privilege_link = False
+    has_per_use_link = False
+    legacy_rent_perk_free_fallback = False
 
     if rent_settings and rent_settings.is_enabled:
-        from app.routes.student import _calculate_rent_coverage_due_date
         coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
         if coverage_due_date:
-            coverage_month = coverage_due_date.month
-            coverage_year = coverage_due_date.year
-            coverage_payments = RentPayment.query.filter(
-                RentPayment.student_id == student.id,
-                RentPayment.period == current_block,
-                RentPayment.coverage_month == coverage_month,
-                RentPayment.coverage_year == coverage_year,
-                RentPayment.join_code == join_code
-            ).all()
-            from app.routes.student import _filter_valid_rent_payments
-            valid_payments = _filter_valid_rent_payments(coverage_payments, student.id, join_code)
-            if valid_payments:
-                total_paid = sum(p.amount_paid for p in valid_payments)
-                grace_for_coverage = coverage_due_date + timedelta(days=rent_settings.grace_period_days)
-                late_fee_applies = now > grace_for_coverage
-                required = rent_settings.rent_amount + (rent_settings.late_fee if late_fee_applies else Decimal('0'))
-                has_paid_rent = total_paid >= required
+            has_paid_rent = _is_student_coverage_period_paid(
+                rent_settings,
+                student.id,
+                current_block,
+                join_code,
+                coverage_due_date,
+            )
 
-        per_use_rent_item = RentItem.query.filter(
+        rent_item_links = RentItem.query.filter(
             RentItem.rent_setting_id == rent_settings.id,
-            RentItem.rent_item_type == 'per_use',
             RentItem.store_item_id == item.id
-        ).first()
+        ).all()
+        has_per_use_link = any(
+            ri.rent_item_type == 'per_use' or (ri.rent_item_type == 'privilege' and ri.purchase_duration == 'per_use')
+            for ri in rent_item_links
+        )
+        has_privilege_link = any(
+            ri.rent_item_type == 'privilege' and ri.purchase_duration != 'per_use'
+            for ri in rent_item_links
+        )
+        per_use_rent_item = next(
+            (ri for ri in rent_item_links
+             if ri.rent_item_type == 'per_use' or (ri.rent_item_type == 'privilege' and ri.purchase_duration == 'per_use')),
+            None
+        )
+        legacy_rent_perk_free_fallback = bool(
+            has_paid_rent and item.is_rent_linked and not has_privilege_link and not has_per_use_link
+        )
+
+    # Privilege-only rent items are already included when rent is paid and
+    # should not be purchasable.
+    if has_paid_rent and has_privilege_link and not has_per_use_link:
+        return jsonify({
+            "status": "error",
+            "message": "This item is already included in your rent for this period."
+        }), 400
 
     if rent_settings and rent_settings.is_enabled and rent_settings.prevent_purchase_when_late:
         # Check if student is late on rent
-        from app.routes.student import _calculate_rent_coverage_due_date
         coverage_due_date = _calculate_rent_coverage_due_date(rent_settings, now)
 
         if coverage_due_date:
@@ -332,17 +368,16 @@ def purchase_item():
 
             # Check if past grace period
             if now > grace_end_date:
-                # Check if rent is paid for current coverage period
-                total_paid = db.session.query(db.func.sum(RentPayment.amount_paid)).filter(
-                    RentPayment.student_id == student.id,
-                    RentPayment.period == current_block,
-                    RentPayment.coverage_month == coverage_month,
-                    RentPayment.coverage_year == coverage_year,
-                    RentPayment.join_code == join_code
-                ).scalar() or 0
+                is_paid_for_coverage = _is_student_coverage_period_paid(
+                    rent_settings,
+                    student.id,
+                    current_block,
+                    join_code,
+                    coverage_due_date,
+                )
 
-                # Student is late if they haven't paid full rent
-                if total_paid < rent_settings.rent_amount:
+                # Student is late if they haven't fully settled the coverage period
+                if not is_paid_for_coverage:
                     # Check if itemization is enabled
                     rent_items = RentItem.query.filter_by(rent_setting_id=rent_settings.id).all()
 
@@ -366,7 +401,7 @@ def purchase_item():
 
     # Check if student has free uses remaining from rent (per-use rent items).
     # Also recover gracefully if a paid-rent student is missing the grant row.
-    if quantity == 1 and (item.is_rent_linked or per_use_rent_item):
+    if quantity == 1 and (item.is_rent_linked or per_use_rent_item or legacy_rent_perk_free_fallback):
         # Look for an active StudentItem with uses_remaining for this store item
         rent_item_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
@@ -389,6 +424,10 @@ def purchase_item():
             StudentItem.join_code == join_code,
             StudentItem.uses_remaining.isnot(None),
             db.or_(
+                StudentItem.uses_remaining > 0,
+                StudentItem.uses_remaining == -1
+            ),
+            db.or_(
                 StudentItem.expiry_date.is_(None),
                 StudentItem.expiry_date > now
             )
@@ -409,10 +448,15 @@ def purchase_item():
                 uses_remaining=per_use_rent_item.use_limit if per_use_rent_item.use_limit else -1
             )
             db.session.add(active_rent_item)
+        elif not active_rent_item and legacy_rent_perk_free_fallback:
+            # Legacy fallback: item is rent-linked and rent is paid, but there is no
+            # per-use grant row or explicit per-use rent linkage in this period.
+            # Allow $0 purchase without mutating uses_remaining grants.
+            active_rent_item = None
 
-        if active_rent_item:
+        if active_rent_item or legacy_rent_perk_free_fallback:
             # Free purchase from rent perk - decrement available free uses unless unlimited (-1)
-            if active_rent_item.uses_remaining != -1:
+            if active_rent_item and active_rent_item.uses_remaining != -1:
                 active_rent_item.uses_remaining -= 1
 
             # For rent perks, purchasing is $0 and usage is logged later on /use-item.
@@ -445,6 +489,9 @@ def purchase_item():
                 uses_remaining=None,
             ))
             db.session.commit()
+
+            if legacy_rent_perk_free_fallback and not active_rent_item:
+                return jsonify({"status": "success", "message": f"You purchased {item.name} for $0 (rent perk)."})
 
             remaining = active_rent_item.uses_remaining
             if remaining == -1:

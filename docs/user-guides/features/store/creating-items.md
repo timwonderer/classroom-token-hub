@@ -29,6 +29,7 @@ Make sure the Store feature is enabled in your Feature Settings. Navigate to **S
 ### 1. Navigate to Store Management
 
 From the admin dashboard:
+
 1. Click **Store** in the sidebar
 2. You'll see the Store Management page with tabs for **Manage Items** and **Redemptions**
 
@@ -62,6 +63,7 @@ From the admin dashboard:
 Choose how the item works:
 
 **Immediate Use**:
+
 - Student purchases, automatically "owns" it
 - No teacher approval needed
 - Status changes to "completed" immediately
@@ -69,6 +71,7 @@ Choose how the item works:
 - Example: "5 Bonus Points" - automatically added to their record
 
 **Delayed Use**:
+
 - Student purchases, teacher approves redemption later
 - Status is "processing" until teacher marks as redeemed
 - Use for tangible rewards you hand out
@@ -76,6 +79,7 @@ Choose how the item works:
 - Example: "Candy Bar" - student must redeem in person
 
 **Collective Goal**:
+
 - Class works together to reach a purchase goal
 - Choose "Fixed Number" (set target) or "Whole Class" (everyone must buy)
 - Status is "pending" until goal is met
@@ -83,6 +87,7 @@ Choose how the item works:
 - Example: "Pizza Party" - set goal of 20 purchases, class works together
 
 **Hall Pass**:
+
 - Adds passes to student's hall pass balance
 - No approval needed, automatic
 - Used with hall pass system
@@ -93,17 +98,20 @@ Choose how the item works:
 ### 3. Configure Limits (Optional)
 
 **Inventory** (global stock limit):
+
 - Total quantity available to ALL students across all periods
 - Example: Set to 10 if you only have 10 physical candy bars
 - Leave blank for unlimited inventory
 
 **Purchase Limit per Student** (how many each student can own at once):
+
 - Maximum number a student can have in their inventory at one time
 - Students can buy again after using/redeeming the item
 - Example: Homework Pass set to 2 means students can own max 2 at once
 - Leave blank for unlimited per student
 
 **Example Limits**:
+
 - Homework Pass: Purchase limit 4 (max 4 at once, can buy more after using)
 - Candy: Inventory 20 (only 20 total available), Purchase limit 2 (max 2 per student at once)
 - Seat Change: No inventory limit, Purchase limit 2 (max 2 owned at once)
@@ -113,11 +121,13 @@ Choose how the item works:
 ### 4. Set Expiration (Optional)
 
 **Expiration Date**:
+
 - Item disappears from store after this date
 - Good for seasonal items or limited-time offers
 - Example: "Halloween Candy" expires Nov 1
 
 **Expiration After Purchase**:
+
 - Item must be redeemed within X days of purchase
 - Prevents students from hoarding
 - Example: "Snack" expires 7 days after purchase
@@ -135,12 +145,14 @@ Choose how the item works:
 ### Immediate Use Items
 
 Best for:
+
 - Bonus points
 - Privileges (sit where you want, choose group partner)
 - Digital rewards
 - Automatic grade adjustments
 
 **How they work**:
+
 - Student clicks "Purchase"
 - Tokens deducted immediately
 - Item added to "My Items"
@@ -150,11 +162,13 @@ Best for:
 ### Delayed Use Items
 
 Best for:
+
 - Tangible rewards (candy, pencils, stickers)
 - Items you need to hand out
 - Limited quantity items
 
 **How they work**:
+
 - Student clicks "Purchase"
 - Tokens deducted
 - Item appears in **Redemptions** queue for teacher
@@ -164,12 +178,14 @@ Best for:
 ### Collective Goal Items
 
 Best for:
+
 - Class-wide rewards
 - Team goals
 - Special events (pizza parties, movie days)
 - Building class unity
 
 **How they work**:
+
 - **Fixed Number**: Set a target number of purchases (e.g., 20)
   - Each student who purchases contributes to the goal
   - When target is reached, all contributors benefit
@@ -181,6 +197,7 @@ Best for:
   - Example: "Field Trip Fund" - everyone must contribute
 
 **Status tracking**:
+
 - Purchase status shows "pending" until goal is met
 - Teacher can view progress toward goal
 - When goal reached, status changes to "completed"
@@ -188,10 +205,12 @@ Best for:
 ### Hall Pass Items
 
 Best for:
+
 - Extra hall pass allowance
 - Restroom pass bundles
 
 **How they work**:
+
 - Student purchases item
 - Hall passes automatically added to their balance
 - Student can use passes via dashboard
@@ -201,11 +220,13 @@ Best for:
 ### Bundle Items
 
 Create items that give multiple rewards:
+
 1. Set the price for the bundle
 2. In description, list what's included
 3. Use immediate use items for automatic multi-reward bundles
 
 Example: "Starter Pack" ($200) includes:
+
 - 2 Homework Passes
 - 1 Seat Change
 - 5 Bonus Points
@@ -213,6 +234,7 @@ Example: "Starter Pack" ($200) includes:
 ### Collective Goal Items
 
 Items the whole class works toward together:
+
 1. Select "Collective Goal" as the item type
 2. Choose goal type:
    - **Fixed Number**: Set target number of purchases (e.g., 20 students)
@@ -222,6 +244,7 @@ Items the whole class works toward together:
 5. When goal is met, all contributors benefit
 
 **Example: Fixed Number**
+
 - Item: "Pizza Party"
 - Price: $50 per student
 - Goal Type: Fixed Number
@@ -229,6 +252,7 @@ Items the whole class works toward together:
 - When 20 students have purchased, goal is met
 
 **Example: Whole Class**
+
 - Item: "Movie Day"
 - Price: $100 per student
 - Goal Type: Whole Class
@@ -240,6 +264,7 @@ Items the whole class works toward together:
 ### Scenario: Homework Pass
 
 **Setup**:
+
 - Name: "Homework Pass"
 - Price: $150
 - Type: Immediate Use
@@ -250,6 +275,7 @@ Items the whole class works toward together:
 ### Scenario: Snack from Treasure Box
 
 **Setup**:
+
 - Name: "Snack"
 - Price: $50
 - Type: Delayed Use
@@ -261,6 +287,7 @@ Items the whole class works toward together:
 ### Scenario: Extra Hall Passes
 
 **Setup**:
+
 - Name: "2 Extra Hall Passes"
 - Price: $100
 - Type: Hall Pass
@@ -279,17 +306,20 @@ Items the whole class works toward together:
 ## Troubleshooting
 
 **Students can't see my item**:
+
 - Check if item is Activated
 - Verify Store feature is enabled in Feature Settings
 - Ensure students are in the correct class period
 
 **Item sold out too quickly**:
+
 - Set inventory limits (total stock available)
 - Set purchase limits per student (max they can own at once)
 - Increase the price
 - Create similar items to distribute demand
 
 **Students aren't buying anything**:
+
 - Prices might be too high (check Economy Health)
 - Items might not be appealing (ask for student input)
 - Students might be saving for something specific

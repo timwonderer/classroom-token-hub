@@ -22,6 +22,7 @@
 System health observability dashboard per analytics specification, providing teachers with actionable insights about their classroom economy.
 
 **Key Features**:
+
 - Three new database models: `AnalyticsSnapshot`, `AnalyticsEvent`, `AnalyticsAlert`
 - Analytics computation engine with CWI-relative metrics (no absolute balances/rankings)
 - System health metrics:
@@ -55,6 +56,7 @@ System health observability dashboard per analytics specification, providing tea
 Teachers can now specify what rent pays for and offer items as store alternatives, creating flexible rent payment options.
 
 **Key Features**:
+
 - New `RentItem` model to track itemized rent components (e.g., Desk, Chair, Locker)
 - Teachers can add/remove/reorder rent items in Rent Settings page
 - Optional store integration: mark items as "Available in Store" with custom pricing
@@ -77,14 +79,17 @@ Teachers can now specify what rent pays for and offer items as store alternative
 "Prevent Purchase When Late" toggle now has dynamic behavior based on itemization status.
 
 **Behavior**:
+
 - **When rent itemization is disabled**: Blocks ALL store purchases when student is late on rent (original behavior)
 - **When rent itemization is enabled**: Students late on rent can ONLY purchase items covered by rent (at à la carte prices), all other store items blocked
 
 **Incentive Structure**: 
+
 - Pay rent to get everything included
 - Or buy individual rent items at higher prices while missing out on other store items
 
 **Implementation**: 
+
 - UI dynamically updates toggle label and description based on itemization status
 - JavaScript updates label when items are added/removed dynamically
 - Implemented in `/api/purchase-item` endpoint with proper rent late detection and item validation
@@ -96,10 +101,12 @@ Teachers can now specify what rent pays for and offer items as store alternative
 Teachers can now choose how long individually-purchased rent items last.
 
 **Options**:
+
 - **Per Use**: Student must buy each time they want to use it (unlimited purchases allowed)
 - **Per Rent Period**: Student buys once and can use until next rent is due (limit 1, expires when rent comes due)
 
 **Features**:
+
 - Radio button selector in rent itemization UI with clear explanations
 - Store items automatically configured with appropriate purchase limits based on duration type
 - Purchase API calculates expiration dates for "per_period" items based on rent frequency settings
@@ -114,10 +121,12 @@ Teachers can now choose how long individually-purchased rent items last.
 Visual indicators on student detail page showing active rent privileges.
 
 **Badge Types**:
+
 - **Green badges**: Privileges covered by paid rent (automatic for rent-paying students)
 - **Blue badges**: Privileges purchased individually (shows "(Purchased)" label)
 
 **Features**:
+
 - Displays all "per_period" rent items that students currently have access to
 - Badges only show for non-expired privileges
 - Rent-paying students automatically receive all per-period privilege badges
@@ -131,6 +140,7 @@ Visual indicators on student detail page showing active rent privileges.
 Full navigation menu now accessible on mobile devices and PWA, resolving a critical usability limitation.
 
 **Key Features**:
+
 - Added floating hamburger menu button that appears on mobile (<768px)
 - Sidebar slides in from left with smooth animation and backdrop overlay
 - Help buttons now visible as icon-only on mobile screens
@@ -158,6 +168,7 @@ Fixed issue where forms with EasyMDE markdown editors could not be submitted due
 **Problem**: EasyMDE markdown editor hides the underlying textarea, causing browser validation to fail on required fields. This resulted in the console error: "An invalid form control with name='[field]' is not focusable"
 
 **Resolution**:
+
 - Removed HTML `required` attribute from hidden textareas after editor initialization
 - Server-side validation via `DataRequired()` still enforces required fields
 - Applied fix to insurance claim form (`student_file_claim.html`) and issue submission form (`student_submit_issue.html`)
@@ -171,6 +182,7 @@ Fixed issue where forms with EasyMDE markdown editors could not be submitted due
 Improved repository structure and documentation consistency.
 
 **Changes**:
+
 - Moved historic audit files to `docs/archive/`:
   - `MULTI_TENANCY_AUDIT_RESULTS.md`
   - `MULTI_TENANCY_VIOLATIONS_AUDIT.md`
@@ -238,6 +250,7 @@ None. This release is fully backward compatible.
 ### Documentation Updates
 
 If you have bookmarked any of the following documentation files, note they have been moved:
+
 - `MULTI_TENANCY_AUDIT_RESULTS.md` → `docs/archive/MULTI_TENANCY_AUDIT_RESULTS.md`
 - `MULTI_TENANCY_VIOLATIONS_AUDIT.md` → `docs/archive/MULTI_TENANCY_VIOLATIONS_AUDIT.md`
 - `SECURITY_FIXES_SUMMARY.md` → `docs/archive/SECURITY_FIXES_SUMMARY.md`
@@ -249,6 +262,7 @@ If you have bookmarked any of the following documentation files, note they have 
 ## Testing
 
 All new features have been tested with:
+
 - Unit tests for analytics computation engine
 - Integration tests for rent itemization
 - Manual testing for mobile navigation
@@ -277,6 +291,7 @@ Thanks to all contributors who helped with this release through testing, feedbac
 ## What's Next
 
 Version 1.8.0 will focus on:
+
 - Additional analytics features
 - Enhanced reporting capabilities
 - Performance optimizations

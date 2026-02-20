@@ -22,6 +22,7 @@
 **Description:**
 The `purchase_item` route authorizes purchases by checking `student.checking_balance` (a global property summing funds across all classes) against the item price, instead of using the class-scoped balance calculated earlier.
 
+
 **Why This Violates Financial Invariants:**
 This allows a student with funds in Class A to purchase items in Class B even if they have $0 or negative balance in Class B. The transaction is then recorded in Class B (correctly scoped), driving Class B's ledger into negative territory based on funds that exist only in Class A. This breaks tenant isolation and fund segregation.
 **Worst Case Scenario:**
@@ -146,4 +147,5 @@ A teacher deletes a class by mistake or maliciously to hide embezzlement/fraud, 
 3. Once the teacher click on `Yes, I am sure`, open a second modal that have the teacher type in *Delete [insert class name here]* in a textbox. Disable copy and pasting within the modal so the teacher must type it in. 
 4. After the positive explicitly typed confirmation, the teacher must click and hold the `Confirm Deletion` button for 10 seconds with visible timer. The `cancel` button is always available and instant. The behavior of the `return` key on this modal should be the same as `cancel`
 5. Once the `Confirm Deletion` is held for 10 seconds, the modal will close and proceed with the `_hard_delete_join_code_scope` 
+
 
