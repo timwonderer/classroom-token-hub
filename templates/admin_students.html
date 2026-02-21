@@ -107,13 +107,15 @@
               </ol>
 
               <div class="alert alert-danger mb-3">
-                <strong><span class="material-symbols-outlined me-1">warning</span>Critical:</strong> The username is shown
+                <strong><span class="material-symbols-outlined me-1">warning</span>Critical:</strong> The username is
+                shown
                 <strong>only once</strong> during setup. Students must record it. If forgotten, you'll need to reset
                 their account.
               </div>
 
               <div class="alert alert-info mb-0">
-                <strong><span class="material-symbols-outlined me-1">lightbulb</span>Teacher Tip:</strong> Have students complete account
+                <strong><span class="material-symbols-outlined me-1">lightbulb</span>Teacher Tip:</strong> Have students
+                complete account
                 setup in class so you can help if they have issues. Although not recommended for security reasons,
                 consider keeping a secure record of usernames for your class so you can assist with forgotten usernames.
               </div>
@@ -143,13 +145,15 @@
               </ol>
 
               <div class="alert alert-warning mb-3">
-                <strong><span class="material-symbols-outlined me-1">warning</span>Changing Class Assignment:</strong> If you
+                <strong><span class="material-symbols-outlined me-1">warning</span>Changing Class Assignment:</strong>
+                If you
                 move a student to a different class period, you can choose to transfer their balance or start fresh at
                 $0.
               </div>
 
               <div class="alert alert-info mb-0">
-                <strong><span class="material-symbols-outlined me-1">info</span>Important:</strong> If you change their name or date
+                <strong><span class="material-symbols-outlined me-1">info</span>Important:</strong> If you change their
+                name or date
                 of birth, the student will need these updated details to log in. Unclaimed students will use the new
                 info during account setup.
               </div>
@@ -628,7 +632,8 @@
         <div class="row">
           <div class="col-lg-6 mb-4">
             <div class="card h-100" style="border: 2px solid var(--primary);">
-              <div class="card-header bg-primary-subtle text-primary" style="background-color: var(--primary); color: white;">
+              <div class="card-header bg-primary-subtle text-primary"
+                style="background-color: var(--primary); color: white;">
                 <h6 class="mb-0 text-white"><span
                     class="material-symbols-outlined me-2 align-middle">info</span>Instructions</h6>
               </div>
@@ -933,6 +938,47 @@
   </div>
 </div>
 
+<!-- Delete Class Modal -->
+<div class="modal fade" id="deleteClassModal" tabindex="-1" aria-labelledby="deleteClassModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <form id="deleteClassForm" method="post">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title" id="deleteClassModalLabel">
+            <span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Delete Class
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+          <div class="alert alert-danger">
+            <h6><span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>CRITICAL
+              WARNING</h6>
+            <p>You are about to permanently delete <strong id="delete_class_target_name"></strong>.</p>
+            <p class="mb-0">This action will permanently delete ALL data scoped to this class, including:</p>
+            <ul class="mb-0 mt-2">
+              <li>Transactions</li>
+              <li>Balances</li>
+              <li>Attendance</li>
+              <li>Hall passes</li>
+              <li>Store purchases</li>
+            </ul>
+          </div>
+
+          <p class="mb-3">Type <strong class="text-danger" id="delete_class_expected_confirmation"></strong> to confirm:
+          </p>
+          <input type="text" class="form-control" id="delete_class_confirmation_input" autocomplete="off" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">Delete Permanently</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -1156,6 +1202,23 @@
       console.log('Delete modal found, attaching event listeners');
       deleteModal.addEventListener('show.bs.modal', event => {
         const button = event.relatedTarget;
+
+        // Check if this is the last student in the block
+        const table = button.closest('table');
+        if (table) {
+          const block = table.id.replace('students-table-', '');
+          const rowCount = table.querySelectorAll('.student-row').length;
+
+          if (rowCount === 1) {
+            // Prevent standard student delete modal
+            event.preventDefault();
+
+            // Redirect to entire block deletion
+            deleteEntireBlock(block);
+            return;
+          }
+        }
+
         const studentId = button.getAttribute('data-student-id');
         const studentName = button.getAttribute('data-student-name');
 
@@ -1237,10 +1300,17 @@
   function bulkDeleteStudents(block) {
     const table = document.getElementById(`students-table-${block}`);
     const checkboxes = table.querySelectorAll('.student-checkbox:checked');
+    const allRows = table.querySelectorAll('.student-row');
     const studentIds = Array.from(checkboxes).map(cb => cb.value);
 
     if (studentIds.length === 0) {
       alert('Please select at least one student to delete.');
+      return;
+    }
+
+    if (studentIds.length === allRows.length) {
+      // If all students are selected, it's equivalent to deleting the entire block
+      deleteEntireBlock(block);
       return;
     }
 
@@ -1287,174 +1357,6 @@
       });
   }
 
-  function bulkTapIn(block) {
-    const table = document.getElementById(`students-table-${block}`);
-    const checkboxes = table.querySelectorAll('.student-checkbox:checked');
-    const studentIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
-
-    if (studentIds.length === 0) {
-      alert('Please select at least one student.');
-      return;
-    }
-
-    const count = studentIds.length;
-    const confirmation = confirm(
-      `Are you sure you want to tap in ${count} selected student(s) in Block ${block.toUpperCase()}?`
-    );
-
-    if (!confirmation) return;
-
-    // Call the tap-in API
-    fetch('/admin/tap-in-students', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-      },
-      body: JSON.stringify({
-        student_ids: studentIds,
-        period: block.toUpperCase()
-      })
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          alert(data.message || `Successfully tapped in ${count} student(s).`);
-          clearSelection(block);
-          // Reload the page so the student table reflects updated work status
-          location.reload();
-          window.location.reload();
-        } else {
-          alert('Error: ' + data.message);
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        alert('Network error occurred while tapping in students.');
-      });
-  }
-
-  function bulkTapOut(block) {
-    const table = document.getElementById(`students-table-${block}`);
-    const checkboxes = table.querySelectorAll('.student-checkbox:checked');
-    const studentIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
-
-    if (studentIds.length === 0) {
-      alert('Please select at least one student.');
-      return;
-    }
-
-    const count = studentIds.length;
-    const confirmation = confirm(
-      `Are you sure you want to tap out ${count} selected student(s) in Block ${block.toUpperCase()}?`
-    );
-
-    if (!confirmation) return;
-
-    // Call the tap-out API
-    fetch('/admin/tap-out-students', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-      },
-      body: JSON.stringify({
-        student_ids: studentIds,
-        period: block.toUpperCase(),
-        reason: 'Teacher bulk stop work'
-      })
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          let message = data.message;
-          if (data.tapped_out && data.tapped_out.length > 0) {
-            message += '\n\nTapped out:\n' + data.tapped_out.join(', ');
-          }
-          if (data.already_inactive && data.already_inactive.length > 0) {
-            message += '\n\nAlready inactive:\n' + data.already_inactive.join(', ');
-          }
-          alert(message);
-          clearSelection(block);
-          window.location.reload();
-        } else {
-          alert('Error: ' + data.message);
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        alert('Network error occurred while tapping out students.');
-      });
-  }
-
-  function bulkUpdateHallPass(block) {
-    const table = document.getElementById(`students-table-${block}`);
-    const checkboxes = table.querySelectorAll('.student-checkbox:checked');
-    const studentIds = Array.from(checkboxes).map(cb => parseInt(cb.value));
-
-    if (studentIds.length === 0) {
-      alert('Please select at least one student.');
-      return;
-    }
-
-    const count = studentIds.length;
-    const action = prompt(
-      `Update hall passes for ${count} student(s):\n\n` +
-      `Enter:\n` +
-      `• A number to SET hall passes to that amount (e.g., "5")\n` +
-      `• +N to ADD passes (e.g., "+3")\n` +
-      `• -N to SUBTRACT passes (e.g., "-2")`
-    );
-
-    if (!action) return;
-
-    const trimmedAction = action.trim();
-    let updateType, value;
-
-    if (trimmedAction.startsWith('+')) {
-      updateType = 'add';
-      value = parseInt(trimmedAction.substring(1));
-    } else if (trimmedAction.startsWith('-')) {
-      updateType = 'subtract';
-      value = parseInt(trimmedAction.substring(1));
-    } else {
-      updateType = 'set';
-      value = parseInt(trimmedAction);
-    }
-
-    if (isNaN(value) || value < 0) {
-      alert('Invalid input. Please enter a valid number.');
-      return;
-    }
-
-    // Send bulk update request
-    fetch('/admin/students/bulk-update-hall-passes', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-      },
-      body: JSON.stringify({
-        student_ids: studentIds,
-        update_type: updateType,
-        value: value
-      })
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          alert(data.message);
-          location.reload();
-        } else {
-          alert('Error: ' + data.message);
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        alert('Network error occurred while updating hall passes.');
-      });
-  }
-
   function deleteEntireBlock(block) {
     const table = document.getElementById(`students-table-${block}`);
     const allRows = table.querySelectorAll('.student-row');
@@ -1465,47 +1367,69 @@
       return;
     }
 
-    const confirmation = confirm(
-      `CRITICAL WARNING: You are about to permanently delete ALL ${count} students in Block ${block.toUpperCase()} and ALL their data:\n\n` +
-      `• All transactions and balances\n` +
-      `• All attendance records\n` +
-      `• All hall pass logs\n` +
-      `• All purchases and items\n\n` +
-      `This action CANNOT be undone!\n\n` +
-      `Type "DELETE BLOCK ${block.toUpperCase()}" in the next prompt to confirm.`
-    );
+    const modalBtn = document.createElement('button');
+    modalBtn.setAttribute('data-bs-toggle', 'modal');
+    modalBtn.setAttribute('data-bs-target', '#deleteClassModal');
 
-    if (!confirmation) return;
+    const blockUpper = block.toUpperCase();
 
-    const confirmText = prompt(`Type "DELETE BLOCK ${block.toUpperCase()}" to confirm:`);
-    if (confirmText !== `DELETE BLOCK ${block.toUpperCase()}`) {
-      alert('Deletion cancelled. You must type the exact confirmation text.');
-      return;
-    }
+    document.getElementById('delete_class_target_name').textContent = `Block ${blockUpper} (${count} students)`;
+    document.getElementById('delete_class_expected_confirmation').textContent = `DELETE CLASS ${blockUpper}`;
+    document.getElementById('delete_class_confirmation_input').value = '';
 
-    // Send block delete request
-    fetch('/admin/students/delete-block', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-      },
-      body: JSON.stringify({ block: block })
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          alert(data.message);
-          location.reload();
-        } else {
-          alert('Error: ' + data.message);
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        alert('Network error occurred while deleting block.');
-      });
+    document.getElementById('delete_class_action_type').value = 'delete_block';
+    document.getElementById('delete_class_block').value = blockUpper;
+
+    const modalEl = document.getElementById('deleteClassModal');
+    const bsModal = new bootstrap.Modal(modalEl);
+    bsModal.show();
   }
+
+  // Handle Submission of the Class Deletion Modal
+  document.addEventListener('DOMContentLoaded', function () {
+    const deleteClassForm = document.getElementById('deleteClassForm');
+    if (deleteClassForm) {
+      deleteClassForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        const expected = document.getElementById('delete_class_expected_confirmation').textContent.trim();
+        const input = document.getElementById('delete_class_confirmation_input').value.trim();
+
+        if (input !== expected) {
+          alert(`Confirmation failed. You must type "${expected}" exactly (case-sensitive).`);
+          return;
+        }
+
+        const actionType = document.getElementById('delete_class_action_type').value;
+        const block = document.getElementById('delete_class_block').value;
+
+        if (actionType === 'delete_block') {
+          // Send block delete request
+          fetch('/admin/students/delete-block', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+            },
+            body: JSON.stringify({ block: block })
+          })
+            .then(response => response.json())
+            .then(data => {
+              if (data.status === 'success') {
+                alert(data.message);
+                location.reload();
+              } else {
+                alert('Error: ' + data.message);
+              }
+            })
+            .catch(error => {
+              console.error('Error:', error);
+              alert('Network error occurred while deleting block.');
+            });
+        }
+      });
+    }
+  });
 
   function deletePendingStudent(teacherBlockId, studentName) {
     const confirmation = confirm(

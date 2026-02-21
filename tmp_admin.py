@@ -20,7 +20,6 @@ from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from app.utils.time import utc_now, ensure_utc
-from app.utils.deletion import collapse_universe
 from decimal import Decimal, InvalidOperation
 
 from flask import (
@@ -488,7 +487,174 @@ def _delete_transactions_for_join_code(join_code, *, join_code_deletion=False):
     return Transaction.query.filter_by(join_code=join_code).delete(synchronize_session=False)
 
 
+def _hard_delete_join_code_scope(join_code, teacher_id):
+    """
+    Permanently remove records scoped to a destroyed join code.
 
+    Scope is strict to the provided join_code.
+    """
+    if not join_code:
+        raise ValueError("join_code is required for class deletion")
+
+    scoped_student_ids = [
+        sid for (sid,) in db.session.query(TeacherBlock.student_id)
+        .filter(
+            TeacherBlock.join_code == join_code,
+            TeacherBlock.student_id.isnot(None),
+        )
+        .distinct()
+        .all()
+    ]
+    student_item_ids_subq = (
+        db.session.query(StudentItem.id)
+        .filter(StudentItem.join_code == join_code)
+        .subquery()
+    )
+    insurance_ids_subq = (
+        db.session.query(StudentInsurance.id)
+        .filter(StudentInsurance.join_code == join_code)
+        .subquery()
+    )
+    tx_ids_subq = (
+        db.session.query(Transaction.id)
+        .filter(Transaction.join_code == join_code)
+        .subquery()
+    )
+    issue_ids_subq = (
+        db.session.query(Issue.id)
+        .filter(Issue.join_code == join_code)
+        .subquery()
+    )
+    class_blocks = [
+        block for (block,) in db.session.query(TeacherBlock.block).filter(
+            TeacherBlock.teacher_id == teacher_id,
+            TeacherBlock.join_code == join_code,
+            TeacherBlock.block.isnot(None),
+        ).distinct().all()
+    ]
+
+    # Class-scoped records
+    RedemptionAuditLog.query.filter(
+        RedemptionAuditLog.student_item_id.in_(sa.select(student_item_ids_subq))
+    ).delete(synchronize_session=False)
+    StudentItem.query.filter(StudentItem.join_code == join_code).delete(synchronize_session=False)
+    TapEvent.query.filter(TapEvent.join_code == join_code).delete(synchronize_session=False)
+    HallPassLog.query.filter(HallPassLog.join_code == join_code).delete(synchronize_session=False)
+    RentPayment.query.filter(RentPayment.join_code == join_code).delete(synchronize_session=False)
+    StudentBlock.query.filter(StudentBlock.join_code == join_code).delete(synchronize_session=False)
+    AnalyticsSnapshot.query.filter(AnalyticsSnapshot.join_code == join_code).delete(synchronize_session=False)
+    AnalyticsEvent.query.filter(AnalyticsEvent.join_code == join_code).delete(synchronize_session=False)
+    Announcement.query.filter(
+        Announcement.teacher_id == teacher_id,
+        Announcement.join_code == join_code,
+    ).delete(synchronize_session=False)
+
+    # Issue data tied to this class
+    IssueResolutionAction.query.filter(
+        IssueResolutionAction.issue_id.in_(sa.select(issue_ids_subq))
+    ).delete(synchronize_session=False)
+    Issue.query.filter(Issue.join_code == join_code).delete(synchronize_session=False)
+
+    # Insurance data tied to this class or class-scoped transactions
+    InsuranceClaim.query.filter(
+        sa.or_(
+            InsuranceClaim.student_insurance_id.in_(sa.select(insurance_ids_subq)),
+            InsuranceClaim.transaction_id.in_(sa.select(tx_ids_subq)),
+        )
+    ).delete(synchronize_session=False)
+    StudentInsurance.query.filter(StudentInsurance.join_code == join_code).delete(synchronize_session=False)
+
+    # Financial ledger (only here)
+    _delete_transactions_for_join_code(join_code, join_code_deletion=True)
+
+    # Remove store items tied only to this class block scope.
+    if class_blocks:
+        store_item_ids_for_blocks = (
+            db.session.query(StoreItemBlock.store_item_id)
+            .group_by(StoreItemBlock.store_item_id)
+            .having(sa.func.count() > 0)
+            .having(sa.func.sum(sa.case((StoreItemBlock.block.in_(class_blocks), 1), else_=0)) == sa.func.count())
+            .subquery()
+        )
+        deletable_store_item_ids = (
+            db.session.query(StoreItem.id)
+            .filter(
+                StoreItem.teacher_id == teacher_id,
+                StoreItem.id.in_(sa.select(store_item_ids_for_blocks)),
+            )
+            .subquery()
+        )
+        class_item_student_ids = (
+            db.session.query(StudentItem.id)
+            .filter(StudentItem.store_item_id.in_(sa.select(deletable_store_item_ids)))
+            .subquery()
+        )
+        RedemptionAuditLog.query.filter(
+            RedemptionAuditLog.student_item_id.in_(sa.select(class_item_student_ids))
+        ).delete(synchronize_session=False)
+        StudentItem.query.filter(
+            StudentItem.store_item_id.in_(sa.select(deletable_store_item_ids))
+        ).delete(synchronize_session=False)
+        StoreItem.query.filter(
+            StoreItem.id.in_(sa.select(deletable_store_item_ids))
+        ).delete(synchronize_session=False)
+
+    # Clean up orphaned StoreItemBlock entries for the deleted class blocks
+    # This handles items that are visible to multiple classes
+    if class_blocks:
+        deletable_block_entries = (
+            db.session.query(StoreItemBlock.store_item_id, StoreItemBlock.block)
+            .join(StoreItem, StoreItemBlock.store_item_id == StoreItem.id)
+            .filter(
+                StoreItem.teacher_id == teacher_id,
+                StoreItemBlock.block.in_(class_blocks)
+            )
+            .subquery()
+        )
+        StoreItemBlock.query.filter(
+            sa.tuple_(StoreItemBlock.store_item_id, StoreItemBlock.block).in_(
+                sa.select(deletable_block_entries)
+            )
+        ).delete(synchronize_session=False)
+
+    # Seats/ownership for this class
+    TeacherBlock.query.filter(
+        TeacherBlock.teacher_id == teacher_id,
+        TeacherBlock.join_code == join_code
+    ).delete(synchronize_session=False)
+
+    if class_blocks and scoped_student_ids:
+        # Only delete legacy StudentBlocks (no join_code) that match the period names.
+        # StudentBlocks with a join_code were already handled by the join_code deletion above.
+        StudentBlock.query.filter(
+            StudentBlock.student_id.in_(scoped_student_ids),
+            StudentBlock.period.in_(class_blocks),
+            StudentBlock.join_code.is_(None),
+        ).delete(synchronize_session=False)
+
+    # Remove students that no longer belong to any class after this join-code deletion.
+    remaining_student_ids_subq = db.session.query(TeacherBlock.student_id).filter(
+        TeacherBlock.student_id.isnot(None),
+        TeacherBlock.join_code != join_code,
+    ).subquery()
+    orphan_student_ids = (
+        db.session.query(Student.id)
+        .filter(Student.id.in_(scoped_student_ids))
+        .filter(~Student.id.in_(sa.select(remaining_student_ids_subq)))
+        .subquery()
+    )
+    StudentTeacher.query.filter(
+        StudentTeacher.student_id.in_(sa.select(orphan_student_ids))
+    ).delete(synchronize_session=False)
+    Student.query.filter(
+        Student.id.in_(sa.select(orphan_student_ids))
+    ).delete(synchronize_session=False)
+
+    # CRITICAL: Delete the ClassEconomy record itself
+    ClassEconomy.query.filter_by(join_code=join_code).delete(synchronize_session=False)
+
+
+def _sanitize_csv_field(value):
     """Prevent CSV injection by prefixing risky leading characters."""
 
     if value is None:
@@ -3062,22 +3228,7 @@ def delete_block():
             }), 400
 
         join_code = authorized_join_codes[0]
-        
-        # Gather student IDs in this block before we wipe it
-        legacy_student_ids = [
-            s_id for (s_id,) in db.session.query(TeacherBlock.student_id).filter(
-                TeacherBlock.teacher_id == current_admin_id,
-                TeacherBlock.block == block,
-                TeacherBlock.student_id.isnot(None)
-            ).all()
-        ]
-
-        # NOTE: Using None for actor_membership_id as delete_block is a legacy wrapper
-        # The true audit record will come when we deprecate delete_block and enforce explicit join-code deletion
-        success = collapse_universe(join_code, reason=f"Legacy block deletion initiated by admin {current_admin_id}", actor_membership_id=None)
-        
-        if not success:
-            return jsonify({"status": "error", "message": "Failed to fully delete the class. Please contact support."}), 500
+        _hard_delete_join_code_scope(join_code, current_admin_id)
 
         # Cleanup any residual unclaimed seats in same block for this join code owner.
         TeacherBlock.query.filter(
@@ -3085,23 +3236,6 @@ def delete_block():
             TeacherBlock.block == block,
             TeacherBlock.student_id.is_(None)
         ).delete(synchronize_session=False)
-
-        # Cleanup legacy StudentBlocks for the students that were in this block
-        if legacy_student_ids:
-            StudentBlock.query.filter(
-                StudentBlock.student_id.in_(legacy_student_ids),
-                StudentBlock.join_code.is_(None)
-            ).delete(synchronize_session=False)
-
-            # Apply erasure rule to these legacy students manually since collapse_universe didn't see them
-            for s_id in legacy_student_ids:
-                remaining_memberships = db.session.query(ClassMembership.id).filter_by(student_id=s_id).count()
-                remaining_tblocks = db.session.query(TeacherBlock.id).filter_by(student_id=s_id).count()
-                if remaining_memberships == 0 and remaining_tblocks == 0:
-                    StudentTeacher.query.filter_by(student_id=s_id).delete(synchronize_session=False)
-                    Transaction.query.filter_by(student_id=s_id).delete(synchronize_session=False)
-                    Student.query.filter_by(id=s_id).delete(synchronize_session=False)
-
         db.session.commit()
         current_app.logger.info(f"Successfully deleted join_code={join_code} for block={block}")
 
@@ -3144,10 +3278,8 @@ def delete_join_code():
         }), 400
 
     try:
-        success = collapse_universe(join_code, reason=f"Explicit join code deletion by admin {current_admin_id}", actor_membership_id=None)
-        if not success:
-            return jsonify({"status": "error", "message": "Failed to fully delete the class. Please contact support."}), 500
-        
+        _hard_delete_join_code_scope(join_code, current_admin_id)
+        db.session.commit()
         return jsonify({
             "status": "success",
             "message": f"Join code {join_code} and all scoped records were permanently deleted."
@@ -7695,16 +7827,6 @@ def download_csv_template():
     """
     template_path = os.path.join(os.getcwd(), "student_upload_template.csv")
     return send_file(template_path, as_attachment=True, download_name="student_upload_template.csv", mimetype='text/csv')
-
-
-def _sanitize_csv_field(value):
-    """Sanitize CSV fields to prevent formula injection."""
-    if value is None:
-        return ''
-    value = str(value)
-    if value and value[0] in ('=', '+', '-', '@'):
-        return f"'{value}"
-    return value
 
 
 @admin_bp.route('/export-students')

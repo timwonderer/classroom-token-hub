@@ -169,6 +169,16 @@ class ClassMembership(db.Model):
         # Ensure unique membership per user per class
         db.UniqueConstraint('join_code', 'admin_id', name='uq_class_membership_admin'),
         db.UniqueConstraint('join_code', 'student_id', name='uq_class_membership_student'),
+        # Enforce exact XOR between admin_id and student_id
+        db.CheckConstraint(
+            "((admin_id IS NOT NULL AND student_id IS NULL) OR (admin_id IS NULL AND student_id IS NOT NULL))",
+            name='ck_membership_xor'
+        ),
+        # Enforce role alignment with ID provided
+        db.CheckConstraint(
+            "((admin_id IS NOT NULL AND role IN ('admin', 'observer')) OR (student_id IS NOT NULL AND role = 'student'))",
+            name='ck_membership_role_consistency'
+        ),
         db.Index('ix_class_memberships_admin_status', 'admin_id', 'status'),
         db.Index('ix_class_memberships_student_status', 'student_id', 'status'),
         db.Index('ix_class_memberships_join_code_role', 'join_code', 'role'),

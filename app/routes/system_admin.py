@@ -27,7 +27,7 @@ from app.models import (
     Transaction, TransactionStatus, TapEvent, HallPassLog, StudentItem, RentPayment,
     StudentInsurance, InsuranceClaim, StudentTeacher, DeletionRequest,
     DeletionRequestType, DeletionRequestStatus, TeacherBlock, StudentBlock, UserReport,
-    FeatureSettings, TeacherOnboarding, RentSettings, BankingSettings,
+    FeatureSettings, TeacherOnboarding, RentSettings, BankingSettings, ClassEconomy,
     DemoStudent, HallPassSettings, PayrollFine, PayrollReward,
     PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction
 )
@@ -42,6 +42,7 @@ from app.utils.passwordless_client import (
     verify_signin_token,
     get_public_api_key
 )
+from app.utils.deletion import collapse_universe
 
 # Create blueprint
 sysadmin_bp = Blueprint('sysadmin', __name__, url_prefix='/sysadmin')
@@ -1264,24 +1265,20 @@ def delete_period(admin_id, period):
         removed_count = 0
 
         if join_code:
-            # New architecture: Delete by join_code
-            # This will cascade delete all associated data via FK constraints
-
-            # New architecture: Delete by join_code
-            # This will cascade delete all associated data via FK constraints
-
-            # Get students in this class (by join_code)
-            from app.models import StudentBlock, ClassEconomy
+            # New architecture: Delete by join_code using the canonical primitive
+            from app.models import StudentBlock
             student_blocks = StudentBlock.query.filter_by(join_code=join_code).all()
             removed_count = len(student_blocks)
-
-            # CRITICAL: Delete ClassEconomy - this triggers cascades for TeacherBlock, StudentBlock, Transactions, HallPassLog
-            ClassEconomy.query.filter_by(join_code=join_code).delete()
             
-            # Manually delete TeacherBlock if it still exists (redundant if cascade works, but safe)
-            if teacher_block:
-                TeacherBlock.query.filter_by(id=teacher_block.id).delete()
-
+            success = collapse_universe(
+                join_code=join_code, 
+                reason=f"Sysadmin {session.get('sysadmin_id')} deleted period via admin {admin_id}",
+                actor_membership_id=None
+            )
+            
+            if not success:
+               flash("An error occurred while deleting the class data.", "error")
+               return redirect(url_for('sysadmin.manage_teachers'))
         else:
             # Legacy fallback: Delete by period string
             # Get students in this period linked to this teacher
@@ -1365,12 +1362,21 @@ def delete_teacher(admin_id):
         return redirect(url_for('sysadmin.manage_teachers'))
 
     try:
-        from app.models import ClassEconomy
-        
-        # CRITICAL FIX: Delete ClassEconomy records FIRST to cascade delete transactions/logs/blocks
-        ClassEconomy.query.filter_by(created_by_admin_id=admin.id).delete(synchronize_session=False)
+        # CRITICAL FIX: Use the canonical class deletion primitive for all owned economies FIRST
+        # This properly handles cascading deletion of all class-scoped records
+        owned_economies = ClassEconomy.query.filter_by(created_by_admin_id=admin.id).all()
+        for economy in owned_economies:
+            success = collapse_universe(
+                join_code=economy.join_code, 
+                reason=f"Teacher {admin.username} ({admin.id}) account deleted by sysadmin",
+                actor_membership_id=None
+            )
+            if not success:
+                current_app.logger.error(f"Failed to collapse universe for join_code={economy.join_code} during teacher {admin.id} deletion")
+                # We continue to try to delete the account even if one economy fails
 
-        # Get all students linked to this teacher via StudentTeacher table
+        # Handle legacy TeacherBlock deletion (for classes not strictly owned by this teacher)
+        # Or placeholder TeacherBlocks that haven't instantiated a class economy
         affected_students = (
             db.session.query(Student)
             .join(StudentTeacher, Student.id == StudentTeacher.student_id)
@@ -1386,11 +1392,11 @@ def delete_teacher(admin_id):
         # Delete all deletion requests for this teacher to prevent NOT NULL violations.
         # Explicit deletion needed because SQLAlchemy flush might try to nullify the FK
         # before database CASCADE can execute, despite FK having ondelete='CASCADE'.
-        DeletionRequest.query.filter_by(admin_id=admin.id).delete()
+        DeletionRequest.query.filter_by(admin_id=admin.id).delete(synchronize_session=False)
 
         # Delete all TeacherBlock entries for this teacher
         # This cleans up roster seats associated with the teacher
-        TeacherBlock.query.filter_by(teacher_id=admin.id).delete()
+        TeacherBlock.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
 
         # Systematically delete all dependent records to prevent IntegrityError due to NOT NULL constraints.
         # Many of these models have a non-nullable teacher_id without a DB-level ON DELETE CASCADE.
@@ -1402,15 +1408,8 @@ def delete_teacher(admin_id):
         PayrollReward.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
         PayrollSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
         RentSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        # Delete StudentItem records for items owned by this teacher
-        StudentItem.query.filter(
-            StudentItem.store_item_id.in_(
-                db.session.query(StoreItem.id).filter_by(teacher_id=admin.id)
-            )
-        ).delete(synchronize_session=False)
         
         # Delete StudentItem records for items owned by this teacher
-        # Must be done before deleting StoreItem to avoid FK constraint violations
         StudentItem.query.filter(
             StudentItem.store_item_id.in_(
                 db.session.query(StoreItem.id).filter_by(teacher_id=admin.id)
