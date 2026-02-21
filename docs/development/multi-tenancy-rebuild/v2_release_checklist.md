@@ -18,17 +18,30 @@ Branch: `join-code-centric-architecture-rebuild`
 | 8 | Legacy bypass routes removed/deprecated paths blocked | In Progress | No deprecated route can mutate/read class data without membership scope | Route tests + routing audit |
 | 9 | Join-code deletion UX guardrails implemented | In Progress | Multi-step confirmation flow before hard delete | UI + endpoint tests |
 | 10 | CI multitenancy regression suite required for merge | Complete | Full 497-test suite passing with strict FK constraints and no warnings | CI validation |
+| 11 | DB CHECK constraints on ClassMembership | Not Started | XOR and Role Consistency enforced at DB level | DB migration + tests |
+| 12 | Production Migration Runbook | Not Started | `V2_PRODUCTION_TRANSITION_RUNBOOK.md` complete | Doc review |
+| 13 | Join code rotation FK backfills | Not Started | Rotation safely backfills FK-scoped tables or aliases without breaking | Integration tests |
+| 14 | Backfill conflict detection | Not Started | `comprehensive_legacy_migration.py` detects conflicts before modifying data | Script verification |
+| 15 | Sweep read paths for `teacher_id` | Not Started | Admin read paths use `join_code` scoping, not just `teacher_id` | Code sweep + tests |
+| 16 | Archived economy read-only access | Not Started | Archived economies permit reads but block mutations | Endpoint tests |
+| 17 | Harden `actor_membership_id = None` paths | Not Started | Silently dropped audits are logged or failed loudly | Code review + tests |
+| 18 | TeacherBlock fallback feature flag | Not Started | Legacy fallback is gated by `USE_LEGACY_TB_FALLBACK` | Code search |
+| 19 | Document/test StoreItem null join_code behavior | Not Started | Global items behavior is explicit and tested, or removed | Document + tests |
+| 20 | Audit `system_admin.py` routes | Not Started | Sysadmin routes audited for multi-tenancy compliance | Route audit matrix |
+| 21 | Class Deletion `collapse_universe` Primitive | Not Started | `collapse_universe` used for all destructive paths, `ON DELETE CASCADE` enforced | Deletion tests + DB schema |
 
 ## Execution Order (Recommended)
 
 1. Complete route-level authorization sweep (`admin`, `api`, `student`, `system_admin`).
 2. Finish query inversion and remove class-level legacy null-join-code blending.
 3. Enforce all-sections fan-out semantics everywhere (no implicit globals).
-4. Complete audit-anchor coverage for every state-changing endpoint.
-5. Finalize immutable-ledger and precision hardening remaining paths.
-6. Remove legacy bypass routes and compatibility branches.
-7. Add destructive delete UX guardrails.
-8. Lock CI gate for multitenancy regression suite.
+4. Implement `collapse_universe` for class deletion and add DB CHECK constraints / FK Cascades.
+5. Complete audit-anchor coverage for every state-changing endpoint & harden None paths.
+6. Enhance migration script with conflict detection and write Production Migration Runbook.
+7. Finalize immutable-ledger, precision hardening, and archived economy read-only rules.
+8. Remove legacy bypass routes, implement join-code rotation backfill, gate TeacherBlock fallback.
+9. Add destructive delete UX guardrails.
+10. Lock CI gate for multitenancy regression suite.
 
 ## Recent Completions
 

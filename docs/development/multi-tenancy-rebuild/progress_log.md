@@ -162,13 +162,20 @@ Branch: `join-code-centric-architecture-rebuild`
 
 ### 4) Audit Anchor Completion
 - Ensure every state-changing write sets `actor_membership_id` where applicable.
-- Backfill/guard rails for paths that can still write without a resolved actor membership.
+- Backfill/guard rails for paths that can still write without a resolved actor membership (fail loudly or log warnings instead of silently dropping audits).
 
 ### 5) Legacy Path Removal
 - Remove deprecated routes/branches that bypass join-code membership validation.
 - Remove compatibility code that enables unscoped class actions once migration cutoff is reached.
+- Gate TeacherBlock legacy fallbacks with a `USE_LEGACY_TB_FALLBACK` feature flag and schedule complete removal.
 
-### 6) Test Coverage Expansion (Required)
+### 6) Class Deletion Architecture
+- Implement the `collapse_universe` primitive for all destructive paths inside a single DB transaction.
+- Enforce `ON DELETE CASCADE` foreign keys for high-risk tables (BalanceCache, Transaction, StudentBlock, TapEvent, RentPayment).
+- Add destructive confirmation UI guardrails for all class and student deletion paths.
+- Ensure student accounts with zero remaining active memberships are fully deleted.
+
+### 7) Test Coverage Expansion (Required)
 - Add explicit regression tests asserting:
   - cross-join-code purchase/transfer/insurance/rent access is denied
   - all class-scoped endpoints reject missing or unauthorized `join_code`
