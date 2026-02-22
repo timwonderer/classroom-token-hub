@@ -7,7 +7,7 @@ This gate is **PR‑blocking by design**. A schema-affecting PR that does not ex
 
 This checklist derives its authority from:
 
-- [Schema Contraction & Destructive Migration Policy](./SCHEMA_CONTRACTION_AND_DESTRUCTIVE_MIGRATION_POLICY.md)
+- [Migration Specifications](./migration-specifications.md)
 
 ---
 

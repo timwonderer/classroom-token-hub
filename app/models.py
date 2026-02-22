@@ -184,10 +184,12 @@ class TeacherBlock(db.Model):
 
     # Fuzzy name matching - stores hash of each last name part separately
     # Example: "Smith-Jones" → ["hash(smith)", "hash(jones)"]
-    last_name_hash_by_part = db.Column(db.JSON, nullable=False)
+    # Nulled out after the seat is claimed (PII cleanup).
+    last_name_hash_by_part = db.Column(db.JSON, nullable=True)
 
-    # Privacy-aligned DOB sum for verification (non-reversible)
-    dob_sum = db.Column(db.Integer, nullable=False)
+    # Privacy-aligned DOB sum for verification (non-reversible).
+    # Nulled out after the seat is claimed (PII cleanup).
+    dob_sum = db.Column(db.Integer, nullable=True)
 
     # Hashing
     salt = db.Column(db.LargeBinary(16), nullable=False)
@@ -199,6 +201,9 @@ class TeacherBlock(db.Model):
     # Claim status
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
     is_claimed = db.Column(db.Boolean, default=False, nullable=False)
+
+    # Teacher Identity Flag
+    is_teacher = db.Column(db.Boolean, default=False, nullable=False)
 
     # Timestamps
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
@@ -273,6 +278,9 @@ class Student(db.Model):
     # Soft-delete flag: archived students cannot log in and are hidden from roster queries.
     is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
+    # Teacher Identity Flag (prevents deletion and analytics skew)
+    is_teacher = db.Column(db.Boolean, default=False, nullable=False)
+
     # Account Recovery Fields
     reset_code = db.Column(db.String(8), nullable=True, unique=True)  # 8-char alphanumeric code
     reset_code_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -328,19 +336,23 @@ class Student(db.Model):
         if join_code:
             # Proper scoping by join_code (period-level isolation)
             # Use Ledger + Settlement model (BalanceCache)
-            from app.models import BalanceCache, Transaction, TransactionStatus 
-            from app.utils.banking import settle_balances
-            
-            # 1. Eager Settlement (Best Effort)
-            try:
-                settle_balances(self.id, join_code)
-            except SQLAlchemyError as exc:
-                logger.warning(
-                    "Eager settlement failed for student %s, join_code %s: %s",
-                    self.id,
-                    join_code,
-                    exc,
-                )
+            from app.models import BalanceCache, Transaction, TransactionStatus
+
+            # Best-effort eager settlement for pending rows in this class context.
+            # This keeps balance reads and transaction statuses consistent even when
+            # asynchronous settlement is unavailable (e.g., tests/local dev).
+            has_pending = db.session.query(Transaction.id).filter(
+                Transaction.student_id == self.id,
+                Transaction.join_code == join_code,
+                Transaction.status == TransactionStatus.PENDING,
+            ).first()
+            if has_pending:
+                try:
+                    from app.utils.banking import settle_balances
+                    settle_balances(self.id, join_code)
+                except Exception:
+                    # Fall back to read path below if settlement cannot run here.
+                    pass
 
             # 2. Read Posted from Cache
             cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()
@@ -425,19 +437,21 @@ class Student(db.Model):
         if join_code:
             # Proper scoping by join_code (period-level isolation)
             # Use Ledger + Settlement model (BalanceCache)
-            from app.models import BalanceCache, Transaction, TransactionStatus 
-            from app.utils.banking import settle_balances
-            
-            # 1. Eager Settlement (Best Effort)
-            try:
-                settle_balances(self.id, join_code)
-            except SQLAlchemyError as exc:
-                logger.warning(
-                    "Eager settlement failed for student %s, join_code %s: %s",
-                    self.id,
-                    join_code,
-                    exc,
-                )
+            from app.models import BalanceCache, Transaction, TransactionStatus
+
+            # Best-effort eager settlement for pending rows in this class context.
+            has_pending = db.session.query(Transaction.id).filter(
+                Transaction.student_id == self.id,
+                Transaction.join_code == join_code,
+                Transaction.status == TransactionStatus.PENDING,
+            ).first()
+            if has_pending:
+                try:
+                    from app.utils.banking import settle_balances
+                    settle_balances(self.id, join_code)
+                except Exception:
+                    # Fall back to read path below if settlement cannot run here.
+                    pass
 
             # 2. Read Posted from Cache
             cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()

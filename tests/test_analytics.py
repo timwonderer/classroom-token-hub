@@ -9,6 +9,7 @@ Tests the analytics computation engine to ensure:
 """
 import pytest
 from datetime import datetime, timedelta, timezone
+from sqlalchemy import event
 from app import db
 from app.models import (
     Admin, Student, StudentBlock, StudentTeacher, TeacherBlock,
@@ -414,3 +415,28 @@ def test_enrolled_students_include_null_join_code_with_matching_block(client, se
     enrolled = engine._get_enrolled_students()
 
     assert null_student in enrolled
+
+
+def test_enrolled_students_distinct_uses_id_only(client, setup_analytics_test):
+    """Regression: avoid DISTINCT over full Student row (breaks on Postgres JSON columns)."""
+    admin, join_code, block, students, payroll = setup_analytics_test
+    engine = AnalyticsEngine(admin.id, join_code)
+
+    distinct_student_queries = []
+
+    def capture_sql(conn, cursor, statement, parameters, context, executemany):
+        lowered = statement.lower()
+        if "select distinct" in lowered and "from students" in lowered:
+            distinct_student_queries.append(lowered)
+
+    event.listen(db.engine, "before_cursor_execute", capture_sql)
+    try:
+        enrolled = engine._get_enrolled_students()
+    finally:
+        event.remove(db.engine, "before_cursor_execute", capture_sql)
+
+    assert len(enrolled) == 5
+    assert distinct_student_queries
+    assert any("select distinct students.id" in query for query in distinct_student_queries)
+    assert all("select distinct students.first_name" not in query for query in distinct_student_queries)
+    assert all("select distinct students.last_name_hash_by_part" not in query for query in distinct_student_queries)
