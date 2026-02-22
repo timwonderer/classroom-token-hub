@@ -13,24 +13,28 @@
                     <div class="alert alert-info">
                         <strong>Privacy Notice:</strong> Deletion requests are reviewed by system administrators.
                         <ul class="mb-0 mt-2">
-                            <li><strong>Period Deletion:</strong> Removes your access to students in a specific period/block. Students maintain access to other classes.</li>
-                            <li><strong>Account Deletion:</strong> Removes your entire teacher account. Students maintain access if linked to other teachers.</li>
+                            <li><strong>Period Deletion:</strong> Removes your access to students in a specific
+                                period/block. Students maintain access to other classes.</li>
+                            <li><strong>Account Deletion:</strong> Removes your entire teacher account. Students
+                                maintain access if linked to other teachers.</li>
                         </ul>
                     </div>
 
-                    <form method="POST" action="{{ url_for('admin.deletion_requests') }}">
+                    <form id="deleteClassForm" method="POST" action="{{ url_for('admin.deletion_requests') }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                         <div class="mb-3">
                             <label class="form-label"><strong>Request Type</strong></label>
                             <div class="form-check">
-                                <input class="form-check-input" type="radio" name="request_type" id="type_period" value="period" required onchange="togglePeriodField()">
+                                <input class="form-check-input" type="radio" name="request_type" id="type_period"
+                                    value="period" required onchange="togglePeriodField()">
                                 <label class="form-check-label" for="type_period">
                                     Delete a specific period/block
                                 </label>
                             </div>
                             <div class="form-check">
-                                <input class="form-check-input" type="radio" name="request_type" id="type_account" value="account" required onchange="togglePeriodField()">
+                                <input class="form-check-input" type="radio" name="request_type" id="type_account"
+                                    value="account" required onchange="togglePeriodField()">
                                 <label class="form-check-label" for="type_account">
                                     Delete my entire account
                                 </label>
@@ -42,22 +46,97 @@
                             <select name="period" id="period" class="form-select">
                                 <option value="">-- Select a period --</option>
                                 {% for period in periods %}
-                                    <option value="{{ period }}">{{ period|upper }}</option>
+                                <option value="{{ period }}">{{ period|upper }}</option>
                                 {% endfor %}
                             </select>
                         </div>
 
                         <div class="mb-3">
                             <label for="reason" class="form-label"><strong>Reason (Optional)</strong></label>
-                            <textarea name="reason" id="reason" class="form-control" rows="3" placeholder="Provide context for your deletion request..."></textarea>
+                            <textarea name="reason" id="reason" class="form-control" rows="3"
+                                placeholder="Provide context for your deletion request..."></textarea>
                         </div>
 
                         <div class="d-grid">
-                            <button type="submit" class="btn btn-danger">
-                                <span class="material-symbols-outlined" aria-hidden="true">delete</span> Submit Deletion Request
+                            <button type="button" class="btn btn-danger" onclick="startDeletionRequest()">
+                                <span class="material-symbols-outlined" aria-hidden="true">delete</span> Submit Deletion
+                                Request
                             </button>
                         </div>
                     </form>
+                </div>
+            </div>
+
+            <!-- Delete Class Modal 1 (Warning & Countdown) -->
+            <div class="modal fade" id="deleteClassModal" tabindex="-1" aria-labelledby="deleteClassModalLabel"
+                aria-hidden="true" data-bs-backdrop="static">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header bg-danger text-white">
+                            <h5 class="modal-title" id="deleteClassModalLabel">
+                                <span class="material-symbols-outlined me-2"
+                                    style="vertical-align: middle;">warning</span>Confirm Deletion Request
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                                aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="alert alert-danger">
+                                <h6><span class="material-symbols-outlined me-2"
+                                        style="vertical-align: middle;">warning</span>CRITICAL
+                                    WARNING</h6>
+                                <p class="mb-0">Deleting this will permanently erase the requested data. It cannot be
+                                    recovered.</p>
+                            </div>
+                            <p>You are about to submit a permanent deletion request for <strong
+                                    id="delete_class_target_name"></strong>.</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-danger" id="btn_yes_im_sure" disabled>Yes, I am sure
+                                <span id="countdown_text"></span></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Delete Class Modal 2 (Type & Hold to Confirm) -->
+            <div class="modal fade" id="deleteClassConfirmModal" tabindex="-1"
+                aria-labelledby="deleteClassConfirmModalLabel" aria-hidden="true" data-bs-backdrop="static">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header bg-danger text-white">
+                            <h5 class="modal-title" id="deleteClassConfirmModalLabel">
+                                <span class="material-symbols-outlined me-2"
+                                    style="vertical-align: middle;">warning</span>Confirm Deletion
+                            </h5>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                                aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-3">Type <strong class="text-danger"
+                                    id="delete_class_expected_confirmation"></strong> to confirm:</p>
+                            <input type="text" class="form-control mb-3" id="delete_class_confirmation_input"
+                                autocomplete="off" required>
+
+                            <div id="hold_instructions" style="display: none;">
+                                <p class="text-muted small mb-2"><span
+                                        class="material-symbols-outlined align-middle fs-6">touch_app</span> Click and
+                                    hold the button below for 10 seconds to execute the deletion.</p>
+                                <div id="hold_progress_block" class="progress mb-3"
+                                    style="height: 10px; display: none;">
+                                    <div id="hold_progress_bar" class="progress-bar bg-danger" role="progressbar"
+                                        style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="button" class="btn btn-danger" id="btn_hold_to_confirm" disabled>Confirm
+                                Deletion</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -84,9 +163,9 @@
                                 <tr>
                                     <td>
                                         {% if req.request_type.value == 'period' %}
-                                            <span class="badge bg-warning text-dark">Period</span>
+                                        <span class="badge bg-warning text-dark">Period</span>
                                         {% else %}
-                                            <span class="badge bg-danger">Account</span>
+                                        <span class="badge bg-danger">Account</span>
                                         {% endif %}
                                     </td>
                                     <td>{{ req.period|upper if req.period else 'N/A' }}</td>
@@ -125,19 +204,20 @@
                                 <tr>
                                     <td>
                                         {% if req.request_type.value == 'period' %}
-                                            <span class="badge bg-warning text-dark">Period</span>
+                                        <span class="badge bg-warning text-dark">Period</span>
                                         {% else %}
-                                            <span class="badge bg-danger">Account</span>
+                                        <span class="badge bg-danger">Account</span>
                                         {% endif %}
                                     </td>
                                     <td>{{ req.period|upper if req.period else 'N/A' }}</td>
                                     <td><small>{{ req.requested_at.strftime('%b %d, %Y') }}</small></td>
-                                    <td><small>{{ req.resolved_at.strftime('%b %d, %Y') if req.resolved_at else 'N/A' }}</small></td>
+                                    <td><small>{{ req.resolved_at.strftime('%b %d, %Y') if req.resolved_at else 'N/A'
+                                            }}</small></td>
                                     <td>
                                         {% if req.status.value == 'approved' %}
-                                            <span class="badge bg-success">Approved</span>
+                                        <span class="badge bg-success">Approved</span>
                                         {% elif req.status.value == 'rejected' %}
-                                            <span class="badge bg-danger">Rejected</span>
+                                        <span class="badge bg-danger">Rejected</span>
                                         {% endif %}
                                     </td>
                                 </tr>
@@ -152,30 +232,66 @@
     </div>
 </div>
 
+<script src="{{ static_url('js/class_deletion_guardrails.js') }}"></script>
 <script>
-function togglePeriodField() {
-    const periodRadio = document.getElementById('type_period');
-    const periodField = document.getElementById('period_field');
-    const periodSelect = document.getElementById('period');
+    function togglePeriodField() {
+        const periodRadio = document.getElementById('type_period');
+        const periodField = document.getElementById('period_field');
+        const periodSelect = document.getElementById('period');
 
-    if (periodRadio.checked) {
-        periodField.style.display = 'block';
-        periodSelect.required = true;
-    } else {
-        periodField.style.display = 'none';
-        periodSelect.required = false;
-        periodSelect.value = '';
-    }
-}
-
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', function() {
-    const typeRadios = document.querySelectorAll('input[name="request_type"]');
-    typeRadios.forEach(radio => {
-        if (radio.checked) {
-            togglePeriodField();
+        if (periodRadio.checked) {
+            periodField.style.display = 'block';
+            periodSelect.required = true;
+        } else {
+            periodField.style.display = 'none';
+            periodSelect.required = false;
+            periodSelect.value = '';
         }
+    }
+
+    function startDeletionRequest() {
+        const periodRadio = document.getElementById('type_period');
+        const accountRadio = document.getElementById('type_account');
+        const periodSelect = document.getElementById('period');
+
+        // Validate inputs
+        if (!periodRadio.checked && !accountRadio.checked) {
+            alert("Please select a request type.");
+            return;
+        }
+
+        let targetName = "";
+        let expectedConfirmation = "";
+
+        if (periodRadio.checked) {
+            if (!periodSelect.value) {
+                alert("Please select a period to delete.");
+                return;
+            }
+            const blockName = periodSelect.options[periodSelect.selectedIndex].text;
+            targetName = `Period ${blockName}`;
+            expectedConfirmation = `DELETE PERIOD ${blockName.toUpperCase()}`;
+        } else if (accountRadio.checked) {
+            targetName = "your entire account";
+            expectedConfirmation = "DELETE MY ACCOUNT";
+        }
+
+        document.getElementById('delete_class_target_name').textContent = targetName;
+        document.getElementById('delete_class_expected_confirmation').textContent = expectedConfirmation;
+
+        const modalEl = document.getElementById('deleteClassModal');
+        const bsModal = new bootstrap.Modal(modalEl);
+        bsModal.show();
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function () {
+        const typeRadios = document.querySelectorAll('input[name="request_type"]');
+        typeRadios.forEach(radio => {
+            if (radio.checked) {
+                togglePeriodField();
+            }
+        });
     });
-});
 </script>
 {% endblock %}

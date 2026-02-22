@@ -146,6 +146,5 @@ A teacher deletes a class by mistake or maliciously to hide embezzlement/fraud, 
 2. A countdown timer of at least 30 seconds must be displayed in the modal. During the 30 second period, the `Yes, I am sure` button is disabled (the `cancel` button is always available). The behavior of the `return` key on this modal should be the same as `cancel`
 3. Once the teacher click on `Yes, I am sure`, open a second modal that have the teacher type in *Delete [insert class name here]* in a textbox. Disable copy and pasting within the modal so the teacher must type it in. 
 4. After the positive explicitly typed confirmation, the teacher must click and hold the `Confirm Deletion` button for 10 seconds with visible timer. The `cancel` button is always available and instant. The behavior of the `return` key on this modal should be the same as `cancel`
-5. Once the `Confirm Deletion` is held for 10 seconds, the modal will close and proceed with the `_hard_delete_join_code_scope` 
-
+5. Once the `Confirm Deletion` is held for 10 seconds, the modal will close and proceed with the current deletion workflow.
 

@@ -938,41 +938,68 @@
   </div>
 </div>
 
-<!-- Delete Class Modal -->
-<div class="modal fade" id="deleteClassModal" tabindex="-1" aria-labelledby="deleteClassModalLabel" aria-hidden="true">
+<!-- Delete Class Modal 1 (Warning & Countdown) -->
+<div class="modal fade" id="deleteClassModal" tabindex="-1" aria-labelledby="deleteClassModalLabel" aria-hidden="true"
+  data-bs-backdrop="static">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="deleteClassModalLabel">
+          <span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Delete Class
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-danger">
+          <h6><span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>CRITICAL
+            WARNING</h6>
+          <p class="mb-0">Deleting this class will permanently erase all students, transactions, and history associated
+            with it.</p>
+        </div>
+        <p>You are about to permanently delete <strong id="delete_class_target_name"></strong>.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="btn_yes_im_sure" disabled>Yes, I am sure <span
+            id="countdown_text"></span></button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Class Modal 2 (Type & Hold to Confirm) -->
+<div class="modal fade" id="deleteClassConfirmModal" tabindex="-1" aria-labelledby="deleteClassConfirmModalLabel"
+  aria-hidden="true" data-bs-backdrop="static">
   <div class="modal-dialog">
     <form id="deleteClassForm" method="post">
       <div class="modal-content">
         <div class="modal-header bg-danger text-white">
-          <h5 class="modal-title" id="deleteClassModalLabel">
-            <span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Delete Class
+          <h5 class="modal-title" id="deleteClassConfirmModalLabel">
+            <span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>Confirm Deletion
           </h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body">
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-          <div class="alert alert-danger">
-            <h6><span class="material-symbols-outlined me-2" style="vertical-align: middle;">warning</span>CRITICAL
-              WARNING</h6>
-            <p>You are about to permanently delete <strong id="delete_class_target_name"></strong>.</p>
-            <p class="mb-0">This action will permanently delete ALL data scoped to this class, including:</p>
-            <ul class="mb-0 mt-2">
-              <li>Transactions</li>
-              <li>Balances</li>
-              <li>Attendance</li>
-              <li>Hall passes</li>
-              <li>Store purchases</li>
-            </ul>
-          </div>
+          <input type="hidden" id="delete_class_action_type" name="action_type">
+          <input type="hidden" id="delete_class_block" name="block">
 
           <p class="mb-3">Type <strong class="text-danger" id="delete_class_expected_confirmation"></strong> to confirm:
           </p>
-          <input type="text" class="form-control" id="delete_class_confirmation_input" autocomplete="off" required>
+          <input type="text" class="form-control mb-3" id="delete_class_confirmation_input" autocomplete="off" required>
+
+          <div id="hold_instructions" style="display: none;">
+            <p class="text-muted small mb-2"><span class="material-symbols-outlined align-middle fs-6">touch_app</span>
+              Click and hold the button below for 10 seconds to execute the deletion.</p>
+            <div id="hold_progress_block" class="progress mb-3" style="height: 10px; display: none;">
+              <div id="hold_progress_bar" class="progress-bar bg-danger" role="progressbar" style="width: 0%;"
+                aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-          <button type="submit" class="btn btn-danger">Delete Permanently</button>
+          <button type="button" class="btn btn-danger" id="btn_hold_to_confirm" disabled>Confirm Deletion</button>
         </div>
       </div>
     </form>
@@ -982,6 +1009,7 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<script src="{{ static_url('js/class_deletion_guardrails.js') }}"></script>
 <script>
   console.log('Student management scripts loading.');
 
