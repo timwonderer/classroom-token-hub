@@ -81,16 +81,6 @@ Infrastructure setup guide for production deployment.
 - Configuring firewall rules
 - Managing Cloudflare proxy settings
 
-### [PII Audit](PII_AUDIT.md)
-
-Review of personally identifiable information handling in the multi-tenancy system.
-
-**Use this when:**
-
-- Conducting privacy audits
-- Reviewing data handling practices
-- Verifying PII encryption implementation
-
 ## Adding New Operational Guides
 
 When creating new operational documentation:

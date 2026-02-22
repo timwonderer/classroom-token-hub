@@ -7,9 +7,9 @@ roles: [developer]
 
 # Claude Development Guide
 
-**Note:** This file has been moved to the repository root for easier access.
+**Note:** This file has been moved to `.claude/CLAUDE.md` in the repository root for easier access.
 
-Please see: [`../../CLAUDE.md`](../../CLAUDE.md)
+Please see: `.claude/CLAUDE.md` in the repository root.
 
 ---
 
