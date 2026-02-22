@@ -1,7 +1,7 @@
 """Make TeacherBlock dob_sum and last_name_hash_by_part nullable for post-claim cleanup
 
 Revision ID: b7c8d9e0f1a2
-Revises: z2a3b4c5d6e7
+Revises: 6d78309c34c1
 Create Date: 2026-02-22 00:00:00.000000
 
 After a student successfully claims their account and completes setup, dob_sum and
@@ -18,7 +18,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'b7c8d9e0f1a2'
-down_revision = 'z2a3b4c5d6e7'
+down_revision = '6d78309c34c1'
 branch_labels = None
 depends_on = None
 
