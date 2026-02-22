@@ -638,49 +638,21 @@ def claim_account():
             flash("No matching account found. Please check your join code and credentials.", "claim")
             return redirect(url_for('student.claim_account'))
 
-        # Check if this student already has an account (claiming from another teacher)
-        # Look for existing students with same credentials across all teachers
-        # SECURITY: Teacher seats are intentionally excluded from dedup — each
-        # teacher-student identity must be unique per join code so that teachers
-        # in multiple classes get separate Student records with separate balances.
-        existing_student = None
-        if not matched_seat.is_teacher:
-            all_students = Student.query.filter_by(
-                last_initial=matched_seat.last_initial,
-                dob_sum=dob_sum
-            ).all()
-
-            for student in all_students:
-                if student.first_name == matched_seat.first_name:
-                    credential_matches, student_primary_match, canonical_hash = match_claim_hash(
-                        student.first_half_hash,
-                        first_initial,
-                        student.last_initial,
-                        student.dob_sum,
-                        student.salt,
-                    )
-
-                    last_name_valid = verify_last_name_parts(
-                        last_name,
-                        student.last_name_hash_by_part,
-                        student.salt
-                    )
-
-                    if credential_matches and last_name_valid:
-                        if canonical_hash and not student_primary_match:
-                            student.first_half_hash = canonical_hash
-                        existing_student = student
-                        break
+        # Check if this student already has an account (claiming from another teacher).
+        # Use first_half_hash for matching — it stays set even after dob_sum is cleaned up
+        # post-claim, so this lookup works regardless of cleanup state.
+        existing_student = Student.query.filter_by(
+            first_half_hash=matched_seat.first_half_hash
+        ).first()
 
         if existing_student:
             # Student already exists - link this seat to existing student
             matched_seat.student_id = existing_student.id
             matched_seat.is_claimed = True
             matched_seat.claimed_at = utc_now()
-
-            # If this seat is a teacher seat, mark the student as a teacher
-            if matched_seat.is_teacher:
-                existing_student.is_teacher = True
+            # Null out PII on the now-claimed seat — no longer needed for matching
+            matched_seat.dob_sum = None
+            matched_seat.last_name_hash_by_part = None
 
             # Create StudentTeacher link
             existing_link = StudentTeacher.query.filter_by(
@@ -744,10 +716,9 @@ def claim_account():
                 matched_seat.student_id = existing_by_hash.id
                 matched_seat.is_claimed = True
                 matched_seat.claimed_at = utc_now()
-
-                # If this seat is a teacher seat, mark the student as a teacher
-                if matched_seat.is_teacher:
-                    existing_by_hash.is_teacher = True
+                # Null out PII on the now-claimed seat
+                matched_seat.dob_sum = None
+                matched_seat.last_name_hash_by_part = None
 
                 # Create StudentTeacher link if not exists
                 existing_link = StudentTeacher.query.filter_by(
@@ -786,6 +757,11 @@ def claim_account():
         matched_seat.student_id = new_student.id
         matched_seat.is_claimed = True
         matched_seat.claimed_at = utc_now()
+        # Null out PII on the now-claimed seat — the student record carries dob_sum
+        # through the setup flow; it will be nulled on the student record itself
+        # after setup completes in setup_pin_passphrase.
+        matched_seat.dob_sum = None
+        matched_seat.last_name_hash_by_part = None
 
         # Create StudentTeacher link
         link = StudentTeacher(
@@ -879,6 +855,15 @@ def setup_pin_passphrase():
             student.reset_code = None
             student.reset_code_expires_at = None
             student.recovery_status = 'active'
+
+        # Post-claim PII cleanup: dob_sum and last_name_hash_by_part are no longer
+        # needed on the student record after setup is complete. Clear them to minimise
+        # the PII footprint. has_completed_profile_migration is set to True so the
+        # legacy migration gate does not incorrectly redirect this student.
+        student.dob_sum = None
+        student.last_name_hash_by_part = None
+        student.has_completed_profile_migration = True
+
         db.session.commit()
         # Clear session onboarding keys
         session.pop('claimed_student_id', None)
@@ -896,8 +881,16 @@ def add_class():
     """
     Allow logged-in students to add a new class by entering a join code.
 
-    This enables students who are already registered to join additional classes
-    taught by other teachers, creating multi-teacher/multi-class support.
+    Each join_code is an independent scoped universe. Credentials entered here
+    are matched against the *new* class's own unclaimed roster seat, which still
+    carries its own verification hashes (dob_sum, last_name_hash_by_part).
+    Those hashes are deleted from the seat after it is claimed.
+
+    Note: The student's own account has no stored dob_sum or last_name_hash_by_part
+    after their first claim completes (post-claim PII cleanup). This is intentional —
+    we verify credentials against the target class's seat, not the student account.
+    A name cross-check (encrypted first_name + last_initial) ensures the entered
+    credentials correspond to a seat belonging to this student.
     """
     from app.models import TeacherBlock, StudentTeacher
     from app.utils.join_code import format_join_code
@@ -979,20 +972,6 @@ def add_class():
             flash("Invalid date of birth. Please enter a valid date.", "danger")
             return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
-        # Verify the credentials match the logged-in student
-        if first_initial != student.first_name[:1].upper():
-            flash("The first initial doesn't match your account. Please check and try again.", "danger")
-            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
-
-        if dob_sum != student.dob_sum:
-            flash("The date of birth doesn't match your account. Please check and try again.", "danger")
-            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
-
-        # Verify last name matches using the same fuzzy matching logic
-        if not verify_last_name_parts(last_name, student.last_name_hash_by_part, student.salt):
-            flash("The last name doesn't match your account. Please check and try again.", "danger")
-            return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
-
         # Find all unclaimed seats with this join code
         unclaimed_seats = TeacherBlock.query.filter_by(
             join_code=join_code,
@@ -1003,7 +982,9 @@ def add_class():
             flash("Invalid join code or all seats already claimed. Check with your teacher.", "danger")
             return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
-        # Try to find a matching seat for this student
+        # Verify credentials against the new class's own seat hashes (per-seat scoping).
+        # The student's account does not store dob_sum or last_name_hash_by_part after
+        # their initial claim completes. Verification uses the target seat's hashes only.
         matched_seat = None
         for seat in unclaimed_seats:
             credential_matches, matched_primary, canonical_hash = match_claim_hash(
@@ -1014,15 +995,18 @@ def add_class():
                 seat.salt,
             )
 
-            # Check last name with fuzzy matching
             last_name_matches = verify_last_name_parts(
                 last_name,
                 seat.last_name_hash_by_part,
                 seat.salt
             )
 
-            # Check if names match (encrypted first name comparison)
-            name_matches = seat.first_name == student.first_name and seat.last_initial == student.last_initial
+            # Cross-check: ensure the seat belongs to this authenticated student
+            # (encrypted first_name + last_initial comparison).
+            name_matches = (
+                seat.first_name == student.first_name
+                and seat.last_initial == student.last_initial
+            )
 
             if credential_matches and last_name_matches and name_matches and seat.dob_sum == dob_sum:
                 if canonical_hash and not matched_primary:
@@ -1031,46 +1015,28 @@ def add_class():
                 break
 
         if not matched_seat:
-            flash("No matching seat found for your account. Please verify your join code and credentials.", "danger")
+            flash("No matching seat found. Please verify your join code and credentials with your teacher.", "danger")
             return redirect(_get_return_target())  # nosec # Safe: validated by _is_safe_url() with same-origin check
 
-        # Check if student is already linked to this teacher
+        # Check if student is already linked to this teacher's block
         existing_link = StudentTeacher.query.filter_by(
             student_id=student.id,
             admin_id=matched_seat.teacher_id
         ).first()
 
         if existing_link:
-            # Check if this link is for the *same block*
-            # If so, they truly are already in this specific class
-            # However, our goal is to allow adding *new* blocks from same/diff teacher
-            # The real check we want is: "Is student already in THIS block?"
-            
-            # The matched_seat knows which block it is for.
-            # We should check if the student is already associated with this specific seat? 
-            # OR simply allow the logic to proceed and just ensure we don't duplicate the StudentTeacher link.
-            
-            # Use a more specific check: Is the student ALREADY in this specific block for this teacher?
             current_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
             new_block_check = matched_seat.block.strip().upper()
-            
-            if new_block_check in current_blocks and existing_link:
-                 flash(f"You are already enrolled in Block {new_block_check}.", "warning")
-                 return redirect(_get_return_target())
-            
-            # If they have a link but NOT for this block, we proceed (to add the new block)
+            if new_block_check in current_blocks:
+                flash(f"You are already enrolled in Block {new_block_check}.", "warning")
+                return redirect(_get_return_target())
 
-
-        # Normalize claim hash to canonical pattern
-        canonical_claim_hash = compute_primary_claim_hash(first_initial, dob_sum, matched_seat.salt)
-        if canonical_claim_hash:
-            matched_seat.first_half_hash = canonical_claim_hash
-            student.first_half_hash = canonical_claim_hash
-
-        # Link the seat to the existing student
+        # Link the seat to the student and null out its PII (no longer needed post-claim)
         matched_seat.student_id = student.id
         matched_seat.is_claimed = True
         matched_seat.claimed_at = utc_now()
+        matched_seat.dob_sum = None
+        matched_seat.last_name_hash_by_part = None
 
         # Create StudentTeacher link if it doesn't exist
         if not existing_link:

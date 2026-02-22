@@ -1,13 +1,11 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app
-from datetime import datetime, timedelta
+from datetime import timedelta
+from datetime import timedelta
 import secrets
 
 from app.extensions import db
 from app.models import Student, TeacherBlock
 from app.auth import admin_required, get_student_for_admin
-from app.hash_utils import hash_hmac, get_random_salt
-from app.utils.name_utils import hash_last_name_parts
-from app.utils.claim_credentials import compute_primary_claim_hash
 from app.utils.time import utc_now, ensure_utc
 from app.extensions import limiter
 
@@ -85,10 +83,18 @@ def account_lookup():
 
     Validates:
       - reset_code exists
-      - reset_code unused
       - reset_code unexpired
       - student.recovery_status == to_be_claimed
-      - join_code matches the student record
+      - join_code matches a claimed seat for this student
+
+    On success: clears old credentials and redirects straight to username/credential
+    setup. No PII re-entry is required — first name and last initial are managed by
+    the teacher and remain unchanged through recovery.
+      - join_code matches a claimed seat for this student
+
+    On success: clears old credentials and redirects straight to username/credential
+    setup. No PII re-entry is required — first name and last initial are managed by
+    the teacher and remain unchanged through recovery.
 
     On failure: generic message, do not reveal student identity.
     """
@@ -124,123 +130,47 @@ def account_lookup():
 
         if not valid:
             session.pop('recovery_student_id', None)
-            session.pop('recovery_teacher_id', None)
             flash("Invalid or expired recovery code.", "error")
             return redirect(url_for('recovery.account_lookup'))
 
-        # Success: store student_id in session for next step
-        session['recovery_student_id'] = student.id
-        # Scope the next step to the teacher context validated by join_code lookup.
-        session['recovery_teacher_id'] = linked_block.teacher_id
-        return redirect(url_for('recovery.verify_identity'))
+        # Clear all credentials — forces fresh credential setup (username, PIN, passphrase).
+        # first_name and last_initial are preserved; they are managed by the teacher.
+        if linked_block and linked_block.is_claimed and linked_block.claimed_at is None:
+            linked_block.claimed_at = utc_now()
 
-    return render_template('student/recovery/account_lookup.html')
-
-
-@recovery_bp.route('/verify-identity', methods=['GET', 'POST'])
-@limiter.limit(_recovery_rate_limit)
-def verify_identity():
-    """
-    Step 3 — Identity Re-Registration.
-
-    Student re-enters first name, full last name, DOB.
-    These replace existing identity metadata on the same student row.
-    student_id remains unchanged. No new student record is created.
-    Operation is atomic.
-
-    Then proceeds to Step 4 — Credential Re-Establishment
-    (normal credential setup: username, PIN, passphrase).
-    """
-    student_id = session.get('recovery_student_id')
-    recovery_teacher_id = session.get('recovery_teacher_id')
-    if not student_id:
-        return redirect(url_for('recovery.account_lookup'))
-
-    if request.method == 'POST':
-        first_name = request.form.get('first_name', '').strip()
-        last_name = request.form.get('last_name', '').strip()
-        dob_str = request.form.get('dob')  # YYYY-MM-DD
-
-        if not first_name or not last_name or not dob_str:
-            flash("All fields are required.", "error")
-            return redirect(url_for('recovery.verify_identity'))
-
-        try:
-            dob_date = datetime.strptime(dob_str, '%Y-%m-%d').date()
-            dob_sum = dob_date.month + dob_date.day + dob_date.year
-        except ValueError:
-            flash("Invalid Date of Birth format.", "error")
-            return redirect(url_for('recovery.verify_identity'))
-
-        student = db.session.get(Student, student_id)
-        if not student:
-            return redirect(url_for('recovery.account_lookup'))
-
-        # Revalidate recovery state in case code expired/regenerated between Step 2 and Step 3.
-        if (
-            student.recovery_status != 'to_be_claimed'
-            or not student.reset_code
-            or not student.reset_code_expires_at
-            or ensure_utc(student.reset_code_expires_at) < utc_now()
-        ):
-            session.pop('recovery_student_id', None)
-            session.pop('recovery_teacher_id', None)
-            flash("Invalid or expired recovery code.", "error")
-            return redirect(url_for('recovery.account_lookup'))
-
-        # --- Atomic identity rebinding ---
-
-        # Update PII and rotate salt
-        new_salt = get_random_salt()
-
-        student.first_name = first_name
-        student.last_initial = last_name[0].upper() if last_name else ''
-        student.dob_sum = dob_sum
-        student.salt = new_salt
-
-        # Update hashes
-        student.last_name_hash_by_part = hash_last_name_parts(last_name, new_salt)
-
-        first_initial = first_name[0].upper()
-        student.first_half_hash = compute_primary_claim_hash(first_initial, dob_sum, new_salt)
-        student.second_half_hash = hash_hmac(str(dob_sum).encode(), new_salt)
-
-        # Clear all credentials — forces full credential setup
         student.username_hash = None
         student.username_lookup_hash = None
         student.pin_hash = None
         student.passphrase_hash = None
         student.has_completed_setup = False
-
-        # Keep recovery code/status until credential setup is completed.
-
-        # Sync PII to TeacherBlock rows for this teacher only.
-        teacher_block_query = TeacherBlock.query.filter_by(student_id=student.id)
-        if recovery_teacher_id:
-            teacher_block_query = teacher_block_query.filter_by(teacher_id=recovery_teacher_id)
-
-        for teacher_block in teacher_block_query.all():
-            teacher_block.first_name = student.first_name
-            teacher_block.last_initial = student.last_initial
-            teacher_block.last_name_hash_by_part = student.last_name_hash_by_part or []
-            teacher_block.dob_sum = student.dob_sum or 0
-            teacher_block.salt = new_salt
-            teacher_block.first_half_hash = student.first_half_hash
-            # Keep the seat claimed for this student so they can log in immediately
-            # after completing credential setup without losing class context.
-            teacher_block.is_claimed = True
-            teacher_block.claimed_at = teacher_block.claimed_at or utc_now()
+        # Keep reset_code and recovery_status until setup_pin_passphrase completes.
+        # Keep reset_code and recovery_status until setup_pin_passphrase completes.
 
         db.session.commit()
 
-        current_app.logger.info(f"Account reclaimed for student {student.id}")
+        current_app.logger.info(
+            f"Recovery lookup succeeded for student {student.id}; credentials cleared."
+        )
+        current_app.logger.info(
+            f"Recovery lookup succeeded for student {student.id}; credentials cleared."
+        )
 
-        # Set session for credential setup flow (Step 4)
+        # Set session for credential setup flow
+        # Set session for credential setup flow
         session['claimed_student_id'] = student.id
         session.pop('recovery_student_id', None)
-        session.pop('recovery_teacher_id', None)
 
-        flash("Identity verified. Please set up your new username and credentials.", "success")
+        flash("Recovery code verified. Please set up your new username and credentials.", "success")
+        flash("Recovery code verified. Please set up your new username and credentials.", "success")
         return redirect(url_for('student.create_username'))
 
-    return render_template('student/recovery/identity_update.html')
+    return render_template('student/recovery/account_lookup.html')
+
+
+@recovery_bp.route('/verify-identity', methods=['GET', 'POST'])
+def verify_identity():
+    """Deprecated — identity re-entry is no longer required for recovery.
+
+    Redirects to account_lookup so students with bookmarked URLs land somewhere useful.
+    """
+    return redirect(url_for('recovery.account_lookup'))
