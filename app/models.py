@@ -336,9 +336,23 @@ class Student(db.Model):
         if join_code:
             # Proper scoping by join_code (period-level isolation)
             # Use Ledger + Settlement model (BalanceCache)
-            from app.models import BalanceCache, Transaction, TransactionStatus 
-            # Note: eager settlement removed to prevent write-on-read performance issues.
-            # Balances are settled on transaction creation or async.
+            from app.models import BalanceCache, Transaction, TransactionStatus
+
+            # Best-effort eager settlement for pending rows in this class context.
+            # This keeps balance reads and transaction statuses consistent even when
+            # asynchronous settlement is unavailable (e.g., tests/local dev).
+            has_pending = db.session.query(Transaction.id).filter(
+                Transaction.student_id == self.id,
+                Transaction.join_code == join_code,
+                Transaction.status == TransactionStatus.PENDING,
+            ).first()
+            if has_pending:
+                try:
+                    from app.utils.banking import settle_balances
+                    settle_balances(self.id, join_code)
+                except Exception:
+                    # Fall back to read path below if settlement cannot run here.
+                    pass
 
             # 2. Read Posted from Cache
             cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()
@@ -423,9 +437,21 @@ class Student(db.Model):
         if join_code:
             # Proper scoping by join_code (period-level isolation)
             # Use Ledger + Settlement model (BalanceCache)
-            from app.models import BalanceCache, Transaction, TransactionStatus 
-            # Note: eager settlement removed to prevent write-on-read performance issues.
-            # Balances are settled on transaction creation or async.
+            from app.models import BalanceCache, Transaction, TransactionStatus
+
+            # Best-effort eager settlement for pending rows in this class context.
+            has_pending = db.session.query(Transaction.id).filter(
+                Transaction.student_id == self.id,
+                Transaction.join_code == join_code,
+                Transaction.status == TransactionStatus.PENDING,
+            ).first()
+            if has_pending:
+                try:
+                    from app.utils.banking import settle_balances
+                    settle_balances(self.id, join_code)
+                except Exception:
+                    # Fall back to read path below if settlement cannot run here.
+                    pass
 
             # 2. Read Posted from Cache
             cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()
