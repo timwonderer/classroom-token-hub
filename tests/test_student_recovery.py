@@ -1,14 +1,16 @@
 """
-Tests for the single account recovery flow per the Account Recovery & Reclaim spec.
+Tests for the student account recovery flow.
 
-Covers:
-  - Teacher-initiated reset code generation (Step 1)
-  - Student lookup via join_code + reset_code (Step 2)
-  - Identity re-registration (Step 3)
-  - Credential re-establishment (Step 4 — via existing setup flow)
-  - Completion (Step 5)
-  - State machine transitions
-  - Security & edge cases from the spec acceptance tests
+The simplified recovery flow:
+  Step 1 — Teacher generates a reset code for the student
+  Step 2 — Student enters join_code + reset_code at /recovery/lookup
+            (credentials cleared here; first_name/last_initial unchanged)
+  Step 3 — Student creates a new username at /student/create-username
+  Step 4 — Student sets new PIN + passphrase at /student/setup-pin-passphrase
+            (dob_sum / last_name_hash_by_part nulled out here post-setup)
+
+No PII re-entry is required. Identity (first_name, last_initial) is preserved
+from the teacher-managed roster and is not editable by the student.
 """
 import pytest
 from datetime import timedelta
@@ -124,7 +126,7 @@ def test_multiple_resets_invalidate_prior_codes(client, recovery_data):
 # ------------------------------------------------------------------
 
 def test_student_lookup_success(client, recovery_data):
-    """Valid join_code + reset_code -> redirect to verify-identity."""
+    """Valid join_code + reset_code -> credentials cleared, redirect to create-username."""
     student = recovery_data["student"]
     join_code = recovery_data["join_code"]
 
@@ -139,10 +141,23 @@ def test_student_lookup_success(client, recovery_data):
     }, follow_redirects=False)
 
     assert resp.status_code == 302
-    assert "/recovery/verify-identity" in resp.location
+    assert "/student/create-username" in resp.location
 
     with client.session_transaction() as sess:
-        assert sess["recovery_student_id"] == student.id
+        assert sess.get("claimed_student_id") == student.id
+        assert "recovery_student_id" not in sess
+
+    # Credentials cleared; identity preserved
+    db.session.refresh(student)
+    assert student.username_hash is None
+    assert student.pin_hash is None
+    assert student.passphrase_hash is None
+    assert student.has_completed_setup is False
+    assert student.first_name == "Original"
+    assert student.last_initial == "O"
+    # Reset code still active until credential setup completes
+    assert student.reset_code == "RESET123"
+    assert student.recovery_status == 'to_be_claimed'
 
 
 def test_student_lookup_wrong_join_code(client, recovery_data):
@@ -207,76 +222,63 @@ def test_student_lookup_nonexistent_code(client, recovery_data):
 
 
 # ------------------------------------------------------------------
-# Step 3 — Identity Re-Registration
+# Verify Identity Route (deprecated — now just redirects)
 # ------------------------------------------------------------------
 
-def test_verify_identity_updates_pii_and_clears_credentials(client, recovery_data):
-    """PII is replaced and credentials are cleared for re-setup."""
-    student = recovery_data["student"]
-    teacher = recovery_data["teacher"]
-    old_salt = student.salt
-    original_id = student.id
+def test_verify_identity_redirects_to_lookup(client, recovery_data):
+    """GET /recovery/verify-identity redirects to account_lookup (deprecated route)."""
+    resp = client.get("/recovery/verify-identity", follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/recovery/lookup" in resp.location
 
-    student.reset_code = "VERIFY11"
+
+def test_verify_identity_post_redirects_to_lookup(client, recovery_data):
+    """POST /recovery/verify-identity also redirects (no longer processes PII)."""
+    resp = client.post("/recovery/verify-identity", data={
+        "first_name": "Test",
+        "last_name": "User",
+        "dob": "2015-06-15",
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+    assert "/recovery/lookup" in resp.location
+
+
+def test_recovery_does_not_create_new_student_row(client, recovery_data):
+    """Recovering an account must not create a new student row."""
+    student = recovery_data["student"]
+    join_code = recovery_data["join_code"]
+    original_id = student.id
+    original_count = Student.query.count()
+
+    student.reset_code = "ROWTEST1"
     student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
     student.recovery_status = 'to_be_claimed'
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess["recovery_student_id"] = student.id
-        sess["recovery_teacher_id"] = teacher.id
+    client.post("/recovery/lookup", data={
+        "join_code": join_code,
+        "reset_code": "ROWTEST1",
+    }, follow_redirects=True)
 
-    resp = client.post("/recovery/verify-identity", data={
-        "first_name": "NewFirst",
-        "last_name": "NewLast",
-        "dob": "2015-06-15",
-    }, follow_redirects=False)
-
-    assert resp.status_code == 302
-    assert "/student/create-username" in resp.location
-
+    assert Student.query.count() == original_count
     db.session.refresh(student)
-
-    # Identity integrity: student_id unchanged
     assert student.id == original_id
 
-    # PII updated
-    assert student.first_name == "NewFirst"
-    assert student.last_initial == "N"
-    assert student.dob_sum == (6 + 15 + 2015)  # 2036
 
-    # Salt rotated
-    assert student.salt != old_salt
-
-    # Credentials cleared
-    assert student.username_hash is None
-    assert student.pin_hash is None
-    assert student.passphrase_hash is None
-    assert student.has_completed_setup is False
-
-    # Recovery remains active until credentials are re-established.
-    assert student.reset_code == "VERIFY11"
-    assert student.recovery_status == 'to_be_claimed'
-
-
-def test_verify_identity_keeps_teacher_block_claimed(client, recovery_data):
-    """Recovery identity update must preserve claimed seat status for login class context."""
+def test_recovery_preserves_teacher_block_claimed(client, recovery_data):
+    """Recovery lookup must not disturb claimed seat status."""
     student = recovery_data["student"]
     teacher = recovery_data["teacher"]
+    join_code = recovery_data["join_code"]
 
     student.reset_code = "KEEPCLM1"
     student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
     student.recovery_status = 'to_be_claimed'
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess["recovery_student_id"] = student.id
-        sess["recovery_teacher_id"] = teacher.id
-
-    resp = client.post("/recovery/verify-identity", data={
-        "first_name": "Claimed",
-        "last_name": "Seat",
-        "dob": "2012-01-05",
+    resp = client.post("/recovery/lookup", data={
+        "join_code": join_code,
+        "reset_code": "KEEPCLM1",
     }, follow_redirects=False)
 
     assert resp.status_code == 302
@@ -287,59 +289,24 @@ def test_verify_identity_keeps_teacher_block_claimed(client, recovery_data):
     assert seat.claimed_at is not None
 
 
-def test_verify_identity_no_new_student_row(client, recovery_data):
-    """Recovering an account must not create a new student row."""
+def test_recovery_preserves_identity(client, recovery_data):
+    """Recovery lookup preserves first_name and last_initial (teacher-managed)."""
     student = recovery_data["student"]
-    original_id = student.id
-    original_count = Student.query.count()
+    join_code = recovery_data["join_code"]
 
-    student.reset_code = "ROWTEST1"
+    student.reset_code = "IDTEST01"
     student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
     student.recovery_status = 'to_be_claimed'
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        sess["recovery_student_id"] = student.id
-
-    client.post("/recovery/verify-identity", data={
-        "first_name": "Changed",
-        "last_name": "Name",
-        "dob": "2010-03-20",
+    client.post("/recovery/lookup", data={
+        "join_code": join_code,
+        "reset_code": "IDTEST01",
     }, follow_redirects=True)
 
-    assert Student.query.count() == original_count
     db.session.refresh(student)
-    assert student.id == original_id
-
-
-def test_verify_identity_redirects_without_session(client, recovery_data):
-    """Accessing verify-identity without recovery session -> redirect."""
-    resp = client.get("/recovery/verify-identity", follow_redirects=False)
-    assert resp.status_code == 302
-    assert "/recovery/lookup" in resp.location
-
-
-def test_verify_identity_missing_fields(client, recovery_data):
-    """All fields required for identity re-registration."""
-    student = recovery_data["student"]
-    teacher = recovery_data["teacher"]
-
-    student.reset_code = "MISSFLD1"
-    student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
-    student.recovery_status = 'to_be_claimed'
-    db.session.commit()
-
-    with client.session_transaction() as sess:
-        sess["recovery_student_id"] = student.id
-        sess["recovery_teacher_id"] = teacher.id
-
-    resp = client.post("/recovery/verify-identity", data={
-        "first_name": "Only",
-        "last_name": "",
-        "dob": "2015-01-01",
-    }, follow_redirects=True)
-
-    assert b"All fields are required" in resp.data
+    assert student.first_name == "Original"
+    assert student.last_initial == "O"
 
 
 # ------------------------------------------------------------------
@@ -379,15 +346,10 @@ def test_recovery_preserves_balance_and_transactions(client, recovery_data):
     student.recovery_status = 'to_be_claimed'
     db.session.commit()
 
-    # Run recovery
-    with client.session_transaction() as sess:
-        sess["recovery_student_id"] = student.id
-        sess["recovery_teacher_id"] = teacher.id
-
-    client.post("/recovery/verify-identity", data={
-        "first_name": "Recovered",
-        "last_name": "Student",
-        "dob": "2012-07-04",
+    # Run recovery (new simplified flow — just lookup)
+    client.post("/recovery/lookup", data={
+        "join_code": join_code,
+        "reset_code": "PRESERVE1",
     }, follow_redirects=True)
 
     # Verify economic data untouched
@@ -408,7 +370,7 @@ def test_recovery_preserves_balance_and_transactions(client, recovery_data):
 # ------------------------------------------------------------------
 
 def test_reset_code_invalid_after_use(client, recovery_data):
-    """Reset code is single-use — invalid after successful recovery."""
+    """Reset code is single-use — invalid after full credential setup is completed."""
     teacher = recovery_data["teacher"]
     student = recovery_data["student"]
     join_code = recovery_data["join_code"]
@@ -418,15 +380,10 @@ def test_reset_code_invalid_after_use(client, recovery_data):
     student.recovery_status = 'to_be_claimed'
     db.session.commit()
 
-    # Use the code successfully
-    with client.session_transaction() as sess:
-        sess["recovery_student_id"] = student.id
-        sess["recovery_teacher_id"] = teacher.id
-
-    client.post("/recovery/verify-identity", data={
-        "first_name": "Test",
-        "last_name": "User",
-        "dob": "2010-01-01",
+    # Complete the full recovery flow via account_lookup
+    client.post("/recovery/lookup", data={
+        "join_code": join_code,
+        "reset_code": "ONETIME1",
     }, follow_redirects=True)
 
     client.post('/student/create-username', data={
@@ -496,33 +453,76 @@ def test_reclaim_when_not_to_be_claimed_fails(client, recovery_data):
     assert b"Invalid or expired recovery code" in resp.data
 
 
-def test_interrupting_reclaim_does_not_corrupt_record(client, recovery_data):
-    """Interrupting mid-flow does not corrupt student record."""
+def test_interrupting_reclaim_after_lookup(client, recovery_data):
+    """After lookup, credentials are cleared but reset_code stays valid for retry."""
     student = recovery_data["student"]
+    join_code = recovery_data["join_code"]
     original_name = student.first_name
-    original_hash = student.username_hash
 
     student.reset_code = "MIDFLOW1"
     student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
     student.recovery_status = 'to_be_claimed'
     db.session.commit()
 
-    # Complete Step 2 (lookup) but abandon before Step 3
+    # Complete Step 2 (lookup) then abandon — don't finish username/credential setup
     resp = client.post("/recovery/lookup", data={
-        "join_code": recovery_data["join_code"],
+        "join_code": join_code,
         "reset_code": "MIDFLOW1",
     }, follow_redirects=False)
     assert resp.status_code == 302
 
-    # Abandon: don't complete verify_identity
     db.session.refresh(student)
 
-    # Student record unchanged
+    # Identity preserved (teacher-managed)
     assert student.first_name == original_name
-    assert student.username_hash == original_hash
-    # Reset code still valid (can try again)
+    # Credentials cleared (setup must be re-completed)
+    assert student.username_hash is None
+    assert student.pin_hash is None
+    assert student.has_completed_setup is False
+    # Reset code still valid — student can retry credential setup
     assert student.reset_code == "MIDFLOW1"
     assert student.recovery_status == 'to_be_claimed'
+
+
+# ------------------------------------------------------------------
+# Post-Setup PII Cleanup Tests
+# ------------------------------------------------------------------
+
+def test_setup_completion_nulls_student_pii(client, recovery_data):
+    """After setup_pin_passphrase, dob_sum and last_name_hash_by_part are nulled."""
+    student = recovery_data["student"]
+    join_code = recovery_data["join_code"]
+
+    # Recovery lookup — clears credentials
+    student.reset_code = "PIICLN01"
+    student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+    student.recovery_status = 'to_be_claimed'
+    db.session.commit()
+
+    client.post("/recovery/lookup", data={
+        "join_code": join_code,
+        "reset_code": "PIICLN01",
+    }, follow_redirects=True)
+
+    # Create username
+    client.post('/student/create-username', data={
+        'write_in_word': 'galaxy',
+    }, follow_redirects=True)
+
+    # Complete setup
+    client.post('/student/setup-pin-passphrase', data={
+        'pin': '4321',
+        'confirm_pin': '4321',
+        'passphrase': 'cleanup-phrase',
+        'confirm_passphrase': 'cleanup-phrase',
+    }, follow_redirects=True)
+
+    db.session.refresh(student)
+    assert student.dob_sum is None
+    assert student.last_name_hash_by_part is None
+    assert student.has_completed_profile_migration is True
+    assert student.recovery_status == 'active'
+    assert student.reset_code is None
 
 
 # ------------------------------------------------------------------
