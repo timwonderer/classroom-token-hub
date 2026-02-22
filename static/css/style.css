@@ -963,9 +963,11 @@ body.sysadmin-shell .eyebrow {
     border-radius: var(--radius-sm);
 }
 
-.mobile-bottom-nav a:hover {
-    background-color: color-mix(in srgb, var(--neutral-900) 3%, transparent);
-    color: var(--text-primary);
+@media (hover: hover) {
+    .mobile-bottom-nav a:hover {
+        background-color: rgba(0, 0, 0, 0.03);
+        color: var(--text-primary);
+    }
 }
 
 .mobile-bottom-nav a.active {
