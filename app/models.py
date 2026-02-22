@@ -331,18 +331,8 @@ class Student(db.Model):
             # Proper scoping by join_code (period-level isolation)
             # Use Ledger + Settlement model (BalanceCache)
             from app.models import BalanceCache, Transaction, TransactionStatus 
-            from app.utils.banking import settle_balances
-            
-            # 1. Eager Settlement (Best Effort)
-            try:
-                settle_balances(self.id, join_code)
-            except SQLAlchemyError as exc:
-                logger.warning(
-                    "Eager settlement failed for student %s, join_code %s: %s",
-                    self.id,
-                    join_code,
-                    exc,
-                )
+            # Note: eager settlement removed to prevent write-on-read performance issues.
+            # Balances are settled on transaction creation or async.
 
             # 2. Read Posted from Cache
             cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()
@@ -428,18 +418,8 @@ class Student(db.Model):
             # Proper scoping by join_code (period-level isolation)
             # Use Ledger + Settlement model (BalanceCache)
             from app.models import BalanceCache, Transaction, TransactionStatus 
-            from app.utils.banking import settle_balances
-            
-            # 1. Eager Settlement (Best Effort)
-            try:
-                settle_balances(self.id, join_code)
-            except SQLAlchemyError as exc:
-                logger.warning(
-                    "Eager settlement failed for student %s, join_code %s: %s",
-                    self.id,
-                    join_code,
-                    exc,
-                )
+            # Note: eager settlement removed to prevent write-on-read performance issues.
+            # Balances are settled on transaction creation or async.
 
             # 2. Read Posted from Cache
             cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()

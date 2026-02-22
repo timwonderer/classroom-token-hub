@@ -16,6 +16,7 @@ from dateutil.relativedelta import relativedelta
 from flask import Blueprint, request, jsonify, session, current_app
 from sqlalchemy import func, or_
 import sqlalchemy as sa
+from sqlalchemy.orm import aliased
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from werkzeug.security import check_password_hash
 
@@ -2133,6 +2134,31 @@ def attendance_history():
             TapEvent.is_deleted.is_(False)
         )
 
+        # Suppress duplicate auto tap-outs from known race conditions.
+        # Keep only the earliest row when daily-limit inactive events are otherwise identical.
+        duplicate_tap = aliased(TapEvent)
+        query = query.filter(~sa.and_(
+            TapEvent.status == 'inactive',
+            TapEvent.reason.like('Daily limit%'),
+            sa.exists(
+                sa.select(1).where(
+                    sa.and_(
+                        duplicate_tap.student_id == TapEvent.student_id,
+                        duplicate_tap.period == TapEvent.period,
+                        duplicate_tap.status == TapEvent.status,
+                        duplicate_tap.reason == TapEvent.reason,
+                        duplicate_tap.timestamp == TapEvent.timestamp,
+                        or_(
+                            duplicate_tap.join_code == TapEvent.join_code,
+                            sa.and_(duplicate_tap.join_code.is_(None), TapEvent.join_code.is_(None))
+                        ),
+                        duplicate_tap.is_deleted.is_(False),
+                        duplicate_tap.id < TapEvent.id
+                    )
+                )
+            )
+        ))
+
         # Apply filters
         if period:
             query = query.filter(TapEvent.period == period)
@@ -2876,6 +2902,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                     existing_limit_tapout = TapEvent.query.filter(
                         TapEvent.student_id == student.id,
                         TapEvent.period == period_upper,
+                        TapEvent.join_code == join_code,
                         TapEvent.status == "inactive",
                         TapEvent.timestamp >= start_of_day_utc,
                         TapEvent.timestamp < end_of_day_utc,

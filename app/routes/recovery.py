@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app
 from datetime import timedelta
+from datetime import timedelta
 import secrets
 
 from app.extensions import db
@@ -89,6 +90,11 @@ def account_lookup():
     On success: clears old credentials and redirects straight to username/credential
     setup. No PII re-entry is required — first name and last initial are managed by
     the teacher and remain unchanged through recovery.
+      - join_code matches a claimed seat for this student
+
+    On success: clears old credentials and redirects straight to username/credential
+    setup. No PII re-entry is required — first name and last initial are managed by
+    the teacher and remain unchanged through recovery.
 
     On failure: generic message, do not reveal student identity.
     """
@@ -138,20 +144,36 @@ def account_lookup():
         student.passphrase_hash = None
         student.has_completed_setup = False
         # Keep reset_code and recovery_status until setup_pin_passphrase completes.
+        # Keep reset_code and recovery_status until setup_pin_passphrase completes.
 
         db.session.commit()
 
         current_app.logger.info(
             f"Recovery lookup succeeded for student {student.id}; credentials cleared."
         )
+        current_app.logger.info(
+            f"Recovery lookup succeeded for student {student.id}; credentials cleared."
+        )
 
+        # Set session for credential setup flow
         # Set session for credential setup flow
         session['claimed_student_id'] = student.id
         session.pop('recovery_student_id', None)
 
         flash("Recovery code verified. Please set up your new username and credentials.", "success")
+        flash("Recovery code verified. Please set up your new username and credentials.", "success")
         return redirect(url_for('student.create_username'))
 
+    return render_template('student/recovery/account_lookup.html')
+
+
+@recovery_bp.route('/verify-identity', methods=['GET', 'POST'])
+def verify_identity():
+    """Deprecated — identity re-entry is no longer required for recovery.
+
+    Redirects to account_lookup so students with bookmarked URLs land somewhere useful.
+    """
+    return redirect(url_for('recovery.account_lookup'))
     return render_template('student/recovery/account_lookup.html')
 
 

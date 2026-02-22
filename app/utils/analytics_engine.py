@@ -147,13 +147,18 @@ class AnalyticsEngine:
             .subquery()
         )
 
-        return (
+        enrolled_student_ids = (
             query
+            .with_entities(Student.id)
             .filter(Student.id.in_(sa.select(scoped_student_ids)))
             .filter(~Student.id.in_(sa.select(demo_student_ids)))
             .distinct()
-            .all()
+            .subquery()
         )
+
+        return Student.query.filter(
+            Student.id.in_(sa.select(enrolled_student_ids))
+        ).all()
     
     def _get_cwi(self) -> float:
         """Calculate current CWI for this class."""

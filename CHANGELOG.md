@@ -8,6 +8,9 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Security
+- **Class Deletion Audit** — Comprehensive audit of all four class/period deletion paths, identifying inconsistent semantics, a P1 BalanceCache orphaning bug, sysadmin use of the deprecated `Student.block` field, and missing data-loss warnings in sysadmin confirmation dialogs. See `docs/security/CLASS_DELETION_AUDIT.md`.
+
 ### Changed
 - **Post-claim PII minimisation** — `dob_sum` and `last_name_hash_by_part` are now deleted from both the `TeacherBlock` roster seat and the `Student` record immediately after a student completes account setup. These fields are only needed during the one-time claim verification; retaining them afterwards served no purpose and increased the sensitive-data footprint.
   - `TeacherBlock.dob_sum` and `TeacherBlock.last_name_hash_by_part` are nulled when `is_claimed` is set to `True` (all claim paths: initial claim, add-class, recovery).

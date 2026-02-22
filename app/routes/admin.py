@@ -24,7 +24,7 @@ from decimal import Decimal, InvalidOperation
 
 from flask import (
     Blueprint, redirect, url_for, flash, request, session,
-    jsonify, Response, send_file, current_app, abort
+    jsonify, Response, send_file, current_app, abort, g
 )
 from urllib.parse import urlparse
 from sqlalchemy import desc, text, or_, and_, func
@@ -109,6 +109,18 @@ LEGACY_PLACEHOLDER_LAST_INITIAL = "P"  # "P" for Placeholder
 
 # Create blueprint
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
+
+
+@admin_bp.before_request
+def before_request():
+    """
+    Set context flags for request safety.
+
+    Mark GET requests as read-only to prevent accidental writes (e.g., balance settlement).
+    This interacts with guards in app/utils/banking.py.
+    """
+    if request.method == 'GET':
+        g.read_only = True
 
 
 # -------------------- HELPER FUNCTIONS --------------------
@@ -2384,16 +2396,36 @@ def students():
     # CRITICAL: Add scoped balances for each student in each block
     # This prevents multi-tenancy violations where students see aggregated balances across all classes
     student_balances_by_block = {}  # {(student_id, block): {'checking': X, 'savings': Y, 'earnings': Z}}
+    from app.services.balance_service import get_batch_balances
+
+    # 1. Identify all join codes and students to query
+    target_join_codes = []
+    target_student_ids = set()
 
     for block in blocks:
         if block != "Unassigned" and block in join_codes_by_block:
             join_code = join_codes_by_block[block]
+            target_join_codes.append(join_code)
+            for s in students_by_block.get(block, []):
+                target_student_ids.add(s.id)
+
+    # 2. Fetch balances in batch via service
+    raw_balances = get_batch_balances(target_join_codes, list(target_student_ids))
+
+    # 3. Populate the result dictionary for ALL students to ensure 0-balance entries exist
+    for block in blocks:
+        if block != "Unassigned" and block in join_codes_by_block:
+            join_code = join_codes_by_block[block]
             for student in students_by_block.get(block, []):
-                key = (student.id, block)
-                student_balances_by_block[key] = {
-                    'checking': student.get_checking_balance(join_code=join_code),
-                    'savings': student.get_savings_balance(join_code=join_code),
-                    'earnings': student.get_total_earnings(join_code=join_code)
+                key = (student.id, join_code)
+                # raw_balances defaults missing entries to 0
+                bals = raw_balances[key]
+
+                final_key = (student.id, block)
+                student_balances_by_block[final_key] = {
+                    'checking': float(Decimal(bals['checking_cents']) / 100),
+                    'savings': float(Decimal(bals['savings_cents']) / 100),
+                    'earnings': float(bals.get('earnings', 0.00))
                 }
 
     # Calculate rent privileges for each student in each block (batched)
@@ -6231,6 +6263,33 @@ def payroll():
 
     # Student statistics
     student_stats = []
+
+    # Pre-fetch payroll earnings and last payroll dates in batch
+    student_ids = [s.id for s in students]
+
+    # Batch: Total Earned
+    earnings_rows = db.session.query(
+        Transaction.student_id,
+        func.sum(Transaction.amount)
+    ).filter(
+        Transaction.student_id.in_(student_ids),
+        Transaction.type == 'payroll',
+        Transaction.is_void == False,
+        Transaction.join_code.in_(my_join_codes),
+    ).group_by(Transaction.student_id).all()
+    earnings_map = {sid: float(amt or 0) for sid, amt in earnings_rows}
+
+    # Batch: Last Payroll Date
+    last_payroll_rows = db.session.query(
+        Transaction.student_id,
+        func.max(Transaction.timestamp)
+    ).filter(
+        Transaction.student_id.in_(student_ids),
+        Transaction.type == 'payroll',
+        Transaction.join_code.in_(my_join_codes),
+    ).group_by(Transaction.student_id).all()
+    last_payroll_map = {sid: ts for sid, ts in last_payroll_rows}
+
     for student in students:
         # Calculate unpaid minutes across all blocks
         unpaid_seconds = 0
@@ -6242,26 +6301,6 @@ def payroll():
         unpaid_minutes = unpaid_seconds / 60.0
         estimated_payout = payroll_summary.get(student.id, 0)
 
-        # Get last payroll date
-        last_payroll = (
-            Transaction.query
-            .filter(
-                Transaction.student_id == student.id,
-                Transaction.type == 'payroll',
-                Transaction.join_code.in_(my_join_codes),
-            )
-            .order_by(Transaction.timestamp.desc())
-            .first()
-        )
-
-        # Total earned from payroll
-        total_earned = db.session.query(func.sum(Transaction.amount)).filter(
-            Transaction.student_id == student.id,
-            Transaction.type == 'payroll',
-            Transaction.is_void == False,
-            Transaction.join_code.in_(my_join_codes),
-        ).scalar() or 0.0
-
         student_stats.append({
             'student_id': student.id,
             'student_name': student.full_name,
@@ -6269,8 +6308,8 @@ def payroll():
             'class_label': class_labels_by_block.get(student.block, student.block) if student.block else 'Unknown',
             'unpaid_minutes': int(unpaid_minutes),
             'estimated_payout': estimated_payout,
-            'last_payroll_date': last_payroll.timestamp if last_payroll else None,
-            'total_earned': total_earned
+            'last_payroll_date': last_payroll_map.get(student.id),
+            'total_earned': earnings_map.get(student.id, 0.0)
         })
 
     # Get rewards and fines for this teacher
