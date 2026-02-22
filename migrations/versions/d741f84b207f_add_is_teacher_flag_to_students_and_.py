@@ -18,10 +18,10 @@ depends_on = None
 
 def upgrade():
     with op.batch_alter_table('students', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('is_teacher', sa.Boolean(), server_default=sa.text('0'), nullable=False))
+        batch_op.add_column(sa.Column('is_teacher', sa.Boolean(), server_default=sa.text('false'), nullable=False))
 
     with op.batch_alter_table('teacher_blocks', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('is_teacher', sa.Boolean(), server_default=sa.text('0'), nullable=False))
+        batch_op.add_column(sa.Column('is_teacher', sa.Boolean(), server_default=sa.text('false'), nullable=False))
 
 
 def downgrade():
