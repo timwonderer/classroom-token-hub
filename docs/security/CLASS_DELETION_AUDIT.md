@@ -303,7 +303,7 @@ This means:
 - There is no DB-level hook to trigger cleanup when a join code is removed
 - Orphaned records from Finding 1 (and any future similar bugs) are invisible to the database
 
-**Recommendation:** Consider adding a `join_code` column to `TeacherBlock` as a unique indexed reference target, and adding FK constraints on high-value tables (`Transaction`, `BalanceCache`, `StudentBlock`). This would require a coordinated migration and data validation pass.
+**Recommendation:** Make `teacher_blocks.join_code` a unique (or primary key candidate) column and add foreign key constraints from high-value tables (`Transaction.join_code`, `BalanceCache.join_code`, `StudentBlock.join_code`, etc.) to `teacher_blocks.join_code`. This will require a coordinated migration and data validation pass.
 
 ---
 
