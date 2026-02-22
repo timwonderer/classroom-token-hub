@@ -25,7 +25,7 @@ The audit reveals critical performance bottlenecks in the read path, primarily d
 *   **Total Queries**: 1,225 (!!!)
 *   **DB Time**: ~47ms (SQLite - would be significantly higher on networked Postgres)
 *   **Issues**:
-    1.  **Balance Calculation N+1 (248x)**: The template iterates `blocks` -> `students` and calls `student.get_checking_balance` and `get_savings_balance`. Each call triggers a `SELECT SUM(...)` query.
+    1.  **Balance Calculation N+1 (248x)**: The route handler for the page iterates `blocks` -> `students` and calls `student.get_checking_balance` and `get_savings_balance`. Each call triggers a `SELECT SUM(...)` query.
     2.  **Writes on Read (62x)**: `get_checking_balance` calls `settle_balances` which attempts to insert/update `balance_cache` records. This locks rows and degrades concurrency.
     3.  **Lazy Loading**: `Transaction` loading triggers lazy loads if not properly joined.
 
