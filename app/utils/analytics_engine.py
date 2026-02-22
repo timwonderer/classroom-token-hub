@@ -147,13 +147,19 @@ class AnalyticsEngine:
             .subquery()
         )
 
-        return (
+        enrolled_student_ids = (
             query
+            .with_entities(Student.id)
             .filter(Student.id.in_(sa.select(scoped_student_ids)))
             .filter(~Student.id.in_(sa.select(demo_student_ids)))
+            .filter(Student.is_teacher == False)
             .distinct()
-            .all()
+            .subquery()
         )
+
+        return Student.query.filter(
+            Student.id.in_(sa.select(enrolled_student_ids))
+        ).all()
     
     def _get_cwi(self) -> float:
         """Calculate current CWI for this class."""
@@ -226,7 +232,11 @@ class AnalyticsEngine:
         for (student_id,) in tap_event_student_rows:
             active_student_ids.add(student_id)
         
-        active_students = len(active_student_ids)
+        # Filter active IDs to only include enrolled students (excludes teachers/demos)
+        enrolled_student_ids = {s.id for s in students}
+        valid_active_student_ids = active_student_ids.intersection(enrolled_student_ids)
+
+        active_students = len(valid_active_student_ids)
         participation_rate = (active_students / total_students) * 100
         
         return participation_rate, active_students, total_students
