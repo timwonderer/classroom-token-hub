@@ -200,6 +200,9 @@ class TeacherBlock(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
     is_claimed = db.Column(db.Boolean, default=False, nullable=False)
 
+    # Teacher Identity Flag
+    is_teacher = db.Column(db.Boolean, default=False, nullable=False)
+
     # Timestamps
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
     claimed_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -272,6 +275,9 @@ class Student(db.Model):
     has_completed_profile_migration = db.Column(db.Boolean, default=False)
     # Soft-delete flag: archived students cannot log in and are hidden from roster queries.
     is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+
+    # Teacher Identity Flag (prevents deletion and analytics skew)
+    is_teacher = db.Column(db.Boolean, default=False, nullable=False)
 
     # Account Recovery Fields
     reset_code = db.Column(db.String(8), nullable=True, unique=True)  # 8-char alphanumeric code
