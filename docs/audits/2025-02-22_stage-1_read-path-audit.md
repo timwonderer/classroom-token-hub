@@ -67,7 +67,7 @@ The audit reveals critical performance bottlenecks in the read path, primarily d
     *   **Action**: Create a `BalanceReadModel` that fetches all balances for a teacher's students in a single query:
         ```sql
         SELECT student_id, join_code, account_type, SUM(amount)
-        FROM transaction
+        FROM "transaction"
         WHERE teacher_id = ?
         GROUP BY student_id, join_code, account_type
         ```
