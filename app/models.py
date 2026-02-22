@@ -184,10 +184,12 @@ class TeacherBlock(db.Model):
 
     # Fuzzy name matching - stores hash of each last name part separately
     # Example: "Smith-Jones" → ["hash(smith)", "hash(jones)"]
-    last_name_hash_by_part = db.Column(db.JSON, nullable=False)
+    # Nulled out after the seat is claimed (PII cleanup).
+    last_name_hash_by_part = db.Column(db.JSON, nullable=True)
 
-    # Privacy-aligned DOB sum for verification (non-reversible)
-    dob_sum = db.Column(db.Integer, nullable=False)
+    # Privacy-aligned DOB sum for verification (non-reversible).
+    # Nulled out after the seat is claimed (PII cleanup).
+    dob_sum = db.Column(db.Integer, nullable=True)
 
     # Hashing
     salt = db.Column(db.LargeBinary(16), nullable=False)
