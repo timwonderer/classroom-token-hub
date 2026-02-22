@@ -3386,6 +3386,11 @@ def add_individual_student():
             flash("All fields are required.", "error")
             return redirect(url_for('admin.students'))
 
+        # Student.block is VARCHAR(10) in the DB; enforce before insert to avoid flush-time errors.
+        if len(block) > 10:
+            flash("Class section name must be 10 characters or fewer.", "error")
+            return redirect(url_for('admin.students'))
+
         # Generate initials
         first_initial = first_name[0].upper()
         last_initial = last_name[0].upper()
