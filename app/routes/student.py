@@ -640,33 +640,37 @@ def claim_account():
 
         # Check if this student already has an account (claiming from another teacher)
         # Look for existing students with same credentials across all teachers
+        # SECURITY: Teacher seats are intentionally excluded from dedup — each
+        # teacher-student identity must be unique per join code so that teachers
+        # in multiple classes get separate Student records with separate balances.
         existing_student = None
-        all_students = Student.query.filter_by(
-            last_initial=matched_seat.last_initial,
-            dob_sum=dob_sum
-        ).all()
+        if not matched_seat.is_teacher:
+            all_students = Student.query.filter_by(
+                last_initial=matched_seat.last_initial,
+                dob_sum=dob_sum
+            ).all()
 
-        for student in all_students:
-            if student.first_name == matched_seat.first_name:
-                credential_matches, student_primary_match, canonical_hash = match_claim_hash(
-                    student.first_half_hash,
-                    first_initial,
-                    student.last_initial,
-                    student.dob_sum,
-                    student.salt,
-                )
+            for student in all_students:
+                if student.first_name == matched_seat.first_name:
+                    credential_matches, student_primary_match, canonical_hash = match_claim_hash(
+                        student.first_half_hash,
+                        first_initial,
+                        student.last_initial,
+                        student.dob_sum,
+                        student.salt,
+                    )
 
-                last_name_valid = verify_last_name_parts(
-                    last_name,
-                    student.last_name_hash_by_part,
-                    student.salt
-                )
+                    last_name_valid = verify_last_name_parts(
+                        last_name,
+                        student.last_name_hash_by_part,
+                        student.salt
+                    )
 
-                if credential_matches and last_name_valid:
-                    if canonical_hash and not student_primary_match:
-                        student.first_half_hash = canonical_hash
-                    existing_student = student
-                    break
+                    if credential_matches and last_name_valid:
+                        if canonical_hash and not student_primary_match:
+                            student.first_half_hash = canonical_hash
+                        existing_student = student
+                        break
 
         if existing_student:
             # Student already exists - link this seat to existing student

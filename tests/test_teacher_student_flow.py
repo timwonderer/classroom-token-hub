@@ -254,7 +254,7 @@ def test_teacher_student_lifecycle(client, teacher, app):
             teacher_id=teacher.id,
             name="Pizza Party",
             price=1000,
-                item_type='collective',
+            item_type='collective',
             is_active=True
         )
         db.session.add(goal_item)
@@ -291,3 +291,68 @@ def test_teacher_student_lifecycle(client, teacher, app):
             Student.is_teacher == False
         ).count()
         assert count == 1
+
+
+def test_teacher_student_unique_identity_per_join_code(client, teacher, app):
+    """
+    Verify that a teacher claiming seats in two different classes
+    gets two separate Student records with independent balances.
+
+    This prevents the multi-tenancy leak where global dedup would
+    link teacher seats across classes to the same Student record.
+    """
+    with app.app_context():
+        teacher = db.session.merge(teacher)
+        from app.routes.admin import _ensure_teacher_student_seat
+
+        join_code_a = "TEACHER_CLASS_A"
+        join_code_b = "TEACHER_CLASS_B"
+
+        _ensure_teacher_student_seat(teacher.id, join_code_a, "A")
+        _ensure_teacher_student_seat(teacher.id, join_code_b, "B")
+        db.session.commit()
+
+        # Claim seat in class A
+        response = client.post('/student/claim-account', data={
+            'join_code': join_code_a,
+            'first_initial': 'T',
+            'last_name': 'Student',
+            'dob_sum': '2001-01-01'
+        }, follow_redirects=True)
+        assert response.status_code == 200
+
+        tb_a = TeacherBlock.query.filter_by(
+            teacher_id=teacher.id, join_code=join_code_a, is_teacher=True
+        ).first()
+        assert tb_a.is_claimed is True
+        student_a = db.session.get(Student, tb_a.student_id)
+        assert student_a is not None
+        assert student_a.is_teacher is True
+
+        # Complete setup for student A so it has completed_setup
+        client.post('/student/create-username', data={'write_in_word': 'alpha'})
+        client.post('/student/setup-pin-passphrase', data={
+            'pin': '1234', 'passphrase': 'secure alpha'
+        })
+
+        # Claim seat in class B (should create a NEW Student record)
+        response = client.post('/student/claim-account', data={
+            'join_code': join_code_b,
+            'first_initial': 'T',
+            'last_name': 'Student',
+            'dob_sum': '2001-01-01'
+        }, follow_redirects=True)
+        assert response.status_code == 200
+
+        tb_b = TeacherBlock.query.filter_by(
+            teacher_id=teacher.id, join_code=join_code_b, is_teacher=True
+        ).first()
+        assert tb_b.is_claimed is True
+        student_b = db.session.get(Student, tb_b.student_id)
+        assert student_b is not None
+        assert student_b.is_teacher is True
+
+        # CRITICAL: Two separate Student records
+        assert student_a.id != student_b.id, (
+            "Teacher seats in different classes must create separate Student records"
+        )

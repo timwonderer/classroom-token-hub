@@ -2765,7 +2765,7 @@ def edit_student():
         current_blocks_set = set(current_blocks)
 
         if form_blocks_set != current_blocks_set:
-             flash("Teacher student accounts cannot be moved between classes manually.", "warning")
+            flash("Teacher student accounts cannot be moved between classes manually.", "warning")
 
     # Join blocks with commas (e.g., "A,B,C")
     # At least one block is required for tap/hall pass functionality to work
@@ -2778,7 +2778,7 @@ def edit_student():
 
     # Track old blocks for TeacherBlock updates
     old_blocks = set(b.strip().upper() for b in (student.block or '').split(',') if b.strip())
-    new_blocks_set = set(b.strip().upper() for b in selected_blocks)
+    new_blocks_set = set(b.strip().upper() for b in new_blocks.split(',') if b.strip())
 
     # Determine which blocks are being removed/added
     removed_blocks = old_blocks - new_blocks_set
