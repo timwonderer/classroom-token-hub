@@ -695,6 +695,7 @@ def claim_account():
             dob_sum=matched_seat.dob_sum,
             last_name_hash_by_part=matched_seat.last_name_hash_by_part,
             has_completed_setup=False,
+            is_teacher=matched_seat.is_teacher,
         )
         db.session.add(new_student)
 
@@ -2536,6 +2537,7 @@ def shop():
         ).filter(
             TeacherBlock.join_code == join_code,
             TeacherBlock.is_claimed == True,
+            Student.is_teacher == False,  # Exclude teacher account from class size
         ).scalar() or 0
 
     collective_progress = {}
@@ -2547,10 +2549,12 @@ def shop():
                 StudentItem.store_item_id,
                 db.func.count(db.distinct(StudentItem.student_id)).label('student_count'),
             )
+            .join(Student, StudentItem.student_id == Student.id)
             .filter(
                 StudentItem.store_item_id.in_(collective_item_ids),
                 StudentItem.join_code == join_code,
                 StudentItem.status.in_(['pending', 'processing', 'purchased', 'redeemed', 'completed']),
+                Student.is_teacher == False,  # Exclude teacher purchases from progress
             )
             .group_by(StudentItem.store_item_id)
             .all()
