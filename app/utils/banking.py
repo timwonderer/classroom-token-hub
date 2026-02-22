@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from decimal import Decimal
 import logging
+from flask import g
 from sqlalchemy.exc import IntegrityError
 from app import db
 from app.models import Transaction, TransactionStatus, BalanceCache, AccountType
@@ -11,6 +12,9 @@ def settle_balances(student_id: int, join_code: str) -> None:
     """
     Atomic settlement of pending transactions into the balance cache.
     
+    CRITICAL SAFETY GUARD:
+    Raises RuntimeError if called during a read-only request (g.read_only=True).
+
     This function:
     1. Locks the BalanceCache row for the student/class context (creating if needed).
     2. Fetches all PENDING transactions for this context.
@@ -22,6 +26,10 @@ def settle_balances(student_id: int, join_code: str) -> None:
         student_id: The ID of the student.
         join_code: The class join code.
     """
+    # Guard against write-on-read
+    if getattr(g, "read_only", False):
+        raise RuntimeError("Settlement attempted during read-only request context")
+
     try:
         cache_was_created = False
         # 1. Lock (or Create) BalanceCache Row
