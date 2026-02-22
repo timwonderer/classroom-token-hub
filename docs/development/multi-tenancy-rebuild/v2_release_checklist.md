@@ -16,7 +16,7 @@ Branch: `join-code-centric-architecture-rebuild`
 | 6 | Ledger immutability semantics complete | In Progress | Reversal-first behavior for voids; no destructive retroactive mutation as source-of-truth | Void flow tests + ledger reconciliation |
 | 7 | Monetary precision hardened | In Progress | Core financial calculations avoid float drift | Precision tests |
 | 8 | Legacy bypass routes removed/deprecated paths blocked | In Progress | No deprecated route can mutate/read class data without membership scope | Route tests + routing audit |
-| 9 | Join-code deletion UX guardrails implemented | In Progress | Multi-step confirmation flow before hard delete | UI + endpoint tests |
+| 9 | Join-code deletion UX guardrails implemented | Complete | Multi-step confirmation flow before hard delete | UI + endpoint tests |
 | 10 | CI multitenancy regression suite required for merge | Complete | Full 497-test suite passing with strict FK constraints and no warnings | CI validation |
 | 11 | DB CHECK constraints on ClassMembership | Not Started | XOR and Role Consistency enforced at DB level | DB migration + tests |
 | 12 | Production Migration Runbook | Not Started | `V2_PRODUCTION_TRANSITION_RUNBOOK.md` complete | Doc review |
@@ -28,7 +28,7 @@ Branch: `join-code-centric-architecture-rebuild`
 | 18 | TeacherBlock fallback feature flag | Not Started | Legacy fallback is gated by `USE_LEGACY_TB_FALLBACK` | Code search |
 | 19 | Document/test StoreItem null join_code behavior | Not Started | Global items behavior is explicit and tested, or removed | Document + tests |
 | 20 | Audit `system_admin.py` routes | Not Started | Sysadmin routes audited for multi-tenancy compliance | Route audit matrix |
-| 21 | Class Deletion `collapse_universe` Primitive | Not Started | `collapse_universe` used for all destructive paths, `ON DELETE CASCADE` enforced | Deletion tests + DB schema |
+| 21 | Class Deletion `collapse_universe` Primitive | Complete | `collapse_universe` used for all destructive paths, `ON DELETE CASCADE` enforced | Deletion tests + DB schema |
 
 ## Execution Order (Recommended)
 
@@ -61,7 +61,8 @@ Branch: `join-code-centric-architecture-rebuild`
 - Updated verification display API to intentional unauthenticated teacher-wide scope via stable random teacher public-id URL across that teacher's join-codes.
 - Added random `Admin.public_id` and moved verification identity resolution off numeric teacher IDs.
 - Switched new `Admin.public_id` generation to readable 3-word slugs from local word list for stable QR/manual use.
-
+- **Class Deletion Guardrails**: Implemented the strict 2-step UI modals (30-second warning, explicit typed confirmation, 10-second hold) for `admin_students` and `admin_deletion_requests`.
+- **Class Deletion Primitive**: Verified `collapse_universe` properly cleans up associated records via integration tests (`test_class_deletion.py`).
 ## Immediate Next Step
 
 1. Complete query inversion sweep: remove remaining class-scope filters using `teacher_id` comparisons and `block=None` as access boundary.

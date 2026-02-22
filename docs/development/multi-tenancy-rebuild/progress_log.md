@@ -170,10 +170,10 @@ Branch: `join-code-centric-architecture-rebuild`
 - Gate TeacherBlock legacy fallbacks with a `USE_LEGACY_TB_FALLBACK` feature flag and schedule complete removal.
 
 ### 6) Class Deletion Architecture
-- Implement the `collapse_universe` primitive for all destructive paths inside a single DB transaction.
-- Enforce `ON DELETE CASCADE` foreign keys for high-risk tables (BalanceCache, Transaction, StudentBlock, TapEvent, RentPayment).
-- Add destructive confirmation UI guardrails for all class and student deletion paths.
-- Ensure student accounts with zero remaining active memberships are fully deleted.
+- ~~Implement the `collapse_universe` primitive for all destructive paths inside a single DB transaction.~~
+- ~~Enforce `ON DELETE CASCADE` foreign keys for high-risk tables (BalanceCache, Transaction, StudentBlock, TapEvent, RentPayment).~~
+- ~~Add destructive confirmation UI guardrails for all class and student deletion paths.~~
+- ~~Ensure student accounts with zero remaining active memberships are fully deleted.~~
 
 ### 7) Test Coverage Expansion (Required)
 - Add explicit regression tests asserting:
