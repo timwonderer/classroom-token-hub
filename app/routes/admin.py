@@ -511,6 +511,7 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
             remaining = db.session.query(TeacherBlock).filter(
                 TeacherBlock.teacher_id == teacher_id,
                 TeacherBlock.block == block_name,
+                TeacherBlock.join_code != join_code,
             ).count()
             if remaining == 0:
                 PayrollSettings.query.filter_by(

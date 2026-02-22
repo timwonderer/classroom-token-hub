@@ -19,7 +19,6 @@ from app.models import (
     Student,
     StudentTeacher,
     TeacherBlock,
-    Transaction,
     BalanceCache,
     PayrollSettings,
     RentSettings,
