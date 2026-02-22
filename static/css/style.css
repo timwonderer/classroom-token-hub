@@ -964,7 +964,7 @@ body.sysadmin-shell .eyebrow {
 }
 
 .mobile-bottom-nav a:hover {
-    background-color: rgba(0, 0, 0, 0.03);
+    background-color: color-mix(in srgb, var(--neutral-900) 3%, transparent);
     color: var(--text-primary);
 }
 
