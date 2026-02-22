@@ -2295,17 +2295,18 @@ def file_claim(policy_id):
             cutoff_date = now_utc - timedelta(days=int(policy.claim_time_limit_days))
             tx_query = tx_query.filter(Transaction.timestamp >= cutoff_date)
 
-        # CRITICAL FIX v2: Prioritize join_code for scoping
-        # If policy has join_code, we rely on that. Only fall back to teacher_id if join_code is missing.
-        if policy.join_code:
+        # QUERY INVERSION v2: Scope transactions strictly by join_code.
+        # No teacher_id fallback — policies without join_code cannot have properly scoped claims.
+        if not policy.join_code:
+            # Policy has no join_code — cannot determine class scope for transactions
+            candidate_transactions = []
+        else:
             tx_query = tx_query.filter(Transaction.join_code == policy.join_code)
-        elif policy.teacher_id:
-            tx_query = tx_query.filter(Transaction.teacher_id == policy.teacher_id)
 
-        if enrollment.coverage_start_date:
-            tx_query = tx_query.filter(Transaction.timestamp >= enrollment.coverage_start_date)
+            if enrollment.coverage_start_date:
+                tx_query = tx_query.filter(Transaction.timestamp >= enrollment.coverage_start_date)
 
-        candidate_transactions = tx_query.order_by(Transaction.timestamp.desc()).all()
+            candidate_transactions = tx_query.order_by(Transaction.timestamp.desc()).all()
         
         claimed_tx_ids = {
             row[0]
@@ -2527,17 +2528,19 @@ def shop():
 
     now = utc_now()
     now_db = normalize_for_db(now)
+
+    if not join_code:
+        flash("No class selected. Please select a class to continue.", "error")
+        return redirect(url_for('student.dashboard'))
+
+    # QUERY INVERSION v2: Scope store items strictly by join_code.
+    # Items with join_code=NULL are teacher-level templates and must NOT
+    # appear in student-visible inventory.  No teacher_id filter needed.
     items_query = StoreItem.query.filter(
-        StoreItem.teacher_id == teacher_id,
+        StoreItem.join_code == join_code,
         StoreItem.is_active == True,
         or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now_db),
     )
-
-    # CRITICAL FIX: Filter StoreItems by join_code if specified (strict scoping)
-    if join_code:
-        items_query = items_query.filter(
-            or_(StoreItem.join_code == None, StoreItem.join_code == join_code)
-        )
 
     # Apply block visibility (SQL optimized)
     if current_block:

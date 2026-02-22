@@ -581,41 +581,48 @@ def _link_student_to_admin(student: Student, admin_id):
         )
 
 
-def _get_feature_settings(teacher_id, block=None):
+def _get_feature_settings(teacher_id, block=None, join_code=None):
     """
-    Get feature settings for a teacher, optionally scoped to a specific block.
+    Get feature settings for a teacher, scoped to join_code.
 
-    Settings are resolved with block-specific overriding global defaults:
-    1. Look for block-specific settings if block is provided
-    2. Fall back to global (block=NULL) settings
-    3. Fall back to system defaults if no settings exist
+    Resolution order:
+    1. If join_code is provided, look up settings by join_code directly.
+    2. If no join_code, try resolving from block via TeacherBlock.
+    3. Fall back to system defaults if no settings exist.
+
+    No teacher-wide global fallback (block=None) — each class
+    must have its own settings or use system defaults.
 
     Args:
         teacher_id: The teacher's admin ID
         block: Optional block/period name (e.g., "A", "B", "1")
+        join_code: Optional join_code for direct scoping (preferred)
 
     Returns:
         dict: Feature settings with all toggle values
     """
-    # Try block-specific settings first
-    if block:
-        block_settings = FeatureSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=block.strip().upper()
+    # Prefer join_code scoping
+    if join_code:
+        jc_settings = FeatureSettings.query.filter_by(
+            join_code=join_code,
         ).first()
-        if block_settings:
-            return block_settings.to_dict()
+        if jc_settings:
+            return jc_settings.to_dict()
 
-    # Fall back to global settings
-    global_settings = FeatureSettings.query.filter_by(
-        teacher_id=teacher_id,
-        block=None
-    ).first()
+    # Legacy fallback: resolve block → join_code via TeacherBlock
+    if block and not join_code:
+        tb = TeacherBlock.query.filter_by(
+            teacher_id=teacher_id,
+            block=block.strip().upper(),
+        ).first()
+        if tb and tb.join_code:
+            jc_settings = FeatureSettings.query.filter_by(
+                join_code=tb.join_code,
+            ).first()
+            if jc_settings:
+                return jc_settings.to_dict()
 
-    if global_settings:
-        return global_settings.to_dict()
-
-    # Return defaults if no settings exist
+    # Return defaults if no settings exist — no teacher-wide global fallback
     return FeatureSettings.get_defaults()
 
 
@@ -1030,7 +1037,13 @@ def give_bonus_all():
     ).all()
     admin_membership_map = {m.join_code: m.id for m in admin_memberships}
 
-    banking_settings = BankingSettings.query.filter_by(teacher_id=current_admin_id).first()
+    # QUERY INVERSION v2: Look up banking settings per-student join_code (not teacher-wide).
+    # We build a map of join_code → BankingSettings for the unique join codes in scope.
+    banking_settings_by_jc = {}
+    for jc in unique_join_codes:
+        bs = BankingSettings.query.filter_by(join_code=jc).first()
+        if bs:
+            banking_settings_by_jc[jc] = bs
     applied_count = 0
     declined_count = 0
     fee_count = 0
@@ -1048,6 +1061,8 @@ def give_bonus_all():
             f"This should not happen if TeacherBlock records are properly created."
             )
 
+        # Resolve class-scoped banking settings for this student's join_code
+        banking_settings = banking_settings_by_jc.get(join_code)
         if amount < 0:
             allowed, shortfall, _, _ = evaluate_overdraft_allowance(
                 student,
@@ -2241,7 +2256,8 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
     if not current_block:
         return rent_privileges
 
-    rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
+    # QUERY INVERSION v2: Scope rent settings by join_code (not teacher_id + block)
+    rent_settings = RentSettings.query.filter_by(join_code=join_code).first()
     if not rent_settings or not rent_settings.is_enabled:
         return rent_privileges
 
@@ -4293,23 +4309,27 @@ def rent_settings():
     """Configure rent settings."""
     admin_id = session.get("admin_id")
     student_ids_subq = _student_scope_subquery()
-    payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True).first()
 
-    # Get teacher's blocks for class selector
+    # Get teacher's blocks and their join_codes for class selector
     teacher_blocks = db.session.query(TeacherBlock.block).filter_by(teacher_id=admin_id).distinct().all()
     teacher_blocks = sorted([b[0] for b in teacher_blocks])
+    join_code_map_all = _get_join_codes_by_block(admin_id, teacher_blocks)
 
     # Get which class settings to show (default to first block)
     settings_block = request.args.get('settings_block') or request.form.get('settings_block')
     if not settings_block and teacher_blocks:
         settings_block = teacher_blocks[0]
 
-    # Get or create rent settings for this class
+    # QUERY INVERSION v2: Resolve join_code for selected block, then scope queries
+    current_jc = join_code_map_all.get(settings_block) if settings_block else None
+    payroll_settings = PayrollSettings.query.filter_by(join_code=current_jc, is_active=True).first() if current_jc else None
+
+    # Get or create rent settings for this class — scoped by join_code
     settings = None
-    if settings_block:
-        settings = RentSettings.query.filter_by(teacher_id=admin_id, block=settings_block).first()
+    if current_jc:
+        settings = RentSettings.query.filter_by(join_code=current_jc).first()
         if not settings:
-            settings = RentSettings(teacher_id=admin_id, block=settings_block)
+            settings = RentSettings(teacher_id=admin_id, block=settings_block, join_code=current_jc)
             db.session.add(settings)
             db.session.commit()
 
@@ -4338,10 +4358,11 @@ def rent_settings():
                     return redirect(url_for('admin.rent_settings'))
 
         for block in blocks_to_update:
-            # Get or create settings for this class
-            block_settings = RentSettings.query.filter_by(teacher_id=admin_id, block=block).first()
+            # QUERY INVERSION v2: Get or create settings by join_code
+            block_jc = join_code_map.get(block)
+            block_settings = RentSettings.query.filter_by(join_code=block_jc).first() if block_jc else None
             if not block_settings:
-                block_settings = RentSettings(teacher_id=admin_id, block=block)
+                block_settings = RentSettings(teacher_id=admin_id, block=block, join_code=block_jc)
                 db.session.add(block_settings)
 
             # Main toggle

@@ -99,16 +99,20 @@ def test_student_shop_filters_items_by_store_item_block_visibility(client):
 
     a_item = StoreItem(
         teacher_id=teacher.id,
+        join_code='JOINA111',
         name='A Only Item',
         price=Decimal('6.00'),
         is_active=True,
     )
     d_item = StoreItem(
         teacher_id=teacher.id,
+        join_code='JOIND222',
         name='D Only Item',
         price=Decimal('7.00'),
         is_active=True,
     )
+    # QUERY INVERSION v2: Unscoped items (join_code=None) are teacher templates
+    # and must NOT appear in student shop.
     unscoped_item = StoreItem(
         teacher_id=teacher.id,
         name='Unscoped Item',
@@ -126,7 +130,8 @@ def test_student_shop_filters_items_by_store_item_block_visibility(client):
     _login_student(client, student_a.id, 'JOINA111')
     resp = client.get('/student/shop')
     assert resp.status_code == 200
-    assert b'Unscoped Item' in resp.data
+    # Unscoped items (join_code=None) must NOT appear in student shop
+    assert b'Unscoped Item' not in resp.data
     assert b'A Only Item' in resp.data
     assert b'D Only Item' not in resp.data
 
@@ -165,6 +170,8 @@ def test_purchase_item_rejects_items_not_visible_to_current_block(client):
 
 
 def test_purchase_item_allows_unscoped_item_without_block_visibility(client):
+    """QUERY INVERSION v2: Items with join_code must be scoped to a class.
+    Items that previously had join_code=None are now class-scoped."""
     teacher = Admin(username='teacher_unscoped_purchase', totp_secret='secret')
     db.session.add(teacher)
     db.session.flush()
@@ -172,25 +179,27 @@ def test_purchase_item_allows_unscoped_item_without_block_visibility(client):
     student_a = _create_student(teacher, 'Devon', 'JOINA444', block='A')
     db.session.flush()
 
-    unscoped_item = StoreItem(
+    # Item is scoped to the student's class (join_code), no block restrictions
+    scoped_item = StoreItem(
         teacher_id=teacher.id,
-        name='Unscoped Hidden Item',
+        join_code='JOINA444',
+        name='Class Scoped Item',
         price=Decimal('4.00'),
         is_active=True,
     )
-    db.session.add(unscoped_item)
+    db.session.add(scoped_item)
     db.session.commit()
 
     _login_student(client, student_a.id, 'JOINA444')
     resp = client.post('/api/purchase-item', json={
-        'item_id': unscoped_item.id,
+        'item_id': scoped_item.id,
         'passphrase': 'password',
         'quantity': 1,
     })
     assert resp.status_code == 200
     assert StudentItem.query.filter_by(
         student_id=student_a.id,
-        store_item_id=unscoped_item.id,
+        store_item_id=scoped_item.id,
         join_code='JOINA444',
     ).count() == 1
 
