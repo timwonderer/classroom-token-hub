@@ -8,6 +8,9 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Security
+- **Class Deletion Audit** — Comprehensive audit of all four class/period deletion paths, identifying inconsistent semantics, a P1 BalanceCache orphaning bug, sysadmin use of the deprecated `Student.block` field, and missing data-loss warnings in sysadmin confirmation dialogs. See `docs/security/CLASS_DELETION_AUDIT.md`.
+
 ### Added
 - **Admin Transaction Backfill** — One-time remediation page (`/admin/backfill-transactions`) that lets teachers fix student balances when past transactions lack a class-period `join_code`. Detected automatically on dashboard load; teachers select the correct period for each affected student and the system links all orphaned transactions to the right class context.
 - **Interactive Project Timeline** — New `/docs/timeline` page showcasing the full development history of Classroom Token Hub
