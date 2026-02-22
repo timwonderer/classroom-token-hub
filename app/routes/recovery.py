@@ -129,6 +129,9 @@ def account_lookup():
 
         # Clear all credentials — forces fresh credential setup (username, PIN, passphrase).
         # first_name and last_initial are preserved; they are managed by the teacher.
+        if linked_block and linked_block.is_claimed and linked_block.claimed_at is None:
+            linked_block.claimed_at = utc_now()
+
         student.username_hash = None
         student.username_lookup_hash = None
         student.pin_hash = None
