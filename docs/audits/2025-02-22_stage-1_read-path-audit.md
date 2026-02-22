@@ -37,6 +37,7 @@ The audit reveals critical performance bottlenecks in the read path, primarily d
     1.  **Attendance Status N+1 (62x)**: `SELECT tap_events.id ...` is executed for each student/block to determine active status or unpaid time.
     2.  **Entity Fetching N+1 (62x)**: `SELECT teacher_blocks.id ...` and `SELECT payroll_settings.id ...` are repeated for each loop iteration.
     3.  **Lazy Loading (40x)**: `SELECT students.id ...` triggered when accessing student attributes from transaction lists.
+    4.  **Balance Calculation N+1 (40x for 40 students)**: The dashboard calculates `total_balance` by iterating through all students and accessing `student.checking_balance` and `student.savings_balance` properties. Each access triggers lazy loading of the student's transactions, resulting in N+1 queries.
 
 ### 3. Payroll Page (`/admin/payroll`)
 
