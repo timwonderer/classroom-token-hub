@@ -15,6 +15,17 @@ and this project follows semantic versioning principles.
 - **P2 fix: Sysadmin confirmation UX** — Period and teacher account deletion dialogs now accurately describe what is preserved versus removed and note the action cannot be undone.
 - **P3 fix: Orphaned settings cleanup** — `_hard_delete_join_code_scope` now deletes `PayrollSettings` and `RentSettings` for block names that have no remaining `TeacherBlock` entries after a join-code deletion.
 
+### Changed
+- **Post-claim PII minimisation** — `dob_sum` and `last_name_hash_by_part` are now deleted from both the `TeacherBlock` roster seat and the `Student` record immediately after a student completes account setup. These fields are only needed during the one-time claim verification; retaining them afterwards served no purpose and increased the sensitive-data footprint.
+  - `TeacherBlock.dob_sum` and `TeacherBlock.last_name_hash_by_part` are nulled when `is_claimed` is set to `True` (all claim paths: initial claim, add-class, recovery).
+  - `Student.dob_sum` and `Student.last_name_hash_by_part` are nulled in `setup_pin_passphrase` once credentials are established; `has_completed_profile_migration` is set to `True` at the same time to suppress the legacy migration prompt.
+  - `TeacherBlock.dob_sum` and `TeacherBlock.last_name_hash_by_part` database columns made nullable via migration `a1b2c3d4e5f6`.
+- **Simplified student account recovery** — The recovery flow no longer asks students to re-enter their name and date of birth. The new two-step flow is: enter join code + reset code → set up new username + credentials. First name and last initial are preserved from the teacher-managed roster and are not editable by the student.
+  - `recovery.account_lookup` now clears credentials (username, PIN, passphrase) directly on successful code verification and redirects to `student.create_username`.
+  - `recovery.verify_identity` is retired; the route now redirects to `recovery.account_lookup` so bookmarked URLs remain functional.
+- **`add_class` credential verification scoped to target class** — When a student adds a new class, credentials (first initial, last name, DOB) are now verified exclusively against the target class's own unclaimed roster seat hashes. The previous pre-check against the student's stored `dob_sum` (which is null post-claim) has been removed. Each join_code is an independent verification universe; claiming one class does not expose or depend on hashes from another.
+- **`claim_account` duplicate detection** — Finding an existing student during initial claim now uses `first_half_hash` lookup instead of `dob_sum` filter, which remains correct after post-claim PII cleanup.
+
 ### Added
 - **Admin Transaction Backfill** — One-time remediation page (`/admin/backfill-transactions`) that lets teachers fix student balances when past transactions lack a class-period `join_code`. Detected automatically on dashboard load; teachers select the correct period for each affected student and the system links all orphaned transactions to the right class context.
 - **Interactive Project Timeline** — New `/docs/timeline` page showcasing the full development history of Classroom Token Hub

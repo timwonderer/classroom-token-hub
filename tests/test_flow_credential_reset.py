@@ -2,10 +2,9 @@
 End-to-end test for the account recovery flow:
   1. Admin generates reset code for student
   2. Student uses join_code + reset_code to begin recovery
-  3. Student re-registers identity (name, DOB)
-  4. Student sets new credentials via normal setup flow
-  5. Student logs in with new credentials
-  6. Economic data is preserved
+  3. Student proceeds directly to username + credential setup
+  4. Existing teacher-managed identity is preserved
+  5. Economic data is preserved
 """
 import pytest
 from werkzeug.security import generate_password_hash
@@ -98,8 +97,8 @@ def test_credential_reset_flow(client, test_data):
       1. Admin generates reset code (via edit modal toggle).
       2. Verify student detail shows reset code.
       3. Student enters join_code + reset_code.
-      4. Student re-registers identity.
-      5. Verify credentials cleared and data preserved.
+      4. Student proceeds directly to credential setup.
+      5. Verify identity is preserved while credentials are reset.
     """
     admin_id = test_data['admin_id']
     student_id = test_data['student_id']
@@ -143,18 +142,9 @@ def test_credential_reset_flow(client, test_data):
         'reset_code': reset_code,
     }, follow_redirects=False)
     assert resp.status_code == 302
-    assert '/recovery/verify-identity' in resp.location
-
-    # ── Step 4: Student re-registers identity ──
-    resp = client.post('/recovery/verify-identity', data={
-        'first_name': 'NewFlow',
-        'last_name': 'NewTest',
-        'dob': '2010-05-15',
-    }, follow_redirects=False)
-    assert resp.status_code == 302
     assert '/student/create-username' in resp.location
 
-    # Verify identity reset state before credentials are re-established.
+    # Verify state after lookup and before credentials are re-established.
     with client.application.app_context():
         s = db.session.get(Student, student_id)
         assert s.has_completed_setup is False
@@ -187,9 +177,9 @@ def test_credential_reset_flow(client, test_data):
         # student_id unchanged
         assert s.id == student_id
 
-        # PII updated
-        assert s.first_name == 'NewFlow'
-        assert s.last_initial == 'N'
+        # Teacher-managed identity preserved
+        assert s.first_name == 'Flow'
+        assert s.last_initial == 'T'
 
         # Credentials re-established
         assert s.has_completed_setup is True

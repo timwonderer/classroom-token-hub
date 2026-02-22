@@ -43,6 +43,7 @@ from app.models import (
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
     RedemptionAuditSource, Issue, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent,
+    BalanceCache,
     BalanceCache
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
@@ -511,6 +512,7 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
             remaining = db.session.query(TeacherBlock).filter(
                 TeacherBlock.teacher_id == teacher_id,
                 TeacherBlock.block == block_name,
+                TeacherBlock.join_code != join_code,
             ).count()
             if remaining == 0:
                 PayrollSettings.query.filter_by(
@@ -539,6 +541,55 @@ def _get_student_or_404(student_id, include_unassigned=True):
     if not student:
         abort(404)
     return student
+
+
+def _ensure_teacher_student_seat(teacher_id, join_code, block):
+    """
+    Ensure a 'Teacher Student' seat exists for the given class period.
+
+    This creates a special TeacherBlock entry that allows the teacher to log in
+    as a student for this specific class. It uses a standard identity so the
+    teacher knows how to claim it (Teacher S., DOB 01/01/2001).
+    """
+    if not join_code:
+        return
+
+    existing_seat = TeacherBlock.query.filter_by(
+        teacher_id=teacher_id,
+        join_code=join_code,
+        is_teacher=True
+    ).first()
+
+    if existing_seat:
+        return
+
+    # Create the teacher student seat
+    # Default Identity: Teacher Student, DOB 01/01/2001
+    first_name = "Teacher"
+    last_initial = "S"
+    dob_sum = 1 + 1 + 2001  # 2003
+
+    salt = get_random_salt()
+    # Canonical hash for claim matching
+    first_half_hash = compute_primary_claim_hash(first_name[:1], dob_sum, salt)
+    last_name_hash_by_part = hash_last_name_parts("Student", salt)
+
+    teacher_seat = TeacherBlock(
+        teacher_id=teacher_id,
+        block=block,
+        join_code=join_code,
+        class_label=f"Teacher's Student Account",
+        first_name=first_name,
+        last_initial=last_initial,
+        last_name_hash_by_part=last_name_hash_by_part,
+        dob_sum=dob_sum,
+        salt=salt,
+        first_half_hash=first_half_hash,
+        is_claimed=False,
+        is_teacher=True
+    )
+    db.session.add(teacher_seat)
+    current_app.logger.info(f"Created Teacher Student seat for teacher {teacher_id}, join_code {join_code}")
 
 
 def _link_student_to_admin(student: Student, admin_id):
@@ -2757,9 +2808,23 @@ def edit_student():
     # Get selected blocks (multiple checkboxes)
     selected_blocks = request.form.getlist('blocks')
 
+    # Guard: Teacher students cannot move between classes
+    if student.is_teacher:
+        # Ignore form input for blocks, preserve existing blocks
+        # This enforces "cannot be moved between classes"
+        current_blocks = [b.strip().upper() for b in (student.block or '').split(',') if b.strip()]
+        new_blocks = ','.join(sorted(current_blocks))
+
+        # Check if user tried to change blocks
+        form_blocks_set = set(b.strip().upper() for b in selected_blocks)
+        current_blocks_set = set(current_blocks)
+
+        if form_blocks_set != current_blocks_set:
+            flash("Teacher student accounts cannot be moved between classes manually.", "warning")
+
     # Join blocks with commas (e.g., "A,B,C")
     # At least one block is required for tap/hall pass functionality to work
-    if selected_blocks:
+    elif selected_blocks:
         new_blocks = ','.join(sorted(b.strip().upper() for b in selected_blocks))
     else:
         # No blocks selected - this would break tap/hall pass functionality
@@ -2768,7 +2833,7 @@ def edit_student():
 
     # Track old blocks for TeacherBlock updates
     old_blocks = set(b.strip().upper() for b in (student.block or '').split(',') if b.strip())
-    new_blocks_set = set(b.strip().upper() for b in selected_blocks)
+    new_blocks_set = set(b.strip().upper() for b in new_blocks.split(',') if b.strip())
 
     # Determine which blocks are being removed/added
     removed_blocks = old_blocks - new_blocks_set
@@ -2936,6 +3001,10 @@ def edit_student():
                     timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
                     join_code = f"B{block_initial}{timestamp_suffix:04d}"
 
+            # Ensure the teacher student seat exists for this new join code
+            if join_code:
+                _ensure_teacher_student_seat(current_admin_id, join_code, block)
+
             # CRITICAL FIX: Ensure first_half_hash exists before creating TeacherBlock
             # Logic: If hash is missing (legacy student), generate it now to prevent NotNullViolation
             if not student.first_half_hash:
@@ -3015,6 +3084,11 @@ def delete_student():
     student = _get_student_or_404(student_id)
     student_name = student.full_name
 
+    # Prevent deletion of teacher student accounts
+    if student.is_teacher:
+        flash("Teacher student accounts cannot be deleted directly. They are removed only when the class is deleted.", "error")
+        return redirect(url_for('admin.students'))
+
     try:
         _archive_student(student)
         db.session.commit()
@@ -3042,7 +3116,7 @@ def bulk_delete_students():
         archived_count = 0
         for student_id in student_ids:
             student = _get_student_or_404(student_id)
-            if student:
+            if student and not student.is_teacher:
                 _archive_student(student)
                 archived_count += 1
 
@@ -3311,6 +3385,11 @@ def add_individual_student():
 
         if not all([first_name, last_name, dob_str, block]):
             flash("All fields are required.", "error")
+            return redirect(url_for('admin.students'))
+
+        # Student.block is VARCHAR(10) in the DB; enforce before insert to avoid flush-time errors.
+        if len(block) > 10:
+            flash("Class section name must be 10 characters or fewer.", "error")
             return redirect(url_for('admin.students'))
 
         # Generate initials
@@ -7311,6 +7390,9 @@ def upload_students():
                             f"Failed to generate unique join code after {MAX_JOIN_CODE_RETRIES} attempts. "
                             f"Using fallback code {new_code} for block {block} in roster upload"
                         )
+
+                # Ensure the teacher student seat exists for this new or existing join code
+                _ensure_teacher_student_seat(teacher_id, join_codes_by_block[block], block)
 
             join_code = join_codes_by_block[block]
 

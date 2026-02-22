@@ -248,3 +248,48 @@ def test_attendance_history_excludes_deleted_records(client, admin_with_students
     # Verify none of the returned records are from period B (the deleted one)
     for record in data['records']:
         assert record['period'] != 'B', "Deleted tap event should not appear in results"
+
+
+def test_attendance_history_dedupes_duplicate_daily_limit_tapouts(client, admin_with_students):
+    """Duplicate auto tap-outs with identical daily-limit payload should render once."""
+    admin = admin_with_students['admin']
+    student = admin_with_students['student']
+    now_utc = datetime.now(timezone.utc)
+    duplicate_ts = now_utc - timedelta(minutes=10)
+    reason = "Daily limit (1.2h) reached"
+
+    # Simulate duplicate inserts from concurrent workers.
+    db.session.add(TapEvent(
+        student_id=student.id,
+        period='A',
+        status='inactive',
+        timestamp=duplicate_ts,
+        reason=reason,
+        join_code='TEST123'
+    ))
+    db.session.add(TapEvent(
+        student_id=student.id,
+        period='A',
+        status='inactive',
+        timestamp=duplicate_ts,
+        reason=reason,
+        join_code='TEST123'
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['is_admin'] = True
+        sess['admin_id'] = admin.id
+        sess['last_activity'] = datetime.now(timezone.utc).isoformat()
+
+    response = client.get('/api/attendance/history')
+    assert response.status_code == 200
+    data = response.get_json()
+
+    assert data['status'] == 'success'
+    assert data['total'] == 3  # tap-in + existing tap-out + one deduped daily-limit tap-out
+    daily_limit_rows = [
+        record for record in data['records']
+        if record['status'] == 'inactive' and record.get('reason') == reason
+    ]
+    assert len(daily_limit_rows) == 1
