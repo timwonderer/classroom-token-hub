@@ -42,7 +42,8 @@ from app.models import (
     BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
-    RedemptionAuditSource, Issue, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent
+    RedemptionAuditSource, Issue, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent,
+    BalanceCache
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
 from app.forms import (
@@ -379,6 +380,7 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
     HallPassLog.query.filter(HallPassLog.join_code == join_code).delete(synchronize_session=False)
     RentPayment.query.filter(RentPayment.join_code == join_code).delete(synchronize_session=False)
     StudentBlock.query.filter(StudentBlock.join_code == join_code).delete(synchronize_session=False)
+    BalanceCache.query.filter_by(join_code=join_code).delete(synchronize_session=False)
     AnalyticsSnapshot.query.filter(AnalyticsSnapshot.join_code == join_code).delete(synchronize_session=False)
     AnalyticsEvent.query.filter(AnalyticsEvent.join_code == join_code).delete(synchronize_session=False)
     Announcement.query.filter(
@@ -486,6 +488,25 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
     Student.query.filter(
         Student.id.in_(sa.select(orphan_student_ids))
     ).delete(synchronize_session=False)
+
+    # Clean up PayrollSettings and RentSettings for any block name that now has no
+    # remaining TeacherBlock entries for this teacher.  These models are scoped by
+    # teacher_id + block name (not join_code), so they are not caught above.
+    # Only delete when the block truly has no seats left — preserving settings for
+    # teachers who still teach other join codes under the same block name.
+    if class_blocks:
+        for block_name in class_blocks:
+            remaining = db.session.query(TeacherBlock).filter(
+                TeacherBlock.teacher_id == teacher_id,
+                TeacherBlock.block == block_name,
+            ).count()
+            if remaining == 0:
+                PayrollSettings.query.filter_by(
+                    teacher_id=teacher_id, block=block_name
+                ).delete(synchronize_session=False)
+                RentSettings.query.filter_by(
+                    teacher_id=teacher_id, block=block_name
+                ).delete(synchronize_session=False)
 
 
 def _sanitize_csv_field(value):
