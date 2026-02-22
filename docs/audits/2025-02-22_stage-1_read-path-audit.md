@@ -1,4 +1,4 @@
-# Stage 1 Read-Path Performance Audit
+# Read-Path Performance Audit
 
 **Date:** 2025-02-22
 **Auditor:** Jules
