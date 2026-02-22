@@ -1215,27 +1215,40 @@ def delete_period(admin_id, period):
         return redirect(url_for('sysadmin.manage_teachers'))
 
     try:
-        # Get students in this period linked to this teacher
-        # Uses StudentTeacher table only (Multi-Teacher Hardening)
-        students_in_period = db.session.query(Student).join(
-            StudentTeacher,
-            Student.id == StudentTeacher.student_id
-        ).filter(
-            StudentTeacher.admin_id == admin.id,
-            Student.block == period
-        ).all()
+        # Resolve the period name to its join_code(s) — join_code is the source of truth.
+        # A period name can theoretically map to multiple join codes (e.g. if recreated),
+        # so we collect all of them.
+        join_codes_for_period = [
+            code for (code,) in db.session.query(TeacherBlock.join_code).filter(
+                TeacherBlock.teacher_id == admin.id,
+                TeacherBlock.block == period,
+                TeacherBlock.join_code.isnot(None),
+            ).distinct().all()
+        ]
+
+        # Find students enrolled in any seat for these join codes.
+        if join_codes_for_period:
+            students_in_period = db.session.query(Student).filter(
+                Student.id.in_(
+                    db.session.query(TeacherBlock.student_id).filter(
+                        TeacherBlock.join_code.in_(join_codes_for_period),
+                        TeacherBlock.student_id.isnot(None),
+                    ).distinct()
+                )
+            ).all()
+        else:
+            students_in_period = []
 
         removed_count = 0
         for student in students_in_period:
-            # Remove the teacher-student link
-            # Only remove the StudentTeacher link if the student is not taught by this teacher in any other period
-            other_links = StudentTeacher.query.filter(
-                StudentTeacher.student_id == student.id,
-                StudentTeacher.admin_id == admin.id
-            ).join(Student, Student.id == StudentTeacher.student_id).filter(
-                Student.block != period
+            # Remove the StudentTeacher link only if the student has no other class
+            # periods with this teacher outside the set of join codes being deleted.
+            other_links = db.session.query(TeacherBlock).filter(
+                TeacherBlock.teacher_id == admin.id,
+                TeacherBlock.student_id == student.id,
+                TeacherBlock.join_code.notin_(join_codes_for_period),
             ).count()
-            
+
             if other_links == 0:
                 StudentTeacher.query.filter_by(
                     student_id=student.id,

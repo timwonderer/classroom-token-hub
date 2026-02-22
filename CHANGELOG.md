@@ -10,6 +10,10 @@ and this project follows semantic versioning principles.
 
 ### Security
 - **Class Deletion Audit** — Comprehensive audit of all four class/period deletion paths, identifying inconsistent semantics, a P1 BalanceCache orphaning bug, sysadmin use of the deprecated `Student.block` field, and missing data-loss warnings in sysadmin confirmation dialogs. See `docs/security/CLASS_DELETION_AUDIT.md`.
+- **P1 fix: BalanceCache orphaning** — `_hard_delete_join_code_scope` now deletes `balance_cache` rows for the deleted `join_code`, preventing stale balance reads after class deletion.
+- **P2 fix: Sysadmin period deletion scope** — `delete_period` now resolves the period name to its `join_code(s)` via `TeacherBlock` before finding enrolled students, replacing the deprecated `Student.block` field lookup.
+- **P2 fix: Sysadmin confirmation UX** — Period and teacher account deletion dialogs now accurately describe what is preserved versus removed and note the action cannot be undone.
+- **P3 fix: Orphaned settings cleanup** — `_hard_delete_join_code_scope` now deletes `PayrollSettings` and `RentSettings` for block names that have no remaining `TeacherBlock` entries after a join-code deletion.
 
 ### Changed
 - **Post-claim PII minimisation** — `dob_sum` and `last_name_hash_by_part` are now deleted from both the `TeacherBlock` roster seat and the `Student` record immediately after a student completes account setup. These fields are only needed during the one-time claim verification; retaining them afterwards served no purpose and increased the sensitive-data footprint.
