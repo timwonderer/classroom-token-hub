@@ -143,18 +143,9 @@ def test_credential_reset_flow(client, test_data):
         'reset_code': reset_code,
     }, follow_redirects=False)
     assert resp.status_code == 302
-    assert '/recovery/verify-identity' in resp.location
-
-    # ── Step 4: Student re-registers identity ──
-    resp = client.post('/recovery/verify-identity', data={
-        'first_name': 'NewFlow',
-        'last_name': 'NewTest',
-        'dob': '2010-05-15',
-    }, follow_redirects=False)
-    assert resp.status_code == 302
     assert '/student/create-username' in resp.location
 
-    # Verify identity reset state before credentials are re-established.
+    # Verify reset state before credentials are re-established.
     with client.application.app_context():
         s = db.session.get(Student, student_id)
         assert s.has_completed_setup is False
@@ -187,9 +178,9 @@ def test_credential_reset_flow(client, test_data):
         # student_id unchanged
         assert s.id == student_id
 
-        # PII updated
-        assert s.first_name == 'NewFlow'
-        assert s.last_initial == 'N'
+        # Identity preserved (teacher-managed)
+        assert s.first_name == 'Flow'
+        assert s.last_initial == 'T'
 
         # Credentials re-established
         assert s.has_completed_setup is True

@@ -127,6 +127,10 @@ def account_lookup():
             flash("Invalid or expired recovery code.", "error")
             return redirect(url_for('recovery.account_lookup'))
 
+        # Preserve claimed-seat integrity for legacy rows that may be missing claimed_at.
+        if linked_block and linked_block.is_claimed and linked_block.claimed_at is None:
+            linked_block.claimed_at = utc_now()
+
         # Clear all credentials — forces fresh credential setup (username, PIN, passphrase).
         # first_name and last_initial are preserved; they are managed by the teacher.
         student.username_hash = None
