@@ -44,7 +44,6 @@ from app.models import (
     DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
     RedemptionAuditSource, Issue, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent,
     BalanceCache,
-    BalanceCache
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
 from app.forms import (
