@@ -457,11 +457,19 @@ document.addEventListener('DOMContentLoaded', function() {
             if (type === 'period') {
                 const period = form.getAttribute('data-period');
                 const count = form.getAttribute('data-count');
-                message = 'Delete period ' + period + ' for ' + username + '? This will remove ' + count + ' student link(s).';
+                message = 'Delete period ' + period + ' for ' + username + '?\n\n' +
+                    'This will remove ' + count + ' student roster link(s) and the class period configuration.\n\n' +
+                    'Transaction history, student balances, and all class records are PRESERVED — this is a roster-only removal.\n\n' +
+                    'This action cannot be undone.';
             } else if (type === 'account') {
-                message = 'Delete teacher account ' + username + '? This will remove all student links.';
+                message = 'Delete teacher account ' + username + '?\n\n' +
+                    'This will permanently remove:\n' +
+                    '  \u2022 All class periods and roster links\n' +
+                    '  \u2022 All payroll, rent, and banking settings\n\n' +
+                    'Student accounts, transaction history, and class records are PRESERVED.\n\n' +
+                    'This action cannot be undone.';
             } else {
-                message = 'Are you sure you want to proceed with this deletion?';
+                message = 'Are you sure you want to proceed with this deletion?\n\nThis action cannot be undone.';
             }
             if (!confirm(message)) {
                 e.preventDefault();
