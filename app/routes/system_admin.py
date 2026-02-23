@@ -26,8 +26,7 @@ from app.extensions import db, limiter
 from app.models import (
     SystemAdmin, SystemAdminCredential, Admin, Student, AdminInviteCode, ErrorLog,
     Transaction, TransactionStatus, TapEvent, HallPassLog, StudentItem, RentPayment,
-    StudentInsurance, InsuranceClaim, StudentTeacher, DeletionRequest,
-    DeletionRequestType, DeletionRequestStatus, TeacherBlock, StudentBlock, UserReport,
+    StudentInsurance, InsuranceClaim, StudentTeacher, TeacherBlock, StudentBlock, UserReport,
     FeatureSettings, TeacherOnboarding, RentSettings, BankingSettings,
     DemoStudent, HallPassSettings, PayrollFine, PayrollReward,
     PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction
@@ -48,55 +47,7 @@ from app.utils.passwordless_client import (
 sysadmin_bp = Blueprint('sysadmin', __name__, url_prefix='/sysadmin')
 
 # Constants
-INACTIVITY_THRESHOLD_DAYS = 180  # Number of days of inactivity before allowing deletion without request
-
-
-
-
-
-def _check_deletion_authorization(admin, request_type=None, period=None):
-    """
-    Check if system admin is authorized to delete for this teacher.
-    
-    Authorization is granted if:
-    1. Teacher has a pending deletion request matching the criteria, OR
-    2. Teacher has been inactive for INACTIVITY_THRESHOLD_DAYS or more
-    
-    Args:
-        admin: The Admin object to check authorization for
-        request_type: Optional request type filter ('account')
-        period: Unused (kept for backwards-compatible call sites)
-    
-    Returns:
-        tuple: (authorized: bool, pending_request: DeletionRequest or None)
-    """
-    # Check for pending request
-    query = DeletionRequest.query.filter_by(
-        admin_id=admin.id,
-        status=DeletionRequestStatus.PENDING
-    )
-    if request_type:
-        # Convert string to enum if needed
-        if isinstance(request_type, str):
-            request_type = DeletionRequestType.from_string(request_type)
-        query = query.filter_by(request_type=request_type)
-    if period:
-        query = query.filter_by(period=period)
-    pending_request = query.first()
-    
-    # Check inactivity
-    inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
-    is_inactive = False
-    if admin.last_login:
-        last_login = admin.last_login
-        if last_login.tzinfo is None:
-            last_login = last_login.replace(tzinfo=timezone.utc)
-        is_inactive = last_login < inactivity_threshold
-    else:
-        is_inactive = True
-    
-    authorized = (pending_request is not None) or is_inactive
-    return authorized, pending_request
+INACTIVITY_THRESHOLD_DAYS = 180  # Number of days of inactivity before highlighting inactive teachers
 
 
 def _tail_log_lines(file_path: str, max_lines: int = 200, chunk_size: int = 8192):

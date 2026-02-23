@@ -1512,7 +1512,7 @@ def login():
             if decrypted_secret:
                 totp = pyotp.TOTP(decrypted_secret)
                 if totp.verify(totp_code, valid_window=1):
-                # Update last login timestamp
+                    # Update last login timestamp
                     admin.last_login = utc_now()
                     db.session.commit()
 
@@ -8432,7 +8432,7 @@ def banking_settings_update():
 # -------------------- DELETION REQUESTS --------------------
 
 @admin_bp.route('/deletion-requests', methods=['GET', 'POST'])
-@limiter.exempt
+@limiter.limit("3 per hour")
 @admin_required
 def deletion_requests():
     """
