@@ -109,7 +109,7 @@
     {% if blocks|length > 1 %}
     <div class="d-flex align-items-center gap-2">
       <label for="classSelector" class="text-muted mb-0">Class:</label>
-      <select id="classSelector" class="form-select form-select-sm" style="width: auto;" onchange="window.location.href='{{ url_for('admin.economy_health') }}?block=' + encodeURIComponent(this.value)">
+      <select id="classSelector" class="form-select" style="width: auto;" onchange="window.location.href='{{ url_for('admin.economy_health') }}?block=' + encodeURIComponent(this.value)">
         {% for block in blocks %}
         <option value="{{ block }}" {% if selected_block == block %}selected{% endif %}>{{ block }}</option>
         {% endfor %}
