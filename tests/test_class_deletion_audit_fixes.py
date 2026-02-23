@@ -124,7 +124,12 @@ def test_balance_cache_deleted_when_join_code_deleted(client):
     _login_teacher(client, teacher, secret)
     resp = client.post(
         "/admin/join-code/delete",
-        json={"join_code": "BCDEL1"},
+        json={
+            "join_code": "BCDEL1",
+            "gate_phrase": "DELETE JOIN CODE BCDEL1",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
     )
     assert resp.status_code == 200
     data = resp.get_json()
@@ -157,7 +162,15 @@ def test_balance_cache_for_other_join_code_not_deleted(client):
     keep_id = cache_keep.id
 
     _login_teacher(client, teacher, secret)
-    resp = client.post("/admin/join-code/delete", json={"join_code": "BCDEL2"})
+    resp = client.post(
+        "/admin/join-code/delete",
+        json={
+            "join_code": "BCDEL2",
+            "gate_phrase": "DELETE JOIN CODE BCDEL2",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
+    )
     assert resp.get_json()["status"] == "success"
 
     # BCKEEP2 cache row must still be present
@@ -297,7 +310,15 @@ def test_payroll_settings_deleted_when_last_join_code_for_block_removed(client):
     ps_id = ps.id
 
     _login_teacher(client, teacher, secret)
-    resp = client.post("/admin/join-code/delete", json={"join_code": "PSDEL1"})
+    resp = client.post(
+        "/admin/join-code/delete",
+        json={
+            "join_code": "PSDEL1",
+            "gate_phrase": "DELETE JOIN CODE PSDEL1",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
+    )
     assert resp.get_json()["status"] == "success"
 
     # PayrollSettings for block A should be gone (no more TeacherBlock for it)
@@ -315,7 +336,15 @@ def test_rent_settings_deleted_when_last_join_code_for_block_removed(client):
     rs_id = rs.id
 
     _login_teacher(client, teacher, secret)
-    resp = client.post("/admin/join-code/delete", json={"join_code": "RSDEL1"})
+    resp = client.post(
+        "/admin/join-code/delete",
+        json={
+            "join_code": "RSDEL1",
+            "gate_phrase": "DELETE JOIN CODE RSDEL1",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
+    )
     assert resp.get_json()["status"] == "success"
 
     assert db.session.get(RentSettings, rs_id) is None
@@ -365,7 +394,15 @@ def test_payroll_settings_preserved_when_other_join_code_for_block_exists(client
 
     _login_teacher(client, teacher, secret)
     # Delete only PSKP1 — PSKP2 still exists for block A
-    resp = client.post("/admin/join-code/delete", json={"join_code": "PSKP1"})
+    resp = client.post(
+        "/admin/join-code/delete",
+        json={
+            "join_code": "PSKP1",
+            "gate_phrase": "DELETE JOIN CODE PSKP1",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
+    )
     assert resp.get_json()["status"] == "success"
 
     # PayrollSettings must still be there (block A still has PSKP2)

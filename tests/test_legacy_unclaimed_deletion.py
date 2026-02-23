@@ -184,7 +184,12 @@ def test_delete_block_removes_student_teacher_associations(client):
     # Delete block B
     response = client.post(
         "/admin/students/delete-block",
-        json={"block": "B"},
+        json={
+            "block": "B",
+            "gate_phrase": "DELETE BLOCK B",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
         content_type="application/json"
     )
     
@@ -236,7 +241,12 @@ def test_delete_block_with_shared_students(client):
     # Teacher1 deletes block D
     response = client.post(
         "/admin/students/delete-block",
-        json={"block": "D"},
+        json={
+            "block": "D",
+            "gate_phrase": "DELETE BLOCK D",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
         content_type="application/json"
     )
     
@@ -268,7 +278,12 @@ def test_bulk_delete_students_removes_associations(client):
     # Bulk delete students
     response = client.post(
         "/admin/students/bulk-delete",
-        json={"student_ids": student_ids},
+        json={
+            "student_ids": student_ids,
+            "gate_phrase": "DELETE STUDENTS",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
         content_type="application/json"
     )
     

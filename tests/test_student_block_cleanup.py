@@ -157,7 +157,12 @@ def test_bulk_delete_students_archives_students(client):
     # Bulk delete students
     response = client.post(
         "/admin/students/bulk-delete",
-        json={"student_ids": [student1_id, student2_id]},
+        json={
+            "student_ids": [student1_id, student2_id],
+            "gate_phrase": "DELETE STUDENTS",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
         content_type="application/json"
     )
     
@@ -186,7 +191,12 @@ def test_delete_block_removes_student_blocks(client):
     # Delete the block
     response = client.post(
         "/admin/students/delete-block",
-        json={"block": "X"},
+        json={
+            "block": "X",
+            "gate_phrase": "DELETE BLOCK X",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
         content_type="application/json"
     )
     

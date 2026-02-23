@@ -209,7 +209,12 @@ def test_delete_join_code_removes_only_scoped_records(client):
     _login_admin(client, teacher, secret)
     response = client.post(
         "/admin/join-code/delete",
-        json={"join_code": "JCDEL1"},
+        json={
+            "join_code": "JCDEL1",
+            "gate_phrase": "DELETE JOIN CODE JCDEL1",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
         content_type="application/json",
     )
     assert response.status_code == 200

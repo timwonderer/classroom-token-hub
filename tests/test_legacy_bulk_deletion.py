@@ -333,7 +333,12 @@ def test_block_deletion_with_improved_transactions(client):
     # Delete block F
     response = client.post(
         "/admin/students/delete-block",
-        json={"block": "F"},
+        json={
+            "block": "F",
+            "gate_phrase": "DELETE BLOCK F",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
         content_type="application/json"
     )
     

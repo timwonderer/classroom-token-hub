@@ -534,6 +534,40 @@ def _sanitize_csv_field(value):
     return text
 
 
+def _validate_destruction_gate(data, expected_phrase):
+    """Require timed in-app gate proof for destructive operations."""
+    phrase = str((data or {}).get("gate_phrase", "")).strip().upper()
+    if phrase != expected_phrase:
+        return jsonify({
+            "status": "error",
+            "message": "Deletion blocked: confirmation phrase did not match."
+        }), 400
+
+    try:
+        countdown_seconds = int((data or {}).get("gate_countdown_seconds", 0))
+    except (TypeError, ValueError):
+        countdown_seconds = 0
+
+    try:
+        hold_seconds = float((data or {}).get("gate_hold_seconds", 0))
+    except (TypeError, ValueError):
+        hold_seconds = 0.0
+
+    if countdown_seconds < 30:
+        return jsonify({
+            "status": "error",
+            "message": "Deletion blocked: 30-second safety countdown is required."
+        }), 400
+
+    if hold_seconds < 10:
+        return jsonify({
+            "status": "error",
+            "message": "Deletion blocked: 10-second hold is required."
+        }), 400
+
+    return None
+
+
 def _get_student_or_404(student_id, include_unassigned=True):
     """Fetch a student the current admin can access or 404."""
     student = get_student_for_admin(student_id, include_unassigned=include_unassigned)
@@ -3105,11 +3139,15 @@ def delete_student():
 @admin_required
 def bulk_delete_students():
     """Archive multiple students at once while preserving ledger history."""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     student_ids = data.get('student_ids', [])
 
     if not student_ids:
         return jsonify({"status": "error", "message": "No students selected."}), 400
+
+    gate_error = _validate_destruction_gate(data, expected_phrase="DELETE STUDENTS")
+    if gate_error:
+        return gate_error
 
     try:
         archived_count = 0
@@ -3134,12 +3172,16 @@ def bulk_delete_students():
 @admin_required
 def delete_block():
     """Backwards-compatible block deletion wrapper that resolves to join-code deletion."""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     block = data.get('block', '').strip().upper()
     current_admin_id = session.get('admin_id')
 
     if not block:
         return jsonify({"status": "error", "message": "No block specified."}), 400
+
+    gate_error = _validate_destruction_gate(data, expected_phrase=f"DELETE BLOCK {block}")
+    if gate_error:
+        return gate_error
 
     try:
         join_codes = [
@@ -3190,6 +3232,10 @@ def delete_join_code():
 
     if not join_code:
         return jsonify({"status": "error", "message": "join_code is required."}), 400
+
+    gate_error = _validate_destruction_gate(data, expected_phrase=f"DELETE JOIN CODE {join_code}")
+    if gate_error:
+        return gate_error
 
     seat = TeacherBlock.query.filter_by(teacher_id=current_admin_id, join_code=join_code).first()
     if not seat:

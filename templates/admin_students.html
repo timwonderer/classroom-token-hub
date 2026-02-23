@@ -18,6 +18,11 @@
     padding: 0.25rem 0.5rem;
     font-size: 0.875rem;
   }
+
+  .hold-delete-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.65;
+  }
 </style>
 <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
 {% endblock %}
@@ -934,6 +939,43 @@
   </div>
 </div>
 
+<!-- Timed Delete Gate Modal -->
+<div class="modal fade" id="timedDeleteGateModal" tabindex="-1" aria-labelledby="timedDeleteGateModalLabel"
+  aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="timedDeleteGateModalLabel">Confirm Deletion</h5>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2" id="timed-delete-gate-warning"></p>
+        <p class="fw-bold text-danger mb-2">This action CANNOT be undone.</p>
+
+        <div class="mb-3">
+          <div class="small fw-semibold" id="timed-delete-countdown-text">Safety countdown: 30s remaining</div>
+          <div class="progress mt-2" role="progressbar" aria-label="Delete countdown">
+            <div id="timed-delete-countdown-bar" class="progress-bar bg-danger" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <label for="timed-delete-phrase" class="form-label mb-1">Type confirmation phrase exactly</label>
+        <input type="text" class="form-control mb-2" id="timed-delete-phrase" autocomplete="off">
+        <div class="small text-muted mb-3" id="timed-delete-phrase-hint"></div>
+
+        <button type="button" class="btn btn-danger w-100 hold-delete-btn" id="timed-delete-hold-btn" disabled>
+          Press and Hold for 10s to Delete
+        </button>
+        <div class="small mt-2 text-muted" id="timed-delete-hold-status">
+          Hold button unlocks after countdown + exact phrase match.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_scripts %}
@@ -1206,6 +1248,162 @@
 
   // -------------------- BULK DELETE FUNCTIONS --------------------
 
+  function showTimedDeleteGate(options) {
+    return new Promise((resolve) => {
+      const modalEl = document.getElementById('timedDeleteGateModal');
+      if (!modalEl || !window.bootstrap) {
+        alert('Delete safety modal is unavailable. Please refresh and try again.');
+        resolve(null);
+        return;
+      }
+
+      const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      const titleEl = document.getElementById('timedDeleteGateModalLabel');
+      const warningEl = document.getElementById('timed-delete-gate-warning');
+      const countdownText = document.getElementById('timed-delete-countdown-text');
+      const countdownBar = document.getElementById('timed-delete-countdown-bar');
+      const phraseInput = document.getElementById('timed-delete-phrase');
+      const phraseHint = document.getElementById('timed-delete-phrase-hint');
+      const holdBtn = document.getElementById('timed-delete-hold-btn');
+      const holdStatus = document.getElementById('timed-delete-hold-status');
+      const cancelBtn = modalEl.querySelector('[data-bs-dismiss="modal"]');
+
+      const expectedPhrase = String(options.expectedPhrase || '').toUpperCase();
+      const title = options.title || 'Confirm Deletion';
+      const warning = options.warning || 'You are about to permanently delete records.';
+      const countdownSeconds = 30;
+      const holdMs = 10000;
+      const holdSeconds = 10;
+
+      let remaining = countdownSeconds;
+      let countdownComplete = false;
+      let resolved = false;
+      let countdownTimer = null;
+      let holdTimer = null;
+      let holdTicker = null;
+      let holdStartAt = null;
+      let isHolding = false;
+
+      titleEl.textContent = title;
+      warningEl.textContent = warning;
+      phraseInput.value = '';
+      phraseHint.textContent = `Required phrase: ${expectedPhrase}`;
+      holdBtn.textContent = 'Press and Hold for 10s to Delete';
+      holdStatus.textContent = 'Hold button unlocks after countdown + exact phrase match.';
+
+      const cleanup = () => {
+        if (countdownTimer) clearInterval(countdownTimer);
+        if (holdTimer) clearTimeout(holdTimer);
+        if (holdTicker) clearInterval(holdTicker);
+        phraseInput.removeEventListener('input', onPhraseInput);
+        holdBtn.removeEventListener('pointerdown', startHold);
+        holdBtn.removeEventListener('pointerup', cancelHold);
+        holdBtn.removeEventListener('pointerleave', cancelHold);
+        holdBtn.removeEventListener('pointercancel', cancelHold);
+        cancelBtn.removeEventListener('click', onCancelClick);
+        modalEl.removeEventListener('hidden.bs.modal', onHidden);
+      };
+
+      const updateHoldAvailability = () => {
+        const phraseOk = phraseInput.value.trim().toUpperCase() === expectedPhrase;
+        holdBtn.disabled = !(countdownComplete && phraseOk);
+      };
+
+      const updateCountdownUi = () => {
+        if (!countdownComplete) {
+          countdownText.textContent = `Safety countdown: ${remaining}s remaining`;
+          const pct = ((countdownSeconds - remaining) / countdownSeconds) * 100;
+          countdownBar.style.width = `${pct}%`;
+        } else {
+          countdownText.textContent = 'Countdown complete. Enter exact phrase and hold button for 10 seconds.';
+          countdownBar.style.width = '100%';
+        }
+      };
+
+      const resetHoldState = () => {
+        if (holdTimer) clearTimeout(holdTimer);
+        if (holdTicker) clearInterval(holdTicker);
+        isHolding = false;
+        holdBtn.textContent = 'Press and Hold for 10s to Delete';
+        holdStatus.textContent = 'Hold must be continuous for 10 seconds.';
+      };
+
+      const onPhraseInput = () => updateHoldAvailability();
+
+      const startHold = (event) => {
+        if (holdBtn.disabled || isHolding) return;
+        event.preventDefault();
+        isHolding = true;
+        holdStartAt = Date.now();
+        holdStatus.textContent = 'Keep holding...';
+
+        holdTicker = setInterval(() => {
+          const elapsed = Date.now() - holdStartAt;
+          const remainingMs = Math.max(0, holdMs - elapsed);
+          holdBtn.textContent = `Keep Holding... ${(remainingMs / 1000).toFixed(1)}s`;
+        }, 100);
+
+        holdTimer = setTimeout(() => {
+          if (resolved) return;
+          resolved = true;
+          cleanup();
+          modal.hide();
+          resolve({
+            gate_phrase: expectedPhrase,
+            gate_countdown_seconds: countdownSeconds,
+            gate_hold_seconds: holdSeconds,
+          });
+        }, holdMs);
+      };
+
+      const cancelHold = () => {
+        if (!isHolding) return;
+        resetHoldState();
+        updateHoldAvailability();
+      };
+
+      const onCancelClick = () => {
+        if (resolved) return;
+        resolved = true;
+        cleanup();
+        resolve(null);
+      };
+
+      const onHidden = () => {
+        if (resolved) return;
+        resolved = true;
+        cleanup();
+        resolve(null);
+      };
+
+      phraseInput.addEventListener('input', onPhraseInput);
+      holdBtn.addEventListener('pointerdown', startHold);
+      holdBtn.addEventListener('pointerup', cancelHold);
+      holdBtn.addEventListener('pointerleave', cancelHold);
+      holdBtn.addEventListener('pointercancel', cancelHold);
+      cancelBtn.addEventListener('click', onCancelClick);
+      modalEl.addEventListener('hidden.bs.modal', onHidden);
+
+      updateCountdownUi();
+      updateHoldAvailability();
+
+      countdownTimer = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          remaining = 0;
+          countdownComplete = true;
+          clearInterval(countdownTimer);
+          countdownTimer = null;
+        }
+        updateCountdownUi();
+        updateHoldAvailability();
+      }, 1000);
+
+      modal.show();
+      setTimeout(() => phraseInput.focus(), 200);
+    });
+  }
+
   function toggleSelectAll(block, checkbox) {
     const table = document.getElementById(`students-table-${block}`);
     const checkboxes = table.querySelectorAll('.student-checkbox');
@@ -1246,46 +1444,40 @@
     }
 
     const count = studentIds.length;
-    const confirmation = confirm(
-      `WARNING: You are about to permanently delete ${count} student(s) and ALL their data:\n\n` +
-      `• All transactions and balances\n` +
-      `• All attendance records\n` +
-      `• All hall pass logs\n` +
-      `• All purchases and items\n\n` +
-      `This action CANNOT be undone!\n\n` +
-      `Type "DELETE" in the next prompt to confirm.`
-    );
+    const warning = `You are about to permanently delete ${count} student(s) and all related data.`;
 
-    if (!confirmation) return;
+    showTimedDeleteGate({
+      title: 'Confirm Student Deletion',
+      warning,
+      expectedPhrase: 'DELETE STUDENTS',
+    }).then(gatePayload => {
+      if (!gatePayload) return;
 
-    const confirmText = prompt(`Type "DELETE" to confirm deletion of ${count} student(s):`);
-    if (confirmText !== 'DELETE') {
-      alert('Deletion cancelled. You must type "DELETE" exactly to confirm.');
-      return;
-    }
-
-    // Send bulk delete request
-    fetch('/admin/students/bulk-delete', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-      },
-      body: JSON.stringify({ student_ids: studentIds })
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          alert(data.message);
-          location.reload();
-        } else {
-          alert('Error: ' + data.message);
-        }
+      fetch('/admin/students/bulk-delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+        },
+        body: JSON.stringify({
+          student_ids: studentIds,
+          ...gatePayload
+        })
       })
-      .catch(error => {
-        console.error('Error:', error);
-        alert('Network error occurred while deleting students.');
-      });
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'success') {
+            alert(data.message);
+            location.reload();
+          } else {
+            alert('Error: ' + data.message);
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          alert('Network error occurred while deleting students.');
+        });
+    });
   }
 
   function bulkTapIn(block) {
@@ -1466,46 +1658,41 @@
       return;
     }
 
-    const confirmation = confirm(
-      `CRITICAL WARNING: You are about to permanently delete ALL ${count} students in Block ${block.toUpperCase()} and ALL their data:\n\n` +
-      `• All transactions and balances\n` +
-      `• All attendance records\n` +
-      `• All hall pass logs\n` +
-      `• All purchases and items\n\n` +
-      `This action CANNOT be undone!\n\n` +
-      `Type "DELETE BLOCK ${block.toUpperCase()}" in the next prompt to confirm.`
-    );
+    const upperBlock = String(block).toUpperCase();
+    const warning = `You are about to permanently delete ALL ${count} students in Block ${upperBlock} and all class records.`;
 
-    if (!confirmation) return;
+    showTimedDeleteGate({
+      title: `Confirm Class Deletion (${upperBlock})`,
+      warning,
+      expectedPhrase: `DELETE BLOCK ${upperBlock}`,
+    }).then(gatePayload => {
+      if (!gatePayload) return;
 
-    const confirmText = prompt(`Type "DELETE BLOCK ${block.toUpperCase()}" to confirm:`);
-    if (confirmText !== `DELETE BLOCK ${block.toUpperCase()}`) {
-      alert('Deletion cancelled. You must type the exact confirmation text.');
-      return;
-    }
-
-    // Send block delete request
-    fetch('/admin/students/delete-block', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
-      },
-      body: JSON.stringify({ block: block })
-    })
-      .then(response => response.json())
-      .then(data => {
-        if (data.status === 'success') {
-          alert(data.message);
-          location.reload();
-        } else {
-          alert('Error: ' + data.message);
-        }
+      fetch('/admin/students/delete-block', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+        },
+        body: JSON.stringify({
+          block: block,
+          ...gatePayload
+        })
       })
-      .catch(error => {
-        console.error('Error:', error);
-        alert('Network error occurred while deleting block.');
-      });
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === 'success') {
+            alert(data.message);
+            location.reload();
+          } else {
+            alert('Error: ' + data.message);
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          alert('Network error occurred while deleting block.');
+        });
+    });
   }
 
   function deletePendingStudent(teacherBlockId, studentName) {
