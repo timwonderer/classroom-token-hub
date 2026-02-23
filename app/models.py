@@ -15,8 +15,9 @@ import sqlalchemy as sa
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.orm import validates
 from app.extensions import db
-from app.utils.encryption import PIIEncryptedType
+from app.utils.encryption import PIIEncryptedType, normalize_totp_for_storage
 from app.utils.time import utc_now, ensure_utc
 
 logger = logging.getLogger(__name__)
@@ -676,6 +677,10 @@ class SystemAdmin(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     totp_secret = db.Column(db.String(200), nullable=False)  # Stores base64-encoded encrypted TOTP secret
+
+    @validates('totp_secret')
+    def _validate_totp_secret(self, key, value):
+        return normalize_totp_for_storage(value)
 
 
 class SystemAdminCredential(db.Model):
@@ -1641,6 +1646,10 @@ class Admin(db.Model):
     # ToS Acknowledgment
     tos_accepted = db.Column(db.Boolean, default=False, nullable=False, server_default='false')
     tos_accepted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    @validates('totp_secret')
+    def _validate_totp_secret(self, key, value):
+        return normalize_totp_for_storage(value)
 
     def get_display_name(self):
         """Return display_name if set, otherwise fall back to username"""

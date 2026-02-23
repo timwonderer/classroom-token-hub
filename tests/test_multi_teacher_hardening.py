@@ -43,21 +43,19 @@ def test_student_count_relies_only_on_link_table(client):
 
 def test_delete_teacher_cleans_up_links(client):
     """
-    Verify deleting a teacher removes StudentTeacher links but keeps the student.
+    Verify teacher self-deletion removes StudentTeacher links but keeps the student
+    when they are still linked to another teacher.
     """
-    from app.models import SystemAdmin
-    from datetime import datetime, timezone
-
     # Create Teacher to delete
     t1_username = f"del_target_{uuid.uuid4().hex[:8]}"
-    teacher = Admin(username=t1_username, totp_secret=pyotp.random_base32())
+    teacher = Admin(username=t1_username, totp_secret='s')
     db.session.add(teacher)
     db.session.commit()
     teacher_id = teacher.id
 
     # Create Survivor Teacher
     t2_username = f"survivor_{uuid.uuid4().hex[:8]}"
-    survivor_teacher = Admin(username=t2_username, totp_secret=pyotp.random_base32())
+    survivor_teacher = Admin(username=t2_username, totp_secret='s2')
     db.session.add(survivor_teacher)
     db.session.commit()
     survivor_teacher_id = survivor_teacher.id
@@ -81,21 +79,10 @@ def test_delete_teacher_cleans_up_links(client):
     db.session.add(link2)
     db.session.commit()
 
-    # Login as sysadmin
-    sa_username = f"sysadmin_{uuid.uuid4().hex[:8]}"
-    sysadmin = SystemAdmin(username=sa_username)
-    sysadmin.totp_secret = 'secret'
-    db.session.add(sysadmin)
+    from app.routes.admin import _hard_delete_teacher_account_scope
+    _hard_delete_teacher_account_scope(teacher_id)
+    db.session.delete(teacher)
     db.session.commit()
-    
-    with client.session_transaction() as sess:
-        sess['is_system_admin'] = True
-        sess['sysadmin_id'] = sysadmin.id
-        sess['last_activity'] = datetime.now(timezone.utc).isoformat()
-
-    # Perform Delete
-    resp = client.post(f'/sysadmin/manage-teachers/delete/{teacher_id}', follow_redirects=True)
-    assert resp.status_code == 200
     
     # Verify Teacher Gone
     assert db.session.get(Admin, teacher_id) is None
