@@ -167,20 +167,27 @@ def login():
         totp_code = form.totp_code.data.strip()
         admin = SystemAdmin.query.filter_by(username=username).first()
         if admin:
-            # Decrypt TOTP secret (handles both encrypted and legacy plaintext)
-            decrypted_secret = decrypt_totp(admin.totp_secret)
-            totp = pyotp.TOTP(decrypted_secret)
-            if totp.verify(totp_code, valid_window=1):
-                session["is_system_admin"] = True
-                session["sysadmin_id"] = admin.id
-                session['last_activity'] = utc_now().isoformat()
-                # Establish global maintenance bypass for subsequent role testing.
-                session['maintenance_global_bypass'] = True
-                flash("System admin login successful.")
-                next_url = request.args.get("next")
-                if not is_safe_url(next_url):
-                    return redirect(url_for("sysadmin.dashboard"))
-                return redirect(next_url or url_for("sysadmin.dashboard"))  # nosec # Safe: validated by is_safe_url()
+            try:
+                decrypted_secret = decrypt_totp(admin.totp_secret)
+            except ValueError:
+                current_app.logger.warning(
+                    "System admin login failed: invalid encrypted TOTP secret for username=%s",
+                    username,
+                )
+                decrypted_secret = None
+            if decrypted_secret:
+                totp = pyotp.TOTP(decrypted_secret)
+                if totp.verify(totp_code, valid_window=1):
+                    session["is_system_admin"] = True
+                    session["sysadmin_id"] = admin.id
+                    session['last_activity'] = utc_now().isoformat()
+                    # Establish global maintenance bypass for subsequent role testing.
+                    session['maintenance_global_bypass'] = True
+                    flash("System admin login successful.")
+                    next_url = request.args.get("next")
+                    if not is_safe_url(next_url):
+                        return redirect(url_for("sysadmin.dashboard"))
+                    return redirect(next_url or url_for("sysadmin.dashboard"))  # nosec # Safe: validated by is_safe_url()
         flash("Invalid credentials or TOTP.", "error")
         return redirect(url_for("sysadmin.login"))
     return render_template("system_admin_login.html", form=form)

@@ -1472,32 +1472,37 @@ def login():
         totp_code = form.totp_code.data.strip()
         admin = Admin.query.filter_by(username=username).first()
         if admin:
-            # Decrypt TOTP secret (handles both encrypted and legacy plaintext)
-            decrypted_secret = decrypt_totp(admin.totp_secret)
-            totp = pyotp.TOTP(decrypted_secret)
-            if totp.verify(totp_code, valid_window=1):
-                # Update last login timestamp
-                admin.last_login = utc_now()
-                db.session.commit()
+            try:
+                decrypted_secret = decrypt_totp(admin.totp_secret)
+            except ValueError:
+                current_app.logger.warning("Admin login failed: invalid encrypted TOTP secret for username=%s", username)
+                decrypted_secret = None
 
-                session["is_admin"] = True
-                session["admin_id"] = admin.id
-                session["last_activity"] = utc_now().isoformat()
-                flash("Admin login successful.")
-                next_url = request.args.get("next")
-                redirect_target = None
-                if next_url:
-                    # Normalize backslashes to mitigate browser quirks and parsing issues
-                    normalized_next = next_url.replace('\\', '')
-                    parsed_next = urlparse(normalized_next)
-                    # Only allow relative URLs with no scheme or netloc, and that pass the existing safety check
-                    if (not parsed_next.scheme and not parsed_next.netloc and is_safe_url(normalized_next)):
-                        redirect_target = normalized_next
+            if decrypted_secret:
+                totp = pyotp.TOTP(decrypted_secret)
+                if totp.verify(totp_code, valid_window=1):
+                # Update last login timestamp
+                    admin.last_login = utc_now()
+                    db.session.commit()
+
+                    session["is_admin"] = True
+                    session["admin_id"] = admin.id
+                    session["last_activity"] = utc_now().isoformat()
+                    flash("Admin login successful.")
+                    next_url = request.args.get("next")
+                    redirect_target = None
+                    if next_url:
+                        # Normalize backslashes to mitigate browser quirks and parsing issues
+                        normalized_next = next_url.replace('\\', '')
+                        parsed_next = urlparse(normalized_next)
+                        # Only allow relative URLs with no scheme or netloc, and that pass the existing safety check
+                        if (not parsed_next.scheme and not parsed_next.netloc and is_safe_url(normalized_next)):
+                            redirect_target = normalized_next
+                        else:
+                            redirect_target = url_for("admin.dashboard")
                     else:
                         redirect_target = url_for("admin.dashboard")
-                else:
-                    redirect_target = url_for("admin.dashboard")
-                return redirect(redirect_target)
+                    return redirect(redirect_target)
         flash("Invalid credentials or TOTP code.", "error")
         return redirect(url_for("admin.login", next=request.args.get("next")))
     return render_template("admin_login.html", form=form)
