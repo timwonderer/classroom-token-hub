@@ -11,11 +11,12 @@
                 </div>
                 <div class="card-body">
                     <div class="alert alert-warning">
-                        <strong>Permanent Action:</strong> This process starts immediately after confirmation.
+                        <strong>THIS ACTION IS IRREVERSIBLE. THERE IS NO ROLL-BACK.</strong> 
                         <ul class="mb-0 mt-2">
-                            <li><strong>No approval step:</strong> System admins are not part of this workflow.</li>
-                            <li><strong>Scope:</strong> All of your class join codes and associated data are permanently deleted first, then your teacher account is deleted.</li>
-                            <li><strong>Student handling:</strong> Students linked to your deleted join codes are deleted only if they are not linked to another teacher.</li>
+                            <li><strong>THIS ACTION WILL DELETE ALL CLASSES THAT ARE CREATED BY YOU</strong></li>
+                            <li><strong>THIS ACTION WILL REMOVE ALL RECORDS ASSOCIATED WITH YOUR ACCOUNT, CLASSES, AND STUDENT ACTION UDNER YOUR JOIN CODES</strong></li>
+                            <li><strong>THIS ACTION WILL DELETE ANY STUDENTS LINKED TO YOUR CLASSES BY JOIN CODE THAT ARE NOT LINKED TO ANOTHER JOIN CODE WITH ANOTHER TEACHER</strong></li>
+                            <li><strong>THIS ACTION IS PERMANENT, FINAL, AND CANNOT BE UNDONE ONCE INITIATED</li>
                         </ul>
                     </div>
 
@@ -40,29 +41,31 @@
                 <div class="modal-dialog modal-dialog-centered">
                     <div class="modal-content">
                         <div class="modal-header bg-danger-subtle text-danger-emphasis">
-                            <h5 class="modal-title" id="timedDeleteGateModalLabel">Confirm Account Deletion</h5>
+                            <h5 class="modal-title" id="timedDeleteGateModalLabel">DANGER! YOU ARE DELETING YOUR ACCOUNT!</h5>
                         </div>
                         <div class="modal-body">
                             <p class="mb-2" id="timed-delete-gate-warning"></p>
-                            <p class="fw-bold text-danger mb-2">This action is irreversible and starts immediately.</p>
+                            <p class="fw-bold text-danger mb-2">You are performing an irreversible action.</p>
+                            <p class="fw-bold text-danger mb-2">Any log entries associated with your account by join code will be destroyed.</p>
+                            <p class="fw-bold text-danger mb-2">Recovery of your account is not possible.</p>
+                            <p class="fw-bold text-danger mb-2">Any student account that is not linked to another teacher by join code will be deleted as well.</p>
+                            <p class="fw-bold text-danger mb-2">Classroom Token Hub does not maintain universal logs or audit records.</p>
 
                             <div class="mb-3">
-                                <div class="small fw-semibold" id="timed-delete-countdown-text">Safety countdown: 30s remaining</div>
+                                <div class="small fw-semibold" id="timed-delete-countdown-text">ARE YOU SURE YOU WANT TO COMPLETE THIS ACTION? 30s remaining</div>
                                 <div class="progress mt-2" role="progressbar" aria-label="Delete countdown">
                                     <div id="timed-delete-countdown-bar" class="progress-bar bg-danger" style="width: 0%"></div>
                                 </div>
                             </div>
 
-                            <label for="timed-delete-phrase" class="form-label mb-1">Type confirmation phrase exactly</label>
+                            <label for="timed-delete-phrase" class="form-label mb-1">Enter the confirmation phrase shown below:</label>
                             <input type="text" class="form-control mb-2" id="timed-delete-phrase" autocomplete="off">
                             <div class="small text-muted mb-3" id="timed-delete-phrase-hint"></div>
 
                             <button type="button" class="btn btn-danger w-100" id="timed-delete-hold-btn" disabled>
-                                Press and Hold for 10s to Continue
+                                To proceed with account deletion, clikc and hold the button for 10 seconds. Any interruption will reset the timer.
                             </button>
-                            <div class="small mt-2 text-muted" id="timed-delete-hold-status">
-                                Hold button unlocks after countdown + exact phrase match.
-                            </div>
+                           
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -152,10 +155,12 @@ function showTimedDeleteGate(options) {
         let holdTicker = null;
         let holdStartAt = null;
         let isHolding = false;
+        let phraseUnlocked = false;
 
         titleEl.textContent = title;
         warningEl.textContent = warning;
         phraseInput.value = '';
+        phraseInput.disabled = true;
         phraseHint.textContent = `Required phrase: ${expectedPhrase}`;
         holdBtn.textContent = 'Press and Hold for 10s to Continue';
         holdStatus.textContent = 'Hold button unlocks after countdown + exact phrase match.';
@@ -165,6 +170,10 @@ function showTimedDeleteGate(options) {
             if (holdTimer) clearTimeout(holdTimer);
             if (holdTicker) clearInterval(holdTicker);
             phraseInput.removeEventListener('input', onPhraseInput);
+            phraseInput.removeEventListener('paste', preventPasteLikeInput);
+            phraseInput.removeEventListener('drop', preventPasteLikeInput);
+            phraseInput.removeEventListener('beforeinput', onBeforePhraseInput);
+            phraseInput.removeEventListener('keydown', onPhraseKeydown);
             holdBtn.removeEventListener('pointerdown', startHold);
             holdBtn.removeEventListener('pointerup', cancelHold);
             holdBtn.removeEventListener('pointerleave', cancelHold);
@@ -184,6 +193,11 @@ function showTimedDeleteGate(options) {
                 const pct = ((countdownSeconds - remaining) / countdownSeconds) * 100;
                 countdownBar.style.width = `${pct}%`;
             } else {
+                if (!phraseUnlocked) {
+                    phraseUnlocked = true;
+                    phraseInput.disabled = false;
+                    setTimeout(() => phraseInput.focus(), 100);
+                }
                 countdownText.textContent = 'Countdown complete. Enter exact phrase and hold button for 10 seconds.';
                 countdownBar.style.width = '100%';
             }
@@ -195,6 +209,23 @@ function showTimedDeleteGate(options) {
             isHolding = false;
             holdBtn.textContent = 'Press and Hold for 10s to Continue';
             holdStatus.textContent = 'Hold must be continuous for 10 seconds.';
+        };
+
+        const preventPasteLikeInput = (event) => event.preventDefault();
+
+        const onBeforePhraseInput = (event) => {
+            if (event.inputType === 'insertFromPaste' || event.inputType === 'insertFromDrop') {
+                event.preventDefault();
+            }
+        };
+
+        const onPhraseKeydown = (event) => {
+            const key = (event.key || '').toLowerCase();
+            const isPasteShortcut = ((event.ctrlKey || event.metaKey) && key === 'v')
+                || (event.shiftKey && key === 'insert');
+            if (isPasteShortcut) {
+                event.preventDefault();
+            }
         };
 
         const onPhraseInput = () => updateHoldAvailability();
@@ -246,6 +277,10 @@ function showTimedDeleteGate(options) {
         };
 
         phraseInput.addEventListener('input', onPhraseInput);
+        phraseInput.addEventListener('paste', preventPasteLikeInput);
+        phraseInput.addEventListener('drop', preventPasteLikeInput);
+        phraseInput.addEventListener('beforeinput', onBeforePhraseInput);
+        phraseInput.addEventListener('keydown', onPhraseKeydown);
         holdBtn.addEventListener('pointerdown', startHold);
         holdBtn.addEventListener('pointerup', cancelHold);
         holdBtn.addEventListener('pointerleave', cancelHold);
@@ -269,7 +304,6 @@ function showTimedDeleteGate(options) {
         }, 1000);
 
         modal.show();
-        setTimeout(() => phraseInput.focus(), 200);
     });
 }
 </script>

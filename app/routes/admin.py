@@ -8494,7 +8494,7 @@ def deletion_requests():
             return redirect(url_for('admin.deletion_requests'))
 
     return render_template(
-        'admin_deletion_requests.html',
+        'admin_account_delete.html',
         current_page="deletion_requests",
         admin_username=admin_username,
     )
