@@ -10,6 +10,7 @@ import re
 import secrets
 import io
 import base64
+from urllib.parse import urlparse
 import qrcode
 import requests
 from datetime import datetime, timedelta, timezone
@@ -185,9 +186,18 @@ def login():
                     session['maintenance_global_bypass'] = True
                     flash("System admin login successful.")
                     next_url = request.args.get("next")
-                    if not is_safe_url(next_url):
-                        return redirect(url_for("sysadmin.dashboard"))
-                    return redirect(next_url or url_for("sysadmin.dashboard"))  # nosec # Safe: validated by is_safe_url()
+                    redirect_target = None
+                    if next_url:
+                        # Normalize backslashes and only allow relative in-app redirects.
+                        normalized_next = next_url.replace('\\', '')
+                        parsed_next = urlparse(normalized_next)
+                        if (not parsed_next.scheme and not parsed_next.netloc and is_safe_url(normalized_next)):
+                            redirect_target = normalized_next
+                        else:
+                            redirect_target = url_for("sysadmin.dashboard")
+                    else:
+                        redirect_target = url_for("sysadmin.dashboard")
+                    return redirect(redirect_target)
         flash("Invalid credentials or TOTP.", "error")
         return redirect(url_for("sysadmin.login"))
     return render_template("system_admin_login.html", form=form)
