@@ -63,8 +63,8 @@ def _check_deletion_authorization(admin, request_type=None, period=None):
     
     Args:
         admin: The Admin object to check authorization for
-        request_type: Optional request type filter ('period' or 'account')
-        period: Optional period filter (for period-specific requests)
+        request_type: Optional request type filter ('account')
+        period: Unused (kept for backwards-compatible call sites)
     
     Returns:
         tuple: (authorized: bool, pending_request: DeletionRequest or None)
@@ -965,13 +965,7 @@ def manage_teachers():
                 teacher_periods[teacher_id] = {}
             teacher_periods[teacher_id][block] = count
 
-        all_pending_requests = DeletionRequest.query.filter(
-            DeletionRequest.admin_id.in_(teacher_ids),
-            DeletionRequest.status == DeletionRequestStatus.PENDING
-        ).all()
         teacher_pending_requests = {}
-        for req in all_pending_requests:
-            teacher_pending_requests.setdefault(req.admin_id, []).append(req)
     else:
         teacher_student_counts = {}
         teacher_periods = {}
@@ -992,26 +986,6 @@ def manage_teachers():
         else:
             is_inactive = True
 
-        # Determine authorization using preloaded pending requests and inactivity flag.
-        # Policy: request OR inactivity threshold authorizes deletion.
-        has_account_request = any(
-            req.request_type == DeletionRequestType.ACCOUNT
-            for req in pending_requests
-        )
-        can_delete_account = has_account_request or is_inactive
-
-        if can_delete_account:
-            # Account-level authorization allows deleting any period for this teacher.
-            authorized_periods = list(periods.keys())
-        else:
-            # Otherwise only periods with explicit pending period requests are authorized.
-            period_requests = {
-                req.period
-                for req in pending_requests
-                if req.request_type == DeletionRequestType.PERIOD and req.period is not None
-            }
-            authorized_periods = [period for period in periods if period in period_requests]
-
         teachers.append({
             'id': teacher.id,
             'username': teacher.username,
@@ -1020,8 +994,7 @@ def manage_teachers():
             'total_students': total_students,
             'periods': periods,
             'pending_requests': pending_requests,
-            'can_delete_account': can_delete_account,
-            'authorized_periods': authorized_periods,
+            'can_delete_account': False,
         })
 
     return render_template(
@@ -1107,18 +1080,7 @@ def teacher_overview():
             teacher_periods[teacher_id] = {}
         teacher_periods[teacher_id][block] = count
 
-    # Batch query: Get all pending deletion requests for all teachers
-    all_pending_requests = DeletionRequest.query.filter(
-        DeletionRequest.admin_id.in_([t.id for t in teachers]),
-        DeletionRequest.status == DeletionRequestStatus.PENDING
-    ).all()
-
-    # Organize pending requests by teacher
     teacher_pending_requests = {}
-    for req in all_pending_requests:
-        if req.admin_id not in teacher_pending_requests:
-            teacher_pending_requests[req.admin_id] = []
-        teacher_pending_requests[req.admin_id].append(req)
 
     # Now build the teacher_data list using the batched data
     teacher_data = []
@@ -1140,25 +1102,6 @@ def teacher_overview():
             # Never logged in - consider inactive
             is_inactive = True
 
-        # Check authorization for account deletion
-        has_account_request = any(
-            req.request_type == DeletionRequestType.ACCOUNT 
-            for req in pending_requests
-        )
-        can_delete_account = has_account_request or is_inactive
-        
-        # Check authorization for each period deletion
-        # A period can be deleted if there's a specific request for it OR an account deletion request OR teacher is inactive
-        authorized_periods = set()
-        if can_delete_account:
-            # Account deletion request or inactivity authorizes all period deletions
-            authorized_periods = set(periods.keys())
-        else:
-            # Check for period-specific requests
-            for req in pending_requests:
-                if req.request_type == DeletionRequestType.PERIOD and req.period:
-                    authorized_periods.add(req.period)
-        
         teacher_data.append({
             'id': teacher.id,
             'username': teacher.username,
@@ -1167,8 +1110,7 @@ def teacher_overview():
             'last_login': teacher.last_login,
             'is_inactive': is_inactive,
             'pending_requests': pending_requests,
-            'can_delete_account': can_delete_account,
-            'authorized_periods': authorized_periods
+            'can_delete_account': False,
         })
 
     return render_template(
@@ -1182,199 +1124,14 @@ def teacher_overview():
 @sysadmin_bp.route('/delete-period/<int:admin_id>/<string:period>', methods=['POST'])
 @system_admin_required
 def delete_period(admin_id, period):
-    """
-    Delete a specific period/block for a teacher with authorization check.
-
-    Authorization required:
-    1. Teacher has a pending deletion request for this period, OR
-    2. Teacher has been inactive for 6+ months
-    """
-    # Validate period parameter
-    if not period or len(period) > 10:
-        flash("Invalid period parameter", "error")
-        return redirect(url_for('sysadmin.manage_teachers'))
-    
-    # Sanitize period to prevent SQL injection (allow only alphanumeric, spaces, hyphens, underscores)
-    if not re.match(r'^[a-zA-Z0-9\s\-_]+$', period):
-        flash("Invalid period format", "error")
-        return redirect(url_for('sysadmin.manage_teachers'))
-    
-    admin = db.get_or_404(Admin, admin_id)
-
-    # Check authorization using helper function
-    authorized, pending_request = _check_deletion_authorization(admin, 'period', period)
-    
-    if not authorized:
-        flash(
-            f"Unauthorized: Cannot delete period '{period}' for teacher '{admin.username}'. "
-            f"Teacher must request deletion or be inactive for 6+ months.",
-            "error"
-        )
-        return redirect(url_for('sysadmin.manage_teachers'))
-
-    try:
-        # Resolve the period name to its join_code(s) — join_code is the source of truth.
-        # A period name can theoretically map to multiple join codes (e.g. if recreated),
-        # so we collect all of them.
-        join_codes_for_period = [
-            code for (code,) in db.session.query(TeacherBlock.join_code).filter(
-                TeacherBlock.teacher_id == admin.id,
-                TeacherBlock.block == period,
-                TeacherBlock.join_code.isnot(None),
-            ).distinct().all()
-        ]
-
-        # Find students enrolled in any seat for these join codes.
-        if join_codes_for_period:
-            students_in_period = db.session.query(Student).filter(
-                Student.id.in_(
-                    db.session.query(TeacherBlock.student_id).filter(
-                        TeacherBlock.join_code.in_(join_codes_for_period),
-                        TeacherBlock.student_id.isnot(None),
-                    ).distinct()
-                )
-            ).all()
-        else:
-            students_in_period = []
-
-        removed_count = 0
-        for student in students_in_period:
-            # Remove the StudentTeacher link only if the student has no other class
-            # periods with this teacher outside the set of join codes being deleted.
-            other_links = db.session.query(TeacherBlock).filter(
-                TeacherBlock.teacher_id == admin.id,
-                TeacherBlock.student_id == student.id,
-                TeacherBlock.join_code.notin_(join_codes_for_period),
-            ).count()
-
-            if other_links == 0:
-                StudentTeacher.query.filter_by(
-                    student_id=student.id,
-                    admin_id=admin.id
-                ).delete()
-
-            removed_count += 1
-
-        # Delete TeacherBlock entries for this period
-        # This is critical - without it, the period still appears in the UI
-        TeacherBlock.query.filter_by(
-            teacher_id=admin.id,
-            block=period
-        ).delete()
-
-        # Mark any pending deletion requests for this period as approved
-        if pending_request:
-            pending_request.status = DeletionRequestStatus.APPROVED
-            pending_request.resolved_at = utc_now()
-            pending_request.resolved_by = session.get('sysadmin_id')
-
-        db.session.commit()
-
-        flash(
-            f"Period '{period}' deleted for teacher '{admin.username}'. "
-            f"Removed {removed_count} student links. Students maintain access to other classes.",
-            "success"
-        )
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.exception(f"Error deleting period {period} for teacher {admin_id}")
-        flash(f"Error deleting period: {str(e)}", "error")
-
+    flash("Teacher deletions are self-managed. System admins cannot delete classes.", "error")
     return redirect(url_for('sysadmin.manage_teachers'))
 
 
 @sysadmin_bp.route('/manage-teachers/delete/<int:admin_id>', methods=['POST'])
 @system_admin_required
 def delete_teacher(admin_id):
-    """
-    Delete a teacher account with authorization check.
-
-    Authorization required:
-    1. Teacher has a pending deletion request for their account, OR
-    2. Teacher has been inactive for 6+ months
-
-    Students maintain access unless they have no other teachers.
-    """
-    admin = db.get_or_404(Admin, admin_id)
-
-    # Check authorization using helper function
-    authorized, pending_request = _check_deletion_authorization(admin, 'account', None)
-    
-    if not authorized:
-        flash(
-            f"Unauthorized: Cannot delete teacher '{admin.username}'. "
-            f"Teacher must request deletion or be inactive for 6+ months.",
-            "error"
-        )
-        return redirect(url_for('sysadmin.manage_teachers'))
-
-    try:
-        # Get all students linked to this teacher via StudentTeacher table
-        affected_students = (
-            db.session.query(Student)
-            .join(StudentTeacher, Student.id == StudentTeacher.student_id)
-            .filter(StudentTeacher.admin_id == admin.id)
-            .all()
-        )
-        student_count = len(affected_students)
-
-        for student in affected_students:
-            # Remove the teacher-student link
-            StudentTeacher.query.filter_by(student_id=student.id, admin_id=admin.id).delete()
-
-        # Delete all deletion requests for this teacher to prevent NOT NULL violations.
-        # Explicit deletion needed because SQLAlchemy flush might try to nullify the FK
-        # before database CASCADE can execute, despite FK having ondelete='CASCADE'.
-        DeletionRequest.query.filter_by(admin_id=admin.id).delete()
-
-        # Delete all TeacherBlock entries for this teacher
-        # This cleans up roster seats associated with the teacher
-        TeacherBlock.query.filter_by(teacher_id=admin.id).delete()
-
-        # Systematically delete all dependent records to prevent IntegrityError due to NOT NULL constraints.
-        # Many of these models have a non-nullable teacher_id without a DB-level ON DELETE CASCADE.
-        BankingSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        DemoStudent.query.filter_by(admin_id=admin.id).delete(synchronize_session=False)
-        FeatureSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        HallPassSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        PayrollFine.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        PayrollReward.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        PayrollSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        RentSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        # Delete StudentItem records for items owned by this teacher
-        StudentItem.query.filter(
-            StudentItem.store_item_id.in_(
-                db.session.query(StoreItem.id).filter_by(teacher_id=admin.id)
-            )
-        ).delete(synchronize_session=False)
-        
-        # Delete StudentItem records for items owned by this teacher
-        # Must be done before deleting StoreItem to avoid FK constraint violations
-        StudentItem.query.filter(
-            StudentItem.store_item_id.in_(
-                db.session.query(StoreItem.id).filter_by(teacher_id=admin.id)
-            )
-        ).delete(synchronize_session=False)
-        
-        StoreItem.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        TeacherOnboarding.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-
-        admin_username = admin.username
-        db.session.delete(admin)
-        db.session.commit()
-
-        flash(
-            f"Teacher '{admin_username}' deleted. Updated {student_count} student ownership records. "
-            f"Students maintain access unless they have no other teachers.",
-            "success",
-        )
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.exception(f"Error deleting teacher {admin_id}")
-        flash(f"Error deleting teacher: {str(e)}", "error")
-
+    flash("Teacher deletions are self-managed. System admins cannot delete teacher accounts.", "error")
     return redirect(url_for('sysadmin.manage_teachers'))
 
 

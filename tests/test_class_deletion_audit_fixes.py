@@ -24,9 +24,6 @@ from app.models import (
     RentSettings,
     SystemAdmin,
     StudentBlock,
-    DeletionRequest,
-    DeletionRequestType,
-    DeletionRequestStatus,
 )
 from app.hash_utils import get_random_salt, hash_hmac
 
@@ -181,18 +178,10 @@ def test_balance_cache_for_other_join_code_not_deleted(client):
 
 
 # ---------------------------------------------------------------------------
-# P2: Sysadmin period deletion uses join_code scope
+# P2: Sysadmin deletion endpoints are disabled
 # ---------------------------------------------------------------------------
 
-def test_sysadmin_period_deletion_finds_students_via_join_code(client):
-    """
-    Sysadmin period deletion must use TeacherBlock.join_code to find enrolled
-    students, not the deprecated Student.block field.
-
-    Setup: student enrolled in block "Z" with join_code "SZJC1", but
-    Student.block intentionally left as "" (empty) to prove the fix doesn't
-    rely on it.
-    """
+def test_sysadmin_period_deletion_endpoint_is_disabled(client):
     teacher, _ = _create_teacher("teacher-sz-jc")
     sysadmin, sys_secret = _create_sysadmin("sysadmin-sz")
 
@@ -227,75 +216,28 @@ def test_sysadmin_period_deletion_finds_students_via_join_code(client):
     teacher.last_login = None
     db.session.commit()
 
-    st_link_id = StudentTeacher.query.filter_by(
-        student_id=student.id, admin_id=teacher.id
-    ).first().id
-
     _login_sysadmin(client, sysadmin, sys_secret)
     resp = client.post(
         f"/sysadmin/delete-period/{teacher.id}/Z",
         follow_redirects=True,
     )
     assert resp.status_code == 200
-
-    # TeacherBlock must be gone
-    assert TeacherBlock.query.filter_by(teacher_id=teacher.id, block="Z").count() == 0
-
-    # StudentTeacher link must also be gone (student has no other classes with this teacher)
-    assert db.session.get(StudentTeacher, st_link_id) is None
+    assert b"System admins cannot delete classes" in resp.data
+    assert TeacherBlock.query.filter_by(teacher_id=teacher.id, block="Z").count() == 1
 
 
-def test_sysadmin_period_deletion_preserves_link_for_multi_period_student(client):
-    """
-    When a student is enrolled in two periods (A and B) with the same teacher
-    and sysadmin deletes period A, the StudentTeacher link must be preserved
-    because the student is still in period B.
-    """
+def test_sysadmin_teacher_deletion_endpoint_is_disabled(client):
     teacher, _ = _create_teacher("teacher-mp-del")
     sysadmin, sys_secret = _create_sysadmin("sysadmin-mp")
 
-    student = _create_student(teacher, "Sam", "A", "MPJC1A")
-
-    # Add a second TeacherBlock seat for the same student in period B
-    salt2 = get_random_salt()
-    fhh2 = hash_hmac(b"S2025", salt2)
-    db.session.add(TeacherBlock(
-        teacher_id=teacher.id,
-        block="B",
-        first_name="Sam",
-        last_initial="S",
-        last_name_hash_by_part=[],
-        dob_sum=2025,
-        salt=salt2,
-        first_half_hash=fhh2,
-        join_code="MPJC1B",
-        is_claimed=True,
-        student_id=student.id,
-    ))
-    db.session.commit()
-    teacher.last_login = None
-    db.session.commit()
-
-    st = StudentTeacher.query.filter_by(
-        student_id=student.id, admin_id=teacher.id
-    ).first()
-    st_id = st.id
-
     _login_sysadmin(client, sysadmin, sys_secret)
     resp = client.post(
-        f"/sysadmin/delete-period/{teacher.id}/A",
+        f"/sysadmin/manage-teachers/delete/{teacher.id}",
         follow_redirects=True,
     )
     assert resp.status_code == 200
-
-    # Period A TeacherBlock gone
-    assert TeacherBlock.query.filter_by(teacher_id=teacher.id, block="A").count() == 0
-
-    # Period B TeacherBlock still present
-    assert TeacherBlock.query.filter_by(teacher_id=teacher.id, block="B").count() == 1
-
-    # StudentTeacher link preserved (student still has period B)
-    assert db.session.get(StudentTeacher, st_id) is not None
+    assert b"System admins cannot delete teacher accounts" in resp.data
+    assert db.session.get(Admin, teacher.id) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -412,8 +354,8 @@ def test_payroll_settings_preserved_when_other_join_code_for_block_exists(client
     assert db.session.get(PayrollSettings, ps_id) is not None
 
 
-def test_deletion_request_submission_requires_gate(client):
-    """Deletion request POST must be blocked when gate fields are missing."""
+def test_account_deletion_requires_gate(client):
+    """Teacher account deletion must be blocked when gate fields are missing."""
     teacher, secret = _create_teacher("teacher-dr-no-gate")
     _login_teacher(client, teacher, secret)
 
@@ -421,44 +363,28 @@ def test_deletion_request_submission_requires_gate(client):
         "/admin/deletion-requests",
         data={
             "request_type": "account",
-            "reason": "Testing gate requirement",
         },
         follow_redirects=True,
     )
     assert resp.status_code == 200
     assert b"Deletion request blocked: confirmation phrase did not match." in resp.data
+    assert db.session.get(Admin, teacher.id) is not None
 
-    pending = DeletionRequest.query.filter_by(
-        admin_id=teacher.id,
-        status=DeletionRequestStatus.PENDING,
-    ).count()
-    assert pending == 0
-
-
-def test_deletion_request_submission_accepts_valid_gate(client):
-    """Deletion request POST succeeds when timed gate evidence is present."""
+def test_account_deletion_executes_with_valid_gate(client):
+    """Teacher account deletion succeeds when timed gate evidence is present."""
     teacher, secret = _create_teacher("teacher-dr-gated")
     _login_teacher(client, teacher, secret)
 
     resp = client.post(
         "/admin/deletion-requests",
         data={
-            "request_type": "period",
-            "period": "A",
-            "reason": "Testing gated request",
-            "gate_phrase": "DELETE PERIOD A",
+            "request_type": "account",
+            "gate_phrase": f"CONFIRM DELETE {teacher.username} ACCOUNT",
             "gate_countdown_seconds": 30,
             "gate_hold_seconds": 10,
         },
         follow_redirects=True,
     )
     assert resp.status_code == 200
-    assert b"Deletion request submitted successfully." in resp.data
-
-    req = DeletionRequest.query.filter_by(
-        admin_id=teacher.id,
-        request_type=DeletionRequestType.PERIOD,
-        period="A",
-    ).first()
-    assert req is not None
-    assert req.status == DeletionRequestStatus.PENDING
+    assert b"permanently deleted" in resp.data
+    assert db.session.get(Admin, teacher.id) is None

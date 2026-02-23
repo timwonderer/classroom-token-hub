@@ -39,10 +39,10 @@ from app.models import (
     Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
-    BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
+    BankingSettings, TeacherBlock, DeletionRequest,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
-    RedemptionAuditSource, Issue, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent,
+    RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent,
     BalanceCache,
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
@@ -520,6 +520,121 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
                 RentSettings.query.filter_by(
                     teacher_id=teacher_id, block=block_name
                 ).delete(synchronize_session=False)
+
+
+def _hard_delete_teacher_account_scope(teacher_id):
+    """Hard-delete a teacher account and all class-scoped data owned by the teacher."""
+    if not teacher_id:
+        raise ValueError("teacher_id is required for account deletion")
+
+    join_codes = [
+        code for (code,) in db.session.query(TeacherBlock.join_code).filter(
+            TeacherBlock.teacher_id == teacher_id,
+            TeacherBlock.join_code.isnot(None),
+        ).distinct().all()
+    ]
+
+    affected_student_ids = {
+        sid for (sid,) in db.session.query(TeacherBlock.student_id).filter(
+            TeacherBlock.teacher_id == teacher_id,
+            TeacherBlock.student_id.isnot(None),
+        ).distinct().all()
+    }
+    affected_student_ids.update(
+        sid for (sid,) in db.session.query(StudentTeacher.student_id).filter(
+            StudentTeacher.admin_id == teacher_id
+        ).distinct().all()
+    )
+
+    # Required ordering: all join-code-scoped data is destroyed before admin account deletion.
+    for join_code in join_codes:
+        _hard_delete_join_code_scope(join_code, teacher_id)
+
+    # Clean residual teacher ownership rows not covered by join-code scope.
+    TeacherBlock.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    StudentTeacher.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
+    DeletionRequest.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
+
+    BankingSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    DemoStudent.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
+    FeatureSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    HallPassSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    PayrollFine.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    PayrollReward.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    PayrollSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    Announcement.query.filter(
+        sa.or_(
+            Announcement.teacher_id == teacher_id,
+            Announcement.target_teacher_id == teacher_id,
+        )
+    ).delete(synchronize_session=False)
+    Transaction.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    RedemptionAuditLog.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+
+    rent_setting_ids_subq = db.session.query(RentSettings.id).filter(
+        RentSettings.teacher_id == teacher_id
+    ).subquery()
+    RentItem.query.filter(
+        RentItem.rent_setting_id.in_(sa.select(rent_setting_ids_subq))
+    ).delete(synchronize_session=False)
+    RentSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+
+    policy_ids_subq = db.session.query(InsurancePolicy.id).filter(
+        InsurancePolicy.teacher_id == teacher_id
+    ).subquery()
+    InsuranceClaim.query.filter(
+        InsuranceClaim.policy_id.in_(sa.select(policy_ids_subq))
+    ).delete(synchronize_session=False)
+    StudentInsurance.query.filter(
+        StudentInsurance.policy_id.in_(sa.select(policy_ids_subq))
+    ).delete(synchronize_session=False)
+    InsurancePolicyBlock.query.filter(
+        InsurancePolicyBlock.policy_id.in_(sa.select(policy_ids_subq))
+    ).delete(synchronize_session=False)
+    InsurancePolicy.query.filter(
+        InsurancePolicy.id.in_(sa.select(policy_ids_subq))
+    ).delete(synchronize_session=False)
+
+    issue_ids_subq = db.session.query(Issue.id).filter(Issue.teacher_id == teacher_id).subquery()
+    IssueResolutionAction.query.filter(
+        IssueResolutionAction.issue_id.in_(sa.select(issue_ids_subq))
+    ).delete(synchronize_session=False)
+    IssueStatusHistory.query.filter(
+        IssueStatusHistory.issue_id.in_(sa.select(issue_ids_subq))
+    ).delete(synchronize_session=False)
+    Issue.query.filter(Issue.teacher_id == teacher_id).delete(synchronize_session=False)
+
+    recovery_ids_subq = db.session.query(RecoveryRequest.id).filter(
+        RecoveryRequest.admin_id == teacher_id
+    ).subquery()
+    StudentRecoveryCode.query.filter(
+        StudentRecoveryCode.recovery_request_id.in_(sa.select(recovery_ids_subq))
+    ).delete(synchronize_session=False)
+    RecoveryRequest.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
+
+    AdminCredential.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
+    TeacherOnboarding.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+
+    store_item_ids_subq = db.session.query(StoreItem.id).filter_by(teacher_id=teacher_id).subquery()
+    StudentItem.query.filter(
+        StudentItem.store_item_id.in_(sa.select(store_item_ids_subq))
+    ).delete(synchronize_session=False)
+    StoreItem.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+
+    # After teacher links are removed, hard-delete affected students with no teachers left.
+    if affected_student_ids:
+        linked_student_ids_subq = db.session.query(StudentTeacher.student_id).filter(
+            StudentTeacher.student_id.in_(affected_student_ids)
+        ).subquery()
+        orphan_student_ids_subq = (
+            db.session.query(Student.id)
+            .filter(Student.id.in_(affected_student_ids))
+            .filter(~Student.id.in_(sa.select(linked_student_ids_subq)))
+            .subquery()
+        )
+        Student.query.filter(
+            Student.id.in_(sa.select(orphan_student_ids_subq))
+        ).delete(synchronize_session=False)
 
 
 def _sanitize_csv_field(value):
@@ -1600,6 +1715,20 @@ def signup():
 
         # Encrypt TOTP secret before storing
         encrypted_totp_secret = encrypt_totp(totp_secret)
+
+        # Mark the exact validated invite row as used.
+        invite_update = db.session.execute(
+            text("UPDATE admin_invite_codes SET used = TRUE WHERE id = :id AND used = FALSE"),
+            {"id": code_row.id}
+        )
+        if invite_update.rowcount != 1:
+            db.session.rollback()
+            msg = "Invite code already used."
+            if is_json:
+                return jsonify(status="error", message=msg), 400
+            flash(msg, "error")
+            return redirect(url_for('admin.signup'))
+
         new_admin = Admin(
             username=username,
             totp_secret=encrypted_totp_secret,
@@ -1609,10 +1738,6 @@ def signup():
             tos_accepted_at=utc_now()
         )
         db.session.add(new_admin)
-        db.session.execute(
-            text("UPDATE admin_invite_codes SET used = TRUE WHERE code = :code"),
-            {"code": invite_code}
-        )
         db.session.commit()
         current_app.logger.info(f"Admin account created successfully")
         # Clear session
@@ -3209,7 +3334,6 @@ def delete_block():
             TeacherBlock.student_id.is_(None)
         ).delete(synchronize_session=False)
         db.session.commit()
-        current_app.logger.info(f"Successfully deleted join_code={join_code} for block={block}")
 
         return jsonify({
             "status": "success",
@@ -8272,44 +8396,30 @@ def banking_settings_update():
 # -------------------- DELETION REQUESTS --------------------
 
 @admin_bp.route('/deletion-requests', methods=['GET', 'POST'])
+@limiter.exempt
 @admin_required
 def deletion_requests():
     """
-    View and create deletion requests for periods/blocks or account.
+    Teacher-managed account deletion.
 
-    Teachers can request:
-    1. Deletion of a specific period/block
-    2. Deletion of their entire account
-
-    System admins approve these requests to perform deletions.
+    Deletion executes immediately after timed confirmation gate checks.
     """
     admin_id = session.get('admin_id')
+    admin = db.session.get(Admin, admin_id)
+    if not admin:
+        flash('Unable to load your account.', 'error')
+        return redirect(url_for('admin.login'))
+    admin_username = (admin.username or '').strip()
 
     if request.method == 'POST':
-        request_type = request.form.get('request_type')  # 'period' or 'account'
-        period = request.form.get('period', '').strip() if request_type == 'period' else None
-        reason = request.form.get('reason', '').strip()
+        request_type = request.form.get('request_type')  # account only
 
         # Validate
-        if request_type not in ['period', 'account']:
-            flash('Invalid request type.', 'error')
+        if request_type != 'account':
+            flash('Invalid request type. Only account deletion is supported.', 'error')
             return redirect(url_for('admin.deletion_requests'))
 
-        if request_type == 'period':
-            if not period:
-                flash('Period/block is required for period deletion requests.', 'error')
-                return redirect(url_for('admin.deletion_requests'))
-            # Validate period format and length
-            # Allow spaces, hyphens, underscores since periods may be named like "Period 1A" or "Block-2"
-            if not re.match(r'^[a-zA-Z0-9\s\-_]+$', period) or len(period) > 10:
-                flash('Invalid period format. Use alphanumeric characters, spaces, hyphens, and underscores only. Max 10 characters.', 'error')
-                return redirect(url_for('admin.deletion_requests'))
-
-        expected_phrase = (
-            f'DELETE PERIOD {period.upper()}'
-            if request_type == 'period'
-            else 'DELETE ACCOUNT'
-        )
+        expected_phrase = f'CONFIRM DELETE {admin_username} ACCOUNT'.upper()
         gate_phrase = str(request.form.get('gate_phrase', '')).strip().upper()
         if gate_phrase != expected_phrase:
             flash('Deletion request blocked: confirmation phrase did not match.', 'error')
@@ -8331,76 +8441,26 @@ def deletion_requests():
             flash('Deletion request blocked: 10-second hold is required.', 'error')
             return redirect(url_for('admin.deletion_requests'))
 
-        # Check for duplicate pending requests
-        # Convert string to enum (will raise ValueError if invalid)
-        request_type_enum = DeletionRequestType.from_string(request_type)
-        existing = DeletionRequest.query.filter_by(
-            admin_id=admin_id,
-            request_type=request_type_enum,
-            period=period,
-            status=DeletionRequestStatus.PENDING
-        ).first()
-
-        if existing:
-            flash(
-                f'You already have a pending {request_type} deletion request'
-                + (f' for period {period}.' if period else '.'),
-                'warning'
-            )
-            return redirect(url_for('admin.deletion_requests'))
-
-        # Create the deletion request
-        deletion_request = DeletionRequest(
-            admin_id=admin_id,
-            request_type=request_type_enum,
-            period=period,
-            reason=reason
-        )
-        db.session.add(deletion_request)
-
         try:
+            _hard_delete_teacher_account_scope(admin_id)
+            db.session.delete(admin)
             db.session.commit()
-            flash(
-                f'Deletion request submitted successfully. '
-                f'A system administrator will review your {request_type} deletion request.',
-                'success'
-            )
-            current_app.logger.info(
-                f"Admin {admin_id} submitted {request_type} deletion request"
-                + (f" for period {period}" if period else "")
-            )
+
+            session.pop("is_admin", None)
+            session.pop("admin_id", None)
+            session.pop("last_activity", None)
+            flash('Your account and associated class data were permanently deleted.', 'success')
+            return redirect(url_for('admin.login'))
         except Exception as e:
             db.session.rollback()
-            current_app.logger.exception(f"Error creating deletion request: {e}")
-            flash('Error submitting deletion request.', 'error')
-
-        return redirect(url_for('admin.deletion_requests'))
-
-    # GET: Display existing deletion requests
-    pending_requests = DeletionRequest.query.filter_by(
-        admin_id=admin_id,
-        status=DeletionRequestStatus.PENDING
-    ).order_by(DeletionRequest.requested_at.desc()).all()
-
-    resolved_requests = DeletionRequest.query.filter_by(
-        admin_id=admin_id
-    ).filter(
-        DeletionRequest.status.in_([DeletionRequestStatus.APPROVED, DeletionRequestStatus.REJECTED])
-    ).order_by(DeletionRequest.resolved_at.desc()).limit(10).all()
-
-    # Get teacher's periods for the dropdown (from both student_teachers and legacy teacher_id)
-    # Get teacher's periods for the dropdown (from student_teachers)
-    periods = db.session.query(Student.block).join(
-        StudentTeacher, Student.id == StudentTeacher.student_id
-    ).filter(StudentTeacher.admin_id == admin_id).distinct().all()
-    periods = [p[0] for p in periods]
+            current_app.logger.exception(f"Error deleting teacher account: {e}")
+            flash('Error deleting account.', 'error')
+            return redirect(url_for('admin.deletion_requests'))
 
     return render_template(
         'admin_deletion_requests.html',
         current_page="deletion_requests",
-        pending_requests=pending_requests,
-        resolved_requests=resolved_requests,
-        periods=periods
+        admin_username=admin_username,
     )
 
 
