@@ -8287,7 +8287,7 @@ def deletion_requests():
 
     if request.method == 'POST':
         request_type = request.form.get('request_type')  # 'period' or 'account'
-        period = request.form.get('period') if request_type == 'period' else None
+        period = request.form.get('period', '').strip() if request_type == 'period' else None
         reason = request.form.get('reason', '').strip()
 
         # Validate
@@ -8304,6 +8304,32 @@ def deletion_requests():
             if not re.match(r'^[a-zA-Z0-9\s\-_]+$', period) or len(period) > 10:
                 flash('Invalid period format. Use alphanumeric characters, spaces, hyphens, and underscores only. Max 10 characters.', 'error')
                 return redirect(url_for('admin.deletion_requests'))
+
+        expected_phrase = (
+            f'DELETE PERIOD {period.upper()}'
+            if request_type == 'period'
+            else 'DELETE ACCOUNT'
+        )
+        gate_phrase = str(request.form.get('gate_phrase', '')).strip().upper()
+        if gate_phrase != expected_phrase:
+            flash('Deletion request blocked: confirmation phrase did not match.', 'error')
+            return redirect(url_for('admin.deletion_requests'))
+
+        try:
+            gate_countdown_seconds = int(request.form.get('gate_countdown_seconds', 0))
+        except (TypeError, ValueError):
+            gate_countdown_seconds = 0
+        if gate_countdown_seconds < 30:
+            flash('Deletion request blocked: 30-second safety countdown is required.', 'error')
+            return redirect(url_for('admin.deletion_requests'))
+
+        try:
+            gate_hold_seconds = float(request.form.get('gate_hold_seconds', 0))
+        except (TypeError, ValueError):
+            gate_hold_seconds = 0.0
+        if gate_hold_seconds < 10:
+            flash('Deletion request blocked: 10-second hold is required.', 'error')
+            return redirect(url_for('admin.deletion_requests'))
 
         # Check for duplicate pending requests
         # Convert string to enum (will raise ValueError if invalid)

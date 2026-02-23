@@ -18,8 +18,11 @@
                         </ul>
                     </div>
 
-                    <form method="POST" action="{{ url_for('admin.deletion_requests') }}">
+                    <form method="POST" action="{{ url_for('admin.deletion_requests') }}" id="deletion-request-form">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="gate_phrase" id="gate_phrase">
+                        <input type="hidden" name="gate_countdown_seconds" id="gate_countdown_seconds">
+                        <input type="hidden" name="gate_hold_seconds" id="gate_hold_seconds">
 
                         <div class="mb-3">
                             <label class="form-label"><strong>Request Type</strong></label>
@@ -148,6 +151,42 @@
                 </div>
             </div>
             {% endif %}
+
+            <div class="modal fade" id="timedDeleteGateModal" tabindex="-1" aria-labelledby="timedDeleteGateModalLabel"
+                 aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content">
+                        <div class="modal-header bg-danger text-white">
+                            <h5 class="modal-title" id="timedDeleteGateModalLabel">Confirm Deletion Request</h5>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-2" id="timed-delete-gate-warning"></p>
+                            <p class="fw-bold text-danger mb-2">This action is irreversible after admin approval.</p>
+
+                            <div class="mb-3">
+                                <div class="small fw-semibold" id="timed-delete-countdown-text">Safety countdown: 30s remaining</div>
+                                <div class="progress mt-2" role="progressbar" aria-label="Delete countdown">
+                                    <div id="timed-delete-countdown-bar" class="progress-bar bg-danger" style="width: 0%"></div>
+                                </div>
+                            </div>
+
+                            <label for="timed-delete-phrase" class="form-label mb-1">Type confirmation phrase exactly</label>
+                            <input type="text" class="form-control mb-2" id="timed-delete-phrase" autocomplete="off">
+                            <div class="small text-muted mb-3" id="timed-delete-phrase-hint"></div>
+
+                            <button type="button" class="btn btn-danger w-100" id="timed-delete-hold-btn" disabled>
+                                Press and Hold for 10s to Continue
+                            </button>
+                            <div class="small mt-2 text-muted" id="timed-delete-hold-status">
+                                Hold button unlocks after countdown + exact phrase match.
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -176,6 +215,208 @@ document.addEventListener('DOMContentLoaded', function() {
             togglePeriodField();
         }
     });
+
+    const deletionRequestForm = document.getElementById('deletion-request-form');
+    let gateConfirmed = false;
+
+    function getGateConfig() {
+        const requestType = document.querySelector('input[name="request_type"]:checked')?.value;
+        if (requestType === 'period') {
+            const period = (document.getElementById('period')?.value || '').trim().toUpperCase();
+            return {
+                title: 'Confirm Period Deletion Request',
+                warning: `You are requesting permanent deletion of period ${period}.`,
+                expectedPhrase: `DELETE PERIOD ${period}`,
+            };
+        }
+        return {
+            title: 'Confirm Account Deletion Request',
+            warning: 'You are requesting permanent deletion of your teacher account.',
+            expectedPhrase: 'DELETE ACCOUNT',
+        };
+    }
+
+    deletionRequestForm.addEventListener('submit', function(event) {
+        if (gateConfirmed) {
+            return;
+        }
+        event.preventDefault();
+
+        if (!deletionRequestForm.checkValidity()) {
+            deletionRequestForm.reportValidity();
+            return;
+        }
+
+        const gateConfig = getGateConfig();
+        showTimedDeleteGate(gateConfig).then(gatePayload => {
+            if (!gatePayload) {
+                return;
+            }
+
+            document.getElementById('gate_phrase').value = gatePayload.gate_phrase;
+            document.getElementById('gate_countdown_seconds').value = gatePayload.gate_countdown_seconds;
+            document.getElementById('gate_hold_seconds').value = gatePayload.gate_hold_seconds;
+
+            gateConfirmed = true;
+            deletionRequestForm.submit();
+        });
+    });
 });
+
+function showTimedDeleteGate(options) {
+    return new Promise((resolve) => {
+        const modalEl = document.getElementById('timedDeleteGateModal');
+        if (!modalEl || !window.bootstrap) {
+            alert('Delete safety modal is unavailable. Please refresh and try again.');
+            resolve(null);
+            return;
+        }
+
+        const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+        const titleEl = document.getElementById('timedDeleteGateModalLabel');
+        const warningEl = document.getElementById('timed-delete-gate-warning');
+        const countdownText = document.getElementById('timed-delete-countdown-text');
+        const countdownBar = document.getElementById('timed-delete-countdown-bar');
+        const phraseInput = document.getElementById('timed-delete-phrase');
+        const phraseHint = document.getElementById('timed-delete-phrase-hint');
+        const holdBtn = document.getElementById('timed-delete-hold-btn');
+        const holdStatus = document.getElementById('timed-delete-hold-status');
+        const cancelBtn = modalEl.querySelector('[data-bs-dismiss="modal"]');
+
+        const expectedPhrase = String(options.expectedPhrase || '').toUpperCase();
+        const title = options.title || 'Confirm Deletion';
+        const warning = options.warning || 'You are about to submit a deletion request.';
+        const countdownSeconds = 30;
+        const holdMs = 10000;
+        const holdSeconds = 10;
+
+        let remaining = countdownSeconds;
+        let countdownComplete = false;
+        let resolved = false;
+        let countdownTimer = null;
+        let holdTimer = null;
+        let holdTicker = null;
+        let holdStartAt = null;
+        let isHolding = false;
+
+        titleEl.textContent = title;
+        warningEl.textContent = warning;
+        phraseInput.value = '';
+        phraseHint.textContent = `Required phrase: ${expectedPhrase}`;
+        holdBtn.textContent = 'Press and Hold for 10s to Continue';
+        holdStatus.textContent = 'Hold button unlocks after countdown + exact phrase match.';
+
+        const cleanup = () => {
+            if (countdownTimer) clearInterval(countdownTimer);
+            if (holdTimer) clearTimeout(holdTimer);
+            if (holdTicker) clearInterval(holdTicker);
+            phraseInput.removeEventListener('input', onPhraseInput);
+            holdBtn.removeEventListener('pointerdown', startHold);
+            holdBtn.removeEventListener('pointerup', cancelHold);
+            holdBtn.removeEventListener('pointerleave', cancelHold);
+            holdBtn.removeEventListener('pointercancel', cancelHold);
+            cancelBtn.removeEventListener('click', onCancelClick);
+            modalEl.removeEventListener('hidden.bs.modal', onHidden);
+        };
+
+        const updateHoldAvailability = () => {
+            const phraseOk = phraseInput.value.trim().toUpperCase() === expectedPhrase;
+            holdBtn.disabled = !(countdownComplete && phraseOk);
+        };
+
+        const updateCountdownUi = () => {
+            if (!countdownComplete) {
+                countdownText.textContent = `Safety countdown: ${remaining}s remaining`;
+                const pct = ((countdownSeconds - remaining) / countdownSeconds) * 100;
+                countdownBar.style.width = `${pct}%`;
+            } else {
+                countdownText.textContent = 'Countdown complete. Enter exact phrase and hold button for 10 seconds.';
+                countdownBar.style.width = '100%';
+            }
+        };
+
+        const resetHoldState = () => {
+            if (holdTimer) clearTimeout(holdTimer);
+            if (holdTicker) clearInterval(holdTicker);
+            isHolding = false;
+            holdBtn.textContent = 'Press and Hold for 10s to Continue';
+            holdStatus.textContent = 'Hold must be continuous for 10 seconds.';
+        };
+
+        const onPhraseInput = () => updateHoldAvailability();
+
+        const startHold = (event) => {
+            if (holdBtn.disabled || isHolding) return;
+            event.preventDefault();
+            isHolding = true;
+            holdStartAt = Date.now();
+            holdStatus.textContent = 'Keep holding...';
+
+            holdTicker = setInterval(() => {
+                const elapsed = Date.now() - holdStartAt;
+                const remainingMs = Math.max(0, holdMs - elapsed);
+                holdBtn.textContent = `Keep Holding... ${(remainingMs / 1000).toFixed(1)}s`;
+            }, 100);
+
+            holdTimer = setTimeout(() => {
+                if (resolved) return;
+                resolved = true;
+                cleanup();
+                modal.hide();
+                resolve({
+                    gate_phrase: expectedPhrase,
+                    gate_countdown_seconds: countdownSeconds,
+                    gate_hold_seconds: holdSeconds,
+                });
+            }, holdMs);
+        };
+
+        const cancelHold = () => {
+            if (!isHolding) return;
+            resetHoldState();
+            updateHoldAvailability();
+        };
+
+        const onCancelClick = () => {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            resolve(null);
+        };
+
+        const onHidden = () => {
+            if (resolved) return;
+            resolved = true;
+            cleanup();
+            resolve(null);
+        };
+
+        phraseInput.addEventListener('input', onPhraseInput);
+        holdBtn.addEventListener('pointerdown', startHold);
+        holdBtn.addEventListener('pointerup', cancelHold);
+        holdBtn.addEventListener('pointerleave', cancelHold);
+        holdBtn.addEventListener('pointercancel', cancelHold);
+        cancelBtn.addEventListener('click', onCancelClick);
+        modalEl.addEventListener('hidden.bs.modal', onHidden);
+
+        updateCountdownUi();
+        updateHoldAvailability();
+
+        countdownTimer = setInterval(() => {
+            remaining -= 1;
+            if (remaining <= 0) {
+                remaining = 0;
+                countdownComplete = true;
+                clearInterval(countdownTimer);
+                countdownTimer = null;
+            }
+            updateCountdownUi();
+            updateHoldAvailability();
+        }, 1000);
+
+        modal.show();
+        setTimeout(() => phraseInput.focus(), 200);
+    });
+}
 </script>
 {% endblock %}

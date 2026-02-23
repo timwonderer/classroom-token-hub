@@ -24,6 +24,9 @@ from app.models import (
     RentSettings,
     SystemAdmin,
     StudentBlock,
+    DeletionRequest,
+    DeletionRequestType,
+    DeletionRequestStatus,
 )
 from app.hash_utils import get_random_salt, hash_hmac
 
@@ -407,3 +410,55 @@ def test_payroll_settings_preserved_when_other_join_code_for_block_exists(client
 
     # PayrollSettings must still be there (block A still has PSKP2)
     assert db.session.get(PayrollSettings, ps_id) is not None
+
+
+def test_deletion_request_submission_requires_gate(client):
+    """Deletion request POST must be blocked when gate fields are missing."""
+    teacher, secret = _create_teacher("teacher-dr-no-gate")
+    _login_teacher(client, teacher, secret)
+
+    resp = client.post(
+        "/admin/deletion-requests",
+        data={
+            "request_type": "account",
+            "reason": "Testing gate requirement",
+        },
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b"Deletion request blocked: confirmation phrase did not match." in resp.data
+
+    pending = DeletionRequest.query.filter_by(
+        admin_id=teacher.id,
+        status=DeletionRequestStatus.PENDING,
+    ).count()
+    assert pending == 0
+
+
+def test_deletion_request_submission_accepts_valid_gate(client):
+    """Deletion request POST succeeds when timed gate evidence is present."""
+    teacher, secret = _create_teacher("teacher-dr-gated")
+    _login_teacher(client, teacher, secret)
+
+    resp = client.post(
+        "/admin/deletion-requests",
+        data={
+            "request_type": "period",
+            "period": "A",
+            "reason": "Testing gated request",
+            "gate_phrase": "DELETE PERIOD A",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b"Deletion request submitted successfully." in resp.data
+
+    req = DeletionRequest.query.filter_by(
+        admin_id=teacher.id,
+        request_type=DeletionRequestType.PERIOD,
+        period="A",
+    ).first()
+    assert req is not None
+    assert req.status == DeletionRequestStatus.PENDING
