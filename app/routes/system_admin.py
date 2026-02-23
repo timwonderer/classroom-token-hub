@@ -992,27 +992,25 @@ def manage_teachers():
         else:
             is_inactive = True
 
-        # Determine authorization using preloaded pending requests and inactivity flag
-        can_delete_account = False
-        authorized_periods = []
+        # Determine authorization using preloaded pending requests and inactivity flag.
+        # Policy: request OR inactivity threshold authorizes deletion.
+        has_account_request = any(
+            req.request_type == DeletionRequestType.ACCOUNT
+            for req in pending_requests
+        )
+        can_delete_account = has_account_request or is_inactive
 
-        if is_inactive and pending_requests:
-            # Build lookup for O(1) access: separate account and period requests
-            account_requests = [req for req in pending_requests if req.request_type == DeletionRequestType.ACCOUNT]
-            period_requests_by_period = {
-                req.period: req 
-                for req in pending_requests 
+        if can_delete_account:
+            # Account-level authorization allows deleting any period for this teacher.
+            authorized_periods = list(periods.keys())
+        else:
+            # Otherwise only periods with explicit pending period requests are authorized.
+            period_requests = {
+                req.period
+                for req in pending_requests
                 if req.request_type == DeletionRequestType.PERIOD and req.period is not None
             }
-            
-            # Check account-level authorization
-            can_delete_account = len(account_requests) > 0
-            
-            # Check period-level authorization using lookup
-            authorized_periods = [
-                period for period in periods 
-                if period in period_requests_by_period
-            ]
+            authorized_periods = [period for period in periods if period in period_requests]
 
         teachers.append({
             'id': teacher.id,
