@@ -9,6 +9,7 @@ from datetime import timezone, timedelta
 from decimal import Decimal, InvalidOperation
 import enum
 import logging
+import secrets
 import uuid
 
 import sqlalchemy as sa
@@ -1646,6 +1647,15 @@ class Admin(db.Model):
     # ToS Acknowledgment
     tos_accepted = db.Column(db.Boolean, default=False, nullable=False, server_default='false')
     tos_accepted_at = db.Column(db.DateTime(timezone=True), nullable=True)
+
+    # Hall pass public verification token (256-bit, capability-based, rotatable)
+    # Used for /verify/hallpass/<token> — not derived from teacher_id
+    hall_pass_verify_token = db.Column(db.String(64), unique=True, nullable=True, index=True)
+
+    @staticmethod
+    def generate_verify_token():
+        """Generate a new 256-bit random hall pass verification token."""
+        return secrets.token_hex(32)
 
     @validates('totp_secret')
     def _validate_totp_secret(self, key, value):

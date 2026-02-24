@@ -656,10 +656,12 @@ def create_app():
         # These pages are public, read-only, and safe to embed in LMS/other sites
         # NOTE: /hall-pass/terminal is NOT embeddable as it performs state-changing actions
         embeddable_paths = [
-            '/hall-pass/verification',
             '/hall-pass/queue'
         ]
-        is_embeddable = request.path in embeddable_paths
+        is_embeddable = (
+            request.path in embeddable_paths
+            or request.path.startswith('/verify/hallpass/')
+        )
 
         # HTTPS Enforcement (HSTS)
         # Forces browsers to use HTTPS for 1 year, including subdomains

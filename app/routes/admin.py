@@ -6105,13 +6105,29 @@ def hall_pass():
     # Extract just the block values from tuples and filter out None/empty
     periods = sorted([p[0] for p in available_periods if p[0]])
 
+    # Lazily generate the hall pass verification token if needed
+    teacher_id = session.get('admin_id')
+    teacher = db.session.get(Admin, teacher_id)
+    if teacher and not teacher.hall_pass_verify_token:
+        teacher.hall_pass_verify_token = Admin.generate_verify_token()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            teacher = db.session.get(Admin, teacher_id)
+
+    verify_url = None
+    if teacher and teacher.hall_pass_verify_token:
+        verify_url = f"/verify/hallpass/{teacher.hall_pass_verify_token}"
+
     return render_template(
         'admin_hall_pass.html',
         pending_requests=pending_requests,
         approved_queue=approved_queue,
         out_of_class=out_of_class,
         available_periods=periods,
-        current_page="hall_pass"
+        current_page="hall_pass",
+        verify_url=verify_url
     )
 
 

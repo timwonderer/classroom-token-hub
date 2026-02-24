@@ -105,9 +105,16 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-end align-items-center mb-4">
         <div>
-            <a href="/hall-pass/verification?teacher_id={{ session['admin_id'] }}" target="_blank" class="btn btn-primary me-2">
-                <span class="material-symbols-outlined">tv</span> Verification Display
+            {% if verify_url %}
+            <a href="{{ verify_url }}" target="_blank" class="btn btn-primary me-2">
+                <span class="material-symbols-outlined">verified_user</span> Office Verification
             </a>
+            {% endif %}
+            <button type="button" class="btn btn-outline-secondary me-2"
+                    onclick="rotateVerifyToken()"
+                    title="Regenerate Hall Pass QR (invalidates old link)">
+                <span class="material-symbols-outlined">qr_code</span> Regenerate QR
+            </button>
             <a href="/hall-pass/terminal?teacher_id={{ session['admin_id'] }}" target="_blank" class="btn btn-secondary me-2">
                 <span class="material-symbols-outlined">computer</span> Terminal
             </a>
@@ -658,6 +665,25 @@ function showHistoryError(message) {
             </td>
         </tr>
     `;
+}
+
+function rotateVerifyToken() {
+    if (!confirm('Regenerate the hall pass verification link? The current link will be immediately invalid.')) {
+        return;
+    }
+    fetch('/api/hall-pass/verify-token/rotate', {method: 'POST', headers: {'Content-Type': 'application/json'}})
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const newUrl = window.location.origin + '/verify/hallpass/' + data.token;
+                const btnLink = document.querySelector('a[href*="/verify/hallpass/"]');
+                if (btnLink) { btnLink.href = newUrl; }
+                alert('Verification link regenerated.\nNew URL: ' + newUrl);
+            } else {
+                alert('Error: ' + (data.message || 'Could not regenerate token.'));
+            }
+        })
+        .catch(() => alert('Failed to contact server. Please try again.'));
 }
 </script>
 {% endblock %}

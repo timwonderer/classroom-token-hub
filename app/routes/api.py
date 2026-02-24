@@ -1258,95 +1258,6 @@ def handle_hall_pass_action(pass_id, action):
     return jsonify({"status": "error", "message": "Invalid action."}), 400
 
 
-@api_bp.route('/hall-pass/verification/active', methods=['GET'])
-def get_active_hall_passes():
-    """Get last 10 students who used hall passes for verification display
-
-    This endpoint supports teacher scoping via query parameter.
-    Usage: /api/hall-pass/verification/active?teacher_id=123
-    If no teacher_id is provided, shows all hall pass activity (backward compatible).
-    """
-
-    from app.models import Admin, Student, StudentTeacher
-    from sqlalchemy import or_
-
-    # Determine which teacher's data to show (optional)
-    teacher_id = request.args.get('teacher_id', type=int)
-
-    # Start with base query
-    query = HallPassLog.query.filter(
-        HallPassLog.status.in_(['left', 'returned']),
-        HallPassLog.left_time.isnot(None)
-    )
-
-    # If teacher_id is provided, validate and scope the query
-    if teacher_id:
-        # Validate teacher exists
-        teacher = db.session.get(Admin, teacher_id)
-        if not teacher:
-            return jsonify({
-                "status": "error",
-                "message": "Invalid teacher_id"
-            }), 404
-
-        # If querying as admin, verify authorization (only their own data unless system admin)
-        if session.get('is_admin') and not session.get('is_system_admin'):
-            if session.get('admin_id') != teacher_id:
-                return jsonify({
-                    "status": "error",
-                    "message": "Unauthorized"
-                }), 403
-
-        # Build subquery for students belonging to this teacher
-        # Include both primary ownership (teacher_id) and shared access (student_teachers)
-        shared_student_ids = (
-            StudentTeacher.query.with_entities(StudentTeacher.student_id)
-            .filter(StudentTeacher.admin_id == teacher_id)
-            .subquery()
-        )
-
-        student_ids_subquery = (
-            Student.query.with_entities(Student.id)
-            .filter(
-                Student.id.in_(sa.select(shared_student_ids))
-            )
-            .subquery()
-        )
-
-        # Add teacher scoping filter
-        query = query.filter(HallPassLog.student_id.in_(sa.select(student_ids_subquery)))
-
-    # Get the last 10 students who have left class
-    recent_passes = query.order_by(HallPassLog.left_time.desc()).limit(10).all()
-
-    # Helper function to ensure times are marked as UTC
-    def format_utc_time(dt):
-        if not dt:
-            return None
-        # Ensure datetime is treated as UTC
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.isoformat()
-
-    passes_data = []
-    for log_entry in recent_passes:
-        student = log_entry.student
-        passes_data.append({
-            "student_name": student.full_name,
-            "period": log_entry.period,
-            "destination": log_entry.reason,
-            "left_time": format_utc_time(log_entry.left_time),
-            "return_time": format_utc_time(log_entry.return_time),
-            "pass_number": log_entry.pass_number,
-            "status": log_entry.status
-        })
-
-    return jsonify({
-        "status": "success",
-        "passes": passes_data
-    })
-
-
 @api_bp.route('/hall-pass/lookup/<string:pass_number>', methods=['GET'])
 def lookup_hall_pass(pass_number):
     """Look up a hall pass by its pass number (for terminal use)"""
@@ -2075,6 +1986,36 @@ def save_hall_pass_setup():
         db.session.rollback()
         current_app.logger.error(f"Error saving hall pass setup: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "Failed to save configuration"}), 500
+
+
+@api_bp.route('/hall-pass/verify-token/rotate', methods=['POST'])
+@admin_required
+def rotate_hall_pass_verify_token():
+    """
+    Rotate the teacher's hall pass public verification token.
+
+    Generates a new 256-bit random token and overwrites the old one.
+    The old token is immediately invalid. Use after a lost pass, suspicious
+    traffic, or student screenshot concern.
+    """
+    from app.models import Admin
+    teacher_id = session.get('admin_id')
+    teacher = db.session.get(Admin, teacher_id)
+    if not teacher:
+        return jsonify({"status": "error", "message": "Teacher not found."}), 404
+
+    teacher.hall_pass_verify_token = Admin.generate_verify_token()
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        current_app.logger.error("Failed to rotate hall pass verify token", exc_info=True)
+        return jsonify({"status": "error", "message": "Failed to rotate token."}), 500
+
+    return jsonify({
+        "status": "success",
+        "token": teacher.hall_pass_verify_token
+    })
 
 
 @api_bp.route('/hall-pass/available-types', methods=['GET'])
