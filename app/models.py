@@ -689,19 +689,16 @@ class SystemAdmin(db.Model):
 
     @validates('username')
     def _normalize_legacy_username(self, key, value):
-        """Backfill hashed auth fields when legacy plaintext usernames are assigned."""
+        """Normalize legacy plaintext usernames on assignment.
+
+        Hash fields must only be set through the explicit migration process
+        (build_hashed_username_fields) so that needs_hashed_username_migration
+        correctly identifies accounts that still require migration.
+        """
         if value is None:
             return None
         normalized = value.strip()
-        if not normalized:
-            return None
-        if not self.salt:
-            self.salt = get_random_salt()
-        if not self.username_hash:
-            self.username_hash = hash_username(normalized, self.salt)
-        if not self.username_lookup_hash:
-            self.username_lookup_hash = hash_username_lookup(normalized)
-        return normalized
+        return normalized if normalized else None
 
     def get_display_username(self):
         return f"sysadmin_{self.id}"
