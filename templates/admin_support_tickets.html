@@ -17,7 +17,7 @@
 
                     <form method="POST" action="{{ url_for('admin.help_support') }}">
                         <div class="mb-3">
-                            <label for="join_code" class="form-label">This issue applies to:<span class="text-danger">*</span></label>
+                            <label for="join_code" class="form-label">This issue applies to: <span class="text-danger">*</span></label>
                             <select class="form-select" id="join_code" name="join_code" required>
                                 <option value="">Select class scope...</option>
                                 {% for option in class_scope_options %}
@@ -71,7 +71,7 @@
                     <h5 class="mb-0"><span class="material-symbols-outlined me-2">format_list_bulleted</span>My Tickets</h5>
                     <form method="GET" action="{{ url_for('admin.help_support') }}" class="d-flex gap-2 align-items-center">
                         <label for="scope_filter" class="small text-muted mb-0">Currently Viewing</label>
-                        <select class="form-select " id="scope_filter" name="join_code" onchange="this.form.submit()">
+                        <select class="form-select" id="scope_filter" name="join_code" onchange="this.form.submit()">
                             <option value="">All classes</option>
                             {% for option in class_scope_options %}
                             <option value="{{ option.join_code }}" {% if selected_join_code == option.join_code %}selected{% endif %}>{{ option.label }}</option>

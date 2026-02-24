@@ -165,7 +165,6 @@ function showTimedDeleteGate(options) {
         phraseInput.value = '';
         phraseInput.disabled = true;
         phraseHint.textContent = `Required phrase: ${expectedPhrase}`;
-        holdBtn.textContent = 'Press and Hold for 10s to Continue';
         holdStatus.textContent = 'Hold button unlocks after countdown + exact phrase match.';
 
         const cleanup = () => {
@@ -210,7 +209,7 @@ function showTimedDeleteGate(options) {
             if (holdTimer) clearTimeout(holdTimer);
             if (holdTicker) clearInterval(holdTicker);
             isHolding = false;
-            holdBtn.textContent = 'Press and Hold for 10s to Continue';
+            holdBtn.textContent = 'To proceed with account deletion, click and hold the button for 10 seconds. Any interruption will reset the timer.';
             holdStatus.textContent = 'Hold must be continuous for 10 seconds.';
         };
 
