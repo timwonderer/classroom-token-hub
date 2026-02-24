@@ -81,7 +81,7 @@ def _login_sysadmin(client, username: str, secret: str):
     )
 
 
-def test_delete_teacher_cascades_deletion_requests(client):
+def test_sysadmin_teacher_deletion_is_blocked_preserves_deletion_requests(client):
     """
     Sysadmin delete endpoint should not delete teacher accounts.
     DeletionRequest records must remain intact when deletion is blocked.

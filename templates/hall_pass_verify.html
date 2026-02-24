@@ -96,6 +96,7 @@
         <div class="card shadow-sm">
             <div class="card-body">
                 <form method="post" action="/verify/hallpass/{{ token }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="mb-3">
                         <label for="join_code" class="form-label fw-semibold">Class</label>
                         <select class="form-select" id="join_code" name="join_code" required>

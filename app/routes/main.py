@@ -245,7 +245,11 @@ def verify_hall_pass(teacher_public_token):
     # Use plain .distinct() (all columns) + Python deduplication for cross-DB compat
     classes_rows = (
         db.session.query(TeacherBlock.join_code, TeacherBlock.block, TeacherBlock.class_label)
-        .filter(TeacherBlock.teacher_id == teacher.id)
+        .filter(
+            TeacherBlock.teacher_id == teacher.id,
+            TeacherBlock.join_code.isnot(None),
+        )
+        .group_by(TeacherBlock.join_code, TeacherBlock.block, TeacherBlock.class_label)
         .order_by(TeacherBlock.block)
         .all()
     )
