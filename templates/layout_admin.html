@@ -90,7 +90,7 @@
                 <div> <span class="material-symbols-outlined" style="font-size: 30px; vertical-align: middle; font-weight:200"> finance_mode</span>Hub</div>
                 <hr>
                 {% if current_admin %}
-                <div class="text-white-55 mb-0" style="font-size: 20px;">{{ current_admin.get_display_name() }}</div>
+                <div class="text-white-55 mb-0" style="font-size: 20px;">{{ current_admin_display_name or current_admin.get_display_name() }}</div>
                 {% endif %}
                 <div class="mt-0" style="font-size: 12px; font-weight:300">Teacher</div>
             </div>

@@ -18,6 +18,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import validates
 from app.extensions import db
+from app.hash_utils import get_random_salt, hash_username, hash_username_lookup
 from app.utils.encryption import PIIEncryptedType, normalize_totp_for_storage
 from app.utils.time import utc_now, ensure_utc
 
@@ -686,8 +687,24 @@ class SystemAdmin(db.Model):
     def _validate_totp_secret(self, key, value):
         return normalize_totp_for_storage(value)
 
+    @validates('username')
+    def _normalize_legacy_username(self, key, value):
+        """Backfill hashed auth fields when legacy plaintext usernames are assigned."""
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        if not self.salt:
+            self.salt = get_random_salt()
+        if not self.username_hash:
+            self.username_hash = hash_username(normalized, self.salt)
+        if not self.username_lookup_hash:
+            self.username_lookup_hash = hash_username_lookup(normalized)
+        return normalized
+
     def get_display_username(self):
-        return self.username or f"sysadmin_{self.id}"
+        return f"sysadmin_{self.id}"
 
 
 class SystemAdminCredential(db.Model):
@@ -873,7 +890,8 @@ class HallPassLog(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     reason = db.Column(db.String(50), nullable=False)
     status = db.Column(db.String(20), default='pending', nullable=False) # pending, approved, rejected, left, returned
-    pass_number = db.Column(db.String(3), nullable=True, unique=True) # Format: letter + 2 digits (e.g., A42)
+    # Legacy field retained for backward compatibility; no longer generated or displayed.
+    pass_number = db.Column(db.String(3), nullable=True, unique=True)
     period = db.Column(db.String(10), nullable=True) # Which period the request was made in
 
     # CRITICAL: join_code is the source of truth for class isolation
@@ -1643,7 +1661,7 @@ class Admin(db.Model):
     username_hash = db.Column(db.String(64), unique=True, nullable=True)
     username_lookup_hash = db.Column(db.String(64), unique=True, nullable=True, index=True)
     teacher_public_id = db.Column(db.String(120), unique=True, nullable=True, index=True)
-    display_name = db.Column(db.String(100), nullable=True)  # Teacher's display name (defaults to teacher_public_id if not set)
+    display_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=True)  # Teacher's display name (defaults to teacher_public_id if not set)
     # TOTP-only: store secret (base64-encoded encrypted data)
     totp_secret = db.Column(db.String(200), nullable=False)  # Stores base64-encoded encrypted TOTP secret
     # Account recovery: Hashed DOB sum (similar to student system)
@@ -1670,19 +1688,37 @@ class Admin(db.Model):
     def _validate_totp_secret(self, key, value):
         return normalize_totp_for_storage(value)
 
+    @validates('username')
+    def _normalize_legacy_username(self, key, value):
+        """Backfill hashed auth fields when legacy plaintext usernames are assigned."""
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        if not self.salt:
+            self.salt = get_random_salt()
+        if not self.username_hash:
+            self.username_hash = hash_username(normalized, self.salt)
+        if not self.username_lookup_hash:
+            self.username_lookup_hash = hash_username_lookup(normalized)
+        if not self.teacher_public_id:
+            self.teacher_public_id = normalized
+        return normalized
+
     def get_display_name(self):
         """Return display_name if set, otherwise fall back to public teacher ID."""
         if self.display_name:
             return self.display_name
         if self.teacher_public_id:
             return self.teacher_public_id
-        return self.username or f"teacher_{self.id}"
+        return f"teacher_{self.id}"
 
     def get_sysadmin_display_name(self):
         """Return the minimal-PII teacher identifier for sysadmin contexts."""
         if self.teacher_public_id:
             return self.teacher_public_id
-        return self.username or f"teacher_{self.id}"
+        return f"teacher_{self.id}"
 
     def get_student_count(self):
         """Return count of unique students linked to this teacher via StudentTeacher."""

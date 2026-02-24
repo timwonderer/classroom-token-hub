@@ -304,8 +304,7 @@ def get_all_block_statuses(student, join_code=None):
             hall_pass = {
                 'id': active_pass.id,
                 'status': active_pass.status,
-                'reason': active_pass.reason,
-                'pass_number': active_pass.pass_number
+                'reason': active_pass.reason
             }
 
         period_states[blk] = {

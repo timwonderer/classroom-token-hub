@@ -2,7 +2,7 @@
 Main routes for Classroom Token Hub.
 
 Contains public-facing utility routes including health checks, legal pages,
-debug endpoints, and hall pass terminals (no authentication required).
+debug endpoints, and public hall pass verification.
 """
 
 import unicodedata
@@ -163,18 +163,24 @@ def service_worker():
     return current_app.send_static_file('sw.js')
 
 
-# -------------------- HALL PASS TERMINALS (NO AUTH REQUIRED) --------------------
+# -------------------- HALL PASS LEGACY TERMINAL/QUEUE (DEPRECATED) --------------------
 
 @main_bp.route('/hall-pass/terminal')
 def hall_pass_terminal():
-    """Hall Pass Check in/out terminal page (no login required)."""
-    return render_template('hall_pass_terminal.html')
+    """Deprecated legacy route kept for compatibility."""
+    return jsonify({
+        "status": "error",
+        "message": "Hall pass terminal is deprecated. Students must check out/check in from their dashboard."
+    }), 410
 
 
 @main_bp.route('/hall-pass/queue')
 def hall_pass_queue():
-    """Hall Pass Queue display page (no login required)."""
-    return render_template('hall_pass_queue.html')
+    """Deprecated legacy route kept for compatibility."""
+    return jsonify({
+        "status": "error",
+        "message": "Hall pass queue display is deprecated. Use student self-service hall pass flow."
+    }), 410
 
 
 # -------------------- HALL PASS PUBLIC VERIFICATION (NO AUTH REQUIRED) --------------------
@@ -303,18 +309,19 @@ def verify_hall_pass(teacher_public_token):
     today_start_db = normalize_for_db(today_start_utc)
     today_end_db = normalize_for_db(today_end_utc)
 
-    # Query hall pass records for today for this join_code
-    # Only include passes with actionable statuses (not pending/rejected)
-    passes = HallPassLog.query.filter(
+    # Query today's hall pass records for this join_code.
+    # Only include actionable statuses (not pending/rejected).
+    passes_query = HallPassLog.query.filter(
         HallPassLog.join_code == selected_join_code,
         HallPassLog.request_time >= today_start_db,
         HallPassLog.request_time <= today_end_db,
         HallPassLog.status.in_(['approved', 'left', 'returned'])
-    ).order_by(HallPassLog.request_time.desc()).limit(20).all()
+    ).order_by(HallPassLog.request_time.desc())
 
-    # Filter in Python (first_name is PII-encrypted, can't filter in DB)
+    # Filter in Python (first_name is PII-encrypted, can't filter in DB).
+    # Stop at 2 matches: enough to distinguish unique vs ambiguous.
     matched = []
-    for entry in passes:
+    for entry in passes_query.yield_per(100):
         student = entry.student
         if not student:
             continue
@@ -322,7 +329,7 @@ def verify_hall_pass(teacher_public_token):
         stored_initial = (student.last_initial or '').strip().upper()
         if stored_norm == first_name_norm and stored_initial == last_initial_norm:
             matched.append(entry)
-        if len(matched) > 1:
+        if len(matched) >= 2:
             # Ambiguous — stop early
             break
 

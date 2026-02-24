@@ -5,8 +5,6 @@ RESTful JSON API endpoints for student transactions, hall passes, attendance,
 and other interactive features. Most routes require authentication.
 """
 
-import random
-import string
 import re
 import pytz
 from datetime import datetime, timedelta, timezone
@@ -1170,20 +1168,8 @@ def handle_hall_pass_action(pass_id, action):
         if should_deduct and student.hall_passes <= 0:
             return jsonify({"status": "error", "message": "Student has no hall passes left."}), 400
 
-        # Generate unique pass number (letter + 2 digits)
-        while True:
-            letter = random.choice(string.ascii_uppercase)
-            digits = random.randint(10, 99)
-            pass_number = f"{letter}{digits}"
-            # Check if this pass number already exists
-            existing = HallPassLog.query.filter_by(pass_number=pass_number).first()
-            if not existing:
-                break
-
         log_entry.status = 'approved'
         log_entry.decision_time = now
-        log_entry.pass_number = pass_number
-
         # Only deduct hall pass for regular reasons (not Office/Summons/Done for the day)
         if should_deduct:
             student.hall_passes -= 1
@@ -1206,7 +1192,7 @@ def handle_hall_pass_action(pass_id, action):
                 student_block.rent_hall_passes -= 1
 
         db.session.commit()
-        return jsonify({"status": "success", "message": "Pass approved.", "pass_number": pass_number})
+        return jsonify({"status": "success", "message": "Pass approved."})
 
     elif action == 'reject':
         if log_entry.status != 'pending':
@@ -1260,38 +1246,12 @@ def handle_hall_pass_action(pass_id, action):
 
 @api_bp.route('/hall-pass/lookup/<string:pass_number>', methods=['GET'])
 def lookup_hall_pass(pass_number):
-    """Look up a hall pass by its pass number (for terminal use)"""
-    # Find the hall pass log entry by pass number
-    log_entry = HallPassLog.query.filter_by(pass_number=pass_number.upper()).first()
-
-    if not log_entry:
-        return jsonify({"status": "error", "message": "Pass number not found."}), 404
-
-    student = log_entry.student
-
-    # Return the pass information (ensure times are marked as UTC)
-    def format_utc_time(dt):
-        if not dt:
-            return None
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.isoformat()
-
+    """Deprecated legacy route kept for compatibility."""
+    _ = pass_number
     return jsonify({
-        "status": "success",
-        "pass": {
-            "id": log_entry.id,
-            "student_name": student.full_name,
-            "period": log_entry.period,
-            "destination": log_entry.reason,
-            "pass_number": log_entry.pass_number,
-            "pass_status": log_entry.status,
-            "request_time": format_utc_time(log_entry.request_time),
-            "decision_time": format_utc_time(log_entry.decision_time),
-            "left_time": format_utc_time(log_entry.left_time),
-            "return_time": format_utc_time(log_entry.return_time)
-        }
-    })
+        "status": "error",
+        "message": "Hall pass terminal lookup is deprecated. Use student self-service hall pass flow."
+    }), 410
 
 
 def _get_default_timezone():
@@ -1371,99 +1331,20 @@ def _check_simultaneous_pass_limit(log_entry):
 
 @api_bp.route('/hall-pass/terminal/use', methods=['POST'])
 def hall_pass_terminal_use():
-    """Mark a hall pass as 'left' when student scans at terminal"""
-    data = request.get_json()
-    pass_number = data.get('pass_number', '').strip().upper()
-
-    if not pass_number:
-        return jsonify({"status": "error", "message": "Pass number is required."}), 400
-
-    log_entry = HallPassLog.query.filter_by(pass_number=pass_number).first()
-
-    if not log_entry:
-        return jsonify({"status": "error", "message": "Invalid pass number."}), 404
-
-    if log_entry.status != 'approved':
-        return jsonify({"status": "error", "message": f"Pass is not approved. Current status: {log_entry.status}"}), 400
-
-    limit_response = _check_simultaneous_pass_limit(log_entry)
-    if limit_response:
-        return limit_response
-
-    # Mark as left and create tap-out event
-    now = utc_now()
-    log_entry.status = 'left'
-    log_entry.left_time = now
-
-    # Create tap-out event for attendance tracking
-    tap_out_event = TapEvent(
-        student_id=log_entry.student_id,
-        period=log_entry.period,
-        status='inactive',
-        timestamp=now,
-        reason=log_entry.reason,
-        join_code=log_entry.join_code
-    )
-    db.session.add(tap_out_event)
-
-    try:
-        db.session.commit()
-        return jsonify({
-            "status": "success",
-            "message": f"{log_entry.student.full_name} has left for {log_entry.reason}.",
-            "student_name": log_entry.student.full_name,
-            "destination": log_entry.reason
-        })
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        current_app.logger.error(f"Hall pass terminal use failed: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": "Database error."}), 500
+    """Deprecated legacy route kept for compatibility."""
+    return jsonify({
+        "status": "error",
+        "message": "Hall pass terminal checkout is deprecated. Students must check out from their dashboard."
+    }), 410
 
 
 @api_bp.route('/hall-pass/terminal/return', methods=['POST'])
 def hall_pass_terminal_return():
-    """Mark a hall pass as 'returned' when student scans back in at terminal"""
-    data = request.get_json()
-    pass_number = data.get('pass_number', '').strip().upper()
-
-    if not pass_number:
-        return jsonify({"status": "error", "message": "Pass number is required."}), 400
-
-    log_entry = HallPassLog.query.filter_by(pass_number=pass_number).first()
-
-    if not log_entry:
-        return jsonify({"status": "error", "message": "Invalid pass number."}), 404
-
-    if log_entry.status != 'left':
-        return jsonify({"status": "error", "message": f"Student is not currently out. Status: {log_entry.status}"}), 400
-
-    # Mark as returned and create tap-in event
-    now = utc_now()
-    log_entry.status = 'returned'
-    log_entry.return_time = now
-
-    # Create tap-in event for attendance tracking
-    tap_in_event = TapEvent(
-        student_id=log_entry.student_id,
-        period=log_entry.period,
-        status='active',
-        timestamp=now,
-        reason="Returned from hall pass",
-        join_code=log_entry.join_code
-    )
-    db.session.add(tap_in_event)
-
-    try:
-        db.session.commit()
-        return jsonify({
-            "status": "success",
-            "message": f"{log_entry.student.full_name} has returned.",
-            "student_name": log_entry.student.full_name
-        })
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        current_app.logger.error(f"Hall pass terminal return failed: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": "Database error."}), 500
+    """Deprecated legacy route kept for compatibility."""
+    return jsonify({
+        "status": "error",
+        "message": "Hall pass terminal checkin is deprecated. Students must check in from their dashboard."
+    }), 410
 
 
 @api_bp.route('/hall-pass/cancel/<int:pass_id>', methods=['POST'])
@@ -1596,131 +1477,11 @@ def checkin_hall_pass():
 
 @api_bp.route('/hall-pass/queue', methods=['GET'])
 def get_hall_pass_queue():
-    """Get current hall pass queue (approved but not yet checked out) and currently out count
-    
-    This endpoint supports teacher scoping via query parameter.
-    Usage: /api/hall-pass/queue?teacher_id=123
-    If no teacher_id is provided and user is logged in as admin, uses session admin_id.
-    """
-    
-    from app.models import Admin
-    
-    # Determine which teacher's data to show
-    teacher_id = request.args.get('teacher_id', type=int)
-    
-    # If no teacher_id param, try to get from session (if admin is logged in)
-    if not teacher_id and session.get('is_admin'):
-        teacher_id = session.get('admin_id')
-    
-    # If still no teacher_id, return error - we need to know which teacher's queue to show
-    if not teacher_id:
-        return jsonify({
-            "status": "error",
-            "message": "teacher_id parameter required for queue display"
-        }), 400
-    
-    # Validate teacher exists
-    teacher = db.session.get(Admin, teacher_id)
-    if not teacher:
-        return jsonify({
-            "status": "error",
-            "message": "Invalid teacher_id"
-        }), 404
-    
-    # If querying as admin, verify authorization (only their own data unless system admin)
-    if session.get('is_admin') and not session.get('is_system_admin'):
-        if session.get('admin_id') != teacher_id:
-            return jsonify({
-                "status": "error",
-                "message": "Unauthorized"
-            }), 403
-    
-    # Get hall pass settings for this teacher (or use defaults)
-    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
-    if not settings:
-        # Use temporary default settings if none configured for this teacher
-        # Note: These are not persisted to the database, just used for this request
-        settings = HallPassSettings(teacher_id=teacher_id, queue_enabled=True, queue_limit=10)
-
-    # Get user's timezone from session, default to Pacific Time
-    tz_name = session.get('timezone', 'America/Los_Angeles')
-    try:
-        user_tz = pytz.timezone(tz_name)
-    except pytz.UnknownTimeZoneError:
-        current_app.logger.warning(f"Invalid timezone '{tz_name}' in session, defaulting to Pacific Time.")
-        user_tz = pytz.timezone('America/Los_Angeles')
-
-    # Get current time in user's timezone
-    now_user_tz = utc_now().astimezone(user_tz)
-
-    # Get start of today (midnight) in user's timezone
-    today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    # Convert to UTC for database comparison (database stores times in UTC)
-    today_start_utc = today_start_user_tz.astimezone(pytz.utc)
-    today_start_db = normalize_for_db(today_start_utc)
-
-    # Build subquery for students belonging to this teacher
-    # Use StudentTeacher table as the source of truth for associations.
-    shared_student_ids = (
-        StudentTeacher.query.with_entities(StudentTeacher.student_id)
-        .filter(StudentTeacher.admin_id == teacher_id)
-        .subquery()
-    )
-    
-    demo_student_ids = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
-    student_ids_subquery = (
-        Student.query.with_entities(Student.id)
-        .filter(
-            Student.id.in_(sa.select(shared_student_ids)),
-            ~Student.id.in_(sa.select(demo_student_ids))
-        )
-        .subquery()
-    )
-
-    # Get approved passes from today that haven't been used yet (not left, not returned)
-    # SCOPED to this teacher's students
-    queue = HallPassLog.query.filter(
-        HallPassLog.status == 'approved',
-        HallPassLog.decision_time >= today_start_db,
-        HallPassLog.student_id.in_(sa.select(student_ids_subquery))
-    ).order_by(HallPassLog.decision_time.asc()).all()
-
-    # Get count of students currently out from today (status = 'left')
-    # SCOPED to this teacher's students
-    currently_out_count = HallPassLog.query.filter(
-        HallPassLog.status == 'left',
-        HallPassLog.left_time >= today_start_db,
-        HallPassLog.student_id.in_(sa.select(student_ids_subquery))
-    ).count()
-
-    # Helper function to ensure times are marked as UTC
-    def format_utc_time(dt):
-        if not dt:
-            return None
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.isoformat()
-
-    queue_data = []
-    for log_entry in queue:
-        student = log_entry.student
-        queue_data.append({
-            "student_name": student.full_name,
-            "destination": log_entry.reason,
-            "pass_number": log_entry.pass_number,
-            "approved_time": format_utc_time(log_entry.decision_time),
-            "period": log_entry.period
-        })
-
+    """Deprecated legacy route kept for compatibility."""
     return jsonify({
-        "status": "success",
-        "queue": queue_data,
-        "currently_out": currently_out_count,
-        "total": len(queue_data) + currently_out_count,
-        "queue_enabled": settings.queue_enabled,
-        "queue_limit": settings.queue_limit
-    })
+        "status": "error",
+        "message": "Hall pass queue endpoint is deprecated. Use student self-service hall pass flow."
+    }), 410
 
 
 @api_bp.route('/hall-pass/settings', methods=['GET', 'POST'])
@@ -1865,7 +1626,6 @@ def hall_pass_history():
                 "student_name": record.student.full_name if record.student else "Unknown",
                 "period": record.period,
                 "reason": record.reason,
-                "pass_number": record.pass_number,
                 "status": record.status,
                 "request_time": format_timestamp(record.request_time),
                 "decision_time": format_timestamp(record.decision_time),
@@ -2426,8 +2186,7 @@ def handle_tap():
                 "hall_pass": {
                     "id": hall_pass_log.id,
                     "status": hall_pass_log.status,
-                    "reason": hall_pass_log.reason,
-                    "pass_number": hall_pass_log.pass_number
+                    "reason": hall_pass_log.reason
                 }
             })
 

@@ -28,6 +28,9 @@ Teacher/admin (`admins`):
 - `display_name` (teacher-managed app name; privacy handling applies).
 - `hall_pass_verify_token` (public verification capability token, unique, rotatable).
 
+Logical capability token name:
+- `hallpass_public_token` (maps to DB field `admins.hall_pass_verify_token`).
+
 System admin (`system_admins`):
 - `username` (legacy plaintext, nullable, deprecated).
 - `username_hash` (auth hash).
@@ -116,16 +119,54 @@ System admin-facing:
 - Username hashing must use account salt plus project pepper strategy.
 - TOTP secrets must remain encrypted at rest.
 - Public verify URLs must use `hall_pass_verify_token`, not teacher username or numeric ID.
+- No public endpoint may accept numeric primary keys or `teacher_id` for routing.
 - Identity updates must be committed atomically to avoid partial migration states.
 - Username uniqueness checks must include hashed-lookup and legacy fallback windows.
 
-## 10. Operational Requirements
+## 10. Public Capability Tokens
+
+Certain features may expose public, unauthenticated endpoints scoped to a teacher account.
+These endpoints must use high-entropy capability tokens rather than internal identifiers.
+
+`hallpass_public_token`:
+- Purpose: allows office staff to verify same-day hall pass records without authentication.
+- Storage mapping: `admins.hall_pass_verify_token`.
+
+Properties:
+- 256-bit cryptographically secure random value.
+- Generated using secure random source.
+- Unique indexed.
+- Stored in teacher table.
+- Not derived from `teacher_id`.
+- Not derived from `join_code`.
+- Not guessable.
+- Rotatable by teacher.
+- Invalidated upon teacher deletion.
+
+Security invariants:
+- Token alone grants read-only access to limited, same-day operational data.
+- Token does not expose historical multi-day records.
+- Token does not expose lists or roster.
+- Token does not expose internal identifiers.
+- Token cannot mutate system state.
+
+Rotation policy:
+- Teacher may regenerate at any time.
+- Old token immediately invalid.
+- Migration ensures all teachers have token populated.
+
+Non-goals:
+- Token is not an authentication credential.
+- Token is not tied to login identity.
+- Token is not reused across features.
+
+## 11. Operational Requirements
 
 - CLI/admin creation commands must create hashed username records, not plaintext.
 - Migrations must be idempotent and tested with upgrade/downgrade rehearsal.
 - Sysadmin and teacher auth flows must continue to function for migrated and unmigrated records during transition.
 
-## 11. Acceptance Criteria
+## 12. Acceptance Criteria
 
 Functional:
 - New teacher and sysadmin accounts persist no plaintext username.
@@ -140,4 +181,3 @@ Privacy:
 Resilience:
 - Migration path does not lock out valid users who know current credentials.
 - Duplicate username prevention works across migrated and legacy records.
-

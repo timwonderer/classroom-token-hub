@@ -109,6 +109,20 @@ def test_get_verify_page_invalid_token(client):
     assert "teacher_id" not in html.lower()
 
 
+def test_get_verify_page_rejects_null_token_teacher(client):
+    """Teacher records with null token must not be publicly reachable."""
+    teacher = Admin(username="nulltoken_teacher", totp_secret="hpsecret_null")
+    teacher.hall_pass_verify_token = None
+    db.session.add(teacher)
+    db.session.commit()
+
+    # URL token 'None' must not resolve to the null token row.
+    resp = client.get("/verify/hallpass/None")
+    assert resp.status_code == 404
+    html = resp.data.decode()
+    assert "Verification page not available" in html
+
+
 def test_get_verify_page_no_id_in_url(client, hp_teacher):
     """The new verification URL must not contain any numeric teacher ID."""
     token = hp_teacher.hall_pass_verify_token
@@ -291,6 +305,61 @@ def test_post_verify_old_pass_not_shown(client, hp_teacher, hp_student):
     assert resp.status_code == 200
     html = resp.data.decode()
     assert "No hall pass record found" in html
+
+
+def test_post_verify_finds_match_beyond_first_20_records(client, hp_teacher, hp_student):
+    """Matching search must not be truncated by an arbitrary fixed result window."""
+    now = datetime.now(timezone.utc)
+
+    # Insert many newer non-matching records for the same class/day.
+    for i in range(25):
+        salt = get_random_salt()
+        other = Student(
+            first_name=f"Other{i}",
+            last_initial="Z",
+            block="Period3",
+            salt=salt,
+            username_hash=hash_username(f"other_{i}", salt),
+        )
+        db.session.add(other)
+        db.session.flush()
+        db.session.add(StudentTeacher(student_id=other.id, admin_id=hp_teacher.id))
+        db.session.add(HallPassLog(
+            student_id=other.id,
+            reason="Office",
+            status="left",
+            join_code="jc_chem3",
+            period="Period3",
+            request_time=now - timedelta(minutes=i),
+            decision_time=now - timedelta(minutes=i),
+            left_time=now - timedelta(minutes=i),
+        ))
+
+    # Add the target match as an older same-day record.
+    db.session.add(HallPassLog(
+        student_id=hp_student.id,
+        reason="Bathroom",
+        status="left",
+        join_code="jc_chem3",
+        period="Period3",
+        request_time=now - timedelta(hours=2),
+        decision_time=now - timedelta(hours=2),
+        left_time=now - timedelta(hours=2),
+    ))
+    db.session.commit()
+
+    resp = client.post(
+        f"/verify/hallpass/{hp_teacher.hall_pass_verify_token}",
+        data={
+            "join_code": "jc_chem3",
+            "first_name": "Maria",
+            "last_initial": "G",
+        },
+    )
+    assert resp.status_code == 200
+    html = resp.data.decode()
+    assert "Maria G." in html
+    assert "No hall pass record found" not in html
 
 
 def test_post_verify_input_normalization(client, hp_teacher, hp_student, hp_pass_today):

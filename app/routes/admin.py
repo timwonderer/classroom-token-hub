@@ -75,6 +75,10 @@ from app.utils.admin_identity import (
     generate_teacher_public_id,
     generate_teacher_public_id_with_suffix,
 )
+from app.utils.display_name_session import (
+    set_admin_display_name_cache,
+    clear_admin_display_name_cache,
+)
 from app.utils.username_migration import (
     normalize_auth_username,
     needs_hashed_username_migration,
@@ -177,16 +181,13 @@ def parse_dob_input(dob_str):
 
 
 def _find_admin_by_auth_username(username: str):
-    """Lookup teacher by hashed username with legacy plaintext fallback."""
+    """Lookup teacher by deterministic username lookup hash."""
     normalized = normalize_auth_username(username)
     if not normalized:
         return None
 
     lookup_hash = hash_username_lookup(normalized)
-    admin = Admin.query.filter_by(username_lookup_hash=lookup_hash).first()
-    if admin:
-        return admin
-    return Admin.query.filter_by(username=normalized).first()
+    return Admin.query.filter_by(username_lookup_hash=lookup_hash).first()
 
 
 def _auth_username_exists(username: str, *, exclude_admin_id: int | None = None) -> bool:
@@ -1573,6 +1574,7 @@ def login():
                     session["admin_id"] = admin.id
                     session["admin_auth_username"] = username
                     session["last_activity"] = utc_now().isoformat()
+                    set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
                     if _admin_requires_username_migration(admin):
                         session["force_admin_username_migration"] = True
                         return redirect(url_for("admin.username_migration"))
@@ -1609,7 +1611,7 @@ def username_migration():
         session.pop("force_admin_username_migration", None)
         return redirect(url_for("admin.dashboard"))
 
-    legacy_username = session.get("admin_auth_username") or (admin.username or "").strip()
+    legacy_username = session.get("admin_auth_username")
     if not legacy_username:
         flash("Could not determine your current username. Contact support.", "error")
         return redirect(url_for("admin.logout"))
@@ -1655,6 +1657,7 @@ def username_migration():
         db.session.commit()
 
         session["admin_auth_username"] = chosen_username
+        set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
         session.pop("force_admin_username_migration", None)
         flash("Username migration completed.", "success")
         return redirect(url_for("admin.dashboard"))
@@ -2446,6 +2449,7 @@ def settings():
             ).update({'class_label': class_label if class_label else None})
 
         db.session.commit()
+        set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
         flash("Settings updated successfully!", "success")
         return redirect(url_for('admin.settings'))
 
@@ -2468,9 +2472,13 @@ def settings():
 @admin_bp.route('/logout')
 def logout():
     """Admin logout."""
+    clear_admin_display_name_cache()
     session.pop("is_admin", None)
     session.pop("admin_id", None)
+    session.pop("admin_auth_username", None)
     session.pop("last_activity", None)
+    session.pop("force_admin_username_migration", None)
+    session.pop("passkey_auth_username", None)
     flash("Logged out.")
     return redirect(url_for("admin.login"))
 
@@ -10083,6 +10091,7 @@ def passkey_auth_finish():
         session['is_admin'] = True
         session['admin_auth_username'] = auth_username or admin.teacher_public_id
         session['last_activity'] = now.isoformat()
+        set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
         session.permanent = True
 
         redirect_url = url_for('admin.dashboard')

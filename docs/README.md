@@ -42,6 +42,7 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 ### Development Specs
 - **[Hall Pass Feature Specification](development/HALL_PASS_FEATURE_SPEC.md)** - End-to-end hall pass lifecycle, APIs, and verification contract.
 - **[Admin Identity Handling Specification](development/ADMIN_IDENTITY_HANDLING_SPEC.md)** - Teacher/sysadmin identity storage, display policy, and migration requirements.
+- **[Implementation Status vs Spec (2026-02-24)](development/IMPLEMENTATION_STATUS_VS_SPEC_2026-02-24.md)** - Current compliance matrix and prioritized gaps.
 
 ### Deployment & Operations
 - **[Deployment Guide](operations/Deployment_Guide.md)** - Environment variables, CI/CD references, and production checklist.

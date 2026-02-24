@@ -28,7 +28,7 @@ Primary table: `hall_pass_logs`
 - `student_id` (required)
 - `reason` (destination/pass type)
 - `status` in: `pending`, `approved`, `rejected`, `left`, `returned`
-- `pass_number` nullable, unique, generated at approval (format `A42`)
+- `pass_number` legacy nullable field (deprecated, no longer generated or displayed)
 - `period` optional class period snapshot
 - `join_code` class isolation key (authoritative scope)
 - `request_time`, `decision_time`, `left_time`, `return_time`
@@ -52,8 +52,9 @@ Teacher public verification token:
 Allowed transitions:
 1. `pending` -> `approved`
 2. `pending` -> `rejected` (teacher reject or student cancel)
-3. `approved` -> `left` (student checkout or legacy terminal use)
-4. `left` -> `returned` (student checkin, legacy terminal return, or auto-return on start-work)
+3. `approved` -> `left` (student checkout or teacher/manual action)
+4. `left` -> `returned` (student checkin or auto-return on start-work)
+5. `left` -> `done for the day` (student forgot to checkin and time elapsed since initial start work is larger than set limit if there is one)
 
 Forbidden transitions:
 - Any transition from `rejected` to active states.
@@ -69,8 +70,7 @@ Primary flow:
 4. Student checks in (`left` -> `returned`).
 
 Deprecated compatibility flow:
-- Terminal and queue display endpoints may remain available for backward compatibility.
-- They must not be required for primary operation.
+- Terminal and queue endpoints are removed from active use and must return `410 Gone`.
 
 ## 6. Behavior Rules
 
@@ -81,7 +81,6 @@ Request-time gating:
 - For reasons other than `office`, `summons`, `done for the day`, student must have pass balance.
 
 Approval-time behavior:
-- On approve, system generates unique `pass_number`.
 - On approve, hall pass balance is decremented when deduction applies.
 - `rent_hall_passes` consumption is prioritized before purchased passes.
 
@@ -107,7 +106,40 @@ Requirements:
 Rate limiting:
 - Public verification route must be rate-limited.
 
-## 8. API Surface (Current Contract)
+## 8. Public Verification Portal — Claim-Based Model
+
+Design principle:
+- Does not display lists.
+- Does not display historical multi-day data.
+- Does not expose roster.
+- Only reveals information in response to a specific student claim.
+
+Endpoint:
+- `/verify/hallpass/<teacher_public_token>`
+
+Input:
+- Class (teacher-defined label mapped internally to `join_code`)
+- Student first name
+- Student last initial
+
+Scope constraints:
+- `teacher_public_token` must match.
+- `join_code` must belong to teacher.
+- Date scope must be current school date (school timezone).
+- Match detection must stop after 2 matches to distinguish unique vs ambiguous.
+
+Output rules:
+- `0` matches: `No hall pass record found for today.`
+- `1` match: display minimal operational details only.
+- `>1` matches: `Unable to uniquely verify. Please contact the teacher.`
+
+Non-goals:
+- No public list view.
+- No multi-day history.
+- No audit display.
+- No roster enumeration.
+
+## 9. API Surface (Current Contract)
 
 Teacher actions:
 - `POST /api/hall-pass/<pass_id>/approve`
@@ -127,18 +159,23 @@ Settings:
 - `GET /api/hall-pass/available-types`
 
 Read endpoints:
-- `GET /api/hall-pass/queue`
 - `GET /api/hall-pass/history`
-- `GET /api/hall-pass/lookup/<pass_number>` (legacy terminal support)
 
-## 9. Security and Privacy Requirements
+Deprecated endpoints (must return `410 Gone`):
+- `GET /hall-pass/terminal`
+- `GET /hall-pass/queue`
+- `GET /api/hall-pass/queue`
+- `GET /api/hall-pass/lookup/<pass_number>`
+- `POST /api/hall-pass/terminal/use`
+- `POST /api/hall-pass/terminal/return`
+
+## 10. Security and Privacy Requirements
 
 - All hall pass operations must remain tenant-scoped by class context (`join_code`) and role auth.
 - Public verify endpoint must use capability token, never teacher username or internal numeric IDs.
-- Pass numbers are not authorization tokens; they are short display/lookup identifiers only.
 - Verification outputs must avoid exposing non-essential PII or roster-level data.
 
-## 10. Observability and Audit
+## 11. Observability and Audit
 
 Minimum events to log:
 - Request create, approve, reject, checkout, checkin, cancel.
@@ -147,10 +184,11 @@ Minimum events to log:
 
 All timestamps are UTC at rest and converted at read time for user display.
 
-## 11. Acceptance Criteria
+## 12. Acceptance Criteria
 
 Functional:
 - Student can complete request -> approve -> checkout -> checkin without terminal dependencies.
+- Terminal and queue routes are disabled (`410 Gone`) in all environments.
 - Teacher approval is mandatory before checkout.
 - Queue/simultaneous limits enforce correctly per destination and day.
 - Public verification resolves valid current-day pass state correctly.
@@ -163,4 +201,3 @@ Security:
 Data integrity:
 - Status transitions follow the allowed state machine only.
 - Tap events are generated exactly once per checkout/checkin.
-

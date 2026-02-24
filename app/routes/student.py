@@ -51,6 +51,11 @@ from app.utils.insurance_eligibility import (
     evaluate_claim_transaction_eligibility,
     collect_reimbursed_source_tx_ids,
 )
+from app.utils.display_name_session import (
+    get_teacher_display_name_cache,
+    upsert_teacher_display_name_cache,
+    clear_teacher_display_name_cache,
+)
 
 # Create blueprint
 student_bp = Blueprint('student', __name__, url_prefix='/student')
@@ -120,6 +125,22 @@ def get_current_class_context():
         'block': current_seat.block,
         'seat_id': current_seat.id
     }
+
+
+def _prime_student_teacher_display_name_cache(student_id: int) -> None:
+    """Cache decrypted teacher display names in session for this student session."""
+    from app.models import TeacherBlock, Admin
+
+    seats = TeacherBlock.query.filter_by(student_id=student_id, is_claimed=True).all()
+    teacher_ids = sorted({seat.teacher_id for seat in seats if seat.teacher_id})
+    if not teacher_ids:
+        clear_teacher_display_name_cache()
+        return
+
+    cache_updates = {}
+    for teacher in Admin.query.filter(Admin.id.in_(teacher_ids)).all():
+        cache_updates[str(teacher.id)] = teacher.get_display_name()
+    upsert_teacher_display_name_cache(cache_updates)
 
 
 def get_rent_settings_for_context(context):
@@ -3560,11 +3581,13 @@ def login():
         # Explicitly clear other potential student-related session keys
         session.pop('claimed_student_id', None)
         session.pop('generated_username', None)
+        clear_teacher_display_name_cache()
 
 
         session['student_id'] = student.id
         session['login_time'] = utc_now().isoformat()
         session['last_activity'] = session['login_time']
+        _prime_student_teacher_display_name_cache(student.id)
 
 
         # Removed redirect to student_setup for has_completed_setup; new onboarding flow uses claim → username → pin/passphrase.
@@ -3661,6 +3684,7 @@ def demo_login(session_id):
         demo_seat = student.roster_seats[0] if student.roster_seats else None
         if demo_seat:
             session['current_join_code'] = demo_seat.join_code
+        _prime_student_teacher_display_name_cache(student.id)
 
         current_app.logger.info(
             f"Admin {demo_session.admin_id} accessed demo session {session_id} "
@@ -3729,7 +3753,13 @@ def switch_class(join_code):
 
     # Get teacher name for response
     teacher = db.session.get(Admin, seat.teacher_id)
-    teacher_name = teacher.get_display_name() if teacher else "Unknown"
+    teacher_cache = get_teacher_display_name_cache()
+    teacher_name = teacher_cache.get(str(seat.teacher_id))
+    if not teacher_name and teacher:
+        teacher_name = teacher.get_display_name()
+        upsert_teacher_display_name_cache({str(seat.teacher_id): teacher_name})
+    if not teacher_name:
+        teacher_name = "Unknown"
 
     # Get block/period info
     block_display = f"Block {seat.block.upper()}" if seat.block else "Unknown Block"

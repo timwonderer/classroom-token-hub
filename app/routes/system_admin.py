@@ -62,10 +62,7 @@ def _find_sysadmin_by_auth_username(username: str):
         return None
 
     lookup_hash = hash_username_lookup(normalized)
-    admin = SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
-    if admin:
-        return admin
-    return SystemAdmin.query.filter_by(username=normalized).first()
+    return SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
 
 
 def _sysadmin_auth_username_exists(username: str, *, exclude_sysadmin_id: int | None = None) -> bool:
@@ -199,7 +196,7 @@ def username_migration():
         session.pop("force_sysadmin_username_migration", None)
         return redirect(url_for("sysadmin.dashboard"))
 
-    legacy_username = session.get("sysadmin_auth_username") or (admin.username or "").strip()
+    legacy_username = session.get("sysadmin_auth_username")
     if not legacy_username:
         flash("Could not determine your current username.", "error")
         return redirect(url_for("sysadmin.logout"))
@@ -523,7 +520,7 @@ def dashboard():
     # System admins
     system_admins = (
         SystemAdmin.query
-        .order_by(db.func.coalesce(SystemAdmin.username, "").asc(), SystemAdmin.id.asc())
+        .order_by(SystemAdmin.id.asc())
         .all()
     )
 
@@ -820,7 +817,7 @@ def manage_admins():
     Note: System admins see teacher info and student counts only, not individual student details.
     """
     # Get all admins with student counts
-    admins = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, Admin.username, '')).all()
+    admins = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     admin_data = []
 
     for admin in admins:
@@ -998,7 +995,7 @@ def manage_teachers():
             active_invites.append(invite)
 
     # Build rich teacher data (from teacher_overview logic)
-    all_teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, Admin.username, '')).all()
+    all_teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
 
     # Batch query: teacher-student relationships
@@ -1104,7 +1101,7 @@ def teacher_overview():
     - Individual student names
     - Individual student details
     """
-    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, Admin.username, '')).all()
+    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     
     # Define inactivity threshold (6 months)
     inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
@@ -1732,7 +1729,7 @@ def announcement_create():
     form = SystemAdminAnnouncementForm()
 
     # Populate teacher choices
-    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, Admin.username, '')).all()
+    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     form.target_teacher.choices = [('', '-- Select Teacher --')] + [
         (teacher.id, teacher.get_sysadmin_display_name())
         for teacher in teachers
@@ -1789,7 +1786,7 @@ def announcement_edit(announcement_id):
     form = SystemAdminAnnouncementForm(obj=announcement)
 
     # Populate teacher choices
-    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, Admin.username, '')).all()
+    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     form.target_teacher.choices = [('', '-- Select Teacher --')] + [
         (teacher.id, teacher.get_sysadmin_display_name())
         for teacher in teachers
