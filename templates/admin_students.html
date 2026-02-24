@@ -1283,10 +1283,12 @@
       let holdTicker = null;
       let holdStartAt = null;
       let isHolding = false;
+      let phraseUnlocked = false;
 
       titleEl.textContent = title;
       warningEl.textContent = warning;
       phraseInput.value = '';
+      phraseInput.disabled = true;
       phraseHint.textContent = `Required phrase: ${expectedPhrase}`;
       holdBtn.textContent = 'Press and Hold for 10s to Delete';
       holdStatus.textContent = 'Hold button unlocks after countdown + exact phrase match.';
@@ -1296,6 +1298,10 @@
         if (holdTimer) clearTimeout(holdTimer);
         if (holdTicker) clearInterval(holdTicker);
         phraseInput.removeEventListener('input', onPhraseInput);
+        phraseInput.removeEventListener('paste', preventPasteLikeInput);
+        phraseInput.removeEventListener('drop', preventPasteLikeInput);
+        phraseInput.removeEventListener('beforeinput', onBeforePhraseInput);
+        phraseInput.removeEventListener('keydown', onPhraseKeydown);
         holdBtn.removeEventListener('pointerdown', startHold);
         holdBtn.removeEventListener('pointerup', cancelHold);
         holdBtn.removeEventListener('pointerleave', cancelHold);
@@ -1315,6 +1321,11 @@
           const pct = ((countdownSeconds - remaining) / countdownSeconds) * 100;
           countdownBar.style.width = `${pct}%`;
         } else {
+          if (!phraseUnlocked) {
+            phraseUnlocked = true;
+            phraseInput.disabled = false;
+            setTimeout(() => phraseInput.focus(), 100);
+          }
           countdownText.textContent = 'Countdown complete. Enter exact phrase and hold button for 10 seconds.';
           countdownBar.style.width = '100%';
         }
@@ -1326,6 +1337,23 @@
         isHolding = false;
         holdBtn.textContent = 'Press and Hold for 10s to Delete';
         holdStatus.textContent = 'Hold must be continuous for 10 seconds.';
+      };
+
+      const preventPasteLikeInput = (event) => event.preventDefault();
+
+      const onBeforePhraseInput = (event) => {
+        if (event.inputType === 'insertFromPaste' || event.inputType === 'insertFromDrop') {
+          event.preventDefault();
+        }
+      };
+
+      const onPhraseKeydown = (event) => {
+        const key = (event.key || '').toLowerCase();
+        const isPasteShortcut = ((event.ctrlKey || event.metaKey) && key === 'v')
+          || (event.shiftKey && key === 'insert');
+        if (isPasteShortcut) {
+          event.preventDefault();
+        }
       };
 
       const onPhraseInput = () => updateHoldAvailability();
@@ -1377,6 +1405,10 @@
       };
 
       phraseInput.addEventListener('input', onPhraseInput);
+      phraseInput.addEventListener('paste', preventPasteLikeInput);
+      phraseInput.addEventListener('drop', preventPasteLikeInput);
+      phraseInput.addEventListener('beforeinput', onBeforePhraseInput);
+      phraseInput.addEventListener('keydown', onPhraseKeydown);
       holdBtn.addEventListener('pointerdown', startHold);
       holdBtn.addEventListener('pointerup', cancelHold);
       holdBtn.addEventListener('pointerleave', cancelHold);
@@ -1400,7 +1432,6 @@
       }, 1000);
 
       modal.show();
-      setTimeout(() => phraseInput.focus(), 200);
     });
   }
 
@@ -1444,7 +1475,7 @@
     }
 
     const count = studentIds.length;
-    const warning = `You are about to permanently delete ${count} student(s) and all related data.`;
+    const warning = `DANGER! YOU ARE ABOUT TO PERMANENTLY AND IRREVERSIBLY DELETE ${count} STUDENT(S) AND DATA ASSOCIATED WITH THEM.`;
 
     showTimedDeleteGate({
       title: 'Confirm Student Deletion',
@@ -1659,7 +1690,7 @@
     }
 
     const upperBlock = String(block).toUpperCase();
-    const warning = `You are about to permanently delete ALL ${count} students in Block ${upperBlock} and all class records.`;
+    const warning = `DANGER! YOU ARE ABOUT TO PERMANENTLY AND IRREVERSIBLY DELETE ALL ${count} STUDENTS IN A CLASS LABELED ${upperBlock} ALONG WITH ALL ASSOCIATED DATA.`;
 
     showTimedDeleteGate({
       title: `Confirm Class Deletion (${upperBlock})`,
