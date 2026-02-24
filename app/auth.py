@@ -76,6 +76,7 @@ def login_required(f):
                     session.pop('student_id', None)
                     session.pop('login_time', None)
                     session.pop('last_activity', None)
+                    session.pop('teacher_display_name_cache', None)
                     session['view_as_student'] = False
                     session.pop('is_demo', None)
                     session.pop('demo_session_id', None)
@@ -107,6 +108,7 @@ def login_required(f):
                     session.pop('student_id', None)
                     session.pop('login_time', None)
                     session.pop('last_activity', None)
+                    session.pop('teacher_display_name_cache', None)
                     session.pop('is_demo', None)
                     session.pop('demo_session_id', None)
                     session['view_as_student'] = False
@@ -164,6 +166,7 @@ def login_required(f):
                         session.pop('student_id', None)
                         session.pop('login_time', None)
                         session.pop('last_activity', None)
+                        session.pop('teacher_display_name_cache', None)
                         session.pop('is_demo', None)
                         session.pop('demo_session_id', None)
                         session['view_as_student'] = False
@@ -180,6 +183,7 @@ def login_required(f):
                         session.pop('student_id', None)
                         session.pop('login_time', None)
                         session.pop('last_activity', None)
+                        session.pop('teacher_display_name_cache', None)
                         session.pop('is_demo', None)
                         session.pop('demo_session_id', None)
                         session['view_as_student'] = False
@@ -209,6 +213,7 @@ def login_required(f):
             session.pop('student_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
+            session.pop('teacher_display_name_cache', None)
             # Return JSON for API requests
             if request.path.startswith('/api/'):
                 return jsonify({"status": "error", "error": "Session is invalid. Please log in again."}), 401
@@ -221,6 +226,7 @@ def login_required(f):
             session.pop('student_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
+            session.pop('teacher_display_name_cache', None)
             # Return JSON for API requests
             if request.path.startswith('/api/'):
                 return jsonify({"status": "error", "error": "Session expired. Please log in again."}), 401
@@ -235,6 +241,7 @@ def login_required(f):
             session.pop('student_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
+            session.pop('teacher_display_name_cache', None)
             if request.path.startswith('/api/'):
                 return jsonify({"status": "error", "error": "Account is inactive. Contact your teacher."}), 403
             flash("Your account is inactive. Contact your teacher.", "error")
@@ -266,6 +273,8 @@ def admin_required(f):
             session.pop("is_admin", None)
             session.pop("admin_id", None)
             session.pop("last_activity", None)
+            session.pop("admin_display_name", None)
+            session.pop("admin_display_name_admin_id", None)
             flash("Admin session is invalid. Please log in again.")
             next_path = _get_safe_next_path()
             encoded_next = urllib.parse.quote(next_path, safe="")

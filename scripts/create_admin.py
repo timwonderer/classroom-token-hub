@@ -16,6 +16,13 @@ from app import app
 from app.extensions import db
 from app.models import SystemAdmin, Admin
 from app.utils.encryption import encrypt_totp
+from app.utils.admin_identity import (
+    load_teacher_id_words,
+    generate_teacher_public_id,
+    generate_teacher_public_id_with_suffix,
+)
+from app.hash_utils import hash_username_lookup
+from app.utils.username_migration import build_hashed_username_fields
 
 
 def clear_screen():
@@ -42,7 +49,10 @@ def create_system_admin(username):
     """Create a system admin account."""
     with app.app_context():
         # Check if username already exists
-        existing = SystemAdmin.query.filter_by(username=username).first()
+        lookup_hash = hash_username_lookup(username)
+        existing = SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
+        if not existing:
+            existing = SystemAdmin.query.filter_by(username=username).first()
         if existing:
             print(f"❌ SystemAdmin '{username}' already exists!")
             return False
@@ -51,8 +61,12 @@ def create_system_admin(username):
         totp_secret = pyotp.random_base32()
 
         # Create the admin
+        salt, username_hash, username_lookup_hash = build_hashed_username_fields(username)
         admin = SystemAdmin(
-            username=username,
+            username=None,
+            username_hash=username_hash,
+            username_lookup_hash=username_lookup_hash,
+            salt=salt,
             totp_secret=encrypt_totp(totp_secret)  # Encrypt before storing
         )
         db.session.add(admin)
@@ -99,18 +113,41 @@ def create_regular_admin(username):
     """Create a regular admin account."""
     with app.app_context():
         # Check if username already exists
-        existing = Admin.query.filter_by(username=username).first()
+        lookup_hash = hash_username_lookup(username)
+        existing = Admin.query.filter_by(username_lookup_hash=lookup_hash).first()
+        if not existing:
+            existing = Admin.query.filter_by(username=username).first()
         if existing:
             print(f"❌ Admin '{username}' already exists!")
             return False
 
         # Generate TOTP secret
         totp_secret = pyotp.random_base32()
+        salt, username_hash, _ = build_hashed_username_fields(username)
+
+        words = load_teacher_id_words()
+        teacher_public_id = None
+        for _ in range(100):
+            candidate = generate_teacher_public_id(words=words)
+            if not Admin.query.filter_by(teacher_public_id=candidate).first():
+                teacher_public_id = candidate
+                break
+        if teacher_public_id is None:
+            while True:
+                candidate = generate_teacher_public_id_with_suffix(words=words)
+                if not Admin.query.filter_by(teacher_public_id=candidate).first():
+                    teacher_public_id = candidate
+                    break
 
         # Create the admin
         admin = Admin(
-            username=username,
-            totp_secret=encrypt_totp(totp_secret)  # Encrypt before storing
+            username=None,
+            username_hash=username_hash,
+            username_lookup_hash=lookup_hash,
+            teacher_public_id=teacher_public_id,
+            totp_secret=encrypt_totp(totp_secret),  # Encrypt before storing
+            salt=salt,
+            hall_pass_verify_token=Admin.generate_verify_token(),
         )
         db.session.add(admin)
         db.session.commit()
@@ -161,7 +198,7 @@ def list_admins():
         sys_admins = SystemAdmin.query.all()
         if sys_admins:
             for admin in sys_admins:
-                print(f"  - {admin.username} (ID: {admin.id})")
+                print(f"  - {admin.get_display_username()} (ID: {admin.id})")
         else:
             print("  (none)")
 
@@ -172,7 +209,7 @@ def list_admins():
         admins = Admin.query.all()
         if admins:
             for admin in admins:
-                print(f"  - {admin.username} (ID: {admin.id})")
+                print(f"  - {admin.get_display_name()} (ID: {admin.id})")
         else:
             print("  (none)")
         print()

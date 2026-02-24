@@ -70,6 +70,20 @@ from app.utils.passwordless_client import (
     verify_signin_token,
     get_public_api_key
 )
+from app.utils.admin_identity import (
+    load_teacher_id_words,
+    generate_teacher_public_id,
+    generate_teacher_public_id_with_suffix,
+)
+from app.utils.display_name_session import (
+    set_admin_display_name_cache,
+    clear_admin_display_name_cache,
+)
+from app.utils.username_migration import (
+    normalize_auth_username,
+    needs_hashed_username_migration,
+    build_hashed_username_fields,
+)
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
 from app.attendance import get_last_payroll_time, calculate_unpaid_attendance_seconds, get_join_code_for_student_period
@@ -164,6 +178,45 @@ def parse_dob_input(dob_str):
 
     # If both formats fail, raise error
     raise ValueError("Invalid date format. Please use the date picker.")
+
+
+def _find_admin_by_auth_username(username: str):
+    """Lookup teacher by deterministic username lookup hash."""
+    normalized = normalize_auth_username(username)
+    if not normalized:
+        return None
+
+    lookup_hash = hash_username_lookup(normalized)
+    return Admin.query.filter_by(username_lookup_hash=lookup_hash).first()
+
+
+def _auth_username_exists(username: str, *, exclude_admin_id: int | None = None) -> bool:
+    admin = _find_admin_by_auth_username(username)
+    if not admin:
+        return False
+    if exclude_admin_id is not None and admin.id == exclude_admin_id:
+        return False
+    return True
+
+
+def _admin_requires_username_migration(admin: Admin) -> bool:
+    return needs_hashed_username_migration(admin)
+
+
+def _generate_unique_teacher_public_id() -> str:
+    words = load_teacher_id_words()
+    for _ in range(100):
+        candidate = generate_teacher_public_id(words=words)
+        if not Admin.query.filter_by(teacher_public_id=candidate).first():
+            return candidate
+    while True:
+        candidate = generate_teacher_public_id_with_suffix(words=words)
+        if not Admin.query.filter_by(teacher_public_id=candidate).first():
+            return candidate
+
+
+def _build_admin_auth_fields(username: str, *, existing_salt: bytes | None = None) -> tuple[bytes, str, str]:
+    return build_hashed_username_fields(username, existing_salt=existing_salt)
 
 
 # -------------------- DASHBOARD & QUICK ACTIONS --------------------
@@ -1497,16 +1550,17 @@ def login():
     session.pop("is_admin", None)
     session.pop("admin_id", None)
     session.pop("last_activity", None)
+    session.pop("force_admin_username_migration", None)
     form = AdminLoginForm()
     if form.validate_on_submit():
-        username = form.username.data.strip()
+        username = normalize_auth_username(form.username.data)
         totp_code = form.totp_code.data.strip()
-        admin = Admin.query.filter_by(username=username).first()
+        admin = _find_admin_by_auth_username(username)
         if admin:
             try:
                 decrypted_secret = decrypt_totp(admin.totp_secret)
             except ValueError:
-                current_app.logger.warning("Admin login failed: invalid encrypted TOTP secret for username=%s", username)
+                current_app.logger.warning("Admin login failed: invalid encrypted TOTP secret for admin_id=%s", admin.id)
                 decrypted_secret = None
 
             if decrypted_secret:
@@ -1518,7 +1572,12 @@ def login():
 
                     session["is_admin"] = True
                     session["admin_id"] = admin.id
+                    session["admin_auth_username"] = username
                     session["last_activity"] = utc_now().isoformat()
+                    set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
+                    if _admin_requires_username_migration(admin):
+                        session["force_admin_username_migration"] = True
+                        return redirect(url_for("admin.username_migration"))
                     flash("Admin login successful.")
                     next_url = request.args.get("next")
                     redirect_target = None
@@ -1537,6 +1596,78 @@ def login():
         flash("Invalid credentials or TOTP code.", "error")
         return redirect(url_for("admin.login", next=request.args.get("next")))
     return render_template("admin_login.html", form=form)
+
+
+@admin_bp.route('/username-migration', methods=['GET', 'POST'])
+@admin_required
+def username_migration():
+    """One-time migration screen for legacy plaintext teacher usernames."""
+    admin = db.session.get(Admin, session.get("admin_id"))
+    if not admin:
+        flash("Account not found.", "error")
+        return redirect(url_for("admin.login"))
+
+    if not _admin_requires_username_migration(admin):
+        session.pop("force_admin_username_migration", None)
+        return redirect(url_for("admin.dashboard"))
+
+    legacy_username = session.get("admin_auth_username")
+    if not legacy_username:
+        flash("Could not determine your current username. Contact support.", "error")
+        return redirect(url_for("admin.logout"))
+
+    student_count = admin.get_student_count()
+    no_recovery_warning = student_count == 0
+
+    if request.method == "POST":
+        action = request.form.get("action", "continue")
+        chosen_username = legacy_username
+
+        if action == "update":
+            chosen_username = normalize_auth_username(request.form.get("new_username", ""))
+            if not chosen_username:
+                flash("Please enter a username.", "error")
+                return render_template(
+                    "admin_username_migration.html",
+                    legacy_username=legacy_username,
+                    no_recovery_warning=no_recovery_warning,
+                    student_count=student_count,
+                )
+            if _auth_username_exists(chosen_username, exclude_admin_id=admin.id):
+                flash("Username already exists. Choose a different username.", "error")
+                return render_template(
+                    "admin_username_migration.html",
+                    legacy_username=legacy_username,
+                    no_recovery_warning=no_recovery_warning,
+                    student_count=student_count,
+                )
+
+        salt, username_hash, username_lookup_hash = _build_admin_auth_fields(
+            chosen_username,
+            existing_salt=admin.salt,
+        )
+        admin.salt = salt
+        admin.username_hash = username_hash
+        admin.username_lookup_hash = username_lookup_hash
+        admin.username = None
+        if not admin.teacher_public_id:
+            admin.teacher_public_id = _generate_unique_teacher_public_id()
+        if not admin.hall_pass_verify_token:
+            admin.hall_pass_verify_token = Admin.generate_verify_token()
+        db.session.commit()
+
+        session["admin_auth_username"] = chosen_username
+        set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
+        session.pop("force_admin_username_migration", None)
+        flash("Username migration completed.", "success")
+        return redirect(url_for("admin.dashboard"))
+
+    return render_template(
+        "admin_username_migration.html",
+        legacy_username=legacy_username,
+        no_recovery_warning=no_recovery_warning,
+        student_count=student_count,
+    )
 
 
 @admin_bp.route('/signup', methods=['GET', 'POST'])
@@ -1567,7 +1698,7 @@ def signup():
         # Get form data
         if is_totp_submission:
             # TOTP form has all fields as strings
-            username = form.username.data.strip()
+            username = normalize_auth_username(form.username.data)
             invite_code = form.invite_code.data.strip()
             dob_string = form.dob_sum.data  # This is a string from hidden field
             totp_code = form.totp_code.data.strip()
@@ -1581,7 +1712,7 @@ def signup():
                 return redirect(url_for('admin.signup'))
         else:
             # Initial signup form
-            username = form.username.data.strip()
+            username = normalize_auth_username(form.username.data)
             invite_code = form.invite_code.data.strip()
             dob_input = form.dob_sum.data
             totp_code = ""
@@ -1644,7 +1775,7 @@ def signup():
                 flash(msg, "error")
                 return redirect(url_for('admin.signup'))
         # Step 2: Check username uniqueness
-        if Admin.query.filter_by(username=username).first():
+        if _auth_username_exists(username):
             current_app.logger.warning("Admin signup failed: username already exists")
             msg = "Username already exists."
             if is_json:
@@ -1765,11 +1896,16 @@ def signup():
             flash(msg, "error")
             return redirect(url_for('admin.signup'))
 
+        salt, username_hash, username_lookup_hash = _build_admin_auth_fields(username, existing_salt=salt)
         new_admin = Admin(
-            username=username,
+            username=None,
+            username_hash=username_hash,
+            username_lookup_hash=username_lookup_hash,
+            teacher_public_id=_generate_unique_teacher_public_id(),
             totp_secret=encrypted_totp_secret,
             dob_sum_hash=dob_sum_hash,
             salt=salt,
+            hall_pass_verify_token=Admin.generate_verify_token(),
             tos_accepted=True,
             tos_accepted_at=utc_now()
         )
@@ -2062,8 +2198,7 @@ def reset_credentials():
             return redirect(url_for('admin.recovery_status'))
 
         # Check username uniqueness
-        existing_admin = Admin.query.filter_by(username=new_username).first()
-        if existing_admin and existing_admin.id != recovery_request.admin_id:
+        if _auth_username_exists(new_username, exclude_admin_id=recovery_request.admin_id):
             flash("Username already exists. Please choose a different username.", "error")
             return render_template("admin_reset_credentials.html", form=form, show_qr=False)
 
@@ -2149,7 +2284,11 @@ def confirm_reset():
         return redirect(url_for('admin.reset_credentials'))
 
     # Update teacher account
-    teacher.username = new_username
+    salt, username_hash, username_lookup_hash = _build_admin_auth_fields(new_username, existing_salt=teacher.salt)
+    teacher.salt = salt
+    teacher.username = None
+    teacher.username_hash = username_hash
+    teacher.username_lookup_hash = username_lookup_hash
     teacher.totp_secret = encrypt_totp(totp_secret)  # Encrypt before storing
 
     # Mark recovery request as completed
@@ -2295,7 +2434,7 @@ def settings():
         if display_name:
             admin.display_name = display_name
         else:
-            admin.display_name = None  # Use username as fallback
+            admin.display_name = None  # Use teacher_public_id as fallback
 
         # Update class labels for each block
         blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).distinct(TeacherBlock.block).all()
@@ -2310,6 +2449,7 @@ def settings():
             ).update({'class_label': class_label if class_label else None})
 
         db.session.commit()
+        set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
         flash("Settings updated successfully!", "success")
         return redirect(url_for('admin.settings'))
 
@@ -2332,9 +2472,13 @@ def settings():
 @admin_bp.route('/logout')
 def logout():
     """Admin logout."""
+    clear_admin_display_name_cache()
     session.pop("is_admin", None)
     session.pop("admin_id", None)
+    session.pop("admin_auth_username", None)
     session.pop("last_activity", None)
+    session.pop("force_admin_username_migration", None)
+    session.pop("passkey_auth_username", None)
     flash("Logged out.")
     return redirect(url_for("admin.login"))
 
@@ -6105,13 +6249,29 @@ def hall_pass():
     # Extract just the block values from tuples and filter out None/empty
     periods = sorted([p[0] for p in available_periods if p[0]])
 
+    # Lazily generate the hall pass verification token if needed
+    teacher_id = session.get('admin_id')
+    teacher = db.session.get(Admin, teacher_id)
+    if teacher and not teacher.hall_pass_verify_token:
+        teacher.hall_pass_verify_token = Admin.generate_verify_token()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            teacher = db.session.get(Admin, teacher_id)
+
+    verify_url = None
+    if teacher and teacher.hall_pass_verify_token:
+        verify_url = f"/verify/hallpass/{teacher.hall_pass_verify_token}"
+
     return render_template(
         'admin_hall_pass.html',
         pending_requests=pending_requests,
         approved_queue=approved_queue,
         out_of_class=out_of_class,
         available_periods=periods,
-        current_page="hall_pass"
+        current_page="hall_pass",
+        verify_url=verify_url
     )
 
 
@@ -8445,7 +8605,7 @@ def deletion_requests():
     if not admin:
         flash('Unable to load your account.', 'error')
         return redirect(url_for('admin.login'))
-    admin_username = (admin.username or '').strip()
+    admin_username = admin.get_display_name().strip()
 
     if request.method == 'POST':
         request_type = request.form.get('request_type')  # account only
@@ -9783,7 +9943,7 @@ def passkey_register_start():
 
         # Generate registration token using official SDK
         user_id = f"admin_{admin.id}"
-        username = admin.username
+        username = session.get("admin_auth_username") or admin.teacher_public_id or f"teacher_{admin.id}"
         displayname = admin.get_display_name()
 
         token = create_register_token(user_id, username, displayname)
@@ -9849,16 +10009,19 @@ def passkey_auth_start():
     """
     try:
         data = request.get_json()
+        session.pop('passkey_auth_username', None)
 
         if not data or 'username' not in data:
             return jsonify({"error": "Missing username"}), 400
 
-        username = data['username'].strip()
+        username = normalize_auth_username(data['username'])
 
         # Verify user exists
-        admin = Admin.query.filter_by(username=username).first()
+        admin = _find_admin_by_auth_username(username)
         if not admin:
             return jsonify({"error": "Invalid credentials"}), 401
+
+        session['passkey_auth_username'] = username
 
         # Check if user has passkeys
         has_passkeys = AdminCredential.query.filter_by(admin_id=admin.id).first() is not None
@@ -9922,16 +10085,23 @@ def passkey_auth_finish():
         db.session.commit()
 
         # Create session
+        auth_username = session.get('passkey_auth_username')
         session.clear()
         session['admin_id'] = admin.id
         session['is_admin'] = True
-        session['username'] = admin.username
+        session['admin_auth_username'] = auth_username or admin.teacher_public_id
         session['last_activity'] = now.isoformat()
+        set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
         session.permanent = True
+
+        redirect_url = url_for('admin.dashboard')
+        if _admin_requires_username_migration(admin):
+            session['force_admin_username_migration'] = True
+            redirect_url = url_for('admin.username_migration')
 
         return jsonify({
             "success": True,
-            "redirect": url_for('admin.dashboard')
+            "redirect": redirect_url
         }), 200
 
     except Exception as e:

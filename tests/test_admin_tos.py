@@ -4,6 +4,7 @@ import pyotp
 
 from app import create_app, db
 from app.models import Admin, AdminInviteCode
+from app.hash_utils import hash_username_lookup
 
 
 class TestAdminTos(unittest.TestCase):
@@ -39,7 +40,7 @@ class TestAdminTos(unittest.TestCase):
         self.assertIn(b'You must agree to the Terms of Service', response.data)
 
         # Verify admin was not created
-        admin = Admin.query.filter_by(username='newadmin').first()
+        admin = Admin.query.filter_by(username_lookup_hash=hash_username_lookup('newadmin')).first()
         self.assertIsNone(admin)
 
         # Try signup WITH ToS agreement
@@ -76,7 +77,7 @@ class TestAdminTos(unittest.TestCase):
         self.assertIn(b'Admin account created successfully', response.data)
 
         # Verify admin was created with ToS accepted
-        admin = Admin.query.filter_by(username='newadmin').first()
+        admin = Admin.query.filter_by(username_lookup_hash=hash_username_lookup('newadmin')).first()
         self.assertIsNotNone(admin)
         self.assertTrue(admin.tos_accepted)
         self.assertIsNotNone(admin.tos_accepted_at)
@@ -153,7 +154,7 @@ class TestAdminTos(unittest.TestCase):
         self.assertIn(b'You must agree to the Terms of Service', response.data)
 
         # Verify admin was not created
-        admin = Admin.query.filter_by(username='newadmin').first()
+        admin = Admin.query.filter_by(username_lookup_hash=hash_username_lookup('newadmin')).first()
         self.assertIsNone(admin)
 
     def test_totp_submission_without_tos_parameter(self):
@@ -190,7 +191,7 @@ class TestAdminTos(unittest.TestCase):
         self.assertIn(b'You must agree to the Terms of Service', response.data)
 
         # Verify admin was not created
-        admin = Admin.query.filter_by(username='newadmin').first()
+        admin = Admin.query.filter_by(username_lookup_hash=hash_username_lookup('newadmin')).first()
         self.assertIsNone(admin)
 
     def test_schema_columns_exist(self):

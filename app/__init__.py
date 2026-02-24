@@ -524,6 +524,10 @@ def create_app():
             from app.auth import get_logged_in_student
             from app.models import TeacherBlock, Admin
             from flask import session
+            from app.utils.display_name_session import (
+                get_teacher_display_name_cache,
+                upsert_teacher_display_name_cache,
+            )
 
             student = get_logged_in_student()
             if not student:
@@ -547,27 +551,34 @@ def create_app():
                 claimed_seats[0]
             )
 
-            # Build list of available classes with teacher names
-            # Fetch all teachers at once to avoid N+1 query
-            teacher_ids = [seat.teacher_id for seat in claimed_seats]
-            teachers = {t.id: t for t in Admin.query.filter(Admin.id.in_(teacher_ids)).all()}
-            
+            # Build list of available classes with teacher names.
+            # Resolve names from session cache first to avoid repeated decryptions.
+            teacher_ids = sorted({seat.teacher_id for seat in claimed_seats if seat.teacher_id})
+            teacher_name_cache = get_teacher_display_name_cache()
+            missing_ids = [tid for tid in teacher_ids if str(tid) not in teacher_name_cache]
+            if missing_ids:
+                cache_updates = {}
+                for teacher in Admin.query.filter(Admin.id.in_(missing_ids)).all():
+                    cache_updates[str(teacher.id)] = teacher.get_display_name()
+                if cache_updates:
+                    upsert_teacher_display_name_cache(cache_updates)
+                    teacher_name_cache.update(cache_updates)
+
             available_classes = []
             for seat in claimed_seats:
-                teacher = teachers.get(seat.teacher_id)
+                teacher_name = teacher_name_cache.get(str(seat.teacher_id), 'Unknown')
                 available_classes.append({
                     'join_code': seat.join_code,
-                    'teacher_name': teacher.get_display_name() if teacher else 'Unknown',
+                    'teacher_name': teacher_name,
                     'block': seat.block,
                     'block_display': seat.get_class_label(),
                     'is_current': seat.join_code == current_seat.join_code
                 })
 
-            # Build current class context - reuse teacher from dictionary
-            current_teacher = teachers.get(current_seat.teacher_id)
+            # Build current class context from cache.
             current_class_context = {
                 'join_code': current_seat.join_code,
-                'teacher_name': current_teacher.get_display_name() if current_teacher else 'Unknown',
+                'teacher_name': teacher_name_cache.get(str(current_seat.teacher_id), 'Unknown'),
                 'teacher_id': current_seat.teacher_id,
                 'block': current_seat.block,
                 'block_display': current_seat.get_class_label()
@@ -588,15 +599,25 @@ def create_app():
         try:
             from app.models import Admin
             from flask import session
+            from app.utils.display_name_session import (
+                get_admin_display_name_cache,
+                set_admin_display_name_cache,
+            )
 
             admin_id = session.get('admin_id')
             if admin_id:
                 admin = db.session.get(Admin, admin_id)
-                return {'current_admin': admin}
-            return {'current_admin': None}
+                if not admin:
+                    return {'current_admin': None, 'current_admin_display_name': None}
+                cached_name = get_admin_display_name_cache(admin_id=admin.id)
+                if not cached_name:
+                    cached_name = admin.get_display_name()
+                    set_admin_display_name_cache(admin_id=admin.id, display_name=cached_name)
+                return {'current_admin': admin, 'current_admin_display_name': cached_name}
+            return {'current_admin': None, 'current_admin_display_name': None}
         except Exception as e:
             app.logger.warning(f"Could not load current admin: {e}")
-            return {'current_admin': None}
+            return {'current_admin': None, 'current_admin_display_name': None}
 
     @app.context_processor
     def inject_current_sysadmin():
@@ -652,14 +673,9 @@ def create_app():
         if request.path.startswith('/static/'):
             return response
 
-        # Public embeddable pages (hall pass displays for classroom use)
-        # These pages are public, read-only, and safe to embed in LMS/other sites
-        # NOTE: /hall-pass/terminal is NOT embeddable as it performs state-changing actions
-        embeddable_paths = [
-            '/hall-pass/verification',
-            '/hall-pass/queue'
-        ]
-        is_embeddable = request.path in embeddable_paths
+        # Public embeddable pages
+        # Only the office verification page is embeddable.
+        is_embeddable = request.path.startswith('/verify/hallpass/')
 
         # HTTPS Enforcement (HSTS)
         # Forces browsers to use HTTPS for 1 year, including subdomains

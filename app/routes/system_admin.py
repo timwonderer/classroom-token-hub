@@ -42,12 +42,36 @@ from app.utils.passwordless_client import (
     verify_signin_token,
     get_public_api_key
 )
+from app.hash_utils import hash_username_lookup
+from app.utils.username_migration import (
+    normalize_auth_username,
+    needs_hashed_username_migration,
+    build_hashed_username_fields,
+)
 
 # Create blueprint
 sysadmin_bp = Blueprint('sysadmin', __name__, url_prefix='/sysadmin')
 
 # Constants
 INACTIVITY_THRESHOLD_DAYS = 180  # Number of days of inactivity before highlighting inactive teachers
+
+
+def _find_sysadmin_by_auth_username(username: str):
+    normalized = normalize_auth_username(username)
+    if not normalized:
+        return None
+
+    lookup_hash = hash_username_lookup(normalized)
+    return SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
+
+
+def _sysadmin_auth_username_exists(username: str, *, exclude_sysadmin_id: int | None = None) -> bool:
+    admin = _find_sysadmin_by_auth_username(username)
+    if not admin:
+        return False
+    if exclude_sysadmin_id is not None and admin.id == exclude_sysadmin_id:
+        return False
+    return True
 
 
 def _tail_log_lines(file_path: str, max_lines: int = 200, chunk_size: int = 8192):
@@ -113,11 +137,12 @@ def login():
     session.pop("is_system_admin", None)
     session.pop("sysadmin_id", None)
     session.pop("last_activity", None)
+    session.pop("force_sysadmin_username_migration", None)
     form = SystemAdminLoginForm()
     if form.validate_on_submit():
-        username = form.username.data.strip()
+        username = normalize_auth_username(form.username.data)
         totp_code = form.totp_code.data.strip()
-        admin = SystemAdmin.query.filter_by(username=username).first()
+        admin = _find_sysadmin_by_auth_username(username)
         if admin:
             try:
                 decrypted_secret = decrypt_totp(admin.totp_secret)
@@ -132,9 +157,13 @@ def login():
                 if totp.verify(totp_code, valid_window=1):
                     session["is_system_admin"] = True
                     session["sysadmin_id"] = admin.id
+                    session["sysadmin_auth_username"] = username
                     session['last_activity'] = utc_now().isoformat()
                     # Establish global maintenance bypass for subsequent role testing.
                     session['maintenance_global_bypass'] = True
+                    if needs_hashed_username_migration(admin):
+                        session["force_sysadmin_username_migration"] = True
+                        return redirect(url_for("sysadmin.username_migration"))
                     flash("System admin login successful.")
                     next_url = request.args.get("next")
                     redirect_target = None
@@ -154,12 +183,64 @@ def login():
     return render_template("system_admin_login.html", form=form)
 
 
+@sysadmin_bp.route('/username-migration', methods=['GET', 'POST'])
+@system_admin_required
+def username_migration():
+    """One-time migration screen for legacy plaintext sysadmin usernames."""
+    admin = db.session.get(SystemAdmin, session.get("sysadmin_id"))
+    if not admin:
+        flash("Account not found.", "error")
+        return redirect(url_for("sysadmin.login"))
+
+    if not needs_hashed_username_migration(admin):
+        session.pop("force_sysadmin_username_migration", None)
+        return redirect(url_for("sysadmin.dashboard"))
+
+    legacy_username = session.get("sysadmin_auth_username")
+    if not legacy_username:
+        flash("Could not determine your current username.", "error")
+        return redirect(url_for("sysadmin.logout"))
+
+    if request.method == "POST":
+        action = request.form.get("action", "continue")
+        chosen_username = legacy_username
+
+        if action == "update":
+            chosen_username = normalize_auth_username(request.form.get("new_username", ""))
+            if not chosen_username:
+                flash("Please enter a username.", "error")
+                return render_template("system_admin_username_migration.html", legacy_username=legacy_username)
+            if _sysadmin_auth_username_exists(chosen_username, exclude_sysadmin_id=admin.id):
+                flash("Username already exists. Choose a different username.", "error")
+                return render_template("system_admin_username_migration.html", legacy_username=legacy_username)
+
+        salt, username_hash, username_lookup_hash = build_hashed_username_fields(
+            chosen_username,
+            existing_salt=admin.salt,
+        )
+        admin.salt = salt
+        admin.username_hash = username_hash
+        admin.username_lookup_hash = username_lookup_hash
+        admin.username = None
+        db.session.commit()
+
+        session["sysadmin_auth_username"] = chosen_username
+        session.pop("force_sysadmin_username_migration", None)
+        flash("Username migration completed.", "success")
+        return redirect(url_for("sysadmin.dashboard"))
+
+    return render_template("system_admin_username_migration.html", legacy_username=legacy_username)
+
+
 @sysadmin_bp.route('/logout')
 def logout():
     """System admin logout."""
     session.pop("is_system_admin", None)
     session.pop("sysadmin_id", None)
     session.pop("last_activity", None)
+    session.pop("sysadmin_auth_username", None)
+    session.pop("passkey_sysadmin_auth_username", None)
+    session.pop("force_sysadmin_username_migration", None)
     # Intentionally DO NOT remove maintenance_global_bypass so admin can test other roles.
     flash("Logged out.")
     return redirect(url_for("sysadmin.login"))
@@ -182,8 +263,8 @@ def passkey_register_start():
 
         # Generate registration token using official SDK
         user_id = f"sysadmin_{admin.id}"
-        username = admin.username
-        displayname = f"System Admin: {admin.username}"
+        username = session.get("sysadmin_auth_username") or admin.get_display_username()
+        displayname = f"System Admin: {admin.get_display_username()}"
 
         token = create_register_token(user_id, username, displayname)
 
@@ -248,14 +329,15 @@ def passkey_auth_start():
     """
     try:
         data = request.get_json()
+        session.pop("passkey_sysadmin_auth_username", None)
 
         if not data or 'username' not in data:
             return jsonify({"error": "Missing username"}), 400
 
-        username = data['username'].strip()
+        username = normalize_auth_username(data['username'])
 
         # Verify user exists
-        admin = SystemAdmin.query.filter_by(username=username).first()
+        admin = _find_sysadmin_by_auth_username(username)
         if not admin:
             return jsonify({"error": "Invalid credentials"}), 401
 
@@ -263,6 +345,8 @@ def passkey_auth_start():
         has_passkeys = SystemAdminCredential.query.filter_by(sysadmin_id=admin.id).first() is not None
         if not has_passkeys:
             return jsonify({"error": "Invalid credentials"}), 401
+
+        session["passkey_sysadmin_auth_username"] = username
 
         return jsonify({
             "apiKey": get_public_api_key()
@@ -322,6 +406,9 @@ def passkey_auth_finish():
         # Create session
         session["is_system_admin"] = True
         session["sysadmin_id"] = admin.id
+        session["sysadmin_auth_username"] = (
+            session.get("passkey_sysadmin_auth_username") or admin.get_display_username()
+        )
         session['last_activity'] = now.isoformat()
         session['maintenance_global_bypass'] = True
 
@@ -331,6 +418,9 @@ def passkey_auth_finish():
             redirect_url = url_for("sysadmin.dashboard")
         else:
             redirect_url = next_url or url_for("sysadmin.dashboard")
+        if needs_hashed_username_migration(admin):
+            session["force_sysadmin_username_migration"] = True
+            redirect_url = url_for("sysadmin.username_migration")
 
         return jsonify({
             "success": True,
@@ -428,7 +518,11 @@ def dashboard():
     recent_errors = ErrorLog.query.order_by(ErrorLog.timestamp.desc()).limit(5).all()
 
     # System admins
-    system_admins = SystemAdmin.query.order_by(SystemAdmin.username.asc()).all()
+    system_admins = (
+        SystemAdmin.query
+        .order_by(SystemAdmin.id.asc())
+        .all()
+    )
 
     return render_template(
         "system_admin_dashboard.html",
@@ -723,7 +817,7 @@ def manage_admins():
     Note: System admins see teacher info and student counts only, not individual student details.
     """
     # Get all admins with student counts
-    admins = Admin.query.all()
+    admins = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     admin_data = []
 
     for admin in admins:
@@ -732,7 +826,7 @@ def manage_admins():
 
         admin_data.append({
             'id': admin.id,
-            'username': admin.username,
+            'username': admin.get_sysadmin_display_name(),
             'student_count': student_count,
             'created_at': admin.created_at,
             'last_login': admin.last_login
@@ -763,7 +857,7 @@ def reset_teacher_totp(admin_id):
 
         # Generate QR code
         totp_uri = pyotp.totp.TOTP(new_secret).provisioning_uri(
-            name=admin.username,
+            name=admin.get_sysadmin_display_name(),
             issuer_name="Classroom Economy Admin"
         )
 
@@ -775,11 +869,11 @@ def reset_teacher_totp(admin_id):
 
         return jsonify({
             "status": "success",
-            "message": f"TOTP secret reset for {admin.username}",
+            "message": f"TOTP secret reset for {admin.get_sysadmin_display_name()}",
             "totp_secret": stored_secret,
             "totp_secret_plain": new_secret,
             "qr_code": qr_b64,
-            "username": admin.username
+            "username": admin.get_sysadmin_display_name()
         })
     except Exception as e:
         db.session.rollback()
@@ -840,7 +934,7 @@ def delete_admin(admin_id):
             TeacherBlock.query.filter(TeacherBlock.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             Student.query.filter(Student.id.in_(exclusive_student_ids)).delete(synchronize_session=False)
 
-        admin_username = admin.username
+        admin_username = admin.get_sysadmin_display_name()
         db.session.delete(admin)
         db.session.commit()
 
@@ -901,7 +995,7 @@ def manage_teachers():
             active_invites.append(invite)
 
     # Build rich teacher data (from teacher_overview logic)
-    all_teachers = Admin.query.order_by(Admin.username.asc()).all()
+    all_teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
 
     # Batch query: teacher-student relationships
@@ -956,7 +1050,7 @@ def manage_teachers():
 
         teachers.append({
             'id': teacher.id,
-            'username': teacher.username,
+            'username': teacher.get_sysadmin_display_name(),
             'last_login': teacher.last_login,
             'is_inactive': is_inactive,
             'total_students': total_students,
@@ -997,7 +1091,7 @@ def teacher_overview():
     Privacy-compliant teacher overview showing only aggregated student counts.
 
     System admins can view:
-    - Teacher username
+    - Teacher public ID/display name
     - Total student count per teacher
     - Student counts by period/block
     - Last login date
@@ -1007,7 +1101,7 @@ def teacher_overview():
     - Individual student names
     - Individual student details
     """
-    teachers = Admin.query.order_by(Admin.username.asc()).all()
+    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     
     # Define inactivity threshold (6 months)
     inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
@@ -1072,7 +1166,7 @@ def teacher_overview():
 
         teacher_data.append({
             'id': teacher.id,
-            'username': teacher.username,
+            'username': teacher.get_sysadmin_display_name(),
             'total_students': total_students,
             'periods': periods,
             'last_login': teacher.last_login,
@@ -1376,7 +1470,8 @@ def grafana_auth_check():
         return Response('Unauthorized', 401)
 
     # Sanitize username for header (prevent response splitting)
-    username = sysadmin.username.replace('\n', '').replace('\r', '') if sysadmin.username else ''
+    raw_username = session.get("sysadmin_auth_username") or sysadmin.get_display_username()
+    username = raw_username.replace('\n', '').replace('\r', '') if raw_username else ''
 
     response = Response('OK', 200)
     response.headers['X-Auth-User'] = username
@@ -1440,7 +1535,7 @@ def grafana_proxy(path):
             # Stale session - admin was deleted
             flash("Authentication failed: user not found.", "error")
             return redirect(url_for('sysadmin.dashboard'))
-        headers['X-WEBAUTH-USER'] = admin.username
+        headers['X-WEBAUTH-USER'] = session.get("sysadmin_auth_username") or admin.get_display_username()
 
         # Make the request to Grafana
         resp = requests.request(
@@ -1612,7 +1707,7 @@ def announcements():
     for announcement in announcements_list:
         if announcement.audience_type == 'teacher_all_classes' and announcement.target_teacher_id:
             teacher = teachers_dict.get(announcement.target_teacher_id)
-            announcement.audience_display = f"All classes of {teacher.get_display_name() if teacher else 'Unknown Teacher'}"
+            announcement.audience_display = f"All classes of {teacher.get_sysadmin_display_name() if teacher else 'Unknown Teacher'}"
         else:
             announcement.audience_display = announcement.get_audience_label()
 
@@ -1634,9 +1729,9 @@ def announcement_create():
     form = SystemAdminAnnouncementForm()
 
     # Populate teacher choices
-    teachers = Admin.query.order_by(Admin.username).all()
+    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     form.target_teacher.choices = [('', '-- Select Teacher --')] + [
-        (teacher.id, f"{teacher.get_display_name()} ({teacher.username})")
+        (teacher.id, teacher.get_sysadmin_display_name())
         for teacher in teachers
     ]
 
@@ -1691,9 +1786,9 @@ def announcement_edit(announcement_id):
     form = SystemAdminAnnouncementForm(obj=announcement)
 
     # Populate teacher choices
-    teachers = Admin.query.order_by(Admin.username).all()
+    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     form.target_teacher.choices = [('', '-- Select Teacher --')] + [
-        (teacher.id, f"{teacher.get_display_name()} ({teacher.username})")
+        (teacher.id, teacher.get_sysadmin_display_name())
         for teacher in teachers
     ]
 

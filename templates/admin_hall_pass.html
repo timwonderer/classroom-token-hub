@@ -94,7 +94,7 @@
                 </h2>
                 <div id="hallPassGuideDisplays" class="accordion-collapse collapse mt-2" aria-labelledby="hallPassGuideHeadingDisplays" data-bs-parent="#hallPassGuideAccordion">
                     <div class="accordion-body">
-                        <p>Open Verification, Terminal, or Queue Display in a new tab to show status on a classroom screen.</p>
+                        <p>Use Office Verification for staff pass checks. Students request and check out/check in directly in their dashboard.</p>
                     </div>
                 </div>
             </div>
@@ -105,15 +105,16 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-end align-items-center mb-4">
         <div>
-            <a href="/hall-pass/verification?teacher_id={{ session['admin_id'] }}" target="_blank" class="btn btn-primary me-2">
-                <span class="material-symbols-outlined">tv</span> Verification Display
+            {% if verify_url %}
+            <a href="{{ verify_url }}" target="_blank" class="btn btn-primary me-2">
+                <span class="material-symbols-outlined">verified_user</span> Office Verification
             </a>
-            <a href="/hall-pass/terminal?teacher_id={{ session['admin_id'] }}" target="_blank" class="btn btn-secondary me-2">
-                <span class="material-symbols-outlined">computer</span> Terminal
-            </a>
-            <a href="/hall-pass/queue?teacher_id={{ session['admin_id'] }}" target="_blank" class="btn btn-info">
-                <span class="material-symbols-outlined">list_alt</span> Queue Display
-            </a>
+            {% endif %}
+            <button type="button" class="btn btn-outline-secondary me-2"
+                    onclick="rotateVerifyToken()"
+                    title="Regenerate Hall Pass QR (invalidates old link)">
+                <span class="material-symbols-outlined">qr_code</span> Regenerate QR
+            </button>
         </div>
     </div>
 
@@ -232,9 +233,6 @@
                                 <div class="list-group-item d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong>{{ req.student.full_name }}</strong> - {{ req.reason }}
-                                        {% if req.pass_number %}
-                                            <span class="badge bg-primary ms-2">Pass #{{ req.pass_number }}</span>
-                                        {% endif %}
                                         <small class="d-block text-muted">Approved: {{ req.decision_time | format_datetime }} | Period: {{ req.period }}</small>
                                     </div>
                                     <button class="btn btn-sm btn-primary" onclick="handlePassAction({{ req.id }}, 'leave')" {% if out_of_class %}disabled{% endif %}>
@@ -259,9 +257,6 @@
                                 <div class="list-group-item d-flex justify-content-between align-items-center">
                                     <div>
                                         <strong>{{ req.student.full_name }}</strong> - {{ req.reason }}
-                                        {% if req.pass_number %}
-                                            <span class="badge bg-success ms-2">Pass #{{ req.pass_number }}</span>
-                                        {% endif %}
                                         <small class="d-block text-muted">Left: {{ req.left_time | format_datetime }} | Period: {{ req.period }}</small>
                                     </div>
                                     <button class="btn btn-sm btn-secondary" onclick="handlePassAction({{ req.id }}, 'return')">
@@ -338,14 +333,13 @@
                                     <th>Student</th>
                                     <th>Period</th>
                                     <th>Type</th>
-                                    <th>Pass #</th>
                                     <th>Status</th>
                                     <th>Duration</th>
                                 </tr>
                             </thead>
                             <tbody id="historyTableBody">
                                 <tr>
-                                    <td colspan="7" class="text-center py-4 text-muted">
+                                    <td colspan="6" class="text-center py-4 text-muted">
                                         <span class="material-symbols-outlined d-block mb-2" style="font-size: 2rem; opacity: 0.3;">filter_alt</span>
                                         Select filters and click Apply to view history
                                     </td>
@@ -528,7 +522,7 @@ function renderHistoryTable(records) {
     if (!records || records.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="7" class="text-center py-4 text-muted">
+                <td colspan="6" class="text-center py-4 text-muted">
                     <span class="material-symbols-outlined d-block mb-2" style="font-size: 2rem; opacity: 0.3;">search_off</span>
                     No records found matching the selected filters
                 </td>
@@ -577,7 +571,6 @@ function renderHistoryTable(records) {
                 <td><strong>${record.student_name}</strong></td>
                 <td>${record.period || '-'}</td>
                 <td>${record.reason || '-'}</td>
-                <td>${record.pass_number || '-'}</td>
                 <td>${statusBadge}</td>
                 <td>${duration}</td>
             </tr>
@@ -658,6 +651,25 @@ function showHistoryError(message) {
             </td>
         </tr>
     `;
+}
+
+function rotateVerifyToken() {
+    if (!confirm('Regenerate the hall pass verification link? The current link will be immediately invalid.')) {
+        return;
+    }
+    fetch('/api/hall-pass/verify-token/rotate', {method: 'POST', headers: {'Content-Type': 'application/json'}})
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'success') {
+                const newUrl = window.location.origin + '/verify/hallpass/' + data.token;
+                const btnLink = document.querySelector('a[href*="/verify/hallpass/"]');
+                if (btnLink) { btnLink.href = newUrl; }
+                alert('Verification link regenerated.\nNew URL: ' + newUrl);
+            } else {
+                alert('Error: ' + (data.message || 'Could not regenerate token.'));
+            }
+        })
+        .catch(() => alert('Failed to contact server. Please try again.'));
 }
 </script>
 {% endblock %}
