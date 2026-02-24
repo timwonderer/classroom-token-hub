@@ -62,7 +62,16 @@ def _find_sysadmin_by_auth_username(username: str):
         return None
 
     lookup_hash = hash_username_lookup(normalized)
-    return SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
+    admin = SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
+    if admin:
+        return admin
+
+    # Migration-only fallback for legacy records that have not been hashed yet.
+    return SystemAdmin.query.filter(
+        SystemAdmin.username == normalized,
+        SystemAdmin.username_lookup_hash.is_(None),
+        SystemAdmin.username_hash.is_(None),
+    ).first()
 
 
 def _sysadmin_auth_username_exists(username: str, *, exclude_sysadmin_id: int | None = None) -> bool:
