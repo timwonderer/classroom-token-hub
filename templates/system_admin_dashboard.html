@@ -125,7 +125,7 @@
                                             style="font-size:18px;">person</span>
                                     </div>
                                     <div>
-                                        <div class="fw-semibold" style="font-size:0.9rem;">{{ teacher.username }}</div>
+                                        <div class="fw-semibold" style="font-size:0.9rem;">{{ teacher.get_sysadmin_display_name() }}</div>
                                         <div class="text-muted" style="font-size:0.75rem;">
                                             Joined {{ teacher.created_at.strftime('%b %d, %Y') if teacher.created_at
                                             else 'Unknown' }}
@@ -214,7 +214,7 @@
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th class="ps-3">Username</th>
+                            <th class="ps-3">Identifier</th>
                             <th>Status</th>
                             <th>Last Active</th>
                         </tr>
@@ -229,7 +229,7 @@
                                         <span class="material-symbols-outlined"
                                             style="font-size:16px;color:var(--sysadmin-accent);">shield_person</span>
                                     </div>
-                                    <span class="fw-semibold" style="font-size:0.9rem;">{{ admin.username }}</span>
+                                    <span class="fw-semibold" style="font-size:0.9rem;">{{ admin.get_display_username() }}</span>
                                 </div>
                             </td>
                             <td><span class="badge bg-success-subtle text-success">Active</span></td>

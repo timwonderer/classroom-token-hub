@@ -113,6 +113,8 @@ classroom-economy/
 - Database schema: `docs/technical-reference/database_schema.md`
 - API reference: `docs/technical-reference/api_reference.md`
 - Timezone handling: `docs/technical-reference/TIMEZONE_HANDLING.md`
+- Hall pass feature spec: `docs/development/HALL_PASS_FEATURE_SPEC.md`
+- Admin identity handling spec: `docs/development/ADMIN_IDENTITY_HANDLING_SPEC.md`
 - Diagnostics for user-visible behavior: `docs/user-guides/diagnostics/student.md`, `docs/user-guides/diagnostics/teacher.md`
 
 ## Full Documentation

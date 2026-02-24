@@ -2,11 +2,20 @@ import pyotp
 
 from app import db
 from app.models import Admin, TeacherBlock, UserReport
+from app.utils.username_migration import build_hashed_username_fields
 
 
 def _login_admin(client):
     secret = pyotp.random_base32()
-    admin = Admin(username="teacher_help", totp_secret=secret)
+    auth_username = "teacher_help"
+    salt, username_hash, username_lookup_hash = build_hashed_username_fields(auth_username)
+    admin = Admin(
+        username=None,
+        username_hash=username_hash,
+        username_lookup_hash=username_lookup_hash,
+        salt=salt,
+        totp_secret=secret,
+    )
     db.session.add(admin)
     db.session.flush()
 
@@ -27,7 +36,7 @@ def _login_admin(client):
 
     response = client.post(
         "/admin/login",
-        data={"username": admin.username, "totp_code": pyotp.TOTP(secret).now()},
+        data={"username": auth_username, "totp_code": pyotp.TOTP(secret).now()},
         follow_redirects=True,
     )
     assert response.status_code == 200
@@ -39,7 +48,7 @@ def test_help_support_page_renders(client):
     response = client.get("/admin/help-support", follow_redirects=False)
 
     assert response.status_code == 200
-    assert b"Submit Teacher Support Ticket" in response.data
+    assert b"Submit Support Ticket" in response.data
 
 
 def test_teacher_can_submit_class_scoped_support_ticket(client):

@@ -3729,7 +3729,7 @@ def switch_class(join_code):
 
     # Get teacher name for response
     teacher = db.session.get(Admin, seat.teacher_id)
-    teacher_name = teacher.username if teacher else "Unknown"
+    teacher_name = teacher.get_display_name() if teacher else "Unknown"
 
     # Get block/period info
     block_display = f"Block {seat.block.upper()}" if seat.block else "Unknown Block"
@@ -3761,7 +3761,7 @@ def switch_period(teacher_id):
     from app.models import Admin
     teacher = db.session.get(Admin, teacher_id)
     if teacher:
-        flash(f"Switched to {teacher.username}'s class")
+        flash(f"Switched to {teacher.get_display_name()}'s class")
 
     return redirect(url_for('student.dashboard'))
 

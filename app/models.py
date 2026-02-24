@@ -676,12 +676,18 @@ class DeletionRequest(db.Model):
 class SystemAdmin(db.Model):
     __tablename__ = 'system_admins'
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=True)  # Legacy plaintext username (deprecated)
+    username_hash = db.Column(db.String(64), unique=True, nullable=True)
+    username_lookup_hash = db.Column(db.String(64), unique=True, nullable=True, index=True)
+    salt = db.Column(db.LargeBinary(16), nullable=True)
     totp_secret = db.Column(db.String(200), nullable=False)  # Stores base64-encoded encrypted TOTP secret
 
     @validates('totp_secret')
     def _validate_totp_secret(self, key, value):
         return normalize_totp_for_storage(value)
+
+    def get_display_username(self):
+        return self.username or f"sysadmin_{self.id}"
 
 
 class SystemAdminCredential(db.Model):
@@ -1633,8 +1639,11 @@ class IssueResolutionAction(db.Model):
 class Admin(db.Model):
     __tablename__ = 'admins'
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    display_name = db.Column(db.String(100), nullable=True)  # Teacher's display name (defaults to username if not set)
+    username = db.Column(db.String(80), unique=True, nullable=True)  # Legacy plaintext username (deprecated)
+    username_hash = db.Column(db.String(64), unique=True, nullable=True)
+    username_lookup_hash = db.Column(db.String(64), unique=True, nullable=True, index=True)
+    teacher_public_id = db.Column(db.String(120), unique=True, nullable=True, index=True)
+    display_name = db.Column(db.String(100), nullable=True)  # Teacher's display name (defaults to teacher_public_id if not set)
     # TOTP-only: store secret (base64-encoded encrypted data)
     totp_secret = db.Column(db.String(200), nullable=False)  # Stores base64-encoded encrypted TOTP secret
     # Account recovery: Hashed DOB sum (similar to student system)
@@ -1662,8 +1671,18 @@ class Admin(db.Model):
         return normalize_totp_for_storage(value)
 
     def get_display_name(self):
-        """Return display_name if set, otherwise fall back to username"""
-        return self.display_name if self.display_name else self.username
+        """Return display_name if set, otherwise fall back to public teacher ID."""
+        if self.display_name:
+            return self.display_name
+        if self.teacher_public_id:
+            return self.teacher_public_id
+        return self.username or f"teacher_{self.id}"
+
+    def get_sysadmin_display_name(self):
+        """Return the minimal-PII teacher identifier for sysadmin contexts."""
+        if self.teacher_public_id:
+            return self.teacher_public_id
+        return self.username or f"teacher_{self.id}"
 
     def get_student_count(self):
         """Return count of unique students linked to this teacher via StudentTeacher."""
