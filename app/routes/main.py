@@ -341,16 +341,17 @@ def verify_hall_pass(teacher_public_token):
         if entry.left_time:
             left_utc = ensure_utc(entry.left_time)
             left_local = left_utc.astimezone(school_tz)
-            time_out_str = left_local.strftime('%-I:%M %p')
+            time_out_str = left_local.strftime('%I:%M %p').lstrip('0')
 
-            # Compute elapsed minutes for 'left' status
-            elapsed_mins = int((utc_now() - left_utc).total_seconds() // 60)
+            # Compute elapsed minutes only for currently-out passes
+            if entry.status == 'left':
+                elapsed_mins = int((utc_now() - left_utc).total_seconds() // 60)
 
         return_time_str = None
         if entry.return_time:
             returned_utc = ensure_utc(entry.return_time)
             returned_local = returned_utc.astimezone(school_tz)
-            return_time_str = returned_local.strftime('%-I:%M %p')
+            return_time_str = returned_local.strftime('%I:%M %p').lstrip('0')
 
         result = {
             'outcome': 'match',

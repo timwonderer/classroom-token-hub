@@ -97,7 +97,6 @@ def test_get_verify_page_valid_token(client, hp_teacher, hp_student):
     assert "Verify" in html
     # Should not expose teacher_id as a query parameter or attribute
     assert f"teacher_id={hp_teacher.id}" not in html
-    assert f"teacher_id={hp_teacher.id}" not in html
 
 
 def test_get_verify_page_invalid_token(client):
