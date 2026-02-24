@@ -142,6 +142,19 @@ Choose how the item works:
 
 ## Item Types Explained
 
+### Rent-Linked Items (Managed via Rent Settings)
+
+Items marked as "Available in Store" in your Rent Settings automatically appear here. These are special system-managed items:
+
+- **Created Automatically**: When you add a rent item with store availability.
+- **Synced**: Changes to name or price in Rent Settings update the store item.
+- **Purchase Duration**:
+  - **Per-Period**: Valid until next rent payment (e.g., Desk Access).
+  - **Per-Use**: Consumable (e.g., Pencil).
+- **Restrictions**: Cannot be deleted from the store directly (must remove from Rent Settings).
+
+For full details on configuring these, see the [Rent Itemization Guide](/docs/user-guides/features/rent/itemization-guide).
+
 ### Immediate Use Items
 
 Best for:
@@ -326,6 +339,7 @@ Items the whole class works toward together:
 
 ## Related Articles
 
+- [Rent Itemization Guide](/docs/user-guides/features/rent/itemization-guide)
 - [Teacher Store Diagnostics](/docs/user-guides/diagnostics/teacher-store)
 - [Economy Guide](/docs/user-guides/economy_guide)
 
