@@ -1,234 +1,286 @@
-Account Recovery & Reclaim Specification
+# Student Account Recovery & Reclaim Specification
 
-Purpose
+> **Verified against implementation.**
+> Claims marked ~~strikethrough~~ reflect original design intent that was
+> revised before or during implementation. Correction notes appear inline.
+> See also: `teacher_account_recovery_spec.md` for teacher credential recovery.
 
-This document defines the architecture, constraints, and invariants for the Account Recovery & Reclaim feature.
+---
 
-The goal is to allow students to safely recover access to their existing classroom economy account without:
-	•	Deleting student records
-	•	Recreating accounts
-	•	Manually transferring balances
-	•	Modifying historical transactions
-	•	Altering economic history
+## Purpose
 
-This feature must preserve all existing economic data and adhere strictly to ledger immutability principles.
+This document defines the architecture, constraints, and invariants for the
+Student Account Recovery & Reclaim feature.
 
-⸻
+The goal is to allow students to safely recover access to their existing
+classroom economy account without:
+- Deleting student records
+- Recreating accounts
+- Manually transferring balances
+- Modifying historical transactions
+- Altering economic history
 
-Core Invariant (Non‑Negotiable)
+This feature must preserve all existing economic data and adhere strictly to
+ledger immutability principles.
 
-Account recovery must never modify, delete, merge, or rewrite historical economic records.
+---
+
+## Core Invariant (Non‑Negotiable)
+
+Account recovery must never modify, delete, merge, or rewrite historical
+economic records.
 
 Specifically:
-	•	No transaction records may be altered.
-	•	No balances may be edited manually.
-	•	No items, insurance policies, or ownership records may be recreated.
-	•	No historical logs may be rewritten.
-	•	No migration files may be modified.
+- No transaction records may be altered.
+- No balances may be edited manually.
+- No items, insurance policies, or ownership records may be recreated.
+- No historical logs may be rewritten.
+- No migration files may be modified.
 
 Account recovery is an identity rebinding operation only.
 
-⸻
+---
 
-Conceptual Model
+## Conceptual Model
 
 Recovery is not a password reset.
 
-Recovery is the process of re‑binding a human student to an existing participant record within a specific join_code economy.
+Recovery is the process of re‑binding a human student to an existing participant
+record within a specific `join_code` economy.
 
 The economic record remains unchanged. Only credential access is restored.
 
-There is a single recovery flow. All resets are teacher‑initiated and time‑bounded.
+There is a single recovery flow. All resets are teacher‑initiated and
+time‑bounded.
 
-⸻
+---
 
-Data Model Changes
+## Data Model
 
-Student Table Additions / Updates
+### `students` table — recovery-relevant columns
 
-Add or confirm the following columns exist on the student table:
-	•	reset_code (string, nullable)
-	•	reset_code_expires_at (datetime, nullable)
-	•	status (enum):
-	•	active
-	•	to_be_claimed
-	•	archived
+| Column | Type | Notes |
+|---|---|---|
+| `reset_code` | String(8), nullable, **globally unique** | 8-character code from unambiguous alphabet |
+| `reset_code_expires_at` | DateTime(tz), nullable | UTC; set to `now + 10 minutes` |
+| `recovery_status` | String(20), default `'active'` | `active` / `to_be_claimed` / `archived` |
 
-Constraints:
-	•	Only one active reset_code per student.
-	•	reset_code must be unique within join_code scope.
-	•	reset_code must be one-time use.
-	•	reset_code must expire (hard TTL: 10 minutes).
-	•	reset_code must be cleared upon successful claim or expiration.
+> **Correction:** The original spec named this column `status` and described it
+> as a database enum. The actual column is named `recovery_status` and is a
+> plain `String(20)` column with no enum constraint.
 
-⸻
+> **Correction:** The original spec stated the uniqueness constraint was scoped
+> to `join_code`. The actual DB column has a global `UNIQUE` constraint across
+> all students.
 
-Single Recovery Flow
+### Reset code alphabet
 
-Step 1 — Teacher Initiates Reset
+```
+ABCDEFGHJKLMNPQRSTUVWXYZ23456789
+```
 
-Teacher clicks Reset Student Account in Student Details.
+Characters omitted to prevent visual confusion: `O`, `I`, `L`, `1`, `0`.
+
+---
+
+## Recovery Flow
+
+### Step 1 — Teacher Initiates Reset (`POST /recovery/admin/generate-code/<student_id>`)
+
+Teacher clicks **Reset Student Account** in Student Details.
 
 System must:
-	•	Set student status → to_be_claimed
-	•	Invalidate any existing reset_code
-	•	Generate new 8-character mixed alphanumeric reset_code
-	•	Set reset_code_expires_at = now + 10 minutes
-	•	Log reset event
+- Verify teacher owns this student (`get_student_for_admin` scoping check).
+- Overwrite any existing `reset_code` with a new 8-character code drawn from
+  the unambiguous alphabet using `secrets.choice`.
+- Set `reset_code_expires_at = utc_now() + 10 minutes`.
+- Set `recovery_status = 'to_be_claimed'`.
+- Log: `"Reset code generated for student {id} by admin {admin_id}"`.
+- Flash the code and expiry to the teacher.
+- Redirect to the student detail page.
 
-Teacher provides reset_code to student immediately (in real time).
+Teacher provides reset_code to student immediately (in real time). The code is
+displayed on the student detail page while the recovery is in progress.
 
-⸻
+---
 
-Step 2 — Student Enters Join Code + Reset Code
+### Step 2 — Student Enters Join Code + Reset Code (`POST /recovery/lookup`)
 
-Student navigates to Log in page and click on "I can't log into my account".
+**Rate limit:** 10 per minute (production); 1000 per minute (test environment).
 
-Student submits:
-	•	join_code
-	•	reset_code
+Student navigates to the login page and clicks "I can't log into my account",
+then submits:
+- `join_code` (uppercased on input)
+- `reset_code` (uppercased on input)
 
-Backend must validate:
-	•	reset_code exists
-	•	reset_code unused
-	•	reset_code unexpired
-	•	student.status == to_be_claimed
-	•	join_code matches the student record
+**Backend validation sequence:**
+1. Find a `TeacherBlock` row where `join_code` matches AND the linked student
+   has `reset_code` matching the submitted code.
+2. Load the student from `TeacherBlock.student_id`.
+3. Check `reset_code_expires_at` is non-null and in the future.
+4. Check `recovery_status == 'to_be_claimed'`.
 
-If validation fails:
-	•	Show generic failure message
-	•	Do not reveal student identity
-	•	Do not change economic or credential state
+All conditions are checked before any response is given. A single generic
+message is shown on failure: `"Invalid or expired recovery code."`
 
-⸻
+**On success:**
+- If `TeacherBlock.is_claimed` is True and `TeacherBlock.claimed_at` is None,
+  set `claimed_at = utc_now()`.
+- Clear all credentials:
+  - `student.username_hash = None`
+  - `student.username_lookup_hash = None`
+  - `student.pin_hash = None`
+  - `student.passphrase_hash = None`
+  - `student.has_completed_setup = False`
+- **`reset_code` and `recovery_status` are NOT cleared here.** They remain
+  until credential setup completes.
+- Set `session['claimed_student_id'] = student.id`.
+- Log: `"Recovery lookup succeeded for student {id}; credentials cleared."`
+- Redirect to `/student/create-username`.
 
-Step 3 — Identity Re‑Registration
+---
 
-If reset_code validation succeeds:
+### ~~Step 3 — Identity Re‑Registration~~ (Removed)
 
-Student must re-enter:
-	•	First name
-	•	Full last name
-	•	Date of birth
+> **This step was removed from the implementation.**
+> The original design required students to re-enter first name, last name, and
+> date of birth. The `/recovery/verify-identity` route now redirects directly
+> to `/recovery/lookup`.
+>
+> **Current behavior:** Identity (first name, last initial) is managed by the
+> teacher and remains unchanged through recovery. No PII re-entry is required.
+
+---
+
+### Step 3 — Credential Re‑Establishment
+
+Student proceeds through the normal credential setup flow:
+- Username (via `/student/create-username`)
+- PIN and passphrase (via `/student/setup-pin-passphrase`)
 
 Rules:
-	•	These fields replace existing identity metadata on the same student row.
-	•	student_id must remain unchanged.
-	•	No new student record may be created.
-	•	Operation must be atomic.
+- All four credential hashes are fully replaced.
+- Old credentials become invalid immediately (cleared in Step 2).
+- No partial credential updates allowed.
+- If interrupted mid-flow, `reset_code` remains valid until expiration (it is
+  not cleared until setup completes).
 
-⸻
+---
 
-Step 4 — Credential Re‑Establishment
-
-Student proceeds through normal credential setup flow:
-	•	Username
-	•	PIN
-	•	Passphrase
-
-Rules:
-	•	All credentials are fully replaced.
-	•	Old credentials become invalid immediately.
-	•	No partial credential updates allowed.
-	•	If interrupted mid-flow, reset_code remains valid until expiration.
-
-⸻
-
-Step 5 — Completion
+### Step 4 — Completion (`POST /student/setup-pin-passphrase`)
 
 Upon successful credential setup:
-	•	Clear reset_code
-	•	Clear reset_code_expires_at
-	•	Set status → active
-	•	Log successful reclaim event
+- `student.reset_code = None`
+- `student.reset_code_expires_at = None`
+- `student.recovery_status = 'active'`
+- `student.has_completed_setup = True`
+- `session['claimed_student_id']` is cleared.
+- PII cleanup: `student.dob_sum = None`, `student.last_name_hash_by_part = None`,
+  `student.has_completed_profile_migration = True`.
 
-⸻
+---
 
-State Machine (Formal Definition)
+## State Machine (Formal Definition)
 
-States
-	•	active
-	•	to_be_claimed
-	•	archived
+### States
 
-Allowed Transitions
+| State | Meaning |
+|---|---|
+| `active` | Student can log in normally |
+| `to_be_claimed` | Recovery initiated; student must re-establish credentials |
+| `archived` | Soft-deleted; cannot log in |
 
-	1.	active → to_be_claimed
-	•	Trigger: Teacher initiates reset
+### Allowed Transitions
 
-	2.	to_be_claimed → active
-	•	Trigger: Successful reclaim
+| # | From | To | Trigger |
+|---|---|---|---|
+| 1 | `active` | `to_be_claimed` | Teacher initiates reset |
+| 2 | `to_be_claimed` | `active` | Student completes credential setup |
+| 3 | `active` | `archived` | Teacher deletes student or class |
 
-	3.	to_be_claimed → active
-	•	Trigger: reset_code expiration
-	•	Action: Clear reset_code and expiration
+> **Implementation note:** Transition 3 from the original design (expired
+> `reset_code` triggers automatic `to_be_claimed → active`) is **not
+> implemented**. Status is only set back to `active` after successful credential
+> setup. The expired code causes the lookup to fail, but the `recovery_status`
+> is not automatically reverted.
 
-	4.	active → archived
-	•	Trigger: Teacher deletes student or class
+### Forbidden Transitions
 
-Forbidden Transitions
-	•	archived → active (unless future explicit restore feature)
-	•	to_be_claimed → archived without logging
-	•	Any transition that creates a new student record automatically
+- `archived → active` (no explicit restore feature exists)
+- `to_be_claimed → archived` without logging
+- Any transition that creates a new student record automatically
 
-⸻
+---
 
-Security Constraints
-	•	Reset codes must be random, 8-character alphanumeric.
-	•	Reset codes must expire after 10 minutes.
-	•	Reset codes must be single-use.
-	•	Rate limit reset code attempts.
-	•	Lock reclaim flow after repeated failed attempts.
-	•	Never reveal whether a specific student exists outside a valid reset flow.
+## Security Constraints
 
-⸻
+| Constraint | Implementation |
+|---|---|
+| Reset code randomness | `secrets.choice` from unambiguous alphabet |
+| Reset code length | 8 characters |
+| Reset code uniqueness | Global unique constraint on `students.reset_code` |
+| Reset code expiry | Hard TTL: 10 minutes |
+| Reset code single-use | Code cleared after successful credential setup |
+| Rate limit | 10 per minute (production) on `/recovery/lookup` |
+| Generic error messages | No student existence revealed on failure |
+| Credential clearing | All four credential hashes nulled atomically before redirecting |
 
-Hard Boundaries (Must Not Do)
+---
+
+## Hard Boundaries (Must Not Do)
 
 The recovery system must NOT:
-	•	Create a new student record during recovery.
-	•	Merge two student records automatically.
-	•	Transfer balances between accounts.
-	•	Copy or recreate items.
-	•	Issue refunds during recovery.
-	•	Modify transaction history.
-	•	Adjust economic balances.
-	•	Alter migration history.
+- Create a new student record during recovery.
+- Merge two student records automatically.
+- Transfer balances between accounts.
+- Copy or recreate items.
+- Issue refunds during recovery.
+- Modify transaction history.
+- Adjust economic balances.
+- Alter migration history.
 
 Recovery restores access. It does not alter economic reality.
 
-⸻
+---
 
-Acceptance & Safety Test Cases
+## Acceptance & Safety Test Cases
 
-Identity Integrity Tests
-	•	Recovering an account must not create a new student row.
-	•	Recovering an account must not duplicate student IDs.
-	•	student_id must remain constant through recovery.
+*(Covered by `tests/test_flow_credential_reset.py` and `tests/test_student_recovery.py`.)*
 
-Economic Invariance Tests
-	•	Balance before reset == balance after reset.
-	•	Transaction count before reset == transaction count after reset.
-	•	No new economic transactions are created during recovery.
+### Identity Integrity Tests
 
-Reset Code Tests
-	•	Only one active reset_code per student.
-	•	Reset code invalid after first successful use.
-	•	Reset code invalid after expiration.
-	•	Expired code does not partially update credentials.
+- Recovering an account must not create a new student row.
+- `student_id` must remain constant through recovery.
+- `first_name` and `last_initial` must be unchanged after recovery.
 
-Edge Case Tests
-	•	Attempt reclaim when status != to_be_claimed → fail.
-	•	Multiple reset attempts regenerate and invalidate prior codes.
-	•	Interrupting reclaim mid-flow does not corrupt student record.
+### Economic Invariance Tests
 
-Migration Discipline Tests
-	•	No historical migration files are edited.
-	•	No legacy economic data is rewritten.
+- Balance before reset == balance after reset.
+- Transaction count before reset == transaction count after reset.
+- No new economic transactions are created during recovery.
 
-⸻
+### Reset Code Tests
 
-Summary Principle
+- Reset code is 8 characters from the unambiguous alphabet.
+- Generating a new reset code replaces any existing one.
+- Reset code is cleared after successful credential setup.
+- Expired code returns generic error; no state changes.
+
+### Edge Case Tests
+
+- Attempt lookup when `recovery_status != 'to_be_claimed'` → fail.
+- Attempt lookup with expired `reset_code_expires_at` → fail.
+- Interrupting after lookup (mid credential setup) leaves `recovery_status = 'to_be_claimed'`
+  and `reset_code` intact until the code expires.
+
+### Migration Discipline Tests
+
+- No historical migration files are edited.
+- No legacy economic data is rewritten.
+
+---
+
+## Summary Principle
 
 Credentials are disposable.
 Identity is reclaimable.
