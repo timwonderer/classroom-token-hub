@@ -181,13 +181,22 @@ def parse_dob_input(dob_str):
 
 
 def _find_admin_by_auth_username(username: str):
-    """Lookup teacher by deterministic username lookup hash."""
+    """Lookup teacher by hash, with migration-only legacy fallback."""
     normalized = normalize_auth_username(username)
     if not normalized:
         return None
 
     lookup_hash = hash_username_lookup(normalized)
-    return Admin.query.filter_by(username_lookup_hash=lookup_hash).first()
+    admin = Admin.query.filter_by(username_lookup_hash=lookup_hash).first()
+    if admin:
+        return admin
+
+    # Migration-only fallback for legacy records that have not been hashed yet.
+    return Admin.query.filter(
+        Admin.username == normalized,
+        Admin.username_lookup_hash.is_(None),
+        Admin.username_hash.is_(None),
+    ).first()
 
 
 def _auth_username_exists(username: str, *, exclude_admin_id: int | None = None) -> bool:
