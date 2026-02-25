@@ -2191,7 +2191,7 @@ def file_claim(policy_id):
             InsuranceClaim.processed_date >= period_start,
             InsuranceClaim.processed_date <= period_end,
             InsuranceClaim.approved_amount.isnot(None),
-        ).scalar() or 0.0
+        ).scalar() or Decimal('0')
         remaining_period_cap = max(policy.max_payout_per_period - period_payouts, 0)
 
     eligible_transactions = []
