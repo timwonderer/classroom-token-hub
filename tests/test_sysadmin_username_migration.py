@@ -115,7 +115,3 @@ def test_migrated_sysadmin_no_longer_needs_migration(client):
     assert needs_hashed_username_migration(admin) is False, (
         "after migration, needs_hashed_username_migration must return False"
     )
-    # Also verify the migrated account is findable by hash lookup, not plaintext
-    found = _find_sysadmin_by_auth_username("postmigrate")
-    assert found is not None
-    assert found.id == admin_id

@@ -42,7 +42,6 @@ from app.utils.passwordless_client import (
     verify_signin_token,
     get_public_api_key
 )
-from app.hash_utils import hash_username_lookup
 from app.utils.username_migration import (
     normalize_auth_username,
     needs_hashed_username_migration,
@@ -61,17 +60,7 @@ def _find_sysadmin_by_auth_username(username: str):
     if not normalized:
         return None
 
-    lookup_hash = hash_username_lookup(normalized)
-    admin = SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
-    if admin:
-        return admin
-
-    # Migration-only fallback for legacy records that have not been hashed yet.
-    return SystemAdmin.query.filter(
-        SystemAdmin.username == normalized,
-        SystemAdmin.username_lookup_hash.is_(None),
-        SystemAdmin.username_hash.is_(None),
-    ).first()
+    return SystemAdmin.query.filter_by(username=normalized).first()
 
 
 def _sysadmin_auth_username_exists(username: str, *, exclude_sysadmin_id: int | None = None) -> bool:
@@ -170,9 +159,6 @@ def login():
                     session['last_activity'] = utc_now().isoformat()
                     # Establish global maintenance bypass for subsequent role testing.
                     session['maintenance_global_bypass'] = True
-                    if needs_hashed_username_migration(admin):
-                        session["force_sysadmin_username_migration"] = True
-                        return redirect(url_for("sysadmin.username_migration"))
                     flash("System admin login successful.")
                     next_url = request.args.get("next")
                     redirect_target = None
@@ -427,9 +413,6 @@ def passkey_auth_finish():
             redirect_url = url_for("sysadmin.dashboard")
         else:
             redirect_url = next_url or url_for("sysadmin.dashboard")
-        if needs_hashed_username_migration(admin):
-            session["force_sysadmin_username_migration"] = True
-            redirect_url = url_for("sysadmin.username_migration")
 
         return jsonify({
             "success": True,
