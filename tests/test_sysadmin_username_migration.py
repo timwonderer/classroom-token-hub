@@ -5,6 +5,11 @@ Regression: the @validates('username') validator on SystemAdmin was eagerly
 backfilling username_hash/username_lookup_hash, causing needs_hashed_username_migration()
 to return False and bypassing the migration screen. The plaintext username was
 never cleared from the database.
+
+PR 1024 regression: _find_sysadmin_by_auth_username was reverted to plaintext-only
+lookup, breaking login for sysadmins who had already migrated to hash-based storage.
+Also: legacy plaintext TOTP secrets caused login to fail because decrypt_totp raised
+ValueError and the code did not fall back to treating the value as a raw secret.
 """
 
 import pyotp
@@ -13,8 +18,8 @@ from sqlalchemy import text
 
 from app import db
 from app.models import SystemAdmin
-from app.utils.encryption import encrypt_totp
-from app.utils.username_migration import needs_hashed_username_migration
+from app.utils.encryption import encrypt_totp, is_totp_encrypted
+from app.utils.username_migration import needs_hashed_username_migration, build_hashed_username_fields
 from app.routes.system_admin import _find_sysadmin_by_auth_username
 
 
@@ -100,7 +105,6 @@ def test_migrated_sysadmin_no_longer_needs_migration(client):
     secret = pyotp.random_base32()
     admin_id = _insert_legacy_sysadmin("postmigrate", secret)
 
-    from app.utils.username_migration import build_hashed_username_fields
     admin = db.session.get(SystemAdmin, admin_id)
     salt, username_hash, username_lookup_hash = build_hashed_username_fields("postmigrate")
     admin.salt = salt
@@ -114,4 +118,75 @@ def test_migrated_sysadmin_no_longer_needs_migration(client):
 
     assert needs_hashed_username_migration(admin) is False, (
         "after migration, needs_hashed_username_migration must return False"
+    )
+
+
+def test_hash_lookup_finds_migrated_sysadmin(client):
+    """_find_sysadmin_by_auth_username must find a fully migrated sysadmin
+    (username=None, hash fields set) via the username_lookup_hash path."""
+    secret = pyotp.random_base32()
+    admin_id = _insert_legacy_sysadmin("hashedadmin", secret)
+
+    # Migrate the record to hash-based storage (username cleared).
+    admin = db.session.get(SystemAdmin, admin_id)
+    salt, username_hash, username_lookup_hash = build_hashed_username_fields("hashedadmin")
+    admin.salt = salt
+    admin.username_hash = username_hash
+    admin.username_lookup_hash = username_lookup_hash
+    admin.username = None
+    db.session.commit()
+
+    found = _find_sysadmin_by_auth_username("hashedadmin")
+
+    assert found is not None, (
+        "migrated sysadmin with null plaintext username must be found via hash lookup"
+    )
+    assert found.id == admin_id
+    assert found.username is None
+    assert found.username_lookup_hash is not None
+
+
+def _insert_plaintext_totp_sysadmin(username: str, totp_secret: str) -> int:
+    """Insert a legacy sysadmin with a raw plaintext TOTP secret (pre-encryption era)."""
+    result = db.session.execute(
+        text(
+            "INSERT INTO system_admins "
+            "(username, username_hash, username_lookup_hash, salt, totp_secret) "
+            "VALUES (:username, NULL, NULL, NULL, :secret)"
+        ),
+        {"username": username, "secret": totp_secret},  # plaintext, not encrypted
+    )
+    db.session.commit()
+    return result.lastrowid
+
+
+def test_login_with_plaintext_totp_succeeds_and_encrypts(client):
+    """A sysadmin whose totp_secret was stored as plaintext (pre-encryption era)
+    must still be able to log in, and the secret must be encrypted in the DB
+    on first successful authentication."""
+    totp_secret = pyotp.random_base32()
+    admin_id = _insert_plaintext_totp_sysadmin("plaintotpadmin", totp_secret)
+
+    # Confirm raw storage is NOT encrypted yet.
+    admin = db.session.get(SystemAdmin, admin_id)
+    assert not is_totp_encrypted(admin.totp_secret), (
+        "test setup: totp_secret should be plaintext before login"
+    )
+
+    totp_code = pyotp.TOTP(totp_secret).now()
+
+    resp = client.post(
+        "/sysadmin/login",
+        data={"username": "plaintotpadmin", "totp_code": totp_code},
+    )
+
+    # Successful login redirects away from the login page.
+    assert resp.status_code == 302
+    assert "/login" not in resp.headers["Location"]
+
+    # TOTP must now be stored encrypted.
+    db.session.expire(admin)
+    db.session.refresh(admin)
+    assert is_totp_encrypted(admin.totp_secret), (
+        "totp_secret must be encrypted after first successful login"
     )
