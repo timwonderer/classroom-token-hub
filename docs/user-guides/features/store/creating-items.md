@@ -149,7 +149,7 @@ Items marked as "Available in Store" in your Rent Settings automatically appear 
 - **Created Automatically**: When you add a rent item with store availability.
 - **Synced**: Changes to name or price in Rent Settings update the store item.
 - **Purchase Duration**:
-  - **Per-Period**: Valid until next rent payment (e.g., Desk Access).
+  - **Per-Period**: Valid until the next rent due date (end of the current coverage period; e.g., Desk Access).
   - **Per-Use**: Consumable (e.g., Pencil).
 - **Restrictions**: Cannot be deleted from the store directly (must remove from Rent Settings).
 

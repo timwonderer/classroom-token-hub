@@ -23,9 +23,9 @@ Go to **Store** from the student sidebar.
 
 ## Rent Alternatives
 Some items in the store are included in your rent payment.
-- **Included:** If you paid rent, you already own these!
+- **Included:** If you paid rent, you already have access to these as part of your current rent period.
 - **Buy Separately:** If you are late on rent, you can buy them here individually (usually at a higher price) to keep using them.
-- **Validity:** These items expire when the next rent payment is due.
+- **Validity:** Access to these included items is valid until your next rent due date (the end of your current coverage period).
 
 ## Per-Use Items
 Consumable items (like pencils or supplies) may work differently:
