@@ -131,7 +131,7 @@
 <body>
   <div class="container">
     <h1>Classroom Token Hub Data Handling and Privacy Policy</h1>
-    <p class="last-updated">Last Updated: December 12, 2025</p>
+    <p class="last-updated">Last Updated: February 25, 2026</p>
 
     <h2>Purpose</h2>
     <p>This document explains the type of data you will provide in order to use this application, ways we handle and
@@ -159,11 +159,15 @@
       <h3>If you are a student user</h3>
       <p>Your teacher has provided these information on your behalf to create your account:</p>
       <ul>
-        <li><strong>Date of Birth</strong>: Used for identity verification in account recovery.</li>
+        <li><strong>Date of Birth</strong>: Used once for identity verification during account setup only. The date of
+          birth is stored as a one-way hash and is <strong>permanently deleted from our systems immediately after you
+            complete account setup</strong>. It is not retained afterward.</li>
         <li><strong>First Name</strong>: For account claim and friendly greetings</li>
-        <li><strong>Last Name</strong>: For account claim and recovery</li>
+        <li><strong>Last Name</strong>: Stored as a one-way hash for account claim only; <strong>deleted immediately
+            after account setup is complete</strong>. Your last initial (not full last name) is retained for
+          identification purposes.</li>
         <li><strong>Class Block</strong>: To place you in the correct class</li>
-        <li><strong>Class Identifier</strong>: A easy to understand name for your class</li>
+        <li><strong>Class Identifier</strong>: An easy to understand name for your class</li>
       </ul>
 
       <div class="additional-info">
@@ -206,6 +210,10 @@
     <p>We collect only the data necessary to support classroom activities and educational objectives. All personally
       identifiable information (PII) is either hashed or stored minimalistically. Data is retained only for as long as
       required by educational standards and district policies, then securely deleted.</p>
+    <p><strong>Post-Claim PII Cleanup:</strong> Verification hashes used solely for the one-time account claim process
+      (date of birth sum and name hash) are <strong>permanently and automatically deleted immediately after a student
+        completes account setup</strong>. These hashes exist only to verify identity during the initial claim and serve
+      no purpose once an account is established. This minimizes the sensitive-data footprint on an ongoing basis.</p>
 
     <h2>Security Measures</h2>
     <ul>
@@ -224,6 +232,12 @@
       <li><strong>Irreversible Hashes</strong>: All hashing is one-way, meaning that original values cannot be recovered
         from the stored hashes by anyone, including administrators. Any lost username, PIN, passphrases, and TOTP are
         not recoverable.</li>
+      <li><strong>Automatic Post-Claim PII Deletion</strong>: Identity verification hashes (date of birth, name) used
+        only during the one-time account claim process are automatically purged from all records — both the class roster
+        and the student account — immediately after setup is complete, reducing long-term data exposure.</li>
+      <li><strong>Timed Confirmation Gates for Destructive Actions</strong>: High-impact operations such as class period
+        deletion and account removal require explicit timed in-app confirmation, reducing the risk of accidental or
+        unauthorized data loss.</li>
       <li><strong>Limited System Administrator Scope</strong>: System Administrators do not have access to any
         information about students except teacher username, class section labels, and total number of students enrolled.
       </li>
@@ -256,6 +270,10 @@
     <h2>Student Rights & Access</h2>
     <p>Students have the right to view their own data. If any information is incorrect, please contact your teacher to
       have it corrected. Account access and credential resets must be handled by an administrator.</p>
+    <p><strong>Account Recovery:</strong> If you lose access to your account, your teacher can issue a reset code. The
+      recovery process requires only your class join code and the reset code — it does not ask you to re-enter your
+      personal information such as your name or date of birth, as those verification hashes are not retained after
+      account setup.</p>
 
     <h2>Data Breach Notification</h2>
     <p>In the event of a data breach, we will notify affected users and authorities within 72 hours and provide guidance
