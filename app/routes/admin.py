@@ -398,6 +398,16 @@ def _hard_delete_student_if_orphaned(student_id):
     if has_links:
         return False
 
+    student_item_ids_subq, issue_ids_subq, insurance_ids_subq, tx_ids_subq = _student_delete_subqueries(student_id)
+    _unclaim_all_teacher_blocks_for_student(student_id)
+    _clear_cross_issue_transaction_refs(tx_ids_subq)
+    _delete_student_scoped_rows(student_id, student_item_ids_subq, issue_ids_subq, insurance_ids_subq, tx_ids_subq)
+    Student.query.filter(Student.id == student_id).delete(synchronize_session=False)
+    return True
+
+
+def _student_delete_subqueries(student_id):
+    """Build reusable subqueries for dependent-row cleanup."""
     student_item_ids_subq = (
         db.session.query(StudentItem.id)
         .filter(StudentItem.student_id == student_id)
@@ -418,8 +428,11 @@ def _hard_delete_student_if_orphaned(student_id):
         .filter(Transaction.student_id == student_id)
         .subquery()
     )
+    return student_item_ids_subq, issue_ids_subq, insurance_ids_subq, tx_ids_subq
 
-    # Convert any claimed roster seats back to unclaimed seats.
+
+def _unclaim_all_teacher_blocks_for_student(student_id):
+    """Convert all claimed roster seats for this student back to unclaimed seats."""
     TeacherBlock.query.filter(
         TeacherBlock.student_id == student_id
     ).update(
@@ -431,8 +444,9 @@ def _hard_delete_student_if_orphaned(student_id):
         synchronize_session=False,
     )
 
-    # Remove all student-scoped records.
-    # Clear transaction references from issues/actions that belong to other students.
+
+def _clear_cross_issue_transaction_refs(tx_ids_subq):
+    """Clear transaction refs in issues/actions that may belong to other students."""
     Issue.query.filter(
         Issue.related_transaction_id.in_(sa.select(tx_ids_subq))
     ).update(
@@ -446,6 +460,9 @@ def _hard_delete_student_if_orphaned(student_id):
         synchronize_session=False,
     )
 
+
+def _delete_student_scoped_rows(student_id, student_item_ids_subq, issue_ids_subq, insurance_ids_subq, tx_ids_subq):
+    """Delete records that are scoped directly to the student being removed."""
     RedemptionAuditLog.query.filter(
         RedemptionAuditLog.student_item_id.in_(sa.select(student_item_ids_subq))
     ).delete(synchronize_session=False)
@@ -475,9 +492,6 @@ def _hard_delete_student_if_orphaned(student_id):
     RentWaiver.query.filter(RentWaiver.student_id == student_id).delete(synchronize_session=False)
     StudentBlock.query.filter(StudentBlock.student_id == student_id).delete(synchronize_session=False)
     BalanceCache.query.filter(BalanceCache.student_id == student_id).delete(synchronize_session=False)
-
-    Student.query.filter(Student.id == student_id).delete(synchronize_session=False)
-    return True
 
 
 def _remove_student_from_teacher_scope(student, teacher_id):
