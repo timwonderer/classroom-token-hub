@@ -12,6 +12,7 @@ import secrets
 import io
 import base64
 from urllib.parse import urlparse
+import sqlalchemy as sa
 import qrcode
 import requests
 from datetime import datetime, timedelta, timezone
@@ -158,13 +159,14 @@ def login():
             try:
                 decrypted_secret = decrypt_totp(admin.totp_secret)
             except ValueError:
-                # Legacy plaintext TOTP secret – attempt direct use and migrate on success.
+                # Legacy plaintext TOTP secret - verify once, then migrate to encrypted storage.
                 decrypted_secret = admin.totp_secret
             if decrypted_secret:
+                totp_valid = False
                 try:
                     totp = pyotp.TOTP(decrypted_secret)
-                except ValueError:
-                except (binascii.Error, TypeError):
+                    totp_valid = totp.verify(totp_code, valid_window=1)
+                except (binascii.Error, TypeError, ValueError):
                     current_app.logger.warning(
                         "System admin login failed: TOTP secret is not valid base32 for sysadmin_id=%s",
                         admin.id,
@@ -181,6 +183,9 @@ def login():
                     session['last_activity'] = utc_now().isoformat()
                     # Establish global maintenance bypass for subsequent role testing.
                     session['maintenance_global_bypass'] = True
+                    if needs_hashed_username_migration(admin):
+                        session["force_sysadmin_username_migration"] = True
+                        return redirect(url_for("sysadmin.username_migration"))
                     flash("System admin login successful.")
                     next_url = request.args.get("next")
                     redirect_target = None
@@ -514,7 +519,10 @@ def dashboard():
     """
     # Gather statistics
     total_teachers = Admin.query.count()
-    total_students = Student.query.count()
+    demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
+    total_students = Student.query.filter(
+        ~Student.id.in_(sa.select(demo_ids_subq)),
+    ).count()
     active_invites = AdminInviteCode.query.filter_by(used=False).count()
     system_admin_count = SystemAdmin.query.count()
 
@@ -1015,12 +1023,14 @@ def manage_teachers():
     # Batch query: teacher-student relationships
     if all_teachers:
         teacher_ids = [t.id for t in all_teachers]
+        demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
         teacher_students = db.session.query(
             StudentTeacher.admin_id.label('teacher_id'),
             Student.id.label('student_id'),
             Student.block.label('block')
         ).join(Student, Student.id == StudentTeacher.student_id).filter(
-            StudentTeacher.admin_id.in_(teacher_ids)
+            StudentTeacher.admin_id.in_(teacher_ids),
+            ~Student.id.in_(sa.select(demo_ids_subq)),
         ).subquery()
 
         teacher_student_count_rows = db.session.query(
@@ -1122,6 +1132,7 @@ def teacher_overview():
 
     # Batch query: Get all teacher-student relationships in one query
     # Uses StudentTeacher table only (Multi-Teacher Hardening)
+    demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
     teacher_students = db.session.query(
         StudentTeacher.admin_id.label('teacher_id'),
         Student.id.label('student_id'),
@@ -1129,7 +1140,8 @@ def teacher_overview():
     ).join(
         Student, Student.id == StudentTeacher.student_id
     ).filter(
-        StudentTeacher.admin_id.in_([t.id for t in teachers])
+        StudentTeacher.admin_id.in_([t.id for t in teachers]),
+        ~Student.id.in_(sa.select(demo_ids_subq)),
     ).subquery()
 
     # Get total student counts per teacher in a single query

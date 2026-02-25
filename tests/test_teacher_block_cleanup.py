@@ -94,8 +94,8 @@ def _login_sysadmin(client, sysadmin: SystemAdmin, secret: str):
     )
 
 
-def test_delete_student_archives_without_removing_teacher_block(client):
-    """Archiving a student should preserve TeacherBlock membership/history."""
+def test_delete_student_removes_student_and_unclaims_teacher_block(client):
+    """Deleting a student should remove the student and keep roster seat as unclaimed."""
     teacher, secret = _create_admin("teacher-cleanup")
     student, teacher_block = _create_student_with_teacher_block("Alice", teacher)
     
@@ -113,17 +113,18 @@ def test_delete_student_archives_without_removing_teacher_block(client):
     
     assert response.status_code == 200
     
-    # Verify student is archived
-    refreshed = db.session.get(Student, student_id)
-    assert refreshed is not None
-    assert refreshed.is_active is False
+    # Verify student is deleted
+    assert db.session.get(Student, student_id) is None
 
-    # Verify TeacherBlock is preserved
-    assert db.session.get(TeacherBlock, teacher_block_id) is not None
+    # Verify TeacherBlock seat is preserved but unclaimed
+    refreshed_tb = db.session.get(TeacherBlock, teacher_block_id)
+    assert refreshed_tb is not None
+    assert refreshed_tb.student_id is None
+    assert refreshed_tb.is_claimed is False
 
 
-def test_bulk_delete_students_archives_without_removing_teacher_blocks(client):
-    """Bulk archive should preserve TeacherBlock entries."""
+def test_bulk_delete_students_removes_students_and_unclaims_teacher_blocks(client):
+    """Bulk delete should remove students and keep TeacherBlock seats unclaimed."""
     teacher, secret = _create_admin("teacher-bulk")
     student1, tb1 = _create_student_with_teacher_block("Alice", teacher)
     student2, tb2 = _create_student_with_teacher_block("Bob", teacher)
@@ -149,13 +150,17 @@ def test_bulk_delete_students_archives_without_removing_teacher_blocks(client):
     
     assert response.status_code == 200
     
-    # Verify students are archived
-    assert db.session.get(Student, student1_id).is_active is False
-    assert db.session.get(Student, student2_id).is_active is False
+    # Verify students are deleted
+    assert db.session.get(Student, student1_id) is None
+    assert db.session.get(Student, student2_id) is None
 
-    # Verify TeacherBlocks are preserved
-    assert db.session.get(TeacherBlock, tb1_id) is not None
-    assert db.session.get(TeacherBlock, tb2_id) is not None
+    # Verify TeacherBlocks are preserved but unclaimed
+    refreshed_tb1 = db.session.get(TeacherBlock, tb1_id)
+    refreshed_tb2 = db.session.get(TeacherBlock, tb2_id)
+    assert refreshed_tb1 is not None
+    assert refreshed_tb2 is not None
+    assert refreshed_tb1.student_id is None and refreshed_tb1.is_claimed is False
+    assert refreshed_tb2.student_id is None and refreshed_tb2.is_claimed is False
 
 
 def test_delete_block_removes_teacher_blocks(client):

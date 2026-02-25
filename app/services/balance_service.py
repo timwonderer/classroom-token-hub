@@ -36,7 +36,7 @@ def get_batch_balances(join_codes, student_ids):
     """
     # Initialize balances with cached values
     # Structure: (student_id, join_code) -> {checking_cents, savings_cents, earnings}
-    raw_balances = defaultdict(lambda: {'checking_cents': 0, 'savings_cents': 0, 'earnings_cents': 0, 'earnings': Decimal('0.00')})
+    raw_balances = defaultdict(lambda: {'checking_cents': 0, 'savings_cents': 0, 'earnings': Decimal('0.00')})
 
     if not join_codes or not student_ids:
         return raw_balances

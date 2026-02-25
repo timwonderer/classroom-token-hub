@@ -1,4 +1,4 @@
-# Read-Path Performance Audit
+# Stage 1 Read-Path Performance Audit
 
 **Date:** 2025-02-22
 **Auditor:** Jules
@@ -25,7 +25,7 @@ The audit reveals critical performance bottlenecks in the read path, primarily d
 *   **Total Queries**: 1,225 (!!!)
 *   **DB Time**: ~47ms (SQLite - would be significantly higher on networked Postgres)
 *   **Issues**:
-    1.  **Balance Calculation N+1 (248x)**: The route handler for the page iterates `blocks` -> `students` and calls `student.get_checking_balance` and `get_savings_balance`. Each call triggers a `SELECT SUM(...)` query.
+    1.  **Balance Calculation N+1 (248x)**: The template iterates `blocks` -> `students` and calls `student.get_checking_balance` and `get_savings_balance`. Each call triggers a `SELECT SUM(...)` query.
     2.  **Writes on Read (62x)**: `get_checking_balance` calls `settle_balances` which attempts to insert/update `balance_cache` records. This locks rows and degrades concurrency.
     3.  **Lazy Loading**: `Transaction` loading triggers lazy loads if not properly joined.
 
@@ -37,7 +37,6 @@ The audit reveals critical performance bottlenecks in the read path, primarily d
     1.  **Attendance Status N+1 (62x)**: `SELECT tap_events.id ...` is executed for each student/block to determine active status or unpaid time.
     2.  **Entity Fetching N+1 (62x)**: `SELECT teacher_blocks.id ...` and `SELECT payroll_settings.id ...` are repeated for each loop iteration.
     3.  **Lazy Loading (40x)**: `SELECT students.id ...` triggered when accessing student attributes from transaction lists.
-    4.  **Balance Calculation N+1 (40x for 40 students)**: The dashboard calculates `total_balance` by iterating through all students and accessing `student.checking_balance` and `student.savings_balance` properties. Each access triggers lazy loading of the student's transactions, resulting in N+1 queries.
 
 ### 3. Payroll Page (`/admin/payroll`)
 
@@ -67,7 +66,7 @@ The audit reveals critical performance bottlenecks in the read path, primarily d
     *   **Action**: Create a `BalanceReadModel` that fetches all balances for a teacher's students in a single query:
         ```sql
         SELECT student_id, join_code, account_type, SUM(amount)
-        FROM "transaction"
+        FROM transaction
         WHERE teacher_id = ?
         GROUP BY student_id, join_code, account_type
         ```

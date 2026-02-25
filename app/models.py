@@ -278,7 +278,8 @@ class Student(db.Model):
     dob_sum = db.Column(db.Integer, nullable=True)
     # Track if student has completed the legacy profile migration
     has_completed_profile_migration = db.Column(db.Boolean, default=False)
-    # Soft-delete flag: archived students cannot log in and are hidden from roster queries.
+    # Legacy field retained for backward compatibility. New deletion flow removes
+    # student records instead of using inactive/archived student state.
     is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
     # Teacher Identity Flag (prevents deletion and analytics skew)
@@ -288,7 +289,7 @@ class Student(db.Model):
     reset_code = db.Column(db.String(8), nullable=True, unique=True)  # 8-char alphanumeric code
     reset_code_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     money_action_cooldown_until = db.Column(db.DateTime(timezone=True), nullable=True)
-    recovery_status = db.Column(db.String(20), default='active', nullable=False)  # active, to_be_claimed, archived
+    recovery_status = db.Column(db.String(20), default='active', nullable=False)  # active, to_be_claimed
 
     @property
     def full_name(self):
@@ -340,22 +341,8 @@ class Student(db.Model):
             # Proper scoping by join_code (period-level isolation)
             # Use Ledger + Settlement model (BalanceCache)
             from app.models import BalanceCache, Transaction, TransactionStatus
-
-            # Best-effort eager settlement for pending rows in this class context.
-            # This keeps balance reads and transaction statuses consistent even when
-            # asynchronous settlement is unavailable (e.g., tests/local dev).
-            has_pending = db.session.query(Transaction.id).filter(
-                Transaction.student_id == self.id,
-                Transaction.join_code == join_code,
-                Transaction.status == TransactionStatus.PENDING,
-            ).first()
-            if has_pending:
-                try:
-                    from app.utils.banking import settle_balances
-                    settle_balances(self.id, join_code)
-                except Exception:
-                    # Fall back to read path below if settlement cannot run here.
-                    pass
+            # Note: eager settlement removed to prevent write-on-read performance issues.
+            # Balances are settled on transaction creation or async.
 
             # 2. Read Posted from Cache
             cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()
@@ -441,20 +428,8 @@ class Student(db.Model):
             # Proper scoping by join_code (period-level isolation)
             # Use Ledger + Settlement model (BalanceCache)
             from app.models import BalanceCache, Transaction, TransactionStatus
-
-            # Best-effort eager settlement for pending rows in this class context.
-            has_pending = db.session.query(Transaction.id).filter(
-                Transaction.student_id == self.id,
-                Transaction.join_code == join_code,
-                Transaction.status == TransactionStatus.PENDING,
-            ).first()
-            if has_pending:
-                try:
-                    from app.utils.banking import settle_balances
-                    settle_balances(self.id, join_code)
-                except Exception:
-                    # Fall back to read path below if settlement cannot run here.
-                    pass
+            # Note: eager settlement removed to prevent write-on-read performance issues.
+            # Balances are settled on transaction creation or async.
 
             # 2. Read Posted from Cache
             cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()
@@ -1718,11 +1693,18 @@ class Admin(db.Model):
         return f"teacher_{self.id}"
 
     def get_student_count(self):
-        """Return count of unique students linked to this teacher via StudentTeacher."""
-        # StudentTeacher is defined earlier in this file
-        return db.session.query(StudentTeacher.student_id).filter(
-            StudentTeacher.admin_id == self.id
-        ).distinct().count()
+        """Return non-demo unique students linked via StudentTeacher."""
+        demo_ids_subq = db.session.query(DemoStudent.student_id).subquery()
+        return (
+            db.session.query(StudentTeacher.student_id)
+            .join(Student, Student.id == StudentTeacher.student_id)
+            .filter(
+                StudentTeacher.admin_id == self.id,
+                ~Student.id.in_(sa.select(demo_ids_subq)),
+            )
+            .distinct()
+            .count()
+        )
 
 
 class AdminCredential(db.Model):
