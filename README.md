@@ -12,7 +12,7 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Version 1.8.0 Released! This release adds rent item types (privilege, per-use, hall pass), coverage period tracking for rent payments, and stability fixes for rent/store/insurance flows. See [RELEASE_NOTES_v1.8.0.md](docs/archive/releases/RELEASE_NOTES_v1.8.0.md) for full details.
+**Project Status:** Version 1.8.0 Released with active security hardening and performance work in progress. The 1.8.0 release added rent item types (privilege, per-use, hall pass), coverage period tracking, and stability fixes. Recent unreleased improvements include: post-claim PII minimisation (DOB and name hashes automatically deleted after account setup), comprehensive class deletion audit with P1/P2/P3 security fixes, timed deletion confirmation gates, hall pass and admin identity boundary hardening, and a major read-path performance optimization reducing student roster queries from ~1225 to ~10 for a class of 60 students. See [RELEASE_NOTES_v1.8.0.md](docs/archive/releases/RELEASE_NOTES_v1.8.0.md) for the full release and [CHANGELOG.md](CHANGELOG.md) for all changes.
 
 ---
 
@@ -35,6 +35,13 @@ An interactive banking and classroom management platform for teaching students a
 - **Insurance System** — Policies, enrollments, and claims managed in-app
 - **Rent & Fees** — Optional recurring rent with waivers and late-fee configuration
 - **TOTP Authentication** — Secure admin access with two-factor authentication
+
+### Performance
+
+- **Optimized Student Roster** — N+1 query elimination reduces roster page queries from ~1225 to ~10 for a class of 60 students
+- **Read-Only Balance Properties** — Removed write-on-read side effects from balance calculations, eliminating race conditions
+- **Scoped Balance Calculations** — All balance aggregations correctly scoped to the current class period
+- **Batch Processing** — Daily limit enforcement and dashboard balance calculations use batched queries instead of per-student iteration
 
 ### Mobile & PWA Features
 
@@ -62,10 +69,14 @@ An interactive banking and classroom management platform for teaching students a
 ### Security Features
 
 - **PII Encryption** — All student names encrypted at rest
+- **Post-Claim PII Deletion** — DOB and name verification hashes automatically purged after account setup completes
 - **TOTP for Admins** — Time-based one-time passwords required
-- **Admin Account Recovery** — System admins can securely reset teacher 2FA
+- **Admin Account Recovery** — System admins can securely reset teacher 2FA; student recovery uses join code + reset code only
 - **CSRF Protection** — Protection against cross-site request forgery
 - **Credential Hashing** — Salted and peppered password hashing
+- **Deletion Confirmation Gates** — Timed in-app confirmation dialogs for destructive operations (class/period deletion, account removal)
+- **Hall Pass & Admin Identity Boundaries** — Hardened authorization checks prevent cross-admin data access in hall pass flows
+- **Class Deletion Audit** — Audited and patched all deletion paths; fixed BalanceCache orphaning (P1), scoping bugs (P2), and orphaned settings cleanup (P3)
 - **Cloudflare Turnstile** — Bot protection on login forms
 - **Database Error Logging** — Automatic error tracking and monitoring
 - **Custom Error Pages** — User-friendly error handling (400, 401, 403, 404, 500, 503)
@@ -334,4 +345,4 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 Built for educators and students to make learning about finance engaging and practical.
 
-**Last Updated:** 2026-02-09
+**Last Updated:** 2026-02-25
