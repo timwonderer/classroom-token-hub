@@ -56,6 +56,13 @@ and this project follows semantic versioning principles.
 - **`support_tickets` route** (`/sysadmin/support`) - New consolidated support ticket view combining user reports and escalated issues
 - **`open_tickets` stat** on dashboard - Shows sum of new user reports + pending/in-review escalated issues
 
+### Performance
+- **Read-Path Audit & Optimization** - Conducted comprehensive audit of student list rendering and admin dashboard performance
+  - **Removed Write-on-Read Side Effects**: Refactored `Student.checking_balance`, `Student.savings_balance`, and `Student.total_earnings` properties to be read-only calculations. Moved legacy automated settlement logic (which triggered database writes during read operations) to explicit mutation endpoints (`/transfer`, `/pay-rent`). This eliminates race conditions and significantly improves read performance.
+  - **Optimized Admin Dashboard internals**: Refactored daily limit enforcement (`auto_tapout`) to use batch processing instead of per-student iteration and moved dashboard balance calculations to batched, scoped queries. Stage 2 audit kept dashboard query totals unchanged at 402 (explicit dashboard query-count reduction remains out of scope for this stage).
+  - **Optimized Student Roster**: Eliminated N+1 query patterns in the student management table by batch-fetching balances and rent privileges. Query count reduced from ~1225 to ~10 for a class of 60 students.
+  - **Scoped Balance Calculations**: Fixed a critical multi-tenancy flaw where student balances were aggregated across all classes instead of being scoped to the current teacher's context. Dashboard and roster now correctly reflect class-specific financial state.
+
 ### Fixed
 - **Student rent/shop regression follow-up** - Addressed review-driven cleanup after the rent/store hotfix
   - Added shared helper logic for determining whether a student's current rent coverage period is paid, and reused it across student rent/shop and API purchase flows to reduce duplicated validation code

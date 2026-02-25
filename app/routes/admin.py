@@ -90,7 +90,15 @@ from app.utils.student_deletion import (
 )
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
-from app.attendance import get_last_payroll_time, calculate_unpaid_attendance_seconds, get_join_code_for_student_period
+from app.attendance import (
+    get_last_payroll_time,
+    calculate_unpaid_attendance_seconds,
+    get_join_code_for_student_period,
+    batch_auto_tapout_students,
+    get_batch_attendance_events,
+    calculate_seconds_in_memory,
+)
+from app.services.balance_service import get_batch_balances
 from app.utils.insurance_eligibility import (
     evaluate_claim_transaction_eligibility,
     CLAIM_REASON_ALREADY_CLAIMED,
@@ -1082,42 +1090,13 @@ def auto_tapout_all_over_limit():
     """
     Checks all active students and auto-taps them out if they've exceeded their daily limit.
     This is called when admin views the dashboard to ensure limits are enforced.
+    Optimized to use batch processing.
     """
-    from app.routes.api import check_and_auto_tapout_if_limit_reached
+    admin_id = session.get('admin_id')
+    if not admin_id:
+        return 0
 
-    # Get all students
-    students = _scoped_students().all()
-    tapped_out_count = 0
-
-    for student in students:
-        try:
-            # Get the student's current active sessions
-            student_blocks = [b.strip().upper() for b in student.block.split(',') if b.strip()]
-            for period in student_blocks:
-                latest_event = (
-                    TapEvent.query
-                    .filter_by(student_id=student.id, period=period)
-                    .order_by(TapEvent.timestamp.desc())
-                    .first()
-                )
-
-                # If student is active, run the auto-tapout check
-                if latest_event and latest_event.status == "active":
-                    check_and_auto_tapout_if_limit_reached(student, commit=False)
-                    tapped_out_count += 1
-                    break  # Only need to run once per student
-        except Exception as e:
-            current_app.logger.error("Error checking auto-tapout for student", exc_info=True)
-            continue
-            
-    # Commit any auto-tapouts found
-    try:
-        db.session.commit()
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Failed to commit auto-tapouts: {e}")
-
-    return tapped_out_count
+    return batch_auto_tapout_students(admin_id)
 
 @admin_bp.route('/')
 @admin_required
@@ -1161,7 +1140,27 @@ def dashboard():
 
     # Quick Stats
     total_students = len(students)
-    total_balance = sum(s.checking_balance + s.savings_balance for s in students)
+
+    # Optimized balance calculation (scoped to teacher's classes)
+    student_ids = [s.id for s in students]
+    # Fetch all join codes for this teacher
+    teacher_join_codes = [
+        code for (code,) in db.session.query(TeacherBlock.join_code)
+        .filter(TeacherBlock.teacher_id == current_admin_id, TeacherBlock.join_code.isnot(None))
+        .distinct()
+        .all()
+    ]
+
+    # Get batch balances
+    batch_balances = get_batch_balances(teacher_join_codes, student_ids)
+
+    # Sum up balances
+    total_balance_decimal = Decimal('0.00')
+    for bal in batch_balances.values():
+        total_balance_decimal += Decimal(bal['checking_cents']) / 100
+        total_balance_decimal += Decimal(bal['savings_cents']) / 100
+
+    total_balance = float(total_balance_decimal)
     avg_balance = total_balance / total_students if total_students > 0 else 0
 
     # Pending actions - count all types of pending approvals
@@ -2830,7 +2829,6 @@ def students():
     # CRITICAL: Add scoped balances for each student in each block
     # This prevents multi-tenancy violations where students see aggregated balances across all classes
     student_balances_by_block = {}  # {(student_id, block): {'checking': X, 'savings': Y, 'earnings': Z}}
-    from app.services.balance_service import get_batch_balances
 
     # 1. Identify all join codes and students to query
     target_join_codes = []
@@ -6794,13 +6792,24 @@ def payroll():
     ).group_by(Transaction.student_id).all()
     last_payroll_map = {sid: ts for sid, ts in last_payroll_rows}
 
+    # Batch: Attendance Events
+    # Fetch all events since global last payroll time for these students.
+    # SECURITY: Pass my_join_codes so events from other teachers' classes are excluded.
+    events_map = get_batch_attendance_events(student_ids, last_payroll_time, allowed_join_codes=my_join_codes)
+
     for student in students:
         # Calculate unpaid minutes across all blocks
         unpaid_seconds = 0
         student_blocks = [b.strip() for b in (student.block or "").split(',') if b.strip()]
         for block in student_blocks:
-            # TapEvent.period is stored in uppercase, so uppercase the block name
-            unpaid_seconds += calculate_unpaid_attendance_seconds(student.id, block.upper(), last_payroll_time)
+            block_upper = block.upper()
+            # Sum up unpaid seconds for all join codes associated with this teacher
+            # (matches logic of calculate_unpaid_attendance_seconds which aggregates by period)
+            for join_code in my_join_codes:
+                key = (student.id, block_upper, join_code)
+                events = events_map.get(key, [])
+                if events:
+                    unpaid_seconds += calculate_seconds_in_memory(events, last_payroll_time)
 
         unpaid_minutes = unpaid_seconds / 60.0
         estimated_payout = payroll_summary.get(student.id, 0)
