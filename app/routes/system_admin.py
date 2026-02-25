@@ -163,7 +163,7 @@ def login():
             if decrypted_secret:
                 try:
                     totp = pyotp.TOTP(decrypted_secret)
-                    totp_valid = totp.verify(totp_code, valid_window=1)
+                except ValueError:
                 except (binascii.Error, TypeError):
                     current_app.logger.warning(
                         "System admin login failed: TOTP secret is not valid base32 for sysadmin_id=%s",
