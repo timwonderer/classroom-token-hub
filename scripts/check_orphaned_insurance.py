@@ -42,7 +42,7 @@ def main():
         teachers = Admin.query.all()
         print(f"\n\nAvailable teachers to assign orphaned policies to:")
         for teacher in teachers:
-            print(f"  - ID {teacher.id}: {teacher.username}")
+            print(f"  - ID {teacher.id}: {teacher.get_display_name()}")
 
         print("\n⚠️  These policies are invisible in the admin panel!")
         print("To fix: Assign them to a teacher or delete them using:")

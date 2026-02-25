@@ -11,8 +11,7 @@
         <span class="material-symbols-outlined flex-shrink-0" style="font-size:20px;">info</span>
         <div>
             <strong>Privacy:</strong> Student names are never displayed to system administrators.
-            Only aggregated counts are shown. Deletions require teacher authorization or
-            {{ inactivity_threshold_days }} days of inactivity.
+            Only aggregated counts are shown. Teacher deletions are self-managed in teacher settings.
         </div>
     </div>
 
@@ -181,7 +180,7 @@
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
-                            <th class="ps-3">Username</th>
+                            <th class="ps-3">Teacher ID</th>
                             <th>Classes</th>
                             <th>Students</th>
                             <th>Last Login</th>
@@ -194,11 +193,6 @@
                         <tr>
                             <td class="ps-3">
                                 <div class="fw-semibold">{{ teacher.username }}</div>
-                                {% if teacher.pending_requests %}
-                                    <div class="badge bg-warning text-dark mt-1" style="font-size:0.7rem;">
-                                        {{ teacher.pending_requests|length }} pending request(s)
-                                    </div>
-                                {% endif %}
                             </td>
                             <td>
                                 {% if teacher.periods %}
@@ -232,64 +226,10 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <div class="d-flex gap-1 flex-wrap">
-                                    {% if teacher.can_delete_account or teacher.authorized_periods %}
-                                        <!-- Period deletion dropdown -->
-                                        {% if teacher.periods %}
-                                        <div class="dropdown">
-                                            <button type="button" class="btn btn-sm btn-outline-warning dropdown-toggle" data-bs-toggle="dropdown">
-                                                Delete Period
-                                            </button>
-                                            <ul class="dropdown-menu">
-                                                {% for period, count in teacher.periods.items() %}
-                                                    {% if period in teacher.authorized_periods %}
-                                                        <li>
-                                                            <form method="POST" action="{{ url_for('sysadmin.delete_period', admin_id=teacher.id, period=period) }}"
-                                                                  class="delete-form" data-type="period" data-period="{{ period|upper }}"
-                                                                  data-username="{{ teacher.username }}" data-count="{{ count }}">
-                                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                                                <button type="submit" class="dropdown-item text-warning">
-                                                                    {{ period|upper }} ({{ count }} students)
-                                                                </button>
-                                                            </form>
-                                                        </li>
-                                                    {% else %}
-                                                        <li>
-                                                            <button type="button" class="dropdown-item disabled" disabled title="No authorization for this period">
-                                                                <span class="material-symbols-outlined align-middle me-1" style="font-size:14px;">lock</span>
-                                                                {{ period|upper }} ({{ count }} students)
-                                                            </button>
-                                                        </li>
-                                                    {% endif %}
-                                                {% endfor %}
-                                            </ul>
-                                        </div>
-                                        {% endif %}
-                                        <!-- Account deletion -->
-                                        {% if teacher.can_delete_account %}
-                                        <form method="POST" action="{{ url_for('sysadmin.delete_teacher', admin_id=teacher.id) }}"
-                                              class="d-inline delete-form" data-type="account" data-username="{{ teacher.username }}">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                <span class="material-symbols-outlined align-middle" style="font-size:14px;">delete</span>
-                                                Delete Account
-                                            </button>
-                                        </form>
-                                        {% else %}
-                                        <button type="button" class="btn btn-sm btn-secondary" disabled
-                                                title="Account deletion requires teacher request or {{ inactivity_threshold_days }}+ days of inactivity">
-                                            <span class="material-symbols-outlined align-middle" style="font-size:14px;">lock</span>
-                                            Locked
-                                        </button>
-                                        {% endif %}
-                                    {% else %}
-                                        <button type="button" class="btn btn-sm btn-secondary" disabled
-                                                title="Deletion requires teacher request or {{ inactivity_threshold_days }}+ days of inactivity">
-                                            <span class="material-symbols-outlined align-middle" style="font-size:14px;">lock</span>
-                                            Locked
-                                        </button>
-                                    {% endif %}
-                                </div>
+                                <span class="text-muted" style="font-size:0.78rem;">
+                                    <span class="material-symbols-outlined align-middle" style="font-size:13px;">person</span>
+                                    Teacher-managed
+                                </span>
                             </td>
                         </tr>
                         {% endfor %}
@@ -305,11 +245,6 @@
                 <div class="d-flex align-items-start justify-content-between mb-2">
                     <div>
                         <div class="fw-semibold">{{ teacher.username }}</div>
-                        {% if teacher.pending_requests %}
-                            <span class="badge bg-warning text-dark mt-1" style="font-size:0.7rem;">
-                                {{ teacher.pending_requests|length }} pending request(s)
-                            </span>
-                        {% endif %}
                     </div>
                     {% if teacher.is_inactive %}
                         <span class="badge bg-danger">Inactive</span>
@@ -342,51 +277,10 @@
 
                 <!-- Actions -->
                 <div class="d-flex gap-2 flex-wrap">
-                    {% if teacher.can_delete_account or teacher.authorized_periods %}
-                        {% if teacher.periods %}
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-outline-warning dropdown-toggle" data-bs-toggle="dropdown">
-                                Delete Period
-                            </button>
-                            <ul class="dropdown-menu">
-                                {% for period, count in teacher.periods.items() %}
-                                    {% if period in teacher.authorized_periods %}
-                                    <li>
-                                        <form method="POST" action="{{ url_for('sysadmin.delete_period', admin_id=teacher.id, period=period) }}"
-                                              class="delete-form" data-type="period" data-period="{{ period|upper }}"
-                                              data-username="{{ teacher.username }}" data-count="{{ count }}">
-                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                            <button type="submit" class="dropdown-item">{{ period|upper }} ({{ count }})</button>
-                                        </form>
-                                    </li>
-                                    {% else %}
-                                    <li>
-                                        <button type="button" class="dropdown-item disabled" disabled>
-                                            <span class="material-symbols-outlined align-middle" style="font-size:13px;">lock</span>
-                                            {{ period|upper }} ({{ count }})
-                                        </button>
-                                    </li>
-                                    {% endif %}
-                                {% endfor %}
-                            </ul>
-                        </div>
-                        {% endif %}
-                        {% if teacher.can_delete_account %}
-                        <form method="POST" action="{{ url_for('sysadmin.delete_teacher', admin_id=teacher.id) }}"
-                              class="delete-form" data-type="account" data-username="{{ teacher.username }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-sm btn-outline-danger">
-                                <span class="material-symbols-outlined align-middle" style="font-size:14px;">delete</span>
-                                Delete
-                            </button>
-                        </form>
-                        {% endif %}
-                    {% else %}
-                        <span class="text-muted" style="font-size:0.78rem;">
-                            <span class="material-symbols-outlined align-middle" style="font-size:13px;">lock</span>
-                            Deletion locked
-                        </span>
-                    {% endif %}
+                    <span class="text-muted" style="font-size:0.78rem;">
+                        <span class="material-symbols-outlined align-middle" style="font-size:13px;">person</span>
+                        Teacher-managed
+                    </span>
                 </div>
             </div>
             {% endfor %}
@@ -400,74 +294,5 @@
         {% endif %}
     </div>
 
-    <!-- ── Pending Deletion Requests ── -->
-    {% set has_pending = namespace(value=False) %}
-    {% for teacher in teachers %}{% if teacher.pending_requests %}{% set has_pending.value = True %}{% endif %}{% endfor %}
-    {% if has_pending.value %}
-    <div class="card border-0 shadow-sm border-start border-warning border-4">
-        <div class="card-header bg-white border-bottom py-3 d-flex align-items-center gap-2">
-            <span class="material-symbols-outlined text-warning" style="font-size:20px;">pending_actions</span>
-            <h6 class="mb-0 fw-semibold">Pending Deletion Requests</h6>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-sm align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th class="ps-3">Teacher</th>
-                        <th>Type</th>
-                        <th>Period</th>
-                        <th>Reason</th>
-                        <th>Requested</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for teacher in teachers %}
-                        {% for request in teacher.pending_requests %}
-                        <tr>
-                            <td class="ps-3 fw-semibold">{{ teacher.username }}</td>
-                            <td>
-                                {% if request.request_type.value == 'period' %}
-                                    <span class="badge bg-warning text-dark">Period Deletion</span>
-                                {% else %}
-                                    <span class="badge bg-danger">Account Deletion</span>
-                                {% endif %}
-                            </td>
-                            <td>{{ request.period|upper if request.period else '—' }}</td>
-                            <td><small class="text-muted">{{ request.reason or 'Not provided' }}</small></td>
-                            <td><small class="text-muted">{{ request.requested_at.strftime('%b %d, %Y') }}</small></td>
-                        </tr>
-                        {% endfor %}
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endif %}
-
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const deleteForms = document.querySelectorAll('.delete-form');
-    deleteForms.forEach(function(form) {
-        form.addEventListener('submit', function(e) {
-            const type = form.getAttribute('data-type');
-            const username = form.getAttribute('data-username');
-            let message;
-            if (type === 'period') {
-                const period = form.getAttribute('data-period');
-                const count = form.getAttribute('data-count');
-                message = 'Delete period ' + period + ' for ' + username + '? This will remove ' + count + ' student link(s).';
-            } else if (type === 'account') {
-                message = 'Delete teacher account ' + username + '? This will remove all student links.';
-            } else {
-                message = 'Are you sure you want to proceed with this deletion?';
-            }
-            if (!confirm(message)) {
-                e.preventDefault();
-            }
-        });
-    });
-});
-</script>
 {% endblock %}

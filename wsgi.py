@@ -9,6 +9,7 @@ For gunicorn: wsgi:app
 
 # Set timezone to UTC to ensure all datetime operations use UTC
 import os
+import sys
 import time
 import platform
 from pathlib import Path
@@ -91,10 +92,75 @@ from app.auth import (
 from app.utils.helpers import format_utc_iso, is_safe_url
 from app.utils.encryption import PIIEncryptedType
 from app.utils.constants import THEME_PROMPTS
+from app.hash_utils import hash_username_lookup
+from app.utils.username_migration import build_hashed_username_fields, normalize_auth_username
 
 
 # -------------------- FLASK CLI COMMANDS --------------------
 from flask.cli import with_appcontext
+
+
+def _wait_for_enter_or_timeout(timeout_seconds=180):
+    """
+    Wait until Enter is pressed or timeout elapses.
+
+    Returns:
+        str: "enter", "timeout", or "non_interactive"
+    """
+    if not sys.stdin or not sys.stdin.isatty():
+        return "non_interactive"
+
+    print(
+        f"\nPress ENTER to clear this screen now, "
+        f"or it will auto-clear in {timeout_seconds // 60} minutes."
+    )
+    deadline = time.monotonic() + timeout_seconds
+
+    if os.name == "nt":
+        import msvcrt
+
+        while True:
+            remaining = int(deadline - time.monotonic())
+            if remaining <= 0:
+                print("\nTimeout reached. Clearing screen...")
+                return "timeout"
+
+            mins, secs = divmod(remaining, 60)
+            print(
+                f"\rAuto-clear in {mins:02d}:{secs:02d} "
+                "(Press ENTER to clear now.)",
+                end="",
+                flush=True
+            )
+
+            tick_end = time.monotonic() + 1
+            while time.monotonic() < tick_end:
+                if msvcrt.kbhit() and msvcrt.getwch() in ("\r", "\n"):
+                    print()
+                    return "enter"
+                time.sleep(0.05)
+    else:
+        import select
+
+        while True:
+            remaining = int(deadline - time.monotonic())
+            if remaining <= 0:
+                print("\nTimeout reached. Clearing screen...")
+                return "timeout"
+
+            mins, secs = divmod(remaining, 60)
+            print(
+                f"\rAuto-clear in {mins:02d}:{secs:02d} "
+                "(Press ENTER to clear now.)",
+                end="",
+                flush=True
+            )
+
+            ready, _, _ = select.select([sys.stdin], [], [], 1)
+            if ready:
+                sys.stdin.readline()
+                print()
+                return "enter"
 
 
 def ensure_default_admin():
@@ -116,15 +182,17 @@ def create_sysadmin():
     """Create initial system admin account interactively."""
     import pyotp
     import qrcode
-    from io import BytesIO
     from app.utils.encryption import encrypt_totp
 
-    username = input("Enter system admin username: ").strip()
+    username = normalize_auth_username(input("Enter system admin username: "))
     if not username:
         print("Username is required.")
         return
 
-    existing = SystemAdmin.query.filter_by(username=username).first()
+    lookup_hash = hash_username_lookup(username)
+    existing = SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
+    if not existing:
+        existing = SystemAdmin.query.filter_by(username=username).first()
     if existing:
         print(f"System admin '{username}' already exists.")
         return
@@ -139,7 +207,14 @@ def create_sysadmin():
     )
 
     # Save to database with encrypted secret
-    sysadmin = SystemAdmin(username=username, totp_secret=encrypt_totp(totp_secret))
+    salt, username_hash, username_lookup_hash = build_hashed_username_fields(username)
+    sysadmin = SystemAdmin(
+        username=None,
+        username_hash=username_hash,
+        username_lookup_hash=username_lookup_hash,
+        salt=salt,
+        totp_secret=encrypt_totp(totp_secret),
+    )
     db.session.add(sysadmin)
     db.session.commit()
 
@@ -166,8 +241,7 @@ def create_sysadmin():
     print(f"   {totp_uri}")
     print("="*70)
 
-    # Wait for user confirmation before clearing
-    input("\nPress ENTER after saving the secret to clear this screen...")
+    wait_result = _wait_for_enter_or_timeout(timeout_seconds=180)
 
     # Clear the terminal screen
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -175,6 +249,10 @@ def create_sysadmin():
     print("\nSystem admin account created and screen cleared for security.")
     print(f"   Username: {username}")
     print("   TOTP secret has been encrypted and stored in the database.\n")
+    if wait_result == "timeout":
+        print("   Screen auto-cleared after 3 minutes.")
+    elif wait_result == "non_interactive":
+        print("   Non-interactive terminal detected; screen cleared immediately.")
 
 
 # -------------------- APPLICATION HOOKS --------------------

@@ -25,6 +25,7 @@ from decimal import Decimal, InvalidOperation
 from flask import (
     Blueprint, redirect, url_for, flash, request, session,
     jsonify, Response, send_file, current_app, abort, g
+    jsonify, Response, send_file, current_app, abort, g
 )
 from urllib.parse import urlparse
 from sqlalchemy import desc, text, or_, and_, func
@@ -39,10 +40,11 @@ from app.models import (
     Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
-    BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus,
+    BankingSettings, TeacherBlock, DeletionRequest,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
-    RedemptionAuditSource, Issue, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent
+    RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent,
+    BalanceCache,
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
 from app.forms import (
@@ -68,6 +70,20 @@ from app.utils.passwordless_client import (
     create_register_token,
     verify_signin_token,
     get_public_api_key
+)
+from app.utils.admin_identity import (
+    load_teacher_id_words,
+    generate_teacher_public_id,
+    generate_teacher_public_id_with_suffix,
+)
+from app.utils.display_name_session import (
+    set_admin_display_name_cache,
+    clear_admin_display_name_cache,
+)
+from app.utils.username_migration import (
+    normalize_auth_username,
+    needs_hashed_username_migration,
+    build_hashed_username_fields,
 )
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
@@ -171,6 +187,54 @@ def parse_dob_input(dob_str):
 
     # If both formats fail, raise error
     raise ValueError("Invalid date format. Please use the date picker.")
+
+
+def _find_admin_by_auth_username(username: str):
+    """Lookup teacher by hash, with migration-only legacy fallback."""
+    normalized = normalize_auth_username(username)
+    if not normalized:
+        return None
+
+    lookup_hash = hash_username_lookup(normalized)
+    admin = Admin.query.filter_by(username_lookup_hash=lookup_hash).first()
+    if admin:
+        return admin
+
+    # Migration-only fallback for legacy records that have not been hashed yet.
+    return Admin.query.filter(
+        Admin.username == normalized,
+        Admin.username_lookup_hash.is_(None),
+        Admin.username_hash.is_(None),
+    ).first()
+
+
+def _auth_username_exists(username: str, *, exclude_admin_id: int | None = None) -> bool:
+    admin = _find_admin_by_auth_username(username)
+    if not admin:
+        return False
+    if exclude_admin_id is not None and admin.id == exclude_admin_id:
+        return False
+    return True
+
+
+def _admin_requires_username_migration(admin: Admin) -> bool:
+    return needs_hashed_username_migration(admin)
+
+
+def _generate_unique_teacher_public_id() -> str:
+    words = load_teacher_id_words()
+    for _ in range(100):
+        candidate = generate_teacher_public_id(words=words)
+        if not Admin.query.filter_by(teacher_public_id=candidate).first():
+            return candidate
+    while True:
+        candidate = generate_teacher_public_id_with_suffix(words=words)
+        if not Admin.query.filter_by(teacher_public_id=candidate).first():
+            return candidate
+
+
+def _build_admin_auth_fields(username: str, *, existing_salt: bytes | None = None) -> tuple[bytes, str, str]:
+    return build_hashed_username_fields(username, existing_salt=existing_salt)
 
 
 # -------------------- DASHBOARD & QUICK ACTIONS --------------------
@@ -399,6 +463,7 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
     HallPassLog.query.filter(HallPassLog.join_code == join_code).delete(synchronize_session=False)
     RentPayment.query.filter(RentPayment.join_code == join_code).delete(synchronize_session=False)
     StudentBlock.query.filter(StudentBlock.join_code == join_code).delete(synchronize_session=False)
+    BalanceCache.query.filter_by(join_code=join_code).delete(synchronize_session=False)
     AnalyticsSnapshot.query.filter(AnalyticsSnapshot.join_code == join_code).delete(synchronize_session=False)
     AnalyticsEvent.query.filter(AnalyticsEvent.join_code == join_code).delete(synchronize_session=False)
     Announcement.query.filter(
@@ -507,6 +572,172 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
         Student.id.in_(sa.select(orphan_student_ids))
     ).delete(synchronize_session=False)
 
+    # Clean up PayrollSettings and RentSettings for any block name that now has no
+    # remaining TeacherBlock entries for this teacher.  These models are scoped by
+    # teacher_id + block name (not join_code), so they are not caught above.
+    # Only delete when the block truly has no seats left — preserving settings for
+    # teachers who still teach other join codes under the same block name.
+    if class_blocks:
+        for block_name in class_blocks:
+            remaining = db.session.query(TeacherBlock).filter(
+                TeacherBlock.teacher_id == teacher_id,
+                TeacherBlock.block == block_name,
+                TeacherBlock.join_code != join_code,
+            ).count()
+            if remaining == 0:
+                PayrollSettings.query.filter_by(
+                    teacher_id=teacher_id, block=block_name
+                ).delete(synchronize_session=False)
+                RentSettings.query.filter_by(
+                    teacher_id=teacher_id, block=block_name
+                ).delete(synchronize_session=False)
+
+
+def _delete_teacher_residual_ownership_rows(teacher_id):
+    """Delete teacher-owned link rows not already removed by join-code scoped deletion."""
+    TeacherBlock.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    StudentTeacher.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
+    DeletionRequest.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
+
+
+def _delete_teacher_settings_activity_and_audit_rows(teacher_id):
+    """Delete teacher-scoped settings, activity, and audit rows."""
+    BankingSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    DemoStudent.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
+    FeatureSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    HallPassSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    PayrollFine.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    PayrollReward.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    PayrollSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    Announcement.query.filter(
+        sa.or_(
+            Announcement.teacher_id == teacher_id,
+            Announcement.target_teacher_id == teacher_id,
+        )
+    ).delete(synchronize_session=False)
+    Transaction.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    RedemptionAuditLog.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+
+
+def _delete_teacher_rent_rows(teacher_id):
+    """Delete rent settings and dependent items owned by a teacher."""
+    rent_setting_ids_subq = db.session.query(RentSettings.id).filter(
+        RentSettings.teacher_id == teacher_id
+    ).subquery()
+    RentItem.query.filter(
+        RentItem.rent_setting_id.in_(sa.select(rent_setting_ids_subq))
+    ).delete(synchronize_session=False)
+    RentSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+
+
+def _delete_teacher_insurance_rows(teacher_id):
+    """Delete teacher-owned insurance policies and dependent rows."""
+    policy_ids_subq = db.session.query(InsurancePolicy.id).filter(
+        InsurancePolicy.teacher_id == teacher_id
+    ).subquery()
+    InsuranceClaim.query.filter(
+        InsuranceClaim.policy_id.in_(sa.select(policy_ids_subq))
+    ).delete(synchronize_session=False)
+    StudentInsurance.query.filter(
+        StudentInsurance.policy_id.in_(sa.select(policy_ids_subq))
+    ).delete(synchronize_session=False)
+    InsurancePolicyBlock.query.filter(
+        InsurancePolicyBlock.policy_id.in_(sa.select(policy_ids_subq))
+    ).delete(synchronize_session=False)
+    InsurancePolicy.query.filter(
+        InsurancePolicy.id.in_(sa.select(policy_ids_subq))
+    ).delete(synchronize_session=False)
+
+
+def _delete_teacher_issue_rows(teacher_id):
+    """Delete teacher-owned issue records and their dependent rows."""
+    issue_ids_subq = db.session.query(Issue.id).filter(Issue.teacher_id == teacher_id).subquery()
+    IssueResolutionAction.query.filter(
+        IssueResolutionAction.issue_id.in_(sa.select(issue_ids_subq))
+    ).delete(synchronize_session=False)
+    IssueStatusHistory.query.filter(
+        IssueStatusHistory.issue_id.in_(sa.select(issue_ids_subq))
+    ).delete(synchronize_session=False)
+    Issue.query.filter(Issue.teacher_id == teacher_id).delete(synchronize_session=False)
+
+
+def _delete_teacher_recovery_and_credentials_rows(teacher_id):
+    """Delete teacher recovery, credential, and onboarding rows."""
+    recovery_ids_subq = db.session.query(RecoveryRequest.id).filter(
+        RecoveryRequest.admin_id == teacher_id
+    ).subquery()
+    StudentRecoveryCode.query.filter(
+        StudentRecoveryCode.recovery_request_id.in_(sa.select(recovery_ids_subq))
+    ).delete(synchronize_session=False)
+    RecoveryRequest.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
+    AdminCredential.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
+    TeacherOnboarding.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+
+
+def _delete_teacher_store_rows(teacher_id):
+    """Delete store rows owned by teacher, including dependent student items."""
+    store_item_ids_subq = db.session.query(StoreItem.id).filter_by(teacher_id=teacher_id).subquery()
+    StudentItem.query.filter(
+        StudentItem.store_item_id.in_(sa.select(store_item_ids_subq))
+    ).delete(synchronize_session=False)
+    StoreItem.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+
+
+def _delete_orphan_students(affected_student_ids):
+    """Delete students that no longer have any teacher links."""
+    if not affected_student_ids:
+        return
+    linked_student_ids_subq = db.session.query(StudentTeacher.student_id).filter(
+        StudentTeacher.student_id.in_(affected_student_ids)
+    ).subquery()
+    orphan_student_ids_subq = (
+        db.session.query(Student.id)
+        .filter(Student.id.in_(affected_student_ids))
+        .filter(~Student.id.in_(sa.select(linked_student_ids_subq)))
+        .subquery()
+    )
+    Student.query.filter(
+        Student.id.in_(sa.select(orphan_student_ids_subq))
+    ).delete(synchronize_session=False)
+
+
+def _hard_delete_teacher_account_scope(teacher_id):
+    """Hard-delete a teacher account and all class-scoped data owned by the teacher."""
+    if not teacher_id:
+        raise ValueError("teacher_id is required for account deletion")
+
+    join_codes = [
+        code for (code,) in db.session.query(TeacherBlock.join_code).filter(
+            TeacherBlock.teacher_id == teacher_id,
+            TeacherBlock.join_code.isnot(None),
+        ).distinct().all()
+    ]
+
+    affected_student_ids = {
+        sid for (sid,) in db.session.query(TeacherBlock.student_id).filter(
+            TeacherBlock.teacher_id == teacher_id,
+            TeacherBlock.student_id.isnot(None),
+        ).distinct().all()
+    }
+    affected_student_ids.update(
+        sid for (sid,) in db.session.query(StudentTeacher.student_id).filter(
+            StudentTeacher.admin_id == teacher_id
+        ).distinct().all()
+    )
+
+    # Required ordering: all join-code-scoped data is destroyed before admin account deletion.
+    for join_code in join_codes:
+        _hard_delete_join_code_scope(join_code, teacher_id)
+
+    _delete_teacher_residual_ownership_rows(teacher_id)
+    _delete_teacher_settings_activity_and_audit_rows(teacher_id)
+    _delete_teacher_rent_rows(teacher_id)
+    _delete_teacher_insurance_rows(teacher_id)
+    _delete_teacher_issue_rows(teacher_id)
+    _delete_teacher_recovery_and_credentials_rows(teacher_id)
+    _delete_teacher_store_rows(teacher_id)
+    _delete_orphan_students(affected_student_ids)
+
 
 def _sanitize_csv_field(value):
     """Prevent CSV injection by prefixing risky leading characters."""
@@ -520,12 +751,95 @@ def _sanitize_csv_field(value):
     return text
 
 
+def _validate_destruction_gate(data, expected_phrase):
+    """Require timed in-app gate proof for destructive operations."""
+    phrase = str((data or {}).get("gate_phrase", "")).strip().upper()
+    if phrase != expected_phrase:
+        return jsonify({
+            "status": "error",
+            "message": "Deletion blocked: confirmation phrase did not match."
+        }), 400
+
+    try:
+        countdown_seconds = int((data or {}).get("gate_countdown_seconds", 0))
+    except (TypeError, ValueError):
+        countdown_seconds = 0
+
+    try:
+        hold_seconds = float((data or {}).get("gate_hold_seconds", 0))
+    except (TypeError, ValueError):
+        hold_seconds = 0.0
+
+    if countdown_seconds < 30:
+        return jsonify({
+            "status": "error",
+            "message": "Deletion blocked: 30-second safety countdown is required."
+        }), 400
+
+    if hold_seconds < 10:
+        return jsonify({
+            "status": "error",
+            "message": "Deletion blocked: 10-second hold is required."
+        }), 400
+
+    return None
+
+
 def _get_student_or_404(student_id, include_unassigned=True):
     """Fetch a student the current admin can access or 404."""
     student = get_student_for_admin(student_id, include_unassigned=include_unassigned)
     if not student:
         abort(404)
     return student
+
+
+def _ensure_teacher_student_seat(teacher_id, join_code, block):
+    """
+    Ensure a 'Teacher Student' seat exists for the given class period.
+
+    This creates a special TeacherBlock entry that allows the teacher to log in
+    as a student for this specific class. It uses a standard identity so the
+    teacher knows how to claim it (Teacher S., DOB 01/01/2001).
+    """
+    if not join_code:
+        return
+
+    existing_seat = TeacherBlock.query.filter_by(
+        teacher_id=teacher_id,
+        join_code=join_code,
+        is_teacher=True
+    ).first()
+
+    if existing_seat:
+        return
+
+    # Create the teacher student seat
+    # Default Identity: Teacher Student, DOB 01/01/2001
+    first_name = "Teacher"
+    last_initial = "S"
+    dob_sum = 1 + 1 + 2001  # 2003
+
+    salt = get_random_salt()
+    # Canonical hash for claim matching
+    first_half_hash = compute_primary_claim_hash(first_name[:1], dob_sum, salt)
+    last_name_hash_by_part = hash_last_name_parts("Student", salt)
+
+    teacher_seat = TeacherBlock(
+        teacher_id=teacher_id,
+        block=block,
+        join_code=join_code,
+        class_label=f"Teacher's Student Account",
+        first_name=first_name,
+        last_initial=last_initial,
+        last_name_hash_by_part=last_name_hash_by_part,
+        dob_sum=dob_sum,
+        salt=salt,
+        first_half_hash=first_half_hash,
+        is_claimed=False,
+        is_teacher=True
+    )
+    db.session.add(teacher_seat)
+    current_app.logger.info(f"Created Teacher Student seat for teacher {teacher_id}, join_code {join_code}")
 
 
 def _link_student_to_admin(student: Student, admin_id):
@@ -1245,41 +1559,124 @@ def login():
     session.pop("is_admin", None)
     session.pop("admin_id", None)
     session.pop("last_activity", None)
+    session.pop("force_admin_username_migration", None)
     form = AdminLoginForm()
     if form.validate_on_submit():
-        username = form.username.data.strip()
+        username = normalize_auth_username(form.username.data)
         totp_code = form.totp_code.data.strip()
-        admin = Admin.query.filter_by(username=username).first()
+        admin = _find_admin_by_auth_username(username)
         if admin:
-            # Decrypt TOTP secret (handles both encrypted and legacy plaintext)
-            decrypted_secret = decrypt_totp(admin.totp_secret)
-            totp = pyotp.TOTP(decrypted_secret)
-            if totp.verify(totp_code, valid_window=1):
-                # Update last login timestamp
-                admin.last_login = utc_now()
-                db.session.commit()
+            try:
+                decrypted_secret = decrypt_totp(admin.totp_secret)
+            except ValueError:
+                current_app.logger.warning("Admin login failed: invalid encrypted TOTP secret for admin_id=%s", admin.id)
+                decrypted_secret = None
 
-                session["is_admin"] = True
-                session["admin_id"] = admin.id
-                session["last_activity"] = utc_now().isoformat()
-                flash("Admin login successful.")
-                next_url = request.args.get("next")
-                redirect_target = None
-                if next_url:
-                    # Normalize backslashes to mitigate browser quirks and parsing issues
-                    normalized_next = next_url.replace('\\', '')
-                    parsed_next = urlparse(normalized_next)
-                    # Only allow relative URLs with no scheme or netloc, and that pass the existing safety check
-                    if (not parsed_next.scheme and not parsed_next.netloc and is_safe_url(normalized_next)):
-                        redirect_target = normalized_next
+            if decrypted_secret:
+                totp = pyotp.TOTP(decrypted_secret)
+                if totp.verify(totp_code, valid_window=1):
+                    # Update last login timestamp
+                    admin.last_login = utc_now()
+                    db.session.commit()
+
+                    session["is_admin"] = True
+                    session["admin_id"] = admin.id
+                    session["admin_auth_username"] = username
+                    session["last_activity"] = utc_now().isoformat()
+                    set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
+                    if _admin_requires_username_migration(admin):
+                        session["force_admin_username_migration"] = True
+                        return redirect(url_for("admin.username_migration"))
+                    flash("Admin login successful.")
+                    next_url = request.args.get("next")
+                    redirect_target = None
+                    if next_url:
+                        # Normalize backslashes to mitigate browser quirks and parsing issues
+                        normalized_next = next_url.replace('\\', '')
+                        parsed_next = urlparse(normalized_next)
+                        # Only allow relative URLs with no scheme or netloc, and that pass the existing safety check
+                        if (not parsed_next.scheme and not parsed_next.netloc and is_safe_url(normalized_next)):
+                            redirect_target = normalized_next
+                        else:
+                            redirect_target = url_for("admin.dashboard")
                     else:
                         redirect_target = url_for("admin.dashboard")
-                else:
-                    redirect_target = url_for("admin.dashboard")
-                return redirect(redirect_target)
+                    return redirect(redirect_target)
         flash("Invalid credentials or TOTP code.", "error")
         return redirect(url_for("admin.login", next=request.args.get("next")))
     return render_template("admin_login.html", form=form)
+
+
+@admin_bp.route('/username-migration', methods=['GET', 'POST'])
+@admin_required
+def username_migration():
+    """One-time migration screen for legacy plaintext teacher usernames."""
+    admin = db.session.get(Admin, session.get("admin_id"))
+    if not admin:
+        flash("Account not found.", "error")
+        return redirect(url_for("admin.login"))
+
+    if not _admin_requires_username_migration(admin):
+        session.pop("force_admin_username_migration", None)
+        return redirect(url_for("admin.dashboard"))
+
+    legacy_username = session.get("admin_auth_username")
+    if not legacy_username:
+        flash("Could not determine your current username. Contact support.", "error")
+        return redirect(url_for("admin.logout"))
+
+    student_count = admin.get_student_count()
+    no_recovery_warning = student_count == 0
+
+    if request.method == "POST":
+        action = request.form.get("action", "continue")
+        chosen_username = legacy_username
+
+        if action == "update":
+            chosen_username = normalize_auth_username(request.form.get("new_username", ""))
+            if not chosen_username:
+                flash("Please enter a username.", "error")
+                return render_template(
+                    "admin_username_migration.html",
+                    legacy_username=legacy_username,
+                    no_recovery_warning=no_recovery_warning,
+                    student_count=student_count,
+                )
+            if _auth_username_exists(chosen_username, exclude_admin_id=admin.id):
+                flash("Username already exists. Choose a different username.", "error")
+                return render_template(
+                    "admin_username_migration.html",
+                    legacy_username=legacy_username,
+                    no_recovery_warning=no_recovery_warning,
+                    student_count=student_count,
+                )
+
+        salt, username_hash, username_lookup_hash = _build_admin_auth_fields(
+            chosen_username,
+            existing_salt=admin.salt,
+        )
+        admin.salt = salt
+        admin.username_hash = username_hash
+        admin.username_lookup_hash = username_lookup_hash
+        admin.username = None
+        if not admin.teacher_public_id:
+            admin.teacher_public_id = _generate_unique_teacher_public_id()
+        if not admin.hall_pass_verify_token:
+            admin.hall_pass_verify_token = Admin.generate_verify_token()
+        db.session.commit()
+
+        session["admin_auth_username"] = chosen_username
+        set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
+        session.pop("force_admin_username_migration", None)
+        flash("Username migration completed.", "success")
+        return redirect(url_for("admin.dashboard"))
+
+    return render_template(
+        "admin_username_migration.html",
+        legacy_username=legacy_username,
+        no_recovery_warning=no_recovery_warning,
+        student_count=student_count,
+    )
 
 
 @admin_bp.route('/signup', methods=['GET', 'POST'])
@@ -1310,7 +1707,7 @@ def signup():
         # Get form data
         if is_totp_submission:
             # TOTP form has all fields as strings
-            username = form.username.data.strip()
+            username = normalize_auth_username(form.username.data)
             invite_code = form.invite_code.data.strip()
             dob_string = form.dob_sum.data  # This is a string from hidden field
             totp_code = form.totp_code.data.strip()
@@ -1324,7 +1721,7 @@ def signup():
                 return redirect(url_for('admin.signup'))
         else:
             # Initial signup form
-            username = form.username.data.strip()
+            username = normalize_auth_username(form.username.data)
             invite_code = form.invite_code.data.strip()
             dob_input = form.dob_sum.data
             totp_code = ""
@@ -1387,7 +1784,7 @@ def signup():
                 flash(msg, "error")
                 return redirect(url_for('admin.signup'))
         # Step 2: Check username uniqueness
-        if Admin.query.filter_by(username=username).first():
+        if _auth_username_exists(username):
             current_app.logger.warning("Admin signup failed: username already exists")
             msg = "Username already exists."
             if is_json:
@@ -1494,19 +1891,34 @@ def signup():
 
         # Encrypt TOTP secret before storing
         encrypted_totp_secret = encrypt_totp(totp_secret)
+
+        # Mark the exact validated invite row as used.
+        invite_update = db.session.execute(
+            text("UPDATE admin_invite_codes SET used = TRUE WHERE id = :id AND used = FALSE"),
+            {"id": code_row.id}
+        )
+        if invite_update.rowcount != 1:
+            db.session.rollback()
+            msg = "Invite code already used."
+            if is_json:
+                return jsonify(status="error", message=msg), 400
+            flash(msg, "error")
+            return redirect(url_for('admin.signup'))
+
+        salt, username_hash, username_lookup_hash = _build_admin_auth_fields(username, existing_salt=salt)
         new_admin = Admin(
-            username=username,
+            username=None,
+            username_hash=username_hash,
+            username_lookup_hash=username_lookup_hash,
+            teacher_public_id=_generate_unique_teacher_public_id(),
             totp_secret=encrypted_totp_secret,
             dob_sum_hash=dob_sum_hash,
             salt=salt,
+            hall_pass_verify_token=Admin.generate_verify_token(),
             tos_accepted=True,
             tos_accepted_at=utc_now()
         )
         db.session.add(new_admin)
-        db.session.execute(
-            text("UPDATE admin_invite_codes SET used = TRUE WHERE code = :code"),
-            {"code": invite_code}
-        )
         db.session.commit()
         current_app.logger.info(f"Admin account created successfully")
         # Clear session
@@ -1795,8 +2207,7 @@ def reset_credentials():
             return redirect(url_for('admin.recovery_status'))
 
         # Check username uniqueness
-        existing_admin = Admin.query.filter_by(username=new_username).first()
-        if existing_admin and existing_admin.id != recovery_request.admin_id:
+        if _auth_username_exists(new_username, exclude_admin_id=recovery_request.admin_id):
             flash("Username already exists. Please choose a different username.", "error")
             return render_template("admin_reset_credentials.html", form=form, show_qr=False)
 
@@ -1882,7 +2293,11 @@ def confirm_reset():
         return redirect(url_for('admin.reset_credentials'))
 
     # Update teacher account
-    teacher.username = new_username
+    salt, username_hash, username_lookup_hash = _build_admin_auth_fields(new_username, existing_salt=teacher.salt)
+    teacher.salt = salt
+    teacher.username = None
+    teacher.username_hash = username_hash
+    teacher.username_lookup_hash = username_lookup_hash
     teacher.totp_secret = encrypt_totp(totp_secret)  # Encrypt before storing
 
     # Mark recovery request as completed
@@ -2028,7 +2443,7 @@ def settings():
         if display_name:
             admin.display_name = display_name
         else:
-            admin.display_name = None  # Use username as fallback
+            admin.display_name = None  # Use teacher_public_id as fallback
 
         # Update class labels for each block
         blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).distinct(TeacherBlock.block).all()
@@ -2043,6 +2458,7 @@ def settings():
             ).update({'class_label': class_label if class_label else None})
 
         db.session.commit()
+        set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
         flash("Settings updated successfully!", "success")
         return redirect(url_for('admin.settings'))
 
@@ -2065,9 +2481,13 @@ def settings():
 @admin_bp.route('/logout')
 def logout():
     """Admin logout."""
+    clear_admin_display_name_cache()
     session.pop("is_admin", None)
     session.pop("admin_id", None)
+    session.pop("admin_auth_username", None)
     session.pop("last_activity", None)
+    session.pop("force_admin_username_migration", None)
+    session.pop("passkey_auth_username", None)
     flash("Logged out.")
     return redirect(url_for("admin.login"))
 
@@ -2734,9 +3154,23 @@ def edit_student():
     # Get selected blocks (multiple checkboxes)
     selected_blocks = request.form.getlist('blocks')
 
+    # Guard: Teacher students cannot move between classes
+    if student.is_teacher:
+        # Ignore form input for blocks, preserve existing blocks
+        # This enforces "cannot be moved between classes"
+        current_blocks = [b.strip().upper() for b in (student.block or '').split(',') if b.strip()]
+        new_blocks = ','.join(sorted(current_blocks))
+
+        # Check if user tried to change blocks
+        form_blocks_set = set(b.strip().upper() for b in selected_blocks)
+        current_blocks_set = set(current_blocks)
+
+        if form_blocks_set != current_blocks_set:
+            flash("Teacher student accounts cannot be moved between classes manually.", "warning")
+
     # Join blocks with commas (e.g., "A,B,C")
     # At least one block is required for tap/hall pass functionality to work
-    if selected_blocks:
+    elif selected_blocks:
         new_blocks = ','.join(sorted(b.strip().upper() for b in selected_blocks))
     else:
         # No blocks selected - this would break tap/hall pass functionality
@@ -2745,7 +3179,7 @@ def edit_student():
 
     # Track old blocks for TeacherBlock updates
     old_blocks = set(b.strip().upper() for b in (student.block or '').split(',') if b.strip())
-    new_blocks_set = set(b.strip().upper() for b in selected_blocks)
+    new_blocks_set = set(b.strip().upper() for b in new_blocks.split(',') if b.strip())
 
     # Determine which blocks are being removed/added
     removed_blocks = old_blocks - new_blocks_set
@@ -2913,6 +3347,10 @@ def edit_student():
                     timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
                     join_code = f"B{block_initial}{timestamp_suffix:04d}"
 
+            # Ensure the teacher student seat exists for this new join code
+            if join_code:
+                _ensure_teacher_student_seat(current_admin_id, join_code, block)
+
             # CRITICAL FIX: Ensure first_half_hash exists before creating TeacherBlock
             # Logic: If hash is missing (legacy student), generate it now to prevent NotNullViolation
             if not student.first_half_hash:
@@ -2992,6 +3430,11 @@ def delete_student():
     student = _get_student_or_404(student_id)
     student_name = student.full_name
 
+    # Prevent deletion of teacher student accounts
+    if student.is_teacher:
+        flash("Teacher student accounts cannot be deleted directly. They are removed only when the class is deleted.", "error")
+        return redirect(url_for('admin.students'))
+
     try:
         _archive_student(student)
         db.session.commit()
@@ -3009,17 +3452,21 @@ def delete_student():
 @admin_required
 def bulk_delete_students():
     """Archive multiple students at once while preserving ledger history."""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     student_ids = data.get('student_ids', [])
 
     if not student_ids:
         return jsonify({"status": "error", "message": "No students selected."}), 400
 
+    gate_error = _validate_destruction_gate(data, expected_phrase="DELETE STUDENTS")
+    if gate_error:
+        return gate_error
+
     try:
         archived_count = 0
         for student_id in student_ids:
             student = _get_student_or_404(student_id)
-            if student:
+            if student and not student.is_teacher:
                 _archive_student(student)
                 archived_count += 1
 
@@ -3038,12 +3485,16 @@ def bulk_delete_students():
 @admin_required
 def delete_block():
     """Backwards-compatible block deletion wrapper that resolves to join-code deletion."""
-    data = request.get_json()
+    data = request.get_json(silent=True) or {}
     block = data.get('block', '').strip().upper()
     current_admin_id = session.get('admin_id')
 
     if not block:
         return jsonify({"status": "error", "message": "No block specified."}), 400
+
+    gate_error = _validate_destruction_gate(data, expected_phrase=f"DELETE BLOCK {block}")
+    if gate_error:
+        return gate_error
 
     try:
         join_codes = [
@@ -3071,7 +3522,6 @@ def delete_block():
             TeacherBlock.student_id.is_(None)
         ).delete(synchronize_session=False)
         db.session.commit()
-        current_app.logger.info(f"Successfully deleted join_code={join_code} for block={block}")
 
         return jsonify({
             "status": "success",
@@ -3094,6 +3544,10 @@ def delete_join_code():
 
     if not join_code:
         return jsonify({"status": "error", "message": "join_code is required."}), 400
+
+    gate_error = _validate_destruction_gate(data, expected_phrase=f"DELETE JOIN CODE {join_code}")
+    if gate_error:
+        return gate_error
 
     seat = TeacherBlock.query.filter_by(teacher_id=current_admin_id, join_code=join_code).first()
     if not seat:
@@ -3288,6 +3742,11 @@ def add_individual_student():
 
         if not all([first_name, last_name, dob_str, block]):
             flash("All fields are required.", "error")
+            return redirect(url_for('admin.students'))
+
+        # Student.block is VARCHAR(10) in the DB; enforce before insert to avoid flush-time errors.
+        if len(block) > 10:
+            flash("Class section name must be 10 characters or fewer.", "error")
             return redirect(url_for('admin.students'))
 
         # Generate initials
@@ -5798,13 +6257,29 @@ def hall_pass():
     # Extract just the block values from tuples and filter out None/empty
     periods = sorted([p[0] for p in available_periods if p[0]])
 
+    # Lazily generate the hall pass verification token if needed
+    teacher_id = session.get('admin_id')
+    teacher = db.session.get(Admin, teacher_id)
+    if teacher and not teacher.hall_pass_verify_token:
+        teacher.hall_pass_verify_token = Admin.generate_verify_token()
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            teacher = db.session.get(Admin, teacher_id)
+
+    verify_url = None
+    if teacher and teacher.hall_pass_verify_token:
+        verify_url = f"/verify/hallpass/{teacher.hall_pass_verify_token}"
+
     return render_template(
         'admin_hall_pass.html',
         pending_requests=pending_requests,
         approved_queue=approved_queue,
         out_of_class=out_of_class,
         available_periods=periods,
-        current_page="hall_pass"
+        current_page="hall_pass",
+        verify_url=verify_url
     )
 
 
@@ -7300,6 +7775,9 @@ def upload_students():
                             f"Using fallback code {new_code} for block {block} in roster upload"
                         )
 
+                # Ensure the teacher student seat exists for this new or existing join code
+                _ensure_teacher_student_seat(teacher_id, join_codes_by_block[block], block)
+
             join_code = join_codes_by_block[block]
 
             # Generate dob_sum first (needed for duplicate detection)
@@ -8133,109 +8611,71 @@ def banking_settings_update():
 # -------------------- DELETION REQUESTS --------------------
 
 @admin_bp.route('/deletion-requests', methods=['GET', 'POST'])
+@limiter.limit("3 per hour")
 @admin_required
 def deletion_requests():
     """
-    View and create deletion requests for periods/blocks or account.
+    Teacher-managed account deletion.
 
-    Teachers can request:
-    1. Deletion of a specific period/block
-    2. Deletion of their entire account
-
-    System admins approve these requests to perform deletions.
+    Deletion executes immediately after timed confirmation gate checks.
     """
     admin_id = session.get('admin_id')
+    admin = db.session.get(Admin, admin_id)
+    if not admin:
+        flash('Unable to load your account.', 'error')
+        return redirect(url_for('admin.login'))
+    admin_username = admin.get_display_name().strip()
 
     if request.method == 'POST':
-        request_type = request.form.get('request_type')  # 'period' or 'account'
-        period = request.form.get('period') if request_type == 'period' else None
-        reason = request.form.get('reason', '').strip()
+        request_type = request.form.get('request_type')  # account only
 
         # Validate
-        if request_type not in ['period', 'account']:
-            flash('Invalid request type.', 'error')
+        if request_type != 'account':
+            flash('Invalid request type. Only account deletion is supported.', 'error')
             return redirect(url_for('admin.deletion_requests'))
 
-        if request_type == 'period':
-            if not period:
-                flash('Period/block is required for period deletion requests.', 'error')
-                return redirect(url_for('admin.deletion_requests'))
-            # Validate period format and length
-            # Allow spaces, hyphens, underscores since periods may be named like "Period 1A" or "Block-2"
-            if not re.match(r'^[a-zA-Z0-9\s\-_]+$', period) or len(period) > 10:
-                flash('Invalid period format. Use alphanumeric characters, spaces, hyphens, and underscores only. Max 10 characters.', 'error')
-                return redirect(url_for('admin.deletion_requests'))
-
-        # Check for duplicate pending requests
-        # Convert string to enum (will raise ValueError if invalid)
-        request_type_enum = DeletionRequestType.from_string(request_type)
-        existing = DeletionRequest.query.filter_by(
-            admin_id=admin_id,
-            request_type=request_type_enum,
-            period=period,
-            status=DeletionRequestStatus.PENDING
-        ).first()
-
-        if existing:
-            flash(
-                f'You already have a pending {request_type} deletion request'
-                + (f' for period {period}.' if period else '.'),
-                'warning'
-            )
+        expected_phrase = f'CONFIRM DELETE {admin_username} ACCOUNT'.upper()
+        gate_phrase = str(request.form.get('gate_phrase', '')).strip().upper()
+        if gate_phrase != expected_phrase:
+            flash('Deletion request blocked: confirmation phrase did not match.', 'error')
             return redirect(url_for('admin.deletion_requests'))
-
-        # Create the deletion request
-        deletion_request = DeletionRequest(
-            admin_id=admin_id,
-            request_type=request_type_enum,
-            period=period,
-            reason=reason
-        )
-        db.session.add(deletion_request)
 
         try:
+            gate_countdown_seconds = int(request.form.get('gate_countdown_seconds', 0))
+        except (TypeError, ValueError):
+            gate_countdown_seconds = 0
+        if gate_countdown_seconds < 30:
+            flash('Deletion request blocked: 30-second safety countdown is required.', 'error')
+            return redirect(url_for('admin.deletion_requests'))
+
+        try:
+            gate_hold_seconds = float(request.form.get('gate_hold_seconds', 0))
+        except (TypeError, ValueError):
+            gate_hold_seconds = 0.0
+        if gate_hold_seconds < 10:
+            flash('Deletion request blocked: 10-second hold is required.', 'error')
+            return redirect(url_for('admin.deletion_requests'))
+
+        try:
+            _hard_delete_teacher_account_scope(admin_id)
+            db.session.delete(admin)
             db.session.commit()
-            flash(
-                f'Deletion request submitted successfully. '
-                f'A system administrator will review your {request_type} deletion request.',
-                'success'
-            )
-            current_app.logger.info(
-                f"Admin {admin_id} submitted {request_type} deletion request"
-                + (f" for period {period}" if period else "")
-            )
+
+            session.pop("is_admin", None)
+            session.pop("admin_id", None)
+            session.pop("last_activity", None)
+            flash('Your account and associated class data were permanently deleted.', 'success')
+            return redirect(url_for('admin.login'))
         except Exception as e:
             db.session.rollback()
-            current_app.logger.exception(f"Error creating deletion request: {e}")
-            flash('Error submitting deletion request.', 'error')
-
-        return redirect(url_for('admin.deletion_requests'))
-
-    # GET: Display existing deletion requests
-    pending_requests = DeletionRequest.query.filter_by(
-        admin_id=admin_id,
-        status=DeletionRequestStatus.PENDING
-    ).order_by(DeletionRequest.requested_at.desc()).all()
-
-    resolved_requests = DeletionRequest.query.filter_by(
-        admin_id=admin_id
-    ).filter(
-        DeletionRequest.status.in_([DeletionRequestStatus.APPROVED, DeletionRequestStatus.REJECTED])
-    ).order_by(DeletionRequest.resolved_at.desc()).limit(10).all()
-
-    # Get teacher's periods for the dropdown (from both student_teachers and legacy teacher_id)
-    # Get teacher's periods for the dropdown (from student_teachers)
-    periods = db.session.query(Student.block).join(
-        StudentTeacher, Student.id == StudentTeacher.student_id
-    ).filter(StudentTeacher.admin_id == admin_id).distinct().all()
-    periods = [p[0] for p in periods]
+            current_app.logger.exception(f"Error deleting teacher account: {e}")
+            flash('Error deleting account.', 'error')
+            return redirect(url_for('admin.deletion_requests'))
 
     return render_template(
-        'admin_deletion_requests.html',
+        'admin_account_delete.html',
         current_page="deletion_requests",
-        pending_requests=pending_requests,
-        resolved_requests=resolved_requests,
-        periods=periods
+        admin_username=admin_username,
     )
 
 
@@ -9522,7 +9962,7 @@ def passkey_register_start():
 
         # Generate registration token using official SDK
         user_id = f"admin_{admin.id}"
-        username = admin.username
+        username = session.get("admin_auth_username") or admin.teacher_public_id or f"teacher_{admin.id}"
         displayname = admin.get_display_name()
 
         token = create_register_token(user_id, username, displayname)
@@ -9588,16 +10028,19 @@ def passkey_auth_start():
     """
     try:
         data = request.get_json()
+        session.pop('passkey_auth_username', None)
 
         if not data or 'username' not in data:
             return jsonify({"error": "Missing username"}), 400
 
-        username = data['username'].strip()
+        username = normalize_auth_username(data['username'])
 
         # Verify user exists
-        admin = Admin.query.filter_by(username=username).first()
+        admin = _find_admin_by_auth_username(username)
         if not admin:
             return jsonify({"error": "Invalid credentials"}), 401
+
+        session['passkey_auth_username'] = username
 
         # Check if user has passkeys
         has_passkeys = AdminCredential.query.filter_by(admin_id=admin.id).first() is not None
@@ -9661,16 +10104,23 @@ def passkey_auth_finish():
         db.session.commit()
 
         # Create session
+        auth_username = session.get('passkey_auth_username')
         session.clear()
         session['admin_id'] = admin.id
         session['is_admin'] = True
-        session['username'] = admin.username
+        session['admin_auth_username'] = auth_username or admin.teacher_public_id
         session['last_activity'] = now.isoformat()
+        set_admin_display_name_cache(admin_id=admin.id, display_name=admin.get_display_name())
         session.permanent = True
+
+        redirect_url = url_for('admin.dashboard')
+        if _admin_requires_username_migration(admin):
+            session['force_admin_username_migration'] = True
+            redirect_url = url_for('admin.username_migration')
 
         return jsonify({
             "success": True,
-            "redirect": url_for('admin.dashboard')
+            "redirect": redirect_url
         }), 200
 
     except Exception as e:

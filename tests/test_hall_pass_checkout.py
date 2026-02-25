@@ -114,6 +114,40 @@ def test_checkout_with_approved_pass(client, setup_hall_pass_checkout_test):
     assert tap_event is not None
 
 
+def test_approve_does_not_generate_pass_number(client, setup_hall_pass_checkout_test):
+    """Test that approval no longer creates or returns a pass number."""
+    data = setup_hall_pass_checkout_test
+    student = data['student']
+    teacher = data['teacher']
+    hall_pass = data['hall_pass']
+
+    hall_pass.status = 'pending'
+    hall_pass.reason = 'Office'
+    hall_pass.pass_number = None
+    hall_pass.decision_time = None
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['is_admin'] = True
+        sess['admin_id'] = teacher.id
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    response = client.post(
+        f'/api/hall-pass/{hall_pass.id}/approve',
+        headers={'X-CSRFToken': 'test'}
+    )
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload['status'] == 'success'
+    assert 'pass_number' not in payload
+
+    db.session.refresh(hall_pass)
+    db.session.refresh(student)
+    assert hall_pass.status == 'approved'
+    assert hall_pass.pass_number is None
+    assert student.hall_passes == 3
+
+
 def test_checkout_blocked_by_simultaneous_limit(client, setup_hall_pass_checkout_test):
     """Test that checkout is blocked when simultaneous limit is reached."""
     data = setup_hall_pass_checkout_test

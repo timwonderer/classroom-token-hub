@@ -9,14 +9,17 @@ from datetime import timezone, timedelta
 from decimal import Decimal, InvalidOperation
 import enum
 import logging
+import secrets
 import uuid
 
 import sqlalchemy as sa
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.orm import validates
 from app.extensions import db
-from app.utils.encryption import PIIEncryptedType
+from app.hash_utils import get_random_salt, hash_username, hash_username_lookup
+from app.utils.encryption import PIIEncryptedType, normalize_totp_for_storage
 from app.utils.time import utc_now, ensure_utc
 
 logger = logging.getLogger(__name__)
@@ -184,10 +187,12 @@ class TeacherBlock(db.Model):
 
     # Fuzzy name matching - stores hash of each last name part separately
     # Example: "Smith-Jones" → ["hash(smith)", "hash(jones)"]
-    last_name_hash_by_part = db.Column(db.JSON, nullable=False)
+    # Nulled out after the seat is claimed (PII cleanup).
+    last_name_hash_by_part = db.Column(db.JSON, nullable=True)
 
-    # Privacy-aligned DOB sum for verification (non-reversible)
-    dob_sum = db.Column(db.Integer, nullable=False)
+    # Privacy-aligned DOB sum for verification (non-reversible).
+    # Nulled out after the seat is claimed (PII cleanup).
+    dob_sum = db.Column(db.Integer, nullable=True)
 
     # Hashing
     salt = db.Column(db.LargeBinary(16), nullable=False)
@@ -199,6 +204,9 @@ class TeacherBlock(db.Model):
     # Claim status
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
     is_claimed = db.Column(db.Boolean, default=False, nullable=False)
+
+    # Teacher Identity Flag
+    is_teacher = db.Column(db.Boolean, default=False, nullable=False)
 
     # Timestamps
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
@@ -272,6 +280,9 @@ class Student(db.Model):
     has_completed_profile_migration = db.Column(db.Boolean, default=False)
     # Soft-delete flag: archived students cannot log in and are hidden from roster queries.
     is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+
+    # Teacher Identity Flag (prevents deletion and analytics skew)
+    is_teacher = db.Column(db.Boolean, default=False, nullable=False)
 
     # Account Recovery Fields
     reset_code = db.Column(db.String(8), nullable=True, unique=True)  # 8-char alphanumeric code
@@ -640,8 +651,31 @@ class DeletionRequest(db.Model):
 class SystemAdmin(db.Model):
     __tablename__ = 'system_admins'
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=True)  # Legacy plaintext username (deprecated)
+    username_hash = db.Column(db.String(64), unique=True, nullable=True)
+    username_lookup_hash = db.Column(db.String(64), unique=True, nullable=True, index=True)
+    salt = db.Column(db.LargeBinary(16), nullable=True)
     totp_secret = db.Column(db.String(200), nullable=False)  # Stores base64-encoded encrypted TOTP secret
+
+    @validates('totp_secret')
+    def _validate_totp_secret(self, key, value):
+        return normalize_totp_for_storage(value)
+
+    @validates('username')
+    def _normalize_legacy_username(self, key, value):
+        """Normalize legacy plaintext usernames on assignment.
+
+        Hash fields must only be set through the explicit migration process
+        (build_hashed_username_fields) so that needs_hashed_username_migration
+        correctly identifies accounts that still require migration.
+        """
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized if normalized else None
+
+    def get_display_username(self):
+        return f"sysadmin_{self.id}"
 
 
 class SystemAdminCredential(db.Model):
@@ -827,7 +861,8 @@ class HallPassLog(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     reason = db.Column(db.String(50), nullable=False)
     status = db.Column(db.String(20), default='pending', nullable=False) # pending, approved, rejected, left, returned
-    pass_number = db.Column(db.String(3), nullable=True, unique=True) # Format: letter + 2 digits (e.g., A42)
+    # Legacy field retained for backward compatibility; no longer generated or displayed.
+    pass_number = db.Column(db.String(3), nullable=True, unique=True)
     period = db.Column(db.String(10), nullable=True) # Which period the request was made in
 
     # CRITICAL: join_code is the source of truth for class isolation
@@ -1593,8 +1628,11 @@ class IssueResolutionAction(db.Model):
 class Admin(db.Model):
     __tablename__ = 'admins'
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    display_name = db.Column(db.String(100), nullable=True)  # Teacher's display name (defaults to username if not set)
+    username = db.Column(db.String(80), unique=True, nullable=True)  # Legacy plaintext username (deprecated)
+    username_hash = db.Column(db.String(64), unique=True, nullable=True)
+    username_lookup_hash = db.Column(db.String(64), unique=True, nullable=True, index=True)
+    teacher_public_id = db.Column(db.String(120), unique=True, nullable=True, index=True)
+    display_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=True)  # Teacher's display name (defaults to teacher_public_id if not set)
     # TOTP-only: store secret (base64-encoded encrypted data)
     totp_secret = db.Column(db.String(200), nullable=False)  # Stores base64-encoded encrypted TOTP secret
     # Account recovery: Hashed DOB sum (similar to student system)
@@ -1608,9 +1646,50 @@ class Admin(db.Model):
     tos_accepted = db.Column(db.Boolean, default=False, nullable=False, server_default='false')
     tos_accepted_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
+    # Hall pass public verification token (256-bit, capability-based, rotatable)
+    # Used for /verify/hallpass/<token> — not derived from teacher_id
+    hall_pass_verify_token = db.Column(db.String(64), unique=True, nullable=True, index=True)
+
+    @staticmethod
+    def generate_verify_token():
+        """Generate a new 256-bit random hall pass verification token."""
+        return secrets.token_hex(32)
+
+    @validates('totp_secret')
+    def _validate_totp_secret(self, key, value):
+        return normalize_totp_for_storage(value)
+
+    @validates('username')
+    def _normalize_legacy_username(self, key, value):
+        """Backfill hashed auth fields when legacy plaintext usernames are assigned."""
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        if not self.salt:
+            self.salt = get_random_salt()
+        if not self.username_hash:
+            self.username_hash = hash_username(normalized, self.salt)
+        if not self.username_lookup_hash:
+            self.username_lookup_hash = hash_username_lookup(normalized)
+        if not self.teacher_public_id:
+            self.teacher_public_id = normalized
+        return normalized
+
     def get_display_name(self):
-        """Return display_name if set, otherwise fall back to username"""
-        return self.display_name if self.display_name else self.username
+        """Return display_name if set, otherwise fall back to public teacher ID."""
+        if self.display_name:
+            return self.display_name
+        if self.teacher_public_id:
+            return self.teacher_public_id
+        return f"teacher_{self.id}"
+
+    def get_sysadmin_display_name(self):
+        """Return the minimal-PII teacher identifier for sysadmin contexts."""
+        if self.teacher_public_id:
+            return self.teacher_public_id
+        return f"teacher_{self.id}"
 
     def get_student_count(self):
         """Return count of unique students linked to this teacher via StudentTeacher."""

@@ -7,9 +7,11 @@ system logs, error monitoring, and debug/testing tools.
 
 import os
 import re
+import binascii
 import secrets
 import io
 import base64
+from urllib.parse import urlparse
 import qrcode
 import requests
 from datetime import datetime, timedelta, timezone
@@ -25,8 +27,7 @@ from app.extensions import db, limiter
 from app.models import (
     SystemAdmin, SystemAdminCredential, Admin, Student, AdminInviteCode, ErrorLog,
     Transaction, TransactionStatus, TapEvent, HallPassLog, StudentItem, RentPayment,
-    StudentInsurance, InsuranceClaim, StudentTeacher, DeletionRequest,
-    DeletionRequestType, DeletionRequestStatus, TeacherBlock, StudentBlock, UserReport,
+    StudentInsurance, InsuranceClaim, StudentTeacher, TeacherBlock, StudentBlock, UserReport,
     FeatureSettings, TeacherOnboarding, RentSettings, BankingSettings,
     DemoStudent, HallPassSettings, PayrollFine, PayrollReward,
     PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction
@@ -36,66 +37,52 @@ from app.forms import SystemAdminLoginForm, SystemAdminInviteForm
 
 # Import utility functions
 from app.utils.helpers import is_safe_url, format_utc_iso
-from app.utils.encryption import encrypt_totp, decrypt_totp
+from app.utils.encryption import encrypt_totp, decrypt_totp, is_totp_encrypted
+from app.hash_utils import hash_username_lookup
 from app.utils.passwordless_client import (
     create_register_token,
     verify_signin_token,
     get_public_api_key
+)
+from app.utils.username_migration import (
+    normalize_auth_username,
+    needs_hashed_username_migration,
+    build_hashed_username_fields,
 )
 
 # Create blueprint
 sysadmin_bp = Blueprint('sysadmin', __name__, url_prefix='/sysadmin')
 
 # Constants
-INACTIVITY_THRESHOLD_DAYS = 180  # Number of days of inactivity before allowing deletion without request
+INACTIVITY_THRESHOLD_DAYS = 180  # Number of days of inactivity before highlighting inactive teachers
 
 
+def _find_sysadmin_by_auth_username(username: str):
+    """Lookup sysadmin by hash, with migration-only legacy fallback."""
+    normalized = normalize_auth_username(username)
+    if not normalized:
+        return None
+
+    lookup_hash = hash_username_lookup(normalized)
+    admin = SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
+    if admin:
+        return admin
+
+    # Migration-only fallback for legacy records that have not been hashed yet.
+    return SystemAdmin.query.filter(
+        SystemAdmin.username == normalized,
+        SystemAdmin.username_lookup_hash.is_(None),
+        SystemAdmin.username_hash.is_(None),
+    ).first()
 
 
-
-def _check_deletion_authorization(admin, request_type=None, period=None):
-    """
-    Check if system admin is authorized to delete for this teacher.
-    
-    Authorization is granted if:
-    1. Teacher has a pending deletion request matching the criteria, OR
-    2. Teacher has been inactive for INACTIVITY_THRESHOLD_DAYS or more
-    
-    Args:
-        admin: The Admin object to check authorization for
-        request_type: Optional request type filter ('period' or 'account')
-        period: Optional period filter (for period-specific requests)
-    
-    Returns:
-        tuple: (authorized: bool, pending_request: DeletionRequest or None)
-    """
-    # Check for pending request
-    query = DeletionRequest.query.filter_by(
-        admin_id=admin.id,
-        status=DeletionRequestStatus.PENDING
-    )
-    if request_type:
-        # Convert string to enum if needed
-        if isinstance(request_type, str):
-            request_type = DeletionRequestType.from_string(request_type)
-        query = query.filter_by(request_type=request_type)
-    if period:
-        query = query.filter_by(period=period)
-    pending_request = query.first()
-    
-    # Check inactivity
-    inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
-    is_inactive = False
-    if admin.last_login:
-        last_login = admin.last_login
-        if last_login.tzinfo is None:
-            last_login = last_login.replace(tzinfo=timezone.utc)
-        is_inactive = last_login < inactivity_threshold
-    else:
-        is_inactive = True
-    
-    authorized = (pending_request is not None) or is_inactive
-    return authorized, pending_request
+def _sysadmin_auth_username_exists(username: str, *, exclude_sysadmin_id: int | None = None) -> bool:
+    admin = _find_sysadmin_by_auth_username(username)
+    if not admin:
+        return False
+    if exclude_sysadmin_id is not None and admin.id == exclude_sysadmin_id:
+        return False
+    return True
 
 
 def _tail_log_lines(file_path: str, max_lines: int = 200, chunk_size: int = 8192):
@@ -161,29 +148,109 @@ def login():
     session.pop("is_system_admin", None)
     session.pop("sysadmin_id", None)
     session.pop("last_activity", None)
+    session.pop("force_sysadmin_username_migration", None)
     form = SystemAdminLoginForm()
     if form.validate_on_submit():
-        username = form.username.data.strip()
+        username = normalize_auth_username(form.username.data)
         totp_code = form.totp_code.data.strip()
-        admin = SystemAdmin.query.filter_by(username=username).first()
+        admin = _find_sysadmin_by_auth_username(username)
         if admin:
-            # Decrypt TOTP secret (handles both encrypted and legacy plaintext)
-            decrypted_secret = decrypt_totp(admin.totp_secret)
-            totp = pyotp.TOTP(decrypted_secret)
-            if totp.verify(totp_code, valid_window=1):
-                session["is_system_admin"] = True
-                session["sysadmin_id"] = admin.id
-                session['last_activity'] = utc_now().isoformat()
-                # Establish global maintenance bypass for subsequent role testing.
-                session['maintenance_global_bypass'] = True
-                flash("System admin login successful.")
-                next_url = request.args.get("next")
-                if not is_safe_url(next_url):
-                    return redirect(url_for("sysadmin.dashboard"))
-                return redirect(next_url or url_for("sysadmin.dashboard"))  # nosec # Safe: validated by is_safe_url()
+            try:
+                decrypted_secret = decrypt_totp(admin.totp_secret)
+            except ValueError:
+                # Legacy plaintext TOTP secret - verify once, then migrate to encrypted storage.
+                decrypted_secret = admin.totp_secret
+            if decrypted_secret:
+                totp_valid = False
+                try:
+                    totp = pyotp.TOTP(decrypted_secret)
+                    totp_valid = totp.verify(totp_code, valid_window=1)
+                except (binascii.Error, TypeError, ValueError):
+                    current_app.logger.warning(
+                        "System admin login failed: TOTP secret is not valid base32 for sysadmin_id=%s",
+                        admin.id,
+                    )
+                    totp_valid = False
+                if totp_valid:
+                    # Lazily encrypt any legacy plaintext TOTP secret.
+                    if not is_totp_encrypted(admin.totp_secret):
+                        admin.totp_secret = encrypt_totp(decrypted_secret)
+                        db.session.commit()
+                    session["is_system_admin"] = True
+                    session["sysadmin_id"] = admin.id
+                    session["sysadmin_auth_username"] = username
+                    session['last_activity'] = utc_now().isoformat()
+                    # Establish global maintenance bypass for subsequent role testing.
+                    session['maintenance_global_bypass'] = True
+                    if needs_hashed_username_migration(admin):
+                        session["force_sysadmin_username_migration"] = True
+                        return redirect(url_for("sysadmin.username_migration"))
+                    flash("System admin login successful.")
+                    next_url = request.args.get("next")
+                    redirect_target = None
+                    if next_url:
+                        # Normalize backslashes and only allow relative in-app redirects.
+                        normalized_next = next_url.replace('\\', '')
+                        parsed_next = urlparse(normalized_next)
+                        if (not parsed_next.scheme and not parsed_next.netloc and is_safe_url(normalized_next)):
+                            redirect_target = normalized_next
+                        else:
+                            redirect_target = url_for("sysadmin.dashboard")
+                    else:
+                        redirect_target = url_for("sysadmin.dashboard")
+                    return redirect(redirect_target)
         flash("Invalid credentials or TOTP.", "error")
         return redirect(url_for("sysadmin.login"))
     return render_template("system_admin_login.html", form=form)
+
+
+@sysadmin_bp.route('/username-migration', methods=['GET', 'POST'])
+@system_admin_required
+def username_migration():
+    """One-time migration screen for legacy plaintext sysadmin usernames."""
+    admin = db.session.get(SystemAdmin, session.get("sysadmin_id"))
+    if not admin:
+        flash("Account not found.", "error")
+        return redirect(url_for("sysadmin.login"))
+
+    if not needs_hashed_username_migration(admin):
+        session.pop("force_sysadmin_username_migration", None)
+        return redirect(url_for("sysadmin.dashboard"))
+
+    legacy_username = session.get("sysadmin_auth_username")
+    if not legacy_username:
+        flash("Could not determine your current username.", "error")
+        return redirect(url_for("sysadmin.logout"))
+
+    if request.method == "POST":
+        action = request.form.get("action", "continue")
+        chosen_username = legacy_username
+
+        if action == "update":
+            chosen_username = normalize_auth_username(request.form.get("new_username", ""))
+            if not chosen_username:
+                flash("Please enter a username.", "error")
+                return render_template("system_admin_username_migration.html", legacy_username=legacy_username)
+            if _sysadmin_auth_username_exists(chosen_username, exclude_sysadmin_id=admin.id):
+                flash("Username already exists. Choose a different username.", "error")
+                return render_template("system_admin_username_migration.html", legacy_username=legacy_username)
+
+        salt, username_hash, username_lookup_hash = build_hashed_username_fields(
+            chosen_username,
+            existing_salt=admin.salt,
+        )
+        admin.salt = salt
+        admin.username_hash = username_hash
+        admin.username_lookup_hash = username_lookup_hash
+        admin.username = None
+        db.session.commit()
+
+        session["sysadmin_auth_username"] = chosen_username
+        session.pop("force_sysadmin_username_migration", None)
+        flash("Username migration completed.", "success")
+        return redirect(url_for("sysadmin.dashboard"))
+
+    return render_template("system_admin_username_migration.html", legacy_username=legacy_username)
 
 
 @sysadmin_bp.route('/logout')
@@ -192,6 +259,9 @@ def logout():
     session.pop("is_system_admin", None)
     session.pop("sysadmin_id", None)
     session.pop("last_activity", None)
+    session.pop("sysadmin_auth_username", None)
+    session.pop("passkey_sysadmin_auth_username", None)
+    session.pop("force_sysadmin_username_migration", None)
     # Intentionally DO NOT remove maintenance_global_bypass so admin can test other roles.
     flash("Logged out.")
     return redirect(url_for("sysadmin.login"))
@@ -214,8 +284,8 @@ def passkey_register_start():
 
         # Generate registration token using official SDK
         user_id = f"sysadmin_{admin.id}"
-        username = admin.username
-        displayname = f"System Admin: {admin.username}"
+        username = session.get("sysadmin_auth_username") or admin.get_display_username()
+        displayname = f"System Admin: {admin.get_display_username()}"
 
         token = create_register_token(user_id, username, displayname)
 
@@ -280,14 +350,15 @@ def passkey_auth_start():
     """
     try:
         data = request.get_json()
+        session.pop("passkey_sysadmin_auth_username", None)
 
         if not data or 'username' not in data:
             return jsonify({"error": "Missing username"}), 400
 
-        username = data['username'].strip()
+        username = normalize_auth_username(data['username'])
 
         # Verify user exists
-        admin = SystemAdmin.query.filter_by(username=username).first()
+        admin = _find_sysadmin_by_auth_username(username)
         if not admin:
             return jsonify({"error": "Invalid credentials"}), 401
 
@@ -295,6 +366,8 @@ def passkey_auth_start():
         has_passkeys = SystemAdminCredential.query.filter_by(sysadmin_id=admin.id).first() is not None
         if not has_passkeys:
             return jsonify({"error": "Invalid credentials"}), 401
+
+        session["passkey_sysadmin_auth_username"] = username
 
         return jsonify({
             "apiKey": get_public_api_key()
@@ -354,6 +427,9 @@ def passkey_auth_finish():
         # Create session
         session["is_system_admin"] = True
         session["sysadmin_id"] = admin.id
+        session["sysadmin_auth_username"] = (
+            session.get("passkey_sysadmin_auth_username") or admin.get_display_username()
+        )
         session['last_activity'] = now.isoformat()
         session['maintenance_global_bypass'] = True
 
@@ -460,7 +536,11 @@ def dashboard():
     recent_errors = ErrorLog.query.order_by(ErrorLog.timestamp.desc()).limit(5).all()
 
     # System admins
-    system_admins = SystemAdmin.query.order_by(SystemAdmin.username.asc()).all()
+    system_admins = (
+        SystemAdmin.query
+        .order_by(SystemAdmin.id.asc())
+        .all()
+    )
 
     return render_template(
         "system_admin_dashboard.html",
@@ -755,7 +835,7 @@ def manage_admins():
     Note: System admins see teacher info and student counts only, not individual student details.
     """
     # Get all admins with student counts
-    admins = Admin.query.all()
+    admins = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     admin_data = []
 
     for admin in admins:
@@ -764,7 +844,7 @@ def manage_admins():
 
         admin_data.append({
             'id': admin.id,
-            'username': admin.username,
+            'username': admin.get_sysadmin_display_name(),
             'student_count': student_count,
             'created_at': admin.created_at,
             'last_login': admin.last_login
@@ -795,7 +875,7 @@ def reset_teacher_totp(admin_id):
 
         # Generate QR code
         totp_uri = pyotp.totp.TOTP(new_secret).provisioning_uri(
-            name=admin.username,
+            name=admin.get_sysadmin_display_name(),
             issuer_name="Classroom Economy Admin"
         )
 
@@ -807,11 +887,11 @@ def reset_teacher_totp(admin_id):
 
         return jsonify({
             "status": "success",
-            "message": f"TOTP secret reset for {admin.username}",
+            "message": f"TOTP secret reset for {admin.get_sysadmin_display_name()}",
             "totp_secret": stored_secret,
             "totp_secret_plain": new_secret,
             "qr_code": qr_b64,
-            "username": admin.username
+            "username": admin.get_sysadmin_display_name()
         })
     except Exception as e:
         db.session.rollback()
@@ -872,7 +952,7 @@ def delete_admin(admin_id):
             TeacherBlock.query.filter(TeacherBlock.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             Student.query.filter(Student.id.in_(exclusive_student_ids)).delete(synchronize_session=False)
 
-        admin_username = admin.username
+        admin_username = admin.get_sysadmin_display_name()
         db.session.delete(admin)
         db.session.commit()
 
@@ -933,7 +1013,7 @@ def manage_teachers():
             active_invites.append(invite)
 
     # Build rich teacher data (from teacher_overview logic)
-    all_teachers = Admin.query.order_by(Admin.username.asc()).all()
+    all_teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
 
     # Batch query: teacher-student relationships
@@ -965,13 +1045,7 @@ def manage_teachers():
                 teacher_periods[teacher_id] = {}
             teacher_periods[teacher_id][block] = count
 
-        all_pending_requests = DeletionRequest.query.filter(
-            DeletionRequest.admin_id.in_(teacher_ids),
-            DeletionRequest.status == DeletionRequestStatus.PENDING
-        ).all()
         teacher_pending_requests = {}
-        for req in all_pending_requests:
-            teacher_pending_requests.setdefault(req.admin_id, []).append(req)
     else:
         teacher_student_counts = {}
         teacher_periods = {}
@@ -992,38 +1066,15 @@ def manage_teachers():
         else:
             is_inactive = True
 
-        # Determine authorization using preloaded pending requests and inactivity flag
-        can_delete_account = False
-        authorized_periods = []
-
-        if is_inactive and pending_requests:
-            # Build lookup for O(1) access: separate account and period requests
-            account_requests = [req for req in pending_requests if req.request_type == DeletionRequestType.ACCOUNT]
-            period_requests_by_period = {
-                req.period: req 
-                for req in pending_requests 
-                if req.request_type == DeletionRequestType.PERIOD and req.period is not None
-            }
-            
-            # Check account-level authorization
-            can_delete_account = len(account_requests) > 0
-            
-            # Check period-level authorization using lookup
-            authorized_periods = [
-                period for period in periods 
-                if period in period_requests_by_period
-            ]
-
         teachers.append({
             'id': teacher.id,
-            'username': teacher.username,
+            'username': teacher.get_sysadmin_display_name(),
             'last_login': teacher.last_login,
             'is_inactive': is_inactive,
             'total_students': total_students,
             'periods': periods,
             'pending_requests': pending_requests,
-            'can_delete_account': can_delete_account,
-            'authorized_periods': authorized_periods,
+            'can_delete_account': False,
         })
 
     return render_template(
@@ -1058,7 +1109,7 @@ def teacher_overview():
     Privacy-compliant teacher overview showing only aggregated student counts.
 
     System admins can view:
-    - Teacher username
+    - Teacher public ID/display name
     - Total student count per teacher
     - Student counts by period/block
     - Last login date
@@ -1068,7 +1119,7 @@ def teacher_overview():
     - Individual student names
     - Individual student details
     """
-    teachers = Admin.query.order_by(Admin.username.asc()).all()
+    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     
     # Define inactivity threshold (6 months)
     inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
@@ -1109,18 +1160,7 @@ def teacher_overview():
             teacher_periods[teacher_id] = {}
         teacher_periods[teacher_id][block] = count
 
-    # Batch query: Get all pending deletion requests for all teachers
-    all_pending_requests = DeletionRequest.query.filter(
-        DeletionRequest.admin_id.in_([t.id for t in teachers]),
-        DeletionRequest.status == DeletionRequestStatus.PENDING
-    ).all()
-
-    # Organize pending requests by teacher
     teacher_pending_requests = {}
-    for req in all_pending_requests:
-        if req.admin_id not in teacher_pending_requests:
-            teacher_pending_requests[req.admin_id] = []
-        teacher_pending_requests[req.admin_id].append(req)
 
     # Now build the teacher_data list using the batched data
     teacher_data = []
@@ -1142,35 +1182,15 @@ def teacher_overview():
             # Never logged in - consider inactive
             is_inactive = True
 
-        # Check authorization for account deletion
-        has_account_request = any(
-            req.request_type == DeletionRequestType.ACCOUNT 
-            for req in pending_requests
-        )
-        can_delete_account = has_account_request or is_inactive
-        
-        # Check authorization for each period deletion
-        # A period can be deleted if there's a specific request for it OR an account deletion request OR teacher is inactive
-        authorized_periods = set()
-        if can_delete_account:
-            # Account deletion request or inactivity authorizes all period deletions
-            authorized_periods = set(periods.keys())
-        else:
-            # Check for period-specific requests
-            for req in pending_requests:
-                if req.request_type == DeletionRequestType.PERIOD and req.period:
-                    authorized_periods.add(req.period)
-        
         teacher_data.append({
             'id': teacher.id,
-            'username': teacher.username,
+            'username': teacher.get_sysadmin_display_name(),
             'total_students': total_students,
             'periods': periods,
             'last_login': teacher.last_login,
             'is_inactive': is_inactive,
             'pending_requests': pending_requests,
-            'can_delete_account': can_delete_account,
-            'authorized_periods': authorized_periods
+            'can_delete_account': False,
         })
 
     return render_template(
@@ -1184,186 +1204,14 @@ def teacher_overview():
 @sysadmin_bp.route('/delete-period/<int:admin_id>/<string:period>', methods=['POST'])
 @system_admin_required
 def delete_period(admin_id, period):
-    """
-    Delete a specific period/block for a teacher with authorization check.
-
-    Authorization required:
-    1. Teacher has a pending deletion request for this period, OR
-    2. Teacher has been inactive for 6+ months
-    """
-    # Validate period parameter
-    if not period or len(period) > 10:
-        flash("Invalid period parameter", "error")
-        return redirect(url_for('sysadmin.manage_teachers'))
-    
-    # Sanitize period to prevent SQL injection (allow only alphanumeric, spaces, hyphens, underscores)
-    if not re.match(r'^[a-zA-Z0-9\s\-_]+$', period):
-        flash("Invalid period format", "error")
-        return redirect(url_for('sysadmin.manage_teachers'))
-    
-    admin = db.get_or_404(Admin, admin_id)
-
-    # Check authorization using helper function
-    authorized, pending_request = _check_deletion_authorization(admin, 'period', period)
-    
-    if not authorized:
-        flash(
-            f"Unauthorized: Cannot delete period '{period}' for teacher '{admin.username}'. "
-            f"Teacher must request deletion or be inactive for 6+ months.",
-            "error"
-        )
-        return redirect(url_for('sysadmin.manage_teachers'))
-
-    try:
-        # Get students in this period linked to this teacher
-        # Uses StudentTeacher table only (Multi-Teacher Hardening)
-        students_in_period = db.session.query(Student).join(
-            StudentTeacher,
-            Student.id == StudentTeacher.student_id
-        ).filter(
-            StudentTeacher.admin_id == admin.id,
-            Student.block == period
-        ).all()
-
-        removed_count = 0
-        for student in students_in_period:
-            # Remove the teacher-student link
-            # Only remove the StudentTeacher link if the student is not taught by this teacher in any other period
-            other_links = StudentTeacher.query.filter(
-                StudentTeacher.student_id == student.id,
-                StudentTeacher.admin_id == admin.id
-            ).join(Student, Student.id == StudentTeacher.student_id).filter(
-                Student.block != period
-            ).count()
-            
-            if other_links == 0:
-                StudentTeacher.query.filter_by(
-                    student_id=student.id,
-                    admin_id=admin.id
-                ).delete()
-
-            removed_count += 1
-
-        # Delete TeacherBlock entries for this period
-        # This is critical - without it, the period still appears in the UI
-        TeacherBlock.query.filter_by(
-            teacher_id=admin.id,
-            block=period
-        ).delete()
-
-        # Mark any pending deletion requests for this period as approved
-        if pending_request:
-            pending_request.status = DeletionRequestStatus.APPROVED
-            pending_request.resolved_at = utc_now()
-            pending_request.resolved_by = session.get('sysadmin_id')
-
-        db.session.commit()
-
-        flash(
-            f"Period '{period}' deleted for teacher '{admin.username}'. "
-            f"Removed {removed_count} student links. Students maintain access to other classes.",
-            "success"
-        )
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.exception(f"Error deleting period {period} for teacher {admin_id}")
-        flash(f"Error deleting period: {str(e)}", "error")
-
+    flash("Teacher deletions are self-managed. System admins cannot delete classes.", "error")
     return redirect(url_for('sysadmin.manage_teachers'))
 
 
 @sysadmin_bp.route('/manage-teachers/delete/<int:admin_id>', methods=['POST'])
 @system_admin_required
 def delete_teacher(admin_id):
-    """
-    Delete a teacher account with authorization check.
-
-    Authorization required:
-    1. Teacher has a pending deletion request for their account, OR
-    2. Teacher has been inactive for 6+ months
-
-    Students maintain access unless they have no other teachers.
-    """
-    admin = db.get_or_404(Admin, admin_id)
-
-    # Check authorization using helper function
-    authorized, pending_request = _check_deletion_authorization(admin, 'account', None)
-    
-    if not authorized:
-        flash(
-            f"Unauthorized: Cannot delete teacher '{admin.username}'. "
-            f"Teacher must request deletion or be inactive for 6+ months.",
-            "error"
-        )
-        return redirect(url_for('sysadmin.manage_teachers'))
-
-    try:
-        # Get all students linked to this teacher via StudentTeacher table
-        affected_students = (
-            db.session.query(Student)
-            .join(StudentTeacher, Student.id == StudentTeacher.student_id)
-            .filter(StudentTeacher.admin_id == admin.id)
-            .all()
-        )
-        student_count = len(affected_students)
-
-        for student in affected_students:
-            # Remove the teacher-student link
-            StudentTeacher.query.filter_by(student_id=student.id, admin_id=admin.id).delete()
-
-        # Delete all deletion requests for this teacher to prevent NOT NULL violations.
-        # Explicit deletion needed because SQLAlchemy flush might try to nullify the FK
-        # before database CASCADE can execute, despite FK having ondelete='CASCADE'.
-        DeletionRequest.query.filter_by(admin_id=admin.id).delete()
-
-        # Delete all TeacherBlock entries for this teacher
-        # This cleans up roster seats associated with the teacher
-        TeacherBlock.query.filter_by(teacher_id=admin.id).delete()
-
-        # Systematically delete all dependent records to prevent IntegrityError due to NOT NULL constraints.
-        # Many of these models have a non-nullable teacher_id without a DB-level ON DELETE CASCADE.
-        BankingSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        DemoStudent.query.filter_by(admin_id=admin.id).delete(synchronize_session=False)
-        FeatureSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        HallPassSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        PayrollFine.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        PayrollReward.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        PayrollSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        RentSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        # Delete StudentItem records for items owned by this teacher
-        StudentItem.query.filter(
-            StudentItem.store_item_id.in_(
-                db.session.query(StoreItem.id).filter_by(teacher_id=admin.id)
-            )
-        ).delete(synchronize_session=False)
-        
-        # Delete StudentItem records for items owned by this teacher
-        # Must be done before deleting StoreItem to avoid FK constraint violations
-        StudentItem.query.filter(
-            StudentItem.store_item_id.in_(
-                db.session.query(StoreItem.id).filter_by(teacher_id=admin.id)
-            )
-        ).delete(synchronize_session=False)
-        
-        StoreItem.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        TeacherOnboarding.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-
-        admin_username = admin.username
-        db.session.delete(admin)
-        db.session.commit()
-
-        flash(
-            f"Teacher '{admin_username}' deleted. Updated {student_count} student ownership records. "
-            f"Students maintain access unless they have no other teachers.",
-            "success",
-        )
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.exception(f"Error deleting teacher {admin_id}")
-        flash(f"Error deleting teacher: {str(e)}", "error")
-
+    flash("Teacher deletions are self-managed. System admins cannot delete teacher accounts.", "error")
     return redirect(url_for('sysadmin.manage_teachers'))
 
 
@@ -1640,7 +1488,8 @@ def grafana_auth_check():
         return Response('Unauthorized', 401)
 
     # Sanitize username for header (prevent response splitting)
-    username = sysadmin.username.replace('\n', '').replace('\r', '') if sysadmin.username else ''
+    raw_username = session.get("sysadmin_auth_username") or sysadmin.get_display_username()
+    username = raw_username.replace('\n', '').replace('\r', '') if raw_username else ''
 
     response = Response('OK', 200)
     response.headers['X-Auth-User'] = username
@@ -1704,7 +1553,7 @@ def grafana_proxy(path):
             # Stale session - admin was deleted
             flash("Authentication failed: user not found.", "error")
             return redirect(url_for('sysadmin.dashboard'))
-        headers['X-WEBAUTH-USER'] = admin.username
+        headers['X-WEBAUTH-USER'] = session.get("sysadmin_auth_username") or admin.get_display_username()
 
         # Make the request to Grafana
         resp = requests.request(
@@ -1876,7 +1725,7 @@ def announcements():
     for announcement in announcements_list:
         if announcement.audience_type == 'teacher_all_classes' and announcement.target_teacher_id:
             teacher = teachers_dict.get(announcement.target_teacher_id)
-            announcement.audience_display = f"All classes of {teacher.get_display_name() if teacher else 'Unknown Teacher'}"
+            announcement.audience_display = f"All classes of {teacher.get_sysadmin_display_name() if teacher else 'Unknown Teacher'}"
         else:
             announcement.audience_display = announcement.get_audience_label()
 
@@ -1898,9 +1747,9 @@ def announcement_create():
     form = SystemAdminAnnouncementForm()
 
     # Populate teacher choices
-    teachers = Admin.query.order_by(Admin.username).all()
+    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     form.target_teacher.choices = [('', '-- Select Teacher --')] + [
-        (teacher.id, f"{teacher.get_display_name()} ({teacher.username})")
+        (teacher.id, teacher.get_sysadmin_display_name())
         for teacher in teachers
     ]
 
@@ -1955,9 +1804,9 @@ def announcement_edit(announcement_id):
     form = SystemAdminAnnouncementForm(obj=announcement)
 
     # Populate teacher choices
-    teachers = Admin.query.order_by(Admin.username).all()
+    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     form.target_teacher.choices = [('', '-- Select Teacher --')] + [
-        (teacher.id, f"{teacher.get_display_name()} ({teacher.username})")
+        (teacher.id, teacher.get_sysadmin_display_name())
         for teacher in teachers
     ]
 

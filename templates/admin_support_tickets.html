@@ -9,13 +9,15 @@
         <div class="col-lg-5">
             <div class="card shadow-sm">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">send</span>Submit Teacher Support Ticket</h5>
+                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">send</span>Submit Support Ticket</h5>
                 </div>
                 <div class="card-body">
-                    <p class="text-muted">This is a direct teacher-to-sysadmin support flow. No teacher approval step is required.</p>
+                    <p class="text-muted">Use this form to submit a support ticket as a teacher. This form should only be used for issues encountered by teacher users, not students.</p>
+                    <p class="text-muted">If you want to report a student issue, your student must initiate the ticket first before you can elevate it to our support team.</p>
+
                     <form method="POST" action="{{ url_for('admin.help_support') }}">
                         <div class="mb-3">
-                            <label for="join_code" class="form-label">Class Scope <span class="text-danger">*</span></label>
+                            <label for="join_code" class="form-label">This issue applies to: <span class="text-danger">*</span></label>
                             <select class="form-select" id="join_code" name="join_code" required>
                                 <option value="">Select class scope...</option>
                                 {% for option in class_scope_options %}
@@ -68,8 +70,8 @@
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><span class="material-symbols-outlined me-2">format_list_bulleted</span>My Tickets</h5>
                     <form method="GET" action="{{ url_for('admin.help_support') }}" class="d-flex gap-2 align-items-center">
-                        <label for="scope_filter" class="small text-muted mb-0">Scope</label>
-                        <select class="form-select form-select-sm" id="scope_filter" name="join_code" onchange="this.form.submit()">
+                        <label for="scope_filter" class="small text-muted mb-0">Currently Viewing</label>
+                        <select class="form-select" id="scope_filter" name="join_code" onchange="this.form.submit()">
                             <option value="">All classes</option>
                             {% for option in class_scope_options %}
                             <option value="{{ option.join_code }}" {% if selected_join_code == option.join_code %}selected{% endif %}>{{ option.label }}</option>

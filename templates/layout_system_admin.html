@@ -100,7 +100,7 @@
                 <div class="sysadmin-identity">
                     <span class="material-symbols-outlined"
                         style="font-size:16px; color: var(--sysadmin-accent); vertical-align:middle;">admin_panel_settings</span>
-                    {{ current_sysadmin.username if current_sysadmin else "System Administrator" }}
+                    {{ current_sysadmin.get_display_username() if current_sysadmin else "System Administrator" }}
                     <div class="mt-0"
                         style="font-size:10pt; color: color-mix(in srgb, var(--secondary) 60%, transparent)">
                         System Administrator

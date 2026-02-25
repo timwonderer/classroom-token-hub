@@ -34,6 +34,7 @@ from app.utils.join_code import generate_join_code
 from app.hash_utils import get_random_salt, hash_username, hash_username_lookup
 from app.utils.claim_credentials import compute_primary_claim_hash
 from app.utils.name_utils import hash_last_name_parts
+from app.utils.encryption import encrypt_totp
 from werkzeug.security import generate_password_hash
 import pyotp
 
@@ -177,7 +178,7 @@ def create_teacher(username, totp_secret=None):
 
     teacher = Admin(
         username=username,
-        totp_secret=totp_secret,
+        totp_secret=encrypt_totp(totp_secret),
         created_at=datetime.now(timezone.utc),
         has_assigned_students=True
     )
@@ -368,7 +369,8 @@ def create_insurance_policies(teacher, period_name, block):
             if random.random() < 0.5:
                 continue
 
-        policy_code = f"{teacher.username[:3].upper()}{block}{idx+1:02d}"
+        teacher_code = (teacher.get_display_name() or f"T{teacher.id}")[:3].upper()
+        policy_code = f"{teacher_code}{block}{idx+1:02d}"
 
         policy = InsurancePolicy(
             policy_code=policy_code,

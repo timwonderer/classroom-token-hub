@@ -56,7 +56,7 @@
                         </label>
                         {{ form.first_initial(class="form-control", placeholder="Example: J", maxlength="1", autocomplete="off") }}
                         <small class="form-text text-muted">
-                            Enter the first letter of your first name (must match your account)
+                            Enter the first letter of your first name (must match your teacher's roster)
                         </small>
                         {% for error in form.first_initial.errors %}
                             <div class="text-danger small mt-1">{{ error }}</div>
@@ -70,7 +70,7 @@
                         </label>
                         {{ form.last_name(class="form-control", placeholder="Example: Smith", autocomplete="off") }}
                         <small class="form-text text-muted">
-                            Enter your last name (must match your account)
+                            Enter your last name as it appears on this teacher's roster
                         </small>
                         {% for error in form.last_name.errors %}
                             <div class="text-danger small mt-1">{{ error }}</div>
@@ -84,16 +84,11 @@
                         </label>
                         {{ form.dob_sum(class="form-control", type="date", autocomplete="off") }}
                         <small class="form-text text-muted">
-                            Enter your date of birth to verify your identity
+                            Enter your date of birth to verify your identity for this class
                         </small>
                         {% for error in form.dob_sum.errors %}
                             <div class="text-danger small mt-1">{{ error }}</div>
                         {% endfor %}
-                    </div>
-
-                    <div class="alert alert-warning">
-                        <span class="material-symbols-outlined align-middle">security</span>
-                        <strong>Verification Required:</strong> For security, we'll verify that the credentials you enter match your existing account before adding the new class.
                     </div>
 
                     <div class="d-grid gap-2">
@@ -121,9 +116,9 @@
             <div class="card-body">
                 <ul class="mb-0">
                     <li>Make sure your teacher has added you to their roster and shared the join code with you</li>
-                    <li>Your credentials (first initial, last name, and birthday sum) must match what your teacher entered in the roster</li>
+                    <li>Enter your information exactly as your teacher entered it in their roster</li>
+                    <li>Each join code is specific to one class period — make sure you're using the correct code for the class you want to join</li>
                     <li>If you're having trouble, ask your teacher to verify that your information is correct in their roster</li>
-                    <li>Each join code is specific to one class period - make sure you're using the correct code for the class you want to join</li>
                 </ul>
             </div>
         </div>

@@ -107,7 +107,7 @@ def debug_student_state():
         all_teachers = Admin.query.all()
         print(f"Total teachers in database: {len(all_teachers)}")
         for teacher in all_teachers:
-            print(f"  Teacher ID {teacher.id}: {teacher.username}")
+            print(f"  Teacher ID {teacher.id}: {teacher.get_display_name()}")
 
             # Count students by different methods
             direct = Student.query.filter_by(teacher_id=teacher.id).count()
@@ -136,7 +136,7 @@ def debug_student_state():
             ).all()
 
             if students_via_st:
-                print(f"Teacher ID {teacher.id} ({teacher.username}):")
+                print(f"Teacher ID {teacher.id} ({teacher.get_display_name()}):")
                 print(f"  Total students with accounts: {len(students_via_st)}")
 
                 # Check how many have claimed TeacherBlock

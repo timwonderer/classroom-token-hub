@@ -65,15 +65,39 @@ def encrypt_totp(plaintext_secret):
     return base64.b64encode(encrypted_bytes).decode('utf-8')
 
 
+def is_totp_encrypted(value):
+    """Return True if the value appears to be a valid encrypted TOTP payload."""
+    if not value:
+        return False
+    try:
+        fernet = _get_fernet()
+        encrypted_bytes = base64.b64decode(value.encode('utf-8'))
+        fernet.decrypt(encrypted_bytes)
+        return True
+    except (InvalidToken, ValueError, TypeError, base64.binascii.Error):
+        return False
+
+
+def normalize_totp_for_storage(secret_value):
+    """
+    Ensure a TOTP secret is stored encrypted.
+
+    If value is already encrypted with current key, keep it unchanged.
+    Otherwise, encrypt it as plaintext input.
+    """
+    if not secret_value:
+        return None
+    if is_totp_encrypted(secret_value):
+        return secret_value
+    return encrypt_totp(secret_value)
+
+
 def decrypt_totp(encrypted_secret):
     """
     Decrypt a TOTP secret from base64-encoded encrypted string.
 
-    Handles both encrypted (new) and plaintext (legacy) secrets for backward compatibility.
-    If decryption fails, assumes it's a legacy plaintext secret and returns as-is.
-
     Args:
-        encrypted_secret (str): Base64-encoded encrypted secret or legacy plaintext
+        encrypted_secret (str): Base64-encoded encrypted secret
 
     Returns:
         str: Plaintext TOTP secret
@@ -81,18 +105,10 @@ def decrypt_totp(encrypted_secret):
     if not encrypted_secret:
         return None
 
-    # Heuristic: Encrypted secrets are base64 (longer), plaintext TOTP secrets are exactly 32 chars
-    # and only contain A-Z2-7 (base32 alphabet)
-    if len(encrypted_secret) == 32 and all(c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567' for c in encrypted_secret.upper()):
-        # Legacy plaintext secret - return as-is
-        return encrypted_secret
-
-    # Try to decrypt
     try:
         fernet = _get_fernet()
         encrypted_bytes = base64.b64decode(encrypted_secret.encode('utf-8'))
         decrypted = fernet.decrypt(encrypted_bytes)
         return decrypted.decode('utf-8')
     except (InvalidToken, ValueError, TypeError, base64.binascii.Error):
-        # If decryption fails, assume it's a legacy plaintext secret
-        return encrypted_secret
+        raise ValueError("Invalid encrypted TOTP secret format")

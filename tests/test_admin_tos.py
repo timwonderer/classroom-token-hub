@@ -4,6 +4,7 @@ import pyotp
 
 from app import create_app, db
 from app.models import Admin, AdminInviteCode
+from app.hash_utils import hash_username_lookup
 
 
 class TestAdminTos(unittest.TestCase):
@@ -39,7 +40,7 @@ class TestAdminTos(unittest.TestCase):
         self.assertIn(b'You must agree to the Terms of Service', response.data)
 
         # Verify admin was not created
-        admin = Admin.query.filter_by(username='newadmin').first()
+        admin = Admin.query.filter_by(username_lookup_hash=hash_username_lookup('newadmin')).first()
         self.assertIsNone(admin)
 
         # Try signup WITH ToS agreement
@@ -76,10 +77,48 @@ class TestAdminTos(unittest.TestCase):
         self.assertIn(b'Admin account created successfully', response.data)
 
         # Verify admin was created with ToS accepted
-        admin = Admin.query.filter_by(username='newadmin').first()
+        admin = Admin.query.filter_by(username_lookup_hash=hash_username_lookup('newadmin')).first()
         self.assertIsNotNone(admin)
         self.assertTrue(admin.tos_accepted)
         self.assertIsNotNone(admin.tos_accepted_at)
+        invite = AdminInviteCode.query.filter_by(code=invite_code).first()
+        self.assertIsNotNone(invite)
+        self.assertTrue(invite.used)
+
+    def test_invite_code_with_db_whitespace_is_marked_used(self):
+        # Stored code has surrounding whitespace (legacy data shape)
+        stored_code = "  PADDED123  "
+        submitted_code = "PADDED123"
+        db.session.add(AdminInviteCode(code=stored_code))
+        db.session.commit()
+
+        response = self.client.post('/admin/signup', data={
+            'username': 'whitespaceadmin',
+            'invite_code': submitted_code,
+            'dob_sum': '1991-02-03',
+            'tos_agreed': 'true'
+        })
+
+        self.assertIn(b'Scan the QR code', response.data)
+
+        with self.client.session_transaction() as sess:
+            totp_secret = sess.get('admin_totp_secret')
+
+        totp = pyotp.TOTP(totp_secret)
+        code = totp.now()
+
+        response = self.client.post('/admin/signup', data={
+            'username': 'whitespaceadmin',
+            'invite_code': submitted_code,
+            'dob_sum': '1991-02-03',
+            'totp_code': code,
+            'tos_agreed': 'true'
+        }, follow_redirects=True)
+
+        self.assertIn(b'Admin account created successfully', response.data)
+        invite = AdminInviteCode.query.filter_by(code=stored_code).first()
+        self.assertIsNotNone(invite)
+        self.assertTrue(invite.used)
 
     def test_totp_submission_without_tos_agreement(self):
         # Create an invite code
@@ -115,7 +154,7 @@ class TestAdminTos(unittest.TestCase):
         self.assertIn(b'You must agree to the Terms of Service', response.data)
 
         # Verify admin was not created
-        admin = Admin.query.filter_by(username='newadmin').first()
+        admin = Admin.query.filter_by(username_lookup_hash=hash_username_lookup('newadmin')).first()
         self.assertIsNone(admin)
 
     def test_totp_submission_without_tos_parameter(self):
@@ -152,7 +191,7 @@ class TestAdminTos(unittest.TestCase):
         self.assertIn(b'You must agree to the Terms of Service', response.data)
 
         # Verify admin was not created
-        admin = Admin.query.filter_by(username='newadmin').first()
+        admin = Admin.query.filter_by(username_lookup_hash=hash_username_lookup('newadmin')).first()
         self.assertIsNone(admin)
 
     def test_schema_columns_exist(self):

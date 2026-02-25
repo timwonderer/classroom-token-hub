@@ -138,7 +138,12 @@ def test_bulk_delete_students_archives_without_removing_teacher_blocks(client):
     # Bulk delete students
     response = client.post(
         "/admin/students/bulk-delete",
-        json={"student_ids": [student1_id, student2_id]},
+        json={
+            "student_ids": [student1_id, student2_id],
+            "gate_phrase": "DELETE STUDENTS",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
         content_type="application/json"
     )
     
@@ -179,7 +184,12 @@ def test_delete_block_removes_teacher_blocks(client):
     # Delete the block
     response = client.post(
         "/admin/students/delete-block",
-        json={"block": "X"},
+        json={
+            "block": "X",
+            "gate_phrase": "DELETE BLOCK X",
+            "gate_countdown_seconds": 30,
+            "gate_hold_seconds": 10,
+        },
         content_type="application/json"
     )
     
@@ -190,8 +200,8 @@ def test_delete_block_removes_teacher_blocks(client):
     assert len(remaining_tbs) == 0
 
 
-def test_sysadmin_delete_period_removes_teacher_blocks(client):
-    """When sysadmin deletes a period, TeacherBlock entries should be removed."""
+def test_sysadmin_delete_period_is_disabled(client):
+    """System admins cannot delete class periods."""
     teacher, _ = _create_admin("teacher-period")
     sysadmin, sys_secret = _create_sysadmin()
     
@@ -204,27 +214,21 @@ def test_sysadmin_delete_period_removes_teacher_blocks(client):
     
     _login_sysadmin(client, sysadmin, sys_secret)
     
-    # Delete the period
+    # Attempt period deletion (should be blocked)
     response = client.post(
         f"/sysadmin/delete-period/{teacher.id}/Y",
         follow_redirects=True
     )
     
     assert response.status_code == 200
-    
-    # Verify TeacherBlock for block Y is deleted
-    assert db.session.get(TeacherBlock, tb_id) is None
+    assert b"System admins cannot delete classes" in response.data
+    assert db.session.get(TeacherBlock, tb_id) is not None
 
 
-def test_sysadmin_delete_teacher_removes_teacher_blocks(client):
-    """When sysadmin deletes a teacher, all their TeacherBlock entries should be removed."""
+def test_teacher_account_deletion_removes_teacher_blocks(client):
+    """Teacher self-deletion removes all owned TeacherBlock entries."""
     teacher, _ = _create_admin("teacher-to-delete")
-    sysadmin, sys_secret = _create_sysadmin()
-    
-    # Make teacher inactive so sysadmin can delete without request
-    teacher.last_login = None
-    db.session.commit()
-    
+
     teacher_id = teacher.id
     
     student1, tb1 = _create_student_with_teacher_block("Alice", teacher, block="A")
@@ -232,16 +236,12 @@ def test_sysadmin_delete_teacher_removes_teacher_blocks(client):
     tb1_id = tb1.id
     tb2_id = tb2.id
     
-    _login_sysadmin(client, sysadmin, sys_secret)
-    
-    # Delete the teacher
-    response = client.post(
-        f"/sysadmin/manage-teachers/delete/{teacher_id}",
-        follow_redirects=True
-    )
-    
-    assert response.status_code == 200
+    from app.routes.admin import _hard_delete_teacher_account_scope
+    _hard_delete_teacher_account_scope(teacher_id)
+    db.session.delete(teacher)
+    db.session.commit()
     
     # Verify TeacherBlocks are deleted
     assert db.session.get(TeacherBlock, tb1_id) is None
     assert db.session.get(TeacherBlock, tb2_id) is None
+    assert db.session.get(Admin, teacher_id) is None
