@@ -113,8 +113,8 @@ def _login_sysadmin(client, sysadmin: SystemAdmin, secret: str):
     )
 
 
-def test_delete_student_archives_without_deleting_student_block(client):
-    """Archiving a student should preserve StudentBlock and ledger history."""
+def test_delete_student_removes_student_and_student_block(client):
+    """Deleting an unshared student should remove both student and StudentBlock rows."""
     teacher, secret = _create_admin("teacher-cleanup")
     student, student_block = _create_student_with_student_block("Alice", teacher)
     
@@ -132,17 +132,15 @@ def test_delete_student_archives_without_deleting_student_block(client):
     
     assert response.status_code == 200
     
-    # Verify student is archived, not deleted
-    refreshed = db.session.get(Student, student_id)
-    assert refreshed is not None
-    assert refreshed.is_active is False
+    # Verify student is deleted
+    assert db.session.get(Student, student_id) is None
 
-    # Verify StudentBlock is preserved
-    assert db.session.get(StudentBlock, student_block_id) is not None
+    # Verify StudentBlock is deleted with the student
+    assert db.session.get(StudentBlock, student_block_id) is None
 
 
-def test_bulk_delete_students_archives_students(client):
-    """Bulk archive should disable students while preserving StudentBlocks."""
+def test_bulk_delete_students_removes_students_and_student_blocks(client):
+    """Bulk delete should remove students and StudentBlock rows."""
     teacher, secret = _create_admin("teacher-bulk")
     student1, sb1 = _create_student_with_student_block("Alice", teacher, period="1")
     student2, sb2 = _create_student_with_student_block("Bob", teacher, period="2")
@@ -168,13 +166,13 @@ def test_bulk_delete_students_archives_students(client):
     
     assert response.status_code == 200
     
-    # Verify students are archived
-    assert db.session.get(Student, student1_id).is_active is False
-    assert db.session.get(Student, student2_id).is_active is False
+    # Verify students are deleted
+    assert db.session.get(Student, student1_id) is None
+    assert db.session.get(Student, student2_id) is None
 
-    # Verify StudentBlocks are preserved
-    assert db.session.get(StudentBlock, sb1_id) is not None
-    assert db.session.get(StudentBlock, sb2_id) is not None
+    # Verify StudentBlocks are deleted with students
+    assert db.session.get(StudentBlock, sb1_id) is None
+    assert db.session.get(StudentBlock, sb2_id) is None
 
 
 def test_delete_block_removes_student_blocks(client):
@@ -207,8 +205,8 @@ def test_delete_block_removes_student_blocks(client):
     assert db.session.get(StudentBlock, sb2_id) is None
 
 
-def test_bulk_delete_legacy_unclaimed_archives_students(client):
-    """Legacy unclaimed bulk deletion route should archive, not delete."""
+def test_bulk_delete_legacy_unclaimed_deletes_students(client):
+    """Legacy unclaimed bulk deletion route should remove students fully."""
     teacher, secret = _create_admin("teacher-legacy")
     
     # Create a legacy unclaimed student (username_hash = None)
@@ -254,13 +252,11 @@ def test_bulk_delete_legacy_unclaimed_archives_students(client):
     
     assert response.status_code == 200
     
-    # Verify student is archived
-    refreshed = db.session.get(Student, student_id)
-    assert refreshed is not None
-    assert refreshed.is_active is False
+    # Verify student is deleted
+    assert db.session.get(Student, student_id) is None
 
-    # Verify StudentBlock is preserved
-    assert db.session.get(StudentBlock, student_block_id) is not None
+    # Verify StudentBlock is deleted
+    assert db.session.get(StudentBlock, student_block_id) is None
 
 
 def test_sysadmin_delete_admin_removes_student_blocks(client):
@@ -294,8 +290,8 @@ def test_sysadmin_delete_admin_removes_student_blocks(client):
     assert db.session.get(StudentBlock, sb2_id) is None
 
 
-def test_delete_student_preserves_issue_and_transaction_references(client):
-    """Archiving a student should preserve transaction rows and issue references."""
+def test_delete_student_clears_cross_issue_transaction_references(client):
+    """Deleting a student should null cross-issue tx refs and remove student tx rows."""
     teacher, secret = _create_admin("teacher-issue-fk")
     student_to_delete, _ = _create_student_with_student_block("Alice", teacher, period="1")
     reporter_student, _ = _create_student_with_student_block("Riley", teacher, period="2")
@@ -357,14 +353,12 @@ def test_delete_student_preserves_issue_and_transaction_references(client):
     )
     assert response.status_code == 200
 
-    refreshed_student = db.session.get(Student, deleted_student_id)
-    assert refreshed_student is not None
-    assert refreshed_student.is_active is False
-    assert db.session.get(Transaction, tx_id) is not None
+    assert db.session.get(Student, deleted_student_id) is None
+    assert db.session.get(Transaction, tx_id) is None
 
     refreshed_issue = db.session.get(Issue, issue_id)
     refreshed_action = db.session.get(IssueResolutionAction, action_id)
     assert refreshed_issue is not None
     assert refreshed_action is not None
-    assert refreshed_issue.related_transaction_id == tx_id
-    assert refreshed_action.related_transaction_id == tx_id
+    assert refreshed_issue.related_transaction_id is None
+    assert refreshed_action.related_transaction_id is None

@@ -27,7 +27,13 @@ from app.models import (
     RentSettings, RentPayment, InsurancePolicy, StudentInsurance, InsuranceClaim,
     BankingSettings, UserReport, FeatureSettings, Issue
 )
-from app.auth import admin_required, login_required, get_logged_in_student, SESSION_TIMEOUT_MINUTES
+from app.auth import (
+    admin_required,
+    login_required,
+    get_logged_in_student,
+    is_student_account_active,
+    SESSION_TIMEOUT_MINUTES,
+)
 from app.forms import (
     StudentClaimAccountForm, StudentCreateUsernameForm, StudentPinPassphraseForm,
     StudentLoginForm, InsuranceClaimForm, StudentCompleteProfileForm
@@ -3555,7 +3561,7 @@ def login():
                 flash("Invalid credentials", "error")
                 return redirect(url_for('student.login', next=request.args.get('next')))
 
-            if not student.is_active:
+            if not is_student_account_active(student):
                 if is_json:
                     return jsonify(status="error", message="Account is inactive. Contact your teacher."), 403
                 flash("Your account is inactive. Contact your teacher.", "error")
