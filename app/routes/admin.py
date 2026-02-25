@@ -6289,8 +6289,9 @@ def payroll():
     last_payroll_map = {sid: ts for sid, ts in last_payroll_rows}
 
     # Batch: Attendance Events
-    # Fetch all events since global last payroll time for these students
-    events_map = get_batch_attendance_events(student_ids, last_payroll_time)
+    # Fetch all events since global last payroll time for these students.
+    # SECURITY: Pass my_join_codes so events from other teachers' classes are excluded.
+    events_map = get_batch_attendance_events(student_ids, last_payroll_time, allowed_join_codes=my_join_codes)
 
     for student in students:
         # Calculate unpaid minutes across all blocks

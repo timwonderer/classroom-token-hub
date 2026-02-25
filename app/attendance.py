@@ -323,11 +323,15 @@ def get_all_block_statuses(student, join_code=None):
 # BATCH OPTIMIZATION HELPERS
 # -------------------------------------------------------------------
 
-def get_batch_attendance_events(student_ids, min_anchor):
+def get_batch_attendance_events(student_ids, min_anchor, allowed_join_codes=None):
     """
     Fetch all relevant tap events for the given students after min_anchor.
     Crucially, also determines if they were 'active' right before min_anchor.
     Returns a dict: (student_id, period_upper, join_code) -> list of TapEvent
+
+    SECURITY: Pass allowed_join_codes to restrict results to a specific tenant's
+    class periods. Without this filter the query returns events from every class
+    the students are enrolled in, including those owned by other teachers.
     """
     from app.models import TapEvent
     from sqlalchemy import func, and_
@@ -337,6 +341,9 @@ def get_batch_attendance_events(student_ids, min_anchor):
         TapEvent.student_id.in_(student_ids),
         TapEvent.is_deleted == False
     )
+
+    if allowed_join_codes is not None:
+        query = query.filter(TapEvent.join_code.in_(allowed_join_codes))
 
     if min_anchor:
         query = query.filter(TapEvent.timestamp > min_anchor)
@@ -353,7 +360,7 @@ def get_batch_attendance_events(student_ids, min_anchor):
     # We need the LAST event <= min_anchor for each student/period.
     if min_anchor:
         # Subquery to find the latest timestamp for each student/period/join_code before anchor
-        subquery = db.session.query(
+        pre_anchor_query = db.session.query(
             TapEvent.student_id,
             TapEvent.period,
             TapEvent.join_code,
@@ -362,7 +369,12 @@ def get_batch_attendance_events(student_ids, min_anchor):
             TapEvent.student_id.in_(student_ids),
             TapEvent.timestamp <= min_anchor,
             TapEvent.is_deleted == False
-        ).group_by(
+        )
+
+        if allowed_join_codes is not None:
+            pre_anchor_query = pre_anchor_query.filter(TapEvent.join_code.in_(allowed_join_codes))
+
+        subquery = pre_anchor_query.group_by(
             TapEvent.student_id,
             TapEvent.period,
             TapEvent.join_code,
@@ -457,7 +469,7 @@ def batch_auto_tapout_students(admin_id):
     Optimized version of auto-tapout that processes all students for an admin in batch.
     Returns the count of students tapped out.
     """
-    from app.models import Student, TapEvent, StudentBlock, PayrollSettings, StudentTeacher
+    from app.models import Student, TapEvent, StudentBlock, PayrollSettings, StudentTeacher, TeacherBlock
     from app.extensions import db
     import pytz
 
@@ -472,6 +484,22 @@ def batch_auto_tapout_students(admin_id):
     if not student_ids:
         return 0
 
+    # 1b. SECURITY: Fetch only the join codes owned by this admin.
+    # This prevents reading or writing attendance data for students' other
+    # class periods that belong to different teachers.
+    admin_join_codes = [
+        row[0] for row in db.session.query(TeacherBlock.join_code)
+        .filter(
+            TeacherBlock.teacher_id == admin_id,
+            TeacherBlock.join_code.isnot(None)
+        )
+        .distinct()
+        .all()
+    ]
+
+    if not admin_join_codes:
+        return 0
+
     # 2. Get today's start in UTC (based on Pacific time)
     pacific = pytz.timezone('America/Los_Angeles')
     now_utc = utc_now()
@@ -481,9 +509,9 @@ def batch_auto_tapout_students(admin_id):
     start_of_day_pacific = pacific.localize(datetime.combine(today_pacific, datetime.min.time()))
     start_of_day_utc = start_of_day_pacific.astimezone(timezone.utc)
 
-    # 3. Batch fetch events for today
+    # 3. Batch fetch events for today, scoped to this admin's join codes only.
     # events_map: (student_id, period, join_code) -> list[TapEvent]
-    events_map = get_batch_attendance_events(student_ids, start_of_day_utc)
+    events_map = get_batch_attendance_events(student_ids, start_of_day_utc, allowed_join_codes=admin_join_codes)
 
     # Restructure for faster lookup: student_id -> period -> list of (join_code, events)
     lookup = {}
