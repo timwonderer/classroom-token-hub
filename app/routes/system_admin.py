@@ -182,6 +182,9 @@ def login():
                     session['last_activity'] = utc_now().isoformat()
                     # Establish global maintenance bypass for subsequent role testing.
                     session['maintenance_global_bypass'] = True
+                    if needs_hashed_username_migration(admin):
+                        session["force_sysadmin_username_migration"] = True
+                        return redirect(url_for("sysadmin.username_migration"))
                     flash("System admin login successful.")
                     next_url = request.args.get("next")
                     redirect_target = None
