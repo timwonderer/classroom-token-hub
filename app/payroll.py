@@ -168,20 +168,26 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
     # Determine the global anchor to limit event fetching
     # We must go back at least to the earliest relevant payroll time
     normalized_global_last_payroll = ensure_utc(last_payroll_time)
-    
+
     # Filter valid times to find the minimum anchor
     valid_times = [t for t in student_last_payrolls.values() if t]
     if normalized_global_last_payroll:
         valid_times.append(normalized_global_last_payroll)
-    
+
     # If we have any history, start fetching from the earliest point
     # If no history at all, we technically fetch everything (min_anchor=None)
     min_anchor = min(valid_times) if valid_times else None
 
+    # SECURITY: Restrict events to this teacher's join codes only.
+    # student_join_codes is already scoped to teacher_id; extract unique values.
+    # Use a list (not None) so that an empty set produces in([]) → zero rows
+    # rather than skipping the filter and leaking other tenants' data.
+    teacher_join_codes = list({jc for jc in student_join_codes.values() if jc})
+
     # map: (student_id, period, join_code) -> list of valid events (sorted)
     # Also handles the "initial state" (was active at anchor) logic internally
     # Updated: Use shared function from app.attendance
-    events_map = get_batch_attendance_events(student_ids, min_anchor)
+    events_map = get_batch_attendance_events(student_ids, min_anchor, allowed_join_codes=teacher_join_codes)
 
     # --- 5. In-Memory Calculation ---
     for student in students:

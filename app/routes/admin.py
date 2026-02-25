@@ -75,7 +75,9 @@ from app.attendance import (
     get_last_payroll_time,
     calculate_unpaid_attendance_seconds,
     get_join_code_for_student_period,
-    batch_auto_tapout_students
+    batch_auto_tapout_students,
+    get_batch_attendance_events,
+    calculate_seconds_in_memory,
 )
 from app.services.balance_service import get_batch_balances
 from app.utils.insurance_eligibility import (
@@ -2393,7 +2395,6 @@ def students():
     # CRITICAL: Add scoped balances for each student in each block
     # This prevents multi-tenancy violations where students see aggregated balances across all classes
     student_balances_by_block = {}  # {(student_id, block): {'checking': X, 'savings': Y, 'earnings': Z}}
-    from app.services.balance_service import get_batch_balances
 
     # 1. Identify all join codes and students to query
     target_join_codes = []
@@ -6288,9 +6289,9 @@ def payroll():
     last_payroll_map = {sid: ts for sid, ts in last_payroll_rows}
 
     # Batch: Attendance Events
-    # Fetch all events since global last payroll time for these students
-    from app.attendance import get_batch_attendance_events, calculate_seconds_in_memory
-    events_map = get_batch_attendance_events(student_ids, last_payroll_time)
+    # Fetch all events since global last payroll time for these students.
+    # SECURITY: Pass my_join_codes so events from other teachers' classes are excluded.
+    events_map = get_batch_attendance_events(student_ids, last_payroll_time, allowed_join_codes=my_join_codes)
 
     for student in students:
         # Calculate unpaid minutes across all blocks
