@@ -39,9 +39,11 @@ This platform is designed for classrooms, not commerce. Every feature prioritize
 ### 2. Privacy & Security
 
 - **Student data is encrypted at rest** - All personally identifiable information (PII) is protected
+- **Post-claim PII minimisation** - Identity verification hashes (date of birth, name) used only for the one-time account claim are automatically deleted immediately after account setup completes, reducing the long-term sensitive-data footprint
 - **Minimal data collection** - We only collect what's necessary for the classroom economy simulation
 - **No tracking or analytics** - No third-party analytics or advertising
 - **Teacher ownership** - Teachers control their data and can export or delete it at any time
+- **Continuously audited** - Regular security audits of critical paths (deletion flows, multi-tenancy scoping, authentication) with documented findings and fixes
 
 ### 3. Transparency
 
@@ -155,4 +157,4 @@ For questions about licensing, commercial use, or the project philosophy:
 
 ---
 
-**Last Updated:** 2026-01-05
+**Last Updated:** 2026-02-25
