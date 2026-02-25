@@ -59,7 +59,7 @@ and this project follows semantic versioning principles.
 ### Performance
 - **Read-Path Audit & Optimization** - Conducted comprehensive audit of student list rendering and admin dashboard performance
   - **Removed Write-on-Read Side Effects**: Refactored `Student.checking_balance`, `Student.savings_balance`, and `Student.total_earnings` properties to be read-only calculations. Moved legacy automated settlement logic (which triggered database writes during read operations) to explicit mutation endpoints (`/transfer`, `/pay-rent`). This eliminates race conditions and significantly improves read performance.
-  - **Optimized Admin Dashboard**: Refactored daily limit enforcement (`auto_tapout`) to use batch processing instead of per-student iteration. Optimized balance calculations to use batched, scoped queries. Reduced dashboard query count by ~92% (from ~351 to 26 queries for a standard class size).
+  - **Optimized Admin Dashboard internals**: Refactored daily limit enforcement (`auto_tapout`) to use batch processing instead of per-student iteration and moved dashboard balance calculations to batched, scoped queries. Stage 2 audit kept dashboard query totals unchanged at 402 (explicit dashboard query-count reduction remains out of scope for this stage).
   - **Optimized Student Roster**: Eliminated N+1 query patterns in the student management table by batch-fetching balances and rent privileges. Query count reduced from ~1225 to ~10 for a class of 60 students.
   - **Scoped Balance Calculations**: Fixed a critical multi-tenancy flaw where student balances were aggregated across all classes instead of being scoped to the current teacher's context. Dashboard and roster now correctly reflect class-specific financial state.
 

@@ -541,6 +541,10 @@ def batch_auto_tapout_students(admin_id):
 
     # 5. Batch fetch Students to get their blocks
     students = Student.query.filter(Student.id.in_(student_ids)).all()
+    student_blocks_lookup = {
+        (sb.student_id, (sb.period or "").strip().upper()): sb
+        for sb in StudentBlock.query.filter(StudentBlock.student_id.in_(student_ids)).all()
+    }
 
     # 6. Iterate and check
     tapped_out_count = 0
@@ -587,7 +591,7 @@ def batch_auto_tapout_students(admin_id):
                     tapped_out_count += 1
 
                     # Lock student
-                    sb = StudentBlock.query.filter_by(student_id=student.id, period=period).first()
+                    sb = student_blocks_lookup.get((student.id, period))
                     if not sb:
                         sb = StudentBlock(
                             student_id=student.id,
@@ -596,6 +600,7 @@ def batch_auto_tapout_students(admin_id):
                             join_code=join_code
                         )
                         db.session.add(sb)
+                        student_blocks_lookup[(student.id, period)] = sb
                     sb.done_for_day_date = today_pacific
 
     if tapped_out_count > 0:
@@ -603,7 +608,7 @@ def batch_auto_tapout_students(admin_id):
             db.session.commit()
         except Exception as e:
             db.session.rollback()
-            current_app.logger.error(f"Error committing batch auto-tapout: {e}")
-            pass
+            current_app.logger.error(f"Error committing batch auto-tapout: {e}", exc_info=True)
+            return 0
 
     return tapped_out_count

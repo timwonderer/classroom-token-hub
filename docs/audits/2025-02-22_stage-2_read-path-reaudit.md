@@ -26,7 +26,7 @@ Following the Stage 1 audit which identified severe N+1 query patterns and a cri
 | | DB Time | ~450ms | ~3ms | -99% |
 | **Payroll** | Queries | 260 | **184** | **-29.2%** |
 | | DB Time | ~120ms | ~40ms | -66% |
-| **Admin Dashboard** | Queries | 406 | 406 | 0% (Out of Scope) |
+| **Admin Dashboard** | Queries | 402 | 402 | 0% (Out of Scope) |
 
 ## 4. Technical Implementation
 

@@ -25,7 +25,6 @@ from decimal import Decimal, InvalidOperation
 from flask import (
     Blueprint, redirect, url_for, flash, request, session,
     jsonify, Response, send_file, current_app, abort, g
-    jsonify, Response, send_file, current_app, abort, g
 )
 from urllib.parse import urlparse
 from sqlalchemy import desc, text, or_, and_, func

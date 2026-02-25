@@ -340,7 +340,7 @@ class Student(db.Model):
         if join_code:
             # Proper scoping by join_code (period-level isolation)
             # Use Ledger + Settlement model (BalanceCache)
-            from app.models import BalanceCache, Transaction, TransactionStatus 
+            from app.models import BalanceCache, Transaction, TransactionStatus
             # Note: eager settlement removed to prevent write-on-read performance issues.
             # Balances are settled on transaction creation or async.
 
@@ -427,7 +427,7 @@ class Student(db.Model):
         if join_code:
             # Proper scoping by join_code (period-level isolation)
             # Use Ledger + Settlement model (BalanceCache)
-            from app.models import BalanceCache, Transaction, TransactionStatus 
+            from app.models import BalanceCache, Transaction, TransactionStatus
             # Note: eager settlement removed to prevent write-on-read performance issues.
             # Balances are settled on transaction creation or async.
 
