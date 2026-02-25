@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app import create_app
 from app.extensions import db
 from app.models import Student, StudentTeacher
-from app.routes.admin import _hard_delete_student_if_orphaned
+from app.utils.student_deletion import hard_delete_student_if_orphaned
 
 
 def purge_archived_students(apply: bool, limit: int | None = None) -> int:
@@ -45,7 +45,7 @@ def purge_archived_students(apply: bool, limit: int | None = None) -> int:
                 continue
 
             StudentTeacher.query.filter_by(student_id=student.id).delete(synchronize_session=False)
-            deleted = _hard_delete_student_if_orphaned(student.id)
+            deleted = hard_delete_student_if_orphaned(student.id)
             if deleted:
                 deleted_count += 1
             else:

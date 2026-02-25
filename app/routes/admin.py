@@ -84,6 +84,10 @@ from app.utils.username_migration import (
     needs_hashed_username_migration,
     build_hashed_username_fields,
 )
+from app.utils.student_deletion import (
+    hard_delete_student_if_orphaned,
+    remove_student_from_teacher_scope,
+)
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
 from app.attendance import get_last_payroll_time, calculate_unpaid_attendance_seconds, get_join_code_for_student_period
@@ -389,109 +393,8 @@ def _assert_transaction_deletion_allowed(join_code, *, join_code_deletion=False)
 
 
 def _hard_delete_student_if_orphaned(student_id):
-    """Hard-delete a student and dependent rows only when no teacher links remain."""
-    has_links = (
-        db.session.query(StudentTeacher.id)
-        .filter(StudentTeacher.student_id == student_id)
-        .first()
-    )
-    if has_links:
-        return False
-
-    student_item_ids_subq, issue_ids_subq, insurance_ids_subq, tx_ids_subq = _student_delete_subqueries(student_id)
-    _unclaim_all_teacher_blocks_for_student(student_id)
-    _clear_cross_issue_transaction_refs(tx_ids_subq)
-    _delete_student_scoped_rows(student_id, student_item_ids_subq, issue_ids_subq, insurance_ids_subq, tx_ids_subq)
-    Student.query.filter(Student.id == student_id).delete(synchronize_session=False)
-    return True
-
-
-def _student_delete_subqueries(student_id):
-    """Build reusable subqueries for dependent-row cleanup."""
-    student_item_ids_subq = (
-        db.session.query(StudentItem.id)
-        .filter(StudentItem.student_id == student_id)
-        .subquery()
-    )
-    issue_ids_subq = (
-        db.session.query(Issue.id)
-        .filter(Issue.student_id == student_id)
-        .subquery()
-    )
-    insurance_ids_subq = (
-        db.session.query(StudentInsurance.id)
-        .filter(StudentInsurance.student_id == student_id)
-        .subquery()
-    )
-    tx_ids_subq = (
-        db.session.query(Transaction.id)
-        .filter(Transaction.student_id == student_id)
-        .subquery()
-    )
-    return student_item_ids_subq, issue_ids_subq, insurance_ids_subq, tx_ids_subq
-
-
-def _unclaim_all_teacher_blocks_for_student(student_id):
-    """Convert all claimed roster seats for this student back to unclaimed seats."""
-    TeacherBlock.query.filter(
-        TeacherBlock.student_id == student_id
-    ).update(
-        {
-            TeacherBlock.student_id: None,
-            TeacherBlock.is_claimed: False,
-            TeacherBlock.claimed_at: None,
-        },
-        synchronize_session=False,
-    )
-
-
-def _clear_cross_issue_transaction_refs(tx_ids_subq):
-    """Clear transaction refs in issues/actions that may belong to other students."""
-    Issue.query.filter(
-        Issue.related_transaction_id.in_(sa.select(tx_ids_subq))
-    ).update(
-        {Issue.related_transaction_id: None},
-        synchronize_session=False,
-    )
-    IssueResolutionAction.query.filter(
-        IssueResolutionAction.related_transaction_id.in_(sa.select(tx_ids_subq))
-    ).update(
-        {IssueResolutionAction.related_transaction_id: None},
-        synchronize_session=False,
-    )
-
-
-def _delete_student_scoped_rows(student_id, student_item_ids_subq, issue_ids_subq, insurance_ids_subq, tx_ids_subq):
-    """Delete records that are scoped directly to the student being removed."""
-    RedemptionAuditLog.query.filter(
-        RedemptionAuditLog.student_item_id.in_(sa.select(student_item_ids_subq))
-    ).delete(synchronize_session=False)
-    IssueResolutionAction.query.filter(
-        IssueResolutionAction.issue_id.in_(sa.select(issue_ids_subq))
-    ).delete(synchronize_session=False)
-    IssueStatusHistory.query.filter(
-        IssueStatusHistory.issue_id.in_(sa.select(issue_ids_subq))
-    ).delete(synchronize_session=False)
-    InsuranceClaim.query.filter(
-        sa.or_(
-            InsuranceClaim.student_id == student_id,
-            InsuranceClaim.student_insurance_id.in_(sa.select(insurance_ids_subq)),
-            InsuranceClaim.transaction_id.in_(sa.select(tx_ids_subq)),
-        )
-    ).delete(synchronize_session=False)
-    Issue.query.filter(Issue.student_id == student_id).delete(synchronize_session=False)
-    StudentInsurance.query.filter(StudentInsurance.student_id == student_id).delete(synchronize_session=False)
-    UserReport.query.filter(UserReport._student_id == student_id).delete(synchronize_session=False)
-    StudentRecoveryCode.query.filter(StudentRecoveryCode.student_id == student_id).delete(synchronize_session=False)
-    DemoStudent.query.filter(DemoStudent.student_id == student_id).delete(synchronize_session=False)
-    Transaction.query.filter(Transaction.student_id == student_id).delete(synchronize_session=False)
-    TapEvent.query.filter(TapEvent.student_id == student_id).delete(synchronize_session=False)
-    HallPassLog.query.filter(HallPassLog.student_id == student_id).delete(synchronize_session=False)
-    StudentItem.query.filter(StudentItem.student_id == student_id).delete(synchronize_session=False)
-    RentPayment.query.filter(RentPayment.student_id == student_id).delete(synchronize_session=False)
-    RentWaiver.query.filter(RentWaiver.student_id == student_id).delete(synchronize_session=False)
-    StudentBlock.query.filter(StudentBlock.student_id == student_id).delete(synchronize_session=False)
-    BalanceCache.query.filter(BalanceCache.student_id == student_id).delete(synchronize_session=False)
+    """Compatibility wrapper for internal call sites and tests."""
+    return hard_delete_student_if_orphaned(student_id)
 
 
 def _remove_student_from_teacher_scope(student, teacher_id):
@@ -502,22 +405,7 @@ def _remove_student_from_teacher_scope(student, teacher_id):
     association is removed. The student record is hard-deleted only when it no
     longer has any StudentTeacher links.
     """
-    StudentTeacher.query.filter(
-        StudentTeacher.student_id == student.id,
-        StudentTeacher.admin_id == teacher_id,
-    ).delete(synchronize_session=False)
-    TeacherBlock.query.filter(
-        TeacherBlock.student_id == student.id,
-        TeacherBlock.teacher_id == teacher_id,
-    ).update(
-        {
-            TeacherBlock.student_id: None,
-            TeacherBlock.is_claimed: False,
-            TeacherBlock.claimed_at: None,
-        },
-        synchronize_session=False,
-    )
-    return _hard_delete_student_if_orphaned(student.id)
+    return remove_student_from_teacher_scope(student.id, teacher_id)
 
 
 def _delete_transactions_for_join_code(join_code, *, join_code_deletion=False):
