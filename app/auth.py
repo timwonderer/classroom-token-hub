@@ -395,7 +395,6 @@ def get_admin_student_query(include_unassigned=True):
     if session.get("is_system_admin"):
         demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
         return Student.query.filter(
-            Student.is_active.is_(True),
             ~Student.id.in_(sa.select(demo_ids_subq))
         )
 
@@ -416,7 +415,6 @@ def get_admin_student_query(include_unassigned=True):
     # This caused multi-tenancy leaks when teacher_id had stale data
     demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
     return Student.query.filter(
-        Student.is_active.is_(True),
         Student.id.in_(sa.select(shared_student_ids)),
         ~Student.id.in_(sa.select(demo_ids_subq))
     )

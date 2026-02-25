@@ -3555,7 +3555,7 @@ def login():
                 flash("Invalid credentials", "error")
                 return redirect(url_for('student.login', next=request.args.get('next')))
 
-            if not student.is_active:
+            if not getattr(student, "is_active", True):
                 if is_json:
                     return jsonify(status="error", message="Account is inactive. Contact your teacher."), 403
                 flash("Your account is inactive. Contact your teacher.", "error")

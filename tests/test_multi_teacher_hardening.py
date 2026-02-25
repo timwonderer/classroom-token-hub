@@ -124,3 +124,31 @@ def test_student_teacher_unique_constraint(client):
         db.session.commit()
     
     db.session.rollback()
+
+
+def test_remove_student_from_teacher_scope_preserves_shared_student(client):
+    """
+    Removing a student from one teacher should not delete the student when another
+    teacher link still exists.
+    """
+    t1 = Admin(username=f"t1_{uuid.uuid4().hex[:8]}", totp_secret='s')
+    t2 = Admin(username=f"t2_{uuid.uuid4().hex[:8]}", totp_secret='s2')
+    s = Student(first_name="Shared", last_initial="S", block="B", salt=get_random_salt())
+    db.session.add_all([t1, t2, s])
+    db.session.commit()
+
+    db.session.add_all([
+        StudentTeacher(student_id=s.id, admin_id=t1.id),
+        StudentTeacher(student_id=s.id, admin_id=t2.id),
+    ])
+    db.session.commit()
+
+    from app.routes.admin import _remove_student_from_teacher_scope
+
+    was_deleted = _remove_student_from_teacher_scope(s, t1.id)
+    db.session.commit()
+
+    assert was_deleted is False
+    assert db.session.get(Student, s.id) is not None
+    assert StudentTeacher.query.filter_by(student_id=s.id, admin_id=t1.id).count() == 0
+    assert StudentTeacher.query.filter_by(student_id=s.id, admin_id=t2.id).count() == 1
