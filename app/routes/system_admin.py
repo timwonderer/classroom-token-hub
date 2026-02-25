@@ -7,6 +7,7 @@ system logs, error monitoring, and debug/testing tools.
 
 import os
 import re
+import binascii
 import secrets
 import io
 import base64
@@ -36,7 +37,8 @@ from app.forms import SystemAdminLoginForm, SystemAdminInviteForm
 
 # Import utility functions
 from app.utils.helpers import is_safe_url, format_utc_iso
-from app.utils.encryption import encrypt_totp, decrypt_totp
+from app.utils.encryption import encrypt_totp, decrypt_totp, is_totp_encrypted
+from app.hash_utils import hash_username_lookup
 from app.utils.passwordless_client import (
     create_register_token,
     verify_signin_token,
@@ -56,11 +58,22 @@ INACTIVITY_THRESHOLD_DAYS = 180  # Number of days of inactivity before highlight
 
 
 def _find_sysadmin_by_auth_username(username: str):
+    """Lookup sysadmin by hash, with migration-only legacy fallback."""
     normalized = normalize_auth_username(username)
     if not normalized:
         return None
 
-    return SystemAdmin.query.filter_by(username=normalized).first()
+    lookup_hash = hash_username_lookup(normalized)
+    admin = SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
+    if admin:
+        return admin
+
+    # Migration-only fallback for legacy records that have not been hashed yet.
+    return SystemAdmin.query.filter(
+        SystemAdmin.username == normalized,
+        SystemAdmin.username_lookup_hash.is_(None),
+        SystemAdmin.username_hash.is_(None),
+    ).first()
 
 
 def _sysadmin_auth_username_exists(username: str, *, exclude_sysadmin_id: int | None = None) -> bool:
@@ -145,14 +158,23 @@ def login():
             try:
                 decrypted_secret = decrypt_totp(admin.totp_secret)
             except ValueError:
-                current_app.logger.warning(
-                    "System admin login failed: invalid encrypted TOTP secret for username=%s",
-                    username,
-                )
-                decrypted_secret = None
+                # Legacy plaintext TOTP secret – attempt direct use and migrate on success.
+                decrypted_secret = admin.totp_secret
             if decrypted_secret:
-                totp = pyotp.TOTP(decrypted_secret)
-                if totp.verify(totp_code, valid_window=1):
+                try:
+                    totp = pyotp.TOTP(decrypted_secret)
+                except ValueError:
+                except (binascii.Error, TypeError):
+                    current_app.logger.warning(
+                        "System admin login failed: TOTP secret is not valid base32 for sysadmin_id=%s",
+                        admin.id,
+                    )
+                    totp_valid = False
+                if totp_valid:
+                    # Lazily encrypt any legacy plaintext TOTP secret.
+                    if not is_totp_encrypted(admin.totp_secret):
+                        admin.totp_secret = encrypt_totp(decrypted_secret)
+                        db.session.commit()
                     session["is_system_admin"] = True
                     session["sysadmin_id"] = admin.id
                     session["sysadmin_auth_username"] = username
