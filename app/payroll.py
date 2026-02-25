@@ -4,7 +4,12 @@ from app.extensions import db
 from app.models import TapEvent, Student, Transaction, PayrollSettings
 from datetime import datetime, timezone
 from app.utils.time import ensure_utc
-from app.attendance import calculate_unpaid_attendance_seconds, get_last_payroll_time
+from app.attendance import (
+    calculate_unpaid_attendance_seconds,
+    get_last_payroll_time,
+    get_batch_attendance_events,
+    calculate_seconds_in_memory
+)
 from app.utils.attendance_helpers import get_join_code_for_student_period
 from flask import has_request_context, session
 from decimal import Decimal
@@ -175,7 +180,8 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
 
     # map: (student_id, period, join_code) -> list of valid events (sorted)
     # Also handles the "initial state" (was active at anchor) logic internally
-    events_map = _get_batch_attendance_events(student_ids, min_anchor)
+    # Updated: Use shared function from app.attendance
+    events_map = get_batch_attendance_events(student_ids, min_anchor)
 
     # --- 5. In-Memory Calculation ---
     for student in students:
@@ -216,7 +222,8 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
             # but we must double-check the anchor for this specific student-block logic
             
             events = events_map.get((student.id, block_upper, join_code), [])
-            total_seconds = _calculate_seconds_in_memory(events, payroll_anchor)
+            # Updated: Use shared function from app.attendance
+            total_seconds = calculate_seconds_in_memory(events, payroll_anchor)
 
             if total_seconds > 0:
                 amount = round(total_seconds * rate_per_second, 2)
@@ -281,142 +288,6 @@ def _get_batch_last_payroll_times(student_ids):
     ).group_by(Transaction.student_id).all()
     
     return {row[0]: ensure_utc(row[1]) for row in results}
-
-def _get_batch_attendance_events(student_ids, min_anchor):
-    """
-    Fetch all relevant tap events for the given students after min_anchor.
-    Crucially, also determines if they were 'active' right before min_anchor.
-    """
-    # 1. Fetch all events > min_anchor (if min_anchor exists)
-    query = TapEvent.query.filter(
-        TapEvent.student_id.in_(student_ids),
-        TapEvent.is_deleted == False
-    )
-    
-    if min_anchor:
-        query = query.filter(TapEvent.timestamp > min_anchor)
-    
-    events = query.order_by(TapEvent.timestamp.asc()).all()
-    
-    # Group by (student_id, period, join_code)
-    grouped = {}
-    for e in events:
-        key = (e.student_id, (e.period or "").upper(), e.join_code)
-        grouped.setdefault(key, []).append(e)
-        
-    # 2. If min_anchor exists, we need the "initial state" for each student/period
-    # We need the LAST event <= min_anchor for each student/period.
-    if min_anchor:
-        from sqlalchemy import func, and_
-        
-        # Subquery to find the latest timestamp for each student/period/join_code before anchor
-        subquery = db.session.query(
-            TapEvent.student_id,
-            TapEvent.period,
-            TapEvent.join_code,
-            func.max(TapEvent.timestamp).label("max_ts")
-        ).filter(
-            TapEvent.student_id.in_(student_ids),
-            TapEvent.timestamp <= min_anchor,
-            TapEvent.is_deleted == False
-        ).group_by(
-            TapEvent.student_id,
-            TapEvent.period,
-            TapEvent.join_code,
-        ).subquery()
-        
-        # Join back to get the full event details (status)
-        # We join on student_id, period, and timestamp
-        initial_states = db.session.query(
-            TapEvent.student_id,
-            TapEvent.period,
-            TapEvent.join_code,
-            TapEvent.status,
-            TapEvent.timestamp
-        ).join(
-            subquery,
-            and_(
-                TapEvent.student_id == subquery.c.student_id,
-                TapEvent.period == subquery.c.period,
-                TapEvent.join_code == subquery.c.join_code,
-                TapEvent.timestamp == subquery.c.max_ts
-            )
-        ).filter(
-            TapEvent.is_deleted == False
-        ).all()
-        
-        # Prepend a virtual "start" event if they were active
-        for row in initial_states:
-            s_id, period, status, ts = row.student_id, row.period, row.status, row.timestamp
-            join_code = row.join_code
-            if status == 'active':
-                key = (s_id, (period or "").upper(), join_code)
-                
-                # We inject the state into the list
-                virtual_start_time = ensure_utc(min_anchor)
-                
-                # Mock object
-                mock_event = TapEvent(
-                    student_id=s_id,
-                    period=period,
-                    join_code=join_code,
-                    status='active',
-                    timestamp=virtual_start_time
-                )
-                
-                # Insert at index 0
-                grouped.setdefault(key, []).insert(0, mock_event)
-
-    return grouped
-
-def _calculate_seconds_in_memory(events, anchor):
-    """
-    Calculate unpaid seconds from a sorted list of events, strictly after anchor.
-    """
-    total_seconds = 0
-    in_time = None
-    
-    anchor = ensure_utc(anchor)
-    
-    for event in events:
-        event_time = ensure_utc(event.timestamp)
-        
-        # Skip events before specific anchor (since batch might have fetched earlier ones for specific students)
-        if anchor and event_time <= anchor:
-            # Loop-hole: If this event is 'active' and is the one immediately preceding/at the valid range,
-            # it effectively sets the in_time for the next period.
-            # However, our batch logic prepended a "virtual active" event at min_anchor if needed.
-            # If the student's *specific* anchor is later than min_anchor, we need to respect that.
-            
-            if event.status == 'active':
-                 in_time = event_time # potential start, but might be cut off by anchor
-            else:
-                 in_time = None # reset
-            continue
-
-        # If we crossed the anchor boundary and in_time was set from a pre-anchor event,
-        # we should clamp the start time to the anchor.
-        if in_time and in_time < anchor:
-            in_time = anchor
-
-        if event.status == 'active':
-            if in_time is None:
-                in_time = event_time
-        elif event.status == 'inactive' and in_time:
-            total_seconds += (event_time - in_time).total_seconds()
-            in_time = None
-            
-    # If still active at "now"
-    if in_time:
-        # Clamp start to anchor if needed (edge case)
-        if anchor and in_time < anchor:
-            in_time = anchor
-            
-        from app.utils.time import utc_now
-        now = utc_now()
-        total_seconds += (now - in_time).total_seconds()
-        
-    return int(total_seconds)
 
 
 @with_teacher_id_fallback
