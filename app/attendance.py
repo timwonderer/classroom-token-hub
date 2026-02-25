@@ -426,9 +426,9 @@ def calculate_seconds_in_memory(events, anchor):
         if anchor and event_time <= anchor:
             # If active, it effectively sets in_time for subsequent period
             if event.status == 'active':
-                 in_time = event_time
+                in_time = event_time
             else:
-                 in_time = None
+                in_time = None
             continue
 
         # If we crossed the anchor boundary and in_time was set from a pre-anchor event
