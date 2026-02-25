@@ -12,6 +12,7 @@ Also: legacy plaintext TOTP secrets caused login to fail because decrypt_totp ra
 ValueError and the code did not fall back to treating the value as a raw secret.
 """
 
+import binascii
 import pyotp
 import pytest
 from sqlalchemy import text
@@ -25,17 +26,14 @@ from app.routes.system_admin import _find_sysadmin_by_auth_username
 
 def _insert_legacy_sysadmin(username: str, totp_secret: str) -> int:
     """Insert a legacy sysadmin record directly, bypassing ORM validators."""
-    encrypted = encrypt_totp(totp_secret)
-    result = db.session.execute(
-        text(
-            "INSERT INTO system_admins "
-            "(username, username_hash, username_lookup_hash, salt, totp_secret) "
-            "VALUES (:username, NULL, NULL, NULL, :secret)"
-        ),
-        {"username": username, "secret": encrypted},
-    )
+    admin = SystemAdmin(username=username, totp_secret=encrypt_totp(totp_secret))
+    # username_hash and username_lookup_hash intentionally left NULL to simulate
+    # a pre-migration record. The @validates('username') validator only normalises
+    # the string and does not touch the hash fields, so this is safe.
+    db.session.add(admin)
+    db.session.flush()  # assigns PK without committing
     db.session.commit()
-    return result.lastrowid
+    return admin.id
 
 
 def test_sysadmin_validator_does_not_backfill_hash_fields(client):
@@ -147,17 +145,21 @@ def test_hash_lookup_finds_migrated_sysadmin(client):
 
 
 def _insert_plaintext_totp_sysadmin(username: str, totp_secret: str) -> int:
-    """Insert a legacy sysadmin with a raw plaintext TOTP secret (pre-encryption era)."""
-    result = db.session.execute(
-        text(
-            "INSERT INTO system_admins "
-            "(username, username_hash, username_lookup_hash, salt, totp_secret) "
-            "VALUES (:username, NULL, NULL, NULL, :secret)"
-        ),
-        {"username": username, "secret": totp_secret},  # plaintext, not encrypted
+    """Insert a legacy sysadmin with a raw plaintext TOTP secret (pre-encryption era).
+
+    Uses ORM flush for a portable PK, then overwrites totp_secret via raw SQL to
+    bypass the @validates('totp_secret') encryption guard.
+    """
+    admin = SystemAdmin(username=username, totp_secret=encrypt_totp(totp_secret))
+    db.session.add(admin)
+    db.session.flush()
+    admin_id = admin.id
+    db.session.execute(
+        text("UPDATE system_admins SET totp_secret = :secret WHERE id = :id"),
+        {"secret": totp_secret, "id": admin_id},
     )
     db.session.commit()
-    return result.lastrowid
+    return admin_id
 
 
 def test_login_with_plaintext_totp_succeeds_and_encrypts(client):

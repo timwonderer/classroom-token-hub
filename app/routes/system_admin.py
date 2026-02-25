@@ -7,6 +7,7 @@ system logs, error monitoring, and debug/testing tools.
 
 import os
 import re
+import binascii
 import secrets
 import io
 import base64
@@ -163,7 +164,7 @@ def login():
                 try:
                     totp = pyotp.TOTP(decrypted_secret)
                     totp_valid = totp.verify(totp_code, valid_window=1)
-                except Exception:
+                except (binascii.Error, TypeError):
                     current_app.logger.warning(
                         "System admin login failed: TOTP secret is not valid base32 for sysadmin_id=%s",
                         admin.id,
