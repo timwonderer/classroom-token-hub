@@ -278,7 +278,8 @@ class Student(db.Model):
     dob_sum = db.Column(db.Integer, nullable=True)
     # Track if student has completed the legacy profile migration
     has_completed_profile_migration = db.Column(db.Boolean, default=False)
-    # Soft-delete flag: archived students cannot log in and are hidden from roster queries.
+    # Legacy field retained for backward compatibility. New deletion flow removes
+    # student records instead of using inactive/archived student state.
     is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
     # Teacher Identity Flag (prevents deletion and analytics skew)
@@ -288,7 +289,7 @@ class Student(db.Model):
     reset_code = db.Column(db.String(8), nullable=True, unique=True)  # 8-char alphanumeric code
     reset_code_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     money_action_cooldown_until = db.Column(db.DateTime(timezone=True), nullable=True)
-    recovery_status = db.Column(db.String(20), default='active', nullable=False)  # active, to_be_claimed, archived
+    recovery_status = db.Column(db.String(20), default='active', nullable=False)  # active, to_be_claimed
 
     @property
     def full_name(self):
@@ -1692,11 +1693,18 @@ class Admin(db.Model):
         return f"teacher_{self.id}"
 
     def get_student_count(self):
-        """Return count of unique students linked to this teacher via StudentTeacher."""
-        # StudentTeacher is defined earlier in this file
-        return db.session.query(StudentTeacher.student_id).filter(
-            StudentTeacher.admin_id == self.id
-        ).distinct().count()
+        """Return non-demo unique students linked via StudentTeacher."""
+        demo_ids_subq = db.session.query(DemoStudent.student_id).subquery()
+        return (
+            db.session.query(StudentTeacher.student_id)
+            .join(Student, Student.id == StudentTeacher.student_id)
+            .filter(
+                StudentTeacher.admin_id == self.id,
+                ~Student.id.in_(sa.select(demo_ids_subq)),
+            )
+            .distinct()
+            .count()
+        )
 
 
 class AdminCredential(db.Model):

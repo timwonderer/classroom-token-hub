@@ -85,6 +85,10 @@ from app.utils.username_migration import (
     needs_hashed_username_migration,
     build_hashed_username_fields,
 )
+from app.utils.student_deletion import (
+    hard_delete_student_if_orphaned,
+    remove_student_from_teacher_scope,
+)
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
 from app.attendance import (
@@ -393,13 +397,24 @@ def _assert_transaction_deletion_allowed(join_code, *, join_code_deletion=False)
     if not join_code_deletion and _join_code_exists(join_code):
         raise AssertionError(
             f"Refusing to delete transactions for active join code '{join_code}'. "
-            "Use archive/deactivate flows instead."
+            "Use student removal or class deletion flows instead."
         )
 
 
-def _archive_student(student):
-    """Soft-delete a student account while preserving all financial/audit history."""
-    student.is_active = False
+def _hard_delete_student_if_orphaned(student_id):
+    """Compatibility wrapper for internal call sites and tests."""
+    return hard_delete_student_if_orphaned(student_id)
+
+
+def _remove_student_from_teacher_scope(student, teacher_id):
+    """
+    Remove a student from a teacher's roster.
+
+    If the student is shared with other teachers, only the current teacher
+    association is removed. The student record is hard-deleted only when it no
+    longer has any StudentTeacher links.
+    """
+    return remove_student_from_teacher_scope(student.id, teacher_id)
 
 
 def _delete_transactions_for_join_code(join_code, *, join_code_deletion=False):
@@ -3406,25 +3421,25 @@ def edit_student():
 @admin_bp.route('/student/delete', methods=['GET', 'POST'])
 @admin_required
 def delete_student():
-    """Archive a student account while preserving class financial history."""
+    """Remove a student from this teacher and delete fully if no links remain."""
     current_app.logger.info(f"Delete student route accessed. Method: {request.method}, Form data: {dict(request.form)}")
 
     # If GET request, show error and redirect (for debugging)
     if request.method == 'GET':
-        flash("Archive student must be accessed via POST request.", "error")
+        flash("Delete student must be accessed via POST request.", "error")
         return redirect(url_for('admin.students'))
 
     student_id = request.form.get('student_id', type=int)
     confirmation = request.form.get('confirmation', '').strip()
 
     if not student_id:
-        current_app.logger.error("No student_id provided in archive request")
+        current_app.logger.error("No student_id provided in delete request")
         flash("Error: No student ID provided.", "error")
         return redirect(url_for('admin.students'))
 
     if confirmation != 'DELETE':
-        current_app.logger.info(f"Archive cancelled: confirmation '{confirmation}' != 'DELETE'")
-        flash("Archive cancelled: confirmation text did not match.", "warning")
+        current_app.logger.info(f"Delete cancelled: confirmation '{confirmation}' != 'DELETE'")
+        flash("Delete cancelled: confirmation text did not match.", "warning")
         return redirect(url_for('admin.students'))
 
     student = _get_student_or_404(student_id)
@@ -3436,14 +3451,17 @@ def delete_student():
         return redirect(url_for('admin.students'))
 
     try:
-        _archive_student(student)
+        was_hard_deleted = _remove_student_from_teacher_scope(student, session.get('admin_id'))
         db.session.commit()
-        flash(f"Archived {student_name}. Account access is now disabled and history is preserved.", "success")
+        if was_hard_deleted:
+            flash(f"Deleted {student_name}.", "success")
+        else:
+            flash(f"Removed {student_name} from this class. Student still exists in other linked classes.", "success")
 
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error archiving student {student_name}", exc_info=True)
-        flash(f"Cannot archive student due to internal error", "error")
+        current_app.logger.error(f"Error deleting student {student_name}", exc_info=True)
+        flash("Cannot delete student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
 
@@ -3451,7 +3469,7 @@ def delete_student():
 @admin_bp.route('/students/bulk-delete', methods=['POST'])
 @admin_required
 def bulk_delete_students():
-    """Archive multiple students at once while preserving ledger history."""
+    """Remove multiple students from this teacher and delete true orphans."""
     data = request.get_json(silent=True) or {}
     student_ids = data.get('student_ids', [])
 
@@ -3463,22 +3481,28 @@ def bulk_delete_students():
         return gate_error
 
     try:
-        archived_count = 0
+        removed_count = 0
+        deleted_count = 0
         for student_id in student_ids:
             student = _get_student_or_404(student_id)
             if student and not student.is_teacher:
-                _archive_student(student)
-                archived_count += 1
+                was_hard_deleted = _remove_student_from_teacher_scope(student, session.get('admin_id'))
+                removed_count += 1
+                if was_hard_deleted:
+                    deleted_count += 1
 
         db.session.commit()
         return jsonify({
             "status": "success",
-            "message": f"Successfully archived {archived_count} student(s). Financial and issue history was preserved."
+            "message": (
+                f"Successfully removed {removed_count} student(s) from this class. "
+                f"{deleted_count} student(s) were fully deleted."
+            )
         })
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error archiving students: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": "An error occurred while archiving students. Please try again."}), 500
+        current_app.logger.error(f"Error deleting students: {e}", exc_info=True)
+        return jsonify({"status": "error", "message": "An error occurred while deleting students. Please try again."}), 500
 
 
 @admin_bp.route('/students/delete-block', methods=['POST'])
@@ -3687,10 +3711,10 @@ def bulk_delete_pending_students():
 @admin_required
 def bulk_delete_legacy_unclaimed_students():
     """
-    Archive multiple legacy unclaimed students (Student records without username_hash) at once.
+    Delete multiple legacy unclaimed students (Student records without username_hash) at once.
     
     Legacy unclaimed students are Student records that exist but don't have a username_hash set yet.
-    This route disables access while preserving class financial/issue history.
+    This route removes students from this teacher and hard-deletes true orphans.
     Accepts a block name to delete all legacy unclaimed students in that block.
     """
     data = request.get_json()
@@ -3710,14 +3734,20 @@ def bulk_delete_legacy_unclaimed_students():
             Student.username_hash.is_(None)
         ).all()
         
+        removed_count = 0
         deleted_count = 0
         for student in students:
-            _archive_student(student)
-            deleted_count += 1
+            was_hard_deleted = _remove_student_from_teacher_scope(student, current_admin_id)
+            removed_count += 1
+            if was_hard_deleted:
+                deleted_count += 1
 
         db.session.commit()
-        
-        message = f"Successfully archived {deleted_count} legacy unclaimed student(s) from Block {block}."
+
+        message = (
+            f"Successfully removed {removed_count} legacy unclaimed student(s) from Block {block}. "
+            f"{deleted_count} student(s) were fully deleted."
+        )
 
         return jsonify({
             "status": "success",
@@ -3726,7 +3756,7 @@ def bulk_delete_legacy_unclaimed_students():
         })
     except Exception as e:
         db.session.rollback()
-        current_app.logger.error(f"Error bulk deleting legacy unclaimed students: {e}", exc_info=True)
+        current_app.logger.error(f"Error deleting legacy unclaimed students: {e}", exc_info=True)
         return jsonify({"status": "error", "message": "An error occurred while bulk deleting legacy students. Please try again."}), 500
 
 

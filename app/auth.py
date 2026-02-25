@@ -325,6 +325,23 @@ def system_admin_required(f):
 
 # -------------------- HELPER FUNCTIONS --------------------
 
+def is_student_account_active(student):
+    """
+    Return True when a student account should be allowed to authenticate.
+
+    Legacy rows may still carry `is_active=False` until one-time cleanup runs.
+    """
+    if student is None:
+        return False
+    if not hasattr(student, "is_active"):
+        current_app.logger.warning(
+            "Student %s is missing is_active attribute; allowing access by fallback",
+            getattr(student, "id", "unknown"),
+        )
+        return True
+    return bool(student.is_active)
+
+
 def get_logged_in_student():
     """
     Get the currently logged-in student from the session.
@@ -337,7 +354,7 @@ def get_logged_in_student():
     if 'student_id' not in session:
         return None
     student = db.session.get(Student, session['student_id'])
-    if not student or not getattr(student, "is_active", True):
+    if not is_student_account_active(student):
         return None
     return student
 
@@ -395,7 +412,6 @@ def get_admin_student_query(include_unassigned=True):
     if session.get("is_system_admin"):
         demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
         return Student.query.filter(
-            Student.is_active.is_(True),
             ~Student.id.in_(sa.select(demo_ids_subq))
         )
 
@@ -416,7 +432,6 @@ def get_admin_student_query(include_unassigned=True):
     # This caused multi-tenancy leaks when teacher_id had stale data
     demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
     return Student.query.filter(
-        Student.is_active.is_(True),
         Student.id.in_(sa.select(shared_student_ids)),
         ~Student.id.in_(sa.select(demo_ids_subq))
     )

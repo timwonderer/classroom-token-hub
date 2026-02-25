@@ -72,7 +72,7 @@ def _login_admin(client, admin: Admin, secret: str):
     return response
 
 
-def test_archive_student_does_not_delete_transactions(client):
+def test_delete_student_removes_transactions(client):
     teacher, secret = _create_admin("teacher-archive-ledger")
     student = _create_student(teacher, "Alice", "A", "ARCHIVE1")
 
@@ -97,10 +97,8 @@ def test_archive_student_does_not_delete_transactions(client):
     )
     assert response.status_code == 200
 
-    refreshed = db.session.get(Student, student_id)
-    assert refreshed is not None
-    assert refreshed.is_active is False
-    assert db.session.get(Transaction, tx_id) is not None
+    assert db.session.get(Student, student_id) is None
+    assert db.session.get(Transaction, tx_id) is None
 
 
 def test_deactivate_item_does_not_delete_transactions(client):

@@ -122,7 +122,7 @@ def _login_admin(client, admin: Admin, secret: str):
 
 
 def test_delete_legacy_unclaimed_student(client):
-    """Teachers archive legacy unclaimed students via the student archive route."""
+    """Teachers can fully delete legacy unclaimed students."""
     teacher, secret = _create_admin("teacher-legacy1")
     legacy_student = _create_legacy_unclaimed_student("Alice", teacher, "A")
     
@@ -139,15 +139,13 @@ def test_delete_legacy_unclaimed_student(client):
     )
     
     assert response.status_code == 200
-    assert b"archived" in response.data.lower()
+    assert b"deleted" in response.data.lower() or b"removed" in response.data.lower()
 
-    # Verify Student is archived (not deleted)
-    refreshed = db.session.get(Student, student_id)
-    assert refreshed is not None
-    assert refreshed.is_active is False
+    # Verify Student is deleted
+    assert db.session.get(Student, student_id) is None
 
-    # Verify StudentTeacher association is preserved
-    assert StudentTeacher.query.filter_by(student_id=student_id).first() is not None
+    # Verify StudentTeacher association is removed
+    assert StudentTeacher.query.filter_by(student_id=student_id).first() is None
 
 
 def test_delete_block_removes_student_teacher_associations(client):
@@ -263,7 +261,7 @@ def test_delete_block_with_shared_students(client):
 
 
 def test_bulk_delete_students_removes_associations(client):
-    """Bulk student deletion endpoint now archives and preserves ownership associations."""
+    """Bulk student deletion endpoint removes students and ownership associations."""
     teacher, secret = _create_admin("teacher-bulk1")
     
     # Create multiple students
@@ -290,12 +288,12 @@ def test_bulk_delete_students_removes_associations(client):
     assert response.status_code == 200
     data = response.get_json()
     assert data["status"] == "success"
-    assert "3" in data["message"]  # Should archive 3 students
+    assert "3" in data["message"]
 
-    # Verify all students are archived
+    # Verify all students and associations are deleted
     for student_id in student_ids:
-        assert db.session.get(Student, student_id).is_active is False
-        assert StudentTeacher.query.filter_by(student_id=student_id).first() is not None
+        assert db.session.get(Student, student_id) is None
+        assert StudentTeacher.query.filter_by(student_id=student_id).first() is None
 
 
 def test_delete_student_without_confirmation(client):
