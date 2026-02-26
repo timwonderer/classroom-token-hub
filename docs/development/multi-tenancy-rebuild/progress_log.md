@@ -91,8 +91,17 @@ Branch: `join-code-centric-architecture-rebuild`
     - All 501 tests pass after this change.
 
 ## Commit Review Snapshot (Recent Branch Work)
+
+> **▶ NEXT SESSION START HERE:** Ledger Immutability Semantics (Checklist Item #6)
+> See "Next Session" section below for full context.
+
 | Commit | Scope Review | Hardening Impact |
 |---|---|---|
+| `8fcc526` | `auth/models/api/student/system_admin/scheduled_tasks/analytics_engine/templates/tests` | Teacher-Shadow identity refactor: replaced DemoStudent with `is_teacher_shadow` flag, deleted demo cleanup code, added shadow operational constraints (deletion guard, identity field immutability, badge), updated analytics exclusions. |
+| `1a8b5b1` | `admin/overdraft + docs` | Actor audit anchor complete: `actor_membership_id` injected into all remaining admin-initiated Transaction writes. DB CHECK constraints on ClassMembership confirmed live. Checklist #5 and #11 marked Complete. |
+| `6bd87ad` | `admin` read paths | Phase 2 query inversion: Scoped InsurancePolicy reads in admin UI by `join_code` + membership lookups. |
+| `a8b5dcc` | `admin/api/student` | Initial actor_membership_id injection on state-changing transactions for audit tracking. |
+| `830bc6e` | `models/migrations` | DB-level CHECK constraints on ClassMembership (XOR + Role Consistency). |
 | `1e4953e` | `student/admin/api` read paths | Phase 1 query inversion: Scoped settings reads and student shop by `join_code`. Removed `teacher_id` leaks in these reads. |
 | `cca4cf9` - `534255d` | `admin` deletion flows | Comprehensive class and account deletion: Implemented 2-step modals (`a6d972b`) and `collapse_universe` DB integrity rules (`534255d`). |
 | `fc51967` | `tests/models` | Test suite strict foreign key fixes and legacy `Query.get()` modernization to ensure DB integrity during deployment. |
@@ -196,3 +205,21 @@ Branch: `join-code-centric-architecture-rebuild`
 - No access control decisions depend on `TeacherBlock`, `teacher_id`, or `block`.
 - No class-scoped reads/writes rely on `join_code IS NULL` fallback logic.
 - All multitenancy hardening tests pass and block regressions in CI.
+
+---
+
+## ▶ Next Session (2026-02-26 → onward)
+
+**Priority: Checklist Item #6 — Ledger Immutability Semantics**
+
+The void flow (`void_payroll_transaction`, `void_transactions_bulk`) currently:
+- Correctly creates reversal transactions for POSTED transactions
+- Directly flips status to VOID for PENDING transactions
+
+The remaining work:
+1. **Audit the Issue Resolution void path** (`resolve_issue` → void loop in `system_admin.py`) — verify it exclusively uses reversal-first logic for POSTED transactions and never retroactively mutates amount/description on source records.
+2. **Amount mutation guard** — confirm no route directly updates `transaction.amount` after creation (only `is_void`, `status`, `voided_at`, and `reversal_transaction_id` should be mutable post-creation).
+3. **Retroactive mutation test** — add a regression test asserting that voiding a POSTED transaction creates a reversal entry rather than modifying the original.
+4. **Mark #6 Complete** on `v2_release_checklist.md` and update this log.
+
+**After #6:** Tackle Item #4 (All-sections fan-out) — replacing implicit teacher-global reads with explicit iteration over owned `join_code` values in batch operations.
