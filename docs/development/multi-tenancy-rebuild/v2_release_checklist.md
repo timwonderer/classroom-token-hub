@@ -12,7 +12,7 @@ Branch: `join-code-centric-architecture-rebuild`
 | 3 | No class-scoped `join_code IS NULL` fallback paths | Complete | Settings helpers (`banking`, `rent`, `feature`) no longer fall back to `join_code=NULL` rows; return `None` or system defaults | `tests/test_settings_fallback_removal.py` (7 tests) |
 | 4 | “All sections” implemented as explicit fan-out over owned join-codes | In Progress | Batch operations iterate concrete owned join-codes only | Integration tests for multi-class teacher |
 | 4a | No global-balance property reads in live class-scoped displays | In Progress | Student/admin financial display surfaces render route-provided scoped totals only | Template + endpoint tests |
-| 5 | Actor audit anchor complete (`actor_membership_id`) | In Progress | All state-changing writes persist actor membership or fail safely | Endpoint mutation tests |
+| 5 | Actor audit anchor complete (`actor_membership_id`) | Complete | All state-changing writes persist actor membership or fail safely | Endpoint mutation tests |
 | 6 | Ledger immutability semantics complete | In Progress | Reversal-first behavior for voids; no destructive retroactive mutation as source-of-truth | Void flow tests + ledger reconciliation |
 | 7 | Monetary precision hardened | In Progress | Core financial calculations avoid float drift | Precision tests |
 | 8 | Legacy bypass routes removed/deprecated paths blocked | In Progress | No deprecated route can mutate/read class data without membership scope | Route tests + routing audit |

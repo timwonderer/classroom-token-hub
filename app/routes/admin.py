@@ -42,10 +42,10 @@ from app.models import (
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest, DeletionRequestType, DeletionRequestStatus, ClassEconomy,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
-    DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction, ClassMembership,
+    Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction, ClassMembership,
     RedemptionAuditSource, Issue, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent
 )
-from app.auth import admin_required, get_admin_student_query, get_student_for_admin, check_membership_access
+from app.auth import admin_required, get_admin_student_query, get_student_for_admin, check_membership_access, get_actor_membership_id
 from app.forms import (
     AdminLoginForm, AdminSignupForm, AdminTOTPConfirmForm, AdminRecoveryForm, AdminResetCredentialsForm, StoreItemForm,
     InsurancePolicyForm, AdminClaimProcessForm, PayrollSettingsForm,
@@ -893,20 +893,21 @@ def dashboard():
     )
 
     # Recent transactions (limited to 5 for display)
-    demo_ids_subq = db.session.query(DemoStudent.student_id).subquery()
     recent_transactions = (
         Transaction.query
+        .join(Student, Student.id == Transaction.student_id)
         .filter(Transaction.student_id.in_(sa.select(student_ids_subq)))
-        .filter(~Transaction.student_id.in_(sa.select(demo_ids_subq)))
-        .filter_by(is_void=False)
+        .filter(Student.is_teacher_shadow.is_(False))
+        .filter(Transaction.is_void.is_(False))
         .order_by(Transaction.timestamp.desc())
         .limit(5)
         .all()
     )
     total_transactions_today = (
         Transaction.query
+        .join(Student, Student.id == Transaction.student_id)
         .filter(Transaction.student_id.in_(sa.select(student_ids_subq)))
-        .filter(~Transaction.student_id.in_(sa.select(demo_ids_subq)))
+        .filter(Student.is_teacher_shadow.is_(False))
         .filter(
             Transaction.timestamp >= utc_now().replace(hour=0, minute=0, second=0, microsecond=0),
             Transaction.is_void == False,
@@ -2732,6 +2733,17 @@ def edit_student():
         # Not accessible by this admin
         abort(404)
 
+    # Shadow identity constraint: first_name, last_initial, and dob_sum are immutable.
+    if student.is_teacher_shadow:
+        identity_changed = (
+            new_first_name != student.first_name
+            or (last_name_input and last_name_input[0].upper() != student.last_initial)
+            or (request.form.get('dob_sum', '').strip() and request.form.get('dob_sum', '').strip() != str(student.dob_sum))
+        )
+        if identity_changed:
+            flash("Shadow student identity fields (name and date of birth) cannot be changed.", "error")
+            return redirect(url_for('admin.student_detail', student_id=student_id))
+
     # Get form data
     new_first_name = request.form.get('first_name', '').strip()
     last_name_input = request.form.get('last_name', '').strip()
@@ -2998,6 +3010,11 @@ def delete_student():
     student = _get_student_or_404(student_id)
     student_name = student.full_name
 
+    # Shadow identity constraint: shadow students cannot be manually deleted.
+    if student.is_teacher_shadow:
+        flash("Shadow students cannot be manually deleted. They are removed automatically when all associated classes are deleted.", "error")
+        return redirect(url_for('admin.students'))
+
     try:
         _archive_student(student)
         db.session.commit()
@@ -3026,6 +3043,10 @@ def bulk_delete_students():
         for student_id in student_ids:
             student = _get_student_or_404(student_id)
             if student:
+                # Shadow students cannot be manually archived.
+                if student.is_teacher_shadow:
+                    current_app.logger.info("Skipping shadow student %s in bulk archive", student.id)
+                    continue
                 _archive_student(student)
                 archived_count += 1
 
@@ -3361,6 +3382,195 @@ def bulk_delete_legacy_unclaimed_students():
         return jsonify({"status": "error", "message": "An error occurred while bulk deleting legacy students. Please try again."}), 500
 
 
+# ============================================================
+# SHADOW STUDENT PROVISIONING
+# ============================================================
+
+def _get_or_create_shadow_student(admin):
+    """
+    Return the existing shadow student for this teacher, or None if first-class onboarding
+    is still needed.
+
+    The shadow student is identified via `shadow_for_admin_id` on the Student model.
+    """
+    return Student.query.filter_by(shadow_for_admin_id=admin.id, is_teacher_shadow=True).first()
+
+
+def _auto_enroll_shadow_for_join_code(admin, join_code):
+    """
+    Silently provision an unclaimed TeacherBlock seat for the teacher's shadow student
+    in the given join_code.  Idempotent — safe to call even if the seat already exists.
+
+    Does NOT claim the seat.  The shadow student must claim it themselves using the
+    normal "Add New Class" flow.
+
+    Should only be called when the teacher already has a shadow student.
+    """
+    shadow = _get_or_create_shadow_student(admin)
+    if not shadow:
+        return  # Onboarding not yet complete — nothing to do.
+
+    # Already has a seat for this join_code?
+    existing = TeacherBlock.query.filter_by(
+        teacher_id=admin.id,
+        join_code=join_code,
+        student_id=shadow.id,
+    ).first()
+    if existing:
+        return
+
+    new_tb = TeacherBlock(
+        teacher_id=admin.id,
+        join_code=join_code,
+        block=None,  # block resolved at claim time
+        first_name=shadow.first_name,
+        last_initial=shadow.last_initial,
+        last_name_hash_by_part=shadow.last_name_hash_by_part or [],
+        dob_sum=shadow.dob_sum,
+        salt=shadow.salt,
+        first_half_hash=shadow.first_half_hash,
+        is_claimed=False,
+        student_id=shadow.id,
+    )
+    db.session.add(new_tb)
+    current_app.logger.info(
+        "Auto-provisioned unclaimed shadow seat for teacher %s in join_code %s",
+        admin.id,
+        join_code,
+    )
+
+
+@admin_bp.route('/shadow-student/onboard', methods=['GET', 'POST'])
+@admin_required
+def shadow_student_onboard():
+    """
+    First-class onboarding flow for creating the teacher's shadow student identity.
+
+    GET  – Show the identity form (first name, last name, DOB) AND the new class join code.
+    POST – Create the shadow student and redirect to the student claim page.
+
+    Query params:
+      join_code – the newly created join code the teacher should write down.
+
+    After claiming, the shadow student session redirects back to the admin dashboard.
+    """
+    admin = get_current_admin()
+    join_code = request.args.get('join_code') or request.form.get('join_code', '')
+
+    # Guard: if a shadow student already exists, skip straight to auto-enroll.
+    existing_shadow = _get_or_create_shadow_student(admin)
+    if existing_shadow:
+        if join_code:
+            _auto_enroll_shadow_for_join_code(admin, join_code)
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                current_app.logger.exception("Failed to auto-enroll shadow for join_code %s", join_code)
+        flash("Your shadow student seat has been provisioned for the new class. Log in as your shadow student and use 'Add New Class' to claim it.", "info")
+        return redirect(url_for('admin.students'))
+
+    if request.method == 'POST':
+        first_name = request.form.get('first_name', '').strip()
+        last_name = request.form.get('last_name', '').strip()
+        dob_str = request.form.get('dob', '').strip()
+
+        errors = []
+        if not first_name:
+            errors.append("First name is required.")
+        if not last_name:
+            errors.append("Last name is required.")
+        if not dob_str:
+            errors.append("Date of birth is required.")
+
+        dob_sum = None
+        if dob_str:
+            try:
+                dob_sum = parse_dob_input(dob_str)
+            except ValueError:
+                errors.append("Invalid date of birth. Please use the date picker.")
+
+        if errors:
+            for e in errors:
+                flash(e, "error")
+            return render_template(
+                'admin_shadow_onboard.html',
+                join_code=join_code,
+                admin=admin,
+            )
+
+        # Build shadow student
+        last_initial = last_name[0].upper()
+        first_initial = first_name[0].upper()
+        salt = get_random_salt()
+        first_half_hash = compute_primary_claim_hash(first_initial, dob_sum, salt)
+        second_half_hash = hash_hmac(str(dob_sum).encode(), salt)
+        last_name_parts = hash_last_name_parts(last_name, salt)
+
+        try:
+            shadow = Student(
+                first_name=first_name,
+                last_initial=last_initial,
+                block='',  # No block at identity level; set at seat-claim time
+                salt=salt,
+                first_half_hash=first_half_hash,
+                second_half_hash=second_half_hash,
+                dob_sum=dob_sum,
+                last_name_hash_by_part=last_name_parts,
+                has_completed_setup=False,
+                is_teacher_shadow=True,
+                shadow_for_admin_id=admin.id,
+            )
+            db.session.add(shadow)
+            db.session.flush()
+
+            # Link shadow to admin via StudentTeacher
+            db.session.add(StudentTeacher(student_id=shadow.id, admin_id=admin.id))
+
+            # Create the unclaimed seat for the first join_code
+            if join_code:
+                new_tb = TeacherBlock(
+                    teacher_id=admin.id,
+                    join_code=join_code,
+                    block=None,
+                    first_name=first_name,
+                    last_initial=last_initial,
+                    last_name_hash_by_part=last_name_parts,
+                    dob_sum=dob_sum,
+                    salt=salt,
+                    first_half_hash=first_half_hash,
+                    is_claimed=False,
+                    student_id=shadow.id,
+                )
+                db.session.add(new_tb)
+
+            db.session.commit()
+            current_app.logger.info(
+                "Created shadow student %s for teacher %s (join_code=%s)",
+                shadow.id, admin.id, join_code,
+            )
+
+            # Redirect to the student claim page. The shadow student must claim their
+            # own seat using the native student flow (join code + identity → username/pin/passphrase).
+            flash(
+                f"Shadow identity created! Now log in as your shadow student using join code "
+                f"<strong>{join_code}</strong> and claim your seat.",
+                "success",
+            )
+            return redirect(url_for('student.login'))
+
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception("Failed to create shadow student for teacher %s", admin.id)
+            flash("An error occurred while creating your shadow identity. Please try again.", "error")
+
+    return render_template(
+        'admin_shadow_onboard.html',
+        join_code=join_code,
+        admin=admin,
+    )
+
+
 @admin_bp.route('/student/add-individual', methods=['POST'])
 @admin_required
 def add_individual_student():
@@ -3503,13 +3713,24 @@ def add_individual_student():
             student_id=new_student.id,
         )
         db.session.add(new_tb)
-        
         db.session.commit()
+
+        # --- Shadow student provisioning ---
+        # Only trigger when a *new* join_code was just minted (i.e., no prior TeacherBlock existed).
+        current_admin = get_current_admin()
+        shadow_needed = not _get_or_create_shadow_student(current_admin)
+        if shadow_needed:
+            # First class: redirect to onboarding so teacher can set their shadow identity.
+            return redirect(url_for('admin.shadow_student_onboard', join_code=join_code))
+        else:
+            # Subsequent class: silently provision the unclaimed seat.
+            _auto_enroll_shadow_for_join_code(current_admin, join_code)
+            db.session.commit()
 
     except Exception as e:
         db.session.rollback()
         current_app.logger.error("Error adding individual student", exc_info=True)
-        flash(f"Cannot add student due to internal error", "error")
+        flash("Cannot add student due to internal error", "error")
 
     return redirect(url_for('admin.students'))
 
@@ -5749,6 +5970,7 @@ def process_claim(claim_id):
                 original_transaction_id=claim.transaction_id,
                 policy_id=claim.policy.id,
                 description=transaction_description,
+                actor_membership_id=get_actor_membership_id(),  # Audit Anchor: admin who processed claim
             )
             db.session.add(transaction)
 
@@ -7246,6 +7468,7 @@ def void_payroll_transaction(transaction_id):
         else:
             # Create reversal for posted transaction
             reversal_amount = -(transaction.amount or Decimal('0.00'))
+            actor_mid = get_actor_membership_id()  # Audit Anchor: admin who voided
             reversal_tx = Transaction(
                 student_id=transaction.student_id,
                 teacher_id=transaction.teacher_id,
@@ -7256,6 +7479,7 @@ def void_payroll_transaction(transaction_id):
                 type='refund',
                 original_transaction_id=transaction.id,
                 description=f"Void refund for transaction #{transaction.id}: {transaction.description}",
+                actor_membership_id=actor_mid,  # Audit Anchor
             )
             db.session.add(reversal_tx)
             db.session.flush()
@@ -7301,6 +7525,7 @@ def void_transactions_bulk():
                 else:
                     # Create reversal for posted transaction
                     reversal_amount = -(transaction.amount or Decimal('0.00'))
+                    actor_mid = get_actor_membership_id()  # Audit Anchor: admin who bulk-voided
                     reversal_tx = Transaction(
                         student_id=transaction.student_id,
                         teacher_id=transaction.teacher_id,
@@ -7311,11 +7536,9 @@ def void_transactions_bulk():
                         type='refund',
                         original_transaction_id=transaction.id,
                         description=f"Void refund for transaction #{transaction.id}: {transaction.description}",
+                        actor_membership_id=actor_mid,  # Audit Anchor
                     )
                     db.session.add(reversal_tx)
-                    # No flush here to avoid performance hit in loop? 
-                    # Actually we need ID for reversal_transaction_id?
-                    # Yes, linking them is good practice.
                     db.session.flush()
                     transaction.reversal_transaction_id = reversal_tx.id
 
@@ -7467,7 +7690,8 @@ def payroll_apply_fine(fine_id):
                         account_type='savings',
                         status=TransactionStatus.PENDING,
                         type='Withdrawal',
-                        description='Overdraft protection transfer to checking'
+                        description='Overdraft protection transfer to checking',
+                        actor_membership_id=admin_membership_map.get(join_code)  # Audit Anchor
                     )
                     transfer_tx_deposit = Transaction(
                         student_id=student.id,
@@ -7477,7 +7701,8 @@ def payroll_apply_fine(fine_id):
                         account_type='checking',
                         status=TransactionStatus.PENDING,
                         type='Deposit',
-                        description='Overdraft protection transfer from savings'
+                        description='Overdraft protection transfer from savings',
+                        actor_membership_id=admin_membership_map.get(join_code)  # Audit Anchor
                     )
                     db.session.add(transfer_tx_withdraw)
                     db.session.add(transfer_tx_deposit)
@@ -7820,6 +8045,24 @@ def upload_students():
             success_msg += "<br>Share these codes with your students so they can claim their accounts."
 
         flash(success_msg, "admin_success")
+
+        # --- Shadow student provisioning ---
+        csv_admin = get_current_admin()
+        existing_shadow = _get_or_create_shadow_student(csv_admin)
+        new_join_codes = list(join_codes_by_block.values())
+        if new_join_codes and not existing_shadow:
+            # First class: send to onboarding with the first generated join code.
+            first_jc = new_join_codes[0]
+            return redirect(url_for('admin.shadow_student_onboard', join_code=first_jc))
+        elif existing_shadow:
+            for jc in new_join_codes:
+                _auto_enroll_shadow_for_join_code(csv_admin, jc)
+            try:
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                current_app.logger.exception("Failed to auto-enroll shadow student for CSV upload")
+
     except Exception as e:
         db.session.rollback()
         flash(f"Upload failed: {e}", "admin_error")

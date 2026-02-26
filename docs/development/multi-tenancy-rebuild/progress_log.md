@@ -83,6 +83,12 @@ Branch: `join-code-centric-architecture-rebuild`
   - **Query Inversion Phase 2 (Admin UI)**: Swept admin UI read paths for `InsurancePolicy` (`insurance_management`, `edit_insurance_policy`) to use explicitly scoped `join_code` lookups based on active class memberships, retaining `teacher_id` fallbacks for legacy compatibility.
   - **Model Migration Safeguards**: Fixed testing models and modernized legacy queries (like `Query.get()`) to pass cleanly ahead of PostgreSQL foreign key constraints hardening.
   - **DB CHECK Constraints**: Implemented `ck_membership_xor` and `ck_membership_role_consistency` on `ClassMembership` via Alembic to guarantee isolation logic at the database layer.
+  - **Actor Audit Anchor Complete (2026-02-26)**: Injected `actor_membership_id` into all remaining admin-initiated `Transaction` writes to complete the audit trail:
+    - `void_payroll_transaction` and `void_transactions_bulk` — refund reversal transactions now carry the acting admin's membership ID via `get_actor_membership_id()`.
+    - `payroll_apply_fine` — overdraft protection transfer pairs (Withdrawal + Deposit) now carry `actor_membership_id` from the prefetched `admin_membership_map`.
+    - `process_claim` (insurance reimbursement) — reimbursement `Transaction` now stamped with the processing admin's membership ID.
+    - `charge_overdraft_fee_if_needed` in `overdraft.py` — function signature updated to accept and propagate `actor_membership_id` to the overdraft fee transaction.
+    - All 501 tests pass after this change.
 
 ## Commit Review Snapshot (Recent Branch Work)
 | Commit | Scope Review | Hardening Impact |
