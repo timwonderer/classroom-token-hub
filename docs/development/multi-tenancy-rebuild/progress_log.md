@@ -32,9 +32,10 @@ Branch: `join-code-centric-architecture-rebuild`
   - Added join-code settings bootstrap helper that clones teacher template rows into join-code-scoped settings
 - Fixed audit-anchor implementation bug:
   - `HallPassLog.actor_membership_id` is now a real persisted column definition
+  - Completed `actor_membership_id` sweep: Added audit trail anchors to all state-changing `Transaction` endpoints (`admin.py`, `api.py`, `student.py`, `system_admin.py`). Sysadmins pass `None`.
 - Hardened issue-resolution reverse flow (`/admin/issues/<id>/resolve`):
   - Enforces issue/transaction scope match (`student_id`, `teacher_id`, `join_code`) before reversal.
-  - For posted transactions, creates compensating pending reversal ledger row (`type='refund'`) and links via `reversal_transaction_id`.
+  - For both pending and posted transactions, creates compensating pending reversal ledger row (`type='refund'`) and links via `reversal_transaction_id`.
   - Pending transactions are transitioned to `VOID` with `voided_at`.
 - Replaced remaining admin financial aggregates that used global student properties:
   - Admin dashboard totals and banking summary totals now aggregate only across teacher-owned active `join_code` memberships.

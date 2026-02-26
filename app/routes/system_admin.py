@@ -1644,6 +1644,7 @@ def send_reward_to_reporter(report_id):
             student_id=student.id,
             teacher_id=teacher_id,
             join_code=join_code,  # CRITICAL: Add join_code for period isolation
+            actor_membership_id=None, # Sysadmins do not have class memberships
             amount=reward_amount,
             account_type='checking',
             description=f"Bug Report Reward (Report #{report_id})",
@@ -2243,6 +2244,7 @@ def resolve_escalated_issue(issue_id):
                 student_id=issue.student_id,
                 teacher_id=issue.teacher_id,
                 join_code=issue.join_code,
+                actor_membership_id=None, # Sysadmins do not have class memberships
                 amount=reward_amount_value,
                 account_type='checking',
                 description=f"Bug Reward (Issue #{issue.id})",

@@ -1108,7 +1108,8 @@ def give_bonus_all():
                 account_type='savings',
                 status=TransactionStatus.PENDING,
                 type='Withdrawal',
-                description='Overdraft protection transfer to checking'
+                description='Overdraft protection transfer to checking',
+                actor_membership_id=admin_membership_map.get(join_code)
             )
             transfer_tx_deposit = Transaction(
                 student_id=student.id,
@@ -1118,7 +1119,8 @@ def give_bonus_all():
                 account_type='checking',
                 status=TransactionStatus.PENDING,
                 type='Deposit',
-                description='Overdraft protection transfer from savings'
+                description='Overdraft protection transfer from savings',
+                actor_membership_id=admin_membership_map.get(join_code)
             )
             db.session.add(transfer_tx_withdraw)
             db.session.add(transfer_tx_deposit)
@@ -5789,6 +5791,11 @@ def void_transaction(transaction_id):
     if tx.is_void:
         return _void_error("Transaction is already voided.")
 
+    # Audit Anchor: Fetch the admin's membership ID for this class
+    admin_id = session.get('admin_id')
+    admin_memberships = ClassMembership.query.filter_by(admin_id=admin_id).all() if admin_id else []
+    admin_membership_map = {m.join_code: m.id for m in admin_memberships}
+
     try:
         is_pending = (tx.status == TransactionStatus.PENDING)
 
@@ -5862,6 +5869,7 @@ def void_transaction(transaction_id):
                 status=TransactionStatus.PENDING,
                 type='void_item_removed',
                 description=f"item removed - {store_item.name}",
+                actor_membership_id=admin_membership_map.get(tx.join_code)
             ))
 
             for student_item in selected_items:
@@ -5880,6 +5888,7 @@ def void_transaction(transaction_id):
                 type='refund',
                 original_transaction_id=tx.id,
                 description=f"Void refund for transaction #{tx.id}: {tx.description}",
+                actor_membership_id=admin_membership_map.get(tx.join_code)
             )
             db.session.add(reversal_tx)
             db.session.flush()
@@ -5914,6 +5923,7 @@ def void_transaction(transaction_id):
                     type='refund',
                     original_transaction_id=tx.id,
                     description=f"Void refund for transaction #{tx.id}: {tx.description}",
+                    actor_membership_id=admin_membership_map.get(tx.join_code)
                 )
                 db.session.add(reversal_tx)
                 db.session.flush()
@@ -5961,6 +5971,7 @@ def void_transaction(transaction_id):
                     type='refund',
                     original_transaction_id=tx.id,
                     description=f"Void refund for transaction #{tx.id}: {tx.description}",
+                    actor_membership_id=admin_membership_map.get(tx.join_code)
                 )
                 db.session.add(reversal_tx)
                 db.session.flush()
@@ -5981,6 +5992,7 @@ def void_transaction(transaction_id):
                     type='refund',
                     original_transaction_id=tx.id,
                     description=f"Void refund for transaction #{tx.id}: {tx.description}",
+                    actor_membership_id=admin_membership_map.get(tx.join_code)
                 )
                 db.session.add(reversal_tx)
                 db.session.flush()
@@ -6397,6 +6409,13 @@ def run_payroll():
         # Pass teacher_id to ensure correct payroll settings are used
         summary = calculate_payroll_breakdown(students, last_payroll_time, teacher_id=current_admin_id)
 
+        # Prefetch admin memberships for accurate audit logging
+        admin_memberships = ClassMembership.query.filter_by(
+            admin_id=current_admin_id,
+            status='active'
+        ).all()
+        admin_membership_map = {m.join_code: m.id for m in admin_memberships}
+
         count = 0
         for (student_id, join_code), amount in summary.items():
             tx = Transaction(
@@ -6407,7 +6426,8 @@ def run_payroll():
                 description=f"Payroll based on attendance",
                 status=TransactionStatus.PENDING,
                 account_type="checking",
-                type="payroll"
+                type="payroll",
+                actor_membership_id=admin_membership_map.get(join_code)
             )
             db.session.add(tx)
             count += 1
@@ -7293,6 +7313,13 @@ def payroll_apply_reward(reward_id):
         # Get current admin ID for teacher_id
         current_admin_id = session.get('admin_id')
 
+        # Prefetch admin memberships for accurate audit logging
+        admin_memberships = ClassMembership.query.filter_by(
+            admin_id=current_admin_id,
+            status='active'
+        ).all()
+        admin_membership_map = {m.join_code: m.id for m in admin_memberships}
+
         count = 0
         for student_id in student_ids:
             student = _get_student_or_404(int(student_id))
@@ -7315,7 +7342,8 @@ def payroll_apply_reward(reward_id):
                     account_type='checking',
                     status=TransactionStatus.PENDING,
                     type='reward',
-                    timestamp=utc_now()
+                    timestamp=utc_now(),
+                    actor_membership_id=admin_membership_map.get(join_code)
                 )
                 db.session.add(transaction)
                 count += 1
@@ -7342,6 +7370,13 @@ def payroll_apply_fine(fine_id):
         # Get current admin ID for teacher_id
         current_admin_id = session.get('admin_id')
         banking_settings = BankingSettings.query.filter_by(teacher_id=current_admin_id).first()
+
+        # Prefetch admin memberships for accurate audit logging
+        admin_memberships = ClassMembership.query.filter_by(
+            admin_id=current_admin_id,
+            status='active'
+        ).all()
+        admin_membership_map = {m.join_code: m.id for m in admin_memberships}
 
         applied_count = 0
         declined_count = 0
@@ -7387,7 +7422,8 @@ def payroll_apply_fine(fine_id):
                     account_type='checking',
                     status=TransactionStatus.PENDING,
                     type='fine',
-                    timestamp=utc_now()
+                    timestamp=utc_now(),
+                    actor_membership_id=admin_membership_map.get(join_code)
                 )
                 db.session.add(transaction)
                 applied_count += 1
@@ -7451,6 +7487,13 @@ def payroll_manual_payment():
             current_admin_id = session.get('admin_id')
             banking_settings = BankingSettings.query.filter_by(teacher_id=current_admin_id).first()
 
+            # Prefetch admin memberships for accurate audit logging
+            admin_memberships = ClassMembership.query.filter_by(
+                admin_id=current_admin_id,
+                status='active'
+            ).all()
+            admin_membership_map = {m.join_code: m.id for m in admin_memberships}
+
             # Create transactions for each selected student
             applied_count = 0
             declined_count = 0
@@ -7498,7 +7541,8 @@ def payroll_manual_payment():
                         account_type=account_type,
                         status=TransactionStatus.PENDING,
                         type='manual_payment',
-                        timestamp=utc_now()
+                        timestamp=utc_now(),
+                        actor_membership_id=admin_membership_map.get(join_code)
                     )
                     db.session.add(transaction)
                     applied_count += 1
@@ -7512,7 +7556,8 @@ def payroll_manual_payment():
                             account_type='savings',
                             status=TransactionStatus.PENDING,
                             type='Withdrawal',
-                            description='Overdraft protection transfer to checking'
+                            description='Overdraft protection transfer to checking',
+                            actor_membership_id=admin_membership_map.get(join_code)
                         )
                         transfer_tx_deposit = Transaction(
                             student_id=student.id,
@@ -7522,7 +7567,8 @@ def payroll_manual_payment():
                             account_type='checking',
                             status=TransactionStatus.PENDING,
                             type='Deposit',
-                            description='Overdraft protection transfer from savings'
+                            description='Overdraft protection transfer from savings',
+                            actor_membership_id=admin_membership_map.get(join_code)
                         )
                         db.session.add(transfer_tx_withdraw)
                         db.session.add(transfer_tx_deposit)
@@ -10354,21 +10400,29 @@ def resolve_issue(issue_id):
 
             if transaction.status == TransactionStatus.PENDING:
                 transaction.status = TransactionStatus.VOID
-            else:
-                reversal_tx = Transaction(
-                    student_id=transaction.student_id,
-                    teacher_id=transaction.teacher_id,
-                    join_code=transaction.join_code,
-                    amount=-(transaction.amount or Decimal('0.00')),
-                    account_type=transaction.account_type or 'checking',
-                    status=TransactionStatus.PENDING,
-                    type='refund',
-                    original_transaction_id=transaction.id,
-                    description=f"Issue resolution refund for transaction #{transaction.id}: {transaction.description}",
-                )
-                db.session.add(reversal_tx)
-                db.session.flush()
-                transaction.reversal_transaction_id = reversal_tx.id
+                
+            # Prefetch admin memberships for accurate audit logging
+            admin_memberships = ClassMembership.query.filter_by(
+                admin_id=admin_id,
+                status='active'
+            ).all()
+            admin_membership_map = {m.join_code: m.id for m in admin_memberships}
+
+            reversal_tx = Transaction(
+                student_id=transaction.student_id,
+                teacher_id=transaction.teacher_id,
+                join_code=transaction.join_code,
+                amount=-(transaction.amount or Decimal('0.00')),
+                account_type=transaction.account_type or 'checking',
+                status=TransactionStatus.PENDING,
+                type='refund',
+                original_transaction_id=transaction.id,
+                description=f"Issue resolution refund for transaction #{transaction.id}: {transaction.description}",
+                actor_membership_id=admin_membership_map.get(transaction.join_code)
+            )
+            db.session.add(reversal_tx)
+            db.session.flush()
+            transaction.reversal_transaction_id = reversal_tx.id
 
             transaction.is_void = True
             transaction.voided_at = utc_now()
