@@ -6079,7 +6079,21 @@ def economy_health():
     # Always use per-class view since CWI is inherently per-class (multi-tenancy by join_code)
     selected_block = request.args.get('block') or (blocks[0] if blocks else None)
 
-    payroll_query = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True)
+    active_join_codes = _get_admin_active_join_codes(admin_id)
+    join_codes_dict = _get_join_codes_by_block(admin_id, [selected_block] if selected_block else [])
+    selected_join_code = join_codes_dict.get(selected_block) if selected_block else None
+
+    if active_join_codes:
+        payroll_query = PayrollSettings.query.filter(
+            sa.or_(
+                PayrollSettings.join_code.in_(active_join_codes),
+                PayrollSettings.teacher_id == admin_id
+            ),
+            PayrollSettings.is_active == True
+        )
+    else:
+        payroll_query = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True)
+
     # Fetch all active payroll settings for this teacher once to avoid multiple DB queries
     all_payroll_settings = payroll_query.order_by(PayrollSettings.block.asc()).all()
     settings_by_block = {s.block: s for s in all_payroll_settings if s.block}
@@ -6099,20 +6113,35 @@ def economy_health():
     has_payroll_settings = len(all_payroll_settings) > 0
 
     rent_settings = None
-    if selected_block:
+    if selected_join_code:
         rent_settings = RentSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=selected_block,
+            join_code=selected_join_code,
             is_enabled=True
         ).first()
+    if not rent_settings and active_join_codes:
+        rent_settings = RentSettings.query.filter(
+            RentSettings.join_code.in_(active_join_codes),
+            RentSettings.is_enabled == True
+        ).first()
+        
+    # Legacy fallback
     if not rent_settings:
-        rent_settings = RentSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=None,
-            is_enabled=True
-        ).first()
+        if selected_block:
+            rent_settings = RentSettings.query.filter_by(teacher_id=admin_id, block=selected_block, is_enabled=True).first()
+        if not rent_settings:
+            rent_settings = RentSettings.query.filter_by(teacher_id=admin_id, is_enabled=True).first()
 
-    insurance_policies_query = InsurancePolicy.query.filter_by(teacher_id=admin_id, is_active=True)
+    if active_join_codes:
+        insurance_policies_query = InsurancePolicy.query.filter(
+            sa.or_(
+                InsurancePolicy.join_code.in_(active_join_codes),
+                InsurancePolicy.teacher_id == admin_id
+            ),
+            InsurancePolicy.is_active == True
+        )
+    else:
+        insurance_policies_query = InsurancePolicy.query.filter_by(teacher_id=admin_id, is_active=True)
+
     if selected_block:
         insurance_policies = [
             policy for policy in insurance_policies_query.all()
@@ -6121,22 +6150,37 @@ def economy_health():
     else:
         insurance_policies = insurance_policies_query.all()
 
-    fines = PayrollFine.query.filter_by(teacher_id=admin_id, is_active=True).all()
-    store_items = StoreItem.query.filter_by(teacher_id=admin_id, is_active=True).all()
+    if selected_join_code:
+        fines = PayrollFine.query.filter_by(join_code=selected_join_code, is_active=True).all()
+        store_items = StoreItem.query.filter_by(join_code=selected_join_code, is_active=True).all()
+        banking_settings = BankingSettings.query.filter_by(
+            join_code=selected_join_code,
+            is_active=True
+        ).first()
+    else:
+        fines = PayrollFine.query.filter(
+            PayrollFine.join_code.in_(active_join_codes),
+            PayrollFine.is_active == True
+        ).all() if active_join_codes else []
+        store_items = StoreItem.query.filter(
+            StoreItem.join_code.in_(active_join_codes),
+            StoreItem.is_active == True
+        ).all() if active_join_codes else []
+        banking_settings = BankingSettings.query.filter(
+            BankingSettings.join_code.in_(active_join_codes),
+            BankingSettings.is_active == True
+        ).first() if active_join_codes else None
 
-    banking_settings = None
-    if selected_block:
-        banking_settings = BankingSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=selected_block,
-            is_active=True
-        ).first()
+    # Legacy fallback
+    if not fines:
+        fines = PayrollFine.query.filter_by(teacher_id=admin_id, is_active=True).all()
+    if not store_items:
+        store_items = StoreItem.query.filter_by(teacher_id=admin_id, is_active=True).all()
     if not banking_settings:
-        banking_settings = BankingSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=None,
-            is_active=True
-        ).first()
+        if selected_block:
+            banking_settings = BankingSettings.query.filter_by(teacher_id=admin_id, block=selected_block, is_active=True).first()
+        if not banking_settings:
+            banking_settings = BankingSettings.query.filter_by(teacher_id=admin_id, is_active=True).first()
 
     def summarize_banking(settings):
         if not settings:
@@ -9673,22 +9717,34 @@ def api_economy_analyze():
         # Get or create checker
         checker = EconomyBalanceChecker(admin_id, block)
 
-        # Get current settings from database.
-        # Prefer block-specific settings, but fall back to global active settings.
-        payroll_settings = None
+        active_join_codes = _get_admin_active_join_codes(admin_id)
+        
+        # Get payroll settings to calculate CWI - filter by join_code if block is provided
+        # First resolve block to join_code if block is provided
+        target_join_code = None
         if block:
+            join_codes_by_block = _get_join_codes_by_block(admin_id, [block])
+            target_join_code = join_codes_by_block.get(block)
+
+        payroll_settings = None
+        if target_join_code:
             payroll_settings = PayrollSettings.query.filter_by(
-                teacher_id=admin_id,
-                block=block,
+                join_code=target_join_code,
                 is_active=True
             ).first()
 
-        if not payroll_settings:
-            payroll_settings = PayrollSettings.query.filter_by(
-                teacher_id=admin_id,
-                block=None,
-                is_active=True
+        if not payroll_settings and active_join_codes:
+            payroll_settings = PayrollSettings.query.filter(
+                PayrollSettings.join_code.in_(active_join_codes),
+                PayrollSettings.is_active == True
             ).first()
+
+        # Legacy fallback
+        if not payroll_settings:
+            if block:
+                payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, block=block, is_active=True).first()
+            if not payroll_settings:
+                payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True).first()
 
         if not payroll_settings:
             return jsonify({
@@ -9697,29 +9753,67 @@ def api_economy_analyze():
             }), 400
 
         # Get other economy features
-        rent_settings = RentSettings.query.filter_by(
-            teacher_id=admin_id,
-            is_enabled=True
-        ).first() if block is None else RentSettings.query.filter_by(
-            teacher_id=admin_id,
-            block=block,
-            is_enabled=True
-        ).first()
+        rent_settings = None
+        if target_join_code:
+            rent_settings = RentSettings.query.filter_by(
+                join_code=target_join_code,
+                is_enabled=True
+            ).first()
+        if not rent_settings and active_join_codes:
+            rent_settings = RentSettings.query.filter(
+                RentSettings.join_code.in_(active_join_codes),
+                RentSettings.is_enabled == True
+            ).first()
+        
+        # Legacy fallback
+        if not rent_settings:
+            if block:
+                rent_settings = RentSettings.query.filter_by(teacher_id=admin_id, block=block, is_enabled=True).first()
+            if not rent_settings:
+                rent_settings = RentSettings.query.filter_by(teacher_id=admin_id, is_enabled=True).first()
 
-        insurance_policies = InsurancePolicy.query.filter_by(
-            teacher_id=admin_id,
-            is_active=True
-        ).all()
+        # InsurancePolicy fallback check
+        insurance_policies = []
+        if target_join_code:
+            insurance_policies = InsurancePolicy.query.filter(
+                sa.or_(
+                    InsurancePolicy.join_code == target_join_code,
+                    InsurancePolicy.teacher_id == admin_id  # Fallback for old shared policies
+                ),
+                InsurancePolicy.is_active == True
+            ).all()
+        elif active_join_codes:
+            insurance_policies = InsurancePolicy.query.filter(
+                sa.or_(
+                    InsurancePolicy.join_code.in_(active_join_codes),
+                    InsurancePolicy.teacher_id == admin_id  # Fallback for old shared policies
+                ),
+                InsurancePolicy.is_active == True
+            ).all()
+        else:
+            insurance_policies = InsurancePolicy.query.filter_by(teacher_id=admin_id, is_active=True).all()
 
-        fines = PayrollFine.query.filter_by(
-            teacher_id=admin_id,
-            is_active=True
-        ).all()
+        fines = []
+        if target_join_code:
+            fines = PayrollFine.query.filter_by(join_code=target_join_code, is_active=True).all()
+        if not fines and active_join_codes:
+            fines = PayrollFine.query.filter(
+                PayrollFine.join_code.in_(active_join_codes),
+                PayrollFine.is_active == True
+            ).all()
+        if not fines:
+            fines = PayrollFine.query.filter_by(teacher_id=admin_id, is_active=True).all()
 
-        store_items = StoreItem.query.filter_by(
-            teacher_id=admin_id,
-            is_active=True
-        ).all()
+        store_items = []
+        if target_join_code:
+            store_items = StoreItem.query.filter_by(join_code=target_join_code, is_active=True).all()
+        if not store_items and active_join_codes:
+            store_items = StoreItem.query.filter(
+                StoreItem.join_code.in_(active_join_codes),
+                StoreItem.is_active == True
+            ).all()
+        if not store_items:
+            store_items = StoreItem.query.filter_by(teacher_id=admin_id, is_active=True).all()
 
         # Perform analysis
         # Use expected_weekly_hours from payroll_settings unless explicitly overridden in request
@@ -9809,18 +9903,33 @@ def api_economy_validate(feature):
                 'message': f"Invalid feature type. Must be one of: {', '.join(valid_features)}"
             }), 400
 
-        # Get payroll settings to calculate CWI - filter by block if provided
+        active_join_codes = _get_admin_active_join_codes(admin_id)
+        
+        # Get payroll settings to calculate CWI - filter by join_code if block is provided
+        target_join_code = None
         if block:
+            join_codes_by_block = _get_join_codes_by_block(admin_id, [block])
+            target_join_code = join_codes_by_block.get(block)
+            
+        payroll_settings = None
+        if target_join_code:
             payroll_settings = PayrollSettings.query.filter_by(
-                teacher_id=admin_id,
-                block=block,
+                join_code=target_join_code,
                 is_active=True
             ).first()
-        else:
-            payroll_settings = PayrollSettings.query.filter_by(
-                teacher_id=admin_id,
-                is_active=True
+
+        if not payroll_settings and active_join_codes:
+            payroll_settings = PayrollSettings.query.filter(
+                PayrollSettings.join_code.in_(active_join_codes),
+                PayrollSettings.is_active == True
             ).first()
+            
+        # Legacy fallback
+        if not payroll_settings:
+            if block:
+                payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, block=block, is_active=True).first()
+            if not payroll_settings:
+                payroll_settings = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True).first()
 
         if not payroll_settings:
             return jsonify({

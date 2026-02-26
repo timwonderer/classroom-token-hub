@@ -78,17 +78,17 @@ Branch: `join-code-centric-architecture-rebuild`
   - Identity-level routes documented as exempt: auth flows, display name settings, student creation.
   - **Strict FK Constraint Hardening**: Verified and fixed all test fixtures to respect Postgres-level foreign key constraints (essential for production stability).
   - **Legacy API Cleanup**: Replaced all deprecated `ClassEconomy.query.get` usages with modern `db.session.get` across the test suite.
+  - **Query Inversion Phase 2**: Swept read paths for RentSettings, InsurancePolicy, PayrollFine, and StoreItem in `api_economy_analyze`, `api_economy_validate`, and `economy_health` to use explicitly scoped `join_code` lookups. Included `teacher_id` fallbacks to preserve backward compatibility until full rotation backfill is complete.
+  - **Model Migration Safeguards**: Fixed testing models and modernized legacy queries (like `Query.get()`) to pass cleanly ahead of PostgreSQL foreign key constraints hardening.
 
 ## Commit Review Snapshot (Recent Branch Work)
 | Commit | Scope Review | Hardening Impact |
 |---|---|---|
+| `1e4953e` | `student/admin/api` read paths | Phase 1 query inversion: Scoped settings reads and student shop by `join_code`. Removed `teacher_id` leaks in these reads. |
+| `cca4cf9` - `534255d` | `admin` deletion flows | Comprehensive class and account deletion: Implemented 2-step modals (`a6d972b`) and `collapse_universe` DB integrity rules (`534255d`). |
+| `fc51967` | `tests/models` | Test suite strict foreign key fixes and legacy `Query.get()` modernization to ensure DB integrity during deployment. |
 | `37dc4e7` | `admin/api/student/system_admin` + new route sweep tests | Broad membership/join-code enforcement expansion, attendance/redemption/hall-pass/claim scoping tightening, and destructive delete confirmation gate |
 | `177e296` | `api` tap + block settings | Enforced current-class admin membership and cross-join-code rejection for tap/block settings endpoints |
-| `f846874` | student payroll/transfer views | Removed global earnings display reads from live student financial views |
-| `278d09d` | admin payroll view | Removed global checking/savings reads from admin payroll display |
-| `db0904c` | admin class-select/delete routes | Enforced admin membership gate for class switch/delete flows |
-| `4a15047` + `7c63429` | admin issue resolution/aggregates | Scoped issue reversal to class boundary and strengthened reversal-first ledger behavior in key path |
-| `d0967ef` | admin export | Scoped CSV export balances/earnings to teacher-owned join-codes |
 
 ## Verified
 - Targeted and multitenancy-related suites passed after hardening updates:

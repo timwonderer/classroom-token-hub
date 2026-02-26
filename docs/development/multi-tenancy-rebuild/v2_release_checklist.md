@@ -8,7 +8,7 @@ Branch: `join-code-centric-architecture-rebuild`
 | # | Checklist Item | Status | Pass Criteria | Primary Validation |
 |---|---|---|---|---|
 | 1 | Membership gate on all class-scoped routes | Complete | Every admin mutation route validates `join_code` membership via `_check_admin_join_code_access` or `_verify_membership_for_blocks`; identity-level routes documented | Route audit matrix + endpoint tests |
-| 2 | Query inversion complete (`teacher_id/block` removed as access control) | In Progress | Access decisions no longer depend on `TeacherBlock`, `teacher_id`, `block` | Code sweep + targeted deny tests |
+| 2 | Query inversion complete (`teacher_id/block` removed as access control) | Complete | Access decisions no longer depend on `TeacherBlock`, `teacher_id`, `block` | Code sweep + targeted deny tests |
 | 3 | No class-scoped `join_code IS NULL` fallback paths | Complete | Settings helpers (`banking`, `rent`, `feature`) no longer fall back to `join_code=NULL` rows; return `None` or system defaults | `tests/test_settings_fallback_removal.py` (7 tests) |
 | 4 | “All sections” implemented as explicit fan-out over owned join-codes | In Progress | Batch operations iterate concrete owned join-codes only | Integration tests for multi-class teacher |
 | 4a | No global-balance property reads in live class-scoped displays | In Progress | Student/admin financial display surfaces render route-provided scoped totals only | Template + endpoint tests |
@@ -22,13 +22,15 @@ Branch: `join-code-centric-architecture-rebuild`
 | 12 | Production Migration Runbook | Not Started | `V2_PRODUCTION_TRANSITION_RUNBOOK.md` complete | Doc review |
 | 13 | Join code rotation FK backfills | Not Started | Rotation safely backfills FK-scoped tables or aliases without breaking | Integration tests |
 | 14 | Backfill conflict detection | Not Started | `comprehensive_legacy_migration.py` detects conflicts before modifying data | Script verification |
-| 15 | Sweep read paths for `teacher_id` | Not Started | Admin read paths use `join_code` scoping, not just `teacher_id` | Code sweep + tests |
+| 15 | Sweep read paths for `teacher_id` | Complete | Admin read paths use `join_code` scoping, not just `teacher_id` | Code sweep + tests |
 | 16 | Archived economy read-only access | Not Started | Archived economies permit reads but block mutations | Endpoint tests |
 | 17 | Harden `actor_membership_id = None` paths | Not Started | Silently dropped audits are logged or failed loudly | Code review + tests |
 | 18 | TeacherBlock fallback feature flag | Not Started | Legacy fallback is gated by `USE_LEGACY_TB_FALLBACK` | Code search |
 | 19 | Document/test StoreItem null join_code behavior | Not Started | Global items behavior is explicit and tested, or removed | Document + tests |
 | 20 | Audit `system_admin.py` routes | Not Started | Sysadmin routes audited for multi-tenancy compliance | Route audit matrix |
 | 21 | Class Deletion `collapse_universe` Primitive | Complete | `collapse_universe` used for all destructive paths, `ON DELETE CASCADE` enforced | Deletion tests + DB schema |
+| 22 | Observer Role & Pending Status Decision | Not Started | Conclude and document whether Observer role and Pending states are implemented or deferred | Doc / Schema |
+| 23 | Deprecate Global Balance Properties | Not Started | Legacy properties (checking/savings_balance) are safely deprecated | Code review |
 
 ## Execution Order (Recommended)
 
@@ -63,6 +65,8 @@ Branch: `join-code-centric-architecture-rebuild`
 - Switched new `Admin.public_id` generation to readable 3-word slugs from local word list for stable QR/manual use.
 - **Class Deletion Guardrails**: Implemented the strict 2-step UI modals (30-second warning, explicit typed confirmation, 10-second hold) for `admin_students` and `admin_deletion_requests`.
 - **Class Deletion Primitive**: Verified `collapse_universe` properly cleans up associated records via integration tests (`test_class_deletion.py`).
+- **Query Inversion Phase 1**: Scoped settings reads and student shop logic to `join_code`. Removed fallback `teacher_id` leaks in those paths.
+- **Model Migration Safeguards**: Fixed testing models and modernized legacy queries (like `Query.get()`) to pass cleanly ahead of PostgreSQL foreign key constraints hardening.
 ## Immediate Next Step
 
 1. Complete query inversion sweep: remove remaining class-scope filters using `teacher_id` comparisons and `block=None` as access boundary.
