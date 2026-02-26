@@ -5018,7 +5018,22 @@ def insurance_management():
             .all()
         )
     else:
-        existing_policies = InsurancePolicy.query.filter_by(teacher_id=current_teacher_id).all()
+        # Get active join codes for this teacher
+        admin_memberships = ClassMembership.query.filter_by(
+            admin_id=current_teacher_id,
+            status='active'
+        ).all()
+        active_join_codes = [m.join_code for m in admin_memberships]
+        
+        if active_join_codes:
+            existing_policies = InsurancePolicy.query.filter(
+                sa.or_(
+                    InsurancePolicy.join_code.in_(active_join_codes),
+                    InsurancePolicy.teacher_id == current_teacher_id
+                )
+            ).all()
+        else:
+            existing_policies = InsurancePolicy.query.filter_by(teacher_id=current_teacher_id).all()
 
     # Collect existing tier groups for the current teacher
     tier_groups_map = {}
@@ -5251,7 +5266,22 @@ def edit_insurance_policy(policy_id):
     if request.method == 'GET':
         form.blocks.data = policy.blocks_list
 
-    teacher_policies = InsurancePolicy.query.filter_by(teacher_id=session.get('admin_id')).all()
+    admin_id = session.get('admin_id')
+    admin_memberships = ClassMembership.query.filter_by(
+        admin_id=admin_id,
+        status='active'
+    ).all()
+    active_join_codes = [m.join_code for m in admin_memberships]
+
+    if active_join_codes:
+        teacher_policies = InsurancePolicy.query.filter(
+            sa.or_(
+                InsurancePolicy.join_code.in_(active_join_codes),
+                InsurancePolicy.teacher_id == admin_id
+            )
+        ).all()
+    else:
+        teacher_policies = InsurancePolicy.query.filter_by(teacher_id=admin_id).all()
     tier_groups_map = {}
     for teacher_policy in teacher_policies:
         if teacher_policy.tier_category_id:
