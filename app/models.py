@@ -455,6 +455,10 @@ class Student(db.Model):
     # Soft-delete flag: archived students cannot log in and are hidden from roster queries.
     is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
+    # Teacher-Student Shadow Feature
+    is_teacher_shadow = db.Column(db.Boolean, default=False, server_default='false', nullable=False)
+    shadow_for_admin_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=True, unique=True, index=True)
+
     # Account Recovery Fields
     reset_code = db.Column(db.String(8), nullable=True, unique=True)  # 8-char alphanumeric code
     reset_code_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -2044,45 +2048,6 @@ class BankingSettings(db.Model):
 
     def __repr__(self):
         return f'<BankingSettings APY:{self.savings_apy}% OD:{self.overdraft_protection_enabled}>'
-
-
-# -------------------- DEMO STUDENT MODEL --------------------
-class DemoStudent(db.Model):
-    """
-    Tracks demo student sessions created by admins for testing the student experience.
-    Demo sessions auto-expire after 10 minutes and store all actions separately.
-    """
-    __tablename__ = 'demo_students'
-    id = db.Column(db.Integer, primary_key=True)
-
-    # Admin who created this demo session
-    admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
-
-    # The temporary student record created for this demo
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
-
-    # Session tracking
-    session_id = db.Column(db.String(255), nullable=False, unique=True)  # Flask session ID
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    expires_at = db.Column(db.DateTime(timezone=True), nullable=False)  # Auto-cleanup after 10 minutes
-    is_active = db.Column(db.Boolean, default=True, nullable=False)
-    ended_at = db.Column(db.DateTime(timezone=True), nullable=True)
-
-    # Demo configuration (snapshot of initial state)
-    config_checking_balance = db.Column(db.Numeric(precision=12, scale=2), default=0.0)
-    config_savings_balance = db.Column(db.Numeric(precision=12, scale=2), default=0.0)
-    config_hall_passes = db.Column(db.Integer, default=3)
-    config_insurance_plan = db.Column(db.String(50), default='none')
-    config_is_rent_enabled = db.Column(db.Boolean, default=True)
-    config_period = db.Column(db.String(10), default='A')
-
-    # Relationships
-    admin = db.relationship('Admin', backref='demo_sessions')
-    student = db.relationship('Student', backref='demo_sessions', foreign_keys=[student_id])
-
-    def __repr__(self):
-        status = 'active' if self.is_active else 'ended'
-        return f'<DemoStudent admin_id={self.admin_id} student_id={self.student_id} {status}>'
 
 
 # -------------------- FEATURE SETTINGS MODEL --------------------

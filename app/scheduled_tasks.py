@@ -80,53 +80,7 @@ def enforce_daily_limits_job():
         logger.error(f"Auto tap-out job failed: {e}", exc_info=True)
 
 
-def cleanup_expired_demo_sessions_job():
-    """
-    Scheduled job that cleans up expired demo student sessions.
-    Runs every 5 minutes to remove demo sessions that have exceeded the 10-minute timeout.
-    """
-    # Import here to avoid circular imports
-    from app.models import DemoStudent
-    from app.extensions import db
-    from app.utils.demo_sessions import cleanup_demo_student_data
 
-    logger = logging.getLogger('scheduled_tasks')
-    logger.info("Starting demo session cleanup job")
-
-    try:
-        now = utc_now()
-
-        # Find all active demo sessions that have expired
-        expired_sessions = DemoStudent.query.filter(
-            DemoStudent.is_active == True,
-            DemoStudent.expires_at < now
-        ).all()
-
-        cleaned_count = 0
-        for demo_session in expired_sessions:
-            try:
-                session_id = demo_session.session_id
-
-                cleanup_demo_student_data(demo_session)
-
-                db.session.commit()
-                cleaned_count += 1
-                logger.info(
-                    "Cleaned up expired demo session %s (student_id=%s)",
-                    session_id,
-                    demo_session.student_id,
-                )
-
-            except Exception as e:
-                db.session.rollback()
-                logger.error(f"Error cleaning up demo session {demo_session.session_id}: {e}", exc_info=True)
-                continue
-
-        if cleaned_count > 0:
-            logger.info(f"Demo session cleanup completed. Cleaned up {cleaned_count} expired sessions")
-
-    except Exception as e:
-        logger.error(f"Demo session cleanup job failed: {e}", exc_info=True)
 
 
 def database_maintenance_job():
@@ -219,11 +173,6 @@ def init_scheduled_tasks(app):
         with app.app_context():
             enforce_daily_limits_job()
 
-    # Wrapper function that runs the cleanup_expired_demo_sessions_job with Flask app context
-    def run_cleanup_demo_sessions():
-        with app.app_context():
-            cleanup_expired_demo_sessions_job()
-
     # Wrapper function that runs the database_maintenance_job with Flask app context
     def run_database_maintenance():
         with app.app_context():
@@ -241,17 +190,6 @@ def init_scheduled_tasks(app):
             max_instances=1  # Prevent overlapping executions
         )
 
-        # Add the demo session cleanup job to run every 5 minutes
-        scheduler.add_job(
-            func=run_cleanup_demo_sessions,
-            trigger='interval',
-            minutes=5,
-            id='cleanup_demo_sessions',
-            name='Clean up expired demo sessions',
-            replace_existing=True,
-            max_instances=1  # Prevent overlapping executions
-        )
-
         # Add the database maintenance job to run nightly at 2 AM UTC
         scheduler.add_job(
             func=run_database_maintenance,
@@ -265,6 +203,6 @@ def init_scheduled_tasks(app):
         )
 
         scheduler.start()
-        logger.info("Scheduled tasks initialized: auto tap-out (hourly), demo cleanup (5 min), database maintenance (2 AM UTC daily)")
+        logger.info("Scheduled tasks initialized: auto tap-out (hourly), database maintenance (2 AM UTC daily)")
     else:
         logger.info("Scheduler already running")

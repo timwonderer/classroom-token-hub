@@ -558,6 +558,11 @@
                             class="fw-bold text-decoration-none">
                             {{ student.full_name }}
                           </a>
+                          {% if student.is_teacher_shadow %}
+                          <span class="badge ms-1"
+                            style="background-color:#6d28d9;font-size:0.7rem;vertical-align:middle;"
+                            title="This is your teacher shadow account">Teacher-Shadow</span>
+                          {% endif %}
                         </td>
                         {% set balance_key = (student.id, block) %}
                         {% set balances = student_balances_by_block.get(balance_key, {'checking': 0, 'savings': 0,
@@ -595,11 +600,13 @@
                             data-student-block="{{ student.block }}" data-student-dob-sum="{{ student.dob_sum }}">
                             <span class="material-symbols-outlined" style="vertical-align: middle;">edit</span>
                           </button>
+                          {% if not student.is_teacher_shadow %}
                           <button class="btn btn-sm btn-outline-danger quick-action-btn" data-bs-toggle="modal"
                             data-bs-target="#deleteStudentModal" data-student-id="{{ student.id }}"
                             data-student-name="{{ student.full_name }}">
                             <span class="material-symbols-outlined" style="vertical-align: middle;">delete</span>
                           </button>
+                          {% endif %}
                         </td>
                       </tr>
                       {% endfor %}

@@ -36,6 +36,12 @@
         <h2 class="mb-0">
             <span class="material-symbols-outlined me-2">account_circle</span>{{ student.full_name }}
             <span class="badge bg-primary">Block {{ student.block|upper }}</span>
+            {% if student.is_teacher_shadow %}
+            <span class="badge ms-1" style="background-color:#6d28d9;" title="This is your teacher shadow account">
+                <span class="material-symbols-outlined align-middle" style="font-size:0.9rem">manage_accounts</span>
+                Teacher-Shadow
+            </span>
+            {% endif %}
         </h2>
     </div>
     <div>
@@ -101,7 +107,8 @@
         {% for privilege in rent_privileges %}
         <span class="badge bg-{% if privilege.source == 'rent' %}success{% else %}info{% endif %} px-3 py-2"
             style="font-size: 0.9rem;" {% if privilege.description %}title="{{ privilege.description }}" {% endif %}>
-            <span class="material-symbols-outlined me-1">{% if privilege.source == 'rent' %}check_circle{% else %}shopping_cart_checkout{% endif %}</span>
+            <span class="material-symbols-outlined me-1">{% if privilege.source == 'rent' %}check_circle{% else
+                %}shopping_cart_checkout{% endif %}</span>
             {{ privilege.name }}
             {% if privilege.source == 'purchased' %}
             <small class="opacity-75">(Purchased)</small>
@@ -174,7 +181,8 @@
             <div class="col-lg-6 mb-4">
                 <div class="card shadow h-100">
                     <div class="card-header bg-info text-white">
-                        <h5 class="mb-0"><span class="material-symbols-outlined me-2">person</span>Student Information</h5>
+                        <h5 class="mb-0"><span class="material-symbols-outlined me-2">person</span>Student Information
+                        </h5>
                     </div>
                     <div class="card-body">
                         <table class="table table-borderless mb-0">
@@ -303,7 +311,8 @@
                                     </div>
                                     <div class="col-12 mt-2">
                                         <div class="small text-muted fst-italic">
-                                            <span class="material-symbols-outlined me-1">info</span>Student must also enter their
+                                            <span class="material-symbols-outlined me-1">info</span>Student must also
+                                            enter their
                                             <strong>Date of Birth</strong> as recorded in your roster.
                                         </div>
                                     </div>
@@ -319,7 +328,8 @@
             <div class="col-lg-6 mb-4">
                 <div class="card shadow h-100">
                     <div class="card-header bg-secondary text-white">
-                        <h5 class="mb-0"><span class="material-symbols-outlined me-2">history</span>Recent Attendance</h5>
+                        <h5 class="mb-0"><span class="material-symbols-outlined me-2">history</span>Recent Attendance
+                        </h5>
                     </div>
                     <div class="card-body">
                         {% if latest_tap_event %}
@@ -368,7 +378,8 @@
     <div class="tab-pane fade" id="transactions" role="tabpanel">
         <div class="card shadow">
             <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><span class="material-symbols-outlined me-2">receipt_long</span>Transaction History</h5>
+                <h5 class="mb-0"><span class="material-symbols-outlined me-2">receipt_long</span>Transaction History
+                </h5>
                 <div>
                     <span class="badge bg-light text-dark me-2">{{ transactions|length }} total</span>
                 </div>
@@ -492,7 +503,8 @@
                 </div>
                 {% else %}
                 <div class="alert alert-info mb-0">
-                    <span class="material-symbols-outlined me-2">info</span>This student has not purchased any items yet.
+                    <span class="material-symbols-outlined me-2">info</span>This student has not purchased any items
+                    yet.
                 </div>
                 {% endif %}
             </div>
@@ -602,7 +614,8 @@
                 {% endif %}
                 {% else %}
                 <div class="alert alert-info mb-0">
-                    <span class="material-symbols-outlined me-2">info</span>No attendance records found for this student.
+                    <span class="material-symbols-outlined me-2">info</span>No attendance records found for this
+                    student.
                 </div>
                 {% endif %}
             </div>
@@ -735,7 +748,8 @@
             <div class="col-lg-8 mb-4">
                 <div class="card shadow">
                     <div class="card-header bg-warning text-dark">
-                        <h5 class="mb-0"><span class="material-symbols-outlined me-2">confirmation_number</span>Hall Pass Management</h5>
+                        <h5 class="mb-0"><span class="material-symbols-outlined me-2">confirmation_number</span>Hall
+                            Pass Management</h5>
                     </div>
                     <div class="card-body">
                         <p><strong>Current Balance:</strong> <span class="badge bg-primary fs-5">{{ student.hall_passes
@@ -755,7 +769,8 @@
                             </div>
                         </form>
                         <div class="alert alert-info mt-3 mb-0">
-                            <small><span class="material-symbols-outlined me-2">info</span>Other settings can be changed via the "Edit
+                            <small><span class="material-symbols-outlined me-2">info</span>Other settings can be changed
+                                via the "Edit
                                 Student" button at the top of the page.</small>
                         </div>
                     </div>
@@ -785,7 +800,8 @@
                     <!-- Basic Information -->
                     <div class="card border-primary mb-3">
                         <div class="card-header bg-primary-subtle">
-                            <h6 class="mb-0 text-primary"><span class="material-symbols-outlined me-2">person</span>Basic Information</h6>
+                            <h6 class="mb-0 text-primary"><span
+                                    class="material-symbols-outlined me-2">person</span>Basic Information</h6>
                         </div>
                         <div class="card-body">
                             <div class="row">
@@ -813,7 +829,9 @@
                     <!-- Block Assignment -->
                     <div class="card border-info mb-3">
                         <div class="card-header bg-info-subtle">
-                            <h6 class="mb-0 text-info"><span class="material-symbols-outlined me-2">calendar_view_week</span>Block Assignment</h6>
+                            <h6 class="mb-0 text-info"><span
+                                    class="material-symbols-outlined me-2">calendar_view_week</span>Block Assignment
+                            </h6>
                         </div>
                         <div class="card-body">
                             <p class="text-muted small mb-2">Select all blocks this student attends (can select
@@ -839,7 +857,8 @@
                     <!-- Account Recovery -->
                     <div class="card border-warning mb-3">
                         <div class="card-header bg-warning-subtle">
-                            <h6 class="mb-0 text-warning"><span class="material-symbols-outlined me-2">key</span>Account Recovery</h6>
+                            <h6 class="mb-0 text-warning"><span class="material-symbols-outlined me-2">key</span>Account
+                                Recovery</h6>
                         </div>
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-center">
@@ -856,7 +875,8 @@
                                 </div>
                             </div>
                             <div class="alert alert-warning mt-3 mb-0" id="reset_login_warning" style="display:none;">
-                                <small><span class="material-symbols-outlined me-2">warning</span>A reset code will be generated.
+                                <small><span class="material-symbols-outlined me-2">warning</span>A reset code will be
+                                    generated.
                                     Give it to the student along with their join code. They will click
                                     <strong>"I can't log into my account"</strong> on the login page to begin
                                     recovery.</small>
@@ -865,7 +885,8 @@
                     </div>
 
                     <div class="alert alert-info mb-0">
-                        <small><span class="material-symbols-outlined me-2">info</span><strong>Note:</strong> Changing the name will
+                        <small><span class="material-symbols-outlined me-2">info</span><strong>Note:</strong> Changing
+                            the name will
                             update what the student needs to enter during the account claim process.</small>
                     </div>
                 </div>
@@ -995,9 +1016,11 @@
 
     // Load tap entries button
     document.getElementById('loadTapEntries')?.addEventListener('click', async function () {
-        const studentId = {{ student.id }};
+        const studentId = {{ student.id }}
+    };
     const container = document.getElementById('tapEntriesContainer');
     const btn = this;
+
 
     btn.disabled = true;
     btn.innerHTML = '<span class="material-symbols-outlined me-1">hourglass_top</span>Loading...';

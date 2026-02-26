@@ -28,7 +28,7 @@ from app.models import (
     StudentInsurance, InsuranceClaim, StudentTeacher, DeletionRequest,
     DeletionRequestType, DeletionRequestStatus, TeacherBlock, StudentBlock, UserReport,
     FeatureSettings, TeacherOnboarding, RentSettings, BankingSettings, ClassEconomy,
-    DemoStudent, HallPassSettings, PayrollFine, PayrollReward,
+    HallPassSettings, PayrollFine, PayrollReward,
     PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction
 )
 from app.auth import system_admin_required, SESSION_TIMEOUT_MINUTES
@@ -1401,7 +1401,6 @@ def delete_teacher(admin_id):
         # Systematically delete all dependent records to prevent IntegrityError due to NOT NULL constraints.
         # Many of these models have a non-nullable teacher_id without a DB-level ON DELETE CASCADE.
         BankingSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
-        DemoStudent.query.filter_by(admin_id=admin.id).delete(synchronize_session=False)
         FeatureSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
         HallPassSettings.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)
         PayrollFine.query.filter_by(teacher_id=admin.id).delete(synchronize_session=False)

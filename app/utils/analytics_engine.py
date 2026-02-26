@@ -30,7 +30,6 @@ from app.models import (
     RentSettings, AnalyticsSnapshot, AnalyticsAlert, TeacherBlock,
     StudentTeacher
 )
-from app.models import DemoStudent
 from app.utils.economy_balance import EconomyBalanceChecker
 import logging
 
@@ -141,16 +140,10 @@ class AnalyticsEngine:
 
         scoped_student_ids = teacherblock_ids.union(studentblock_ids).subquery()
 
-        demo_student_ids = (
-            DemoStudent.query.with_entities(DemoStudent.student_id)
-            .filter(DemoStudent.admin_id == self.teacher_id)
-            .subquery()
-        )
-
         return (
             query
             .filter(Student.id.in_(sa.select(scoped_student_ids)))
-            .filter(~Student.id.in_(sa.select(demo_student_ids)))
+            .filter(Student.is_teacher_shadow.is_(False))
             .distinct()
             .all()
         )

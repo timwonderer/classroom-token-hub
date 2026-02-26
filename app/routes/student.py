@@ -37,7 +37,6 @@ from app.forms import (
 from app.utils.helpers import generate_anonymous_code, is_safe_url, format_utc_iso, render_template_with_fallback as render_template
 from app.utils.constants import THEME_PROMPTS
 from app.utils.turnstile import verify_turnstile_token
-from app.utils.demo_sessions import cleanup_demo_student_data
 from app.utils.ip_handler import get_real_ip
 from app.utils.claim_credentials import compute_primary_claim_hash, match_claim_hash
 from app.utils.name_utils import hash_last_name_parts
@@ -3720,125 +3719,10 @@ def login():
     return render_template('student_login.html', setup_cta=setup_cta, form=form)
 
 
-@student_bp.route('/demo-login/<string:session_id>')
-@admin_required
-def demo_login(session_id):
-    """Auto-login for demo student sessions created by admins.
-
-    SECURITY: This route requires the user to already be logged in as the admin
-    who created the demo session. Demo links cannot be used by anonymous users
-    or other admins.
-    """
-    from app.models import DemoStudent, Admin
-
-    try:
-        # Find the demo session
-        demo_session = DemoStudent.query.filter_by(
-            session_id=session_id,
-            is_active=True
-        ).first()
-
-        if not demo_session:
-            flash("Demo session not found or has expired.", "error")
-            return redirect(url_for('admin.dashboard'))
-
-        # Check if session has expired
-        now = utc_now()
-        expires_at = demo_session.expires_at
-        if not isinstance(expires_at, datetime):
-            # If missing or invalid, refresh expiry to 10 minutes from now to avoid false immediate expiry
-            expires_at = now + timedelta(minutes=10)
-            demo_session.expires_at = expires_at
-            db.session.commit()
-        elif expires_at.tzinfo is None:
-            # Treat naive timestamps as being in the admin's timezone (or fallback to UTC), then normalize to UTC
-            tz_name = session.get('timezone') or 'UTC'
-            try:
-                local_tz = pytz.timezone(tz_name)
-                expires_at = local_tz.localize(expires_at).astimezone(timezone.utc)
-            except Exception:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            demo_session.expires_at = expires_at
-            db.session.commit()
-
-        if expires_at and now > expires_at:
-            # Mark as inactive and cleanup
-            cleanup_demo_student_data(demo_session)
-            db.session.commit()
-            flash("Demo session has expired (10 minute limit).", "error")
-            return redirect(url_for('admin.dashboard'))
-
-        # SECURITY: Verify the user is logged in as the admin who created this demo
-        # This prevents privilege escalation via demo links
-        if not session.get('is_admin') or session.get('admin_id') != demo_session.admin_id:
-            current_app.logger.warning(
-                f"Unauthorized demo login attempt for session {session_id}. "
-                f"Current admin_id={session.get('admin_id')}, required={demo_session.admin_id}"
-            )
-            flash("You must be logged in as the admin who created this demo session.", "error")
-            return redirect(url_for('admin.login'))
-
-        # Set up student session (preserving admin authentication)
-        student = demo_session.student
-
-        # Clear student-specific keys only, preserve admin session
-        session.pop('student_id', None)
-        session.pop('login_time', None)
-        session.pop('last_activity', None)
-        session.pop('is_demo', None)
-        session.pop('demo_session_id', None)
-
-        # Set student session variables
-        session['student_id'] = student.id
-        session['login_time'] = utc_now().isoformat()
-        session['last_activity'] = session['login_time']
-        session['is_demo'] = True
-        session['demo_session_id'] = session_id
-        session['view_as_student'] = True
-        # Ensure class context is set for dashboard queries
-        demo_seat = student.roster_seats[0] if student.roster_seats else None
-        if demo_seat:
-            session['current_join_code'] = demo_seat.join_code
-
-        current_app.logger.info(
-            f"Admin {demo_session.admin_id} accessed demo session {session_id} "
-            f"(student_id={student.id})"
-        )
-
-        flash("Demo session started! Session will expire in 10 minutes.", "success")
-        return redirect(url_for('student.dashboard'))
-
-    except Exception as e:
-        current_app.logger.error(f"Error during demo login: {e}", exc_info=True)
-        flash("An error occurred starting the demo session.", "error")
-        return redirect(url_for('student.login'))
-
-
 @student_bp.route('/logout')
 @login_required
 def logout():
     """Student logout."""
-    # Check if this is a demo session
-    is_demo = session.get('is_demo', False)
-    demo_session_id = session.get('demo_session_id')
-
-    if is_demo and demo_session_id:
-        # Clean up demo session
-        from app.models import DemoStudent
-        try:
-            demo_session = DemoStudent.query.filter_by(session_id=demo_session_id).first()
-            if demo_session:
-                demo_session.is_active = False
-                demo_session.ended_at = utc_now()
-
-                cleanup_demo_student_data(demo_session)
-
-                db.session.commit()
-                current_app.logger.info(f"Demo session {demo_session_id} ended and cleaned up")
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error cleaning up demo session: {e}", exc_info=True)
-
     session.clear()
     flash("You've been logged out.")
     return redirect(url_for('student.login'))
