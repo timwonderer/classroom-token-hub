@@ -18,7 +18,7 @@ Branch: `join-code-centric-architecture-rebuild`
 | 8 | Legacy bypass routes removed/deprecated paths blocked | In Progress | No deprecated route can mutate/read class data without membership scope | Route tests + routing audit |
 | 9 | Join-code deletion UX guardrails implemented | Complete | Multi-step confirmation flow before hard delete | UI + endpoint tests |
 | 10 | CI multitenancy regression suite required for merge | Complete | Full 497-test suite passing with strict FK constraints and no warnings | CI validation |
-| 11 | DB CHECK constraints on ClassMembership | Not Started | XOR and Role Consistency enforced at DB level | DB migration + tests |
+| 11 | DB CHECK constraints on ClassMembership | Complete | XOR and Role Consistency enforced at DB level | DB migration + tests |
 | 12 | Production Migration Runbook | Not Started | `V2_PRODUCTION_TRANSITION_RUNBOOK.md` complete | Doc review |
 | 13 | Join code rotation FK backfills | Not Started | Rotation safely backfills FK-scoped tables or aliases without breaking | Integration tests |
 | 14 | Backfill conflict detection | Not Started | `comprehensive_legacy_migration.py` detects conflicts before modifying data | Script verification |

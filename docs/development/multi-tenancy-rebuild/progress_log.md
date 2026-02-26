@@ -80,6 +80,7 @@ Branch: `join-code-centric-architecture-rebuild`
   - **Legacy API Cleanup**: Replaced all deprecated `ClassEconomy.query.get` usages with modern `db.session.get` across the test suite.
   - **Query Inversion Phase 2**: Swept read paths for RentSettings, InsurancePolicy, PayrollFine, and StoreItem in `api_economy_analyze`, `api_economy_validate`, and `economy_health` to use explicitly scoped `join_code` lookups. Included `teacher_id` fallbacks to preserve backward compatibility until full rotation backfill is complete.
   - **Model Migration Safeguards**: Fixed testing models and modernized legacy queries (like `Query.get()`) to pass cleanly ahead of PostgreSQL foreign key constraints hardening.
+  - **DB CHECK Constraints**: Implemented `ck_membership_xor` and `ck_membership_role_consistency` on `ClassMembership` via Alembic to guarantee isolation logic at the database layer.
 
 ## Commit Review Snapshot (Recent Branch Work)
 | Commit | Scope Review | Hardening Impact |
