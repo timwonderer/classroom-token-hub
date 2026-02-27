@@ -134,6 +134,7 @@ def test_process_expired_goals_refunds_pending_and_deactivates(client):
         store_item_id=item.id,
         join_code='JOINEXP1',
         status='pending',
+        purchase_transaction_id=purchase_tx.id,
     )
     db.session.add(si)
     db.session.commit()
@@ -271,6 +272,31 @@ def test_process_expired_goals_only_voids_pending_not_processing(client):
     assert si_pending.status == 'voided', "'pending' item should be voided on expiration"
 
 
+def test_process_expired_goals_skips_met_goals_with_no_pending(client):
+    """An expired goal with no pending purchases (already met/unlocked) is not deactivated."""
+    teacher = _create_teacher('teacher_exp_met')
+    student = _create_student(teacher, 'Fay', 'JOINEXPMET')
+    db.session.flush()
+
+    item = _collective_item(teacher, 'Met Goal', 'JOINEXPMET', expires_at=_past())
+    si_processing = StudentItem(
+        student_id=student.id,
+        store_item_id=item.id,
+        join_code='JOINEXPMET',
+        status='processing',
+    )
+    db.session.add(si_processing)
+    db.session.commit()
+
+    count = process_expired_collective_goals(teacher.id)
+
+    assert count == 0, "Met goals with no pending purchases should not be expired"
+    db.session.refresh(item)
+    assert item.is_active is True, "Item should remain active when goal was already met"
+    db.session.refresh(si_processing)
+    assert si_processing.status == 'processing'
+
+
 def test_process_expired_goals_scoped_to_teacher(client):
     """Expiration only processes items belonging to the specified teacher."""
     teacher_a = _create_teacher('teacher_exp_scope_a')
@@ -357,7 +383,8 @@ def test_refund_pending_collective_purchases_marks_voided_and_creates_refund(cli
     db.session.flush()
 
     si = StudentItem(student_id=student.id, store_item_id=item.id,
-                     join_code='JOINREFUND', status='pending')
+                     join_code='JOINREFUND', status='pending',
+                     purchase_transaction_id=purchase_tx.id)
     db.session.add(si)
     db.session.commit()
 
@@ -373,6 +400,46 @@ def test_refund_pending_collective_purchases_marks_voided_and_creates_refund(cli
     ).all()
     assert len(refund_txs) == 1
     assert 'Teacher Removed' in refund_txs[0].description
+
+
+def test_refund_matching_uses_purchase_transaction_id_after_item_rename(client):
+    """Refund matching should remain correct even if the store item name changes."""
+    teacher = _create_teacher('teacher_refund_id_match')
+    student = _create_student(teacher, 'Jules', 'JOINIDMATCH')
+    db.session.flush()
+
+    item = _collective_item(teacher, 'Original Name', 'JOINIDMATCH')
+    purchase_tx = Transaction(
+        student_id=student.id, teacher_id=teacher.id,
+        join_code='JOINIDMATCH', amount=Decimal('-13.00'),
+        account_type='checking', type='purchase',
+        description='Purchase: Original Name',
+    )
+    db.session.add(purchase_tx)
+    db.session.flush()
+
+    si = StudentItem(
+        student_id=student.id,
+        store_item_id=item.id,
+        join_code='JOINIDMATCH',
+        status='pending',
+        purchase_transaction_id=purchase_tx.id,
+    )
+    db.session.add(si)
+
+    item.name = 'Renamed Item'
+    item.price = Decimal('99.00')
+    db.session.commit()
+
+    count = refund_pending_collective_purchases(item, description_suffix='Teacher Removed')
+    db.session.commit()
+
+    assert count == 1
+    refund_tx = Transaction.query.filter_by(
+        student_id=student.id, join_code='JOINIDMATCH', type='refund'
+    ).one()
+    assert refund_tx.amount == Decimal('13.00'), "Refund should use linked purchase transaction amount"
+    assert refund_tx.original_transaction_id == purchase_tx.id
 
 
 def test_refund_pending_skips_non_pending_statuses(client):
@@ -420,7 +487,8 @@ def test_delete_active_collective_item_refunds_pending(client):
     db.session.flush()
 
     si = StudentItem(student_id=student.id, store_item_id=item.id,
-                     join_code='JOINDEL', status='pending')
+                     join_code='JOINDEL', status='pending',
+                     purchase_transaction_id=purchase_tx.id)
     db.session.add(si)
     db.session.commit()
 

@@ -593,6 +593,8 @@ def purchase_item():
             description=purchase_description
         )
         db.session.add(purchase_tx)
+        # Ensure purchase_tx.id is available so each StudentItem can carry a stable refund link.
+        db.session.flush()
 
         # Handle inventory
         if item.inventory is not None:
@@ -690,6 +692,7 @@ def purchase_item():
                 purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
+                purchase_transaction_id=purchase_tx.id,
                 is_from_bundle=True,
                 bundle_remaining=item.bundle_quantity * quantity,  # Total uses = bundle_quantity * number of bundles purchased
                 quantity_purchased=quantity,
@@ -706,6 +709,7 @@ def purchase_item():
                 purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
+                purchase_transaction_id=purchase_tx.id,
                 is_from_bundle=False,
                 quantity_purchased=quantity,
                 uses_remaining=uses_remaining
@@ -721,6 +725,7 @@ def purchase_item():
                     purchase_date=utc_now(),
                     expiry_date=expiry_date,
                     status=student_item_status,
+                    purchase_transaction_id=purchase_tx.id,
                     is_from_bundle=False,
                     quantity_purchased=1,
                     uses_remaining=uses_remaining

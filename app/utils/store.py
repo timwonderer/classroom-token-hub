@@ -31,10 +31,18 @@ def refund_pending_collective_purchases(item, description_suffix="Goal Expired")
 
     refunded = 0
     for si in pending_items:
-        # Attempt to locate the original purchase transaction for this student+item.
-        # join_code scoping is critical for multi-tenancy correctness.
+        # Prefer direct transaction linkage for stable matching.
         purchase_tx = None
-        if si.join_code:
+        if si.purchase_transaction_id:
+            purchase_tx = db.session.get(Transaction, si.purchase_transaction_id)
+            if purchase_tx and (
+                purchase_tx.student_id != si.student_id
+                or purchase_tx.teacher_id != item.teacher_id
+            ):
+                purchase_tx = None
+
+        # Legacy fallback for rows created before purchase_transaction_id existed.
+        if purchase_tx is None and si.join_code:
             purchase_tx = (
                 Transaction.query
                 .filter_by(
@@ -93,12 +101,18 @@ def process_expired_collective_goals(teacher_id):
         int: Number of collective goal items that were expired and processed.
     """
     now = utc_now()
+    pending_exists = db.session.query(StudentItem.id).filter(
+        StudentItem.store_item_id == StoreItem.id,
+        StudentItem.status == 'pending',
+    ).exists()
+
     expired_items = StoreItem.query.filter(
         StoreItem.teacher_id == teacher_id,
         StoreItem.item_type == 'collective',
         StoreItem.is_active == True,
         StoreItem.collective_goal_expires_at.isnot(None),
         StoreItem.collective_goal_expires_at <= now,
+        pending_exists,
     ).all()
 
     if not expired_items:
