@@ -4090,6 +4090,19 @@ def add_manual_student():
 
 # -------------------- STORE MANAGEMENT --------------------
 
+def _end_of_day_utc(date_obj):
+    """Convert a date to 23:59:59 UTC, or return None when empty."""
+    if not date_obj:
+        return None
+    return datetime(
+        date_obj.year,
+        date_obj.month,
+        date_obj.day,
+        23, 59, 59,
+        tzinfo=timezone.utc,
+    )
+
+
 @admin_bp.route('/store', methods=['GET', 'POST'])
 @admin_required
 def store_management():
@@ -4132,13 +4145,8 @@ def store_management():
             collective_goal_type=form.collective_goal_type.data if form.item_type.data == 'collective' else None,
             collective_goal_target=form.collective_goal_target.data if form.item_type.data == 'collective' else None,
             collective_goal_expires_at=(
-                datetime(
-                    form.collective_goal_expires_at.data.year,
-                    form.collective_goal_expires_at.data.month,
-                    form.collective_goal_expires_at.data.day,
-                    23, 59, 59, tzinfo=timezone.utc,
-                )
-                if form.item_type.data == 'collective' and form.collective_goal_expires_at.data
+                _end_of_day_utc(form.collective_goal_expires_at.data)
+                if form.item_type.data == 'collective'
                 else None
             ),
             # Redemption prompt
@@ -4462,14 +4470,11 @@ def edit_store_item(item_id):
         form.populate_obj(item)
         # Set blocks using many-to-many relationship
         item.set_blocks(form.blocks.data if form.blocks.data else [])
-        # Convert collective_goal_expires_at date → timezone-aware datetime (end of day UTC)
-        if item.item_type == 'collective' and form.collective_goal_expires_at.data:
-            d = form.collective_goal_expires_at.data
-            item.collective_goal_expires_at = datetime(
-                d.year, d.month, d.day, 23, 59, 59, tzinfo=timezone.utc
-            )
-        else:
-            item.collective_goal_expires_at = None
+        item.collective_goal_expires_at = (
+            _end_of_day_utc(form.collective_goal_expires_at.data)
+            if item.item_type == 'collective'
+            else None
+        )
         db.session.commit()
         flash(f"'{item.name}' has been updated.", "success")
         return redirect(url_for('admin.store_management'))

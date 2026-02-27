@@ -76,6 +76,8 @@ def refund_pending_collective_purchases(item, description_suffix="Goal Expired")
         )
         db.session.add(refund_tx)
         if purchase_tx:
+            # Assign ID before linking reverse pointer.
+            db.session.flush()
             purchase_tx.reversal_transaction_id = refund_tx.id
 
         si.status = 'voided'

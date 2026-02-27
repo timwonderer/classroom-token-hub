@@ -36,6 +36,7 @@ from app.routes.student import (
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
+from app.utils.store import process_expired_collective_goals
 from app.utils.time import utc_now, ensure_utc, normalize_for_db
 
 # Import external modules
@@ -279,7 +280,6 @@ def purchase_item():
     # If so, trigger lazy expiration processing (refunds + deactivation) and block the purchase.
     # Use ensure_utc() so the comparison works for both PostgreSQL (aware) and SQLite (naive UTC).
     if item.item_type == 'collective' and item.collective_goal_expires_at:
-        from app.utils.store import process_expired_collective_goals
         if ensure_utc(item.collective_goal_expires_at) <= utc_now():
             process_expired_collective_goals(item.teacher_id)
             return jsonify({"status": "error", "message": "This collective goal has expired and is no longer available."}), 400
@@ -1144,6 +1144,8 @@ def reject_redemption():
         )
         db.session.add(refund_tx)
         if purchase_tx:
+            # Assign ID before linking reverse pointer.
+            db.session.flush()
             purchase_tx.reversal_transaction_id = refund_tx.id
 
         # 3. Mark item as rejected (terminal state) instead of deleting history.

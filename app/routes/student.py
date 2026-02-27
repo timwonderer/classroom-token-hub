@@ -49,6 +49,7 @@ from app.utils.claim_credentials import compute_primary_claim_hash, match_claim_
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed, evaluate_overdraft_allowance
 from app.utils.help_content import HELP_ARTICLES
+from app.utils.store import process_expired_collective_goals
 from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
 from app.attendance import get_all_block_statuses
 from app.payroll import get_pay_rate_for_block
@@ -2427,7 +2428,6 @@ def shop():
     teacher_id = context['teacher_id']
 
     # Lazily expire collective goals whose deadline has passed, refunding pending purchases.
-    from app.utils.store import process_expired_collective_goals
     process_expired_collective_goals(teacher_id)
 
     current_block = (context.get('block') or '').strip().upper()
