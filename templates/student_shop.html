@@ -30,11 +30,12 @@
             {% set rent_item_types = rent_item_types_by_store_id.get(item.id, []) %}
             {% set is_privilege_rent_item = 'privilege' in rent_item_types %}
             {% set is_per_use_rent_item = 'per_use' in rent_item_types %}
-            {% set is_rent_perk_item = (rent_item_types|length > 0) or item.is_rent_linked %}
+            {% set is_hall_pass_item = item.item_type == 'hall_pass' %}
+            {% set is_rent_perk_item = (not is_hall_pass_item) and ((rent_item_types|length > 0) or item.is_rent_linked) %}
             {% set is_rent_covered = has_paid_rent and is_privilege_rent_item and not is_per_use_rent_item %}
             {% set rent_free_uses_remaining = rent_free_uses.get(item.id) %}
             {% set has_rent_free_purchase = rent_free_uses_remaining is not none and (rent_free_uses_remaining == -1 or rent_free_uses_remaining > 0) %}
-            {% set has_legacy_rent_free_purchase = has_paid_rent and item.is_rent_linked and not is_rent_covered and not has_rent_free_purchase %}
+            {% set has_legacy_rent_free_purchase = (not is_hall_pass_item) and has_paid_rent and item.is_rent_linked and not is_rent_covered and not has_rent_free_purchase %}
             {% set has_any_rent_free_purchase = has_rent_free_purchase or has_legacy_rent_free_purchase %}
             <div class="col">
                 <div class="card h-100 {% if item.is_bundle or item.bulk_discount_enabled %}border-primary{% endif %} {% if is_rent_covered %}opacity-50{% endif %}">

@@ -1114,6 +1114,10 @@ def dashboard():
     teacher_id = context['teacher_id']
     current_block = context['block']  # Get current class block
 
+    _, _, hall_pass_reconciled = _ensure_rent_hall_pass_top_off(student, context)
+    if hall_pass_reconciled:
+        db.session.commit()
+
     apply_savings_interest(student)  # Apply savings interest if not already applied
 
     # CRITICAL FIX: Filter transactions by join_code (not just teacher_id)
@@ -2036,6 +2040,7 @@ def purchase_insurance(policy_id):
     enrollment = StudentInsurance(
         student_id=student.id,
         policy_id=policy.id,
+        join_code=join_code,
         status='active',
         purchase_date=utc_now(),
         last_payment_date=utc_now(),
@@ -2487,6 +2492,7 @@ def shop():
                 RentItem.rent_setting_id == rent_settings.id,
                 RentItem.is_available_in_store == True,
                 RentItem.store_item_id.isnot(None),
+                RentItem.rent_item_type != 'hall_pass',
             ).all()
             rent_item_types_by_store_id = {}
             for rent_item in rent_store_items:
@@ -2939,6 +2945,95 @@ def _calculate_rent_coverage_due_date(settings, reference_date=None):
     return current_due_date - delta
 
 
+def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
+    """
+    Reconcile rent-granted hall passes for the current coverage period.
+
+    Returns:
+        tuple[int, int, bool]: (passes_awarded, passes_revoked, state_changed)
+    """
+    if not student or not context:
+        return 0, 0, False
+
+    join_code = context.get('join_code')
+    current_block = (context.get('block') or '').strip().upper()
+    if not join_code or not current_block:
+        return 0, 0, False
+
+    settings = settings or get_rent_settings_for_context(context)
+    if not settings or not settings.is_enabled:
+        return 0, 0, False
+
+    now = now or utc_now()
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
+    if not coverage_due_date:
+        return 0, 0, False
+
+    is_paid = _is_student_coverage_period_paid(
+        settings,
+        student.id,
+        current_block,
+        join_code,
+        coverage_due_date,
+    )
+
+    from app.models import RentItem, StudentBlock
+
+    total_grant = db.session.query(
+        db.func.coalesce(db.func.sum(RentItem.hall_pass_count), 0)
+    ).filter(
+        RentItem.rent_setting_id == settings.id,
+        RentItem.rent_item_type == 'hall_pass',
+    ).scalar() or 0
+    total_grant = int(total_grant)
+
+    student_block = StudentBlock.query.filter_by(
+        student_id=student.id,
+        period=current_block,
+        join_code=join_code,
+    ).first()
+    if not student_block:
+        student_block = StudentBlock.query.filter_by(
+        student_id=student.id,
+        period=current_block,
+        join_code=None,
+    ).first()
+
+    state_changed = False
+
+    if student_block and not student_block.join_code and join_code:
+        student_block.join_code = join_code
+        state_changed = True
+    elif not student_block and (is_paid and total_grant > 0):
+        student_block = StudentBlock(
+            student_id=student.id,
+            period=current_block,
+            join_code=join_code,
+            rent_hall_passes=0,
+        )
+        db.session.add(student_block)
+        state_changed = True
+
+    current_total_passes = max(0, int(student.hall_passes or 0))
+    current_rent_passes = max(0, int(student_block.rent_hall_passes or 0)) if student_block else 0
+    effective_rent_passes = min(current_rent_passes, current_total_passes)
+    target_rent_passes = total_grant if is_paid else 0
+    delta = target_rent_passes - effective_rent_passes
+    passes_awarded = max(0, delta)
+    passes_revoked = max(0, -delta)
+
+    if delta != 0:
+        student.hall_passes = current_total_passes + delta
+        db.session.add(student)
+        state_changed = True
+
+    if student_block:
+        if student_block.rent_hall_passes != target_rent_passes:
+            student_block.rent_hall_passes = target_rent_passes
+            state_changed = True
+
+    return passes_awarded, passes_revoked, state_changed
+
 
 @student_bp.route('/rent')
 @login_required
@@ -3388,46 +3483,12 @@ def rent_pay(period):
     passes_awarded = 0
     # Only award if this payment completes full rent (not already fully paid)
     if total_paid_so_far < total_due and (total_paid_so_far + payment_amount >= total_due):
-        from app.models import RentItem, StudentBlock
-        hall_pass_items = RentItem.query.filter_by(
-            rent_setting_id=settings.id,
-            rent_item_type='hall_pass'
-        ).all()
-
-        # Calculate total grant from all hall_pass rent items
-        total_grant = sum(item.hall_pass_count for item in hall_pass_items if item.hall_pass_count)
-
-        if total_grant > 0:
-            # Top-off logic: only replenish rent-granted portion
-            # rent_hall_passes tracks how many of student's current passes came from rent
-            student_block = StudentBlock.query.filter_by(
-                student_id=student.id,
-                period=period
-            ).first()
-            if student_block and not student_block.join_code and join_code:
-                student_block.join_code = join_code
-            elif not student_block:
-                student_block = StudentBlock(
-                    student_id=student.id,
-                    period=period,
-                    join_code=join_code
-                )
-                db.session.add(student_block)
-
-            current_rent_passes = student_block.rent_hall_passes if student_block else 0
-            # Defensive normalization: if the rent-only counter drifts above actual passes
-            # (legacy/manual edits), still top-off correctly when rent is paid.
-            effective_rent_passes = min(current_rent_passes, student.hall_passes or 0)
-            top_off = max(0, total_grant - effective_rent_passes)
-
-            if top_off > 0:
-                student.hall_passes = (student.hall_passes or 0) + top_off
-                passes_awarded = top_off
-                db.session.add(student)
-
-            # Update rent_hall_passes to reflect the new grant level
-            if student_block:
-                student_block.rent_hall_passes = total_grant
+        passes_awarded, _, _ = _ensure_rent_hall_pass_top_off(
+            student,
+            context,
+            settings=settings,
+            now=now,
+        )
 
     # Grant per-use free uses if rent is fully paid
     per_use_items_granted = 0
