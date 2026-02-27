@@ -49,6 +49,7 @@ def refund_pending_collective_purchases(item, description_suffix="Goal Expired")
                     student_id=si.student_id,
                     teacher_id=item.teacher_id,
                     type='purchase',
+                    reversal_transaction_id=None,
                 )
                 .filter(
                     Transaction.join_code == si.join_code,

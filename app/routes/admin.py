@@ -101,6 +101,7 @@ from app.attendance import (
 )
 from app.services.balance_service import get_batch_balances
 from app.utils.insurance_eligibility import (
+    collect_reimbursed_source_tx_ids,
     evaluate_claim_transaction_eligibility,
     CLAIM_REASON_ALREADY_CLAIMED,
     CLAIM_REASON_DELAY_USE_EXPIRED,
@@ -5007,14 +5008,6 @@ def rent_settings():
 
     # Get statistics
     total_students = _scoped_students().filter_by(is_rent_enabled=True).count()
-    current_month = utc_now().month
-    current_year = utc_now().year
-    paid_this_month = (
-        RentPayment.query
-        .filter(RentPayment.student_id.in_(sa.select(student_ids_subq)))
-        .filter_by(period_month=current_month, period_year=current_year)
-        .count()
-    )
 
     # Get active waivers
     now = utc_now()
@@ -5071,34 +5064,58 @@ def rent_settings():
         from app.models import RentItem
         rent_items = RentItem.query.filter_by(rent_setting_id=settings.id).order_by(RentItem.order_index).all()
 
-    # Calculate rent active status and unpaid students (grouped by class/join code)
+    # Calculate rent active status, backlog buckets, and logs
     rent_active_for_period = False
-    unpaid_students = []
-    unpaid_students_by_class = []
+    rent_status_counts = {
+        'current': 0,
+        'behind_1': 0,
+        'behind_2': 0,
+        'behind_3_plus': 0,
+    }
+    rent_status_total = 0
+    unpaid_rent_log = []
+    payment_log = []
+    current_period_start = None
+    current_period_end = None
+    next_due_date = None
 
     if settings and settings.is_enabled:
         now_utc = utc_now()
+        from app.routes.student import (
+            _calculate_rent_coverage_due_date,
+            _calculate_rent_deadlines,
+            _calculate_upcoming_rent_due_date,
+            _get_rent_period_delta,
+            _is_student_coverage_period_paid,
+        )
+
+        # Current selected-class period card data
+        selected_coverage_due = _calculate_rent_coverage_due_date(settings, now_utc)
+        selected_due_date, _ = _calculate_rent_deadlines(settings, now_utc)
+        selected_next_due = _calculate_upcoming_rent_due_date(settings, selected_due_date, selected_coverage_due)
+        if selected_coverage_due and selected_next_due:
+            current_period_start = selected_coverage_due + timedelta(days=1)
+            current_period_end = selected_next_due
+            next_due_date = selected_next_due
 
         # Build class/join_code map for this teacher
-        teacher_block_rows = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
-        classes_by_block = {}
+        teacher_block_rows = TeacherBlock.query.filter_by(teacher_id=admin_id, is_claimed=True).all()
+        classes_by_join_code = {}
         for tb in teacher_block_rows:
             block_name = (tb.block or '').strip().upper()
-            if not block_name:
+            join_code = (tb.join_code or '').strip()
+            if not block_name or not join_code or not tb.student_id:
                 continue
-            if block_name not in classes_by_block:
-                classes_by_block[block_name] = {
+            if join_code not in classes_by_join_code:
+                classes_by_join_code[join_code] = {
                     'block': block_name,
-                    'join_code': tb.join_code,
+                    'join_code': join_code,
                     'class_label': tb.get_class_label(),
                     'student_ids': set()
                 }
-            if tb.is_claimed and tb.student_id:
-                classes_by_block[block_name]['student_ids'].add(tb.student_id)
+            classes_by_join_code[join_code]['student_ids'].add(tb.student_id)
 
-        from app.routes.student import _calculate_rent_coverage_due_date
-
-        for class_info in classes_by_block.values():
+        for class_info in classes_by_join_code.values():
             block_name = class_info['block']
             join_code = class_info['join_code']
             class_label = class_info['class_label']
@@ -5112,63 +5129,109 @@ def rent_settings():
                 continue
 
             coverage_due_date = _calculate_rent_coverage_due_date(block_settings, now_utc)
-            if not coverage_due_date:
-                continue
-
-            if now_utc < coverage_due_date:
-                # Rent not active yet for this class
+            if not coverage_due_date or now_utc < coverage_due_date:
                 continue
 
             rent_active_for_period = True
-
-            coverage_month = coverage_due_date.month
-            coverage_year = coverage_due_date.year
-            period_label_for_class = coverage_due_date.strftime('%B %Y')
-
-            # Fetch all payments that cover the current period for this class
-            period_payments = (
-                RentPayment.query
-                .filter(RentPayment.student_id.in_(student_ids))
-                .filter_by(coverage_month=coverage_month, coverage_year=coverage_year)
-                .filter(RentPayment.join_code == join_code)
-                .all()
-            )
-
-            payments_map = defaultdict(lambda: Decimal('0.00'))
-            for p in period_payments:
-                payments_map[p.student_id] += Decimal(str(p.amount_paid))
-
-            base_rent_amount = _calculate_base_rent_amount(block_settings, coverage_year, coverage_month)
-            grace_days = block_settings.grace_period_days or 0
-            grace_end_date = coverage_due_date + timedelta(days=grace_days)
-
-            class_unpaid = []
+            period_delta = _get_rent_period_delta(block_settings)
+            first_due = ensure_utc(block_settings.first_rent_due_date) if block_settings.first_rent_due_date else None
             class_students = Student.query.filter(
                 Student.id.in_(student_ids),
                 Student.is_rent_enabled == True
             ).order_by(Student.first_name).all()
 
             for student in class_students:
-                paid = payments_map.get(student.id, Decimal('0.00'))
-                if paid < base_rent_amount - Decimal('0.01'):
-                    remaining = base_rent_amount - paid
-                    is_late = now_utc > grace_end_date
+                unpaid_due_dates = []
+                cursor = coverage_due_date
+                for _ in range(24):
+                    if first_due and cursor < first_due:
+                        break
+                    is_paid = _is_student_coverage_period_paid(
+                        block_settings,
+                        student.id,
+                        block_name,
+                        join_code,
+                        cursor,
+                    )
+                    if is_paid:
+                        break
+                    unpaid_due_dates.append(cursor)
+                    cursor = cursor - period_delta
+
+                months_behind = len(unpaid_due_dates)
+                rent_status_total += 1
+                if months_behind <= 0:
+                    rent_status_counts['current'] += 1
+                elif months_behind == 1:
+                    rent_status_counts['behind_1'] += 1
+                elif months_behind == 2:
+                    rent_status_counts['behind_2'] += 1
+                else:
+                    rent_status_counts['behind_3_plus'] += 1
+
+                if months_behind > 0:
+                    unpaid_month_labels = [(d + timedelta(days=1)).strftime('%b %Y') for d in unpaid_due_dates]
                     item = {
                         'student': student,
-                        'period': period_label_for_class,
-                        'total_paid': paid,
-                        'total_due': base_rent_amount,
-                        'remaining': remaining,
-                        'is_late': is_late
+                        'join_code': join_code,
+                        'class_label': class_label,
+                        'block': block_name,
+                        'months_behind': months_behind,
+                        'unpaid_months': unpaid_month_labels,
                     }
-                    class_unpaid.append(item)
-                    unpaid_students.append(item)
+                    unpaid_rent_log.append(item)
 
-            unpaid_students_by_class.append({
-                'block': block_name,
-                'join_code': join_code,
-                'class_label': class_label,
-                'unpaid_students': class_unpaid
+        payment_query = (
+            RentPayment.query
+            .join(Student, RentPayment.student_id == Student.id)
+            .filter(Student.id.in_(sa.select(student_ids_subq)))
+            .order_by(RentPayment.payment_date.desc())
+            .limit(200)
+        )
+        class_label_by_join = {
+            info['join_code']: info['class_label']
+            for info in classes_by_join_code.values()
+        }
+        block_by_join = {
+            info['join_code']: info['block']
+            for info in classes_by_join_code.values()
+        }
+        settings_by_block = {
+            rs.block: rs
+            for rs in RentSettings.query.filter(
+                RentSettings.teacher_id == admin_id,
+                RentSettings.block.in_([info['block'] for info in classes_by_join_code.values()])
+            ).all()
+        }
+        for payment in payment_query.all():
+            payment_join = (payment.join_code or '').strip()
+            payment_block = block_by_join.get(payment_join, payment.period)
+            block_settings = settings_by_block.get(payment_block)
+            coverage_label = "Unknown"
+            if payment.coverage_year and payment.coverage_month:
+                due_day = 1
+                if block_settings:
+                    if block_settings.first_rent_due_date:
+                        due_day = ensure_utc(block_settings.first_rent_due_date).day
+                    elif block_settings.due_day_of_month:
+                        due_day = block_settings.due_day_of_month
+                month_last_day = monthrange(payment.coverage_year, payment.coverage_month)[1]
+                effective_due_day = max(1, min(int(due_day), month_last_day))
+                period_start = datetime(
+                    payment.coverage_year,
+                    payment.coverage_month,
+                    effective_due_day,
+                    tzinfo=timezone.utc,
+                ) + timedelta(days=1)
+                coverage_label = period_start.strftime('%b %Y')
+            payment_log.append({
+                'student': payment.student,
+                'join_code': payment_join,
+                'class_label': class_label_by_join.get(payment_join, payment.period),
+                'block': payment_block,
+                'coverage_label': coverage_label,
+                'amount_paid': payment.amount_paid,
+                'payment_date': payment.payment_date,
             })
 
     # Determine period label based on frequency type
@@ -5202,7 +5265,6 @@ def rent_settings():
     return render_template('admin_rent_settings.html',
                           settings=settings,
                           total_students=total_students,
-                          paid_this_month=paid_this_month,
                           active_waivers=active_waivers,
                           all_students=all_students,
                           payroll_warning=payroll_warning,
@@ -5212,10 +5274,15 @@ def rent_settings():
                           class_labels_by_block=class_labels_by_block,
                           join_codes_by_block=join_codes_by_block,
                           rent_items=rent_items,
-                          unpaid_students=unpaid_students,
-                          unpaid_students_by_class=unpaid_students_by_class,
                           rent_active_for_period=rent_active_for_period,
-                          period_label=period_label)
+                          period_label=period_label,
+                          rent_status_counts=rent_status_counts,
+                          rent_status_total=rent_status_total,
+                          payment_log=payment_log,
+                          unpaid_rent_log=unpaid_rent_log,
+                          current_period_start=current_period_start,
+                          current_period_end=current_period_end,
+                          next_due_date=next_due_date)
 
 
 @admin_bp.route('/rent-waiver/add', methods=['POST'])
@@ -5776,10 +5843,20 @@ def process_claim(claim_id):
 
     # Get enrollment details
     enrollment = db.session.get(StudentInsurance, claim.student_insurance_id)
+    claim_type = (
+        'transaction_monetary'
+        if claim.transaction_id
+        else ('non_monetary' if claim.claim_item else 'legacy_monetary')
+    )
+    max_claim_amount = enrollment.contract_max_claim_amount
+    max_payout_per_period = enrollment.contract_max_payout_per_period
+    max_claims_count = enrollment.contract_max_claims_count
+    max_claims_period = (enrollment.contract_max_claims_period or 'month').lower()
+    claim_time_limit_days = enrollment.contract_claim_time_limit_days
 
     def _get_period_bounds():
         now = utc_now()
-        period_key = (claim.policy.charge_frequency or '').lower()
+        period_key = max_claims_period
         if period_key == 'semester':
             if now.month <= 6:
                 return (
@@ -5802,7 +5879,7 @@ def process_claim(claim_id):
     period_start, period_end = _get_period_bounds()
 
     def _claim_base_amount(target_claim):
-        if target_claim.policy.claim_type == 'transaction_monetary' and target_claim.transaction:
+        if claim_type == 'transaction_monetary' and target_claim.transaction:
             return abs(target_claim.transaction.amount)
         return target_claim.claim_amount or 0.0
 
@@ -5822,13 +5899,13 @@ def process_claim(claim_id):
     if not enrollment.payment_current:
         validation_errors.append("Premium payments are not current")
 
-    if claim.policy.claim_type == 'transaction_monetary' and not claim.transaction:
+    if claim_type == 'transaction_monetary' and not claim.transaction:
         validation_errors.append("Transaction-based claim is missing a linked transaction")
-    if claim.policy.claim_type == 'transaction_monetary' and claim.transaction and claim.transaction.is_void:
+    if claim_type == 'transaction_monetary' and claim.transaction and claim.transaction.is_void:
         validation_errors.append("Linked transaction has been voided and cannot be reimbursed")
 
     # P0-3 Fix: Validate transaction ownership to prevent cross-student fraud
-    if claim.policy.claim_type == 'transaction_monetary' and claim.transaction:
+    if claim_type == 'transaction_monetary' and claim.transaction:
         if claim.transaction.student_id != claim.student_id:
             validation_errors.append(
                 f"SECURITY: Transaction ownership mismatch. "
@@ -5840,7 +5917,7 @@ def process_claim(claim_id):
                 f"Claim student_id={claim.student_id}, transaction student_id={claim.transaction.student_id}"
             )
 
-    if claim.policy.claim_type == 'transaction_monetary' and claim.transaction_id:
+    if claim_type == 'transaction_monetary' and claim.transaction_id:
         duplicate_claim = InsuranceClaim.query.filter(
             InsuranceClaim.transaction_id == claim.transaction_id,
             InsuranceClaim.id != claim.id,
@@ -5848,7 +5925,7 @@ def process_claim(claim_id):
         if duplicate_claim:
             validation_errors.append("Another claim is already tied to this transaction")
 
-    if claim.policy.claim_type == 'transaction_monetary' and claim.transaction:
+    if claim_type == 'transaction_monetary' and claim.transaction:
         reason_to_message = {
             CLAIM_REASON_HARD_DENY_CATEGORY: "Linked transaction category is never eligible for reimbursement",
             CLAIM_REASON_INTERNAL_TRANSFER: "Internal transfer transactions are not eligible for reimbursement",
@@ -5861,22 +5938,35 @@ def process_claim(claim_id):
             CLAIM_REASON_REIMBURSEMENT_ALREADY_EXISTS: "A reimbursement already exists for this source transaction/policy",
             CLAIM_REASON_UNCLASSIFIED_TRANSACTION: "Transaction could not be classified as eligible",
         }
+        claimed_tx_ids = {
+            row[0]
+            for row in db.session.query(InsuranceClaim.transaction_id)
+            .filter(InsuranceClaim.transaction_id.isnot(None), InsuranceClaim.id != claim.id)
+            .all()
+            if row[0] is not None
+        }
+        reimbursed_tx_ids = collect_reimbursed_source_tx_ids(claim.policy_id)
         transaction_eligible, reason_code = evaluate_claim_transaction_eligibility(
             claim.transaction,
-            policy=claim.policy,
             enrollment=enrollment,
             now_utc=utc_now(),
+            claim_type=claim_type,
+            claim_time_limit_days=claim_time_limit_days,
+            policy_id=claim.policy_id,
+            enrollment_join_code=enrollment.join_code,
+            claimed_tx_ids=claimed_tx_ids,
+            reimbursed_tx_ids=reimbursed_tx_ids,
         )
         if not transaction_eligible:
             validation_errors.append(reason_to_message.get(reason_code, "Linked transaction is not eligible"))
 
-    incident_reference = claim.transaction.timestamp if claim.policy.claim_type == 'transaction_monetary' and claim.transaction else claim.incident_date
+    incident_reference = claim.transaction.timestamp if claim_type == 'transaction_monetary' and claim.transaction else claim.incident_date
     # Ensure timezone-aware comparison
     if incident_reference and incident_reference.tzinfo is None:
         incident_reference = incident_reference.replace(tzinfo=timezone.utc)
     days_since_incident = (utc_now() - incident_reference).days if incident_reference else 0
-    if days_since_incident > claim.policy.claim_time_limit_days:
-        validation_errors.append(f"Claim filed too late ({days_since_incident} days after incident, limit is {claim.policy.claim_time_limit_days} days)")
+    if claim_time_limit_days is not None and days_since_incident > claim_time_limit_days:
+        validation_errors.append(f"Claim filed too late ({days_since_incident} days after incident, limit is {claim_time_limit_days} days)")
 
     # Check max claims count
     approved_claims = InsuranceClaim.query.filter(
@@ -5886,12 +5976,12 @@ def process_claim(claim_id):
         InsuranceClaim.processed_date <= period_end,
         InsuranceClaim.id != claim.id,
     )
-    if claim.policy.max_claims_count and approved_claims.count() >= claim.policy.max_claims_count:
-        validation_errors.append(f"Maximum claims limit reached ({claim.policy.max_claims_count} per {claim.policy.charge_frequency})")
+    if max_claims_count and approved_claims.count() >= max_claims_count:
+        validation_errors.append(f"Maximum claims limit reached ({max_claims_count} per {max_claims_period})")
 
     period_payouts = None
     remaining_period_cap = None
-    if claim.policy.max_payout_per_period:
+    if max_payout_per_period:
         period_payouts = db.session.query(func.sum(InsuranceClaim.approved_amount)).filter(
             InsuranceClaim.student_insurance_id == enrollment.id,
             InsuranceClaim.status.in_(['approved', 'paid']),
@@ -5902,10 +5992,10 @@ def process_claim(claim_id):
         ).scalar() or 0.0
 
         requested_amount = _claim_base_amount(claim)
-        remaining_period_cap = max(claim.policy.max_payout_per_period - period_payouts, 0)
-        if remaining_period_cap is not None and requested_amount > remaining_period_cap and claim.policy.claim_type != 'non_monetary':
+        remaining_period_cap = max(max_payout_per_period - period_payouts, 0)
+        if remaining_period_cap is not None and requested_amount > remaining_period_cap and claim_type != 'non_monetary':
             validation_errors.append(
-                f"Maximum payout limit would be exceeded (${period_payouts:.2f} paid + ${requested_amount:.2f} requested > ${claim.policy.max_payout_per_period:.2f} limit per {claim.policy.charge_frequency})"
+                f"Maximum payout limit would be exceeded (${period_payouts:.2f} paid + ${requested_amount:.2f} requested > ${max_payout_per_period:.2f} limit per {max_claims_period})"
             )
 
     # Get claims statistics
@@ -5920,7 +6010,7 @@ def process_claim(claim_id):
         old_status = claim.status
         new_status = form.status.data
 
-        is_monetary_claim = claim.policy.claim_type != 'non_monetary'
+        is_monetary_claim = claim_type != 'non_monetary'
         requires_payout = is_monetary_claim and new_status in ('approved', 'paid') and old_status not in ('approved', 'paid')
 
         if validation_errors and requires_payout:
@@ -5936,23 +6026,23 @@ def process_claim(claim_id):
         # Handle monetary claims - auto-deposit when approved/paid
         if requires_payout:
             approved_claims_count = approved_claims.count()
-            if claim.policy.max_claims_count and approved_claims_count >= claim.policy.max_claims_count:
-                flash(f"Cannot approve claim: maximum of {claim.policy.max_claims_count} claims already reached this {claim.policy.charge_frequency}.", "danger")
+            if max_claims_count and approved_claims_count >= max_claims_count:
+                flash(f"Cannot approve claim: maximum of {max_claims_count} claims already reached this {max_claims_period}.", "danger")
                 db.session.rollback()
                 return redirect(url_for('admin.process_claim', claim_id=claim_id))
 
             base_amount = _claim_base_amount(claim)
             approved_amount = base_amount
-            if claim.policy.claim_type == 'legacy_monetary' and form.approved_amount.data is not None:
+            if claim_type == 'legacy_monetary' and form.approved_amount.data is not None:
                 approved_amount = form.approved_amount.data
 
-            if claim.policy.max_claim_amount:
-                approved_amount = min(approved_amount, claim.policy.max_claim_amount)
+            if max_claim_amount:
+                approved_amount = min(approved_amount, max_claim_amount)
 
             if remaining_period_cap is not None:
                 if remaining_period_cap <= 0:
                     flash(
-                        f"Cannot approve claim: Would exceed maximum payout limit of ${claim.policy.max_payout_per_period:.2f} per {claim.policy.charge_frequency} (${period_payouts:.2f} already paid)",
+                        f"Cannot approve claim: Would exceed maximum payout limit of ${max_payout_per_period:.2f} per {max_claims_period} (${period_payouts:.2f} already paid)",
                         "danger",
                     )
                     db.session.rollback()
@@ -5964,14 +6054,14 @@ def process_claim(claim_id):
             # Auto-deposit to student's checking account via transaction
             student = claim.student
 
-            transaction_description = f"Insurance reimbursement for claim #{claim.id} ({claim.policy.title})"
+            transaction_description = f"Insurance reimbursement for claim #{claim.id} ({enrollment.contract_title})"
             if claim.transaction_id:
                 transaction_description += f" linked to transaction #{claim.transaction_id}"
 
             existing_reimbursement = Transaction.query.filter(
                 Transaction.type == 'insurance_reimbursement',
                 Transaction.original_transaction_id == claim.transaction_id,
-                Transaction.policy_id == claim.policy.id,
+                Transaction.policy_id == claim.policy_id,
                 Transaction.is_void == False,
             ).first()
             if existing_reimbursement:
@@ -5985,20 +6075,20 @@ def process_claim(claim_id):
 
             transaction = Transaction(
                 student_id=student.id,
-                teacher_id=claim.policy.teacher_id,
+                teacher_id=session.get('admin_id'),
                 join_code=join_code,  # CRITICAL: Add join_code for period isolation
                 amount=approved_amount,
                 account_type='checking',
                 status=TransactionStatus.PENDING,
                 type='insurance_reimbursement',
                 original_transaction_id=claim.transaction_id,
-                policy_id=claim.policy.id,
+                policy_id=claim.policy_id,
                 description=transaction_description,
             )
             db.session.add(transaction)
 
             flash(f"Monetary claim approved! ${approved_amount:.2f} deposited to {student.full_name}'s checking account.", "success")
-        elif claim.policy.claim_type == 'non_monetary' and new_status == 'approved':
+        elif claim_type == 'non_monetary' and new_status == 'approved':
             claim.approved_amount = None
             flash(f"Non-monetary claim approved for {claim.claim_item}. Item/service will be provided offline.", "success")
         elif new_status == 'rejected':
@@ -6019,6 +6109,14 @@ def process_claim(claim_id):
                           claim=claim,
                           form=form,
                           enrollment=enrollment,
+                          claim_type=claim_type,
+                          contract_title=enrollment.contract_title,
+                          contract_description=enrollment.contract_description,
+                          contract_max_claim_amount=max_claim_amount,
+                          contract_max_claims_count=max_claims_count,
+                          contract_max_claims_period=max_claims_period,
+                          contract_claim_time_limit_days=claim_time_limit_days,
+                          contract_max_payout_per_period=max_payout_per_period,
                           validation_errors=validation_errors,
                           claims_stats=claims_stats,
                           remaining_period_cap=remaining_period_cap,

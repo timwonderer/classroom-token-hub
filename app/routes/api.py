@@ -32,6 +32,7 @@ from app.routes.student import (
     get_rent_settings_for_context,
     _calculate_rent_coverage_due_date,
     _is_student_coverage_period_paid,
+    _ensure_rent_hall_pass_top_off,
 )
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
@@ -394,7 +395,11 @@ def purchase_item():
 
     # Check if student has free uses remaining from rent (per-use rent items).
     # Also recover gracefully if a paid-rent student is missing the grant row.
-    if quantity == 1 and (item.is_rent_linked or per_use_rent_item or legacy_rent_perk_free_fallback):
+    if (
+        quantity == 1
+        and item.item_type != 'hall_pass'
+        and (item.is_rent_linked or per_use_rent_item or legacy_rent_perk_free_fallback)
+    ):
         # Look for an active StudentItem with uses_remaining for this store item
         rent_item_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
@@ -872,6 +877,28 @@ def use_item():
         (student_item.store_item.teacher_id if student_item.store_item else None)
     )
     fallback_block = context.get('block') if context else student.block
+
+    # Legacy compatibility: convert stale hall-pass inventory rows into actual pass balance.
+    # Hall-pass store purchases should not require redemption workflow.
+    if student_item.store_item and student_item.store_item.item_type == 'hall_pass':
+        try:
+            granted = max(1, int(student_item.quantity_purchased or 1))
+            student.hall_passes = (student.hall_passes or 0) + granted
+            student_item.status = 'redeemed'
+            student_item.redemption_date = utc_now()
+            student_item.redemption_details = (
+                f"{details}\n---\nConverted to {granted} hall pass(es).".strip()
+                if details else f"Converted to {granted} hall pass(es)."
+            )
+            db.session.commit()
+            return jsonify({
+                "status": "success",
+                "message": f"Added {granted} hall pass(es). Your new balance is {student.hall_passes}."
+            })
+        except (SQLAlchemyError, ValueError, TypeError) as e:
+            db.session.rollback()
+            current_app.logger.error(f"Hall pass conversion failed for student item {student_item.id}: {e}", exc_info=True)
+            return jsonify({"status": "error", "message": "An error occurred. Please try again."}), 500
 
     # Request action happens when item transitions into admin approval workflow.
     will_create_request = (
@@ -2169,6 +2196,13 @@ def handle_tap():
 
             # Check if hall pass is required (not for Office/Summons/Done for the day)
             should_require_pass = reason.lower() not in ['office', 'summons', 'done for the day']
+
+            # Keep hall-pass rent grants in sync for the active rent coverage period.
+            # This applies the monthly top-off model even if the student paid rent earlier.
+            if should_require_pass and context:
+                _, _, hall_pass_reconciled = _ensure_rent_hall_pass_top_off(student, context)
+                if hall_pass_reconciled:
+                    db.session.flush()
 
             if should_require_pass and student.hall_passes <= 0:
                 return jsonify({"error": "Insufficient hall passes."}), 400
