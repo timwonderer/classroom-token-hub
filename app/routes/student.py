@@ -2048,6 +2048,7 @@ def purchase_insurance(policy_id):
         coverage_start_date=utc_now() + timedelta(days=policy.waiting_period_days),
         payment_current=True
     )
+    enrollment.freeze_policy_snapshot(policy)
     db.session.add(enrollment)
 
     # CRITICAL FIX v2: Create transaction with join_code
@@ -2109,7 +2110,7 @@ def cancel_insurance(enrollment_id):
     enrollment.cancel_date = utc_now()
 
     db.session.commit()
-    flash(f"Insurance policy '{enrollment.policy.title}' has been cancelled.", "info")
+    flash(f"Insurance policy '{enrollment.contract_title}' has been cancelled.", "info")
     return redirect(url_for('student.student_insurance'))
 
 
@@ -2131,8 +2132,14 @@ def file_claim(policy_id):
         return redirect(url_for('student.student_insurance'))
 
     policy = enrollment.policy
+    claim_type = policy.claim_type
+    max_claim_amount = enrollment.contract_max_claim_amount
+    max_payout_per_period = enrollment.contract_max_payout_per_period
+    max_claims_count = enrollment.contract_max_claims_count
+    max_claims_period = (enrollment.contract_max_claims_period or 'month').lower()
+    claim_time_limit_days = enrollment.contract_claim_time_limit_days
     form = InsuranceClaimForm()
-    if policy.claim_type == 'transaction_monetary' and not form.incident_date.data:
+    if claim_type == 'transaction_monetary' and not form.incident_date.data:
         form.incident_date.data = utc_now().date()
 
     # Validation errors
@@ -2140,7 +2147,7 @@ def file_claim(policy_id):
 
     def _get_period_bounds():
         now = utc_now()
-        period_key = (policy.charge_frequency or '').lower()
+        period_key = max_claims_period
         if period_key == 'semester':
             if now.month <= 6:
                 return (
@@ -2177,7 +2184,7 @@ def file_claim(policy_id):
     period_start, period_end = _get_period_bounds()
 
     # Check max claims per period
-    if policy.max_claims_count:
+    if max_claims_count:
         claims_count = InsuranceClaim.query.filter(
             InsuranceClaim.student_insurance_id == enrollment.id,
             InsuranceClaim.status.in_(['pending', 'approved', 'paid']),
@@ -2185,12 +2192,12 @@ def file_claim(policy_id):
             InsuranceClaim.filed_date <= period_end,
         ).count()
 
-        if claims_count >= policy.max_claims_count:
-            errors.append(f"You have reached the maximum number of claims ({policy.max_claims_count}) for this {policy.charge_frequency}.")
+        if claims_count >= max_claims_count:
+            errors.append(f"You have reached the maximum number of claims ({max_claims_count}) for this {max_claims_period}.")
 
     period_payouts = None
     remaining_period_cap = None
-    if policy.max_payout_per_period:
+    if max_payout_per_period:
         period_payouts = db.session.query(func.sum(InsuranceClaim.approved_amount)).filter(
             InsuranceClaim.student_insurance_id == enrollment.id,
             InsuranceClaim.status.in_(['approved', 'paid']),
@@ -2200,11 +2207,11 @@ def file_claim(policy_id):
         ).scalar()
         if period_payouts is None:
             period_payouts = Decimal('0.00')
-        remaining_period_cap = max(policy.max_payout_per_period - period_payouts, Decimal('0.00'))
+        remaining_period_cap = max(max_payout_per_period - period_payouts, Decimal('0.00'))
 
     eligible_transactions = []
-    if policy.claim_type == 'transaction_monetary':
-        claim_time_limit_days = int(policy.claim_time_limit_days) if policy.claim_time_limit_days is not None else None
+    if claim_type == 'transaction_monetary':
+        effective_time_limit_days = int(claim_time_limit_days) if claim_time_limit_days is not None else None
         tx_query = (
             Transaction.query
             .filter(Transaction.student_id == student.id)
@@ -2217,11 +2224,11 @@ def file_claim(policy_id):
                 )
             )
         )
-        if claim_time_limit_days is not None and claim_time_limit_days > 0:
-            cutoff_date = now_utc - timedelta(days=claim_time_limit_days)
+        if effective_time_limit_days is not None and effective_time_limit_days > 0:
+            cutoff_date = now_utc - timedelta(days=effective_time_limit_days)
             tx_query = tx_query.filter(Transaction.timestamp >= cutoff_date)
-        if policy.teacher_id:
-            tx_query = tx_query.filter(Transaction.teacher_id == policy.teacher_id)
+        if enrollment.join_code:
+            tx_query = tx_query.filter(Transaction.join_code == enrollment.join_code)
         candidate_transactions = tx_query.order_by(Transaction.timestamp.desc()).all()
         claimed_tx_ids = {
             row[0]
@@ -2230,14 +2237,17 @@ def file_claim(policy_id):
             .all()
             if row[0] is not None
         }
-        reimbursed_tx_ids = collect_reimbursed_source_tx_ids(policy.id)
+        reimbursed_tx_ids = collect_reimbursed_source_tx_ids(enrollment.policy_id)
         eligible_transactions = []
         for tx in candidate_transactions:
             tx_is_eligible, _reason = evaluate_claim_transaction_eligibility(
                 tx,
-                policy=policy,
                 enrollment=enrollment,
                 now_utc=now_utc,
+                claim_type=claim_type,
+                claim_time_limit_days=claim_time_limit_days,
+                policy_id=enrollment.policy_id,
+                enrollment_join_code=enrollment.join_code,
                 claimed_tx_ids=claimed_tx_ids,
                 reimbursed_tx_ids=reimbursed_tx_ids,
             )
@@ -2260,7 +2270,7 @@ def file_claim(policy_id):
         incident_date_value = None
         transaction_id_value = None
 
-        if policy.claim_type == 'transaction_monetary':
+        if claim_type == 'transaction_monetary':
             if not form.transaction_id.data:
                 flash("You must select a transaction for this claim type.", "danger")
                 return redirect(url_for('student.file_claim', policy_id=policy_id))
@@ -2280,9 +2290,12 @@ def file_claim(policy_id):
 
             transaction_is_eligible, _reason = evaluate_claim_transaction_eligibility(
                 selected_transaction,
-                policy=policy,
                 enrollment=enrollment,
                 now_utc=now_utc,
+                claim_type=claim_type,
+                claim_time_limit_days=claim_time_limit_days,
+                policy_id=enrollment.policy_id,
+                enrollment_join_code=enrollment.join_code,
             )
             if not transaction_is_eligible:
                 flash("Selected transaction is not eligible for claims.", "danger")
@@ -2314,26 +2327,26 @@ def file_claim(policy_id):
             incident_date_value = ensure_utc(datetime.combine(form.incident_date.data, datetime.min.time()))
             days_since_incident = (now_utc - incident_date_value).days
 
-        if policy.claim_type == 'non_monetary':
+        if claim_type == 'non_monetary':
             if not form.claim_item.data:
                 flash("Claim item is required for non-monetary policies.", "danger")
                 return redirect(url_for('student.file_claim', policy_id=policy_id))
             claim_item_value = form.claim_item.data
-        elif policy.claim_type == 'legacy_monetary':
+        elif claim_type == 'legacy_monetary':
             if not form.claim_amount.data:
                 flash("Claim amount is required for monetary policies.", "danger")
                 return redirect(url_for('student.file_claim', policy_id=policy_id))
             claim_amount_value = form.claim_amount.data
 
-            if policy.max_claim_amount and claim_amount_value > policy.max_claim_amount:
-                flash(f"Claim amount cannot exceed ${policy.max_claim_amount:.2f}.", "danger")
+            if max_claim_amount and claim_amount_value > max_claim_amount:
+                flash(f"Claim amount cannot exceed ${max_claim_amount:.2f}.", "danger")
                 return redirect(url_for('student.file_claim', policy_id=policy_id))
 
-        if days_since_incident > policy.claim_time_limit_days:
-            flash(f"Claims must be filed within {policy.claim_time_limit_days} days of the incident.", "danger")
+        if claim_time_limit_days is not None and days_since_incident > claim_time_limit_days:
+            flash(f"Claims must be filed within {claim_time_limit_days} days of the incident.", "danger")
             return redirect(url_for('student.file_claim', policy_id=policy_id))
 
-        if remaining_period_cap is not None and policy.claim_type != 'non_monetary' and remaining_period_cap <= 0:
+        if remaining_period_cap is not None and claim_type != 'non_monetary' and remaining_period_cap <= 0:
             flash("You have reached the maximum payout limit for this period.", "danger")
             return redirect(url_for('student.file_claim', policy_id=policy_id))
 
@@ -2343,8 +2356,8 @@ def file_claim(policy_id):
             student_id=student.id,
             incident_date=incident_date_value,
             description=form.description.data,
-            claim_amount=claim_amount_value if policy.claim_type != 'non_monetary' else None,
-            claim_item=claim_item_value if policy.claim_type == 'non_monetary' else None,
+            claim_amount=claim_amount_value if claim_type != 'non_monetary' else None,
+            claim_item=claim_item_value if claim_type == 'non_monetary' else None,
             comments=form.comments.data,
             status='pending',
             transaction_id=transaction_id_value,
@@ -2373,6 +2386,14 @@ def file_claim(policy_id):
                           student=student,
                           policy=policy,
                           enrollment=enrollment,
+                          claim_type=claim_type,
+                          contract_title=enrollment.contract_title,
+                          contract_description=enrollment.contract_description,
+                          contract_max_claim_amount=max_claim_amount,
+                          contract_max_claims_count=max_claims_count,
+                          contract_max_claims_period=max_claims_period,
+                          contract_claim_time_limit_days=claim_time_limit_days,
+                          contract_max_payout_per_period=max_payout_per_period,
                           form=form,
                           errors=errors,
                           claims_this_period=claims_this_period,

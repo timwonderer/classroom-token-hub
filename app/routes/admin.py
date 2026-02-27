@@ -101,6 +101,7 @@ from app.attendance import (
 )
 from app.services.balance_service import get_batch_balances
 from app.utils.insurance_eligibility import (
+    collect_reimbursed_source_tx_ids,
     evaluate_claim_transaction_eligibility,
     CLAIM_REASON_ALREADY_CLAIMED,
     CLAIM_REASON_DELAY_USE_EXPIRED,
@@ -5842,10 +5843,20 @@ def process_claim(claim_id):
 
     # Get enrollment details
     enrollment = db.session.get(StudentInsurance, claim.student_insurance_id)
+    claim_type = (
+        'transaction_monetary'
+        if claim.transaction_id
+        else ('non_monetary' if claim.claim_item else 'legacy_monetary')
+    )
+    max_claim_amount = enrollment.contract_max_claim_amount
+    max_payout_per_period = enrollment.contract_max_payout_per_period
+    max_claims_count = enrollment.contract_max_claims_count
+    max_claims_period = (enrollment.contract_max_claims_period or 'month').lower()
+    claim_time_limit_days = enrollment.contract_claim_time_limit_days
 
     def _get_period_bounds():
         now = utc_now()
-        period_key = (claim.policy.charge_frequency or '').lower()
+        period_key = max_claims_period
         if period_key == 'semester':
             if now.month <= 6:
                 return (
@@ -5868,7 +5879,7 @@ def process_claim(claim_id):
     period_start, period_end = _get_period_bounds()
 
     def _claim_base_amount(target_claim):
-        if target_claim.policy.claim_type == 'transaction_monetary' and target_claim.transaction:
+        if claim_type == 'transaction_monetary' and target_claim.transaction:
             return abs(target_claim.transaction.amount)
         return target_claim.claim_amount or 0.0
 
@@ -5888,13 +5899,13 @@ def process_claim(claim_id):
     if not enrollment.payment_current:
         validation_errors.append("Premium payments are not current")
 
-    if claim.policy.claim_type == 'transaction_monetary' and not claim.transaction:
+    if claim_type == 'transaction_monetary' and not claim.transaction:
         validation_errors.append("Transaction-based claim is missing a linked transaction")
-    if claim.policy.claim_type == 'transaction_monetary' and claim.transaction and claim.transaction.is_void:
+    if claim_type == 'transaction_monetary' and claim.transaction and claim.transaction.is_void:
         validation_errors.append("Linked transaction has been voided and cannot be reimbursed")
 
     # P0-3 Fix: Validate transaction ownership to prevent cross-student fraud
-    if claim.policy.claim_type == 'transaction_monetary' and claim.transaction:
+    if claim_type == 'transaction_monetary' and claim.transaction:
         if claim.transaction.student_id != claim.student_id:
             validation_errors.append(
                 f"SECURITY: Transaction ownership mismatch. "
@@ -5906,7 +5917,7 @@ def process_claim(claim_id):
                 f"Claim student_id={claim.student_id}, transaction student_id={claim.transaction.student_id}"
             )
 
-    if claim.policy.claim_type == 'transaction_monetary' and claim.transaction_id:
+    if claim_type == 'transaction_monetary' and claim.transaction_id:
         duplicate_claim = InsuranceClaim.query.filter(
             InsuranceClaim.transaction_id == claim.transaction_id,
             InsuranceClaim.id != claim.id,
@@ -5914,7 +5925,7 @@ def process_claim(claim_id):
         if duplicate_claim:
             validation_errors.append("Another claim is already tied to this transaction")
 
-    if claim.policy.claim_type == 'transaction_monetary' and claim.transaction:
+    if claim_type == 'transaction_monetary' and claim.transaction:
         reason_to_message = {
             CLAIM_REASON_HARD_DENY_CATEGORY: "Linked transaction category is never eligible for reimbursement",
             CLAIM_REASON_INTERNAL_TRANSFER: "Internal transfer transactions are not eligible for reimbursement",
@@ -5927,22 +5938,35 @@ def process_claim(claim_id):
             CLAIM_REASON_REIMBURSEMENT_ALREADY_EXISTS: "A reimbursement already exists for this source transaction/policy",
             CLAIM_REASON_UNCLASSIFIED_TRANSACTION: "Transaction could not be classified as eligible",
         }
+        claimed_tx_ids = {
+            row[0]
+            for row in db.session.query(InsuranceClaim.transaction_id)
+            .filter(InsuranceClaim.transaction_id.isnot(None), InsuranceClaim.id != claim.id)
+            .all()
+            if row[0] is not None
+        }
+        reimbursed_tx_ids = collect_reimbursed_source_tx_ids(claim.policy_id)
         transaction_eligible, reason_code = evaluate_claim_transaction_eligibility(
             claim.transaction,
-            policy=claim.policy,
             enrollment=enrollment,
             now_utc=utc_now(),
+            claim_type=claim_type,
+            claim_time_limit_days=claim_time_limit_days,
+            policy_id=claim.policy_id,
+            enrollment_join_code=enrollment.join_code,
+            claimed_tx_ids=claimed_tx_ids,
+            reimbursed_tx_ids=reimbursed_tx_ids,
         )
         if not transaction_eligible:
             validation_errors.append(reason_to_message.get(reason_code, "Linked transaction is not eligible"))
 
-    incident_reference = claim.transaction.timestamp if claim.policy.claim_type == 'transaction_monetary' and claim.transaction else claim.incident_date
+    incident_reference = claim.transaction.timestamp if claim_type == 'transaction_monetary' and claim.transaction else claim.incident_date
     # Ensure timezone-aware comparison
     if incident_reference and incident_reference.tzinfo is None:
         incident_reference = incident_reference.replace(tzinfo=timezone.utc)
     days_since_incident = (utc_now() - incident_reference).days if incident_reference else 0
-    if days_since_incident > claim.policy.claim_time_limit_days:
-        validation_errors.append(f"Claim filed too late ({days_since_incident} days after incident, limit is {claim.policy.claim_time_limit_days} days)")
+    if claim_time_limit_days is not None and days_since_incident > claim_time_limit_days:
+        validation_errors.append(f"Claim filed too late ({days_since_incident} days after incident, limit is {claim_time_limit_days} days)")
 
     # Check max claims count
     approved_claims = InsuranceClaim.query.filter(
@@ -5952,12 +5976,12 @@ def process_claim(claim_id):
         InsuranceClaim.processed_date <= period_end,
         InsuranceClaim.id != claim.id,
     )
-    if claim.policy.max_claims_count and approved_claims.count() >= claim.policy.max_claims_count:
-        validation_errors.append(f"Maximum claims limit reached ({claim.policy.max_claims_count} per {claim.policy.charge_frequency})")
+    if max_claims_count and approved_claims.count() >= max_claims_count:
+        validation_errors.append(f"Maximum claims limit reached ({max_claims_count} per {max_claims_period})")
 
     period_payouts = None
     remaining_period_cap = None
-    if claim.policy.max_payout_per_period:
+    if max_payout_per_period:
         period_payouts = db.session.query(func.sum(InsuranceClaim.approved_amount)).filter(
             InsuranceClaim.student_insurance_id == enrollment.id,
             InsuranceClaim.status.in_(['approved', 'paid']),
@@ -5968,10 +5992,10 @@ def process_claim(claim_id):
         ).scalar() or 0.0
 
         requested_amount = _claim_base_amount(claim)
-        remaining_period_cap = max(claim.policy.max_payout_per_period - period_payouts, 0)
-        if remaining_period_cap is not None and requested_amount > remaining_period_cap and claim.policy.claim_type != 'non_monetary':
+        remaining_period_cap = max(max_payout_per_period - period_payouts, 0)
+        if remaining_period_cap is not None and requested_amount > remaining_period_cap and claim_type != 'non_monetary':
             validation_errors.append(
-                f"Maximum payout limit would be exceeded (${period_payouts:.2f} paid + ${requested_amount:.2f} requested > ${claim.policy.max_payout_per_period:.2f} limit per {claim.policy.charge_frequency})"
+                f"Maximum payout limit would be exceeded (${period_payouts:.2f} paid + ${requested_amount:.2f} requested > ${max_payout_per_period:.2f} limit per {max_claims_period})"
             )
 
     # Get claims statistics
@@ -5986,7 +6010,7 @@ def process_claim(claim_id):
         old_status = claim.status
         new_status = form.status.data
 
-        is_monetary_claim = claim.policy.claim_type != 'non_monetary'
+        is_monetary_claim = claim_type != 'non_monetary'
         requires_payout = is_monetary_claim and new_status in ('approved', 'paid') and old_status not in ('approved', 'paid')
 
         if validation_errors and requires_payout:
@@ -6002,23 +6026,23 @@ def process_claim(claim_id):
         # Handle monetary claims - auto-deposit when approved/paid
         if requires_payout:
             approved_claims_count = approved_claims.count()
-            if claim.policy.max_claims_count and approved_claims_count >= claim.policy.max_claims_count:
-                flash(f"Cannot approve claim: maximum of {claim.policy.max_claims_count} claims already reached this {claim.policy.charge_frequency}.", "danger")
+            if max_claims_count and approved_claims_count >= max_claims_count:
+                flash(f"Cannot approve claim: maximum of {max_claims_count} claims already reached this {max_claims_period}.", "danger")
                 db.session.rollback()
                 return redirect(url_for('admin.process_claim', claim_id=claim_id))
 
             base_amount = _claim_base_amount(claim)
             approved_amount = base_amount
-            if claim.policy.claim_type == 'legacy_monetary' and form.approved_amount.data is not None:
+            if claim_type == 'legacy_monetary' and form.approved_amount.data is not None:
                 approved_amount = form.approved_amount.data
 
-            if claim.policy.max_claim_amount:
-                approved_amount = min(approved_amount, claim.policy.max_claim_amount)
+            if max_claim_amount:
+                approved_amount = min(approved_amount, max_claim_amount)
 
             if remaining_period_cap is not None:
                 if remaining_period_cap <= 0:
                     flash(
-                        f"Cannot approve claim: Would exceed maximum payout limit of ${claim.policy.max_payout_per_period:.2f} per {claim.policy.charge_frequency} (${period_payouts:.2f} already paid)",
+                        f"Cannot approve claim: Would exceed maximum payout limit of ${max_payout_per_period:.2f} per {max_claims_period} (${period_payouts:.2f} already paid)",
                         "danger",
                     )
                     db.session.rollback()
@@ -6030,14 +6054,14 @@ def process_claim(claim_id):
             # Auto-deposit to student's checking account via transaction
             student = claim.student
 
-            transaction_description = f"Insurance reimbursement for claim #{claim.id} ({claim.policy.title})"
+            transaction_description = f"Insurance reimbursement for claim #{claim.id} ({enrollment.contract_title})"
             if claim.transaction_id:
                 transaction_description += f" linked to transaction #{claim.transaction_id}"
 
             existing_reimbursement = Transaction.query.filter(
                 Transaction.type == 'insurance_reimbursement',
                 Transaction.original_transaction_id == claim.transaction_id,
-                Transaction.policy_id == claim.policy.id,
+                Transaction.policy_id == claim.policy_id,
                 Transaction.is_void == False,
             ).first()
             if existing_reimbursement:
@@ -6051,20 +6075,20 @@ def process_claim(claim_id):
 
             transaction = Transaction(
                 student_id=student.id,
-                teacher_id=claim.policy.teacher_id,
+                teacher_id=session.get('admin_id'),
                 join_code=join_code,  # CRITICAL: Add join_code for period isolation
                 amount=approved_amount,
                 account_type='checking',
                 status=TransactionStatus.PENDING,
                 type='insurance_reimbursement',
                 original_transaction_id=claim.transaction_id,
-                policy_id=claim.policy.id,
+                policy_id=claim.policy_id,
                 description=transaction_description,
             )
             db.session.add(transaction)
 
             flash(f"Monetary claim approved! ${approved_amount:.2f} deposited to {student.full_name}'s checking account.", "success")
-        elif claim.policy.claim_type == 'non_monetary' and new_status == 'approved':
+        elif claim_type == 'non_monetary' and new_status == 'approved':
             claim.approved_amount = None
             flash(f"Non-monetary claim approved for {claim.claim_item}. Item/service will be provided offline.", "success")
         elif new_status == 'rejected':
@@ -6085,6 +6109,14 @@ def process_claim(claim_id):
                           claim=claim,
                           form=form,
                           enrollment=enrollment,
+                          claim_type=claim_type,
+                          contract_title=enrollment.contract_title,
+                          contract_description=enrollment.contract_description,
+                          contract_max_claim_amount=max_claim_amount,
+                          contract_max_claims_count=max_claims_count,
+                          contract_max_claims_period=max_claims_period,
+                          contract_claim_time_limit_days=claim_time_limit_days,
+                          contract_max_payout_per_period=max_payout_per_period,
                           validation_errors=validation_errors,
                           claims_stats=claims_stats,
                           remaining_period_cap=remaining_period_cap,
