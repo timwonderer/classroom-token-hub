@@ -7,6 +7,7 @@ Create Date: 2026-02-27 00:00:00.000000
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
@@ -16,17 +17,59 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade():
-    op.add_column('insurance_policies', sa.Column('version_number', sa.Integer(), nullable=False, server_default='1'))
+def table_exists(table_name):
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    return table_name in inspector.get_table_names()
 
-    op.add_column('student_insurance', sa.Column('frozen_policy_title', sa.String(length=100), nullable=True))
-    op.add_column('student_insurance', sa.Column('frozen_policy_description', sa.Text(), nullable=True))
-    op.add_column('student_insurance', sa.Column('frozen_max_claim_amount', sa.Numeric(precision=12, scale=2), nullable=True))
-    op.add_column('student_insurance', sa.Column('frozen_max_payout_per_period', sa.Numeric(precision=12, scale=2), nullable=True))
-    op.add_column('student_insurance', sa.Column('frozen_max_claims_count', sa.Integer(), nullable=True))
-    op.add_column('student_insurance', sa.Column('frozen_max_claims_period', sa.String(length=20), nullable=True))
-    op.add_column('student_insurance', sa.Column('frozen_claim_time_limit_days', sa.Integer(), nullable=True))
-    op.add_column('student_insurance', sa.Column('policy_version', sa.Integer(), nullable=True))
+
+def column_exists(table_name, column_name):
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    if table_name not in inspector.get_table_names():
+        return False
+    columns = [col["name"] for col in inspector.get_columns(table_name)]
+    return column_name in columns
+
+
+def index_exists(table_name, index_name):
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    if table_name not in inspector.get_table_names():
+        return False
+    indexes = [idx["name"] for idx in inspector.get_indexes(table_name)]
+    return index_name in indexes
+
+
+def foreign_key_exists(table_name, fk_name):
+    bind = op.get_bind()
+    inspector = inspect(bind)
+    if table_name not in inspector.get_table_names():
+        return False
+    fks = [fk["name"] for fk in inspector.get_foreign_keys(table_name)]
+    return fk_name in fks
+
+
+def upgrade():
+    if table_exists('insurance_policies') and not column_exists('insurance_policies', 'version_number'):
+        op.add_column('insurance_policies', sa.Column('version_number', sa.Integer(), nullable=False, server_default='1'))
+
+    if table_exists('student_insurance') and not column_exists('student_insurance', 'frozen_policy_title'):
+        op.add_column('student_insurance', sa.Column('frozen_policy_title', sa.String(length=100), nullable=True))
+    if table_exists('student_insurance') and not column_exists('student_insurance', 'frozen_policy_description'):
+        op.add_column('student_insurance', sa.Column('frozen_policy_description', sa.Text(), nullable=True))
+    if table_exists('student_insurance') and not column_exists('student_insurance', 'frozen_max_claim_amount'):
+        op.add_column('student_insurance', sa.Column('frozen_max_claim_amount', sa.Numeric(precision=12, scale=2), nullable=True))
+    if table_exists('student_insurance') and not column_exists('student_insurance', 'frozen_max_payout_per_period'):
+        op.add_column('student_insurance', sa.Column('frozen_max_payout_per_period', sa.Numeric(precision=12, scale=2), nullable=True))
+    if table_exists('student_insurance') and not column_exists('student_insurance', 'frozen_max_claims_count'):
+        op.add_column('student_insurance', sa.Column('frozen_max_claims_count', sa.Integer(), nullable=True))
+    if table_exists('student_insurance') and not column_exists('student_insurance', 'frozen_max_claims_period'):
+        op.add_column('student_insurance', sa.Column('frozen_max_claims_period', sa.String(length=20), nullable=True))
+    if table_exists('student_insurance') and not column_exists('student_insurance', 'frozen_claim_time_limit_days'):
+        op.add_column('student_insurance', sa.Column('frozen_claim_time_limit_days', sa.Integer(), nullable=True))
+    if table_exists('student_insurance') and not column_exists('student_insurance', 'policy_version'):
+        op.add_column('student_insurance', sa.Column('policy_version', sa.Integer(), nullable=True))
 
     # Freeze existing active enrollments that predate snapshots.
     op.execute(
@@ -79,17 +122,27 @@ def upgrade():
         """
     )
 
-    op.alter_column('insurance_policies', 'version_number', server_default=None)
+    if table_exists('insurance_policies') and column_exists('insurance_policies', 'version_number'):
+        op.alter_column('insurance_policies', 'version_number', server_default=None)
 
 
 def downgrade():
-    op.drop_column('student_insurance', 'policy_version')
-    op.drop_column('student_insurance', 'frozen_claim_time_limit_days')
-    op.drop_column('student_insurance', 'frozen_max_claims_period')
-    op.drop_column('student_insurance', 'frozen_max_claims_count')
-    op.drop_column('student_insurance', 'frozen_max_payout_per_period')
-    op.drop_column('student_insurance', 'frozen_max_claim_amount')
-    op.drop_column('student_insurance', 'frozen_policy_description')
-    op.drop_column('student_insurance', 'frozen_policy_title')
+    if table_exists('student_insurance') and column_exists('student_insurance', 'policy_version'):
+        op.drop_column('student_insurance', 'policy_version')
+    if table_exists('student_insurance') and column_exists('student_insurance', 'frozen_claim_time_limit_days'):
+        op.drop_column('student_insurance', 'frozen_claim_time_limit_days')
+    if table_exists('student_insurance') and column_exists('student_insurance', 'frozen_max_claims_period'):
+        op.drop_column('student_insurance', 'frozen_max_claims_period')
+    if table_exists('student_insurance') and column_exists('student_insurance', 'frozen_max_claims_count'):
+        op.drop_column('student_insurance', 'frozen_max_claims_count')
+    if table_exists('student_insurance') and column_exists('student_insurance', 'frozen_max_payout_per_period'):
+        op.drop_column('student_insurance', 'frozen_max_payout_per_period')
+    if table_exists('student_insurance') and column_exists('student_insurance', 'frozen_max_claim_amount'):
+        op.drop_column('student_insurance', 'frozen_max_claim_amount')
+    if table_exists('student_insurance') and column_exists('student_insurance', 'frozen_policy_description'):
+        op.drop_column('student_insurance', 'frozen_policy_description')
+    if table_exists('student_insurance') and column_exists('student_insurance', 'frozen_policy_title'):
+        op.drop_column('student_insurance', 'frozen_policy_title')
 
-    op.drop_column('insurance_policies', 'version_number')
+    if table_exists('insurance_policies') and column_exists('insurance_policies', 'version_number'):
+        op.drop_column('insurance_policies', 'version_number')
