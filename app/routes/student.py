@@ -2884,7 +2884,7 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
     return valid_payments
 
 
-def _is_coverage_period_paid(settings, valid_payments, coverage_due_date):
+def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, include_late_fee=True):
     """
     Return True when a coverage period is fully paid.
 
@@ -2902,13 +2902,20 @@ def _is_coverage_period_paid(settings, valid_payments, coverage_due_date):
     paid_by_grace = _total_paid_by_grace(valid_payments, grace_for_coverage)
 
     required_total = settings.rent_amount
-    if paid_by_grace < settings.rent_amount:
+    if include_late_fee and paid_by_grace < settings.rent_amount:
         required_total += settings.late_fee
 
     return total_paid >= required_total
 
 
-def _is_student_coverage_period_paid(settings, student_id, period, join_code, coverage_due_date):
+def _is_student_coverage_period_paid(
+    settings,
+    student_id,
+    period,
+    join_code,
+    coverage_due_date,
+    include_late_fee=True,
+):
     """Return True when a student's specific coverage period is fully paid."""
     if not settings or not coverage_due_date or not join_code:
         return False
@@ -2926,7 +2933,12 @@ def _is_student_coverage_period_paid(settings, student_id, period, join_code, co
         student_id,
         join_code
     )
-    return _is_coverage_period_paid(settings, valid_payments, coverage_due_date)
+    return _is_coverage_period_paid(
+        settings,
+        valid_payments,
+        coverage_due_date,
+        include_late_fee=include_late_fee,
+    )
 
 
 def _calculate_rent_coverage_due_date(settings, reference_date=None):
@@ -2996,6 +3008,7 @@ def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
         current_block,
         join_code,
         coverage_due_date,
+        include_late_fee=False,
     )
 
     from app.models import RentItem, StudentBlock
