@@ -2987,16 +2987,15 @@ def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
     ).scalar() or 0
     total_grant = int(total_grant)
 
-    student_block = StudentBlock.query.filter_by(
-        student_id=student.id,
-        period=current_block,
-        join_code=join_code,
-    ).first()
-    if not student_block:
-        student_block = StudentBlock.query.filter_by(
-        student_id=student.id,
-        period=current_block,
-        join_code=None,
+    student_block = StudentBlock.query.filter(
+        StudentBlock.student_id == student.id,
+        StudentBlock.period == current_block,
+        db.or_(
+            StudentBlock.join_code == join_code,
+            StudentBlock.join_code.is_(None),
+        ),
+    ).order_by(
+        db.case((StudentBlock.join_code == join_code, 0), else_=1)
     ).first()
 
     state_changed = False
