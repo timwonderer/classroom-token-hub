@@ -125,6 +125,11 @@
                             {% else %}
                                 <small class="text-success"><span class="material-symbols-outlined">check_circle</span> Goal reached! Item will unlock soon.</small>
                             {% endif %}
+                            {% if item.collective_goal_expires_at %}
+                            <div class="alert alert-warning p-2 mt-2 mb-0">
+                                <small><span class="material-symbols-outlined" style="font-size: 14px; vertical-align: middle;">schedule</span> <strong>Deadline:</strong> Goal expires {{ item.collective_goal_expires_at.strftime('%b %d, %Y') }}</small>
+                            </div>
+                            {% endif %}
                         </div>
                         {% endif %}
 

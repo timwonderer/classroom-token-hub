@@ -53,6 +53,7 @@ from app.forms import (
 )
 # Import utility functions
 from app.utils.helpers import is_safe_url, format_utc_iso, generate_anonymous_code, render_template_with_fallback as render_template
+from app.utils.store import refund_pending_collective_purchases, process_expired_collective_goals
 from app.utils.join_code import generate_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
 from app.utils.claim_credentials import (
@@ -4089,11 +4090,26 @@ def add_manual_student():
 
 # -------------------- STORE MANAGEMENT --------------------
 
+def _end_of_day_utc(date_obj):
+    """Convert a date to 23:59:59 UTC, or return None when empty."""
+    if not date_obj:
+        return None
+    return datetime(
+        date_obj.year,
+        date_obj.month,
+        date_obj.day,
+        23, 59, 59,
+        tzinfo=timezone.utc,
+    )
+
+
 @admin_bp.route('/store', methods=['GET', 'POST'])
 @admin_required
 def store_management():
     """Manage store items - view, create, edit, delete."""
     admin_id = session.get("admin_id")
+    # Lazily expire collective goals whose deadline has passed, refunding pending purchases.
+    process_expired_collective_goals(admin_id)
     student_ids_subq = _student_scope_subquery()
     form = StoreItemForm()
 
@@ -4128,6 +4144,11 @@ def store_management():
             # Collective goal settings
             collective_goal_type=form.collective_goal_type.data if form.item_type.data == 'collective' else None,
             collective_goal_target=form.collective_goal_target.data if form.item_type.data == 'collective' else None,
+            collective_goal_expires_at=(
+                _end_of_day_utc(form.collective_goal_expires_at.data)
+                if form.item_type.data == 'collective'
+                else None
+            ),
             # Redemption prompt
             redemption_prompt=form.redemption_prompt.data if form.redemption_prompt.data else None
         )
@@ -4440,12 +4461,20 @@ def edit_store_item(item_id):
     # Pre-populate selected blocks on GET request (using many-to-many relationship)
     if request.method == 'GET':
         form.blocks.data = item.blocks_list
+        # Convert stored datetime to date for the DateField
+        if item.collective_goal_expires_at:
+            form.collective_goal_expires_at.data = item.collective_goal_expires_at.date()
 
     if form.validate_on_submit():
         # Populate other fields first
         form.populate_obj(item)
         # Set blocks using many-to-many relationship
         item.set_blocks(form.blocks.data if form.blocks.data else [])
+        item.collective_goal_expires_at = (
+            _end_of_day_utc(form.collective_goal_expires_at.data)
+            if item.item_type == 'collective'
+            else None
+        )
         db.session.commit()
         flash(f"'{item.name}' has been updated.", "success")
         return redirect(url_for('admin.store_management'))
@@ -4464,6 +4493,16 @@ def delete_store_item(item_id):
     # Prevent deletion if linked to rent settings
     if _block_rent_linked_store_item(item):
         return redirect(url_for('admin.store_management'))
+
+    # For active collective items, refund any pending purchases before deactivating
+    # so students are not left with purchased but unredeemable items.
+    if item.item_type == 'collective' and item.is_active:
+        refunded = refund_pending_collective_purchases(item, description_suffix="Item Removed by Teacher")
+        if refunded:
+            flash(
+                f"{refunded} pending purchase(s) for '{item.name}' have been refunded automatically.",
+                "info",
+            )
 
     # To preserve history, we'll just deactivate it instead of a hard delete
     # A hard delete would be: db.session.delete(item)

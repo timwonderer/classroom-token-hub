@@ -36,6 +36,7 @@ from app.routes.student import (
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
+from app.utils.store import process_expired_collective_goals
 from app.utils.time import utc_now, ensure_utc, normalize_for_db
 
 # Import external modules
@@ -274,6 +275,14 @@ def purchase_item():
     # 2. Validate item and purchase conditions
     if not item or not item.is_active:
         return jsonify({"status": "error", "message": "This item is not available."}), 404
+
+    # Check if a collective goal has passed its expiration deadline.
+    # If so, trigger lazy expiration processing (refunds + deactivation) and block the purchase.
+    # Use ensure_utc() so the comparison works for both PostgreSQL (aware) and SQLite (naive UTC).
+    if item.item_type == 'collective' and item.collective_goal_expires_at:
+        if ensure_utc(item.collective_goal_expires_at) <= utc_now():
+            process_expired_collective_goals(item.teacher_id)
+            return jsonify({"status": "error", "message": "This collective goal has expired and is no longer available."}), 400
 
     # For collective items with whole_class goal, enforce one purchase per student per class
     if item.item_type == 'collective' and item.collective_goal_type == 'whole_class':
@@ -584,6 +593,8 @@ def purchase_item():
             description=purchase_description
         )
         db.session.add(purchase_tx)
+        # Ensure purchase_tx.id is available so each StudentItem can carry a stable refund link.
+        db.session.flush()
 
         # Handle inventory
         if item.inventory is not None:
@@ -681,6 +692,7 @@ def purchase_item():
                 purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
+                purchase_transaction_id=purchase_tx.id,
                 is_from_bundle=True,
                 bundle_remaining=item.bundle_quantity * quantity,  # Total uses = bundle_quantity * number of bundles purchased
                 quantity_purchased=quantity,
@@ -697,6 +709,7 @@ def purchase_item():
                 purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
+                purchase_transaction_id=purchase_tx.id,
                 is_from_bundle=False,
                 quantity_purchased=quantity,
                 uses_remaining=uses_remaining
@@ -712,6 +725,7 @@ def purchase_item():
                     purchase_date=utc_now(),
                     expiry_date=expiry_date,
                     status=student_item_status,
+                    purchase_transaction_id=purchase_tx.id,
                     is_from_bundle=False,
                     quantity_purchased=1,
                     uses_remaining=uses_remaining
@@ -1130,6 +1144,8 @@ def reject_redemption():
         )
         db.session.add(refund_tx)
         if purchase_tx:
+            # Assign ID before linking reverse pointer.
+            db.session.flush()
             purchase_tx.reversal_transaction_id = refund_tx.id
 
         # 3. Mark item as rejected (terminal state) instead of deleting history.
