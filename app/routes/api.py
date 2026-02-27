@@ -275,6 +275,15 @@ def purchase_item():
     if not item or not item.is_active:
         return jsonify({"status": "error", "message": "This item is not available."}), 404
 
+    # Check if a collective goal has passed its expiration deadline.
+    # If so, trigger lazy expiration processing (refunds + deactivation) and block the purchase.
+    # Use ensure_utc() so the comparison works for both PostgreSQL (aware) and SQLite (naive UTC).
+    if item.item_type == 'collective' and item.collective_goal_expires_at:
+        from app.utils.store import process_expired_collective_goals
+        if ensure_utc(item.collective_goal_expires_at) <= utc_now():
+            process_expired_collective_goals(item.teacher_id)
+            return jsonify({"status": "error", "message": "This collective goal has expired and is no longer available."}), 400
+
     # For collective items with whole_class goal, enforce one purchase per student per class
     if item.item_type == 'collective' and item.collective_goal_type == 'whole_class':
         existing_purchase = StudentItem.query.filter(

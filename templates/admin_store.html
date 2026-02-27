@@ -410,6 +410,12 @@
                 {% else %}
                   <div class="small text-muted">No class progress yet.</div>
                 {% endif %}
+                {% if item.collective_goal_expires_at %}
+                <div class="small text-muted mt-1">
+                  <span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;">schedule</span>
+                  <strong>Deadline:</strong> {{ item.collective_goal_expires_at.strftime('%b %d, %Y') }}
+                </div>
+                {% endif %}
               </div>
               {% endif %}
 
@@ -628,6 +634,11 @@
                     <div class="alert alert-warning">
                       <small><span class="material-symbols-outlined me-2">info</span><strong>Whole Class Mode:</strong> Every student in the class must purchase (1 per person). The target dynamically updates based on class size.</small>
                     </div>
+                  </div>
+                  <div class="mb-3">
+                    {{ form.collective_goal_expires_at.label(class="form-label fw-bold") }}
+                    {{ form.collective_goal_expires_at(class="form-control") }}
+                    <small class="text-muted">If set, the goal expires at end of this date. Students who purchased will be automatically refunded if the goal is not reached. The item deactivates and must be reactivated to start fresh.</small>
                   </div>
                 </div>
               </div>

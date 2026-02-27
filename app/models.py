@@ -971,6 +971,7 @@ class StoreItem(db.Model):
     # Collective goal settings (only for item_type='collective')
     collective_goal_type = db.Column(db.String(20), nullable=True)  # 'fixed' or 'whole_class'
     collective_goal_target = db.Column(db.Integer, nullable=True)  # Fixed number of purchases needed (used when type='fixed')
+    collective_goal_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)  # Optional deadline; unmet goals are auto-refunded on expiration
 
     # Redemption prompt (for delayed use items)
     redemption_prompt = db.Column(db.Text, nullable=True)  # Optional prompt shown to students when redeeming delayed items

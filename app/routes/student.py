@@ -2426,6 +2426,10 @@ def shop():
 
     teacher_id = context['teacher_id']
 
+    # Lazily expire collective goals whose deadline has passed, refunding pending purchases.
+    from app.utils.store import process_expired_collective_goals
+    process_expired_collective_goals(teacher_id)
+
     current_block = (context.get('block') or '').strip().upper()
 
     now = utc_now()
