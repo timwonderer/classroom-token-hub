@@ -1883,7 +1883,13 @@ def attendance_history():
         duplicate_tap = aliased(TapEvent)
         query = query.filter(~sa.and_(
             TapEvent.status == 'inactive',
-            TapEvent.reason_code == TapEventReasonCode.DAILY_LIMIT,
+            or_(
+                TapEvent.reason_code == TapEventReasonCode.DAILY_LIMIT,
+                sa.and_(
+                    TapEvent.reason_code.is_(None),
+                    TapEvent.reason.like('Daily limit%')
+                )
+            ),
             sa.exists(
                 sa.select(1).where(
                     sa.and_(
@@ -2656,7 +2662,14 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                         TapEvent.status == "inactive",
                         TapEvent.timestamp >= start_of_day_utc,
                         TapEvent.timestamp < end_of_day_utc,
-                        TapEvent.reason_code == TapEventReasonCode.DAILY_LIMIT,
+                        or_(
+                            TapEvent.reason_code == TapEventReasonCode.DAILY_LIMIT,
+                            # Backward-compatible fallback: legacy rows may have NULL reason_code
+                            sa.and_(
+                                TapEvent.reason_code.is_(None),
+                                TapEvent.reason.ilike("Daily limit%")
+                            ),
+                        ),
                         TapEvent.is_deleted == False
                     ).first()
 

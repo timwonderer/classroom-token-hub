@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '3d54e2e343df'
-down_revision = 'd2e4f6a8b0c1'
+down_revision = 'b6c7d8e9f0a1'
 branch_labels = None
 depends_on = None
 
@@ -28,6 +28,23 @@ def upgrade():
         )
     )
     op.create_index('ix_tap_events_reason_code', 'tap_events', ['reason_code'], unique=False)
+
+    # Backfill reason_code for existing tap_events so historical data
+    # continues to work with reason_code-based filtering and deduplication.
+    op.execute(
+        sa.text(
+            "UPDATE tap_events "
+            "SET reason_code = 'daily_limit' "
+            "WHERE reason_code IS NULL AND reason LIKE 'Daily limit%'"
+        )
+    )
+    op.execute(
+        sa.text(
+            "UPDATE tap_events "
+            "SET reason_code = 'auto_switch' "
+            "WHERE reason_code IS NULL AND reason = 'auto_switch'"
+        )
+    )
 
 
 def downgrade():
