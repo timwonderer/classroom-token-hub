@@ -971,6 +971,7 @@ class StoreItem(db.Model):
     # Collective goal settings (only for item_type='collective')
     collective_goal_type = db.Column(db.String(20), nullable=True)  # 'fixed' or 'whole_class'
     collective_goal_target = db.Column(db.Integer, nullable=True)  # Fixed number of purchases needed (used when type='fixed')
+    collective_goal_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)  # Optional deadline; unmet goals are auto-refunded on expiration
 
     # Redemption prompt (for delayed use items)
     redemption_prompt = db.Column(db.Text, nullable=True)  # Optional prompt shown to students when redeeming delayed items
@@ -1035,6 +1036,8 @@ class StudentItem(db.Model):
     status = db.Column(db.String(20), default='purchased', nullable=False)
     redemption_details = db.Column(db.Text, nullable=True) # For student notes on usage
     redemption_date = db.Column(db.DateTime(timezone=True), nullable=True) # When student used it
+    # Stable link to the purchase transaction for accurate refunds even if item metadata changes.
+    purchase_transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True, index=True)
 
     # Bundle tracking - for items purchased as part of a bundle
     is_from_bundle = db.Column(db.Boolean, default=False, nullable=False)
@@ -1225,6 +1228,7 @@ class InsurancePolicy(db.Model):
     __tablename__ = 'insurance_policies'
     id = db.Column(db.Integer, primary_key=True)
     policy_code = db.Column(db.String(16), unique=True, nullable=False, index=True)  # Unique code per teacher's policy
+    version_number = db.Column(db.Integer, nullable=False, default=1)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)  # Owner teacher
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
@@ -1303,6 +1307,18 @@ class InsurancePolicy(db.Model):
         return self.claim_type != 'non_monetary'
 
 
+@sa.event.listens_for(InsurancePolicy, "before_update")
+def _increment_insurance_policy_version(_mapper, _connection, target):
+    """Bump template version whenever mutable policy fields are edited."""
+    state = sa.inspect(target)
+    changed_fields = {attr.key for attr in state.attrs if attr.history.has_changes()}
+    if not changed_fields:
+        return
+    if changed_fields.issubset({"updated_at", "version_number"}):
+        return
+    target.version_number = (target.version_number or 1) + 1
+
+
 class InsurancePolicyBlock(db.Model):
     """Association model for insurance policy block visibility."""
     __tablename__ = 'insurance_policy_blocks'
@@ -1325,7 +1341,7 @@ class StudentInsurance(db.Model):
     # Each insurance enrollment should be scoped to the specific class/period
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
-    status = db.Column(db.String(20), default='active')  # active, cancelled, suspended
+    status = db.Column(db.String(20), default='active')  # active, cancelled, suspended, expired
     purchase_date = db.Column(db.DateTime(timezone=True), default=utc_now)
     cancel_date = db.Column(db.DateTime(timezone=True), nullable=True)
     last_payment_date = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -1336,9 +1352,87 @@ class StudentInsurance(db.Model):
     payment_current = db.Column(db.Boolean, default=True)
     days_unpaid = db.Column(db.Integer, default=0)
 
+    # Immutable snapshot of the policy terms at purchase time.
+    frozen_policy_title = db.Column(db.String(100), nullable=True)
+    frozen_policy_description = db.Column(db.Text, nullable=True)
+    frozen_max_claim_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+    frozen_max_payout_per_period = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+    frozen_max_claims_count = db.Column(db.Integer, nullable=True)
+    frozen_max_claims_period = db.Column(db.String(20), nullable=True)
+    frozen_claim_time_limit_days = db.Column(db.Integer, nullable=True)
+    policy_version = db.Column(db.Integer, nullable=True)
+
     # Relationships
     student = db.relationship('Student', backref='insurance_policies')
     claims = db.relationship('InsuranceClaim', backref='student_policy', lazy='dynamic')
+
+    def freeze_policy_snapshot(self, policy):
+        """Copy mutable template values into this enrollment's immutable contract snapshot."""
+        self.frozen_policy_title = policy.title
+        self.frozen_policy_description = policy.description
+        self.frozen_max_claim_amount = policy.max_claim_amount
+        self.frozen_max_payout_per_period = policy.max_payout_per_period
+        self.frozen_max_claims_count = policy.max_claims_count
+        self.frozen_max_claims_period = policy.max_claims_period
+        self.frozen_claim_time_limit_days = policy.claim_time_limit_days
+        self.policy_version = policy.version_number or 1
+
+    def build_renewed_enrollment(self, policy):
+        """Create a new enrollment row with a fresh snapshot for the next coverage period."""
+        renewal = StudentInsurance(
+            student_id=self.student_id,
+            policy_id=policy.id,
+            join_code=self.join_code,
+            status='active',
+            purchase_date=utc_now(),
+            last_payment_date=utc_now(),
+            next_payment_due=utc_now() + timedelta(days=30),
+            coverage_start_date=utc_now() + timedelta(days=policy.waiting_period_days),
+            payment_current=True,
+            days_unpaid=0,
+        )
+        renewal.freeze_policy_snapshot(policy)
+        return renewal
+
+    @property
+    def contract_title(self):
+        return self.frozen_policy_title or (self.policy.title if self.policy else "")
+
+    @property
+    def contract_description(self):
+        return self.frozen_policy_description if self.frozen_policy_description is not None else (
+            self.policy.description if self.policy else None
+        )
+
+    @property
+    def contract_max_claim_amount(self):
+        return self.frozen_max_claim_amount if self.frozen_max_claim_amount is not None else (
+            self.policy.max_claim_amount if self.policy else None
+        )
+
+    @property
+    def contract_max_payout_per_period(self):
+        return self.frozen_max_payout_per_period if self.frozen_max_payout_per_period is not None else (
+            self.policy.max_payout_per_period if self.policy else None
+        )
+
+    @property
+    def contract_max_claims_count(self):
+        return self.frozen_max_claims_count if self.frozen_max_claims_count is not None else (
+            self.policy.max_claims_count if self.policy else None
+        )
+
+    @property
+    def contract_max_claims_period(self):
+        return self.frozen_max_claims_period if self.frozen_max_claims_period else (
+            self.policy.max_claims_period if self.policy else "month"
+        )
+
+    @property
+    def contract_claim_time_limit_days(self):
+        return self.frozen_claim_time_limit_days if self.frozen_claim_time_limit_days is not None else (
+            self.policy.claim_time_limit_days if self.policy else None
+        )
 
 
 class InsuranceClaim(db.Model):

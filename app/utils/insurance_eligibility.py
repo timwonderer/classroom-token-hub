@@ -143,9 +143,12 @@ def _is_rent_perk_or_privilege_purchase(tx: Transaction) -> bool:
 def evaluate_claim_transaction_eligibility(
     tx: Transaction,
     *,
-    policy,
     enrollment,
     now_utc: datetime,
+    claim_type: Optional[str] = None,
+    claim_time_limit_days: Optional[int] = None,
+    policy_id: Optional[int] = None,
+    enrollment_join_code: Optional[str] = None,
     claimed_tx_ids: Optional[Set[int]] = None,
     reimbursed_tx_ids: Optional[Set[int]] = None,
 ) -> Tuple[bool, Optional[str]]:
@@ -153,7 +156,7 @@ def evaluate_claim_transaction_eligibility(
     if not tx or tx.id is None:
         return False, CLAIM_REASON_UNCLASSIFIED_TRANSACTION
 
-    if not policy or policy.claim_type != "transaction_monetary":
+    if claim_type != "transaction_monetary":
         return False, CLAIM_REASON_UNCLASSIFIED_TRANSACTION
 
     if not enrollment or enrollment.status != "active":
@@ -189,12 +192,12 @@ def evaluate_claim_transaction_eligibility(
     tx_ts = ensure_utc(tx.timestamp) if tx.timestamp else None
     if tx_ts is None:
         return False, CLAIM_REASON_UNCLASSIFIED_TRANSACTION
-    claim_time_limit_days = int(policy.claim_time_limit_days) if policy.claim_time_limit_days is not None else None
-    if claim_time_limit_days is not None and claim_time_limit_days > 0:
-        if (now_utc - tx_ts).days > claim_time_limit_days:
+    effective_time_limit = int(claim_time_limit_days) if claim_time_limit_days is not None else None
+    if effective_time_limit is not None and effective_time_limit > 0:
+        if (now_utc - tx_ts).days > effective_time_limit:
             return False, CLAIM_REASON_TIME_LIMIT_EXCEEDED
 
-    if policy.teacher_id and tx.teacher_id != policy.teacher_id:
+    if enrollment_join_code and tx.join_code != enrollment_join_code:
         return False, CLAIM_REASON_UNCLASSIFIED_TRANSACTION
 
     if claimed_tx_ids is None:
@@ -205,10 +208,12 @@ def evaluate_claim_transaction_eligibility(
         return False, CLAIM_REASON_ALREADY_CLAIMED
 
     if reimbursed_tx_ids is None:
+        if policy_id is None:
+            return False, CLAIM_REASON_UNCLASSIFIED_TRANSACTION
         existing_reimbursement = Transaction.query.filter(
             Transaction.type == "insurance_reimbursement",
             Transaction.original_transaction_id == tx.id,
-            Transaction.policy_id == policy.id,
+            Transaction.policy_id == policy_id,
             Transaction.is_void.is_(False),
         ).first()
         if existing_reimbursement:

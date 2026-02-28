@@ -32,13 +32,13 @@
           <dd class="col-sm-8">{{ claim.student.full_name }}</dd>
 
           <dt class="col-sm-4">Insurance Policy:</dt>
-          <dd class="col-sm-8">{{ claim.policy.title }}</dd>
+          <dd class="col-sm-8">{{ contract_title }}</dd>
 
           <dt class="col-sm-4">Claim Type:</dt>
           <dd class="col-sm-8">
-            {% if claim.policy.claim_type == 'transaction_monetary' %}
+            {% if claim_type == 'transaction_monetary' %}
               <span class="badge bg-info">[TXN] Transaction-based</span>
-            {% elif claim.policy.claim_type == 'non_monetary' %}
+            {% elif claim_type == 'non_monetary' %}
               <span class="badge bg-warning text-dark">[NON-MONETARY]</span>
             {% else %}
               <span class="badge bg-primary">[CUSTOM]</span>
@@ -125,9 +125,9 @@
       </div>
       <div class="card-body">
         <p><strong>Claim Type:</strong><br>
-          {% if claim.policy.claim_type == 'transaction_monetary' %}
+          {% if claim_type == 'transaction_monetary' %}
             <span class="badge bg-info">[TXN] Transaction-based</span>
-          {% elif claim.policy.claim_type == 'non_monetary' %}
+          {% elif claim_type == 'non_monetary' %}
             <span class="badge bg-warning text-dark">[NON-MONETARY]</span>
           {% else %}
             <span class="badge bg-primary">[CUSTOM]</span>
@@ -147,20 +147,20 @@
         </p>
 
         <p><strong>Claim Time Limit:</strong><br>
-          {{ claim.policy.claim_time_limit_days }} days from incident
+          {{ contract_claim_time_limit_days }} days from incident
         </p>
 
         <p><strong>Max Claim Amount:</strong><br>
-          {% if claim.policy.max_claim_amount %}
-            ${{ "%.2f"|format(claim.policy.max_claim_amount) }}
+          {% if contract_max_claim_amount %}
+            ${{ "%.2f"|format(contract_max_claim_amount) }}
           {% else %}
             Unlimited
           {% endif %}
         </p>
 
         <p><strong>Max Claims:</strong><br>
-          {% if claim.policy.max_claims_count %}
-            {{ claim.policy.max_claims_count }} per {{ claim.policy.max_claims_period }}
+          {% if contract_max_claims_count %}
+            {{ contract_max_claims_count }} per {{ contract_max_claims_period }}
           {% else %}
             Unlimited
           {% endif %}
@@ -174,9 +174,9 @@
           {% endif %}
         </p>
 
-        {% if remaining_period_cap is not none and claim.policy.max_payout_per_period %}
+        {% if remaining_period_cap is not none and contract_max_payout_per_period %}
           <p><strong>Remaining Period Cap:</strong><br>
-            ${{ '%.2f'|format(remaining_period_cap) }} left this {{ claim.policy.max_claims_period }}
+            ${{ '%.2f'|format(remaining_period_cap) }} left this {{ contract_max_claims_period }}
           </p>
         {% endif %}
 
@@ -206,9 +206,9 @@
           <li>Paid: {{ claims_stats.paid }} claims</li>
         </ul>
 
-        {% if claim.policy.max_claims_count %}
+        {% if contract_max_claims_count %}
           <p class="text-muted small">
-            Used {{ claims_stats.approved + claims_stats.paid }} of {{ claim.policy.max_claims_count }} claims this {{ claim.policy.max_claims_period }}
+            Used {{ claims_stats.approved + claims_stats.paid }} of {{ contract_max_claims_count }} claims this {{ contract_max_claims_period }}
           </p>
         {% endif %}
       </div>
@@ -230,7 +230,7 @@
           {{ form.status.label(class="form-label") }}
           {{ form.status(class="form-select") }}
         </div>
-        {% if claim.policy.claim_type == 'legacy_monetary' %}
+        {% if claim_type == 'legacy_monetary' %}
           <div class="col-md-6 mb-3">
             {{ form.approved_amount.label(class="form-label") }}
             <div class="input-group">
@@ -239,7 +239,7 @@
             </div>
             <small class="text-muted">Leave blank to use requested amount</small>
           </div>
-        {% elif claim.policy.claim_type == 'transaction_monetary' %}
+        {% elif claim_type == 'transaction_monetary' %}
           <div class="col-md-6 mb-3">
             <label class="form-label">Approved Amount</label>
             <input type="text" class="form-control" value="Auto-calculated from the linked transaction" disabled>
