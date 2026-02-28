@@ -345,6 +345,88 @@ class TestDecimalTypeErrors:
         # Interest should have been calculated (may or may not be > 0 depending on settings)
         assert interest_tx is not None or student.savings_balance == Decimal('100.00')
 
+    @pytest.mark.regression
+    def test_file_claim_period_cap_no_prior_payouts_no_type_error(self, client, app):
+        """
+        Regression test for TypeError in file_claim when max_payout_per_period is set
+        and there are zero prior approved_amount rows in the current period.
+
+        Bug: In student.py:
+            period_payouts = db.session.query(func.sum(...)).scalar() or 0.0
+            remaining_period_cap = max(policy.max_payout_per_period - period_payouts, 0)
+            # TypeError: unsupported operand type(s) for -: 'decimal.Decimal' and 'float'
+
+        Fix: Use Decimal('0.00') as the fallback when scalar() returns None.
+        """
+        from app.models import (
+            Admin, Student, StudentTeacher, InsurancePolicy, StudentInsurance,
+        )
+
+        # Create teacher
+        teacher = Admin(username='teacher_claim_cap', totp_secret='test_secret')
+        db.session.add(teacher)
+        db.session.flush()
+
+        # Create student
+        student = Student(
+            first_name='ClaimCap',
+            last_initial='T',
+            block='A',
+            salt=b'test_salt_cap',
+            passphrase_hash='test_hash',
+        )
+        db.session.add(student)
+        db.session.flush()
+
+        # Associate student with teacher
+        st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+        db.session.add(st)
+        db.session.flush()
+
+        # Create policy with max_payout_per_period set (triggers the Decimal path)
+        policy = InsurancePolicy(
+            policy_code='CAP-POLICY-001',
+            teacher_id=teacher.id,
+            title='Cap Test Policy',
+            description='',
+            premium=Decimal('5.00'),
+            claim_type='legacy_monetary',
+            is_monetary=True,
+            is_active=True,
+            waiting_period_days=0,
+            claim_time_limit_days=30,
+            max_payout_per_period=Decimal('100.00'),
+        )
+        db.session.add(policy)
+        db.session.flush()
+
+        # Enroll student (active, payment current, coverage started)
+        enrollment = StudentInsurance(
+            student_id=student.id,
+            policy_id=policy.id,
+            status='active',
+            coverage_start_date=datetime.now(timezone.utc) - timedelta(days=5),
+            payment_current=True,
+        )
+        db.session.add(enrollment)
+        db.session.commit()
+
+        # Log in as student
+        with client.session_transaction() as sess:
+            sess['student_id'] = student.id
+            sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+        # GET the file_claim route — must not raise TypeError
+        # (no prior InsuranceClaim rows exist, so scalar() returns None)
+        response = client.get(
+            f'/student/insurance/claim/{policy.id}',
+        )
+
+        assert response.status_code == 200, (
+            f"Expected 200 but got {response.status_code}; "
+            "possible Decimal/float TypeError in period-cap calculation"
+        )
+
     def test_quantize_currency_handles_invalid_inputs(self, app):
         """
         Test that _quantize_currency handles edge cases that could cause InvalidOperation.
