@@ -2884,11 +2884,13 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
     return valid_payments
 
 
-def _is_coverage_period_paid(settings, valid_payments, coverage_due_date):
+def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, include_late_fee=True):
     """
     Return True when a coverage period is fully paid.
 
-    Late fee is required only when rent was not fully paid by grace.
+    When include_late_fee is True (default), late fee is required when rent
+    was not fully paid by grace. When False, this checks base-rent coverage
+    only (used by hall-pass perk restoration).
     """
     if not settings or not coverage_due_date:
         return False
@@ -2902,20 +2904,30 @@ def _is_coverage_period_paid(settings, valid_payments, coverage_due_date):
     paid_by_grace = _total_paid_by_grace(valid_payments, grace_for_coverage)
 
     required_total = settings.rent_amount
-    if paid_by_grace < settings.rent_amount:
+    if include_late_fee and paid_by_grace < settings.rent_amount:
         required_total += settings.late_fee
 
     return total_paid >= required_total
 
 
-def _is_student_coverage_period_paid(settings, student_id, period, join_code, coverage_due_date):
+def _is_student_coverage_period_paid(
+    settings,
+    student_id,
+    period,
+    join_code,
+    coverage_due_date,
+    include_late_fee=True,
+):
     """Return True when a student's specific coverage period is fully paid."""
     if not settings or not coverage_due_date or not join_code:
+        return False
+    normalized_period = (period or '').strip().upper()
+    if not normalized_period:
         return False
 
     coverage_payments = RentPayment.query.filter(
         RentPayment.student_id == student_id,
-        RentPayment.period == period,
+        db.func.upper(db.func.trim(RentPayment.period)) == normalized_period,
         RentPayment.coverage_month == coverage_due_date.month,
         RentPayment.coverage_year == coverage_due_date.year,
         RentPayment.join_code == join_code,
@@ -2926,7 +2938,12 @@ def _is_student_coverage_period_paid(settings, student_id, period, join_code, co
         student_id,
         join_code
     )
-    return _is_coverage_period_paid(settings, valid_payments, coverage_due_date)
+    return _is_coverage_period_paid(
+        settings,
+        valid_payments,
+        coverage_due_date,
+        include_late_fee=include_late_fee,
+    )
 
 
 def _calculate_rent_coverage_due_date(settings, reference_date=None):
@@ -2996,6 +3013,7 @@ def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
         current_block,
         join_code,
         coverage_due_date,
+        include_late_fee=False,
     )
 
     from app.models import RentItem, StudentBlock
@@ -3234,7 +3252,7 @@ def rent_pay(period):
 
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
-    current_block = (context.get('block') or '').upper()
+    current_block = (context.get('block') or '').strip().upper()
     settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
@@ -3246,7 +3264,7 @@ def rent_pay(period):
         return redirect(url_for('student.dashboard'))
 
     # Validate period for the current class context only
-    period = period.upper()
+    period = (period or '').strip().upper()
     student_blocks = [current_block]
     if period != current_block:
         flash("Invalid period.", "error")
