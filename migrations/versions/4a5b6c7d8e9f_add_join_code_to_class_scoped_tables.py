@@ -88,7 +88,6 @@ def upgrade():
         'payroll_rewards',
         'payroll_settings',
         'recovery_requests',
-        'redemption_audit_logs',
         'rent_items',
         'rent_settings',
         'rent_waivers',
@@ -165,22 +164,6 @@ def upgrade():
                     SELECT si.join_code
                     FROM student_insurance si
                     WHERE si.id = insurance_claims.student_insurance_id
-                    LIMIT 1
-                )
-                WHERE join_code IS NULL
-                """
-            )
-        )
-
-    if table_exists('redemption_audit_logs') and table_exists('student_items'):
-        op.execute(
-            sa.text(
-                """
-                UPDATE redemption_audit_logs
-                SET join_code = (
-                    SELECT si.join_code
-                    FROM student_items si
-                    WHERE si.id = redemption_audit_logs.student_item_id
                     LIMIT 1
                 )
                 WHERE join_code IS NULL
@@ -332,7 +315,6 @@ def downgrade():
         'rent_waivers',
         'rent_settings',
         'rent_items',
-        'redemption_audit_logs',
         'recovery_requests',
         'payroll_settings',
         'payroll_rewards',
