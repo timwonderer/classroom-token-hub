@@ -21,7 +21,7 @@ from werkzeug.security import check_password_hash
 from app.extensions import db, limiter
 from app.models import (
     Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
-    HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
+    TapEventReasonCode, HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
     StudentTeacher, TeacherBlock, StudentBlock, DemoStudent, StoreItemBlock,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource
 )
@@ -1867,7 +1867,13 @@ def attendance_history():
         duplicate_tap = aliased(TapEvent)
         query = query.filter(~sa.and_(
             TapEvent.status == 'inactive',
-            TapEvent.reason.like('Daily limit%'),
+            or_(
+                TapEvent.reason_code == TapEventReasonCode.DAILY_LIMIT,
+                sa.and_(
+                    TapEvent.reason_code.is_(None),
+                    TapEvent.reason.like('Daily limit%')
+                )
+            ),
             sa.exists(
                 sa.select(1).where(
                     sa.and_(
@@ -2630,7 +2636,14 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                         TapEvent.status == "inactive",
                         TapEvent.timestamp >= start_of_day_utc,
                         TapEvent.timestamp < end_of_day_utc,
-                        TapEvent.reason.like(f"Daily limit%"),  # Matches "Daily limit (X.Xh) reached"
+                        or_(
+                            TapEvent.reason_code == TapEventReasonCode.DAILY_LIMIT,
+                            # Backward-compatible fallback: legacy rows may have NULL reason_code
+                            sa.and_(
+                                TapEvent.reason_code.is_(None),
+                                TapEvent.reason.ilike("Daily limit%")
+                            ),
+                        ),
                         TapEvent.is_deleted == False
                     ).first()
 
@@ -2657,6 +2670,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                         status="inactive",
                         timestamp=tapout_timestamp,
                         reason=f"Daily limit ({hours_limit:.1f}h) reached",
+                        reason_code=TapEventReasonCode.DAILY_LIMIT,
                         join_code=join_code
                     )
                     db.session.add(tap_out_event)

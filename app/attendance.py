@@ -468,7 +468,7 @@ def batch_auto_tapout_students(admin_id):
     Optimized version of auto-tapout that processes all students for an admin in batch.
     Returns the count of students tapped out.
     """
-    from app.models import Student, TapEvent, StudentBlock, PayrollSettings, StudentTeacher, TeacherBlock
+    from app.models import Student, TapEvent, TapEventReasonCode, StudentBlock, PayrollSettings, StudentTeacher, TeacherBlock
     from app.extensions import db
     import pytz
 
@@ -585,6 +585,7 @@ def batch_auto_tapout_students(admin_id):
                         status='inactive',
                         timestamp=tapout_ts,
                         reason=f"Daily limit ({hours_limit:.1f}h) reached",
+                        reason_code=TapEventReasonCode.DAILY_LIMIT,
                         join_code=join_code
                     )
                     db.session.add(new_event)
