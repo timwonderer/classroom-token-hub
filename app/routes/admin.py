@@ -6952,7 +6952,7 @@ def payroll():
             'unpaid_minutes': int(unpaid_minutes),
             'estimated_payout': estimated_payout,
             'last_payroll_date': last_payroll_map.get(student.id),
-            'total_earned': earnings_map.get(student.id, 0)
+            'total_earned': earnings_map.get(student.id, Decimal('0.00'))
         })
 
     # Get rewards and fines for this teacher
