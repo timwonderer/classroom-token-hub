@@ -2919,10 +2919,13 @@ def _is_student_coverage_period_paid(
     """Return True when a student's specific coverage period is fully paid."""
     if not settings or not coverage_due_date or not join_code:
         return False
+    normalized_period = (period or '').strip().upper()
+    if not normalized_period:
+        return False
 
     coverage_payments = RentPayment.query.filter(
         RentPayment.student_id == student_id,
-        RentPayment.period == period,
+        db.func.upper(db.func.trim(RentPayment.period)) == normalized_period,
         RentPayment.coverage_month == coverage_due_date.month,
         RentPayment.coverage_year == coverage_due_date.year,
         RentPayment.join_code == join_code,
@@ -3247,7 +3250,7 @@ def rent_pay(period):
 
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
-    current_block = (context.get('block') or '').upper()
+    current_block = (context.get('block') or '').strip().upper()
     settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
@@ -3259,7 +3262,7 @@ def rent_pay(period):
         return redirect(url_for('student.dashboard'))
 
     # Validate period for the current class context only
-    period = period.upper()
+    period = (period or '').strip().upper()
     student_blocks = [current_block]
     if period != current_block:
         flash("Invalid period.", "error")

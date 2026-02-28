@@ -588,6 +588,79 @@ def test_hall_pass_top_off_restores_after_base_rent_paid_even_with_late_fee_due(
     assert sb.rent_hall_passes == 3
 
 
+def test_hall_pass_top_off_accepts_legacy_whitespace_period_values(client, teacher_admin, student_in_class):
+    """Top-off should still detect paid coverage when legacy RentPayment.period contains trailing whitespace."""
+    from app.routes.student import _ensure_rent_hall_pass_top_off
+
+    student = student_in_class
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    db.session.add(RentItem(
+        rent_setting_id=settings.id,
+        name='Hall Pass Grant',
+        rent_item_type='hall_pass',
+        hall_pass_count=3,
+    ))
+
+    sb = StudentBlock.query.filter_by(student_id=student.id, period='A').first()
+    if not sb:
+        sb = StudentBlock(student_id=student.id, period='A', join_code='JOINCODE123')
+        db.session.add(sb)
+        db.session.flush()
+    sb.rent_hall_passes = 0
+    student.hall_passes = 0
+    db.session.commit()
+
+    context = {'join_code': 'JOINCODE123', 'teacher_id': teacher_admin.id, 'block': 'A'}
+    fixed_now = datetime(2026, 2, 10, 12, 0, tzinfo=timezone.utc)
+
+    # Legacy/dirty data path: period stored as 'A '.
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A ',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=fixed_now.month,
+        period_year=fixed_now.year,
+        coverage_month=fixed_now.month,
+        coverage_year=fixed_now.year,
+        payment_date=fixed_now,
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent paid with legacy period whitespace',
+        timestamp=fixed_now,
+    ))
+    db.session.commit()
+
+    awarded, revoked, changed = _ensure_rent_hall_pass_top_off(
+        student,
+        context,
+        settings=settings,
+        now=fixed_now + timedelta(minutes=1),
+    )
+    assert changed is True
+    assert awarded == 3
+    assert revoked == 0
+
+
 def test_mid_period_lock_blocks_semantic_changes(client, teacher_admin):
     """Test that semantic fields are locked when students have paid rent for current period."""
     with client.session_transaction() as sess:
