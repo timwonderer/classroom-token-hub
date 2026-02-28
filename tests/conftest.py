@@ -25,6 +25,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import pytest
 from sqlalchemy import event, text
 from app import app as flask_app, db, Student
+from app.extensions import limiter
 
 
 def _set_sqlite_pragma(dbapi_connection, connection_record):
@@ -46,6 +47,7 @@ def app():
         SQLALCHEMY_DATABASE_URI=test_db_url,
         ENV="testing",
         SESSION_COOKIE_SECURE=False,
+        RATELIMIT_ENABLED=False,
     )
     
     # Ensure strict separation - if connection fails, test fails
@@ -67,11 +69,13 @@ def client(app):
     
     # Create all tables for the test
     db.create_all()
+    limiter.reset()
     
     client = flask_app.test_client()
     yield client
     
     # Teardown: Drop all tables after test
+    limiter.reset()
     db.session.remove()
     db.drop_all()
     ctx.pop()

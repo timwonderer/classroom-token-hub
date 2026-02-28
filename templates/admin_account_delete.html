@@ -7,18 +7,21 @@
         <div class="col-lg-8 offset-lg-2">
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0">Delete Account</h5>
+                    <h5 class="mb-0">Delete your Classroom Token Hub Account</h5>
                 </div>
                 <div class="card-body">
-                    <div class="alert alert-warning">
-                        <strong>THIS ACTION IS IRREVERSIBLE. THERE IS NO ROLL-BACK.</strong> 
-                        <ul class="mb-0 mt-2">
-                            <li><strong>THIS ACTION WILL DELETE ALL CLASSES THAT ARE CREATED BY YOU</strong></li>
-                            <li><strong>THIS ACTION WILL REMOVE ALL RECORDS ASSOCIATED WITH YOUR ACCOUNT, CLASSES, AND STUDENT ACTION UNDER YOUR JOIN CODES</strong></li>
-                            <li><strong>THIS ACTION WILL DELETE ANY STUDENTS LINKED TO YOUR CLASSES BY JOIN CODE THAT ARE NOT LINKED TO ANOTHER JOIN CODE WITH ANOTHER TEACHER</strong></li>
-                            <li><strong>THIS ACTION IS PERMANENT, FINAL, AND CANNOT BE UNDONE ONCE INITIATED</strong></li>
-                        </ul>
+                    <div class="alert alert-danger">
+                        <strong>YOU ARE ABOUT TO PERFORM AN IRREVERSIBLE ACTION. PLEASE READ CAREFULLY</strong> 
                     </div>
+                    <p>Classroom Token Hub was designed to collect and keep minimal amount of personal information. Because of this, the app is designed to completely delete all data associated with you and your classes. There is no global ledger or archive for user data. When a class is removed from your account, all student, transaction history, purchase history, and other information associated with that class by join code are also deleted.</p>
+                    <ul>
+                        <li>All classes associated your account by join code will be deleted.</li>
+                        <li>All students in those classes will be deleted.</li>
+                        <li>All transaction and purchase history associated with those classes will be deleted.</li>
+                        <li>If your students are not linked to another teacher by join code, their account will also be deleted.</li>
+                        <li>Once confirmed, the deletion process starts immediately.</li>
+                        <li>This action is permanent, irreversible, and unrecoverable.</li>
+                    </ul>
 
                     <form method="POST" action="{{ url_for('admin.deletion_requests') }}" id="deletion-request-form" data-admin-username="{{ admin_username }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -45,12 +48,13 @@
                         </div>
                         <div class="modal-body">
                             <p class="mb-2" id="timed-delete-gate-warning"></p>
-                            <p class="fw-bold text-danger mb-2">You are performing an irreversible action.</p>
-                            <p class="fw-bold text-danger mb-2">Any log entries associated with your account by join code will be destroyed.</p>
-                            <p class="fw-bold text-danger mb-2">Recovery of your account is not possible.</p>
-                            <p class="fw-bold text-danger mb-2">Any student account that is not linked to another teacher by join code will be deleted as well.</p>
-                            <p class="fw-bold text-danger mb-2">Classroom Token Hub does not maintain universal logs or audit records.</p>
-
+                            <ul>
+                            <li class="fw-bold text-danger mb-2">You are performing an irreversible action.</li>
+                            <li class="fw-bold text-danger mb-2">Any log entries associated with your account by join code will be destroyed.</li>
+                            <li class="fw-bold text-danger mb-2">Recovery of your account is not possible.</li>
+                            <li class="fw-bold text-danger mb-2">Any student account that is not linked to another teacher by join code will be deleted as well.</li>
+                            <li class="fw-bold text-danger mb-2">Classroom Token Hub does not maintain universal logs or audit records.</li>
+                            </ul>
                             <div class="mb-3">
                                 <div class="small fw-semibold" id="timed-delete-countdown-text">ARE YOU SURE YOU WANT TO COMPLETE THIS ACTION? 30s remaining</div>
                                 <div class="progress mt-2" role="progressbar" aria-label="Delete countdown">
@@ -63,7 +67,7 @@
                             <div class="small text-muted mb-3" id="timed-delete-phrase-hint"></div>
 
                             <button type="button" class="btn btn-danger w-100" id="timed-delete-hold-btn" disabled>
-                                To proceed with account deletion, click and hold the button for 10 seconds. Any interruption will reset the timer.
+                                Click and Hold this Button to Confirm Account Deletion
                             </button>
                             <div class="small text-muted mt-2" id="timed-delete-hold-status">
                                 The delete button will be enabled after you enter the correct confirmation phrase.
