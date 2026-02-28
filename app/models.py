@@ -67,6 +67,12 @@ def _current_utc_year():
 
 # -------------------- ENUMS --------------------
 
+class TapEventReasonCode(str, enum.Enum):
+    """Reason codes for TapEvent records, enabling programmatic identification without string matching."""
+    DAILY_LIMIT = 'daily_limit'
+    AUTO_SWITCH = 'auto_switch'
+
+
 class TransactionStatus(str, enum.Enum):
     PENDING = 'pending'
     POSTED = 'posted'
@@ -845,6 +851,7 @@ class TapEvent(db.Model):
     # All times stored as UTC (see header note)
     timestamp = db.Column(db.DateTime(timezone=True), default=utc_now)
     reason = db.Column(db.String(50), nullable=True)
+    reason_code = db.Column(db.Enum(TapEventReasonCode, values_callable=lambda x: [e.value for e in x]), nullable=True, index=True)
 
     # Flag to indicate if this event was deleted by a teacher
     is_deleted = db.Column(db.Boolean, default=False, nullable=False, index=True)

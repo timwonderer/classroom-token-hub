@@ -4,7 +4,7 @@ Tests for the /api/attendance/history endpoint to ensure it returns attendance r
 import pytest
 from datetime import datetime, timezone, timedelta
 from app import app, db
-from app.models import Admin, Student, TapEvent, StudentTeacher
+from app.models import Admin, Student, TapEvent, TapEventReasonCode, StudentTeacher
 from app.hash_utils import hash_username, get_random_salt
 from werkzeug.security import generate_password_hash
 
@@ -265,6 +265,7 @@ def test_attendance_history_dedupes_duplicate_daily_limit_tapouts(client, admin_
         status='inactive',
         timestamp=duplicate_ts,
         reason=reason,
+        reason_code=TapEventReasonCode.DAILY_LIMIT,
         join_code='TEST123'
     ))
     db.session.add(TapEvent(
@@ -273,6 +274,7 @@ def test_attendance_history_dedupes_duplicate_daily_limit_tapouts(client, admin_
         status='inactive',
         timestamp=duplicate_ts,
         reason=reason,
+        reason_code=TapEventReasonCode.DAILY_LIMIT,
         join_code='TEST123'
     ))
     db.session.commit()
