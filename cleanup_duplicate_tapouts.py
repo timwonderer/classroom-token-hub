@@ -14,7 +14,7 @@ Usage:
 import argparse
 from datetime import datetime
 from app import create_app, db
-from app.models import TapEvent
+from app.models import TapEvent, TapEventReasonCode
 
 
 def find_duplicate_tapouts(student_id=None):
@@ -25,7 +25,7 @@ def find_duplicate_tapouts(student_id=None):
     """
     query = TapEvent.query.filter(
         TapEvent.status == "inactive",
-        TapEvent.reason.like("Daily limit%"),
+        TapEvent.reason_code == TapEventReasonCode.DAILY_LIMIT,
         TapEvent.is_deleted == False
     )
 
