@@ -245,7 +245,6 @@ def upgrade():
             sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
             sa.ForeignKeyConstraint(['teacher_id'], ['admins.id'], ondelete='CASCADE'),
             sa.PrimaryKeyConstraint('join_code_id'),
-            sa.UniqueConstraint('teacher_id', 'join_code_token', name='uq_join_codes_teacher_join_code_token'),
         )
 
     if not index_exists('join_codes', 'ix_join_codes_join_code_token'):

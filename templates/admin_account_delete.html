@@ -13,17 +13,15 @@
                     <div class="alert alert-danger">
                         <strong>YOU ARE ABOUT TO PERFORM AN IRREVERSIBLE ACTION. PLEASE READ CAREFULLY</strong> 
                     </div>
-                        <p>Classroom Token Hub was designed to collect and keep minimal amount of personal information. Because of this, the app is designed to completely delete all data associated with you and your classes. There is no global ledge or archive for user data. When a class is removed from your account, all student, transaction history, purchase history, and other information associated with that class by join code are also deleted. </p>
-                        <ul>
-                            <li>All classes associated your account by join code will be deleted.</li>
-                            <li>All students in those classes will be deleted.</li>
-                            <li>All transaction and purchase history associated with those classes will be deleted.</li>
-                            <li>If your students are not linked to antoher teacher by join code, their account will also be deleted.</li>
-                            <li>Once confirmed, the deletion process starts immediately.
-                            <li>This action is permanent, irreversible, and unrecoverable.</li>
-
-                    </div>
-                    </div>
+                    <p>Classroom Token Hub was designed to collect and keep minimal amount of personal information. Because of this, the app is designed to completely delete all data associated with you and your classes. There is no global ledger or archive for user data. When a class is removed from your account, all student, transaction history, purchase history, and other information associated with that class by join code are also deleted.</p>
+                    <ul>
+                        <li>All classes associated your account by join code will be deleted.</li>
+                        <li>All students in those classes will be deleted.</li>
+                        <li>All transaction and purchase history associated with those classes will be deleted.</li>
+                        <li>If your students are not linked to another teacher by join code, their account will also be deleted.</li>
+                        <li>Once confirmed, the deletion process starts immediately.</li>
+                        <li>This action is permanent, irreversible, and unrecoverable.</li>
+                    </ul>
 
                     <form method="POST" action="{{ url_for('admin.deletion_requests') }}" id="deletion-request-form" data-admin-username="{{ admin_username }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

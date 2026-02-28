@@ -188,10 +188,6 @@ class JoinCode(db.Model):
 
     teacher = db.relationship('Admin', backref=db.backref('join_codes', lazy='dynamic', passive_deletes=True))
 
-    __table_args__ = (
-        db.UniqueConstraint('teacher_id', 'join_code_token', name='uq_join_codes_teacher_join_code_token'),
-    )
-
 
 class TeacherBlock(db.Model):
     """
