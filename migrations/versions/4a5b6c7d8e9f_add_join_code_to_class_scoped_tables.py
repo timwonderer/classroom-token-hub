@@ -1,7 +1,7 @@
 """Add join_code to class-scoped tables
 
 Revision ID: 4a5b6c7d8e9f
-Revises: 3d54e2e343df
+Revises: b6c7d8e9f0a1
 Create Date: 2026-02-28 11:00:00.000000
 
 Adds `join_code` columns to teacher/student/class-scoped tables so class tenancy
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '4a5b6c7d8e9f'
-down_revision = '3d54e2e343df'
+down_revision = 'b6c7d8e9f0a1'
 branch_labels = None
 depends_on = None
 
