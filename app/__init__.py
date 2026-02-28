@@ -168,19 +168,24 @@ def create_app():
                 static_folder=_os.path.join(basedir, 'static'))
 
     # -------------------- CONFIGURATION --------------------
+    flask_env = os.environ["FLASK_ENV"]
+    dev_rate_limit_enabled = os.getenv("DEV_ENABLE_RATELIMIT", "").lower() in {"1", "true", "yes", "on"}
+
     app.config.from_mapping(
         DEBUG=False,
-        ENV=os.environ["FLASK_ENV"],
+        ENV=flask_env,
         SECRET_KEY=os.environ["SECRET_KEY"],
         SQLALCHEMY_DATABASE_URI=os.environ["DATABASE_URL"],
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
-        SESSION_COOKIE_SECURE=os.environ["FLASK_ENV"] == "production",  # Only require HTTPS in production
+        SESSION_COOKIE_SECURE=flask_env == "production",  # Only require HTTPS in production
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_PATH="/",
         TEMPLATES_AUTO_RELOAD=True,
         TURNSTILE_SITE_KEY=os.getenv("TURNSTILE_SITE_KEY"),
         TURNSTILE_SECRET_KEY=os.getenv("TURNSTILE_SECRET_KEY"),
+        # Dev ergonomics: disable limiter in local development unless explicitly re-enabled.
+        RATELIMIT_ENABLED=(flask_env != "development") or dev_rate_limit_enabled,
     )
 
     # Enable Jinja2 template hot reloading without server restart
