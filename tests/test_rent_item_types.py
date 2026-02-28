@@ -416,6 +416,257 @@ def test_hall_pass_consumption_decrements_rent_passes_first(client, teacher_admi
     assert sb.rent_hall_passes == 0  # Still 0, purchased pass consumed
 
 
+def test_unpaid_period_revokes_rent_hall_passes_and_payment_restores_immediately(client, teacher_admin, student_in_class):
+    """Unpaid students lose rent-granted hall passes for the new period; paying restores them immediately."""
+    from app.routes.student import _ensure_rent_hall_pass_top_off
+
+    student = student_in_class
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    db.session.add(RentItem(
+        rent_setting_id=settings.id,
+        name='Hall Pass Grant',
+        rent_item_type='hall_pass',
+        hall_pass_count=3,
+    ))
+
+    # Student starts new period with 3 rent-granted + 2 purchased passes.
+    sb = StudentBlock.query.filter_by(student_id=student.id, period='A').first()
+    if not sb:
+        sb = StudentBlock(student_id=student.id, period='A', join_code='JOINCODE123')
+        db.session.add(sb)
+        db.session.flush()
+    sb.rent_hall_passes = 3
+    student.hall_passes = 5
+    db.session.commit()
+
+    context = {'join_code': 'JOINCODE123', 'teacher_id': teacher_admin.id, 'block': 'A'}
+    fixed_now = datetime(2026, 2, 2, 12, 0, tzinfo=timezone.utc)  # New coverage period, unpaid
+
+    awarded, revoked, changed = _ensure_rent_hall_pass_top_off(student, context, settings=settings, now=fixed_now)
+    assert changed is True
+    assert awarded == 0
+    assert revoked == 3
+
+    db.session.commit()
+    db.session.refresh(student)
+    db.session.refresh(sb)
+    assert student.hall_passes == 2
+    assert sb.rent_hall_passes == 0
+
+    # Pay rent for current coverage period and reconcile again immediately.
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=fixed_now.month,
+        period_year=fixed_now.year,
+        coverage_month=fixed_now.month,
+        coverage_year=fixed_now.year,
+        payment_date=fixed_now,
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent for Period A',
+        timestamp=fixed_now,
+    ))
+    db.session.commit()
+
+    awarded, revoked, changed = _ensure_rent_hall_pass_top_off(
+        student,
+        context,
+        settings=settings,
+        now=fixed_now + timedelta(minutes=5),
+    )
+    assert changed is True
+    assert awarded == 3
+    assert revoked == 0
+
+    db.session.commit()
+    db.session.refresh(student)
+    db.session.refresh(sb)
+    assert student.hall_passes == 5
+    assert sb.rent_hall_passes == 3
+
+
+def test_hall_pass_top_off_restores_after_base_rent_paid_even_with_late_fee_due(client, teacher_admin, student_in_class):
+    """Hall-pass rent perk should restore once base rent is paid, even if late fee remains outstanding."""
+    from app.routes.student import _ensure_rent_hall_pass_top_off
+
+    student = student_in_class
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('2.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    db.session.add(RentItem(
+        rent_setting_id=settings.id,
+        name='Hall Pass Grant',
+        rent_item_type='hall_pass',
+        hall_pass_count=3,
+    ))
+
+    sb = StudentBlock.query.filter_by(student_id=student.id, period='A').first()
+    if not sb:
+        sb = StudentBlock(student_id=student.id, period='A', join_code='JOINCODE123')
+        db.session.add(sb)
+        db.session.flush()
+    sb.rent_hall_passes = 0
+    student.hall_passes = 2
+    db.session.commit()
+
+    context = {'join_code': 'JOINCODE123', 'teacher_id': teacher_admin.id, 'block': 'A'}
+    fixed_now = datetime(2026, 2, 10, 12, 0, tzinfo=timezone.utc)
+
+    # Student pays base rent only; late fee remains.
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=fixed_now.month,
+        period_year=fixed_now.year,
+        coverage_month=fixed_now.month,
+        coverage_year=fixed_now.year,
+        payment_date=fixed_now,
+        was_late=True,
+        late_fee_charged=Decimal('0.00'),
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Base rent paid; late fee outstanding',
+        timestamp=fixed_now,
+    ))
+    db.session.commit()
+
+    awarded, revoked, changed = _ensure_rent_hall_pass_top_off(
+        student,
+        context,
+        settings=settings,
+        now=fixed_now + timedelta(minutes=1),
+    )
+    assert changed is True
+    assert awarded == 3
+    assert revoked == 0
+
+    db.session.commit()
+    db.session.refresh(student)
+    db.session.refresh(sb)
+    assert student.hall_passes == 5
+    assert sb.rent_hall_passes == 3
+
+
+def test_hall_pass_top_off_accepts_legacy_whitespace_period_values(client, teacher_admin, student_in_class):
+    """Top-off should still detect paid coverage when legacy RentPayment.period contains trailing whitespace."""
+    from app.routes.student import _ensure_rent_hall_pass_top_off
+
+    student = student_in_class
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    db.session.add(RentItem(
+        rent_setting_id=settings.id,
+        name='Hall Pass Grant',
+        rent_item_type='hall_pass',
+        hall_pass_count=3,
+    ))
+
+    sb = StudentBlock.query.filter_by(student_id=student.id, period='A').first()
+    if not sb:
+        sb = StudentBlock(student_id=student.id, period='A', join_code='JOINCODE123')
+        db.session.add(sb)
+        db.session.flush()
+    sb.rent_hall_passes = 0
+    student.hall_passes = 0
+    db.session.commit()
+
+    context = {'join_code': 'JOINCODE123', 'teacher_id': teacher_admin.id, 'block': 'A'}
+    fixed_now = datetime(2026, 2, 10, 12, 0, tzinfo=timezone.utc)
+
+    # Legacy/dirty data path: period stored as 'A '.
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A ',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=fixed_now.month,
+        period_year=fixed_now.year,
+        coverage_month=fixed_now.month,
+        coverage_year=fixed_now.year,
+        payment_date=fixed_now,
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent paid with legacy period whitespace',
+        timestamp=fixed_now,
+    ))
+    db.session.commit()
+
+    awarded, revoked, changed = _ensure_rent_hall_pass_top_off(
+        student,
+        context,
+        settings=settings,
+        now=fixed_now + timedelta(minutes=1),
+    )
+    assert changed is True
+    assert awarded == 3
+    assert revoked == 0
+
+    db.session.commit()
+    db.session.refresh(student)
+    db.session.refresh(sb)
+    assert student.hall_passes == 3
+    assert sb.rent_hall_passes == 3
+
+
 def test_mid_period_lock_blocks_semantic_changes(client, teacher_admin):
     """Test that semantic fields are locked when students have paid rent for current period."""
     with client.session_transaction() as sess:
@@ -1120,6 +1371,144 @@ def test_api_allows_zero_cost_rent_linked_purchase_when_paid_without_per_use_map
 
     db.session.refresh(student)
     assert student.checking_balance == starting_balance
+
+
+def test_api_hall_pass_item_skips_rent_perk_zero_cost_flow(client, teacher_admin, student_in_class):
+    """Hall-pass items should always purchase directly and never create rent-perk inventory rows."""
+    student = student_in_class
+    from werkzeug.security import generate_password_hash
+    from app.routes.student import _calculate_rent_coverage_due_date
+
+    student.passphrase_hash = generate_password_hash('password')
+
+    settings = RentSettings(
+        teacher_id=teacher_admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('10.00'),
+        frequency_type='monthly',
+        first_rent_due_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        grace_period_days=3,
+        late_penalty_amount=Decimal('0.00'),
+    )
+    db.session.add(settings)
+    db.session.flush()
+
+    hall_pass_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Paid Hall Pass',
+        price=Decimal('5.00'),
+        is_active=True,
+        item_type='hall_pass',
+        is_rent_linked=True,  # Legacy/stale flag should not trigger free rent-perk flow
+    )
+    db.session.add(hall_pass_item)
+    db.session.flush()
+
+    now = datetime.now(timezone.utc)
+    coverage_due_date = _calculate_rent_coverage_due_date(settings, now)
+    assert coverage_due_date is not None
+
+    db.session.add(RentPayment(
+        student_id=student.id,
+        period='A',
+        join_code='JOINCODE123',
+        amount_paid=Decimal('10.00'),
+        period_month=now.month,
+        period_year=now.year,
+        coverage_month=coverage_due_date.month,
+        coverage_year=coverage_due_date.year,
+        payment_date=now,
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('-10.00'),
+        account_type='checking',
+        type='Rent Payment',
+        description='Rent for Period A',
+    ))
+    db.session.add(Transaction(
+        student_id=student.id,
+        teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
+        amount=Decimal('100.00'),
+        account_type='checking',
+        type='Deposit',
+        description='Seed funds',
+    ))
+    db.session.commit()
+
+    starting_balance = student.checking_balance
+    starting_hall_passes = student.hall_passes
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.post('/api/purchase-item', json={'item_id': hall_pass_item.id, 'passphrase': 'password', 'quantity': 1})
+    assert resp.status_code == 200
+    assert 'Hall Pass' in resp.json['message']
+
+    db.session.refresh(student)
+    assert student.hall_passes == starting_hall_passes + 1
+    assert student.checking_balance == pytest.approx(float(starting_balance) - 5.0)
+
+    created_rows = StudentItem.query.filter_by(student_id=student.id, store_item_id=hall_pass_item.id).all()
+    assert len(created_rows) == 0
+
+
+def test_use_item_converts_legacy_hall_pass_inventory_row(client, teacher_admin, student_in_class):
+    """Legacy hall-pass StudentItem rows should redeem into hall-pass balance immediately."""
+    student = student_in_class
+    from werkzeug.security import generate_password_hash
+
+    student.passphrase_hash = generate_password_hash('password')
+
+    hall_pass_item = StoreItem(
+        teacher_id=teacher_admin.id,
+        name='Legacy Hall Pass',
+        price=Decimal('5.00'),
+        is_active=True,
+        item_type='hall_pass',
+    )
+    db.session.add(hall_pass_item)
+    db.session.flush()
+
+    legacy_row = StudentItem(
+        student_id=student.id,
+        store_item_id=hall_pass_item.id,
+        join_code='JOINCODE123',
+        status='purchased',
+        quantity_purchased=2,
+    )
+    db.session.add(legacy_row)
+    db.session.commit()
+
+    starting_hall_passes = student.hall_passes
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['current_join_code'] = 'JOINCODE123'
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    resp = client.post('/api/use-item', json={
+        'student_item_id': legacy_row.id,
+        'passphrase': 'password',
+        'details': 'Need to use this old item',
+    })
+    assert resp.status_code == 200
+    assert 'Added 2 hall pass(es)' in resp.json['message']
+
+    db.session.refresh(student)
+    db.session.refresh(legacy_row)
+
+    assert student.hall_passes == starting_hall_passes + 2
+    assert legacy_row.status == 'redeemed'
+    assert legacy_row.redemption_date is not None
+    assert 'Converted to 2 hall pass(es).' in (legacy_row.redemption_details or '')
 
 
 def test_shop_displays_rent_perk_price_as_free(client, teacher_admin, student_in_class):

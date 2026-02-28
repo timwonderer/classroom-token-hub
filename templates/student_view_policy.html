@@ -1,7 +1,7 @@
 {% extends "layout_student.html" %}
 
-{% set page_title = enrollment.policy.title %}
-{% block title %}{{ enrollment.policy.title }}{% endblock %}
+{% set page_title = enrollment.contract_title %}
+{% block title %}{{ enrollment.contract_title }}{% endblock %}
 {% block page_icon %}policy{% endblock %}
 
 {% block content %}
@@ -15,8 +15,8 @@
                 Policy Overview
             </div>
             <div class="card-body">
-                <h5>{{ enrollment.policy.title }}</h5>
-                <div class="text-muted">{{ enrollment.policy.description | markdown }}</div>
+                <h5>{{ enrollment.contract_title }}</h5>
+                <div class="text-muted">{{ enrollment.contract_description | markdown }}</div>
 
                 <hr>
 
@@ -65,15 +65,15 @@
                         <h6>Claim Limits</h6>
                         <ul>
                             <li>Waiting period: {{ enrollment.policy.waiting_period_days }} days</li>
-                            <li>Claim deadline: {{ enrollment.policy.claim_time_limit_days }} days from incident</li>
-                            {% if enrollment.policy.max_claim_amount %}
-                            <li>Max per claim: ${{ "%.2f"|format(enrollment.policy.max_claim_amount) }}</li>
+                            <li>Claim deadline: {{ enrollment.contract_claim_time_limit_days }} days from incident</li>
+                            {% if enrollment.contract_max_claim_amount %}
+                            <li>Max per claim: ${{ "%.2f"|format(enrollment.contract_max_claim_amount) }}</li>
                             {% else %}
                             <li>Max per claim: Unlimited</li>
                             {% endif %}
-                            {% if enrollment.policy.max_claims_count %}
-                            <li>Max claims: {{ enrollment.policy.max_claims_count }} per {{
-                                enrollment.policy.max_claims_period }}</li>
+                            {% if enrollment.contract_max_claims_count %}
+                            <li>Max claims: {{ enrollment.contract_max_claims_count }} per {{
+                                enrollment.contract_max_claims_period }}</li>
                             {% else %}
                             <li>Max claims: Unlimited</li>
                             {% endif %}

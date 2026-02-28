@@ -27,6 +27,15 @@ and this project follows semantic versioning principles.
 - **`claim_account` duplicate detection** — Finding an existing student during initial claim now uses `first_half_hash` lookup instead of `dob_sum` filter, which remains correct after post-claim PII cleanup.
 
 ### Added
+- **Collective Goal Expiration** — Teachers can now set an optional expiration date on collective goal store items.
+  - If the goal is met before the deadline, the item unlocks normally (existing behavior unchanged).
+  - If the deadline passes without the goal being reached, all pending purchases are automatically refunded, the item is deactivated, and a `voided` status is recorded for each affected `StudentItem`.
+  - Expiration is processed lazily: triggered on admin store page load, student shop load, and at purchase time — no background scheduler required.
+  - Teacher deactivating an active collective item also triggers automatic refund for all pending purchasers.
+  - A reactivated collective goal always starts progress at zero because voided `StudentItem` records are excluded from the progress count.
+  - New `collective_goal_expires_at` column on `StoreItem` with Alembic migration `e3f4g5h6i7j8`.
+  - New `app/utils/store.py` module with `refund_pending_collective_purchases()` and `process_expired_collective_goals()` helpers.
+  - 16 new tests in `tests/test_collective_goal_expiration.py` covering happy paths, edge cases, API blocking, and multi-tenancy scoping.
 - **Admin Transaction Backfill** — One-time remediation page (`/admin/backfill-transactions`) that lets teachers fix student balances when past transactions lack a class-period `join_code`. Detected automatically on dashboard load; teachers select the correct period for each affected student and the system links all orphaned transactions to the right class context.
 - **Interactive Project Timeline** — New `/docs/timeline` page showcasing the full development history of Classroom Token Hub
   - Visual vertical timeline organized into four eras: Genesis, Crisis Resolution, Feature Expansion, and Refinement

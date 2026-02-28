@@ -51,6 +51,9 @@
     --background: var(--neutral-100);
     --surface: #ffffff;
     --border-color: var(--neutral-200);
+    --table-sort-hover-bg: color-mix(in srgb, var(--primary) 8%, transparent);
+    --table-sort-indicator-muted: var(--neutral-400);
+    --table-sort-indicator-active: var(--primary);
 
     /* Text - Role Agnostic */
     --text-primary: var(--neutral-800);

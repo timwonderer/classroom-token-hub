@@ -48,6 +48,7 @@ class StoreItemForm(FlaskForm):
         ('whole_class', 'Whole Class Must Purchase (1 per person)')
     ], validators=[Optional()])
     collective_goal_target = IntegerField('Target Number of Purchases (for Fixed type)', validators=[Optional()])
+    collective_goal_expires_at = DateField('Goal Expiration Date (optional)', format='%Y-%m-%d', validators=[Optional()])
 
     # Redemption settings (for delayed-use items)
     redemption_prompt = TextAreaField('Redemption Prompt (optional, for delayed-use items)', validators=[Optional()])
