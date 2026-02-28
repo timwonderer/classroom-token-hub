@@ -190,14 +190,14 @@
                         </span>
                     </button>
                     <div class="dropdown-menu position-static w-100 p-0 bg-transparent border-0{% if settings_open %} show{% endif %}">
-                        <a href="{{ url_for('admin.settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'settings' %}active{% endif %}">
+                        <a href="{{ url_for('admin.settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'Personalization' %}active{% endif %}">
                             <span class="material-symbols-outlined">style</span> Personalization
                         </a>
                         <a href="{{ url_for('admin.passkey_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'passkey_settings' %}active{% endif %}">
                             <span class="material-symbols-outlined">fingerprint</span> Passkey
                         </a>
-                        <a href="{{ url_for('admin.feature_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'feature_settings' %}active{% endif %}">
-                            <span class="material-symbols-outlined">tune</span> Features
+                        <a href="{{ url_for('admin.feature_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'Economy_Features' %}active{% endif %}">
+                            <span class="material-symbols-outlined">tune</span> Economy Features
                         </a>
                         <a href="{{ url_for('admin.deletion_requests') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'deletion_requests' %}active{% endif %}">
                             <span class="material-symbols-outlined">person_cancel</span> Account Deletion
