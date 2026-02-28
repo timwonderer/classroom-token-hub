@@ -15,8 +15,8 @@ from flask import has_request_context, session
 from decimal import Decimal
 
 
-DEFAULT_PAY_RATE_PER_MINUTE = 0.25
-DEFAULT_PAY_RATE_PER_SECOND = DEFAULT_PAY_RATE_PER_MINUTE / 60.0
+DEFAULT_PAY_RATE_PER_MINUTE = Decimal('0.25')
+DEFAULT_PAY_RATE_PER_SECOND = DEFAULT_PAY_RATE_PER_MINUTE / Decimal('60')
 
 
 def with_teacher_id_fallback(func):
@@ -49,7 +49,7 @@ def get_pay_rate_for_block(block, teacher_id=None):
     
     # Can't lookup settings without a teacher_id - return default
     if teacher_id is None:
-        return Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))
+        return DEFAULT_PAY_RATE_PER_SECOND
 
     # Try block-specific settings first
     if block:
@@ -72,7 +72,7 @@ def get_pay_rate_for_block(block, teacher_id=None):
         return global_setting.pay_rate / Decimal('60')
 
     # Ultimate fallback to hardcoded default
-    return Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))
+    return DEFAULT_PAY_RATE_PER_SECOND
 
 
 @with_teacher_id_fallback
@@ -214,7 +214,7 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
             block_upper = block_original.upper()
 
             # lookup rate
-            rate_per_second = pay_rates.get(block_upper, pay_rates.get(None, Decimal(str(DEFAULT_PAY_RATE_PER_SECOND))))
+            rate_per_second = pay_rates.get(block_upper, pay_rates.get(None, DEFAULT_PAY_RATE_PER_SECOND))
 
             # lookup join code
             join_code = student_join_codes.get((student.id, block_upper))
@@ -232,9 +232,9 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
             total_seconds = calculate_seconds_in_memory(events, payroll_anchor)
 
             if total_seconds > 0:
-                amount = round(total_seconds * rate_per_second, 2)
+                amount = (Decimal(total_seconds) * rate_per_second).quantize(Decimal('0.01'))
                 if amount > 0:
-                    summary.setdefault((student.id, join_code), 0)
+                    summary.setdefault((student.id, join_code), Decimal('0.00'))
                     summary[(student.id, join_code)] += amount
 
     return summary
@@ -305,7 +305,7 @@ def calculate_payroll(students, last_payroll_time, teacher_id=None):
     breakdown = calculate_payroll_breakdown(students, last_payroll_time, teacher_id=teacher_id)
     summary = {}
     for (student_id, _), amount in breakdown.items():
-        summary.setdefault(student_id, 0)
+        summary.setdefault(student_id, Decimal('0.00'))
         summary[student_id] += amount
     return summary
 
@@ -353,10 +353,10 @@ def get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=None):
         requested_ids = {s.id for s in students}
         
         # Convert JSON keys (str) back to int and values to Decimal
-        for s_id_str, amount_float in raw_data.items():
+        for s_id_str, amount_raw in raw_data.items():
             s_id = int(s_id_str)
             if s_id in requested_ids:
-                summary[s_id] = Decimal(str(amount_float))
+                summary[s_id] = Decimal(str(amount_raw))
     else:
         # Cache Miss/Stale: Recalculate EVERYTHING for this teacher
         # We need to fetch ALL students for this teacher to build a complete cache
@@ -374,8 +374,8 @@ def get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=None):
         # Calculate full payroll
         full_summary = calculate_payroll(all_students, last_payroll_time, teacher_id=teacher_id)
         
-        # Serialize for Cache (int key -> str, Decimal -> float)
-        cache_data = {str(k): float(v) for k, v in full_summary.items()}
+        # Serialize for cache as strings to preserve exact currency precision.
+        cache_data = {str(k): str(v) for k, v in full_summary.items()}
         
         # Update/Create Cache Record
         if not cache_entry:

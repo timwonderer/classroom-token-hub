@@ -8,7 +8,6 @@ debug endpoints, and public hall pass verification.
 import unicodedata
 from datetime import timezone
 
-import pytz
 from flask import Blueprint, redirect, url_for, jsonify, current_app, session, request
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -16,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.extensions import db, limiter
 from app.models import Admin
 from app.utils.helpers import render_template_with_fallback as render_template, is_safe_url
-from app.utils.time import utc_now, ensure_utc, normalize_for_db
+from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone
 
 # Create blueprint
 main_bp = Blueprint('main', __name__)
@@ -187,11 +186,7 @@ def hall_pass_queue():
 
 def _get_school_timezone():
     """Return the configured school timezone or fall back to Pacific Time."""
-    tz_name = current_app.config.get('DEFAULT_TIMEZONE', 'America/Los_Angeles')
-    try:
-        return pytz.timezone(tz_name)
-    except pytz.UnknownTimeZoneError:
-        return pytz.timezone('America/Los_Angeles')
+    return get_timezone(current_app.config.get('DEFAULT_TIMEZONE'))
 
 
 def _normalize_first_name(value):

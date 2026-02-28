@@ -38,7 +38,7 @@ from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
 from app.utils.store import process_expired_collective_goals
-from app.utils.time import utc_now, ensure_utc, normalize_for_db
+from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, local_date_bounds_utc, UTC_MIN
 
 # Import external modules
 from app.attendance import (
@@ -462,7 +462,7 @@ def purchase_item():
                 student_id=student.id,
                 teacher_id=teacher_id,
                 join_code=join_code,
-                amount=0.0,
+                amount=Decimal('0.00'),
                 account_type='checking',
                 status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
                 type='purchase',
@@ -969,7 +969,7 @@ def use_item():
                 student_id=student.id,
                 teacher_id=context['teacher_id'],
                 join_code=context['join_code'],  # CRITICAL: Add join_code for period isolation
-                amount=0.0,
+                amount=Decimal('0.00'),
                 account_type='checking',
                 type='redemption',
                 description=f"Used: {student_item.store_item.name}" + (f" (bundle: {student_item.bundle_remaining} remaining)" if student_item.is_from_bundle else "")
@@ -1106,7 +1106,7 @@ def reject_redemption():
             else:
                 purchase_tx = max(
                     purchase_txs,
-                    key=lambda tx: ensure_utc(tx.timestamp) if tx.timestamp else datetime.min.replace(tzinfo=timezone.utc)
+                    key=lambda tx: ensure_utc(tx.timestamp) if tx.timestamp else UTC_MIN
                 )
 
         if purchase_tx and purchase_tx.amount is not None:
@@ -1299,15 +1299,7 @@ def lookup_hall_pass(pass_number):
 
 def _get_default_timezone():
     """Return the configured default timezone or fall back to Pacific Time."""
-    tz_name = current_app.config.get('DEFAULT_TIMEZONE', 'America/Los_Angeles')
-    try:
-        return pytz.timezone(tz_name)
-    except pytz.UnknownTimeZoneError:
-        current_app.logger.warning(
-            "Invalid DEFAULT_TIMEZONE '%s' configured; falling back to America/Los_Angeles.",
-            tz_name
-        )
-        return pytz.timezone('America/Los_Angeles')
+    return get_timezone(current_app.config.get('DEFAULT_TIMEZONE'))
 
 
 def _check_simultaneous_pass_limit(log_entry):
@@ -1623,18 +1615,16 @@ def hall_pass_history():
 
         if start_date:
             try:
-                # Parse date and treat as UTC midnight (start of day)
-                start_datetime = datetime.strptime(start_date, '%Y-%m-%d')
-                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                start_day = datetime.strptime(start_date, '%Y-%m-%d').date()
+                start_datetime, _ = local_date_bounds_utc(start_day)
                 query = query.filter(HallPassLog.request_time >= start_datetime)
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid start date format"}), 400
 
         if end_date:
             try:
-                # Parse date and treat as UTC end of day (23:59:59)
-                end_datetime = datetime.strptime(end_date, '%Y-%m-%d')
-                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
+                end_day = datetime.strptime(end_date, '%Y-%m-%d').date()
+                _, end_datetime = local_date_bounds_utc(end_day)
                 query = query.filter(HallPassLog.request_time <= end_datetime)
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid end date format"}), 400
@@ -1653,13 +1643,7 @@ def hall_pass_history():
         def format_timestamp(dt):
             if not dt:
                 return None
-            # Ensure timestamp is treated as UTC and format properly
-            if dt.tzinfo is None:
-                # Naive datetime - assume UTC
-                return dt.replace(tzinfo=timezone.utc).isoformat().replace('+00:00', 'Z')
-            else:
-                # Convert to UTC if not already
-                return dt.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+            return ensure_utc(dt).isoformat().replace('+00:00', 'Z')
         
         # Format records for response
         records_data = []
@@ -1912,18 +1896,16 @@ def attendance_history():
 
         if start_date:
             try:
-                # Parse date and treat as UTC midnight (start of day)
-                start_datetime = datetime.strptime(start_date, '%Y-%m-%d')
-                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                start_day = datetime.strptime(start_date, '%Y-%m-%d').date()
+                start_datetime, _ = local_date_bounds_utc(start_day)
                 query = query.filter(TapEvent.timestamp >= normalize_for_db(start_datetime))
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid start date format"}), 400
 
         if end_date:
             try:
-                # Parse date and treat as UTC end of day (23:59:59)
-                end_datetime = datetime.strptime(end_date, '%Y-%m-%d')
-                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
+                end_day = datetime.strptime(end_date, '%Y-%m-%d').date()
+                _, end_datetime = local_date_bounds_utc(end_day)
                 query = query.filter(TapEvent.timestamp <= normalize_for_db(end_datetime))
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid end date format"}), 400
@@ -1970,15 +1952,7 @@ def attendance_history():
             # Format timestamp as UTC with 'Z' suffix
             timestamp_str = None
             if record.timestamp:
-                # Ensure timestamp is treated as UTC and format properly
-                if record.timestamp.tzinfo is None:
-                    # Naive datetime - assume UTC
-                    timestamp_str = record.timestamp.replace(tzinfo=timezone.utc).isoformat()
-                else:
-                    # Convert to UTC if not already
-                    timestamp_str = record.timestamp.astimezone(timezone.utc).isoformat()
-                # Replace +00:00 with Z for cleaner UTC representation
-                timestamp_str = timestamp_str.replace('+00:00', 'Z')
+                timestamp_str = ensure_utc(record.timestamp).isoformat().replace('+00:00', 'Z')
 
             records_data.append({
                 "id": record.id,

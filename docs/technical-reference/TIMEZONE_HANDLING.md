@@ -17,6 +17,17 @@ The application uses a centralized JavaScript utility (`static/js/timezone-utils
 
 All timestamps are stored and transmitted from the server as UTC (ISO 8601 format with 'Z' suffix). The client-side JavaScript utility converts these to the user's local timezone for display.
 
+### Teacher-Local Deadline Semantics
+
+Business deadlines (rent due dates, expiration dates, due dates) are based on the teacher/admin timezone calendar day, then converted to UTC for storage/comparison.
+
+Rules:
+
+- Server-side storage/comparison remains UTC.
+- Calendar-day business logic is evaluated in teacher-local time first.
+- If timezone cannot be resolved, fallback is `America/Los_Angeles` (PST/PDT).
+- Client timezone affects rendering only; it does not redefine server-side due-date boundaries.
+
 **Benefits:**
 
 - Accurate timezone detection using browser APIs
