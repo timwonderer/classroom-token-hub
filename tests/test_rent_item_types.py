@@ -660,6 +660,12 @@ def test_hall_pass_top_off_accepts_legacy_whitespace_period_values(client, teach
     assert awarded == 3
     assert revoked == 0
 
+    db.session.commit()
+    db.session.refresh(student)
+    db.session.refresh(sb)
+    assert student.hall_passes == 3
+    assert sb.rent_hall_passes == 3
+
 
 def test_mid_period_lock_blocks_semantic_changes(client, teacher_admin):
     """Test that semantic fields are locked when students have paid rent for current period."""

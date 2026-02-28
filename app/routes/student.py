@@ -2888,7 +2888,9 @@ def _is_coverage_period_paid(settings, valid_payments, coverage_due_date, includ
     """
     Return True when a coverage period is fully paid.
 
-    Late fee is required only when rent was not fully paid by grace.
+    When include_late_fee is True (default), late fee is required when rent
+    was not fully paid by grace. When False, this checks base-rent coverage
+    only (used by hall-pass perk restoration).
     """
     if not settings or not coverage_due_date:
         return False
