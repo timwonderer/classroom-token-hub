@@ -64,12 +64,21 @@ depends_on = None
 
 def upgrade():
     if table_exists('tap_events'):
+        reason_code_enum = sa.Enum(
+            'daily_limit',
+            'auto_switch',
+            name='tapeventreasoncode',
+        )
+
+        # Ensure enum type exists before adding the column on PostgreSQL.
+        reason_code_enum.create(op.get_bind(), checkfirst=True)
+
         if not column_exists('tap_events', 'reason_code'):
             op.add_column(
                 'tap_events',
                 sa.Column(
                     'reason_code',
-                    sa.Enum('daily_limit', 'auto_switch', name='tapeventreasoncode'),
+                    reason_code_enum,
                     nullable=True
                 )
             )
