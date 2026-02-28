@@ -420,7 +420,6 @@ class TestDecimalTypeErrors:
         # (no prior InsuranceClaim rows exist, so scalar() returns None)
         response = client.get(
             f'/student/insurance/claim/{policy.id}',
-            follow_redirects=True,
         )
 
         assert response.status_code == 200, (
