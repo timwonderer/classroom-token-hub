@@ -55,11 +55,12 @@ def get_timezone(timezone_name: str | None = None):
             )
         return pytz.timezone(PACIFIC_FALLBACK_TIMEZONE)
 
-def ensure_utc(dt: datetime, naive_tz_name: str | None = None) -> datetime | None:
+def ensure_utc(dt: datetime | None, naive_tz_name: str | None = None) -> datetime | None:
     """
     Ensure a datetime object is UTC-aware.
     
-    - If naive, assumes it is UTC and attaches timezone.
+    - If naive and naive_tz_name is provided, localize in that timezone then convert to UTC.
+    - If naive and naive_tz_name is not provided, assume UTC and attach timezone.
     - If aware, converts to UTC.
     - If None, returns None.
     
@@ -84,7 +85,7 @@ def local_date_bounds_utc(local_day: date, timezone_name: str | None = None) -> 
     """
     tz = get_timezone(timezone_name)
     start_local = tz.localize(datetime.combine(local_day, time.min))
-    end_local = tz.localize(datetime.combine(local_day, time.max.replace(microsecond=0)))
+    end_local = tz.localize(datetime.combine(local_day, time.max))
     return start_local.astimezone(timezone.utc), end_local.astimezone(timezone.utc)
 
 def local_date_end_utc(local_day: date, timezone_name: str | None = None) -> datetime:

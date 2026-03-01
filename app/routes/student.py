@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 
-from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app
+from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app, has_app_context
 from sqlalchemy import or_, func, select, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -2664,10 +2664,23 @@ def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, 
     )
 
 
+def _get_rent_timezone(settings):
+    """
+    Return the server-side timezone used for rent schedule semantics.
+
+    This intentionally avoids session/client timezone so browser locale changes
+    do not change due-date boundaries.
+    """
+    tz_name = getattr(settings, "timezone", None)
+    if not tz_name and has_app_context():
+        tz_name = current_app.config.get("DEFAULT_TIMEZONE")
+    return get_timezone(tz_name)
+
+
 def _calculate_rent_deadlines(settings, reference_date=None):
     """Return the due date and grace end date for the active month."""
     reference_date = ensure_utc(reference_date) if reference_date else utc_now()
-    teacher_tz = get_timezone()
+    teacher_tz = _get_rent_timezone(settings)
     reference_local = reference_date.astimezone(teacher_tz)
 
     def _local_due_to_utc(
@@ -3006,7 +3019,7 @@ def _calculate_rent_coverage_due_date(settings, reference_date=None):
     # For monthly settings without a first_rent_due_date, compute the prior
     # month explicitly to preserve the configured day-of-month.
     if settings.frequency_type == 'monthly' and not settings.first_rent_due_date:
-        teacher_tz = get_timezone()
+        teacher_tz = _get_rent_timezone(settings)
         current_due_local = ensure_utc(current_due_date).astimezone(teacher_tz)
         prev_year = current_due_local.year
         prev_month = current_due_local.month - 1

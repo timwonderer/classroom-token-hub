@@ -1624,8 +1624,9 @@ def hall_pass_history():
         if end_date:
             try:
                 end_day = datetime.strptime(end_date, '%Y-%m-%d').date()
-                _, end_datetime = local_date_bounds_utc(end_day)
-                query = query.filter(HallPassLog.request_time <= end_datetime)
+                next_day = end_day + timedelta(days=1)
+                next_day_start_utc, _ = local_date_bounds_utc(next_day)
+                query = query.filter(HallPassLog.request_time < next_day_start_utc)
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid end date format"}), 400
 
