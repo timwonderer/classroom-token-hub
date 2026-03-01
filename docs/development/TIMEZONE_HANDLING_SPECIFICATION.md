@@ -18,9 +18,9 @@ This specification applies to:
 
 ## 2. Core Invariant (Non-Negotiable)
 
-All datetimes in the system MUST be UTC and timezone-aware.
+All persisted datetimes in the system MUST be UTC and timezone-aware.
 
-Localization is a presentation concern only and MUST NOT affect storage, logic, or comparisons.
+Localization is a presentation concern for rendering, except for business rules defined by local calendar day (deadlines, due dates, expirations), which must be computed in teacher-local time and then converted to UTC for storage/comparison.
 
 Any deviation from this invariant is considered a bug, not a stylistic choice.
 
@@ -123,6 +123,15 @@ Rule:
 All comparisons MUST occur between UTC-aware datetimes.
 
 Any comparison capable of raising offset-naive vs offset-aware is considered a spec violation.
+
+### 4.6 Teacher-Local Deadline Expansion
+
+For date-based business rules (rent due day, deadline, expiration date):
+
+- Interpret the date in the teacher/admin timezone calendar.
+- Expand to a precise UTC instant (e.g., local start/end of day) before persistence/comparison.
+- If timezone cannot be resolved, fallback to `America/Los_Angeles` (PST/PDT).
+- Client/browser timezone must not alter these server-side deadline boundaries.
 
 ### 4.5 API Serialization
 

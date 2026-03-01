@@ -1154,7 +1154,7 @@ class RentSettings(db.Model):
     is_enabled = db.Column(db.Boolean, default=True)
 
     # Rent amount and frequency
-    rent_amount = db.Column(db.Numeric(precision=12, scale=2), default=50.0)
+    rent_amount = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('50.00'))
     frequency_type = db.Column(db.String(20), default='monthly')  # 'daily', 'weekly', 'monthly', 'custom'
     custom_frequency_value = db.Column(db.Integer, nullable=True)  # For custom: x per time unit
     custom_frequency_unit = db.Column(db.String(20), nullable=True)  # 'days', 'weeks', 'months'
@@ -1165,7 +1165,7 @@ class RentSettings(db.Model):
 
     # Grace period and late penalties
     grace_period_days = db.Column(db.Integer, default=3)
-    late_penalty_amount = db.Column(db.Numeric(precision=12, scale=2), default=10.0)
+    late_penalty_amount = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('10.00'))
     late_penalty_type = db.Column(db.String(20), default='once')  # 'once' or 'recurring'
     late_penalty_frequency_days = db.Column(db.Integer, nullable=True)  # For recurring type
 
@@ -1210,7 +1210,7 @@ class RentPayment(db.Model):
     coverage_year = db.Column(db.Integer, nullable=False, default=_current_utc_year)  # Year covered (e.g., 2025)
 
     was_late = db.Column(db.Boolean, default=False)
-    late_fee_charged = db.Column(db.Numeric(precision=12, scale=2), default=0.0)
+    late_fee_charged = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))
 
     student = db.relationship('Student', backref='rent_payments')
 
@@ -2029,8 +2029,8 @@ class BankingSettings(db.Model):
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Interest settings for savings
-    savings_apy = db.Column(db.Numeric(precision=8, scale=6), default=0.0)  # Annual Percentage Yield (e.g., 5.0 for 5%)
-    savings_monthly_rate = db.Column(db.Numeric(precision=8, scale=6), default=0.0)  # Monthly rate (calculated or custom)
+    savings_apy = db.Column(db.Numeric(precision=8, scale=6), default=Decimal('0.000000'))  # Annual Percentage Yield (e.g., 5.0 for 5%)
+    savings_monthly_rate = db.Column(db.Numeric(precision=8, scale=6), default=Decimal('0.000000'))  # Monthly rate (calculated or custom)
     interest_calculation_type = db.Column(db.String(20), default='simple')  # 'simple' or 'compound'
     compound_frequency = db.Column(db.String(20), default='monthly')  # 'daily', 'weekly', 'monthly'
 
@@ -2045,12 +2045,12 @@ class BankingSettings(db.Model):
     # Overdraft/NSF fees
     overdraft_fee_enabled = db.Column(db.Boolean, default=False)  # Enable/disable overdraft fees
     overdraft_fee_type = db.Column(db.String(20), default='flat')  # 'flat' or 'progressive'
-    overdraft_fee_flat_amount = db.Column(db.Numeric(precision=12, scale=2), default=0.0)  # Flat fee per transaction
+    overdraft_fee_flat_amount = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))  # Flat fee per transaction
 
     # Progressive fee settings
-    overdraft_fee_progressive_1 = db.Column(db.Numeric(precision=12, scale=2), default=0.0)  # First tier fee
-    overdraft_fee_progressive_2 = db.Column(db.Numeric(precision=12, scale=2), default=0.0)  # Second tier fee
-    overdraft_fee_progressive_3 = db.Column(db.Numeric(precision=12, scale=2), default=0.0)  # Third tier fee
+    overdraft_fee_progressive_1 = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))  # First tier fee
+    overdraft_fee_progressive_2 = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))  # Second tier fee
+    overdraft_fee_progressive_3 = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))  # Third tier fee
     overdraft_fee_progressive_cap = db.Column(db.Numeric(precision=12, scale=2), nullable=True)  # Maximum total fees per period
 
     # Metadata
@@ -2089,8 +2089,8 @@ class DemoStudent(db.Model):
     ended_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Demo configuration (snapshot of initial state)
-    config_checking_balance = db.Column(db.Numeric(precision=12, scale=2), default=0.0)
-    config_savings_balance = db.Column(db.Numeric(precision=12, scale=2), default=0.0)
+    config_checking_balance = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))
+    config_savings_balance = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))
     config_hall_passes = db.Column(db.Integer, default=3)
     config_insurance_plan = db.Column(db.String(50), default='none')
     config_is_rent_enabled = db.Column(db.Boolean, default=True)
@@ -2352,10 +2352,7 @@ class Announcement(db.Model):
         if self.expires_at is None:
             return False
 
-        # Handle timezone-naive datetimes from database
-        expires_at = self.expires_at
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        expires_at = ensure_utc(self.expires_at)
 
         return utc_now() > expires_at
 

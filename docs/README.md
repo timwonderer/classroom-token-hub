@@ -38,6 +38,7 @@ Welcome to the Classroom Token Hub documentation. This index points you to fast,
 - **[Analytics Specification](technical-reference/analytics-specification.md)** - System health observability and analytics dashboard.
 - **[Economy Specification](technical-reference/economy-specification.md)** - Developer-only ratios and balancing rules.
 - **[Timezone Handling](technical-reference/TIMEZONE_HANDLING.md)** - UTC storage and conversion patterns.
+- **[Money Handling](technical-reference/MONEY_HANDLING.md)** - Decimal-safe cashflow and currency rules.
 
 ### Development Specs
 - **[Hall Pass Feature Specification](development/HALL_PASS_FEATURE_SPEC.md)** - End-to-end hall pass lifecycle, APIs, and verification contract.

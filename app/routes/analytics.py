@@ -12,7 +12,7 @@ Key Principles:
 """
 
 from datetime import datetime, timedelta, timezone
-from app.utils.time import utc_now
+from app.utils.time import utc_now, ensure_utc
 from flask import Blueprint, session, jsonify, request, flash, redirect, url_for
 from sqlalchemy import desc
 
@@ -496,10 +496,7 @@ def student_drill_down(student_id):
     if enrollment_start is not None:
         now_utc = utc_now()
         # Ensure timezone-aware arithmetic
-        if getattr(enrollment_start, "tzinfo", None) is None:
-            enrollment_start_utc = enrollment_start.replace(tzinfo=timezone.utc)
-        else:
-            enrollment_start_utc = enrollment_start.astimezone(timezone.utc)
+        enrollment_start_utc = ensure_utc(enrollment_start)
 
         enrollment_duration_days = (now_utc - enrollment_start_utc).days
         if enrollment_duration_days > 0:
