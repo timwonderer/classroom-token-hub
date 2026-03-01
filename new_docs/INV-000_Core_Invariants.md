@@ -80,3 +80,20 @@ Authority is strictly scoped to defined roles. No role may exercise cross-tenant
 
 #### Prohibited Action
 - Any mechanism that enables privilege escalation or hidden impersonation within the application domain.
+
+---
+### 5. Definite Tenant Lifecycle 
+
+#### Statement
+`join_code` defines the context in which transactions, attendance record, and analytics reside. Destruction of `join_code` must also destroy data linked to `join_code`
+
+#### Constraints
+- No cross-tenant global ledger or historical archive retaining deleted tenant data is permitted within the application domain
+- Deletion of `join_code` must also delete linked data entry
+- Database backup and restoration must not be used to restore accounts
+- Student accounts not linked to other `join_code` will also be deleted
+- Stale accounts must be automatically deleted and their data purged
+
+#### Prohibited Action
+- Storage of `join_code` linked data or accounts after a deletion action has been completed
+- Retention of recoverable financial history after tenant deletion.
