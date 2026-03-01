@@ -7,7 +7,8 @@ description: How to report technical issues, balance disputes, or store problems
 keywords: [report issue, help, support, dispute, bug]
 related:
   - user-guides/diagnostics/student-support
-  - user-guides/features/teacher/classroom/student-issues
+  - user-guides/features/teacher/student-issues/student-issues
+Audience: student-facing
 ---
 
 # Report Issues
@@ -55,4 +56,4 @@ After you submit a report, you can track its status on the **Help & Support** pa
 
 ## Related guides
 - [Student Support Diagnostics](/docs/user-guides/diagnostics/student-support)
-- [Teacher Guide: Student Issues Queue](/docs/user-guides/features/teacher/classroom/student-issues)
+- [Teacher Guide: Student Issues Queue](/docs/user-guides/features/teacher/student-issues/student-issues)

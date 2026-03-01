@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Database Configuration
 
 ## Automatic Branch-Based Database Switching

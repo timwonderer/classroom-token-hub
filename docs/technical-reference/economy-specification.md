@@ -2,6 +2,7 @@
 title: Economy Specification (Developer)
 description: Developer-only ratios and constraints used by automated tools and balancing logic.
 roles: [developer]
+Audience: developer-facing
 ---
 
 # Economy Specification (Developer)

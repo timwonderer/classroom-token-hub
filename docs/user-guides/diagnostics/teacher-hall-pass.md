@@ -5,6 +5,7 @@ roles: [teacher]
 related:
   - user-guides/diagnostics/teacher-store
   - user-guides/diagnostics/teacher-attendance-payroll
+Audience: teacher-facing
 ---
 
 # Hall Passes

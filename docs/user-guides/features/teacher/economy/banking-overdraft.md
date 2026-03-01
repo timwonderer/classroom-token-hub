@@ -6,7 +6,8 @@ roles: [teacher]
 description: Set overdraft protection and fees.
 keywords: [overdraft, fees, protection]
 related:
-  - user-guides/features/teacher/economy/banking-settings
+  - user-guides/features/teacher/banking/banking-settings
+Audience: teacher-facing
 ---
 
 # Overdraft Rules
@@ -21,4 +22,4 @@ Go to **Economy > Banking**.
 - Disable protection and set an overdraft fee.
 
 ## Related guides
-- [Banking Settings](/docs/user-guides/features/teacher/economy/banking-settings)
+- [Banking Settings](/docs/user-guides/features/teacher/banking/banking-settings)

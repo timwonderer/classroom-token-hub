@@ -1,4 +1,11 @@
+---
+roles: [teacher, student, developer]
+Audience: mixed-audience
+---
 # Classroom Token Hub — Design Principles, Philosophy, and Memory
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 ## Document Purpose
 

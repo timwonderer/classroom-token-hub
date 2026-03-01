@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Transaction-Based Reimbursement Architecture — Specification & Invariants
 
 This document defines the **architecture** for transaction-based insurance reimbursement (claim type: `transaction_monetary` or of similar type).

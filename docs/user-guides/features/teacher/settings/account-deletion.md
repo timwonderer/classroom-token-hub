@@ -7,6 +7,7 @@ description: Request period or account deletion and track request status.
 keywords: [account deletion, period deletion, requests]
 related:
   - user-guides/diagnostics/teacher-login
+Audience: teacher-facing
 ---
 
 # Account Deletion Requests

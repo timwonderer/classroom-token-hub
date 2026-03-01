@@ -5,6 +5,7 @@ roles: [teacher]
 related:
   - user-guides/diagnostics/teacher-students
   - user-guides/diagnostics/teacher-attendance-payroll
+Audience: teacher-facing
 ---
 
 # Onboarding and Feature Settings

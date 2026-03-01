@@ -5,6 +5,7 @@ roles: [teacher]
 related:
   - user-guides/diagnostics/teacher-onboarding
   - user-guides/diagnostics/teacher-students
+Audience: teacher-facing
 ---
 
 # Announcements and Issues

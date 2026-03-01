@@ -6,10 +6,14 @@ roles: [teacher]
 description: Configure rent settings, set amounts, and manage collection schedules per class block.
 keywords: [rent, settings, configuration, block settings, penalties, schedule]
 related:
-  - user-guides/features/rent/itemization-guide
+  - user-guides/features/teacher/rent/itemization-guide
+Audience: mixed-audience
 ---
 
 # Managing Rent Settings
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 Configure how rent is collected, set amounts, and manage schedules for your classroom economy.
 

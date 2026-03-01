@@ -6,9 +6,13 @@ description: Create and configure store items like rewards, privileges, and hall
 keywords: [store, items, rewards, privileges, shop, inventory, hall pass, collective goals, purchases]
 related:
   - user-guides/diagnostics/teacher-store
+Audience: mixed-audience
 ---
 
 # Creating Store Items
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 Learn how to create and configure store items for your classroom economy.
 
@@ -153,7 +157,7 @@ Items marked as "Available in Store" in your Rent Settings automatically appear 
   - **Per-Use**: Consumable (e.g., Pencil).
 - **Restrictions**: Cannot be deleted from the store directly (must remove from Rent Settings).
 
-For full details on configuring these, see the [Rent Itemization Guide](/docs/user-guides/features/rent/itemization-guide).
+For full details on configuring these, see the [Rent Itemization Guide](/docs/user-guides/features/teacher/rent/itemization-guide).
 
 ### Immediate Use Items
 
@@ -339,7 +343,7 @@ Items the whole class works toward together:
 
 ## Related Articles
 
-- [Rent Itemization Guide](/docs/user-guides/features/rent/itemization-guide)
+- [Rent Itemization Guide](/docs/user-guides/features/teacher/rent/itemization-guide)
 - [Teacher Store Diagnostics](/docs/user-guides/diagnostics/teacher-store)
 - [Economy Guide](/docs/user-guides/economy_guide)
 

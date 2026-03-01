@@ -7,6 +7,7 @@ description: Enroll in insurance and submit claims.
 keywords: [insurance, coverage, claims]
 related:
   - user-guides/diagnostics/student-rent-insurance
+Audience: student-facing
 ---
 
 # Insurance Coverage and Claims

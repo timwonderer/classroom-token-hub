@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Legacy Account Migration Guide
 
 **Date:** 2025-12-19

@@ -6,8 +6,9 @@ roles: [teacher]
 description: Configure pay rates, block settings, and payroll behavior.
 keywords: [payroll, pay rate, settings, blocks]
 related:
-  - user-guides/features/teacher/economy/payroll-run
+  - user-guides/features/teacher/attendance-and-payroll/payroll-run
   - user-guides/diagnostics/teacher-attendance-payroll
+Audience: teacher-facing
 ---
 
 # Payroll Settings
@@ -27,5 +28,5 @@ Payroll uses Start Work and Break or Done taps from the Attendance Log. Confirm 
 After saving, preview the projected pay list to confirm the rates are applying.
 
 ## Related guides
-- [Run Payroll](/docs/user-guides/features/teacher/economy/payroll-run)
+- [Run Payroll](/docs/user-guides/features/teacher/attendance-and-payroll/payroll-run)
 - [Teacher Attendance and Payroll Diagnostics](/docs/user-guides/diagnostics/teacher-attendance-payroll)

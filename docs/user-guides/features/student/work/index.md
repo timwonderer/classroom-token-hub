@@ -5,6 +5,7 @@ subcategory: student-work
 roles: [student]
 description: Student work tracking and attendance history.
 keywords: [work, attendance, payroll]
+Audience: student-facing
 ---
 
 # Work and Pay Features (Student)
@@ -12,5 +13,5 @@ keywords: [work, attendance, payroll]
 This section covers start and end work, attendance history, and pay status.
 
 ## Work tracking
-- [Start and End Work](/docs/user-guides/features/student/work/start-end-work)
-- [Attendance History and Pay Status](/docs/user-guides/features/student/work/attendance-history)
+- [Start and End Work](/docs/user-guides/features/student/starting-and-ending-work/start-end-work)
+- [Attendance History and Pay Status](/docs/user-guides/features/student/starting-and-ending-work/attendance-history)

@@ -1,5 +1,7 @@
 ---
 searchable: false
+roles: [developer]
+Audience: developer-facing
 ---
 
 # Multi-Tenancy Security Fix - Deployment Instructions

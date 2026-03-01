@@ -6,7 +6,8 @@ roles: [teacher]
 description: Enroll students in insurance policies and manage active coverage.
 keywords: [insurance, enrollment, coverage]
 related:
-  - user-guides/features/teacher/bills/insurance-policies
+  - user-guides/features/teacher/insurance/insurance-policies
+Audience: teacher-facing
 ---
 
 # Insurance Enrollment
@@ -22,4 +23,4 @@ Go to **Bills > Insurance** and open the **Active Student Policies** tab.
 - Confirm enrollment before students submit claims.
 
 ## Related guides
-- [Insurance Policies](/docs/user-guides/features/teacher/bills/insurance-policies)
+- [Insurance Policies](/docs/user-guides/features/teacher/insurance/insurance-policies)

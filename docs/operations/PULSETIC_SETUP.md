@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # UptimeRobot Setup Guide for Classroom Economy
 
 This guide explains how to set up UptimeRobot monitoring for your Classroom Economy app.

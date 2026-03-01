@@ -3,9 +3,13 @@ title: Changelog
 roles: [teacher, developer]
 description: Complete history of all updates, bug fixes, and new features added to Classroom Token Hub.
 keywords: [changelog, updates, version history, releases, what's new, bug fixes, features]
+Audience: mixed-audience
 ---
 
 # Changelog
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 **Note:** The changelog has been consolidated at the repository root per Keep a Changelog standards.
 

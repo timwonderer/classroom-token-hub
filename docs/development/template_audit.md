@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Template Audit Report
 
 **Date:** 2026-02-18  

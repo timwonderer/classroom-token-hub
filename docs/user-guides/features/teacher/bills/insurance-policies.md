@@ -6,8 +6,9 @@ roles: [teacher]
 description: Create, edit, and manage insurance policies.
 keywords: [insurance, policies, premium, coverage]
 related:
-  - user-guides/features/teacher/bills/insurance-claims
+  - user-guides/features/teacher/insurance/insurance-claims
   - user-guides/diagnostics/teacher-rent-insurance
+Audience: teacher-facing
 ---
 
 # Insurance Policies
@@ -29,5 +30,5 @@ Use **Add New Policy** to create coverage or edit an existing policy in **Existi
 Use **Active Student Policies** to see who is enrolled and manage coverage.
 
 ## Related guides
-- [Insurance Claims and Coverage](/docs/user-guides/features/teacher/bills/insurance-claims)
+- [Insurance Claims and Coverage](/docs/user-guides/features/teacher/insurance/insurance-claims)
 - [Teacher Rent and Insurance Diagnostics](/docs/user-guides/diagnostics/teacher-rent-insurance)

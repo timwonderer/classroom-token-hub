@@ -6,8 +6,9 @@ roles: [teacher]
 description: Create class sections, manage join codes, and keep student roster data aligned with claims.
 keywords: [class setup, join code, class roster, blocks, sections]
 related:
-  - user-guides/features/teacher/classroom/students-overview
-  - user-guides/features/student/account/join-class
+  - user-guides/features/teacher/managing-students/students-overview
+  - user-guides/features/student/student-account-actions/join-class
+Audience: teacher-facing
 ---
 
 # Class Setup and Join Codes
@@ -37,5 +38,5 @@ The roster fields you enter are the exact values students must use to claim acco
 If a student cannot join, confirm the join code and confirm their roster details match exactly.
 
 ## Related guides
-- [Student Management Overview](/docs/user-guides/features/teacher/classroom/students-overview)
-- [Join or Add a Class (Student)](/docs/user-guides/features/student/account/join-class)
+- [Student Management Overview](/docs/user-guides/features/teacher/managing-students/students-overview)
+- [Join or Add a Class (Student)](/docs/user-guides/features/student/student-account-actions/join-class)

@@ -5,6 +5,7 @@ roles: [student]
 related:
   - user-guides/diagnostics/student-store
   - user-guides/diagnostics/student-attendance
+Audience: student-facing
 ---
 
 # Hall Passes

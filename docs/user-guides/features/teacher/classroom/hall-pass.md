@@ -7,6 +7,7 @@ description: Review and manage hall pass requests and the live queue.
 keywords: [hall pass, requests, queue]
 related:
   - user-guides/diagnostics/teacher-hall-pass
+Audience: teacher-facing
 ---
 
 # Hall Pass

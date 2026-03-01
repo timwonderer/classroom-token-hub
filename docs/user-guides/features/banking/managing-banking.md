@@ -6,10 +6,14 @@ roles: [teacher]
 description: Configure banking settings, including interest rates, types (simple vs compound), and payout schedules.
 keywords: [banking, interest, simple interest, compound interest, savings, overdraft, settings]
 related:
-  - user-guides/features/banking/transferring-money
+  - user-guides/features/student/banking/transferring-money
+Audience: mixed-audience
 ---
 
 # Managing Banking Settings
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 Customize how the banking system works for your students, including interest types, rates, and detailed schedules.
 

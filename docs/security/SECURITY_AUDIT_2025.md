@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Security Audit Report - November 2025
 
 **Date:** 2025-11-28

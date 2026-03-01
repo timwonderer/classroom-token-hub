@@ -7,9 +7,14 @@ searchable: true
 related:
   - user-guides/legal/license
   - user-guides/legal/attribution
+roles: [teacher, student, developer]
+Audience: mixed-audience
 ---
 
 # Commercial Use Policy
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 This project is licensed to ensure that the software itself remains free, open, and non-commercial, while allowing others to offer services around it.
 

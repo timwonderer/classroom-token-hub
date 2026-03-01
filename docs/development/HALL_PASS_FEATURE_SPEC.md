@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Hall Pass Feature Specification
 
 Status: Active (Normative)

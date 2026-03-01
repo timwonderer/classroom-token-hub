@@ -6,8 +6,9 @@ roles: [teacher]
 description: Interpret analytics signals and system health metrics.
 keywords: [analytics, dashboard, metrics]
 related:
-  - user-guides/features/analytics/interpreting-analytics
+  - user-guides/features/teacher/economy-and-analytics/interpreting-analytics
   - user-guides/diagnostics/teacher-analytics
+Audience: teacher-facing
 ---
 
 # Analytics Dashboard
@@ -26,5 +27,5 @@ Go to **Economy > Analytics**.
 Use the detailed analytics guide for definitions and interpretation tips.
 
 ## Related guides
-- [Interpreting Analytics (Detailed)](/docs/user-guides/features/analytics/interpreting-analytics)
+- [Interpreting Analytics (Detailed)](/docs/user-guides/features/teacher/economy-and-analytics/interpreting-analytics)
 - [Teacher Analytics Diagnostics](/docs/user-guides/diagnostics/teacher-analytics)

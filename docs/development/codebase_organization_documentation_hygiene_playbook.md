@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Codebase Organization & Documentation Hygiene Playbook
 
 **Status:** Authoritative

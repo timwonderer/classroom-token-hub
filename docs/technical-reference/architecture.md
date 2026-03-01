@@ -2,6 +2,7 @@
 title: Architecture Guide
 category: technical-reference
 roles: [developer]
+Audience: developer-facing
 ---
 
 # Classroom Token Hub - Architecture Guide

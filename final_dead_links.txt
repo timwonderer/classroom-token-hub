@@ -1,0 +1,517 @@
+Dead link in docs/README.md: user-guides/diagnostics/student.md -> Resolved: docs/user-guides/diagnostics/student.md
+Dead link in docs/README.md: user-guides/diagnostics/teacher.md -> Resolved: docs/user-guides/diagnostics/teacher.md
+Dead link in docs/README.md: technical-reference/architecture.md -> Resolved: docs/technical-reference/architecture.md
+Dead link in docs/README.md: operations/Deployment_Guide.md -> Resolved: docs/operations/Deployment_Guide.md
+Dead link in docs/README.md: operations/README.md -> Resolved: docs/operations/README.md
+Dead link in docs/README.md: user-guides/diagnostics/student.md -> Resolved: docs/user-guides/diagnostics/student.md
+Dead link in docs/README.md: user-guides/diagnostics/teacher.md -> Resolved: docs/user-guides/diagnostics/teacher.md
+Dead link in docs/README.md: user-guides/economy_guide.md -> Resolved: docs/user-guides/economy_guide.md
+Dead link in docs/README.md: user-guides/features/teacher/index.md -> Resolved: docs/user-guides/features/teacher/index.md
+Dead link in docs/README.md: user-guides/features/student/index.md -> Resolved: docs/user-guides/features/student/index.md
+Dead link in docs/README.md: technical-reference/architecture.md -> Resolved: docs/technical-reference/architecture.md
+Dead link in docs/README.md: technical-reference/database_schema.md -> Resolved: docs/technical-reference/database_schema.md
+Dead link in docs/README.md: technical-reference/api_reference.md -> Resolved: docs/technical-reference/api_reference.md
+Dead link in docs/README.md: technical-reference/analytics-specification.md -> Resolved: docs/technical-reference/analytics-specification.md
+Dead link in docs/README.md: technical-reference/economy-specification.md -> Resolved: docs/technical-reference/economy-specification.md
+Dead link in docs/README.md: technical-reference/TIMEZONE_HANDLING.md -> Resolved: docs/technical-reference/TIMEZONE_HANDLING.md
+Dead link in docs/README.md: technical-reference/MONEY_HANDLING.md -> Resolved: docs/technical-reference/MONEY_HANDLING.md
+Dead link in docs/README.md: development/HALL_PASS_FEATURE_SPEC.md -> Resolved: docs/development/HALL_PASS_FEATURE_SPEC.md
+Dead link in docs/README.md: development/ADMIN_IDENTITY_HANDLING_SPEC.md -> Resolved: docs/development/ADMIN_IDENTITY_HANDLING_SPEC.md
+Dead link in docs/README.md: development/IMPLEMENTATION_STATUS_VS_SPEC_2026-02-24.md -> Resolved: docs/development/IMPLEMENTATION_STATUS_VS_SPEC_2026-02-24.md
+Dead link in docs/README.md: operations/Deployment_Guide.md -> Resolved: docs/operations/Deployment_Guide.md
+Dead link in docs/README.md: operations/README.md -> Resolved: docs/operations/README.md
+Dead link in docs/README.md: operations/MULTI_TENANCY_FIX_DEPLOYMENT.md -> Resolved: docs/operations/MULTI_TENANCY_FIX_DEPLOYMENT.md
+Dead link in docs/README.md: user-guides/diagnostics/student-login.md -> Resolved: docs/user-guides/diagnostics/student-login.md
+Dead link in docs/README.md: user-guides/diagnostics/teacher-students.md -> Resolved: docs/user-guides/diagnostics/teacher-students.md
+Dead link in docs/README.md: user-guides/diagnostics/teacher-attendance-payroll.md -> Resolved: docs/user-guides/diagnostics/teacher-attendance-payroll.md
+Dead link in docs/README.md: user-guides/features/teacher/index.md -> Resolved: docs/user-guides/features/teacher/index.md
+Dead link in docs/README.md: technical-reference/database_schema.md -> Resolved: docs/technical-reference/database_schema.md
+Dead link in docs/README.md: user-guides/economy_guide.md -> Resolved: docs/user-guides/economy_guide.md
+Dead link in docs/README.md: user-guides/diagnostics/student.md -> Resolved: docs/user-guides/diagnostics/student.md
+Dead link in docs/README.md: user-guides/diagnostics/teacher.md -> Resolved: docs/user-guides/diagnostics/teacher.md
+Dead link in docs/README.md: user-guides/features/teacher/index.md -> Resolved: docs/user-guides/features/teacher/index.md
+Dead link in docs/README.md: user-guides/features/student/index.md -> Resolved: docs/user-guides/features/student/index.md
+Dead link in docs/README.md: technical-reference/architecture.md -> Resolved: docs/technical-reference/architecture.md
+Dead link in docs/README.md: technical-reference/database_schema.md -> Resolved: docs/technical-reference/database_schema.md
+Dead link in docs/README.md: technical-reference/api_reference.md -> Resolved: docs/technical-reference/api_reference.md
+Dead link in docs/README.md: technical-reference/analytics-specification.md -> Resolved: docs/technical-reference/analytics-specification.md
+Dead link in docs/README.md: user-guides/economy_guide.md -> Resolved: docs/user-guides/economy_guide.md
+Dead link in docs/README.md: operations/Deployment_Guide.md -> Resolved: docs/operations/Deployment_Guide.md
+Dead link in docs/README.md: technical-reference/economy-specification.md -> Resolved: docs/technical-reference/economy-specification.md
+Dead link in docs/user-guides/README.md: features/teacher/economy-and-analytics/interpreting-analytics.md -> Resolved: user-guides/features/teacher/economy-and-analytics/interpreting-analytics.md
+Dead link in docs/user-guides/README.md: features/student/banking/transferring-money.md -> Resolved: user-guides/features/student/banking/transferring-money.md
+Dead link in docs/user-guides/README.md: features/teacher/attendance-and-payroll/running-payroll.md -> Resolved: user-guides/features/teacher/attendance-and-payroll/running-payroll.md
+Dead link in docs/user-guides/README.md: features/teacher/rent/itemization-guide.md -> Resolved: user-guides/features/teacher/rent/itemization-guide.md
+Dead link in docs/user-guides/README.md: features/teacher/store/creating-items.md -> Resolved: user-guides/features/teacher/store/creating-items.md
+Dead link in docs/user-guides/student_guide.md: /docs/user-guides/features/student/student-account-actions/login-setup -> Resolved: /docs/user-guides/features/student/student-account-actions/login-setup
+Dead link in docs/user-guides/student_guide.md: /docs/user-guides/features/student/starting-and-ending-work/start-end-work -> Resolved: /docs/user-guides/features/student/starting-and-ending-work/start-end-work
+Dead link in docs/user-guides/student_guide.md: /docs/user-guides/features/student/rent/rent-payments -> Resolved: /docs/user-guides/features/student/rent/rent-payments
+Dead link in docs/user-guides/student_guide.md: /docs/user-guides/features/student/reporting-issues/help-center -> Resolved: /docs/user-guides/features/student/reporting-issues/help-center
+Dead link in docs/user-guides/teacher_manual.md: /docs/user-guides/features/teacher/class-management/class-setup -> Resolved: /docs/user-guides/features/teacher/class-management/class-setup
+Dead link in docs/user-guides/teacher_manual.md: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-run -> Resolved: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-run
+Dead link in docs/user-guides/teacher_manual.md: /docs/user-guides/features/teacher/store/store-items -> Resolved: /docs/user-guides/features/teacher/store/store-items
+Dead link in docs/user-guides/teacher_manual.md: /docs/user-guides/features/teacher/economy-and-analytics/economy-health -> Resolved: /docs/user-guides/features/teacher/economy-and-analytics/economy-health
+Dead link in docs/user-guides/teacher_manual.md: /docs/user-guides/features/teacher/rent/rent-settings -> Resolved: /docs/user-guides/features/teacher/rent/rent-settings
+Dead link in docs/user-guides/teacher_manual.md: /docs/user-guides/features/teacher/account-customization/personalization -> Resolved: /docs/user-guides/features/teacher/account-customization/personalization
+Dead link in docs/user-guides/teacher_manual.md: /docs/user-guides/features/teacher/economy-and-analytics/interpreting-analytics -> Resolved: /docs/user-guides/features/teacher/economy-and-analytics/interpreting-analytics
+Dead link in docs/user-guides/teacher_manual.md: /docs/user-guides/features/teacher/rent/itemization-guide -> Resolved: /docs/user-guides/features/teacher/rent/itemization-guide
+Dead link in docs/user-guides/features/teacher/index.md: /docs/user-guides/features/teacher/class-management/index -> Resolved: /docs/user-guides/features/teacher/class-management/index
+Dead link in docs/user-guides/features/teacher/index.md: /docs/user-guides/features/teacher/economy-and-analytics/index -> Resolved: /docs/user-guides/features/teacher/economy-and-analytics/index
+Dead link in docs/user-guides/features/teacher/index.md: /docs/user-guides/features/teacher/rent/index -> Resolved: /docs/user-guides/features/teacher/rent/index
+Dead link in docs/user-guides/features/teacher/index.md: /docs/user-guides/features/teacher/account-customization/index -> Resolved: /docs/user-guides/features/teacher/account-customization/index
+Dead link in docs/user-guides/features/teacher/economy/index.md: /docs/user-guides/features/teacher/economy-and-analytics/economy-health -> Resolved: /docs/user-guides/features/teacher/economy-and-analytics/economy-health
+Dead link in docs/user-guides/features/teacher/economy/index.md: /docs/user-guides/features/teacher/economy-and-analytics/analytics -> Resolved: /docs/user-guides/features/teacher/economy-and-analytics/analytics
+Dead link in docs/user-guides/features/teacher/economy/index.md: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-settings -> Resolved: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-settings
+Dead link in docs/user-guides/features/teacher/economy/index.md: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-run -> Resolved: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-run
+Dead link in docs/user-guides/features/teacher/economy/index.md: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-history -> Resolved: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-history
+Dead link in docs/user-guides/features/teacher/economy/index.md: /docs/user-guides/features/teacher/store/store-items -> Resolved: /docs/user-guides/features/teacher/store/store-items
+Dead link in docs/user-guides/features/teacher/economy/index.md: /docs/user-guides/features/teacher/store/store-redemptions -> Resolved: /docs/user-guides/features/teacher/store/store-redemptions
+Dead link in docs/user-guides/features/teacher/economy/index.md: /docs/user-guides/features/teacher/store/store-pricing -> Resolved: /docs/user-guides/features/teacher/store/store-pricing
+Dead link in docs/user-guides/features/teacher/economy/index.md: /docs/user-guides/features/teacher/banking/banking-settings -> Resolved: /docs/user-guides/features/teacher/banking/banking-settings
+Dead link in docs/user-guides/features/teacher/economy/index.md: /docs/user-guides/features/teacher/banking/banking-interest -> Resolved: /docs/user-guides/features/teacher/banking/banking-interest
+Dead link in docs/user-guides/features/teacher/economy/index.md: /docs/user-guides/features/teacher/banking/banking-overdraft -> Resolved: /docs/user-guides/features/teacher/banking/banking-overdraft
+Dead link in docs/user-guides/features/teacher/economy/index.md: /docs/user-guides/features/teacher/banking/transactions -> Resolved: /docs/user-guides/features/teacher/banking/transactions
+Dead link in docs/user-guides/features/teacher/economy/store-redemptions.md: /docs/user-guides/features/teacher/store/store-items -> Resolved: /docs/user-guides/features/teacher/store/store-items
+Dead link in docs/user-guides/features/teacher/economy/payroll-run.md: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-settings -> Resolved: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-settings
+Dead link in docs/user-guides/features/teacher/economy/payroll-history.md: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-run -> Resolved: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-run
+Dead link in docs/user-guides/features/teacher/economy/banking-settings.md: /docs/user-guides/features/teacher/banking/managing-banking -> Resolved: /docs/user-guides/features/teacher/banking/managing-banking
+Dead link in docs/user-guides/features/teacher/economy/banking-settings.md: /docs/user-guides/features/teacher/banking/transactions -> Resolved: /docs/user-guides/features/teacher/banking/transactions
+Dead link in docs/user-guides/features/teacher/economy/analytics.md: /docs/user-guides/features/teacher/economy-and-analytics/interpreting-analytics -> Resolved: /docs/user-guides/features/teacher/economy-and-analytics/interpreting-analytics
+Dead link in docs/user-guides/features/teacher/economy/transactions.md: /docs/user-guides/features/teacher/banking/banking-settings -> Resolved: /docs/user-guides/features/teacher/banking/banking-settings
+Dead link in docs/user-guides/features/teacher/economy/payroll-settings.md: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-run -> Resolved: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-run
+Dead link in docs/user-guides/features/teacher/economy/banking-interest.md: /docs/user-guides/features/teacher/banking/banking-settings -> Resolved: /docs/user-guides/features/teacher/banking/banking-settings
+Dead link in docs/user-guides/features/teacher/economy/banking-interest.md: /docs/user-guides/features/teacher/banking/managing-banking -> Resolved: /docs/user-guides/features/teacher/banking/managing-banking
+Dead link in docs/user-guides/features/teacher/economy/store-pricing.md: /docs/user-guides/features/teacher/store/store-items -> Resolved: /docs/user-guides/features/teacher/store/store-items
+Dead link in docs/user-guides/features/teacher/economy/store-items.md: /docs/user-guides/features/teacher/store/store-redemptions -> Resolved: /docs/user-guides/features/teacher/store/store-redemptions
+Dead link in docs/user-guides/features/teacher/economy/banking-overdraft.md: /docs/user-guides/features/teacher/banking/banking-settings -> Resolved: /docs/user-guides/features/teacher/banking/banking-settings
+Dead link in docs/user-guides/features/teacher/economy/economy-health.md: /docs/user-guides/features/teacher/economy-and-analytics/analytics -> Resolved: /docs/user-guides/features/teacher/economy-and-analytics/analytics
+Dead link in docs/user-guides/features/teacher/classroom/attendance-corrections.md: /docs/user-guides/features/teacher/attendance-and-payroll/attendance-approvals -> Resolved: /docs/user-guides/features/teacher/attendance-and-payroll/attendance-approvals
+Dead link in docs/user-guides/features/teacher/classroom/attendance-approvals.md: /docs/user-guides/features/student/starting-and-ending-work/start-end-work -> Resolved: /docs/user-guides/features/student/starting-and-ending-work/start-end-work
+Dead link in docs/user-guides/features/teacher/classroom/attendance-approvals.md: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-run -> Resolved: /docs/user-guides/features/teacher/attendance-and-payroll/payroll-run
+Dead link in docs/user-guides/features/teacher/classroom/index.md: /docs/user-guides/features/teacher/class-management/dashboard-overview -> Resolved: /docs/user-guides/features/teacher/class-management/dashboard-overview
+Dead link in docs/user-guides/features/teacher/classroom/index.md: /docs/user-guides/features/teacher/class-management/class-setup -> Resolved: /docs/user-guides/features/teacher/class-management/class-setup
+Dead link in docs/user-guides/features/teacher/classroom/index.md: /docs/user-guides/features/teacher/managing-students/students-overview -> Resolved: /docs/user-guides/features/teacher/managing-students/students-overview
+Dead link in docs/user-guides/features/teacher/classroom/index.md: /docs/user-guides/features/teacher/attendance-and-payroll/attendance-approvals -> Resolved: /docs/user-guides/features/teacher/attendance-and-payroll/attendance-approvals
+Dead link in docs/user-guides/features/teacher/classroom/index.md: /docs/user-guides/features/teacher/attendance-and-payroll/attendance-corrections -> Resolved: /docs/user-guides/features/teacher/attendance-and-payroll/attendance-corrections
+Dead link in docs/user-guides/features/teacher/classroom/index.md: /docs/user-guides/features/teacher/class-management/hall-pass -> Resolved: /docs/user-guides/features/teacher/class-management/hall-pass
+Dead link in docs/user-guides/features/teacher/classroom/index.md: /docs/user-guides/features/teacher/class-management/announcements -> Resolved: /docs/user-guides/features/teacher/class-management/announcements
+Dead link in docs/user-guides/features/teacher/classroom/index.md: /docs/user-guides/features/teacher/student-issues/student-issues -> Resolved: /docs/user-guides/features/teacher/student-issues/student-issues
+Dead link in docs/user-guides/features/teacher/classroom/student-issues.md: /docs/user-guides/features/student/reporting-issues/report-issues -> Resolved: /docs/user-guides/features/student/reporting-issues/report-issues
+Dead link in docs/user-guides/features/teacher/classroom/students-overview.md: /docs/user-guides/features/teacher/class-management/class-setup -> Resolved: /docs/user-guides/features/teacher/class-management/class-setup
+Dead link in docs/user-guides/features/teacher/classroom/students-overview.md: /docs/user-guides/features/student/student-account-actions/login-setup -> Resolved: /docs/user-guides/features/student/student-account-actions/login-setup
+Dead link in docs/user-guides/features/teacher/classroom/class-setup.md: /docs/user-guides/features/teacher/managing-students/students-overview -> Resolved: /docs/user-guides/features/teacher/managing-students/students-overview
+Dead link in docs/user-guides/features/teacher/classroom/class-setup.md: /docs/user-guides/features/student/student-account-actions/join-class -> Resolved: /docs/user-guides/features/student/student-account-actions/join-class
+Dead link in docs/user-guides/features/teacher/classroom/dashboard-overview.md: /docs/user-guides/features/teacher/managing-students/students-overview -> Resolved: /docs/user-guides/features/teacher/managing-students/students-overview
+Dead link in docs/user-guides/features/teacher/classroom/dashboard-overview.md: /docs/user-guides/features/teacher/economy-and-analytics/economy-health -> Resolved: /docs/user-guides/features/teacher/economy-and-analytics/economy-health
+Dead link in docs/user-guides/features/teacher/bills/rent-waivers.md: /docs/user-guides/features/teacher/rent/rent-settings -> Resolved: /docs/user-guides/features/teacher/rent/rent-settings
+Dead link in docs/user-guides/features/teacher/bills/index.md: /docs/user-guides/features/teacher/rent/rent-settings -> Resolved: /docs/user-guides/features/teacher/rent/rent-settings
+Dead link in docs/user-guides/features/teacher/bills/index.md: /docs/user-guides/features/teacher/rent/rent-behaviors -> Resolved: /docs/user-guides/features/teacher/rent/rent-behaviors
+Dead link in docs/user-guides/features/teacher/bills/index.md: /docs/user-guides/features/teacher/rent/rent-itemization-2 -> Resolved: /docs/user-guides/features/teacher/rent/rent-itemization-2
+Dead link in docs/user-guides/features/teacher/bills/index.md: /docs/user-guides/features/teacher/rent/rent-waivers -> Resolved: /docs/user-guides/features/teacher/rent/rent-waivers
+Dead link in docs/user-guides/features/teacher/bills/index.md: /docs/user-guides/features/teacher/insurance/insurance-policies -> Resolved: /docs/user-guides/features/teacher/insurance/insurance-policies
+Dead link in docs/user-guides/features/teacher/bills/index.md: /docs/user-guides/features/teacher/insurance/insurance-claims -> Resolved: /docs/user-guides/features/teacher/insurance/insurance-claims
+Dead link in docs/user-guides/features/teacher/bills/index.md: /docs/user-guides/features/teacher/insurance/insurance-enrollment -> Resolved: /docs/user-guides/features/teacher/insurance/insurance-enrollment
+Dead link in docs/user-guides/features/teacher/bills/insurance-enrollment.md: /docs/user-guides/features/teacher/insurance/insurance-policies -> Resolved: /docs/user-guides/features/teacher/insurance/insurance-policies
+Dead link in docs/user-guides/features/teacher/bills/insurance-policies.md: /docs/user-guides/features/teacher/insurance/insurance-claims -> Resolved: /docs/user-guides/features/teacher/insurance/insurance-claims
+Dead link in docs/user-guides/features/teacher/bills/rent-itemization.md: /docs/user-guides/features/teacher/rent/itemization-guide -> Resolved: /docs/user-guides/features/teacher/rent/itemization-guide
+Dead link in docs/user-guides/features/teacher/bills/rent-behaviors.md: /docs/user-guides/features/teacher/rent/rent-settings -> Resolved: /docs/user-guides/features/teacher/rent/rent-settings
+Dead link in docs/user-guides/features/teacher/bills/rent-settings.md: /docs/user-guides/features/teacher/rent/itemization-guide.md -> Resolved: /docs/user-guides/features/teacher/rent/itemization-guide.md
+Dead link in docs/user-guides/features/teacher/bills/rent-settings.md: /docs/user-guides/features/teacher/rent/managing-rent.md -> Resolved: /docs/user-guides/features/teacher/rent/managing-rent.md
+Dead link in docs/user-guides/features/teacher/bills/rent-settings.md: /docs/user-guides/features/teacher/rent/itemization-guide.md -> Resolved: /docs/user-guides/features/teacher/rent/itemization-guide.md
+Dead link in docs/user-guides/features/teacher/bills/insurance-claims.md: /docs/user-guides/features/teacher/insurance/insurance-policies -> Resolved: /docs/user-guides/features/teacher/insurance/insurance-policies
+Dead link in docs/user-guides/features/teacher/settings/index.md: /docs/user-guides/features/teacher/account-customization/personalization -> Resolved: /docs/user-guides/features/teacher/account-customization/personalization
+Dead link in docs/user-guides/features/teacher/settings/index.md: /docs/user-guides/features/teacher/account-customization/passkey -> Resolved: /docs/user-guides/features/teacher/account-customization/passkey
+Dead link in docs/user-guides/features/teacher/settings/index.md: /docs/user-guides/features/teacher/account-customization/account-recovery -> Resolved: /docs/user-guides/features/teacher/account-customization/account-recovery
+Dead link in docs/user-guides/features/teacher/settings/index.md: /docs/user-guides/features/teacher/system-features/feature-toggles -> Resolved: /docs/user-guides/features/teacher/system-features/feature-toggles
+Dead link in docs/user-guides/features/teacher/settings/index.md: /docs/user-guides/features/teacher/account-customization/account-deletion -> Resolved: /docs/user-guides/features/teacher/account-customization/account-deletion
+Dead link in docs/user-guides/features/teacher/settings/personalization.md: /docs/user-guides/features/teacher/class-management/class-setup -> Resolved: /docs/user-guides/features/teacher/class-management/class-setup
+Dead link in docs/user-guides/features/student/index.md: /docs/user-guides/features/student/student-account-actions/index -> Resolved: /docs/user-guides/features/student/student-account-actions/index
+Dead link in docs/user-guides/features/student/index.md: /docs/user-guides/features/student/starting-and-ending-work/index -> Resolved: /docs/user-guides/features/student/starting-and-ending-work/index
+Dead link in docs/user-guides/features/student/index.md: /docs/user-guides/features/student/rent/index -> Resolved: /docs/user-guides/features/student/rent/index
+Dead link in docs/user-guides/features/student/index.md: /docs/user-guides/features/student/reporting-issues/index -> Resolved: /docs/user-guides/features/student/reporting-issues/index
+Dead link in docs/user-guides/features/student/support/index.md: /docs/user-guides/features/student/reporting-issues/help-center -> Resolved: /docs/user-guides/features/student/reporting-issues/help-center
+Dead link in docs/user-guides/features/student/support/index.md: /docs/user-guides/features/student/reporting-issues/report-issues -> Resolved: /docs/user-guides/features/student/reporting-issues/report-issues
+Dead link in docs/user-guides/features/student/support/report-issues.md: /docs/user-guides/features/teacher/student-issues/student-issues -> Resolved: /docs/user-guides/features/teacher/student-issues/student-issues
+Dead link in docs/user-guides/features/student/work/index.md: /docs/user-guides/features/student/starting-and-ending-work/start-end-work -> Resolved: /docs/user-guides/features/student/starting-and-ending-work/start-end-work
+Dead link in docs/user-guides/features/student/work/index.md: /docs/user-guides/features/student/starting-and-ending-work/attendance-history -> Resolved: /docs/user-guides/features/student/starting-and-ending-work/attendance-history
+Dead link in docs/user-guides/features/student/work/attendance-history.md: /docs/user-guides/features/student/starting-and-ending-work/start-end-work -> Resolved: /docs/user-guides/features/student/starting-and-ending-work/start-end-work
+Dead link in docs/user-guides/features/student/work/start-end-work.md: /docs/user-guides/features/student/starting-and-ending-work/attendance-history -> Resolved: /docs/user-guides/features/student/starting-and-ending-work/attendance-history
+Dead link in docs/user-guides/features/student/work/start-end-work.md: /docs/user-guides/features/teacher/attendance-and-payroll/attendance-approvals -> Resolved: /docs/user-guides/features/teacher/attendance-and-payroll/attendance-approvals
+Dead link in docs/user-guides/features/student/bills/index.md: /docs/user-guides/features/student/rent/rent-payments -> Resolved: /docs/user-guides/features/student/rent/rent-payments
+Dead link in docs/user-guides/features/student/bills/index.md: /docs/user-guides/features/student/insurance/insurance-coverage -> Resolved: /docs/user-guides/features/student/insurance/insurance-coverage
+Dead link in docs/user-guides/features/student/bills/index.md: /docs/user-guides/features/student/insurance/insurance-claims -> Resolved: /docs/user-guides/features/student/insurance/insurance-claims
+Dead link in docs/user-guides/features/student/bills/insurance-claims.md: /docs/user-guides/features/student/insurance/insurance-coverage -> Resolved: /docs/user-guides/features/student/insurance/insurance-coverage
+Dead link in docs/user-guides/features/student/account/reset-recovery.md: /docs/user-guides/features/student/reporting-issues/report-issues -> Resolved: /docs/user-guides/features/student/reporting-issues/report-issues
+Dead link in docs/user-guides/features/student/account/index.md: /docs/user-guides/features/student/student-account-actions/dashboard-overview -> Resolved: /docs/user-guides/features/student/student-account-actions/dashboard-overview
+Dead link in docs/user-guides/features/student/account/index.md: /docs/user-guides/features/student/student-account-actions/login-setup -> Resolved: /docs/user-guides/features/student/student-account-actions/login-setup
+Dead link in docs/user-guides/features/student/account/index.md: /docs/user-guides/features/student/student-account-actions/reset-recovery -> Resolved: /docs/user-guides/features/student/student-account-actions/reset-recovery
+Dead link in docs/user-guides/features/student/account/index.md: /docs/user-guides/features/student/student-account-actions/join-class -> Resolved: /docs/user-guides/features/student/student-account-actions/join-class
+Dead link in docs/user-guides/features/student/account/index.md: /docs/user-guides/features/student/student-account-actions/switch-class -> Resolved: /docs/user-guides/features/student/student-account-actions/switch-class
+Dead link in docs/user-guides/features/student/account/switch-class.md: /docs/user-guides/features/student/student-account-actions/join-class -> Resolved: /docs/user-guides/features/student/student-account-actions/join-class
+Dead link in docs/user-guides/features/student/account/login-setup.md: /docs/user-guides/features/student/student-account-actions/reset-recovery -> Resolved: /docs/user-guides/features/student/student-account-actions/reset-recovery
+Dead link in docs/user-guides/features/student/account/login-setup.md: /docs/user-guides/features/student/student-account-actions/join-class -> Resolved: /docs/user-guides/features/student/student-account-actions/join-class
+Dead link in docs/user-guides/features/student/account/join-class.md: /docs/user-guides/features/student/student-account-actions/switch-class -> Resolved: /docs/user-guides/features/student/student-account-actions/switch-class
+Dead link in docs/user-guides/features/student/account/join-class.md: /docs/user-guides/features/teacher/class-management/class-setup -> Resolved: /docs/user-guides/features/teacher/class-management/class-setup
+Dead link in docs/user-guides/features/student/account/dashboard-overview.md: /docs/user-guides/features/student/starting-and-ending-work/attendance-history -> Resolved: /docs/user-guides/features/student/starting-and-ending-work/attendance-history
+Dead link in docs/user-guides/features/store/creating-items.md: /docs/user-guides/features/teacher/rent/itemization-guide -> Resolved: /docs/user-guides/features/teacher/rent/itemization-guide
+Dead link in docs/user-guides/features/store/creating-items.md: /docs/user-guides/features/teacher/rent/itemization-guide -> Resolved: /docs/user-guides/features/teacher/rent/itemization-guide
+Dead link in docs/user-guides/diagnostics/teacher-analytics.md: ../features/teacher/economy-and-analytics/interpreting-analytics.md -> Resolved: user-guides/features/teacher/economy-and-analytics/interpreting-analytics.md
+Dead link in docs/user-guides/diagnostics/teacher-rent-itemization.md: ../features/teacher/rent/itemization-guide.md -> Resolved: user-guides/features/teacher/rent/itemization-guide.md
+Dead link in docs/user-guides/diagnostics/teacher-rent-itemization.md: ../features/teacher/rent/managing-rent.md -> Resolved: user-guides/features/teacher/rent/managing-rent.md
+Dead link in docs/user-guides/diagnostics/teacher-rent-itemization.md: ../features/teacher/store/creating-items.md -> Resolved: user-guides/features/teacher/store/creating-items.md
+Dead link in docs/security/COMPREHENSIVE_ATTACK_SURFACE_AUDIT_2025.md: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }} -> Resolved: security/${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+Orphaned file: /docs/user-guides/features/student/starting-and-ending-work/setup.md
+Orphaned file: user-guides/features/teacher/bills/rent-itemization.md
+Orphaned file: /docs/user-guides/features/teacher/account-customization/behavioral-rules.md
+Orphaned file: /docs/user-guides/diagnostics/student-login.md
+Orphaned file: user-guides/features/teacher/bills/rent-behaviors.md
+Orphaned file: user-guides/features/student/student-account-actions/edge-cases.md
+Orphaned file: /docs/development/DEPRECATED_SYMBOLS_REGISTRY.md
+Orphaned file: user-guides/features/teacher/system-features/setup.md
+Orphaned file: /docs/development/SCHEMA_CHANGE_MD.md
+Orphaned file: /docs/user-guides/features/teacher/settings/passkey.md
+Orphaned file: user-guides/features/teacher/managing-students/edge-cases.md
+Orphaned file: /docs/user-guides/features/student/index.md
+Orphaned file: /docs/user-guides/features/student/reporting-issues/setup.md
+Orphaned file: /docs/user-guides/features/teacher/bills/insurance-policies.md
+Orphaned file: /docs/user-guides/features/student/insurance/configuration.md
+Orphaned file: /docs/development/IMPLEMENTATION_STATUS_VS_SPEC_2026-02-24.md
+Orphaned file: /docs/development/ai/CLAUDE.md
+Orphaned file: /docs/user-guides/features/teacher/economy/transactions.md
+Orphaned file: /docs/user-guides/features/rent/itemization-guide.md
+Orphaned file: /docs/user-guides/features/student/banking/edge-cases.md
+Orphaned file: user-guides/features/student/starting-and-ending-work/behavioral-rules.md
+Orphaned file: user-guides/features/teacher/classroom/class-setup.md
+Orphaned file: user-guides/features/student/insurance/edge-cases.md
+Orphaned file: user-guides/features/teacher/economy/banking-interest.md
+Orphaned file: user-guides/features/teacher/settings/passkey.md
+Orphaned file: user-guides/features/banking/managing-banking.md
+Orphaned file: /docs/user-guides/diagnostics/teacher-announcements-issues.md
+Orphaned file: /docs/user-guides/diagnostics/teacher-students.md
+Orphaned file: user-guides/features/student/account/switch-class.md
+Orphaned file: user-guides/features/student/account/index.md
+Orphaned file: /docs/user-guides/features/teacher/economy/banking-overdraft.md
+Orphaned file: /docs/user-guides/features/teacher/student-issues/setup.md
+Orphaned file: user-guides/features/teacher/bills/rent-waivers.md
+Orphaned file: /docs/user-guides/features/student/student-account-actions/configuration.md
+Orphaned file: /docs/user-guides/features/teacher/settings/feature-toggles.md
+Orphaned file: /docs/user-guides/features/teacher/student-issues/edge-cases.md
+Orphaned file: /docs/user-guides/teacher_manual.md
+Orphaned file: /docs/user-guides/features/teacher/classroom/index.md
+Orphaned file: user-guides/features/teacher/settings/index.md
+Orphaned file: user-guides/features/teacher/insurance/behavioral-rules.md
+Orphaned file: /docs/user-guides/features/teacher/rent/behavioral-rules.md
+Orphaned file: user-guides/features/teacher/store/configuration.md
+Orphaned file: /docs/user-guides/features/teacher/classroom/hall-pass.md
+Orphaned file: /docs/user-guides/features/student/banking/setup.md
+Orphaned file: /docs/user-guides/diagnostics/teacher.md
+Orphaned file: user-guides/features/teacher/economy-and-analytics/configuration.md
+Orphaned file: /docs/development/SYSADMIN_INTERFACE_DESIGN.md
+Orphaned file: user-guides/features/teacher/economy/transactions.md
+Orphaned file: user-guides/features/teacher/rent/behavioral-rules.md
+Orphaned file: /docs/user-guides/features/teacher/managing-students/edge-cases.md
+Orphaned file: /docs/user-guides/features/teacher/system-features/behavioral-rules.md
+Orphaned file: /docs/user-guides/legal/commercial.md
+Orphaned file: /docs/security/PII_AUDIT.md
+Orphaned file: /docs/user-guides/features/student/support/help-center.md
+Orphaned file: /docs/user-guides/features/teacher/economy/payroll-settings.md
+Orphaned file: /docs/operations/Deployment_Guide.md
+Orphaned file: user-guides/features/student/banking/behavioral-rules.md
+Orphaned file: /docs/development/MIGRATION_COMPLIANCE_REVIEW.md
+Orphaned file: user-guides/features/student/rent/edge-cases.md
+Orphaned file: /docs/user-guides/features/student/banking/behavioral-rules.md
+Orphaned file: user-guides/features/teacher/attendance-and-payroll/behavioral-rules.md
+Orphaned file: /docs/user-guides/features/teacher/bills/rent-settings.md
+Orphaned file: /docs/user-guides/diagnostics/teacher-attendance-payroll.md
+Orphaned file: /docs/user-guides/economy_guide.md
+Orphaned file: user-guides/features/student/bills/insurance-coverage.md
+Orphaned file: /docs/user-guides/features/teacher/banking/behavioral-rules.md
+Orphaned file: /docs/user-guides/legal/third-party-notices.md
+Orphaned file: /docs/user-guides/features/teacher/system-features/edge-cases.md
+Orphaned file: /docs/user-guides/features/teacher/banking/configuration.md
+Orphaned file: /docs/operations/LANDING_PAGE_DEPLOYMENT.md
+Orphaned file: user-guides/features/student/starting-and-ending-work/configuration.md
+Orphaned file: /docs/user-guides/features/student/banking/accounts-transfers.md
+Orphaned file: /docs/user-guides/features/teacher/account-customization/setup.md
+Orphaned file: /docs/security/SOURCE_CODE_VULNERABILITY_REPORT.md
+Orphaned file: user-guides/features/teacher/economy/economy-health.md
+Orphaned file: user-guides/features/student/reporting-issues/configuration.md
+Orphaned file: /docs/user-guides/features/teacher/bills/insurance-claims.md
+Orphaned file: user-guides/features/teacher/classroom/dashboard-overview.md
+Orphaned file: /docs/user-guides/features/student/bills/rent-payments.md
+Orphaned file: /docs/development/transaction_based_reimbursement_architecture_specification_invariants.md
+Orphaned file: user-guides/features/teacher/classroom/index.md
+Orphaned file: user-guides/features/teacher/settings/account-deletion.md
+Orphaned file: user-guides/features/banking/transferring-money.md
+Orphaned file: /docs/user-guides/features/store/creating-items.md
+Orphaned file: /docs/user-guides/features/teacher/settings/account-deletion.md
+Orphaned file: user-guides/features/teacher/account-customization/setup.md
+Orphaned file: /docs/user-guides/features/teacher/economy/banking-settings.md
+Orphaned file: /docs/user-guides/features/teacher/economy-and-analytics/configuration.md
+Orphaned file: /docs/development/RENT_ITEM_TYPES_IMPLEMENTATION.md
+Orphaned file: user-guides/features/student/banking/edge-cases.md
+Orphaned file: /docs/technical-reference/economy-specification.md
+Orphaned file: user-guides/features/teacher/rent/edge-cases.md
+Orphaned file: /docs/security/SECURITY_FIXES_SUMMARY.md
+Orphaned file: /docs/user-guides/features/teacher/settings/personalization.md
+Orphaned file: /docs/user-guides/diagnostics/teacher-rent-itemization.md
+Orphaned file: user-guides/features/student/support/report-issues.md
+Orphaned file: /docs/user-guides/features/teacher/economy/store-items.md
+Orphaned file: user-guides/features/student/reporting-issues/edge-cases.md
+Orphaned file: user-guides/features/student/starting-and-ending-work/edge-cases.md
+Orphaned file: /docs/user-guides/features/teacher/account-customization/configuration.md
+Orphaned file: user-guides/features/teacher/economy/store-redemptions.md
+Orphaned file: user-guides/features/teacher/economy-and-analytics/setup.md
+Orphaned file: /docs/development/design_system.md
+Orphaned file: /docs/user-guides/features/teacher/insurance/setup.md
+Orphaned file: /docs/user-guides/features/teacher/economy/payroll-run.md
+Orphaned file: /docs/user-guides/features/teacher/banking/setup.md
+Orphaned file: /docs/user-guides/features/student/support/index.md
+Orphaned file: /docs/development/ECONOMY_BALANCE_CHECKER.md
+Orphaned file: /docs/security/CLASS_DELETION_AUDIT.md
+Orphaned file: /docs/user-guides/features/teacher/settings/index.md
+Orphaned file: /docs/user-guides/features/teacher/classroom/students-overview.md
+Orphaned file: /docs/user-guides/diagnostics/teacher-analytics.md
+Orphaned file: user-guides/features/student/support/help-center.md
+Orphaned file: /docs/user-guides/diagnostics/student-support.md
+Orphaned file: /docs/user-guides/features/teacher/insurance/behavioral-rules.md
+Orphaned file: /docs/user-guides/features/teacher/classroom/announcements.md
+Orphaned file: /docs/user-guides/features/student/work/index.md
+Orphaned file: /docs/user-guides/features/student/account/switch-class.md
+Orphaned file: /docs/user-guides/features/student/store/configuration.md
+Orphaned file: /docs/user-guides/features/student/starting-and-ending-work/configuration.md
+Orphaned file: user-guides/features/teacher/class-management/setup.md
+Orphaned file: /docs/user-guides/features/teacher/bills/rent-waivers.md
+Orphaned file: user-guides/features/teacher/insurance/edge-cases.md
+Orphaned file: user-guides/features/teacher/attendance-and-payroll/edge-cases.md
+Orphaned file: user-guides/features/student/account/join-class.md
+Orphaned file: /docs/security/ACCESS_AND_SECRETS_REPORT.md
+Orphaned file: user-guides/features/student/work/attendance-history.md
+Orphaned file: /docs/security/COMPREHENSIVE_ATTACK_SURFACE_AUDIT_2025.md
+Orphaned file: /docs/user-guides/features/teacher/managing-students/configuration.md
+Orphaned file: user-guides/features/student/support/index.md
+Orphaned file: /docs/technical-reference/database_schema.md
+Orphaned file: /docs/user-guides/features/student/account/index.md
+Orphaned file: user-guides/features/teacher/managing-students/configuration.md
+Orphaned file: user-guides/features/student/reporting-issues/behavioral-rules.md
+Orphaned file: /docs/user-guides/diagnostics/teacher-store.md
+Orphaned file: /docs/user-guides/features/student/banking/index.md
+Orphaned file: user-guides/features/student/reporting-issues/setup.md
+Orphaned file: /docs/user-guides/features/teacher/attendance-and-payroll/setup.md
+Orphaned file: /docs/security/VALIDATION_REPORT.md
+Orphaned file: /docs/user-guides/features/student/account/reset-recovery.md
+Orphaned file: user-guides/features/teacher/rent/configuration.md
+Orphaned file: /docs/user-guides/features/teacher/economy/banking-interest.md
+Orphaned file: user-guides/features/teacher/banking/configuration.md
+Orphaned file: /docs/user-guides/features/teacher/economy-and-analytics/edge-cases.md
+Orphaned file: user-guides/features/teacher/attendance-and-payroll/configuration.md
+Orphaned file: /docs/user-guides/features/teacher/class-management/behavioral-rules.md
+Orphaned file: user-guides/features/teacher/classroom/announcements.md
+Orphaned file: user-guides/features/teacher/store/behavioral-rules.md
+Orphaned file: user-guides/features/teacher/settings/account-recovery.md
+Orphaned file: /docs/user-guides/features/teacher/settings/account-recovery.md
+Orphaned file: /docs/user-guides/features/student/bills/index.md
+Orphaned file: /docs/user-guides/features/teacher/economy/economy-health.md
+Orphaned file: /docs/user-guides/features/student/store/edge-cases.md
+Orphaned file: user-guides/features/teacher/managing-students/setup.md
+Orphaned file: /docs/user-guides/legal/license.md
+Orphaned file: user-guides/features/student/rent/behavioral-rules.md
+Orphaned file: user-guides/features/student/work/start-end-work.md
+Orphaned file: /docs/development/DEPRECATED_CODE_PATTERNS.md
+Orphaned file: /docs/operations/GRAFANA_FIX_GUIDE.md
+Orphaned file: user-guides/features/student/bills/rent-payments.md
+Orphaned file: user-guides/features/student/banking/configuration.md
+Orphaned file: /docs/operations/MULTI_TENANCY_FIX_DEPLOYMENT.md
+Orphaned file: /docs/user-guides/features/student/work/attendance-history.md
+Orphaned file: /docs/user-guides/diagnostics/teacher-login.md
+Orphaned file: /docs/user-guides/features/teacher/banking/edge-cases.md
+Orphaned file: user-guides/features/teacher/bills/index.md
+Orphaned file: /docs/user-guides/features/teacher/store/behavioral-rules.md
+Orphaned file: /docs/user-guides/features/teacher/economy-and-analytics/setup.md
+Orphaned file: /docs/user-guides/features/teacher/rent/setup.md
+Orphaned file: user-guides/features/teacher/economy/banking-overdraft.md
+Orphaned file: user-guides/features/analytics/interpreting-analytics.md
+Orphaned file: /docs/development/ADMIN_IDENTITY_HANDLING_SPEC.md
+Orphaned file: /docs/user-guides/features/teacher/managing-students/setup.md
+Orphaned file: user-guides/features/teacher/classroom/student-issues.md
+Orphaned file: /docs/user-guides/features/student/reporting-issues/configuration.md
+Orphaned file: user-guides/features/teacher/system-features/behavioral-rules.md
+Orphaned file: /docs/user-guides/features/teacher/economy/store-pricing.md
+Orphaned file: user-guides/features/student/store/edge-cases.md
+Orphaned file: user-guides/features/teacher/class-management/configuration.md
+Orphaned file: /docs/security/MIGRATION_TOTP_ENCRYPTION.md
+Orphaned file: /docs/user-guides/legal/attribution.md
+Orphaned file: /docs/user-guides/features/student/store/setup.md
+Orphaned file: /docs/user-guides/features/student/insurance/edge-cases.md
+Orphaned file: /docs/user-guides/features/teacher/system-features/setup.md
+Orphaned file: user-guides/features/student/bills/index.md
+Orphaned file: /docs/user-guides/features/teacher/class-management/setup.md
+Orphaned file: /docs/development/TIMEZONE_HANDLING_SPECIFICATION.md
+Orphaned file: /docs/development/account_recovery_and_reclaim_spec.md
+Orphaned file: user-guides/features/student/rent/setup.md
+Orphaned file: user-guides/features/student/bills/insurance-claims.md
+Orphaned file: /docs/user-guides/diagnostics/student-attendance.md
+Orphaned file: user-guides/features/student/insurance/setup.md
+Orphaned file: /docs/user-guides/features/teacher/attendance-and-payroll/edge-cases.md
+Orphaned file: /docs/user-guides/features/student/store/behavioral-rules.md
+Orphaned file: /docs/user-guides/features/student/banking/configuration.md
+Orphaned file: user-guides/features/teacher/economy/payroll-settings.md
+Orphaned file: /docs/user-guides/features/teacher/classroom/dashboard-overview.md
+Orphaned file: user-guides/features/teacher/class-management/behavioral-rules.md
+Orphaned file: /docs/user-guides/features/teacher/classroom/attendance-approvals.md
+Orphaned file: /docs/user-guides/features/student/bills/insurance-coverage.md
+Orphaned file: /docs/user-guides/features/teacher/student-issues/behavioral-rules.md
+Orphaned file: user-guides/features/teacher/settings/personalization.md
+Orphaned file: /docs/user-guides/features/rent/managing-rent.md
+Orphaned file: /docs/user-guides/features/student/store/redemption-status.md
+Orphaned file: user-guides/features/student/insurance/behavioral-rules.md
+Orphaned file: user-guides/features/teacher/insurance/configuration.md
+Orphaned file: /docs/development/codebase_organization_documentation_hygiene_playbook.md
+Orphaned file: /docs/user-guides/features/banking/managing-banking.md
+Orphaned file: /docs/user-guides/features/student/rent/behavioral-rules.md
+Orphaned file: user-guides/features/teacher/student-issues/edge-cases.md
+Orphaned file: user-guides/features/student/insurance/configuration.md
+Orphaned file: /docs/user-guides/features/teacher/store/setup.md
+Orphaned file: /docs/technical-reference/PWA_ICON_REQUIREMENTS.md
+Orphaned file: user-guides/features/teacher/economy/analytics.md
+Orphaned file: /docs/operations/LEGACY_ACCOUNT_MIGRATION.md
+Orphaned file: user-guides/features/student/account/reset-recovery.md
+Orphaned file: /docs/user-guides/features/teacher/bills/rent-behaviors.md
+Orphaned file: /docs/user-guides/diagnostics/teacher-hall-pass.md
+Orphaned file: /docs/user-guides/diagnostics/teacher-onboarding.md
+Orphaned file: user-guides/features/teacher/settings/feature-toggles.md
+Orphaned file: user-guides/features/teacher/bills/insurance-enrollment.md
+Orphaned file: /docs/security/CRITICAL_SAME_TEACHER_LEAK.md
+Orphaned file: /docs/user-guides/features/student/starting-and-ending-work/behavioral-rules.md
+Orphaned file: user-guides/features/teacher/rent/setup.md
+Orphaned file: user-guides/features/teacher/account-customization/behavioral-rules.md
+Orphaned file: /docs/security/PROMPTPWND_REMEDIATION.md
+Orphaned file: /docs/user-guides/features/student/bills/insurance-claims.md
+Orphaned file: /docs/user-guides/features/teacher/economy/analytics.md
+Orphaned file: /docs/user-guides/features/teacher/attendance-and-payroll/configuration.md
+Orphaned file: user-guides/features/teacher/class-management/edge-cases.md
+Orphaned file: user-guides/features/teacher/banking/setup.md
+Orphaned file: /docs/user-guides/features/student/reporting-issues/edge-cases.md
+Orphaned file: /docs/user-guides/diagnostics/teacher-rent-insurance.md
+Orphaned file: user-guides/features/teacher/classroom/hall-pass.md
+Orphaned file: /docs/security/SECURITY_IMPROVEMENTS_IMPLEMENTATION.md
+Orphaned file: user-guides/features/teacher/bills/insurance-policies.md
+Orphaned file: /docs/user-guides/features/student/reporting-issues/behavioral-rules.md
+Orphaned file: /docs/development/HALL_PASS_FEATURE_SPEC.md
+Orphaned file: /docs/user-guides/features/student/student-account-actions/behavioral-rules.md
+Orphaned file: user-guides/features/teacher/classroom/attendance-approvals.md
+Orphaned file: /docs/development/migration-specifications.md
+Orphaned file: /docs/user-guides/diagnostics/student-store.md
+Orphaned file: /docs/operations/DEMO_SESSIONS.md
+Orphaned file: /docs/development/template_audit.md
+Orphaned file: /docs/user-guides/features/analytics/interpreting-analytics.md
+Orphaned file: user-guides/features/student/account/login-setup.md
+Orphaned file: user-guides/features/teacher/store/setup.md
+Orphaned file: /docs/security/SECURITY_REMEDIATION_GUIDE.md
+Orphaned file: /docs/user-guides/features/teacher/index.md
+Orphaned file: /docs/user-guides/features/teacher/economy/store-redemptions.md
+Orphaned file: /docs/user-guides/student_guide.md
+Orphaned file: user-guides/features/teacher/system-features/configuration.md
+Orphaned file: /docs/technical-reference/analytics-specification.md
+Orphaned file: /docs/development/SEEDING_INSTRUCTIONS.md
+Orphaned file: /docs/user-guides/features/teacher/classroom/student-issues.md
+Orphaned file: user-guides/features/teacher/student-issues/configuration.md
+Orphaned file: /docs/security/NETWORK_VULNERABILITY_REPORT.md
+Orphaned file: user-guides/features/student/store/behavioral-rules.md
+Orphaned file: user-guides/features/teacher/account-customization/edge-cases.md
+Orphaned file: user-guides/features/teacher/bills/insurance-claims.md
+Orphaned file: user-guides/features/teacher/insurance/setup.md
+Orphaned file: user-guides/features/teacher/system-features/edge-cases.md
+Orphaned file: user-guides/features/student/starting-and-ending-work/setup.md
+Orphaned file: /docs/user-guides/features/teacher/student-issues/configuration.md
+Orphaned file: user-guides/features/teacher/bills/rent-settings.md
+Orphaned file: user-guides/features/teacher/economy/store-items.md
+Orphaned file: /docs/user-guides/features/teacher/bills/insurance-enrollment.md
+Orphaned file: /docs/user-guides/features/student/insurance/setup.md
+Orphaned file: /docs/user-guides/features/teacher/classroom/class-setup.md
+Orphaned file: user-guides/features/teacher/economy-and-analytics/edge-cases.md
+Orphaned file: user-guides/features/teacher/economy-and-analytics/behavioral-rules.md
+Orphaned file: user-guides/features/teacher/account-customization/configuration.md
+Orphaned file: /docs/development/database-switching.md
+Orphaned file: /docs/user-guides/features/teacher/rent/configuration.md
+Orphaned file: /docs/user-guides/features/student/work/start-end-work.md
+Orphaned file: /docs/user-guides/features/teacher/class-management/configuration.md
+Orphaned file: /docs/security/MULTI_TENANCY_AUDIT_RESULTS.md
+Orphaned file: /docs/user-guides/features/teacher/store/configuration.md
+Orphaned file: user-guides/features/teacher/attendance-and-payroll/setup.md
+Orphaned file: /docs/technical-reference/TIMEZONE_HANDLING.md
+Orphaned file: /docs/user-guides/features/student/account/dashboard-overview.md
+Orphaned file: /docs/user-guides/features/student/store/browse-buy.md
+Orphaned file: /docs/security/MULTI_TENANCY_AUDIT.md
+Orphaned file: /docs/user-guides/features/teacher/economy/index.md
+Orphaned file: user-guides/features/teacher/economy/payroll-history.md
+Orphaned file: user-guides/features/student/store/setup.md
+Orphaned file: user-guides/features/teacher/banking/edge-cases.md
+Orphaned file: /docs/user-guides/diagnostics/student-money.md
+Orphaned file: /docs/operations/DEMO_ENV_SETUP.md
+Orphaned file: /docs/user-guides/features/banking/transferring-money.md
+Orphaned file: /docs/operations/CLEANUP_DUPLICATES.md
+Orphaned file: /docs/technical-reference/MONEY_HANDLING.md
+Orphaned file: user-guides/features/student/store/configuration.md
+Orphaned file: /docs/user-guides/features/student/insurance/behavioral-rules.md
+Orphaned file: /docs/user-guides/features/teacher/managing-students/behavioral-rules.md
+Orphaned file: user-guides/features/teacher/economy/payroll-run.md
+Orphaned file: /docs/user-guides/features/student/student-account-actions/setup.md
+Orphaned file: /docs/user-guides/features/student/banking/savings-interest.md
+Orphaned file: /docs/technical-reference/api_reference.md
+Orphaned file: user-guides/features/teacher/economy/store-pricing.md
+Orphaned file: user-guides/features/teacher/economy/index.md
+Orphaned file: user-guides/features/student/work/index.md
+Orphaned file: user-guides/features/teacher/student-issues/behavioral-rules.md
+Orphaned file: /docs/user-guides/diagnostics/student-classes.md
+Orphaned file: /docs/user-guides/features/teacher/attendance-and-payroll/behavioral-rules.md
+Orphaned file: /docs/user-guides/features/student/account/login-setup.md
+Orphaned file: user-guides/features/payroll/running-payroll.md
+Orphaned file: /docs/user-guides/features/student/rent/edge-cases.md
+Orphaned file: user-guides/features/student/banking/setup.md
+Orphaned file: user-guides/features/student/student-account-actions/behavioral-rules.md
+Orphaned file: /docs/user-guides/features/student/account/join-class.md
+Orphaned file: /docs/operations/PULSETIC_SETUP.md
+Orphaned file: /docs/CHANGELOG.md
+Orphaned file: user-guides/features/teacher/store/edge-cases.md
+Orphaned file: /docs/user-guides/features/teacher/classroom/attendance-corrections.md
+Orphaned file: /docs/user-guides/features/teacher/economy-and-analytics/behavioral-rules.md
+Orphaned file: /docs/user-guides/features/payroll/running-payroll.md
+Orphaned file: /docs/user-guides/features/teacher/bills/index.md
+Orphaned file: /docs/development/TESTING_SUMMARY.md
+Orphaned file: /docs/user-guides/diagnostics/student-hall-pass.md
+Orphaned file: user-guides/features/student/account/dashboard-overview.md
+Orphaned file: /docs/user-guides/features/student/student-account-actions/edge-cases.md
+Orphaned file: /docs/user-guides/features/student/support/report-issues.md
+Orphaned file: /docs/user-guides/features/teacher/system-features/configuration.md
+Orphaned file: /docs/user-guides/features/teacher/bills/rent-itemization.md
+Orphaned file: /docs/user-guides/features/student/starting-and-ending-work/edge-cases.md
+Orphaned file: /docs/user-guides/features/teacher/store/edge-cases.md
+Orphaned file: /docs/user-guides/features/teacher/class-management/edge-cases.md
+Orphaned file: user-guides/features/student/student-account-actions/setup.md
+Orphaned file: /docs/operations/GITHUB_PAGES_SETUP.md
+Orphaned file: user-guides/features/teacher/economy/banking-settings.md
+Orphaned file: user-guides/features/teacher/banking/behavioral-rules.md
+Orphaned file: user-guides/features/rent/itemization-guide.md
+Orphaned file: /docs/user-guides/diagnostics/student-rent-insurance.md
+Orphaned file: /docs/user-guides/features/teacher/insurance/configuration.md
+Orphaned file: /docs/security/SECURITY_AUDIT_2025.md
+Orphaned file: user-guides/features/teacher/classroom/attendance-corrections.md
+Orphaned file: /docs/user-guides/features/teacher/insurance/edge-cases.md
+Orphaned file: user-guides/features/student/student-account-actions/configuration.md
+Orphaned file: /docs/user-guides/features/student/store/index.md
+Orphaned file: user-guides/features/teacher/classroom/students-overview.md
+Orphaned file: /docs/technical-reference/architecture.md
+Orphaned file: /docs/operations/DIGITALOCEAN_CLOUDFLARE_SETUP.md
+Orphaned file: /docs/user-guides/diagnostics/teacher-transactions-banking.md
+Orphaned file: /docs/security/HOW_TO_ADD_GITHUB_SECRETS.md
+Orphaned file: /docs/user-guides/features/teacher/rent/edge-cases.md
+Orphaned file: /docs/user-guides/features/student/rent/configuration.md
+Orphaned file: user-guides/features/teacher/student-issues/setup.md
+Orphaned file: /docs/user-guides/features/student/rent/setup.md
+Orphaned file: user-guides/features/student/rent/configuration.md
+Orphaned file: /docs/user-guides/features/teacher/account-customization/edge-cases.md
+Orphaned file: /docs/user-guides/diagnostics/student.md
+Orphaned file: /docs/user-guides/features/teacher/economy/payroll-history.md
+Orphaned file: user-guides/features/teacher/managing-students/behavioral-rules.md
+Link check complete.

@@ -5,6 +5,7 @@ roles: [student]
 related:
   - user-guides/diagnostics/student-money
   - user-guides/diagnostics/student-rent-insurance
+Audience: student-facing
 ---
 
 # Store and Purchases

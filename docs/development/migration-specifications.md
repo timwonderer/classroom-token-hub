@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Database Migration Specifications
 
 > [!IMPORTANT]

@@ -1,4 +1,11 @@
+---
+roles: [teacher, student, developer]
+Audience: mixed-audience
+---
 # Classroom Token Hub - Development Priorities
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 **Last Updated:** 2026-02-09
 **Current Version:** 1.8.0

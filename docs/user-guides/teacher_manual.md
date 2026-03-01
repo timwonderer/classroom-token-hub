@@ -2,6 +2,7 @@
 title: Teacher Manual
 category: user-guides
 roles: [teacher]
+Audience: teacher-facing
 ---
 
 # Teacher Manual (Quick Index)
@@ -26,13 +27,13 @@ This page is a shortcut list. Use diagnostics for fast troubleshooting and featu
 
 ## Feature Guides (Structured by Section)
 - [Teacher Feature Guides Index](/docs/user-guides/features/teacher/index)
-- [Classroom Setup and Students](/docs/user-guides/features/teacher/classroom/class-setup)
-- [Attendance and Payroll](/docs/user-guides/features/teacher/economy/payroll-run)
-- [Store and Redemptions](/docs/user-guides/features/teacher/economy/store-items)
-- [Economy Health and Analytics](/docs/user-guides/features/teacher/economy/economy-health)
-- [Rent and Insurance](/docs/user-guides/features/teacher/bills/rent-settings)
-- [Settings and Feature Toggles](/docs/user-guides/features/teacher/settings/personalization)
+- [Classroom Setup and Students](/docs/user-guides/features/teacher/class-management/class-setup)
+- [Attendance and Payroll](/docs/user-guides/features/teacher/attendance-and-payroll/payroll-run)
+- [Store and Redemptions](/docs/user-guides/features/teacher/store/store-items)
+- [Economy Health and Analytics](/docs/user-guides/features/teacher/economy-and-analytics/economy-health)
+- [Rent and Insurance](/docs/user-guides/features/teacher/rent/rent-settings)
+- [Settings and Feature Toggles](/docs/user-guides/features/teacher/account-customization/personalization)
 
 ## Legacy Deep Dives
-- [Interpreting Analytics Dashboard](/docs/user-guides/features/analytics/interpreting-analytics)
-- [Rent Itemization Setup](/docs/user-guides/features/rent/itemization-guide)
+- [Interpreting Analytics Dashboard](/docs/user-guides/features/teacher/economy-and-analytics/interpreting-analytics)
+- [Rent Itemization Setup](/docs/user-guides/features/teacher/rent/itemization-guide)

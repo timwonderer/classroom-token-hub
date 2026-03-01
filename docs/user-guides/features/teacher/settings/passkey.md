@@ -7,6 +7,7 @@ description: Manage passkeys and login security.
 keywords: [passkey, security, login]
 related:
   - user-guides/diagnostics/teacher-login
+Audience: teacher-facing
 ---
 
 # Passkey and Login Security

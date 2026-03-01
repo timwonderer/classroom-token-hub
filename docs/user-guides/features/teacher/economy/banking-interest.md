@@ -6,8 +6,9 @@ roles: [teacher]
 description: Configure savings interest type, rate, and payout cadence.
 keywords: [interest, savings, payout]
 related:
-  - user-guides/features/teacher/economy/banking-settings
-  - user-guides/features/banking/managing-banking
+  - user-guides/features/teacher/banking/banking-settings
+  - user-guides/features/teacher/banking/managing-banking
+Audience: teacher-facing
 ---
 
 # Interest and Payouts
@@ -26,5 +27,5 @@ Go to **Economy > Banking**.
 Keep rates modest and review the economy balance after changes.
 
 ## Related guides
-- [Banking Settings](/docs/user-guides/features/teacher/economy/banking-settings)
-- [Managing Banking (Detailed)](/docs/user-guides/features/banking/managing-banking)
+- [Banking Settings](/docs/user-guides/features/teacher/banking/banking-settings)
+- [Managing Banking (Detailed)](/docs/user-guides/features/teacher/banking/managing-banking)

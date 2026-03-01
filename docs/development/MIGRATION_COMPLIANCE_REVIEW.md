@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Migration Compliance Review Report
 
 **Branch:** `claude/review-migration-compliance-9Qj73`

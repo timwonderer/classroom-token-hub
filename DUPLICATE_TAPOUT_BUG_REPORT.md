@@ -1,4 +1,11 @@
+---
+roles: [teacher, student, developer]
+Audience: mixed-audience
+---
 # P0 Bug Report: Duplicate Auto-Tap-Out Events Causing Payroll Overpayment
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 **Date:** 2026-02-10
 **Severity:** P0 - Critical Financial Bug

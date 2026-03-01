@@ -6,7 +6,8 @@ roles: [student]
 description: Submit claims for coverage and track eligibility.
 keywords: [insurance, claims]
 related:
-  - user-guides/features/student/bills/insurance-coverage
+  - user-guides/features/student/insurance/insurance-coverage
+Audience: student-facing
 ---
 
 # Submit an Insurance Claim
@@ -25,4 +26,4 @@ Go to **Bills** and open the Insurance view.
 Claims follow the waiting period and limits set by your teacher.
 
 ## Related guides
-- [Insurance Coverage and Claims](/docs/user-guides/features/student/bills/insurance-coverage)
+- [Insurance Coverage and Claims](/docs/user-guides/features/student/insurance/insurance-coverage)

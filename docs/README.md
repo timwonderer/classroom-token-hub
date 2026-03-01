@@ -3,9 +3,13 @@ title: Documentation Home
 description: Complete guide to using Classroom Token Hub - feature guides, troubleshooting, and help resources.
 keywords: [documentation, help, guide, tutorial, how-to, manual, support]
 roles: [teacher, student]
+Audience: mixed-audience
 ---
 
 # Classroom Token Hub - Documentation Index
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 Welcome to the Classroom Token Hub documentation. This index points you to fast, diagnostic answers first.
 

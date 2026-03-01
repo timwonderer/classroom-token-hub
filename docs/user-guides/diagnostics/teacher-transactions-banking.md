@@ -5,6 +5,7 @@ roles: [teacher]
 related:
   - user-guides/diagnostics/teacher-attendance-payroll
   - user-guides/diagnostics/teacher-store
+Audience: teacher-facing
 ---
 
 # Transactions and Banking

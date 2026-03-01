@@ -7,6 +7,7 @@ description: Check the status of your store redemptions.
 keywords: [store, redemption, status]
 related:
   - user-guides/diagnostics/student-store
+Audience: student-facing
 ---
 
 # Track Redemptions

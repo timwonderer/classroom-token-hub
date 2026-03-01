@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Class Deletion Audit
 
 **Date:** 2026-02-21

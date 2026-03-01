@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Admin (Teacher) Identity Handling Specification
 
 Status: Active (Normative)

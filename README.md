@@ -1,4 +1,11 @@
+---
+roles: [teacher, student, developer]
+Audience: mixed-audience
+---
 # 🎓 Classroom Token Hub
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.
 

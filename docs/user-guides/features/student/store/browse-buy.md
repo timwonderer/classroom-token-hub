@@ -7,6 +7,7 @@ description: Browse store items and redeem rewards.
 keywords: [store, buy, redeem]
 related:
   - user-guides/diagnostics/student-store
+Audience: student-facing
 ---
 
 # Browse and Buy Items

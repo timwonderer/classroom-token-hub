@@ -7,6 +7,7 @@ description: View checking and savings balances and transfer funds.
 keywords: [accounts, checking, savings, transfer]
 related:
   - user-guides/diagnostics/student-money
+Audience: student-facing
 ---
 
 # Accounts and Transfers

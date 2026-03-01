@@ -8,9 +8,13 @@ related:
   - user-guides/features/payroll/settings
   - user-guides/features/payroll/rewards-and-fines
   - user-guides/diagnostics/teacher-attendance-payroll
+Audience: mixed-audience
 ---
 
 # Running Payroll
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 Process student paychecks and distribute earnings based on attendance.
 

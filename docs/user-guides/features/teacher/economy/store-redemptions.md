@@ -6,8 +6,9 @@ roles: [teacher]
 description: Review pending redemptions and purchase history.
 keywords: [store, redemptions, purchase history]
 related:
-  - user-guides/features/teacher/economy/store-items
+  - user-guides/features/teacher/store/store-items
   - user-guides/diagnostics/teacher-store
+Audience: teacher-facing
 ---
 
 # Store Redemptions
@@ -24,5 +25,5 @@ Use the overview panel to approve or deny requests for delayed items.
 Use the history tab to see what students have redeemed and when.
 
 ## Related guides
-- [Store Items](/docs/user-guides/features/teacher/economy/store-items)
+- [Store Items](/docs/user-guides/features/teacher/store/store-items)
 - [Teacher Store Diagnostics](/docs/user-guides/diagnostics/teacher-store)

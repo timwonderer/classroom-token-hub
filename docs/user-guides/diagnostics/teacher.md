@@ -2,6 +2,7 @@
 title: Teacher Help and Support Guides
 category: diagnostics
 roles: [teacher]
+Audience: teacher-facing
 ---
 
 # Teacher Help and Support Guides

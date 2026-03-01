@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Security Alert Fixes Summary
 
 **Date:** 2025-12-27

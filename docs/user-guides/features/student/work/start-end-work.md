@@ -6,8 +6,9 @@ roles: [student]
 description: Record your work sessions so payroll can calculate your pay.
 keywords: [start work, end work, attendance, payroll]
 related:
-  - user-guides/features/student/work/attendance-history
-  - user-guides/features/teacher/classroom/attendance-approvals
+  - user-guides/features/student/starting-and-ending-work/attendance-history
+  - user-guides/features/teacher/attendance-and-payroll/attendance-approvals
+Audience: student-facing
 ---
 
 # Start and End Work
@@ -27,5 +28,5 @@ Select **Break** or **Done** when you stop working.
 Payroll uses these taps to calculate your pay.
 
 ## Related guides
-- [Attendance History and Pay Status](/docs/user-guides/features/student/work/attendance-history)
-- [Attendance and Approvals (Teacher)](/docs/user-guides/features/teacher/classroom/attendance-approvals)
+- [Attendance History and Pay Status](/docs/user-guides/features/student/starting-and-ending-work/attendance-history)
+- [Attendance and Approvals (Teacher)](/docs/user-guides/features/teacher/attendance-and-payroll/attendance-approvals)

@@ -6,8 +6,9 @@ roles: [teacher]
 description: Understand the teacher dashboard widgets and quick actions.
 keywords: [dashboard, overview]
 related:
-  - user-guides/features/teacher/classroom/students-overview
-  - user-guides/features/teacher/economy/economy-health
+  - user-guides/features/teacher/managing-students/students-overview
+  - user-guides/features/teacher/economy-and-analytics/economy-health
+Audience: teacher-facing
 ---
 
 # Teacher Dashboard Overview
@@ -23,5 +24,5 @@ Go to **Dashboard** from the teacher sidebar.
 - Getting started prompts for new classes.
 
 ## Related guides
-- [Student Management Overview](/docs/user-guides/features/teacher/classroom/students-overview)
-- [Economy Health](/docs/user-guides/features/teacher/economy/economy-health)
+- [Student Management Overview](/docs/user-guides/features/teacher/managing-students/students-overview)
+- [Economy Health](/docs/user-guides/features/teacher/economy-and-analytics/economy-health)

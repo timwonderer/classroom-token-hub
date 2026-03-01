@@ -2,9 +2,13 @@
 title: Classroom Economy Guide
 description: Teacher-friendly ranges and examples for pricing, rent, insurance, and balance checks.
 roles: [teacher]
+Audience: mixed-audience
 ---
 
 # Classroom Economy Guide
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 This guide helps teachers set prices and fees that keep the classroom economy balanced and motivating. Use it alongside the Economy Health page.
 

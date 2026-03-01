@@ -7,9 +7,14 @@ searchable: true
 related:
   - user-guides/legal/license
   - user-guides/legal/attribution
+roles: [teacher, student, developer]
+Audience: mixed-audience
 ---
 
 # Third-Party Notices
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 This project relies on third-party open-source software and services. The following attributions are provided in accordance with their respective licenses.
 

@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Economy Balance Checker - Implementation Guide
 
 ## Overview

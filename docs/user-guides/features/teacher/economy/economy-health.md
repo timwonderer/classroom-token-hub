@@ -7,7 +7,8 @@ description: Monitor classroom economy balance, wages, and affordability.
 keywords: [economy health, balance, wage index, affordability]
 related:
   - user-guides/economy_guide
-  - user-guides/features/teacher/economy/analytics
+  - user-guides/features/teacher/economy-and-analytics/analytics
+Audience: teacher-facing
 ---
 
 # Economy Health
@@ -27,4 +28,4 @@ Use the Classroom Economy Guide for recommended ranges and quick checks.
 
 ## Related guides
 - [Classroom Economy Guide](/docs/user-guides/economy_guide)
-- [Analytics Dashboard](/docs/user-guides/features/teacher/economy/analytics)
+- [Analytics Dashboard](/docs/user-guides/features/teacher/economy-and-analytics/analytics)

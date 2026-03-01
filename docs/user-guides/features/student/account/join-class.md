@@ -6,8 +6,9 @@ roles: [student]
 description: Add a new class using a join code from your teacher.
 keywords: [join class, add class, join code]
 related:
-  - user-guides/features/student/account/switch-class
-  - user-guides/features/teacher/classroom/class-setup
+  - user-guides/features/student/student-account-actions/switch-class
+  - user-guides/features/teacher/class-management/class-setup
+Audience: student-facing
 ---
 
 # Join or Add a Class
@@ -27,5 +28,5 @@ Go to **Add Class** from the student sidebar.
 3. Submit the form to add the class.
 
 ## Related guides
-- [Switch Classes](/docs/user-guides/features/student/account/switch-class)
-- [Class Setup and Join Codes (Teacher)](/docs/user-guides/features/teacher/classroom/class-setup)
+- [Switch Classes](/docs/user-guides/features/student/student-account-actions/switch-class)
+- [Class Setup and Join Codes (Teacher)](/docs/user-guides/features/teacher/class-management/class-setup)

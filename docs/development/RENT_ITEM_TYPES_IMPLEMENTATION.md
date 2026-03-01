@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Rent Item Types Implementation Plan
 
 **Feature:** Rent Item Type Extension (Privilege / Per-Use / Hall Pass)

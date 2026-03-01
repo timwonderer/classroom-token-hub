@@ -6,8 +6,9 @@ roles: [teacher]
 description: Control attendance taps, review attendance records, and resolve discrepancies.
 keywords: [attendance, work, approvals, tap, start work, break, done]
 related:
-  - user-guides/features/student/work/start-end-work
-  - user-guides/features/teacher/economy/payroll-run
+  - user-guides/features/student/starting-and-ending-work/start-end-work
+  - user-guides/features/teacher/attendance-and-payroll/payroll-run
+Audience: teacher-facing
 ---
 
 # Attendance and Approvals
@@ -27,5 +28,5 @@ Use filters to narrow by class, event type, and date range. The table shows the 
 If records are missing, expand the date range and clear filters. If a student reports a mistake, verify their event list and update payroll expectations.
 
 ## Related guides
-- [Start and End Work (Student)](/docs/user-guides/features/student/work/start-end-work)
-- [Run Payroll](/docs/user-guides/features/teacher/economy/payroll-run)
+- [Start and End Work (Student)](/docs/user-guides/features/student/starting-and-ending-work/start-end-work)
+- [Run Payroll](/docs/user-guides/features/teacher/attendance-and-payroll/payroll-run)

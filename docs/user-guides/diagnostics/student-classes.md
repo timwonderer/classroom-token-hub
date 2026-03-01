@@ -5,6 +5,7 @@ roles: [student]
 related:
   - user-guides/diagnostics/student-login
   - user-guides/diagnostics/student-money
+Audience: student-facing
 ---
 
 # Classes and Join Codes

@@ -7,6 +7,7 @@ description: Find quick help links and diagnostics.
 keywords: [help center, support, diagnostics]
 related:
   - user-guides/diagnostics/student
+Audience: student-facing
 ---
 
 # Help Center Basics

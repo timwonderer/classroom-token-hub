@@ -6,8 +6,9 @@ roles: [student]
 description: Review your attendance record and projected pay.
 keywords: [attendance history, projected pay, payroll]
 related:
-  - user-guides/features/student/work/start-end-work
+  - user-guides/features/student/starting-and-ending-work/start-end-work
   - user-guides/diagnostics/student-attendance
+Audience: student-facing
 ---
 
 # Attendance History and Pay Status
@@ -26,5 +27,5 @@ Go to **Work and Pay** from the student sidebar.
 Use the help icon on an attendance record to report a problem.
 
 ## Related guides
-- [Start and End Work](/docs/user-guides/features/student/work/start-end-work)
+- [Start and End Work](/docs/user-guides/features/student/starting-and-ending-work/start-end-work)
 - [Student Attendance Diagnostics](/docs/user-guides/diagnostics/student-attendance)

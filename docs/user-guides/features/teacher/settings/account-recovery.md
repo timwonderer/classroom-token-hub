@@ -7,6 +7,7 @@ description: Set up account recovery for teacher accounts.
 keywords: [account recovery, teacher]
 related:
   - user-guides/diagnostics/teacher-login
+Audience: teacher-facing
 ---
 
 # Account Recovery

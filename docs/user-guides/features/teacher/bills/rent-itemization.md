@@ -6,10 +6,11 @@ roles: [teacher]
 description: Break rent into itemized charges and configure store alternatives.
 keywords: [rent, itemization, utilities, itemized rent]
 related:
-  - user-guides/features/rent/itemization-guide
-  - user-guides/features/teacher/bills/rent-settings
-  - user-guides/features/teacher/bills/rent-behaviors
+  - user-guides/features/teacher/rent/itemization-guide
+  - user-guides/features/teacher/rent/rent-settings
+  - user-guides/features/teacher/rent/rent-behaviors
   - user-guides/diagnostics/teacher-rent-itemization
+Audience: teacher-facing
 ---
 
 # Rent Itemization
@@ -28,5 +29,5 @@ Go to **Bills > Rent** and open the **Itemization** tab.
 If enabled, itemized rent can point to alternative store purchases tied to line items.
 
 ## Related guides
-- [Rent Itemization Setup (Detailed)](/docs/user-guides/features/rent/itemization-guide)
+- [Rent Itemization Setup (Detailed)](/docs/user-guides/features/teacher/rent/itemization-guide)
 - [Teacher Rent Itemization Diagnostics](/docs/user-guides/diagnostics/teacher-rent-itemization)

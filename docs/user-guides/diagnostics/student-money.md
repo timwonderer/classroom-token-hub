@@ -5,6 +5,7 @@ roles: [student]
 related:
   - user-guides/diagnostics/student-classes
   - user-guides/diagnostics/student-store
+Audience: student-facing
 ---
 
 # Balances, Transfers, and Interest

@@ -4,6 +4,7 @@ category: diagnostics
 roles: [teacher]
 related:
   - user-guides/diagnostics/teacher-onboarding
+Audience: teacher-facing
 ---
 
 # Login and Account Security

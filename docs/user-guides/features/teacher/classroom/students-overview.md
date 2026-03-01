@@ -6,8 +6,9 @@ roles: [teacher]
 description: Add, update, move, reset, and remove students from class rosters.
 keywords: [students, roster, bulk upload, reset, remove, edit]
 related:
-  - user-guides/features/teacher/classroom/class-setup
-  - user-guides/features/student/account/login-setup
+  - user-guides/features/teacher/class-management/class-setup
+  - user-guides/features/student/student-account-actions/login-setup
+Audience: teacher-facing
 ---
 
 # Student Management Overview
@@ -36,5 +37,5 @@ Use **Remove** in the Class Roster to delete a student from the class. This is p
 Use **Export All** in the roster header to download a CSV of your students.
 
 ## Related guides
-- [Class Setup and Join Codes](/docs/user-guides/features/teacher/classroom/class-setup)
-- [Log In and First-Time Setup (Student)](/docs/user-guides/features/student/account/login-setup)
+- [Class Setup and Join Codes](/docs/user-guides/features/teacher/class-management/class-setup)
+- [Log In and First-Time Setup (Student)](/docs/user-guides/features/student/student-account-actions/login-setup)

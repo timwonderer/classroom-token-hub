@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # GitHub Pages Setup Instructions
 
 This document explains how to configure and maintain the GitHub Pages site for Classroom Token Hub.

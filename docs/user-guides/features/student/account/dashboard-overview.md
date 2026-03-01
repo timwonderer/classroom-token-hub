@@ -7,7 +7,8 @@ description: Understand the student dashboard summary and shortcuts.
 keywords: [dashboard, overview]
 related:
   - user-guides/features/student/banking/accounts-transfers
-  - user-guides/features/student/work/attendance-history
+  - user-guides/features/student/starting-and-ending-work/attendance-history
+Audience: student-facing
 ---
 
 # Student Dashboard Overview
@@ -24,4 +25,4 @@ Go to **Dashboard** from the student sidebar.
 
 ## Related guides
 - [Accounts and Transfers](/docs/user-guides/features/student/banking/accounts-transfers)
-- [Attendance History and Pay Status](/docs/user-guides/features/student/work/attendance-history)
+- [Attendance History and Pay Status](/docs/user-guides/features/student/starting-and-ending-work/attendance-history)

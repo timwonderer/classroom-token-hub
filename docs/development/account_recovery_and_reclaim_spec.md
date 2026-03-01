@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 Account Recovery & Reclaim Specification
 
 Purpose

@@ -6,8 +6,9 @@ roles: [teacher]
 description: Manage and resolve student-reported issues and disputes.
 keywords: [issues, reports, support, student, resolution, escalate]
 related:
-  - user-guides/features/student/support/report-issues
+  - user-guides/features/student/reporting-issues/report-issues
   - user-guides/diagnostics/teacher-announcements-issues
+Audience: teacher-facing
 ---
 
 # Student Issues Queue
@@ -96,5 +97,5 @@ Students see the status of their issues on their **Help & Support** page.
 ---
 
 ## Related Guides
-- [Student Perspective: Reporting Issues](/docs/user-guides/features/student/support/report-issues)
+- [Student Perspective: Reporting Issues](/docs/user-guides/features/student/reporting-issues/report-issues)
 - [Diagnostics: Announcements & Issues](/docs/user-guides/diagnostics/teacher-announcements-issues)

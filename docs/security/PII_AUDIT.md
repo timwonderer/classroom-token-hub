@@ -1,5 +1,7 @@
 ---
 searchable: false
+roles: [developer]
+Audience: developer-facing
 ---
 
 # PII Audit for Multi-Tenancy Rollout

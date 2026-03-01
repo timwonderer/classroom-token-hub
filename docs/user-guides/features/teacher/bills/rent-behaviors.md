@@ -6,8 +6,9 @@ roles: [teacher]
 description: Adjust grace periods, penalties, waivers, and store restrictions for rent.
 keywords: [rent, penalties, grace period, waivers]
 related:
-  - user-guides/features/teacher/bills/rent-settings
+  - user-guides/features/teacher/rent/rent-settings
   - user-guides/diagnostics/teacher-rent-insurance
+Audience: teacher-facing
 ---
 
 # Customizing Rent Behaviors
@@ -27,5 +28,5 @@ Go to **Bills > Rent** and open the **Settings** tab.
 Align penalties with your classroom norms so rent feels fair and predictable.
 
 ## Related guides
-- [Rent Settings](/docs/user-guides/features/teacher/bills/rent-settings)
+- [Rent Settings](/docs/user-guides/features/teacher/rent/rent-settings)
 - [Teacher Rent and Insurance Diagnostics](/docs/user-guides/diagnostics/teacher-rent-insurance)

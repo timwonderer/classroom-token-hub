@@ -5,6 +5,7 @@ roles: [student]
 related:
   - user-guides/diagnostics/student-classes
   - user-guides/diagnostics/student-support
+Audience: student-facing
 ---
 
 # Student Login and Setup

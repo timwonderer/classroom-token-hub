@@ -6,8 +6,9 @@ roles: [teacher]
 description: Run payroll, review previews, and confirm payments.
 keywords: [payroll, run payroll, paychecks]
 related:
-  - user-guides/features/teacher/economy/payroll-settings
+  - user-guides/features/teacher/attendance-and-payroll/payroll-settings
   - user-guides/diagnostics/teacher-attendance-payroll
+Audience: teacher-facing
 ---
 
 # Run Payroll
@@ -29,5 +30,5 @@ Check **Payroll History** to confirm totals and spot check transactions for a fe
 Verify attendance taps and pay rates, then refresh the preview.
 
 ## Related guides
-- [Payroll Settings](/docs/user-guides/features/teacher/economy/payroll-settings)
+- [Payroll Settings](/docs/user-guides/features/teacher/attendance-and-payroll/payroll-settings)
 - [Teacher Attendance and Payroll Diagnostics](/docs/user-guides/diagnostics/teacher-attendance-payroll)

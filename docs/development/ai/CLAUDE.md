@@ -3,6 +3,7 @@ title: Claude Development Guide
 description: Essential guidance for AI assistants working on Classroom Token Hub
 keywords: [claude, ai, development, guidelines, best practices]
 roles: [developer]
+Audience: developer-facing
 ---
 
 # Claude Development Guide

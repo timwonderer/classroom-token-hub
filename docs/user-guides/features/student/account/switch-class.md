@@ -6,7 +6,8 @@ roles: [student]
 description: Switch between classes you are already enrolled in.
 keywords: [switch class, class selector]
 related:
-  - user-guides/features/student/account/join-class
+  - user-guides/features/student/student-account-actions/join-class
+Audience: student-facing
 ---
 
 # Switch Classes
@@ -23,4 +24,4 @@ Select the class you want. The dashboard updates to the selected class.
 Use **Add Class** with the join code from your teacher.
 
 ## Related guides
-- [Join or Add a Class](/docs/user-guides/features/student/account/join-class)
+- [Join or Add a Class](/docs/user-guides/features/student/student-account-actions/join-class)

@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Security Remediation Implementation Guide
 
 **Date:** 2025-12-22

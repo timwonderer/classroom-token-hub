@@ -6,8 +6,9 @@ roles: [teacher]
 description: Create and manage store items, pricing, and availability.
 keywords: [store, items, pricing, inventory, redemption]
 related:
-  - user-guides/features/teacher/economy/store-redemptions
+  - user-guides/features/teacher/store/store-redemptions
   - user-guides/diagnostics/teacher-store
+Audience: teacher-facing
 ---
 
 # Store Items
@@ -33,5 +34,5 @@ Go to **Economy > Store** and open **Add New Item** or **Manage Items**.
 Keep prices aligned to your Classroom Wage Index so rewards feel achievable.
 
 ## Related guides
-- [Store Redemptions](/docs/user-guides/features/teacher/economy/store-redemptions)
+- [Store Redemptions](/docs/user-guides/features/teacher/store/store-redemptions)
 - [Teacher Store Diagnostics](/docs/user-guides/diagnostics/teacher-store)

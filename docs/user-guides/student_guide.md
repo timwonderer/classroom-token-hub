@@ -2,6 +2,7 @@
 title: Student Guide
 category: user-guides
 roles: [student]
+Audience: student-facing
 ---
 
 # Student Guide (Quick Index)
@@ -23,9 +24,9 @@ Here are some issues students typically encounter, plus links to focused feature
 
 ## Feature Guides (Structured by Section)
 - [Student Feature Guides Index](/docs/user-guides/features/student/index)
-- [Log In and Setup](/docs/user-guides/features/student/account/login-setup)
-- [Work and Pay](/docs/user-guides/features/student/work/start-end-work)
+- [Log In and Setup](/docs/user-guides/features/student/student-account-actions/login-setup)
+- [Work and Pay](/docs/user-guides/features/student/starting-and-ending-work/start-end-work)
 - [Store Purchases](/docs/user-guides/features/student/store/browse-buy)
 - [Accounts and Transfers](/docs/user-guides/features/student/banking/accounts-transfers)
-- [Rent and Insurance](/docs/user-guides/features/student/bills/rent-payments)
-- [Help and Support](/docs/user-guides/features/student/support/help-center)
+- [Rent and Insurance](/docs/user-guides/features/student/rent/rent-payments)
+- [Help and Support](/docs/user-guides/features/student/reporting-issues/help-center)

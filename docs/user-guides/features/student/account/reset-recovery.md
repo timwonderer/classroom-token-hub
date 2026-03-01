@@ -7,7 +7,8 @@ description: What to do if you cannot log in or forgot your credentials.
 keywords: [reset, recovery, forgot username, forgot pin]
 related:
   - user-guides/diagnostics/student-login
-  - user-guides/features/student/support/report-issues
+  - user-guides/features/student/reporting-issues/report-issues
+Audience: student-facing
 ---
 
 # Reset or Recover Your Account
@@ -23,4 +24,4 @@ Your username is shown during setup. Write it down or keep it in a safe place.
 
 ## Related guides
 - [Student Login Diagnostics](/docs/user-guides/diagnostics/student-login)
-- [Report Issues](/docs/user-guides/features/student/support/report-issues)
+- [Report Issues](/docs/user-guides/features/student/reporting-issues/report-issues)

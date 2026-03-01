@@ -1,4 +1,11 @@
+---
+roles: [teacher, student, developer]
+Audience: mixed-audience
+---
 # Changelog
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 All notable changes to the Classroom Token Hub project will be documented in this file.
 

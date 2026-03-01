@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Security Assessment Reports - Validation Report
 
 **Validation Date:** 2025-11-26  

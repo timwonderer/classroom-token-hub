@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # DigitalOcean Firewall Setup for Cloudflare Proxy
 
 This guide explains how to configure DigitalOcean firewall rules to work with Cloudflare's proxy service (orange cloud enabled).

@@ -6,8 +6,9 @@ roles: [teacher]
 description: Price store items with the Classroom Wage Index and economy goals.
 keywords: [store pricing, cwi, economy balance]
 related:
-  - user-guides/features/teacher/economy/store-items
+  - user-guides/features/teacher/store/store-items
   - user-guides/economy_guide
+Audience: teacher-facing
 ---
 
 # Store Pricing Strategy
@@ -23,5 +24,5 @@ Set prices in **Economy > Store** when creating or editing items.
 - Adjust prices if students are consistently broke or overloaded with cash.
 
 ## Related guides
-- [Store Items](/docs/user-guides/features/teacher/economy/store-items)
+- [Store Items](/docs/user-guides/features/teacher/store/store-items)
 - [Classroom Economy Guide](/docs/user-guides/economy_guide)

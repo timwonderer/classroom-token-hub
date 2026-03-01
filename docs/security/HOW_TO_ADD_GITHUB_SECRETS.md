@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # How to Add SSH Host Key to GitHub Secrets
 
 ## Quick Start (5 Minutes)

@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Demo Session Lifecycle and Cleanup
 
 ## Overview

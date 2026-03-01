@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Security Improvements Implementation Guide
 
 **Date:** 2025-11-28

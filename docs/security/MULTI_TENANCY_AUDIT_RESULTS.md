@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Multi-Tenancy Security Audit Results
 
 **Date:** 2025-12-23

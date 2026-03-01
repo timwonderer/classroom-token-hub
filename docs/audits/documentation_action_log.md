@@ -1,0 +1,370 @@
+- **Create**: `docs/user-guides/features/teacher/managing-students/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/teacher/managing-students/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/teacher/managing-students/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/teacher/managing-students/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/teacher/attendance-and-payroll/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/teacher/attendance-and-payroll/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/teacher/attendance-and-payroll/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/teacher/attendance-and-payroll/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/teacher/store/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/teacher/store/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/teacher/store/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/teacher/store/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/teacher/economy-and-analytics/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/teacher/economy-and-analytics/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/teacher/economy-and-analytics/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/teacher/economy-and-analytics/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/teacher/rent/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/teacher/rent/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/teacher/rent/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/teacher/rent/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/teacher/insurance/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/teacher/insurance/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/teacher/insurance/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/teacher/insurance/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/teacher/banking/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/teacher/banking/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/teacher/banking/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/teacher/banking/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/teacher/student-issues/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/teacher/student-issues/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/teacher/student-issues/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/teacher/student-issues/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/teacher/account-customization/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/teacher/account-customization/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/teacher/account-customization/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/teacher/account-customization/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/teacher/class-management/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/teacher/class-management/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/teacher/class-management/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/teacher/class-management/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/teacher/system-features/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/teacher/system-features/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/teacher/system-features/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/teacher/system-features/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/student/starting-and-ending-work/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/student/starting-and-ending-work/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/student/starting-and-ending-work/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/student/starting-and-ending-work/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/student/store/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/student/store/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/student/store/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/student/store/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/student/rent/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/student/rent/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/student/rent/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/student/rent/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/student/insurance/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/student/insurance/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/student/insurance/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/student/insurance/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/student/banking/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/student/banking/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/student/banking/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/student/banking/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/student/reporting-issues/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/student/reporting-issues/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/student/reporting-issues/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/student/reporting-issues/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Create**: `docs/user-guides/features/student/student-account-actions/setup.md` - Generated boilerplate for missing granularity (setup.md)
+- **Create**: `docs/user-guides/features/student/student-account-actions/configuration.md` - Generated boilerplate for missing granularity (configuration.md)
+- **Create**: `docs/user-guides/features/student/student-account-actions/behavioral-rules.md` - Generated boilerplate for missing granularity (behavioral-rules.md)
+- **Create**: `docs/user-guides/features/student/student-account-actions/edge-cases.md` - Generated boilerplate for missing granularity (edge-cases.md)
+- **Update**: `docs/README.md` - Injected audience indicator: mixed-audience
+- **Update**: `docs/CHANGELOG.md` - Injected audience indicator: mixed-audience
+- **Update**: `docs/user-guides/economy_guide.md` - Injected audience indicator: mixed-audience
+- **Update**: `docs/user-guides/README.md` - Injected audience indicator: mixed-audience
+- **Update**: `docs/user-guides/student_guide.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/teacher_manual.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/index.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/system-features/setup.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/system-features/behavioral-rules.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/system-features/configuration.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/system-features/edge-cases.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/insurance/setup.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/insurance/behavioral-rules.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/insurance/configuration.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/insurance/edge-cases.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/banking/setup.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/banking/behavioral-rules.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/banking/configuration.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/banking/edge-cases.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/economy-and-analytics/index.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/store/store-redemptions.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/attendance-and-payroll/payroll-run.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/attendance-and-payroll/payroll-history.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/banking/banking-settings.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/economy-and-analytics/analytics.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/banking/transactions.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/attendance-and-payroll/payroll-settings.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/banking/banking-interest.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/store/store-pricing.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/store/store-items.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/banking/banking-overdraft.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/economy-and-analytics/economy-health.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/rent/setup.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/rent/behavioral-rules.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/rent/configuration.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/rent/edge-cases.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/attendance-and-payroll/attendance-corrections.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/attendance-and-payroll/attendance-approvals.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/class-management/index.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/student-issues/student-issues.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/managing-students/students-overview.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/class-management/hall-pass.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/class-management/announcements.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/class-management/class-setup.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/class-management/dashboard-overview.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/rent/rent-waivers.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/rent/index.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/insurance/insurance-enrollment.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/insurance/insurance-policies.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/rent/rent-itemization-2.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/rent/rent-behaviors.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/rent/rent-settings.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/insurance/insurance-claims.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/economy-and-analytics/setup.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/economy-and-analytics/behavioral-rules.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/economy-and-analytics/configuration.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/economy-and-analytics/edge-cases.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/student-issues/setup.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/student-issues/behavioral-rules.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/student-issues/configuration.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/student-issues/edge-cases.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/managing-students/setup.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/managing-students/behavioral-rules.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/managing-students/configuration.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/managing-students/edge-cases.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/account-customization/setup.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/account-customization/behavioral-rules.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/account-customization/configuration.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/account-customization/edge-cases.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/account-customization/index.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/account-customization/passkey.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/account-customization/account-recovery.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/account-customization/account-deletion.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/system-features/feature-toggles.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/account-customization/personalization.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/class-management/setup.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/class-management/behavioral-rules.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/class-management/configuration.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/class-management/edge-cases.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/store/setup.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/store/behavioral-rules.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/store/configuration.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/store/edge-cases.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/attendance-and-payroll/setup.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/attendance-and-payroll/behavioral-rules.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/attendance-and-payroll/configuration.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/teacher/attendance-and-payroll/edge-cases.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/features/student/index.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/reporting-issues/help-center.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/reporting-issues/index.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/reporting-issues/report-issues.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/starting-and-ending-work/setup.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/starting-and-ending-work/behavioral-rules.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/starting-and-ending-work/configuration.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/starting-and-ending-work/edge-cases.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/insurance/setup.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/insurance/behavioral-rules.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/insurance/configuration.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/insurance/edge-cases.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/reporting-issues/setup.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/reporting-issues/behavioral-rules.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/reporting-issues/configuration.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/reporting-issues/edge-cases.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/starting-and-ending-work/index.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/starting-and-ending-work/attendance-history.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/starting-and-ending-work/start-end-work.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/banking/setup.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/banking/savings-interest.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/banking/accounts-transfers.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/banking/behavioral-rules.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/banking/index.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/banking/configuration.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/banking/edge-cases.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/rent/setup.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/rent/behavioral-rules.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/rent/configuration.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/rent/edge-cases.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/insurance/insurance-coverage.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/rent/rent-payments.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/bills/index.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/insurance/insurance-claims.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/student-account-actions/reset-recovery.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/student-account-actions/index.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/student-account-actions/switch-class.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/student-account-actions/login-setup.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/student-account-actions/join-class.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/student-account-actions/dashboard-overview.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/store/setup.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/store/behavioral-rules.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/store/index.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/store/browse-buy.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/store/configuration.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/store/redemption-status.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/store/edge-cases.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/student-account-actions/setup.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/student-account-actions/behavioral-rules.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/student-account-actions/configuration.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/student/student-account-actions/edge-cases.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/features/banking/transferring-money.md` - Injected audience indicator: mixed-audience
+- **Update**: `docs/user-guides/features/banking/managing-banking.md` - Injected audience indicator: mixed-audience
+- **Update**: `docs/user-guides/features/rent/managing-rent.md` - Injected audience indicator: mixed-audience
+- **Update**: `docs/user-guides/features/payroll/running-payroll.md` - Injected audience indicator: mixed-audience
+- **Update**: `docs/user-guides/features/store/creating-items.md` - Injected audience indicator: mixed-audience
+- **Update**: `docs/user-guides/legal/license.md` - Injected audience indicator: mixed-audience
+- **Update**: `docs/user-guides/legal/attribution.md` - Injected audience indicator: mixed-audience
+- **Update**: `docs/user-guides/legal/third-party-notices.md` - Injected audience indicator: mixed-audience
+- **Update**: `docs/user-guides/legal/commercial.md` - Injected audience indicator: mixed-audience
+- **Update**: `docs/user-guides/diagnostics/student-classes.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/diagnostics/student-support.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/diagnostics/teacher-store.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/diagnostics/student-login.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/diagnostics/teacher-analytics.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/diagnostics/teacher-attendance-payroll.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/diagnostics/teacher-announcements-issues.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/diagnostics/student-store.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/diagnostics/teacher-rent-itemization.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/diagnostics/student-rent-insurance.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/diagnostics/student-hall-pass.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/diagnostics/teacher-transactions-banking.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/diagnostics/teacher-hall-pass.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/diagnostics/teacher-students.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/diagnostics/teacher-login.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/diagnostics/teacher.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/diagnostics/student-money.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/diagnostics/teacher-rent-insurance.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/diagnostics/student.md` - Injected audience indicator: student-facing
+- **Update**: `docs/user-guides/diagnostics/teacher-onboarding.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/user-guides/diagnostics/student-attendance.md` - Injected audience indicator: student-facing
+- **Update**: `docs/security/CRITICAL_SAME_TEACHER_LEAK.md` - Injected audience indicator: teacher-facing
+- **Update**: `docs/security/PROMPTPWND_REMEDIATION.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/COMPREHENSIVE_ATTACK_SURFACE_AUDIT_2025.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/SECURITY_AUDIT_2025.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/NETWORK_VULNERABILITY_REPORT.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/MULTI_TENANCY_AUDIT.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/MIGRATION_TOTP_ENCRYPTION.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/VALIDATION_REPORT.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/SECURITY_REMEDIATION_GUIDE.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/SECURITY_FIXES_SUMMARY.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/ACCESS_AND_SECRETS_REPORT.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/HOW_TO_ADD_GITHUB_SECRETS.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/PII_AUDIT.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/SECURITY_IMPROVEMENTS_IMPLEMENTATION.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/SOURCE_CODE_VULNERABILITY_REPORT.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/MULTI_TENANCY_AUDIT_RESULTS.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/security/CLASS_DELETION_AUDIT.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/technical-reference/PWA_ICON_REQUIREMENTS.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/technical-reference/analytics-specification.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/technical-reference/MONEY_HANDLING.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/technical-reference/architecture.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/technical-reference/TIMEZONE_HANDLING.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/technical-reference/api_reference.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/technical-reference/database_schema.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/technical-reference/economy-specification.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/operations/GRAFANA_FIX_GUIDE.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/operations/DIGITALOCEAN_CLOUDFLARE_SETUP.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/operations/MULTI_TENANCY_FIX_DEPLOYMENT.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/operations/PULSETIC_SETUP.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/operations/DEMO_ENV_SETUP.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/operations/LEGACY_ACCOUNT_MIGRATION.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/operations/CLEANUP_DUPLICATES.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/operations/README.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/operations/README_GITHUB_PAGES.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/operations/LANDING_PAGE_DEPLOYMENT.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/operations/DEMO_SESSIONS.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/operations/GITHUB_PAGES_SETUP.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/operations/Deployment_Guide.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/template_audit.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/database-switching.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/design_system.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/DEPRECATED_SYMBOLS_REGISTRY.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/SCHEMA_CHANGE_MD.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/SYSADMIN_INTERFACE_DESIGN.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/transaction_based_reimbursement_architecture_specification_invariants.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/ECONOMY_BALANCE_CHECKER.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/migration-specifications.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/SEEDING_INSTRUCTIONS.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/TESTING_SUMMARY.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/account_recovery_and_reclaim_spec.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/codebase_organization_documentation_hygiene_playbook.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/HALL_PASS_FEATURE_SPEC.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/IMPLEMENTATION_STATUS_VS_SPEC_2026-02-24.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/RENT_ITEM_TYPES_IMPLEMENTATION.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/MIGRATION_COMPLIANCE_REVIEW.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/ADMIN_IDENTITY_HANDLING_SPEC.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/DEPRECATED_CODE_PATTERNS.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/TIMEZONE_HANDLING_SPECIFICATION.md` - Injected audience indicator: developer-facing
+- **Update**: `docs/development/ai/CLAUDE.md` - Injected audience indicator: developer-facing
+- **Update**: `PROJECT_HISTORY.md` - Injected audience indicator: mixed-audience
+- **Update**: `plan.md` - Injected audience indicator: mixed-audience
+- **Update**: `README.md` - Injected audience indicator: mixed-audience
+- **Update**: `CHANGELOG.md` - Injected audience indicator: mixed-audience
+- **Update**: `DEVELOPMENT.md` - Injected audience indicator: mixed-audience
+- **Update**: `CONTRIBUTING.md` - Injected audience indicator: mixed-audience
+- **Update**: `DUPLICATE_TAPOUT_BUG_REPORT.md` - Injected audience indicator: mixed-audience
+- **Update**: `PROJECT_TIMELINE.md` - Injected audience indicator: mixed-audience
+- **Update**: `scripts/README.md` - Injected audience indicator: developer-facing
+- **Update**: `scripts/dev-utilities/README.md` - Injected audience indicator: developer-facing
+- **Update**: `templates/admin_store.html` - Updated old doc links to new structure
+- **Update**: `templates/admin_payroll.html` - Updated old doc links to new structure
+- **Update**: `templates/admin_analytics_dashboard.html` - Updated old doc links to new structure
+- **Update**: `templates/docs/index.html` - Updated old doc links to new structure
+- **Update**: `templates/docs/view.html` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/README.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/student_guide.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/teacher_manual.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/index.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/economy-and-analytics/index.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/store/store-redemptions.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/attendance-and-payroll/payroll-run.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/attendance-and-payroll/payroll-history.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/banking/banking-settings.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/economy-and-analytics/analytics.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/banking/transactions.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/attendance-and-payroll/payroll-settings.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/banking/banking-interest.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/store/store-pricing.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/store/store-items.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/banking/banking-overdraft.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/economy-and-analytics/economy-health.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/attendance-and-payroll/attendance-corrections.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/attendance-and-payroll/attendance-approvals.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/class-management/index.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/student-issues/student-issues.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/managing-students/students-overview.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/class-management/class-setup.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/class-management/dashboard-overview.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/rent/rent-waivers.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/rent/index.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/insurance/insurance-enrollment.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/insurance/insurance-policies.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/rent/rent-itemization-2.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/rent/rent-behaviors.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/rent/rent-settings.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/insurance/insurance-claims.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/account-customization/index.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/teacher/account-customization/personalization.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/index.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/reporting-issues/index.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/reporting-issues/report-issues.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/starting-and-ending-work/index.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/starting-and-ending-work/attendance-history.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/starting-and-ending-work/start-end-work.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/banking/savings-interest.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/banking/index.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/bills/index.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/insurance/insurance-claims.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/student-account-actions/reset-recovery.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/student-account-actions/index.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/student-account-actions/switch-class.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/student-account-actions/login-setup.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/student-account-actions/join-class.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/student-account-actions/dashboard-overview.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/student/store/index.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/banking/managing-banking.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/rent/managing-rent.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/features/store/creating-items.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/diagnostics/teacher-analytics.md` - Updated old doc links to new structure
+- **Update**: `docs/user-guides/diagnostics/teacher-rent-itemization.md` - Updated old doc links to new structure

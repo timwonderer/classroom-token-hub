@@ -1,4 +1,11 @@
+---
+roles: [teacher, student, developer]
+Audience: mixed-audience
+---
 # User Guides
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 This directory contains all user-facing documentation.
 
@@ -22,11 +29,11 @@ Feature walkthroughs live under `features/`:
 
 Legacy deep dives:
 
-- [Analytics](features/analytics/interpreting-analytics.md)
-- [Banking](features/banking/transferring-money.md)
-- [Payroll](features/payroll/running-payroll.md)
-- [Rent](features/rent/itemization-guide.md)
-- [Store](features/store/creating-items.md)
+- [Analytics](features/teacher/economy-and-analytics/interpreting-analytics.md)
+- [Banking](features/student/banking/transferring-money.md)
+- [Payroll](features/teacher/attendance-and-payroll/running-payroll.md)
+- [Rent](features/teacher/rent/itemization-guide.md)
+- [Store](features/teacher/store/creating-items.md)
 
 ## Legal
 

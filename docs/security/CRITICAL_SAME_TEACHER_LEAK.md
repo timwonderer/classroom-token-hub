@@ -1,3 +1,7 @@
+---
+roles: [teacher]
+Audience: teacher-facing
+---
 #  RESOLVED: Same-Teacher Multi-Period Data Leak
 
 **Severity:** P0 CRITICAL (Originally)

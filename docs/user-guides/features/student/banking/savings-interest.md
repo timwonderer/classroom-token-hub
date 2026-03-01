@@ -7,6 +7,7 @@ description: Understand how savings interest is earned.
 keywords: [savings, interest]
 related:
   - user-guides/features/student/banking/accounts-transfers
+Audience: student-facing
 ---
 
 # Savings Interest

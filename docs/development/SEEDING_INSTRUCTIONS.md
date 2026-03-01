@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Multi-Tenancy Test Data Seeding Instructions
 
 This document explains how to use the `seed_multi_tenancy_test_data.py` script to populate your database with comprehensive test data for validating the join_code-based multi-tenancy fixes.

@@ -4,9 +4,14 @@ description: PolyForm Noncommercial License 1.0.0 - Full license text for Classr
 category: legal
 keywords: [license, polyform, noncommercial, terms, legal]
 searchable: true
+roles: [teacher, student, developer]
+Audience: mixed-audience
 ---
 
 # PolyForm Noncommercial License 1.0.0
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 <https://polyformproject.org/licenses/noncommercial/1.0.0>
 

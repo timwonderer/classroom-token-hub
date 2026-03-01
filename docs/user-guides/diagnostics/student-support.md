@@ -5,6 +5,7 @@ roles: [student]
 related:
   - user-guides/diagnostics/student-attendance
   - user-guides/diagnostics/student-money
+Audience: student-facing
 ---
 
 # Help and Issue Reports

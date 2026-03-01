@@ -2,6 +2,7 @@
 title: Database Schema Documentation
 category: technical-reference
 roles: [developer]
+Audience: developer-facing
 ---
 
 # Database Schema Documentation

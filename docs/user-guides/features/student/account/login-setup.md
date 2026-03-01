@@ -6,8 +6,9 @@ roles: [student]
 description: Claim your account, set your username, and log in.
 keywords: [student login, claim account, username, pin]
 related:
-  - user-guides/features/student/account/reset-recovery
-  - user-guides/features/student/account/join-class
+  - user-guides/features/student/student-account-actions/reset-recovery
+  - user-guides/features/student/student-account-actions/join-class
+Audience: student-facing
 ---
 
 # Log In and First-Time Setup
@@ -26,5 +27,5 @@ Use your username and PIN to log in on the student login page.
 Ask your teacher to confirm your roster details and join code.
 
 ## Related guides
-- [Reset or Recover Your Account](/docs/user-guides/features/student/account/reset-recovery)
-- [Join or Add a Class](/docs/user-guides/features/student/account/join-class)
+- [Reset or Recover Your Account](/docs/user-guides/features/student/student-account-actions/reset-recovery)
+- [Join or Add a Class](/docs/user-guides/features/student/student-account-actions/join-class)

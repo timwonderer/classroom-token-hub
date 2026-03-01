@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Comprehensive Attack Surface Security Audit
 
 **Date:** 2025-12-22

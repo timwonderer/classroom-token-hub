@@ -3,6 +3,7 @@ title: Money Handling
 category: technical-reference
 roles: [developer]
 description: Authoritative rules for Decimal-safe money and cashflow handling.
+Audience: developer-facing
 ---
 
 # Money Handling

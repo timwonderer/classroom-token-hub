@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Operations Documentation
 
 This directory contains operational guides and troubleshooting documentation for managing the Classroom Token Hub in production.

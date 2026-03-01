@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Deprecated Symbols Registry
 
 This document describes symbols that are **explicitly prohibited** from appearing in application code.

@@ -7,6 +7,7 @@ description: Create and manage announcements for your classroom.
 keywords: [announcements, messages, classroom]
 related:
   - user-guides/diagnostics/teacher-announcements-issues
+Audience: teacher-facing
 ---
 
 # Announcements

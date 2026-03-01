@@ -5,6 +5,7 @@ roles: [teacher]
 related:
   - user-guides/diagnostics/teacher-onboarding
   - user-guides/diagnostics/teacher-attendance-payroll
+Audience: teacher-facing
 ---
 
 # Students and Join Codes

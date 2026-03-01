@@ -7,6 +7,7 @@ description: Review rent charges, understand coverage periods, and make payments
 keywords: [rent, payments, coverage, privileges]
 related:
   - user-guides/diagnostics/student-rent-insurance
+Audience: student-facing
 ---
 
 # Pay Rent

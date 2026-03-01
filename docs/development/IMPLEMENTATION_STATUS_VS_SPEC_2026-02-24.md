@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Implementation Status vs Spec (2026-02-24)
 
 Scope:

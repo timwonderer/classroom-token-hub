@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Scripts Directory
 
 This directory contains utility scripts for development, operations, and maintenance of the Classroom Token Hub application.

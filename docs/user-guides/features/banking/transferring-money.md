@@ -6,9 +6,13 @@ category: banking
 roles: [student]
 related:
   - user-guides/diagnostics/student-money
+Audience: mixed-audience
 ---
 
 # Transferring Money Between Accounts
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 Move tokens between your checking and savings accounts.
 

@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Access Control, Secrets, & Codebase Vulnerability & Mitigation Strategy
 
 **Scope:** Server-level access, database security, and secrets management.

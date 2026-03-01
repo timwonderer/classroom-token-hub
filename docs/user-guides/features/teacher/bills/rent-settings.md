@@ -6,9 +6,10 @@ roles: [teacher]
 description: Configure rent amounts, schedules, and itemized privileges.
 keywords: [rent, settings, schedule, itemization, privilege, per-use]
 related:
-  - user-guides/features/rent/managing-rent
-  - user-guides/features/teacher/bills/rent-behaviors
-  - user-guides/features/teacher/bills/rent-itemization
+  - user-guides/features/teacher/rent/managing-rent
+  - user-guides/features/teacher/rent/rent-behaviors
+  - user-guides/features/teacher/rent/rent-itemization-2
+Audience: teacher-facing
 ---
 
 # Rent Settings
@@ -31,7 +32,7 @@ You can break rent down into specific items to show value. Items can be:
 - **Per-Use:** Consumables (Pencils) or services. Can grant free uses to rent payers.
 - **Hall Pass:** Adds passes to the student's balance upon payment.
 
-See the [Rent Itemization Guide](/docs/user-guides/features/rent/itemization-guide.md) for full setup instructions.
+See the [Rent Itemization Guide](/docs/user-guides/features/teacher/rent/itemization-guide.md) for full setup instructions.
 
 ## Penalties and restrictions
 Enable late penalties and decide whether overdue rent blocks store purchases.
@@ -39,5 +40,5 @@ Enable late penalties and decide whether overdue rent blocks store purchases.
 - **Dynamic Purchase Blocking:** If you use Itemized Rent, late students can still buy "Rent Alternative" items (like a desk pass) but are blocked from other store purchases.
 
 ## Related guides
-- [Managing Rent (Detailed)](/docs/user-guides/features/rent/managing-rent.md)
-- [Rent Itemization Guide](/docs/user-guides/features/rent/itemization-guide.md)
+- [Managing Rent (Detailed)](/docs/user-guides/features/teacher/rent/managing-rent.md)
+- [Rent Itemization Guide](/docs/user-guides/features/teacher/rent/itemization-guide.md)

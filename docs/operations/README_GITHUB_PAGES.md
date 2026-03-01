@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # GitHub Pages Configuration
 
 **Last Updated:** February 9, 2026  

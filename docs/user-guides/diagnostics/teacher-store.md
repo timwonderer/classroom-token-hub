@@ -5,6 +5,7 @@ roles: [teacher]
 related:
   - user-guides/diagnostics/teacher-transactions-banking
   - user-guides/diagnostics/teacher-rent-insurance
+Audience: teacher-facing
 ---
 
 # Store and Redemptions

@@ -1,3 +1,7 @@
+---
+roles: [developer]
+Audience: developer-facing
+---
 # Multi-Tenancy Testing Summary
 
 **Branch**: `claude/fix-multi-tenancy-leaks-015yz9WmT5SE8EFgAzU8Au32`

@@ -8,9 +8,14 @@ related:
   - user-guides/legal/license
   - user-guides/legal/commercial
   - user-guides/legal/third-party-notices
+roles: [teacher, student, developer]
+Audience: mixed-audience
 ---
 
 # Attribution & Project Philosophy
+> **Note:** This page is relevant to multiple audiences because it covers system-wide information applicable to all roles.
+
+
 
 This project exists to provide teachers with a **complete, inspectable, and ethical classroom economy system**.
 

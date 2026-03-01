@@ -1,5 +1,7 @@
 ---
 searchable: false
+roles: [developer]
+Audience: developer-facing
 ---
 
 # Cleanup Duplicate Students

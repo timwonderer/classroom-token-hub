@@ -6,8 +6,9 @@ roles: [teacher]
 description: Resolve missed taps, long sessions, and attendance discrepancies.
 keywords: [attendance, corrections, tap errors]
 related:
-  - user-guides/features/teacher/classroom/attendance-approvals
+  - user-guides/features/teacher/attendance-and-payroll/attendance-approvals
   - user-guides/diagnostics/teacher-attendance-payroll
+Audience: teacher-facing
 ---
 
 # Fix Attendance Errors
@@ -26,5 +27,5 @@ Go to **Classroom > Attendance**.
 Attendance issues affect payroll. Correct the records before running payroll when possible.
 
 ## Related guides
-- [Attendance and Approvals](/docs/user-guides/features/teacher/classroom/attendance-approvals)
+- [Attendance and Approvals](/docs/user-guides/features/teacher/attendance-and-payroll/attendance-approvals)
 - [Teacher Attendance and Payroll Diagnostics](/docs/user-guides/diagnostics/teacher-attendance-payroll)

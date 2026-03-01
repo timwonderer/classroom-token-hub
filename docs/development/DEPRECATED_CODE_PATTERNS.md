@@ -1,5 +1,7 @@
 ---
 searchable: false
+roles: [developer]
+Audience: developer-facing
 ---
 
 # Deprecated Code Patterns - Technical Debt
