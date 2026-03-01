@@ -1,4 +1,4 @@
-# SEC-AUD-000: Security Architecture Foundation
+# Security Architecture Foundation
 
 | Reference Number | Version | Effective Date | Supersedes | Authoritative |
 |------------------|---------|----------------|------------|---------------|

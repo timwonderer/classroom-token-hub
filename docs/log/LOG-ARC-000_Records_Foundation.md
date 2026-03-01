@@ -1,4 +1,4 @@
-# LOG-ARC-000: Historical Records Foundation
+# Historical Records Foundation
 
 | Reference Number | Version | Effective Date | Supersedes | Authoritative |
 |------------------|---------|----------------|------------|---------------|

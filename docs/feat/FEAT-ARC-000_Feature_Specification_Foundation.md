@@ -1,4 +1,4 @@
-# FEAT-ARC-000: Feature Specification Foundation
+# Feature Specification Foundation
 
 | Reference Number | Version | Effective Date | Supersedes | Authoritative |
 |------------------|---------|----------------|------------|---------------|

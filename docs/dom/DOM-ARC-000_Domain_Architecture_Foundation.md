@@ -1,4 +1,4 @@
-# DOM-ARC-000: Domain Architecture Foundation
+# Domain Architecture Foundation
 
 | Reference Number | Version | Effective Date | Supersedes | Authoritative |
 |------------------|---------|----------------|------------|---------------|
