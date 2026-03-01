@@ -60,6 +60,7 @@ Approved functional areas include:
 Defines structural boundaries and core models within specific business domains.
 
 Approved functional areas include:
+- **BASE** — Foundational architecture and rules
 - **PAY** — Payroll and attendance economics
 - **BANK** — Banking and ledger system
 - **RENT** — Rent system
@@ -75,7 +76,7 @@ Approved functional areas include:
 ### 4. FEAT — Feature Specifications
 Defines scoped functionality within a specific domain.
 
-Feature documents must mirror existing DOM functional areas.
+Feature documents must mirror existing DOM functional areas, plus BASE for foundations.
 
 Example:
 - FEAT-BANK-001 — Savings Interest Calculation
@@ -101,6 +102,7 @@ SEC documents may mandate remediation actions but must not redefine architectura
 Defines descriptive, time-bound documentation.
 
 Approved functional areas include:
+- **BASE** — Foundational records strategy
 - **REL** — Release logs
 - **INC** — Incident timelines
 - **MILE** — Milestone reports
