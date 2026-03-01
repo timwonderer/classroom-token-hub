@@ -35,6 +35,7 @@ All data access and mutation operations must be scoped to a single `join_code`. 
 
 - Any role or privilege that allows for cross-tenant action.
 
+---
 ### 2. Minimal Use and Storage of PII
 
 #### Statement
@@ -50,6 +51,7 @@ The system stores only the minimum personally identifiable information required 
 - Retention of PII beyond its defined functional purpose.
 - PII stored as plaintext.
 
+---
 ### 3. Deterministic and Traceable Financial Logic
 
 #### Statement
@@ -64,6 +66,7 @@ All finance-related actions must be immutably logged and traceable. Financial ou
 #### Prohibited Action
 - Deletion or silent mutation of financial ledger entries.
 
+---
 ### 4. Role-Bound Authority
 
 #### Statement
