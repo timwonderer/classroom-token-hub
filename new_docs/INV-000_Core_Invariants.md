@@ -1,7 +1,7 @@
 # Core Invariants of Classroom Token Hub
 | Reference Number | Version | Effective Date |  Supercedes |Authorative?|
 |------------------|---------|----------------|-----------|--------------|
-| ARC-INV-000      | 1.0     |                 |N/A        |YES    |
+| ARC-INV-000      | 1.0     |2026-02-28    |N/A        |YES    |
 
 ## I. Purpose
 This document defines the core invariants, or underlying principles, that drives the design of this application. Any future development of this application must stay within the boundaries of these invariants.
