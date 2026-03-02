@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authoritative |
 |------------------|---------|----------------|------------|---------------|
-| SOP-REL-010      | 1.0     | 2026-03-01     | N/A        | YES           |
+| LOG-REL-010      | 1.0     | 2026-03-01     | N/A        | NO            |
 
 **Release Date**: December 27, 2025
 

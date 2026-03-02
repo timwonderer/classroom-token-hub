@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authoritative |
 |------------------|---------|----------------|------------|---------------|
-| SOP-REL-013      | 1.0     | 2026-03-01     | N/A        | YES           |
+| LOG-REL-013      | 1.0     | 2026-03-01     | N/A        | NO            |
 
 **Release Date**: January 9, 2026
 **Focus**: Analytics Dashboard, Rent Itemization, Mobile Navigation, and Documentation Organization

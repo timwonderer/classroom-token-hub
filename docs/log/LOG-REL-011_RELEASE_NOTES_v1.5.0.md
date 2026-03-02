@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authoritative |
 |------------------|---------|----------------|------------|---------------|
-| SOP-REL-011      | 1.0     | 2026-03-01     | N/A        | YES           |
+| LOG-REL-011      | 1.0     | 2026-03-01     | N/A        | NO            |
 
 **Release Date**: December 29, 2025  
 **Focus**: Issue reporting lifecycle, security hardening, and operational polish

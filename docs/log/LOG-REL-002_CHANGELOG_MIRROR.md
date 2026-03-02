@@ -9,11 +9,11 @@ keywords: [changelog, updates, version history, releases, what's new, bug fixes,
 
 | Reference Number | Version | Effective Date | Supersedes | Authoritative |
 |------------------|---------|----------------|------------|---------------|
-| SOP-REL-002      | 1.0     | 2026-03-01     | N/A        | YES           |
+| LOG-REL-002      | 1.0     | 2026-03-01     | N/A        | NO            |
 
 **Note:** The changelog has been consolidated at the repository root per Keep a Changelog standards.
 
-Please see: [`../CHANGELOG.md`](SOP-REL-002_CHANGELOG_MIRROR.md)
+Please see: [`../CHANGELOG.md`](LOG-REL-002_CHANGELOG_MIRROR.md)
 
 ---
 

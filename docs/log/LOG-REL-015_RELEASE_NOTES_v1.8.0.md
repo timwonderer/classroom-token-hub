@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authoritative |
 |------------------|---------|----------------|------------|---------------|
-| SOP-REL-015      | 1.0     | 2026-03-01     | N/A        | YES           |
+| LOG-REL-015      | 1.0     | 2026-03-01     | N/A        | NO            |
 
 **Release Date**: February 9, 2026
 **Focus**: Rent item types, coverage-period tracking, and stability/security fixes
