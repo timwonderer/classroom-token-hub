@@ -393,7 +393,7 @@ def check_legacy_profile():
     needs_migration = (
         student.has_completed_setup and
         not student.has_completed_profile_migration and
-        (not student.last_name_hash_by_part or student.dob_sum is None)
+        False
     )
     
     if needs_migration:
@@ -518,12 +518,6 @@ def complete_profile():
                 # Update last initial from last name (already validated to not be empty)
                 student.last_initial = last_name[0].upper()
                 
-                # Calculate and store DOB sum
-                student.dob_sum = dob_sum
-                
-                # Generate last_name_hash_by_part
-                student.last_name_hash_by_part = hash_last_name_parts(last_name, student.salt)
-                
                 # Regenerate first_half_hash using first initial + dob_sum
                 first_initial_char = first_name[0].upper() if first_name else ''
                 student.first_half_hash = compute_primary_claim_hash(first_initial_char, dob_sum, student.salt)
@@ -538,8 +532,10 @@ def complete_profile():
                 # Update all TeacherBlock entries for this student with new hashes
                 from app.models import TeacherBlock
                 teacher_blocks = TeacherBlock.query.filter_by(student_id=student.id).all()
+                last_name_parts = hash_last_name_parts(last_name, student.salt)
                 for block in teacher_blocks:
-                    block.last_name_hash_by_part = student.last_name_hash_by_part
+                    block.last_name_hash_by_part = last_name_parts
+                    block.dob_sum = dob_sum
                     block.first_half_hash = student.first_half_hash
                     block.last_initial = student.last_initial
                 
@@ -720,8 +716,6 @@ def claim_account():
             salt=matched_seat.salt,
             first_half_hash=matched_seat.first_half_hash,
             second_half_hash=second_half_hash,
-            dob_sum=matched_seat.dob_sum,
-            last_name_hash_by_part=matched_seat.last_name_hash_by_part,
             has_completed_setup=False,
             is_teacher=matched_seat.is_teacher,
         )
@@ -838,7 +832,7 @@ def create_username():
             "lucky", "mighty", "noble", "quick", "proud", "silly", "witty", "zesty", "sunny", "chill"
         ]
         adjective = random.choice(adjectives)
-        dob_sum = student.dob_sum if student.dob_sum is not None else 0
+        dob_sum = student.id or 0
         initials = f"{student.first_name[0].upper()}{student.last_initial.upper()}"
         username = f"{adjective}{write_in_word}{dob_sum}{initials}"
         # Save username plaintext in session for display
@@ -884,12 +878,7 @@ def setup_pin_passphrase():
             student.reset_code_expires_at = None
             student.recovery_status = 'active'
 
-        # Post-claim PII cleanup: dob_sum and last_name_hash_by_part are no longer
-        # needed on the student record after setup is complete. Clear them to minimise
-        # the PII footprint. has_completed_profile_migration is set to True so the
-        # legacy migration gate does not incorrectly redirect this student.
-        student.dob_sum = None
-        student.last_name_hash_by_part = None
+        # Mark profile migration complete; claim verification data is stored only on seats.
         student.has_completed_profile_migration = True
 
         db.session.commit()
@@ -914,8 +903,8 @@ def add_class():
     carries its own verification hashes (dob_sum, last_name_hash_by_part).
     Those hashes are deleted from the seat after it is claimed.
 
-    Note: The student's own account has no stored dob_sum or last_name_hash_by_part
-    after their first claim completes (post-claim PII cleanup). This is intentional —
+    Note: The student's own account has no stored dob_sum or last_name_hash_by_part.
+    This is intentional —
     we verify credentials against the target class's seat, not the student account.
     A name cross-check (encrypted first_name + last_initial) ensures the entered
     credentials correspond to a seat belonging to this student.

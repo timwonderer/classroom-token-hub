@@ -847,8 +847,6 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
         class_label=f"Teacher's Student Account",
         first_name=first_name,
         last_initial=last_initial,
-        last_name_hash_by_part=last_name_hash_by_part,
-        dob_sum=dob_sum,
         salt=salt,
         first_half_hash=first_half_hash,
         is_claimed=False,
@@ -913,8 +911,8 @@ def _link_student_to_admin(student: Student, admin_id):
             is_claimed=True,  # Mark as claimed since teacher manually added them
             first_name=student.first_name,
             last_initial=student.last_initial,
-            last_name_hash_by_part=student.last_name_hash_by_part,
-            dob_sum=student.dob_sum,
+            last_name_hash_by_part=[],
+            dob_sum=0,
             salt=student.salt,
             first_half_hash=student.first_half_hash
         )
@@ -1059,21 +1057,6 @@ def _normalize_claim_credentials_for_admin(admin_id: int) -> int:
         )
         if changed and updated_hash:
             seat.first_half_hash = updated_hash
-            updated += 1
-
-    # Normalize Student records scoped to this admin
-    students = _scoped_students().yield_per(100)
-    for student in students:
-        first_initial = student.first_name.strip()[0].upper() if student.first_name else None
-        updated_hash, changed = normalize_claim_hash(
-            student.first_half_hash,
-            first_initial,
-            student.last_initial,
-            student.dob_sum,
-            student.salt,
-        )
-        if changed and updated_hash:
-            student.first_half_hash = updated_hash
             updated += 1
 
     if updated:
@@ -3244,6 +3227,8 @@ def edit_student():
     # Check if name changed (need to recalculate hashes)
     name_changed = (new_first_name != student.first_name or new_last_initial != student.last_initial)
     dob_changed = False
+    dob_sum_value = 0
+    last_name_parts = []
 
     # Update basic fields
     student.first_name = new_first_name
@@ -3252,7 +3237,7 @@ def edit_student():
 
     # If name changed, refresh last name hashes
     if name_changed:
-        student.last_name_hash_by_part = hash_last_name_parts(last_name_input, student.salt)
+        last_name_parts = hash_last_name_parts(last_name_input, student.salt)
 
     # Update DOB sum if provided (and recalculate second_half_hash)
     dob_sum_str = request.form.get('dob_sum', '').strip()
@@ -3263,14 +3248,13 @@ def edit_student():
             flash("Invalid date of birth. Please use the date picker.", "error")
             return redirect(url_for('admin.students'))
 
-        if new_dob_sum != student.dob_sum:
-            student.dob_sum = new_dob_sum
-            # Regenerate second_half_hash (DOB sum hash)
-            student.second_half_hash = hash_hmac(str(new_dob_sum).encode(), student.salt)
-            dob_changed = True
+        dob_sum_value = new_dob_sum
+        # Regenerate second_half_hash (DOB sum hash)
+        student.second_half_hash = hash_hmac(str(new_dob_sum).encode(), student.salt)
+        dob_changed = True
 
     if name_changed or dob_changed:
-        claim_hash = compute_primary_claim_hash(new_first_name[:1], student.dob_sum, student.salt)
+        claim_hash = compute_primary_claim_hash(new_first_name[:1], dob_sum_value, student.salt)
         if claim_hash:
             student.first_half_hash = claim_hash
 
@@ -3297,8 +3281,8 @@ def edit_student():
         ).update({
             'first_name': student.first_name,
             'last_initial': student.last_initial,
-            'last_name_hash_by_part': student.last_name_hash_by_part or [],
-            'dob_sum': student.dob_sum or 0,
+            'last_name_hash_by_part': last_name_parts,
+            'dob_sum': dob_sum_value,
             'first_half_hash': student.first_half_hash,
         })
 
@@ -3368,7 +3352,7 @@ def edit_student():
             # CRITICAL FIX: Ensure first_half_hash exists before creating TeacherBlock
             # Logic: If hash is missing (legacy student), generate it now to prevent NotNullViolation
             if not student.first_half_hash:
-                claim_hash = compute_primary_claim_hash(student.first_name[:1], student.dob_sum or 0, student.salt)
+                claim_hash = compute_primary_claim_hash(student.first_name[:1], dob_sum_value, student.salt)
                 if claim_hash:
                     student.first_half_hash = claim_hash
                     current_app.logger.info(f"Generated missing first_half_hash for student {student.id} during edit")
@@ -3383,8 +3367,8 @@ def edit_student():
                 block=block,
                 first_name=student.first_name,
                 last_initial=student.last_initial,
-                last_name_hash_by_part=student.last_name_hash_by_part or [],
-                dob_sum=student.dob_sum or 0,
+                last_name_hash_by_part=last_name_parts,
+                dob_sum=dob_sum_value,
                 salt=student.salt,
                 first_half_hash=student.first_half_hash,
                 join_code=join_code,
@@ -3801,10 +3785,7 @@ def add_individual_student():
 
         # Check for duplicates - need to check ALL students GLOBALLY (not scoped to teacher)
         # This prevents creating duplicate accounts when multiple teachers have the same student
-        potential_duplicates = Student.query.filter_by(
-            last_initial=last_initial,
-            dob_sum=dob_sum
-        ).all()
+        potential_duplicates = Student.query.filter_by(first_half_hash=first_half_hash).all()
 
         # Check if any existing student matches (using new credential system)
         for existing_student in potential_duplicates:
@@ -3818,17 +3799,7 @@ def add_individual_student():
                     existing_student.salt,
                 )
 
-                # Also check fuzzy last name matching
-                fuzzy_match = False
-                if existing_student.last_name_hash_by_part:
-                    fuzzy_match = verify_last_name_parts(
-                        last_name,
-                        existing_student.last_name_hash_by_part,
-                        existing_student.salt
-                    )
-
-                # Match if BOTH credential AND last name match
-                if credential_matches and fuzzy_match:
+                if credential_matches:
                     if canonical_hash and not is_primary:
                         existing_student.first_half_hash = canonical_hash
                     # Student already exists - link to this teacher instead of creating duplicate
@@ -3860,8 +3831,6 @@ def add_individual_student():
             salt=salt,
             first_half_hash=first_half_hash,
             second_half_hash=second_half_hash,
-            dob_sum=dob_sum,
-            last_name_hash_by_part=last_name_parts,
             has_completed_setup=False,
         )
 
@@ -3897,8 +3866,6 @@ def add_individual_student():
             block=block,
             first_name=first_name,
             last_initial=last_initial,
-            last_name_hash_by_part=last_name_parts,
-            dob_sum=dob_sum,
             salt=salt,
             first_half_hash=first_half_hash,
             join_code=join_code,
@@ -3961,10 +3928,7 @@ def add_manual_student():
         last_name_parts = hash_last_name_parts(last_name, salt)
 
         # Check for duplicates GLOBALLY (not scoped to teacher)
-        potential_duplicates = Student.query.filter_by(
-            last_initial=last_initial,
-            dob_sum=dob_sum
-        ).all()
+        potential_duplicates = Student.query.filter_by(first_half_hash=first_half_hash).all()
 
         for existing_student in potential_duplicates:
             if existing_student.first_name == first_name:
@@ -3977,16 +3941,7 @@ def add_manual_student():
                     existing_student.salt,
                 )
 
-                # Also check fuzzy last name matching
-                fuzzy_match = False
-                if existing_student.last_name_hash_by_part:
-                    fuzzy_match = verify_last_name_parts(
-                        last_name,
-                        existing_student.last_name_hash_by_part,
-                        existing_student.salt
-                    )
-
-                if credential_matches and fuzzy_match:
+                if credential_matches:
                     if canonical_hash and not is_primary:
                         existing_student.first_half_hash = canonical_hash
                     flash(f"Student {first_name} {last_name} already exists. Linking to your class.", "warning")
@@ -4010,8 +3965,6 @@ def add_manual_student():
             salt=salt,
             first_half_hash=first_half_hash,
             second_half_hash=second_half_hash,
-            dob_sum=dob_sum,
-            last_name_hash_by_part=last_name_parts,
             hall_passes=hall_passes,
             is_rent_enabled=rent_enabled,
             has_completed_setup=setup_complete,
@@ -4066,8 +4019,6 @@ def add_manual_student():
             block=block,
             first_name=first_name,
             last_initial=last_initial,
-            last_name_hash_by_part=last_name_parts,
-            dob_sum=dob_sum,
             salt=salt,
             first_half_hash=first_half_hash,
             join_code=join_code,
@@ -4125,7 +4076,6 @@ def store_management():
             limit_per_student=form.limit_per_student.data,
             auto_delist_date=form.auto_delist_date.data,
             auto_expiry_days=form.auto_expiry_days.data,
-            is_active=form.is_active.data,
             is_long_term_goal=form.is_long_term_goal.data,
             # Bundle settings
             is_bundle=form.is_bundle.data,
@@ -9419,7 +9369,6 @@ def announcement_create():
                     title=form.title.data,
                     message=form.message.data,
                     priority=form.priority.data,
-                    is_active=form.is_active.data,
                     expires_at=form.expires_at.data
                 )
                 db.session.add(announcement)
