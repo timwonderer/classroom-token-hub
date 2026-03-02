@@ -9,7 +9,7 @@ roles: [developer]
 
 **Note:** This document tracked the implementation of the Issue Resolution & Escalation system and has been archived.
 
-Please see: [`../archive/IMPLEMENTATION_PROGRESS.md`](../archive/IMPLEMENTATION_PROGRESS.md)
+Please see: [`../archive/IMPLEMENTATION_PROGRESS.md`](LOG-ARC-007_Implementation_Progress_Legacy.md)
 
 ---
 

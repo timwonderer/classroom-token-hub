@@ -85,7 +85,7 @@ python3 scripts/create-github-actions-firewall.py <droplet-id>
 Reference file containing all Cloudflare and Pulsetic IP ranges in JSON format. Use for manual setup or custom automation.
 
 
-**Documentation:** [DigitalOcean & Cloudflare Setup Guide](../docs/operations/DIGITALOCEAN_CLOUDFLARE_SETUP.md)
+**Documentation:** [DigitalOcean & Cloudflare Setup Guide](../docs/sop/SOP-DEP-005_DIGITALOCEAN_CLOUDFLARE_SETUP.md)
 
 ---
 
@@ -100,7 +100,7 @@ python scripts/cleanup_duplicates_flask.py --list    # Preview duplicates
 python scripts/cleanup_duplicates_flask.py --delete  # Remove duplicates
 ```
 
-**Documentation:** [Cleanup Duplicates Guide](../docs/operations/CLEANUP_DUPLICATES.md)
+**Documentation:** [Cleanup Duplicates Guide](../docs/sop/SOP-DEP-002_CLEANUP_DUPLICATES.md)
 
 #### `cleanup_duplicates.py`
 Legacy cleanup script (simpler version). Use `cleanup_duplicates_flask.py` for production as it properly handles data migration.
@@ -124,7 +124,7 @@ python scripts/comprehensive_legacy_migration.py --dry-run
 python scripts/comprehensive_legacy_migration.py
 ```
 
-**Documentation:** [Legacy Account Migration Guide](../docs/operations/LEGACY_ACCOUNT_MIGRATION.md)
+**Documentation:** [Legacy Account Migration Guide](../docs/sop/SOP-DEP-010_LEGACY_ACCOUNT_MIGRATION.md)
 
 #### `migrate_legacy_students.py`
 Migrates legacy students (pre-join-code system) to use proper `StudentTeacher` associations and `TeacherBlock` entries. **Note:** For production use, consider using `comprehensive_legacy_migration.py` instead.
