@@ -4,14 +4,14 @@
 |------------------|---------|----------------|------------|-----------------|
 | SOP-DOC-002      | 1.0     | 2026-03-01     | N/A        | Constitutional            |
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DOC-002      | 2.0     | 2026-03-02     | SOP-DOC-002 v1.0 | NO       |
+
 
 This document serves as the index of all formally tracked documents in the ARC, SOP, and SEC namespaces. For namespace definitions and tier classification, see [SOP-DOC-000](SOP-DOC-000_Writing_Specification.md).
 
 ## ARC Namespace
-- [ARC-INV-000_Core_Invariants.md](../arc/ARC-INV-000_Core_Invariants.md)
+- [INV-CORE-000_Core_Invariants.md](../../INV-CORE-000_Core_Invariants.md)
+- [INV-CORE-001_Authority_Model.md](../../INV-CORE-001_Authority_Model.md)
+- [ARC-CORE-000_Architecture_Foundation.md](../../ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)
 - [ARC-OPS-000_Operational_Constraints.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-000_Operational_Constraints.md)
 - [ARC-OPS-001_transaction_based_reimbursement_architecture.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-001_transaction_based_reimbursement_architecture.md)
 - [ARC-OPS-002_PWA_ICON_REQUIREMENTS.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-002_PWA_ICON_REQUIREMENTS.md)
@@ -61,8 +61,10 @@ This document serves as the index of all formally tracked documents in the ARC, 
 - [SOP-DOC-000_Writing_Specification.md](SOP-DOC-000_Writing_Specification.md) — **Documentation Standard** (Normative; supersedes SOP-DOC-000 v1.0 and SOP-DOC-001 v1.0)
 - [SOP-DOC-001_Documentation_Taxonomy.md](SOP-DOC-001_Documentation_Taxonomy.md) — ~~Documentation Taxonomy~~ (Superseded by SOP-DOC-000 v2.0)
 - [SOP-DOC-002_Documentation_Index.md](SOP-DOC-002_Documentation_Index.md) — Documentation Index (this file)
-- [SOP-DOC-003_Codebase_Organization_Playbook.md](SOP-DOC-003_Codebase_Organization_Playbook.md) — Codebase Organization and Documentation Hygiene Playbook (Normative)
+- [SOP-DOC-003_Division_Definition.md](SOP-DOC-003_Division_Definition.md) — Division Definitions of Classroom Token Hub (Normative)
 - [SOP-DOC-004_AI_Claude_Guide.md](SOP-DOC-004_AI_Claude_Guide.md) — ~~AI Claude Guide~~ (Removed from tracking; see `.claude/CLAUDE.md` and `.claude/rules/`)
+- [SOP-DOC-005_Codebase_Organization_Playbook.md](SOP-DOC-005_Codebase_Organization_Playbook.md) — Codebase Organization and Documentation Hygiene Playbook (Normative)
+- [SOP-CORE-000_SOP_Foundation.md](../SOP-CORE-000_SOP_Foundation.md) — Standard Operating Procedures Foundation
 - [SOP-REL-001_CHANGELOG.md](../../CHANGELOG.md)
 - [LOG-REL-002_CHANGELOG_MIRROR.md](../../LOGS/RELEASES/LOG-REL-002_CHANGELOG_MIRROR.md)
 - [LOG-REL-003_RELEASES_INDEX.md](../../LOGS/RELEASES/LOG-REL-003_RELEASES_INDEX.md)

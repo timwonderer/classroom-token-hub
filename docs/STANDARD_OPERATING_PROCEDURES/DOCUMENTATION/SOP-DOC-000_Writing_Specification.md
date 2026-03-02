@@ -28,56 +28,57 @@ This standard applies to all documents maintained within the repository, includi
 
 ## III. Authority Level
 
-Normative (SOP Tier). Subordinate to ARC-INV-000.
+Foundational (Tier 0). This document establishes the rules by which all governance must abide, deriving its authority explicitly from INV-CORE-001 (Authority Model).
 
 ---
 
 ## IV. Dependencies
 
-- ARC-INV-000: Core Invariants
+- `INV-CORE-000_Core_Invariants.md`
+- `INV-CORE-001_Authority_Model.md`
 
 ---
 
 ## V. Document Tier Classification
 
-All repository documents are classified into one of three tiers based on their normative authority.
+All repository documents are classified into one of four tiers based on their normative authority, as defined by `INV-CORE-001`.
+
+### Tier 0 — Foundational
+
+**Definition:** Defines the identity, philosophy, and non-negotiable existence principles of the system. No lower authority document may override or redefine a Foundational invariant.
+**Language:** Establishes core invariants. Cannot derive authority from lower levels.
+**Applies to:**
+- `INV-CORE-000`, `INV-CORE-001`, `SOP-DOC-000`
 
 ### Tier 1 — Constitutional
 
-**Definition:** Inviolable system invariants. No other document may contradict or override a Constitutional document. Changes require explicit architectural deliberation.
-
-**Language:** Must use "shall" and "prohibited" exclusively for constraints.
-
+**Definition:** Defines structural enforcement mechanisms and cross-cutting constraints that operationalize Foundational invariants.
+**Language:** Must use "shall" and "prohibited" exclusively for constraints. MUST cite relevant Foundational invariants.
 **Applies to:**
-- `ARC-INV-*`
+- `ARCHITECTURE/` (ARC-*)
+- `DOMAINS/` (DOM-*)
+- `SECURITY/` (SEC-CONT, Security Architecture)
 
 ---
 
 ### Tier 2 — Normative
 
-**Definition:** Binding rules that must be followed. All implementations and procedures must conform. Must not conflict with Constitutional documents.
-
+**Definition:** Defines required operational procedures and behavioral governance necessary to maintain compliance. Must not conflict with Constitutional documents.
 **Language:** Must use "must", "shall", "required", "prohibited".
-
 **Applies to:**
-- `ARC-OPS-*`, `ARC-ROLE-*`, `ARC-LIFE-*`, `ARC-APP-*`, `ARC-SEC-*` — structural architecture
-- `DOM-*` — domain architecture
-- `FEAT-*` — feature specifications
-- `SOP-*` — standard operating procedures
+- `FEATURES/` (FEAT-*)
+- `STANDARD_OPERATING_PROCEDURES/` (SOP-*)
 - `.claude/rules/*` — AI agent operational rules
-- `SEC-CONT-*` — security control standards
 
 ---
 
 ### Tier 3 — Informative
 
-**Definition:** Descriptive or reference content. Must not define new rules or restate invariants. Informative documents describe, explain, instruct, or record.
-
+**Definition:** Records historical events, reports, audits, releases, and descriptive system information. Must not define new rules.
 **Language:** May use advisory language ("should", "recommended"). Must not use binding language.
-
 **Applies to:**
-- `LOG-*` — historical records and milestone reports
-- `SEC-AUD-*`, `SEC-INC-*`, `SEC-VUL-*`, `SEC-THR-*` — audit findings, incidents, vulnerability reports
+- `LOGS/` (LOG-*) — historical records and milestone reports
+- `SECURITY/` (SEC-AUD/INC/VUL/THR) — audit findings, incidents, vulnerability reports
 - `docs/user-guides/*` — user-facing instructional content
 - Root-level files: `README.md`, `CHANGELOG.md`, `DEVELOPMENT.md`, `PROJECT_HISTORY.md`, `CONTRIBUTING.md`
 
@@ -85,26 +86,25 @@ All repository documents are classified into one of three tiers based on their n
 
 ### Conflict Resolution
 
-In the event of conflict between documents:
-
-1. Constitutional (Tier 1) takes precedence over all.
-2. Normative (Tier 2) takes precedence over Informative (Tier 3).
-3. Within Tier 2: ARC supersedes DOM, DOM supersedes FEAT, FEAT supersedes SOP.
+In the event of conflict between documents, `INV-CORE-001` Section V is the sole authority:
+1. Foundational authority SHALL prevail.
+2. Constitutional authority SHALL prevail over Normative and Informative.
+3. Normative authority SHALL prevail over Informative.
 
 ---
 
 ## VI. Documentation Namespaces
 
-The repository documentation is organized into the following top-level namespaces. Each document must belong to exactly one namespace.
+The repository documentation is organized into six functional Divisions. For a complete definition of each Division, its purpose, its boundary rules, and what it may/may not contain, refer to `SOP-DOC-003_Division_Definition.md`.
 
-| Namespace        | Tier                              | Purpose                                           |
-|------------------|-----------------------------------|---------------------------------------------------|
-| ARC              | Constitutional (INV) / Normative  | Cross-domain architectural principles and invariants |
-| DOM              | Normative                         | Domain boundaries and core business models        |
-| FEAT             | Normative                         | Scoped functionality within a domain              |
-| SOP              | Normative                         | Human operational procedures and governance       |
-| SEC              | Normative (CONT) / Informative    | Security audits, controls, and incident records   |
-| LOG              | Informative                       | Historical records, milestones, release logs      |
+| Division      | Tier Classification                 |
+|---------------|-------------------------------------|
+| ARCHITECTURE  | Constitutional (ARC)               |
+| DOMAINS       | Constitutional (DOM)               |
+| FEATURES      | Normative (FEAT)                   |
+| SOP           | Normative (SOP)                    |
+| SECURITY      | Mixed (Constitutional/Informative) |
+| LOGS          | Informative                        |
 
 Non-namespace locations:
 
@@ -118,96 +118,7 @@ Non-namespace locations:
 
 ## VII. Namespace Sub-Divisions
 
-### ARC — Application Architecture
-
-Defines cross-domain architectural principles and global system structure.
-
-Approved functional areas:
-
-- **INV** — Core invariants (Constitutional tier)
-- **OPS** — Application-level operational constraints
-- **ROLE** — Role and authority architecture
-- **LIFE** — Tenant lifecycle architecture
-- **APP** — Core application structure
-- **SEC** — Application security architecture
-
----
-
-### DOM — Domain Architecture
-
-Defines structural boundaries and core models within specific business domains. Must derive from ARC documents and must not redefine invariants.
-
-Approved functional areas:
-
-- **BASE** — Foundational architecture and rules
-- **PAY** — Payroll and attendance economics
-- **BANK** — Banking and ledger system
-- **RENT** — Rent system
-- **INS** — Insurance system
-- **STORE** — Store and redemption system
-- **ATT** — Attendance logic
-- **HALL** — Hall pass system
-- **TIX** — Support and ticketing system
-- **ANA** — Analytics
-
----
-
-### FEAT — Feature Specifications
-
-Defines scoped functionality within a specific domain. Must reference applicable ARC and DOM documents and must not redefine invariants or domain boundaries.
-
-Feature documents must mirror existing DOM functional areas, plus BASE for foundations.
-
-Examples:
-- `FEAT-BANK-001` — Savings Interest Calculation
-- `FEAT-RENT-002` — Rent Waiver Flow
-
----
-
-### SOP — Standard Operating Procedures
-
-Defines human procedures outside of application runtime behavior. Must not conflict with ARC or DOM documents.
-
-Approved functional areas:
-
-- **DOC** — Documentation governance
-- **REL** — Release procedures
-- **DEP** — Deployment workflow
-- **DB** — Database and migration procedures
-- **CI** — CI/CD enforcement procedures
-- **GIT** — Repository and branching discipline
-- **MIG** — Migration execution procedures
-
----
-
-### SEC — Security Documentation
-
-Defines security audits, threat models, vulnerability assessments, incident reports, and control standards.
-
-Approved functional areas:
-
-| Sub-Division | Tier        | Purpose                            |
-|--------------|-------------|------------------------------------|
-| **AUD**      | Informative | Security audit framework and reports |
-| **INC**      | Informative | Incident reports and timelines     |
-| **VUL**      | Informative | Vulnerability assessments          |
-| **THR**      | Informative | Threat modeling                    |
-| **CONT**     | Normative   | Control and mitigation standards   |
-
-`SEC-CONT` documents are Normative and may mandate remediation actions. All other SEC sub-divisions are Informative and must not redefine architectural invariants.
-
----
-
-### LOG — Milestone and Historical Records
-
-Descriptive and time-bound documentation. LOG documents are Informative and must not define rules.
-
-Approved functional areas:
-
-- **BASE** — Foundational records strategy
-- **REL** — Release logs
-- **INC** — Incident timelines
-- **MILE** — Milestone reports
+Subdivisions (e.g., `docs/ARCHITECTURE/OPERATIONS/`, `docs/DOMAINS/BANKING/`) are governed individually by the `CORE-000` document located at the root of their respective namespaces (e.g., `ARC-CORE-000`, `DOM-CORE-000`). Refer to the respective `CORE-000` documents for up-to-date subdivision structures.
 
 ---
 
@@ -237,10 +148,10 @@ All formally tracked documents must include a frontmatter table immediately afte
 ```markdown
 | Reference Number | Version | Effective Date | Supersedes       | Authority Level                      |
 |------------------|---------|----------------|------------------|--------------------------------------|
-| [REF]            | [X.Y]   | [YYYY-MM-DD]   | [N/A or prev ref] | Constitutional/Normative/Informative |
+| [REF]            | [X.Y]   | [YYYY-MM-DD]   | [N/A or prev ref] | Foundational/Constitutional/Normative/Informative |
 ```
 
-The `Authority Level` field must strictly match the assigned Tier of the document (Constitutional, Normative, or Informative).
+The `Authority Level` field must strictly match the assigned Tier of the document (Foundational, Constitutional, Normative, or Informative).
 
 ### Required Sections for Normative Documents
 
@@ -278,16 +189,12 @@ Informative documents:
 
 ## X. Authority Hierarchy
 
-The following precedence order applies in the event of conflict:
+The following precedence order applies in the event of conflict, per `INV-CORE-001`:
 
-1. ARC-INV documents define constitutional-level constraints.
-2. ARC and DOM documents define authoritative application structure.
-3. FEAT documents must conform to ARC and DOM documents.
-4. SOP documents govern human procedures and must not conflict with ARC or DOM documents.
-5. SEC documents may mandate remediation actions but must remain consistent with ARC-INV-000.
-6. LOG documents are descriptive and hold no normative authority.
-
-In the event of conflict, ARC documents take precedence.
+1. `INV-CORE` and `SOP-DOC-000` define Foundational truth.
+2. `ARC`, `DOM`, and Security Architecture define authoritative Constitutional rules.
+3. `FEAT` and `SOP` define Normative implementation details and operational procedures.
+4. `LOG` and `SEC` records are Informative descriptions.
 
 ---
 
