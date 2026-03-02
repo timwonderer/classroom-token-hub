@@ -179,10 +179,6 @@ class JoinCode(db.Model):
     join_code_token = db.Column(db.String(20), nullable=False, unique=True, index=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False, index=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
-    is_archived = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
-    is_expired = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
-    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    archived_at = db.Column(db.DateTime(timezone=True), nullable=True)
     metadata_json = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
 
@@ -274,14 +270,9 @@ class Student(db.Model):
     # Credential: CONCAT(first_initial, DOB_sum) - simpler than old name_code system
     salt = db.Column(db.LargeBinary(16), nullable=False)
     first_half_hash = db.Column(db.String(64), unique=True, nullable=True)  # Hash of "FirstInitial + DOBSum" (e.g., "S2025")
-    second_half_hash = db.Column(db.String(64), unique=True, nullable=True)  # Hash of DOB sum (backward compat)
+    second_half_hash = db.Column(db.String(64), unique=True, nullable=True)  # Legacy/compat hash value
     username_hash = db.Column(db.String(64), unique=True, nullable=True)
     username_lookup_hash = db.Column(db.String(64), unique=True, nullable=True)
-
-    # Fuzzy name matching - stores hash of each last name part separately
-    # Example: "Smith-Jones" → ["hash(smith)", "hash(jones)"]
-    # Allows matching when teachers enter names with different delimiters
-    last_name_hash_by_part = db.Column(db.JSON, nullable=True)
 
     # Ownership / tenancy
     # Students are linked to teachers via student_teachers table (many-to-many)
@@ -305,14 +296,8 @@ class Student(db.Model):
     second_factor_type = db.Column(db.String, nullable=True)
     second_factor_enabled = db.Column(db.Boolean, default=False)
     has_completed_setup = db.Column(db.Boolean, default=False)
-    # Privacy-aligned DOB sum for username generation (non-reversible)
-    dob_sum = db.Column(db.Integer, nullable=True)
     # Track if student has completed the legacy profile migration
     has_completed_profile_migration = db.Column(db.Boolean, default=False)
-    # Legacy field retained for backward compatibility. New deletion flow removes
-    # student records instead of using inactive/archived student state.
-    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
-
     # Teacher Identity Flag (prevents deletion and analytics skew)
     is_teacher = db.Column(db.Boolean, default=False, nullable=False)
 
