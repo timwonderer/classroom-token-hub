@@ -433,7 +433,3 @@ Key fields: `student_id`, `created_at`, `expires_at`.
 - **v1.7.0** added analytics models (`analytics_snapshots`, `analytics_events`, `analytics_alerts`) for system health monitoring and rent itemization (`rent_items`) for transparent rent breakdown.
 - All new models properly scoped by `join_code` for multi-tenancy compliance.
 
-## Full Documentation
-
-For the complete documentation set, visit:
-https://github.com/timwonderer/classroom-economy/tree/main/docs

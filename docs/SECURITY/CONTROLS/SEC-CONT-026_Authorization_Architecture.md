@@ -11,10 +11,10 @@ Define the Role-Based Access Control (RBAC) model, role definitions, permission 
 All routes, services, and tenant operations within the application.
 
 ## III. Authority Level
-Authoritative (ARC Tier). Evaluated against ARC-INV-000 isolation rules.
+Authoritative (ARC Tier). Evaluated against INV-CORE-000 isolation rules.
 
 ## IV. Dependencies
-- ARC-INV-000: Core Invariants
+- INV-CORE-000: Core Invariants
 
 ## V. Role Definitions and Mapping
 1. **System Administrator**

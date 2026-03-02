@@ -41,7 +41,7 @@ User visits classroomtokenhub.com
 ## Files Created/Modified
 
 ### New Files
-1. **[docs/index.html](docs/index.html)** - Static landing page (520 lines)
+1. **[docs/index.html](../../GITHUB_SITE/index.html)** - Static landing page (520 lines)
    - Professional responsive design
    - Material Symbols icons (no emoji)
    - SEO-optimized meta tags

@@ -36,7 +36,6 @@ The `ARCHITECTURE` namespace is organized into the following subdivisions:
 - `OPERATIONS/` (ARC-OPS-*): Application-level operational constraints, environments, and deployment architecture.
 - `IDENTITY/` (ARC-IDEN-*): Cross-domain identity, roles, and authorization mechanisms.
 - `SYSADMIN/` (ARC-SYS-*): Global administrative architecture spanning multiple boundaries.
-- `ECONOMY/` (ARC-ECON-*): Global economic engines (e.g., ledger structures).
 
 ## VI. Standard Document Template
 

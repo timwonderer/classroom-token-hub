@@ -314,7 +314,3 @@ These routes require an active system administrator login session.
 -   **`GET /sysadmin/logs`**: Displays the application's log file output.
 -   **`GET /sysadmin/logout`**: Logs the system admin out of their session.
 
-## Full Documentation
-
-For the complete documentation set, visit:
-https://github.com/timwonderer/classroom-economy/tree/main/docs

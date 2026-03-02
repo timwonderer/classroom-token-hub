@@ -18,7 +18,7 @@ SOP documents are binding rules for humans, not for application code.
 
 ## III. Authority Level
 
-Constitutional (Tier 1) within the context of human procedure, but explicitly subordinate to `ARC-INV-000` and `ARC/DOM` structures. SOP documents cannot dictate architectural behavior.
+Constitutional (Tier 1) within the context of human procedure, but explicitly subordinate to `INV-CORE-000` and `ARC/DOM` structures. SOP documents cannot dictate architectural behavior.
 
 ## IV. Dependencies
 

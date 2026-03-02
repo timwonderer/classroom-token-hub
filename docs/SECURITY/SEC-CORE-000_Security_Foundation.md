@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SEC-AUD-000      | 1.0     | 2026-03-01     | N/A        | Constitutional            |
+| SEC-CORE-000     | 1.0     | 2026-03-01     | N/A        | Constitutional  |
 
 ## I. Purpose
 To establish the foundational rules and methodologies for security audits, threat models, incident responses, and vulnerability disclosures across the Classroom Token Hub.
@@ -11,7 +11,7 @@ To establish the foundational rules and methodologies for security audits, threa
 All endpoints, storage mediums, network routes, and third-party integrations utilized within the application schema.
 
 ## III. Authority Level
-Authoritative (ARC tier equivalent). Must remain subordinate to the identity and data-isolation invariants defined in ARC-INV-000.
+Authoritative (ARC tier equivalent). Must remain subordinate to the identity and data-isolation invariants defined in INV-CORE-000.
 
 ## IV. Security Precepts
 

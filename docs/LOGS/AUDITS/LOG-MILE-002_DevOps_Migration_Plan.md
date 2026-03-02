@@ -262,7 +262,7 @@ Missing documentation:
 - Role definitions (Admin, Teacher, Student, SysAdmin)
 - Permission mapping
 - Cross-tenant authorization constraints
-- Integration with ARC-INV-000
+- Integration with INV-CORE-000
 
 #### 6. ARC-SEC-027: Multi-Tenancy Threat Model
 **Reference:** ARC-SEC-027
@@ -335,7 +335,7 @@ Missing documentation:
 ### Phase 1: Foundation (Week 1)
 **Goal:** Establish ARC documents (constitutional layer)
 
-- [ ] **ARC-INV-000** - Already exists in `new_docs/`
+- [ ] **INV-CORE-000** - Already exists in `new_docs/`
 - [ ] **ARC-OPS-000** - Operational constraints foundation
 - [ ] **ARC-SEC-000** - Security architecture framework (create if missing)
 - [ ] Create `/docs/` subdirectory structure for new taxonomy
@@ -382,7 +382,7 @@ Missing documentation:
 
 ```
 docs/
-├── ARC-INV-000_Core_Invariants.md          (foundational)
+├── INV-CORE-000_Core_Invariants.md          (foundational)
 ├── ARC-OPS-000_Operational_Constraints.md  (new)
 ├── ARC-OPS-001_*.md
 ├── ARC-OPS-002_*.md
@@ -464,7 +464,7 @@ docs/
 **Recommendation:** Create LOG-REL-* docs but note they are historical/immutable
 
 ### Q3: Breaking Changes
-**Issue:** ARC-INV-000 states no changes to configuration should retroactively alter outcomes.
+**Issue:** INV-CORE-000 states no changes to configuration should retroactively alter outcomes.
 **Question:** Should breaking changes be allowed at all, or only at major versions?
 
 **Recommendation:** Document in SOP-REL-017

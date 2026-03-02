@@ -176,7 +176,7 @@ Normative documents must:
 
 - Use precise and enforceable language: "must", "shall", "required", "prohibited"
 - Avoid narrative, historical storytelling, or design rationale
-- Avoid duplicating invariant language from ARC-INV-000
+- Avoid duplicating invariant language from INV-CORE-000
 - Avoid redundancy with other normative documents
 
 Informative documents:
@@ -214,5 +214,5 @@ Revisions to this document must:
 1. Increment the version number per Section XI.
 2. Update the Effective Date.
 3. Populate the Supersedes field with the replaced version or document references.
-4. Maintain consistency with ARC-INV-000.
+4. Maintain consistency with INV-CORE-000.
 5. Update SOP-DOC-002 to reflect any structural changes to the namespace or sub-division definitions.

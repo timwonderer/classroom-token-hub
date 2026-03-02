@@ -121,7 +121,3 @@ classroom-economy/
 - Admin identity handling spec: `docs/development/ADMIN_IDENTITY_HANDLING_SPEC.md`
 - Diagnostics for user-visible behavior: `docs/user-guides/diagnostics/student.md`, `docs/user-guides/diagnostics/teacher.md`
 
-## Full Documentation
-
-For the complete documentation set, visit:
-https://github.com/timwonderer/classroom-economy/tree/main/docs

@@ -11,10 +11,10 @@ Define non-negotiable operational constraints for the Classroom Token Hub applic
 Applies to all application environments (production, staging, demo) and governs future architectural additions.
 
 ## III. Authority Level
-Authoritative (ARC Tier). Subordinate to ARC-INV-000.
+Authoritative (ARC Tier). Subordinate to INV-CORE-000.
 
 ## IV. Dependencies
-- ARC-INV-000: Core Invariants
+- INV-CORE-000: Core Invariants
 
 ## V. Operational Constraints
 
@@ -33,4 +33,4 @@ Authoritative (ARC Tier). Subordinate to ARC-INV-000.
 - Timezone interpretation must happen strictly at the presentation layer based on localized context of the user.
 
 ### 5. Data Retention
-- Data retention must conform to the policies outlined in ARC-INV-000. Stale accounts must be securely purged according to their lifecycle.
+- Data retention must conform to the policies outlined in INV-CORE-000. Stale accounts must be securely purged according to their lifecycle.
