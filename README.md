@@ -12,7 +12,7 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Version 1.8.0 Released with active security hardening and performance work in progress. The 1.8.0 release added rent item types (privilege, per-use, hall pass), coverage period tracking, and stability fixes. Recent unreleased improvements include: post-claim PII minimisation (DOB and name hashes automatically deleted after account setup), comprehensive class deletion audit with P1/P2/P3 security fixes, timed deletion confirmation gates, hall pass and admin identity boundary hardening, and a major read-path performance optimization reducing student roster queries from ~1225 to ~10 for a class of 60 students. See [RELEASE_NOTES_v1.8.0.md](docs/log/LOG-REL-015_RELEASE_NOTES_v1.8.0.md) for the full release and [CHANGELOG.md](CHANGELOG.md) for all changes.
+**Project Status:** Version 1.8.0 Released with active security hardening and performance work in progress. The 1.8.0 release added rent item types (privilege, per-use, hall pass), coverage period tracking, and stability fixes. Recent unreleased improvements include: post-claim PII minimisation (DOB and name hashes automatically deleted after account setup), comprehensive class deletion audit with P1/P2/P3 security fixes, timed deletion confirmation gates, hall pass and admin identity boundary hardening, and a major read-path performance optimization reducing student roster queries from ~1225 to ~10 for a class of 60 students. See [RELEASE_NOTES_v1.8.0.md](docs/LOGS/RELEASES/LOG-REL-015_RELEASE_NOTES_v1.8.0.md) for the full release and [CHANGELOG.md](CHANGELOG.md) for all changes.
 
 ---
 
@@ -168,7 +168,7 @@ An interactive banking and classroom management platform for teaching students a
 
 ## Documentation
 
-📚 **[Complete Documentation →](docs/README.md)**
+📚 **[Complete Documentation →](docs/GITHUB_SITE/README.md)**
 
 ### For Users
 
@@ -177,15 +177,15 @@ An interactive banking and classroom management platform for teaching students a
 
 ### For Developers
 
-- **[Architecture Guide](docs/arc/ARC-OPS-006_ARCHITECTURE.md)** — System design and patterns
-- **[Database Schema](docs/arc/ARC-OPS-007_DATABASE_SCHEMA.md)** — Up-to-date database reference
-- **[API Reference](docs/arc/ARC-OPS-005_API_REFERENCE.md)** — REST API documentation
+- **[Architecture Guide](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-006_ARCHITECTURE.md)** — System design and patterns
+- **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_DATABASE_SCHEMA.md)** — Up-to-date database reference
+- **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_API_REFERENCE.md)** — REST API documentation
 - **[Development Priorities](DEVELOPMENT.md)** — Current priorities, roadmap, and tasks
 - **[Changelog](CHANGELOG.md)** — Version history and notable changes
 
 ### Deployment & Operations
 
-- **[Deployment Guide](docs/sop/SOP-DEP-006_Deployment_Guide.md)** — Production deployment instructions
+- **[Deployment Guide](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)** — Production deployment instructions
 - **[Operations Guides](docs/operations/)** — Operational procedures and troubleshooting
 - **[Contributing Guide](.github/CONTRIBUTING.md)** — How to contribute to the project
 
@@ -298,7 +298,7 @@ curl http://your-domain/health
 We welcome contributions! Please see [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md) for guidelines.
 
 **Before contributing:**
-1. Review the [Architecture Guide](docs/arc/ARC-OPS-006_ARCHITECTURE.md)
+1. Review the [Architecture Guide](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-006_ARCHITECTURE.md)
 2. Check [DEVELOPMENT.md](DEVELOPMENT.md) for current priorities
 3. Ensure all tests pass
 4. Follow the existing code style
@@ -335,7 +335,7 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 ## Support
 
-**Documentation:** [docs/README.md](docs/README.md)
+**Documentation:** [docs/README.md](docs/GITHUB_SITE/README.md)
 **Issues:** Use GitHub Issues for bug reports and feature requests
 **Security:** Report security issues privately to project maintainers
 

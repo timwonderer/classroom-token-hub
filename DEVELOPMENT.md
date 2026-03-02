@@ -8,9 +8,9 @@
 
 ## Quick Links
 
-- **[Architecture Guide](docs/arc/ARC-OPS-006_ARCHITECTURE.md)** - System design and patterns
-- **[Database Schema](docs/arc/ARC-OPS-007_DATABASE_SCHEMA.md)** - Current data models
-- **[API Reference](docs/arc/ARC-OPS-005_API_REFERENCE.md)** - REST API documentation
+- **[Architecture Guide](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-006_ARCHITECTURE.md)** - System design and patterns
+- **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_DATABASE_SCHEMA.md)** - Current data models
+- **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_API_REFERENCE.md)** - REST API documentation
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute
 - **[Project History](PROJECT_HISTORY.md)** - Project evolution and philosophy
 
@@ -43,7 +43,7 @@
 - ✅ **Insurance Class Scoping** - Fixed insurance management filters to respect selected class period
 - ✅ **Security Hardening** - Improved Grafana proxy content-type filtering to prevent XSS
 
-See [RELEASE_NOTES_v1.8.0.md](docs/log/LOG-REL-015_RELEASE_NOTES_v1.8.0.md) for full details.
+See [RELEASE_NOTES_v1.8.0.md](docs/LOGS/RELEASES/LOG-REL-015_RELEASE_NOTES_v1.8.0.md) for full details.
 
 ### ✅ Version 1.7.0 - January 9, 2026
 
@@ -60,7 +60,7 @@ See [RELEASE_NOTES_v1.8.0.md](docs/log/LOG-REL-015_RELEASE_NOTES_v1.8.0.md) for 
 - ✅ **ToS Acknowledgment** - Compliance modal during admin signup
 - ✅ **Issue Resolution Improvements** - EasyMDE form fixes and zero-value event display
 
-See [RELEASE_NOTES_v1.7.0.md](docs/log/LOG-REL-013_RELEASE_NOTES_v1.7.0.md) for full details.
+See [RELEASE_NOTES_v1.7.0.md](docs/LOGS/RELEASES/LOG-REL-013_RELEASE_NOTES_v1.7.0.md) for full details.
 
 ### ✅ Version 1.6.0 - January 1, 2026
 
@@ -72,7 +72,7 @@ See [RELEASE_NOTES_v1.7.0.md](docs/log/LOG-REL-013_RELEASE_NOTES_v1.7.0.md) for 
 - ✅ **Passkey Authentication Fixes** - Improved environment variable loading and error handling
 - ✅ **Documentation Updates** - Standardized file paths and references
 
-See [RELEASE_NOTES_v1.6.0.md](docs/log/LOG-REL-012_RELEASE_NOTES_v1.6.0.md) for full details.
+See [RELEASE_NOTES_v1.6.0.md](docs/LOGS/RELEASES/LOG-REL-012_RELEASE_NOTES_v1.6.0.md) for full details.
 
 ### ✅ Version 1.5.0 - December 29, 2025
 
@@ -84,7 +84,7 @@ See [RELEASE_NOTES_v1.6.0.md](docs/log/LOG-REL-012_RELEASE_NOTES_v1.6.0.md) for 
 - ✅ **Security Hardening** - Comprehensive attack surface audit and remediation
 - ✅ **Time Handling** - Standardized UTC timestamp formatting
 
-See [RELEASE_NOTES_v1.5.0.md](docs/log/LOG-REL-011_RELEASE_NOTES_v1.5.0.md) for full details.
+See [RELEASE_NOTES_v1.5.0.md](docs/LOGS/RELEASES/LOG-REL-011_RELEASE_NOTES_v1.5.0.md) for full details.
 
 ### ✅ Version 1.4.0 - December 27, 2025
 
@@ -97,7 +97,7 @@ See [RELEASE_NOTES_v1.5.0.md](docs/log/LOG-REL-011_RELEASE_NOTES_v1.5.0.md) for 
 - ✅ **Streamlined Authentication** - Improved login flow with better error handling
 - ✅ **Student Dashboard Improvements** - Side-by-side account cards with projected interest
 
-See [RELEASE_NOTES_v1.4.0.md](docs/log/LOG-REL-010_RELEASE_NOTES_v1.4.0.md) for full details.
+See [RELEASE_NOTES_v1.4.0.md](docs/LOGS/RELEASES/LOG-REL-010_RELEASE_NOTES_v1.4.0.md) for full details.
 
 ### ✅ Version 1.3.0 - December 25, 2025
 
@@ -109,7 +109,7 @@ See [RELEASE_NOTES_v1.4.0.md](docs/log/LOG-REL-010_RELEASE_NOTES_v1.4.0.md) for 
 - ✅ **Security Audit** - Comprehensive attack surface security audit completed
 - ✅ **Service Worker Fixes** - Resolved persistent browser console errors
 
-See [RELEASE_NOTES_v1.3.0.md](docs/log/LOG-REL-009_RELEASE_NOTES_v1.3.0.md) for full details.
+See [RELEASE_NOTES_v1.3.0.md](docs/LOGS/RELEASES/LOG-REL-009_RELEASE_NOTES_v1.3.0.md) for full details.
 
 ### ✅ Version 1.2.0 - December 18, 2025
 
@@ -123,7 +123,7 @@ See [RELEASE_NOTES_v1.3.0.md](docs/log/LOG-REL-009_RELEASE_NOTES_v1.3.0.md) for 
 - ✅ **Critical Payroll Fix** - Resolved multi-tenancy data leak in payroll system
 - ✅ **Improved Terminology** - "Start Work/Break Done" replaces "Tap In/Out"
 
-See [RELEASE_NOTES_v1.2.0.md](docs/log/LOG-REL-007_RELEASE_NOTES_v1.2.0.md) for full details.
+See [RELEASE_NOTES_v1.2.0.md](docs/LOGS/RELEASES/LOG-REL-007_RELEASE_NOTES_v1.2.0.md) for full details.
 
 ### ✅ Version 1.0.0 - November 29, 2024
 
@@ -219,7 +219,7 @@ See [RELEASE_NOTES_v1.2.0.md](docs/log/LOG-REL-007_RELEASE_NOTES_v1.2.0.md) for 
 - 🔄 Teacher analytics for payroll and store performance (partial - economy health page provides CWI analysis)
 - ⏳ Enhanced reporting and export capabilities (planned for future release)
 
-**See:** [RELEASE_NOTES_v1.1.0.md](docs/log/LOG-REL-005_RELEASE_NOTES_v1.1.0.md) for complete details
+**See:** [RELEASE_NOTES_v1.1.0.md](docs/LOGS/RELEASES/LOG-REL-005_RELEASE_NOTES_v1.1.0.md) for complete details
 
 ### Version 1.2 - Mobile Experience
 - Progressive Web App (PWA) capabilities
@@ -596,18 +596,18 @@ When ready to finalize multi-teacher model:
 - **[Teacher Manual](docs/user-guides/teacher_manual.md)** - Comprehensive admin guide
 
 ### Technical Reference
-- **[Architecture](docs/arc/ARC-OPS-006_ARCHITECTURE.md)** - System design and patterns
-- **[Database Schema](docs/arc/ARC-OPS-007_DATABASE_SCHEMA.md)** - Data models and relationships
-- **[API Reference](docs/arc/ARC-OPS-005_API_REFERENCE.md)** - REST endpoints
-- **[Timezone Handling](docs/arc/ARC-OPS-003_TIMEZONE_HANDLING.md)** - UTC storage and conversion
-- **[Economy Specification](docs/arc/ARC-OPS-008_ECONOMY_SPECIFICATION.md)** - Financial system ratios and rules
+- **[Architecture](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-006_ARCHITECTURE.md)** - System design and patterns
+- **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_DATABASE_SCHEMA.md)** - Data models and relationships
+- **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_API_REFERENCE.md)** - REST endpoints
+- **[Timezone Handling](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-003_TIMEZONE_HANDLING.md)** - UTC storage and conversion
+- **[Economy Specification](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-008_ECONOMY_SPECIFICATION.md)** - Financial system ratios and rules
 
 ### Development Guides
 - **[Economy Balance Checker](docs/dom/DOM-ARC-002_Economy_Balance_Checker.md)** - CWI implementation guide
 - **[Migration Guide](docs/development/MIGRATION_GUIDE.md)** - Alembic best practices
 - **[Migration Best Practices](docs/development/MIGRATION_BEST_PRACTICES.md)** - Database migration guidelines
-- **[Seeding Instructions](docs/sop/SOP-DEP-020_Seeding_Instructions.md)** - Test data setup
-- **[Deprecated Patterns](docs/arc/ARC-OPS-009_Deprecated_Code_Patterns.md)** - Code modernization tracking
+- **[Seeding Instructions](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-020_Seeding_Instructions.md)** - Test data setup
+- **[Deprecated Patterns](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-009_Deprecated_Code_Patterns.md)** - Code modernization tracking
 - **[System Admin Design](docs/feat/FEAT-ARC-003_Sysadmin_Interface.md)** - Admin interface patterns
 
 ### Operations & Deployment
@@ -642,8 +642,8 @@ Version 1.0 has been successfully released with the following criteria met:
 
 ## Getting Help
 
-- **Documentation Issues:** Check [docs/README.md](docs/README.md) for navigation
-- **Technical Questions:** Review [Architecture Guide](docs/arc/ARC-OPS-006_ARCHITECTURE.md)
+- **Documentation Issues:** Check [docs/README.md](docs/GITHUB_SITE/README.md) for navigation
+- **Technical Questions:** Review [Architecture Guide](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-006_ARCHITECTURE.md)
 - **Security Concerns:** See [Security Audits](docs/security/)
 - **Contributing:** Read [CONTRIBUTING.md](CONTRIBUTING.md)
 

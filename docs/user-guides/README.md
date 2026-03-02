@@ -17,8 +17,8 @@ This directory contains all user-facing documentation.
 
 Feature walkthroughs live under `features/`:
 
-- [Teacher Feature Guides](features/teacher/index.md)
-- [Student Feature Guides](features/student/index.md)
+- [Teacher Feature Guides](features/teacher/bills/index.md)
+- [Student Feature Guides](features/teacher/bills/index.md)
 
 Legacy deep dives:
 
