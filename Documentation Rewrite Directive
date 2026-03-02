@@ -1,0 +1,449 @@
+# Documentation Rewrite Directive — Classroom Token Hub
+
+> **Audience:** An autonomous AI agent with no prior knowledge of this project.
+> **Objective:** Produce a coherent, predictable, deduplicated, and structurally sound documentation system under `/docs` with a single source of truth for every topic.
+>
+> **Exclusion:** `docs/user-guides/` and `docs/GITHUB_SITE/` are **out of scope** for this project. Do not move, rename, rewrite, or restructure any file within those directories. User-guides will be a separate future project.
+
+---
+
+## 1. Project Context
+
+Classroom Token Hub is a Flask web application that models a classroom economy. Students earn wages via attendance, spend at a store, pay rent, purchase insurance, and manage savings. Teachers configure all economic parameters per-class. System admins have oversight across teachers.
+
+Key architectural concept: **`join_code`** is the isolation boundary. Every financial operation, query, and data scope is anchored to a `join_code`. This is the most important invariant in the system.
+
+The application has three user roles: **Student**, **Teacher (Admin)**, and **System Admin** — each with separate dashboards, routes, and permissions.
+
+---
+
+## 2. Documentation Hierarchy (Preserve Exactly)
+
+The project uses a formal authority hierarchy defined in `INV-CORE-001_Authority_Model.md`. This hierarchy MUST be preserved:
+
+```
+Tier 0 — Foundational (INV-CORE-000, INV-CORE-001, SOP-DOC-000)
+  ↓
+Tier 1 — Constitutional (ARC-*, DOM-*, SEC-Architecture)
+  ↓
+Tier 2 — Normative (FEAT-*, SOP-*, .claude/rules/*)
+  ↓
+Tier 3 — Informative (LOG-*, SEC-Records, user-guides, root files)
+```
+
+Six formal **Divisions** exist, defined in `SOP-DOC-003_Division_Definition.md`:
+
+| Division | Code | Tier | Purpose |
+|---|---|---|---|
+| ARCHITECTURE | ARC | Constitutional | Cross-domain system design, identity, authorization, ledger |
+| DOMAINS | DOM | Constitutional | Bounded business contexts (Rent, Bank, Pay, Insurance, Store) |
+| FEATURES | FEAT | Normative | User-facing workflows and implementations of domain capability |
+| STANDARD OPERATING PROCEDURES | SOP | Normative | Human procedures: deployment, migration, documentation governance |
+| SECURITY | SEC | Mixed | Constitutional (threat models, controls) + Informative (audit reports, incidents) |
+| LOGS | LOG | Informative | Historical records, release notes, milestones, postmortems |
+
+Plus two non-namespace locations:
+- `docs/user-guides/` — Informative, user-facing instructional content
+- Root files (`README.md`, `CHANGELOG.md`, etc.) — Informative
+
+---
+
+## 3. Current State: Specific Problems Found
+
+### 3.1 INV Files at Root (Intentional — Do Not Move)
+
+Two INV files sit at the `docs/` root:
+- `docs/INV-CORE-000_Core_Invariants.md`
+- `docs/INV-CORE-001_Authority_Model.md`
+
+These are Tier 0 (Foundational) documents that **intentionally transcend all divisions**. They live at the root precisely because they are above every namespace in the hierarchy. **Do not move them into a subdirectory.** Their rootless position IS their authoritative signal.
+
+### 3.2 Inconsistent CORE Reference Numbers
+
+Each namespace has a `*-CORE-000` foundation file, but several have wrong reference numbers in their frontmatter:
+
+| File | Declared Reference Number | Expected |
+|---|---|---|
+| `SECURITY/SEC-CORE-000_Security_Foundation.md` | `SEC-AUD-000` | `SEC-CORE-000` |
+| `LOGS/LOG-CORE-000_Logs_Foundation.md` | `LOG-ARC-000` | `LOG-CORE-000` |
+| `FEATURES/FEAT-CORE-000_Feature_Foundation.md` | `FEAT-ARC-000` | `FEAT-CORE-000` |
+
+### 3.3 Duplicate Timezone Documents
+
+Two files cover overlapping timezone content:
+- `ARCHITECTURE/OPERATIONS/ARC-OPS-003_TIMEZONE_HANDLING.md` — Implementation-focused: template usage, `timezone-utils.js` API, which templates were updated
+- `ARCHITECTURE/OPERATIONS/ARC-OPS-012_Timezone_Specification.md` — Specification-focused: invariant rules, forbidden patterns, enforcement
+
+**Action:** Merge into a single authoritative document. The specification-level content (ARC-OPS-012) is the canonical source; the implementation details from ARC-OPS-003 should fold into it or be demoted to informative reference.
+
+### 3.4 Misplaced Files in ARCHITECTURE/OPERATIONS
+
+The `ARCHITECTURE/OPERATIONS/` subdivision has become a dumping ground. Per `ARC-CORE-000_Architecture_Foundation.md`, ARCHITECTURE is for "architectural rules, mechanisms, and systems that span **multiple domains**." The following files do NOT belong in ARCHITECTURE:
+
+| File | Problem | Correct Location |
+|---|---|---|
+| `ARC-OPS-008_ECONOMY_SPECIFICATION.md` | Domain-specific economy ratios and CWI rules | → `DOMAINS/ECONOMY_DESIGN/` (it IS domain logic) |
+| `ARC-OPS-004_ANALYTICS_SPECIFICATION.md` | Feature specification for a specific analytics feature | → `FEATURES/ANALYTICS/` |
+| `ARC-OPS-009_Deprecated_Code_Patterns.md` | Historical tracking of tech debt; not architectural | → `LOGS/AUDITS/` (informative record) |
+| `ARC-OPS-010_Deprecated_Symbols_Registry.md` | CI-enforced gate that lives outside the app runtime | → `SOP/DATABASE/` or `SOP/WORKFLOW/` (it's a human/CI procedure, not architecture) |
+| `ARC-OPS-011_Schema_Change_Proposals.md` | Procedural governance for schema changes | → `SOP/DATABASE/` |
+| `ARC-OPS-013_Design_System.md` | UI/visual design system; not an architectural constraint | → `FEATURES/` or a new `DESIGN/` subdivision |
+| `ARC-OPS-002_PWA_ICON_REQUIREMENTS.md` | Implementation detail, not cross-domain architecture | → `SOP/DEPLOYMENT/` or `FEATURES/` |
+| `ARC-OPS-006_ARCHITECTURE.md` | General architecture overview that duplicates info from `ARC-CORE-000` and `DOM-CORE-000` | **Evaluate:** merge unique content into CORE files, then delete or archive to LOG |
+
+Files that DO correctly belong in `ARCHITECTURE/OPERATIONS/`:
+- `ARC-OPS-000_Operational_Constraints.md` — cross-domain operational rules ✓
+- `ARC-OPS-001_transaction_based_reimbursement_architecture.md` — ledger architecture ✓
+- `ARC-OPS-005_API_REFERENCE.md` — cross-domain API surface ✓
+- `ARC-OPS-007_DATABASE_SCHEMA.md` — cross-domain data model ✓
+
+### 3.5 Misplaced File in ARCHITECTURE/IDENTITY
+
+- `ARCHITECTURE/IDENTITY/ARC-IDEN-001_Admin_Identity_Handling.md` declares its reference number as `DOM-IDEN-001` in frontmatter, not `ARC-IDEN-001`. It's filed under ARCHITECTURE but tagged as a DOMAINS document. **Decide:** Is this cross-domain identity (stays in ARC) or domain-specific identity (moves to DOM)? Given that admin identity handling affects authentication, roles, and every route, it IS cross-domain and should remain in ARC — but the reference number must be corrected to `ARC-IDEN-001`.
+
+### 3.6 Missing Declared Subdivision
+
+`ARC-CORE-000` declares an `ECONOMY/` (ARC-ECON-*) subdivision, but this directory does not exist. Either:
+- Create it and move relevant cross-domain economy documents there, OR
+- Remove the declaration from `ARC-CORE-000` if all economy content belongs in `DOMAINS/ECONOMY_DESIGN/`.
+
+### 3.7 SOP-DOC-002 Index Has Stale References
+
+The documentation index `SOP-DOC-002_Documentation_Index.md` lists SEC namespace entries using old `ARC-SEC-*` reference IDs (lines 85–112), but actual filenames use `SEC-AUD-*`, `SEC-CONT-*`, `SEC-INC-*`, `SEC-THR-*`, and `SEC-VUL-*` prefixes. The file paths in the index also reference `../sec/` (lowercase), which does not exist — the actual directory is `SECURITY/` (uppercase).
+
+This entire index must be rebuilt from the actual filesystem.
+
+### 3.8 Superseded Stubs Taking Up Space
+
+Two files are marked as superseded but preserved "for index continuity":
+- `SOP-DOC-001_Documentation_Taxonomy.md` — merged into `SOP-DOC-000` v2.0
+- `SOP-DOC-004_AI_Claude_Guide.md` — removed from tracking
+
+**Action:** These stubs serve no purpose. Delete them and remove their entries from the index.
+
+### 3.9 SOP-DOC-005 Structural Contradiction
+
+`SOP-DOC-005_Codebase_Organization_Playbook.md` (Section VI) defines a canonical structure using **lowercase** directory names (`docs/arc/`, `docs/sop/`, `docs/sec/`, etc.), but the actual repository uses **UPPERCASE** (`ARCHITECTURE/`, `STANDARD_OPERATING_PROCEDURES/`, `SECURITY/`). The playbook must be updated to match reality, or the directories must be renamed. Pick one and enforce consistency.
+
+### 3.10 SOP-DB Files Are Historical Reports, Not SOPs
+
+Most `SOP/DATABASE/SOP-DB-*` files are NOT standard operating procedures. They are one-time migration reports, status summaries, and fix logs. Examples:
+
+| File | Actual Content |
+|---|---|
+| `SOP-DB-001_MIGRATION_FIX_SUMMARY.md` | Historical report of a migration fix |
+| `SOP-DB-002_MIGRATION_NOTE_expected_weekly_hours.md` | Note about a specific migration |
+| `SOP-DB-003_MIGRATION_STATUS_REPORT.md` | Point-in-time status report |
+| `SOP-DB-004_STAGING_MIGRATION_FIX.md` | Fix applied to staging |
+| `SOP-DB-005_migration_conditional_index_drop.md` | One-time technical note |
+| `SOP-DB-006_migration_check_report.md` | Migration audit report |
+| `SOP-DB-007_MIGRATION_REPORT_STAGING.md` | Staging report |
+| `SOP-DB-012_MIGRATION_TOTP_ENCRYPTION.md` | One-time migration detail |
+
+Only these are actual reusable SOPs:
+- `SOP-DB-010_database_switching.md` — procedure for switching databases ✓
+- `SOP-DB-011_migration_specifications.md` — reusable migration spec ✓
+- `SOP-DB-013_Database_Migration_Rollback.md` — rollback procedure ✓
+- `SOP-DB-009_MIGRATION_COMPLIANCE_REVIEW.md` — compliance checklist (borderline) ✓
+
+**Action:** Move the one-time reports to `LOGS/AUDITS/` and keep only reusable procedures in `SOP/DATABASE/`.
+
+### 3.11 SOP-DEP Files Have Similar Issues
+
+Several `SOP/DEPLOYMENT/SOP-DEP-*` files are historical reports rather than reusable procedures:
+
+| File | Issue |
+|---|---|
+| `SOP-DEP-002_CLEANUP_DUPLICATES.md` | One-time cleanup procedure |
+| `SOP-DEP-010_LEGACY_ACCOUNT_MIGRATION.md` | One-time migration |
+| `SOP-DEP-011_MULTI_TENANCY_FIX_DEPLOYMENT.md` | One-time deployment fix |
+| `SOP-DEP-013_README.md` and `SOP-DEP-014_README_GITHUB_PAGES.md` | README-like overviews, not procedures |
+
+**Action:** Evaluate each — archive one-time procedures to `LOGS/` and keep only reusable, repeatable procedures.
+
+### 3.12 SECURITY Audit Overlap with LOGS/AUDITS
+
+Both `SECURITY/AUDITS/` and `LOGS/AUDITS/` contain audit-type documents. Per the division model:
+- `SECURITY/AUDITS/` → security-specific audits (access control, PII, attack surface, vulnerabilities)
+- `LOGS/AUDITS/` → general engineering audits (code review, testing summaries, implementation progress)
+
+Some `LOGS/AUDITS/LOG-ARC-*` files are security-related (e.g., `LOG-ARC-016_Security_Fix_Verification`, `LOG-ARC-017_Security_Fixes_Consolidated`, `LOG-ARC-018_PR_Description_Security`, `LOG-ARC-023_Security_Fix_Update`, `LOG-ARC-026_Code_Review_Security`). These should be evaluated for relocation to `SECURITY/AUDITS/` or left under LOGS if they are primarily historical fix records rather than security methodology documents.
+
+### 3.13 user-guides — OUT OF SCOPE
+
+`docs/user-guides/` is excluded from this rewrite project. It will be addressed in a separate future project. Do not modify, move, or restructure any files within this directory.
+
+### 3.14 Economy Content Scattered Across 3+ Locations
+
+Economy-related content is fragmented:
+1. `ARC-OPS-008_ECONOMY_SPECIFICATION.md` — developer-facing ratios and CWI formulas (in ARCHITECTURE)
+2. `DOM-ECON-001_Economy_Balance_Checker.md` — implementation guide for the balance checker tool (in DOMAINS)
+3. `user-guides/economy_guide.md` — teacher-facing CWI guide (in user-guides)
+4. References to an "AGENTS financial setup.md" that may not exist
+
+**Action:** Consolidate: one canonical economy specification (DOMAINS or ARC), one implementation reference. Fix broken cross-references. The user-guide version (`economy_guide.md`) is out of scope for this project.
+
+### 3.15 Stale Cross-References Throughout
+
+Many documents contain references to paths that no longer exist:
+- `ARC-OPS-006` references `docs/technical-reference/database_schema.md`, `docs/technical-reference/api_reference.md`, `docs/development/HALL_PASS_FEATURE_SPEC.md`, `docs/development/ADMIN_IDENTITY_HANDLING_SPEC.md` — none of these paths exist
+- `ARC-OPS-008` references `../user-guides/economy_guide` — relative path is wrong from its location
+- `ARC-OPS-010` references `docs/development/deprecated_symbols.txt` — does not exist
+- `economy_guide.md` references `../technical-reference/economy-specification` — does not exist
+- `SEC-CORE-000` references `ARC-INV-000` — the actual document is `INV-CORE-000`
+- `SOP-CORE-000` references `ARC-INV-000` — same issue
+
+### 3.16 DOMAINS Namespace Is Underpopulated
+
+`DOMAINS/` has only:
+- `DOM-CORE-000_Domain_Foundation.md`
+- `ECONOMY_DESIGN/DOM-ECON-001_Economy_Balance_Checker.md`
+- `IDENTITY/` (empty directory)
+
+The foundation document mentions domains like PAY, BANK, RENT, INS, STORE, but none of these have actual specification documents. Any domain-specific content currently misplaced in ARC should be relocated here. Delete the empty `IDENTITY/` directory.
+
+### 3.17 Naming Convention Inconsistencies
+
+- Some filenames use ALL_CAPS_WITH_UNDERSCORES (e.g., `ARC-OPS-002_PWA_ICON_REQUIREMENTS.md`)
+- Others use Title_Case (e.g., `ARC-OPS-009_Deprecated_Code_Patterns.md`)
+- Others use lowercase_with_underscores (e.g., `SOP-DB-005_migration_conditional_index_drop.md`)
+- The naming convention in `SOP-DOC-000` specifies `[NAMESPACE]-[FUNCTIONAL-AREA]-[NUMERIC-IDENTIFIER]_[Descriptive_Title].md` — standardize all filenames to this.
+
+### 3.18 user-guides/features — OUT OF SCOPE
+
+See Section 3.13. All user-guides work is deferred to a future project.
+
+### 3.19 Documents Do Not Conform to SOP-DOC-000 Section Template
+
+This is the most pervasive issue. `SOP-DOC-000_Writing_Specification.md` (Section IX) mandates that **all normative documents** (ARC, DOM, FEAT, SOP, SEC-CONT) must follow this exact section order:
+
+```
+I.   Purpose          — Single paragraph statement
+II.  Scope            — What this document governs
+III. Authority Level   — Tier classification and subordination
+IV.  Dependencies      — Documents this document derives from
+[V+] Content Sections  — Document-specific normative content
+[Last] Amendment       — Procedure for revising this document
+```
+
+All documents must include a correct **frontmatter table** immediately after the title:
+```markdown
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+```
+
+All formal sections must use **Roman numerals** at the top level (I, II, III...) with Arabic numerals (1, 2, 3...) for subsections.
+
+**Informative documents** (LOG-*, SEC-AUD/INC/VUL/THR) do NOT require this normative structure, but MUST still have a correct frontmatter table.
+
+#### Specific Non-Conforming Patterns Observed
+
+| Pattern | Example Files | Problem |
+|---|---|---|
+| YAML frontmatter instead of the required markdown table | `ARC-OPS-003`, `ARC-OPS-005`, `ARC-OPS-006`, `ARC-OPS-007`, `ARC-OPS-008`, `ARC-OPS-009` | Have `---` YAML blocks with `title:`, `category:`, `roles:` that are not part of the standard |
+| Arabic numeral sections instead of Roman | `ARC-OPS-012` uses `1. Purpose`, `2. Core Invariant`; `ARC-OPS-004` uses `1. Core Purpose`, `2. Design Philosophy` | Must be `I. Purpose`, `II. Scope`, etc. |
+| Missing required sections entirely | `ARC-OPS-003` has no Purpose, Scope, Authority, Dependencies, or Amendment section | Must add all required sections |
+| Informal section names | `ARC-OPS-006` uses `What This Document Covers`, `System Overview`; `ARC-OPS-009` uses `Overview` | Must use the canonical names from SOP-DOC-000 |
+| `"Full Documentation"` footer boilerplate | `ARC-OPS-003`, `ARC-OPS-005`, `ARC-OPS-006`, `ARC-OPS-007`, `ARC-OPS-008` all end with a generic GitHub link block | Remove this — it adds no value and is not part of the standard |
+| `Last Updated:` date outside frontmatter | `ARC-OPS-006`, `ARC-OPS-009`, `ARC-OPS-013` | The Effective Date in the frontmatter table IS the update date. Remove redundant inline dates |
+| `Status: Active` or `Status: Authoritative` inline | `ARC-IDEN-001`, `ARC-OPS-013`, `SOP-DOC-005` | Authority Level in the frontmatter table IS the status indicator. Remove redundant inline status |
+| Missing Amendment section | Most ARC-OPS files, `DOM-ECON-001`, `SEC-CORE-000`, `LOG-CORE-000` | Must add Amendment section as the last section |
+| Content sections not numbered with Roman numerals | `DOM-ECON-001` uses `## Overview`, `## Components`, `## Troubleshooting` with no numbering | Must be `V. Overview`, `VI. Components`, etc. |
+
+#### Content Rewrite Rule
+
+**Preserve the substance. Reorganize the structure.**
+
+The information within each document must NOT be changed — the facts, rules, code examples, tables, and technical details stay the same. What changes is:
+
+1. **Section ordering** — rearranged to match the SOP-DOC-000 template
+2. **Section naming** — renamed to use the canonical names (I. Purpose, II. Scope, etc.)
+3. **Section numbering** — converted to Roman numerals at top level
+4. **Frontmatter** — corrected or added to match the standard table format
+5. **Boilerplate removal** — delete `Full Documentation` footers, redundant `Last Updated:` lines, redundant `Status:` lines, YAML frontmatter blocks
+6. **Amendment section** — added if missing
+7. **Language register** — normative docs use "must", "shall", "required", "prohibited"; informative docs use "should", "recommended", "typically"
+
+---
+
+## 4. Execution Instructions
+
+### Phase 1: Foundation Repair (Do First)
+
+1. **Fix all CORE reference numbers** in frontmatter tables so they match their filenames.
+2. **Leave INV files at docs root.** They intentionally transcend all divisions. Do NOT create a subdirectory for them.
+3. **Delete superseded stubs** `SOP-DOC-001` and `SOP-DOC-004`.
+4. **Resolve SOP-DOC-005 structural contradiction** — update it to match actual directory naming (UPPERCASE).
+5. **Fix stale cross-references** in `SEC-CORE-000` and `SOP-CORE-000` (`ARC-INV-000` → `INV-CORE-000`).
+
+### Phase 2: Relocate Misplaced Files
+
+6. **Move misplaced ARC-OPS files** per Section 3.4 above. For each move:
+   - Assign a new reference number matching the destination namespace
+   - Update the frontmatter table
+   - Use `git mv`
+   - Update all inbound references
+7. **Fix ARC-IDEN-001 reference number** from `DOM-IDEN-001` to `ARC-IDEN-001`.
+8. **Merge duplicate timezone docs** (ARC-OPS-003 + ARC-OPS-012) into one canonical document.
+9. **Move historical SOP-DB reports** to `LOGS/AUDITS/`, re-numbering them as `LOG-*`.
+10. **Evaluate SOP-DEP files** for archival vs retention per Section 3.11.
+
+### Phase 3: Content Conformance Rewrite
+
+After all files are in their correct locations, rewrite every in-scope document to conform to the SOP-DOC-000 template (Section 3.19). Process files by namespace:
+
+11. **Rewrite ARCHITECTURE documents** — Apply the normative template to all ARC files. For each file:
+    - Remove any YAML frontmatter blocks (`---` with `title:`, `category:`, `roles:`).
+    - Ensure the markdown frontmatter table is present and correct.
+    - Restructure content into: I. Purpose → II. Scope → III. Authority Level → IV. Dependencies → V+ Content → Last: Amendment.
+    - Convert all top-level sections to Roman numerals.
+    - Remove `Full Documentation` footer boilerplate.
+    - Remove redundant `Last Updated:` and `Status:` inline text.
+12. **Rewrite DOMAINS documents** — Same process for all DOM files.
+13. **Rewrite FEATURES documents** — Same process for all FEAT files.
+14. **Rewrite SOP documents** — Same process for all SOP files (except SOP-DOC-000 itself, which is already the standard).
+15. **Rewrite SECURITY Constitutional documents** (SEC-CONT-*, SEC-CORE-000, SEC-THR-*) — Apply the normative template.
+16. **Rewrite SECURITY Informative documents** (SEC-AUD-*, SEC-INC-*, SEC-VUL-*) — Do NOT apply the full normative template, but DO ensure:
+    - Correct frontmatter table with Authority Level = "Informative"
+    - No binding language ("must", "shall") — use advisory language only
+    - Remove boilerplate footers
+17. **Rewrite LOG documents** — Same as Security Informative: correct frontmatter, no structural mandate beyond that. Do NOT alter the historical content body.
+
+### Phase 4: Rebuild Index and References
+
+18. **Rebuild `SOP-DOC-002_Documentation_Index.md`** from the actual filesystem. Every file must be listed with correct paths and reference numbers.
+19. **Sweep all documents** for broken cross-references using:
+    ```bash
+    rg '\]\(' docs/ --include '*.md' | grep -v 'http'
+    ```
+    Fix every broken relative link.
+20. **Update `ARC-CORE-000`** — remove `ECONOMY/` subdivision declaration if no ARC-ECON files remain, or create the subdivision if warranted.
+
+### Phase 5: Content Deduplication
+
+21. **Audit economy content** (Section 3.14) — consolidate developer-facing content into exactly one canonical specification. Fix broken cross-references. Do NOT touch `user-guides/economy_guide.md` (out of scope).
+22. **Audit `ARC-OPS-006_ARCHITECTURE.md`** — merge any unique content into existing CORE documents, then archive or delete.
+
+### Phase 6: Standardize Naming
+
+23. **Rename all files** to conform to `SOP-DOC-000` Section VIII naming convention: `[NAMESPACE]-[AREA]-[NUM]_Descriptive_Title.md` using consistent Title_Case for the descriptive portion.
+
+### Phase 7: Verification
+
+24. Run a full broken-link scan:
+    ```bash
+    rg '\]\(' docs/ --include '*.md' | grep -v 'http'
+    ```
+25. Verify every file is listed in the rebuilt index.
+26. Verify every directory has a clear single responsibility.
+27. Verify no duplicate topics exist.
+28. Verify every normative document follows the SOP-DOC-000 section template.
+29. Verify every document has a correct frontmatter table.
+30. Confirm `pytest` still passes:
+    ```bash
+    pytest tests/
+    ```
+
+---
+
+## 5. Rules for the Executing Agent
+
+1. **Preserve substance, reorganize structure.** The facts, rules, code examples, tables, and technical details within each document stay the same. What changes is the section ordering, naming, numbering, and frontmatter to conform to SOP-DOC-000.
+2. **Do NOT alter historical body content** in LOGS or SECURITY audit/incident/vulnerability files. You may reorganize their sections for consistency and fix their frontmatter, but do not rewrite the informational substance of what happened.
+3. **Preserve the authority hierarchy** (Section 2). Do not promote Informative documents to Normative, or demote Constitutional documents.
+4. **Use `git mv`** for all file moves to preserve history.
+5. **One logical group per commit.** Do not mix unrelated moves in the same commit.
+6. **Every document must have a correct frontmatter table** with: Reference Number, Version, Effective Date, Supersedes, Authority Level.
+7. **Every normative document must follow the SOP-DOC-000 section template** (I. Purpose, II. Scope, III. Authority Level, IV. Dependencies, V+ Content, Last: Amendment).
+8. **When merging duplicates,** always keep the more complete/accurate version as the base. Archive the other.
+9. **When rewriting normative docs,** audit the actual codebase (`app/models.py`, `app/routes/`, `app/utils/`) to ensure the documentation matches the implemented behavior. Do not copy stale information forward.
+10. **Cross-reference the database schema** in `ARC-OPS-007` against actual `app/models.py` for accuracy. The schema doc mentions `students.teacher_id` as "scheduled for removal" and "All monetary values are stored as floating point" — but `Transaction.amount` was changed to `Numeric(12,2)`. Document must reflect current state.
+11. **After every batch of moves,** run the broken-link scan and fix before proceeding.
+12. **Remove all non-standard boilerplate:** YAML frontmatter blocks, `Full Documentation` footers, redundant `Last Updated:` lines, redundant `Status:` lines.
+13. **Do not touch `docs/user-guides/` or `docs/GITHUB_SITE/`** under any circumstances.
+
+---
+
+## 6. Target Structure (After Completion)
+
+```
+docs/
+├── INV-CORE-000_Core_Invariants.md      ← Tier 0: Foundational (root = transcendent)
+├── INV-CORE-001_Authority_Model.md      ← Tier 0: Foundational (root = transcendent)
+├── ARCHITECTURE/                        ← Tier 1: Constitutional
+│   ├── ARC-CORE-000_Architecture_Foundation.md
+│   ├── IDENTITY/
+│   │   ├── ARC-IDEN-001_Admin_Identity_Handling.md
+│   │   └── ARC-IDEN-002_Account_Recovery.md
+│   └── OPERATIONS/
+│       ├── ARC-OPS-000_Operational_Constraints.md
+│       ├── ARC-OPS-001_Transaction_Reimbursement_Architecture.md
+│       ├── ARC-OPS-005_API_Reference.md
+│       ├── ARC-OPS-007_Database_Schema.md
+│       └── ARC-OPS-012_Datetime_Handling_Specification.md  ← merged timezone
+├── DOMAINS/                             ← Tier 1: Constitutional
+│   ├── DOM-CORE-000_Domain_Foundation.md
+│   └── ECONOMY_DESIGN/
+│       ├── DOM-ECON-001_Economy_Balance_Checker.md
+│       └── DOM-ECON-002_Economy_Specification.md  ← moved from ARC-OPS-008
+├── FEATURES/                            ← Tier 2: Normative
+│   ├── FEAT-CORE-000_Feature_Foundation.md
+│   ├── ANALYTICS/
+│   │   └── FEAT-ANAL-001_Analytics_Specification.md  ← moved from ARC-OPS-004
+│   ├── DESIGN/
+│   │   └── FEAT-DES-001_Design_System.md  ← moved from ARC-OPS-013
+│   ├── HALL_PASS/
+│   │   └── FEAT-HALL-001_Hall_Pass.md
+│   └── RENT/
+│       └── FEAT-RENT-002_Rent_Item_Types.md
+├── STANDARD_OPERATING_PROCEDURES/       ← Tier 2: Normative
+│   ├── SOP-CORE-000_SOP_Foundation.md
+│   ├── DATABASE/
+│   │   ├── SOP-DB-010_Database_Switching.md  ← keep
+│   │   ├── SOP-DB-011_Migration_Specifications.md  ← keep
+│   │   └── SOP-DB-013_Database_Migration_Rollback.md  ← keep
+│   ├── DEPLOYMENT/
+│   │   ├── SOP-DEP-001_Production_Deployment.md  ← keep
+│   │   ├── SOP-DEP-006_Deployment_Guide.md  ← keep
+│   │   └── ... (retained reusable procedures only)
+│   └── DOCUMENTATION/
+│       ├── SOP-DOC-000_Writing_Specification.md
+│       ├── SOP-DOC-002_Documentation_Index.md  ← rebuilt
+│       ├── SOP-DOC-003_Division_Definition.md
+│       └── SOP-DOC-005_Codebase_Organization_Playbook.md
+├── SECURITY/                            ← Mixed Tier 1/3
+│   ├── SEC-CORE-000_Security_Foundation.md
+│   ├── AUDITS/   (security-specific audits)
+│   ├── CONTROLS/ (enforcement mechanisms)
+│   ├── INCIDENTS/ (postmortems)
+│   ├── THREATS/  (threat models)
+│   └── VULNERABILITIES/ (vulnerability reports)
+├── LOGS/                                ← Tier 3: Informative
+│   ├── LOG-CORE-000_Logs_Foundation.md
+│   ├── AUDITS/   (general engineering audits + relocated SOP-DB reports)
+│   ├── RELEASES/ (release notes)
+│   └── ARCHIVES/ (archived/superseded docs)
+├── GITHUB_SITE/                         ← OUT OF SCOPE
+└── user-guides/                         ← OUT OF SCOPE (future project)
+```
+
+---
+
+## 7. Success Criteria
+
+- [ ] Zero duplicate topics across the entire `docs/` tree
+- [ ] Every file has a correct, consistent frontmatter table
+- [ ] Every normative document follows the SOP-DOC-000 section template (I–IV + Content + Amendment)
+- [ ] Every normative document uses Roman numeral top-level sections
+- [ ] No YAML frontmatter blocks remain in any document
+- [ ] No `Full Documentation` footer boilerplate remains
+- [ ] No redundant `Last Updated:` or `Status:` inline text remains
+- [ ] Every cross-reference resolves to an existing file
+- [ ] Every file is listed in the rebuilt `SOP-DOC-002` index
+- [ ] Every directory can be described in one sentence
+- [ ] No historical/log content is filed under SOP or ARC
+- [ ] No domain-specific content is filed under ARCHITECTURE
+- [ ] No feature specifications are filed under ARCHITECTURE
+- [ ] All naming follows the `[NS]-[AREA]-[NUM]_Title.md` convention
+- [ ] `pytest tests/` passes
+- [ ] Authority hierarchy from `INV-CORE-001` is preserved throughout
+- [ ] `docs/user-guides/` and `docs/GITHUB_SITE/` are completely untouched
