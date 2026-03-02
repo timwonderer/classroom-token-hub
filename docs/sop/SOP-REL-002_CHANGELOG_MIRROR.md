@@ -9,7 +9,7 @@ keywords: [changelog, updates, version history, releases, what's new, bug fixes,
 
 **Note:** The changelog has been consolidated at the repository root per Keep a Changelog standards.
 
-Please see: [`../CHANGELOG.md`](../CHANGELOG.md)
+Please see: [`../CHANGELOG.md`](SOP-REL-002_CHANGELOG_MIRROR.md)
 
 ---
 

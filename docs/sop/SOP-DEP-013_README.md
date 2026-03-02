@@ -99,8 +99,8 @@ When creating new operational documentation:
 ## Related Documentation
 
 - **[Deployment Guide](Deployment_Guide.md)** - Initial setup and deployment procedures
-- **[Migration Specifications](../development/migration-specifications.md)** - Database schema migrations
-- **[System Admin Design](../development/SYSADMIN_INTERFACE_DESIGN.md)** - Admin interface features
+- **[Migration Specifications](SOP-DB-011_migration_specifications.md)** - Database schema migrations
+- **[System Admin Design](../feat/FEAT-ARC-003_Sysadmin_Interface.md)** - Admin interface features
 
 ## Emergency Procedures
 
@@ -109,7 +109,7 @@ For critical issues:
 1. Check the relevant operational guide in this directory
 2. Review error logs via the System Admin portal
 3. Consult the [Teacher Diagnostics Index](../user-guides/diagnostics/teacher.md) for troubleshooting checklists
-4. Review recent changes in [CHANGELOG.md](../CHANGELOG.md)
+4. Review recent changes in [CHANGELOG.md](SOP-REL-002_CHANGELOG_MIRROR.md)
 
 ---
 

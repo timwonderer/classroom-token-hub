@@ -55,7 +55,7 @@ This document serves as an automatically generated index of all formally tracked
 - [SOP-DOC-002_Documentation_Index.md](SOP-DOC-002_Documentation_Index.md)
 - [SOP-DOC-003_Codebase_Organization_Playbook.md](SOP-DOC-003_Codebase_Organization_Playbook.md)
 - [SOP-DOC-004_AI_Claude_Guide.md](SOP-DOC-004_AI_Claude_Guide.md)
-- [SOP-REL-001_CHANGELOG.md](SOP-REL-001_CHANGELOG.md)
+- [SOP-REL-001_CHANGELOG.md](../../CHANGELOG.md)
 - [SOP-REL-002_CHANGELOG_MIRROR.md](SOP-REL-002_CHANGELOG_MIRROR.md)
 - [SOP-REL-003_RELEASES_INDEX.md](SOP-REL-003_RELEASES_INDEX.md)
 - [SOP-REL-004_RELEASE_NOTES_v1.0.0.md](SOP-REL-004_RELEASE_NOTES_v1.0.0.md)
