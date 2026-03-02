@@ -1,6 +1,10 @@
 # SOP-DOC-002 Documentation Index
 
-This document serves as an automatically generated index of all formally tracked documents in the ARC, SOP, and SEC namespaces.
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DOC-002      | 2.0     | 2026-03-02     | SOP-DOC-002 v1.0 | NO       |
+
+This document serves as the index of all formally tracked documents in the ARC, SOP, and SEC namespaces. For namespace definitions and tier classification, see [SOP-DOC-000](SOP-DOC-000_Writing_Specification.md).
 
 ## ARC Namespace
 - [ARC-INV-000_Core_Invariants.md](../arc/ARC-INV-000_Core_Invariants.md)
@@ -50,11 +54,11 @@ This document serves as an automatically generated index of all formally tracked
 - [SOP-DEP-015_CI_CD_Pipeline_Documentation.md](SOP-DEP-015_CI_CD_Pipeline_Documentation.md)
 - [SOP-DEP-015_Seeding_Instructions.md](SOP-DEP-015_Seeding_Instructions.md)
 - [SOP-DEP-016_Rollback_Procedures.md](SOP-DEP-016_Rollback_Procedures.md)
-- [SOP-DOC-000_Writing_Specification.md](SOP-DOC-000_Writing_Specification.md)
-- [SOP-DOC-001_Documentation_Taxonomy.md](SOP-DOC-001_Documentation_Taxonomy.md)
-- [SOP-DOC-002_Documentation_Index.md](SOP-DOC-002_Documentation_Index.md)
-- [SOP-DOC-003_Codebase_Organization_Playbook.md](SOP-DOC-003_Codebase_Organization_Playbook.md)
-- [SOP-DOC-004_AI_Claude_Guide.md](SOP-DOC-004_AI_Claude_Guide.md)
+- [SOP-DOC-000_Writing_Specification.md](SOP-DOC-000_Writing_Specification.md) — **Documentation Standard** (Normative; supersedes SOP-DOC-000 v1.0 and SOP-DOC-001 v1.0)
+- [SOP-DOC-001_Documentation_Taxonomy.md](SOP-DOC-001_Documentation_Taxonomy.md) — ~~Documentation Taxonomy~~ (Superseded by SOP-DOC-000 v2.0)
+- [SOP-DOC-002_Documentation_Index.md](SOP-DOC-002_Documentation_Index.md) — Documentation Index (this file)
+- [SOP-DOC-003_Codebase_Organization_Playbook.md](SOP-DOC-003_Codebase_Organization_Playbook.md) — Codebase Organization and Documentation Hygiene Playbook (Normative)
+- [SOP-DOC-004_AI_Claude_Guide.md](SOP-DOC-004_AI_Claude_Guide.md) — ~~AI Claude Guide~~ (Removed from tracking; see `.claude/CLAUDE.md` and `.claude/rules/`)
 - [SOP-REL-001_CHANGELOG.md](../../CHANGELOG.md)
 - [SOP-REL-002_CHANGELOG_MIRROR.md](SOP-REL-002_CHANGELOG_MIRROR.md)
 - [SOP-REL-003_RELEASES_INDEX.md](SOP-REL-003_RELEASES_INDEX.md)

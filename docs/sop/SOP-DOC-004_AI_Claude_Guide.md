@@ -1,24 +1,7 @@
----
-title: Claude Development Guide
-description: Essential guidance for AI assistants working on Classroom Token Hub
-keywords: [claude, ai, development, guidelines, best practices]
-roles: [developer]
----
+# SOP-DOC-004: AI Claude Guide
 
-# Claude Development Guide
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DOC-004      | 1.0     | 2026-01-09     | N/A        | NO            |
 
-**Note:** This file has been moved to `.claude/CLAUDE.md` in the repository root for easier access.
-
-Please see: `.claude/CLAUDE.md` in the repository root.
-
----
-
-**Why at the root?**
-
-- AI assistants typically scan root-level files first
-- Keeps development guidelines easily accessible
-- Reduces duplication and maintenance burden
-
----
-
-**Last Updated:** 2026-01-09
+> **REMOVED FROM TRACKING.** The AI agent development guide is maintained at `.claude/CLAUDE.md` and `.claude/rules/`. Per SOP-DOC-000, `.claude/rules/` documents are classified as Normative (Tier 2). This stub is preserved for index continuity only.
