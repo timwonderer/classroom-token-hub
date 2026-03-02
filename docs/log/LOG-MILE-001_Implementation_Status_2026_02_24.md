@@ -1,5 +1,9 @@
 # Implementation Status vs Spec (2026-02-24)
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-MILE-001     | 1.0     | 2026-03-01     | N/A        | NO            |
+
 Scope:
 - `docs/development/HALL_PASS_FEATURE_SPEC.md`
 - `docs/development/ADMIN_IDENTITY_HANDLING_SPEC.md`

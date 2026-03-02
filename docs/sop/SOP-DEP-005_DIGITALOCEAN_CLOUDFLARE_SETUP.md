@@ -1,5 +1,9 @@
 # DigitalOcean Firewall Setup for Cloudflare Proxy
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DEP-005      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 This guide explains how to configure DigitalOcean firewall rules to work with Cloudflare's proxy service (orange cloud enabled).
 
 ## Overview

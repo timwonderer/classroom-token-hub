@@ -1,5 +1,9 @@
 # Deprecated Symbols Registry
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| ARC-OPS-010      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 This document describes symbols that are **explicitly prohibited** from appearing in application code.
 
 The authoritative, machine-enforced list lives in:

@@ -1,5 +1,9 @@
 # Decimal Refactoring Summary
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-ARC-003      | 1.0     | 2026-03-01     | N/A        | NO            |
+
 ## Overview
 
 This document summarizes the comprehensive refactoring of all financial calculations in the Classroom Token Hub codebase from `float` to Python's `Decimal` type for exact precision in monetary operations.

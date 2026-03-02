@@ -1,5 +1,9 @@
 # Database Configuration
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DB-010       | 1.0     | 2026-03-01     | N/A        | YES           |
+
 ## Automatic Branch-Based Database Switching
 
 This repository uses a git `post-checkout` hook to automatically switch between databases based on the current branch:

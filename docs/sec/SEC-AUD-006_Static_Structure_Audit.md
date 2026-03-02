@@ -1,5 +1,9 @@
 # Stage 1 Audit Report: Static Structural Analysis
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SEC-AUD-006      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 ## Summary
 - **Total Findings:** 1953
 - **By Severity:**
@@ -35,7 +39,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #2
 
 | Property | Value |
@@ -49,7 +52,6 @@
 **Description:** Function `login_required` has cyclomatic complexity of 33.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #3
 
@@ -65,7 +67,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #4
 
 | Property | Value |
@@ -79,7 +80,6 @@
 **Description:** Function `signup` has cyclomatic complexity of 31.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #5
 
@@ -95,7 +95,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #6
 
 | Property | Value |
@@ -109,7 +108,6 @@
 **Description:** Function `_build_rent_privileges_by_block` has cyclomatic complexity of 25.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #7
 
@@ -125,7 +123,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #8
 
 | Property | Value |
@@ -139,7 +136,6 @@
 **Description:** Function `edit_student` has cyclomatic complexity of 44.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #9
 
@@ -155,7 +151,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #10
 
 | Property | Value |
@@ -169,7 +164,6 @@
 **Description:** Function `rent_settings` has cyclomatic complexity of 99.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #11
 
@@ -185,7 +179,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #12
 
 | Property | Value |
@@ -199,7 +192,6 @@
 **Description:** Function `process_claim` has cyclomatic complexity of 53.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #13
 
@@ -215,7 +207,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #14
 
 | Property | Value |
@@ -229,7 +220,6 @@
 **Description:** Function `payroll` has cyclomatic complexity of 24.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #15
 
@@ -245,7 +235,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #16
 
 | Property | Value |
@@ -259,7 +248,6 @@
 **Description:** Function `handle_hall_pass_action` has cyclomatic complexity of 21.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #17
 
@@ -275,7 +263,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #18
 
 | Property | Value |
@@ -289,7 +276,6 @@
 **Description:** Function `purchase_item` has cyclomatic complexity of 101.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #19
 
@@ -305,7 +291,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #20
 
 | Property | Value |
@@ -319,7 +304,6 @@
 **Description:** Function `reject_redemption` has cyclomatic complexity of 29.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #21
 
@@ -335,7 +319,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #22
 
 | Property | Value |
@@ -349,7 +332,6 @@
 **Description:** Function `search` has cyclomatic complexity of 29.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #23
 
@@ -365,7 +347,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #24
 
 | Property | Value |
@@ -379,7 +360,6 @@
 **Description:** Function `transfer` has cyclomatic complexity of 34.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #25
 
@@ -395,7 +375,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #26
 
 | Property | Value |
@@ -409,7 +388,6 @@
 **Description:** Function `purchase_insurance` has cyclomatic complexity of 21.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #27
 
@@ -425,7 +403,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #28
 
 | Property | Value |
@@ -439,7 +416,6 @@
 **Description:** Function `shop` has cyclomatic complexity of 29.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #29
 
@@ -455,7 +431,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #30
 
 | Property | Value |
@@ -469,7 +444,6 @@
 **Description:** Function `rent_pay` has cyclomatic complexity of 71.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #31
 
@@ -485,7 +459,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #32
 
 | Property | Value |
@@ -499,7 +472,6 @@
 **Description:** Function `claim_account` has cyclomatic complexity of 25.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #33
 
@@ -515,7 +487,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #34
 
 | Property | Value |
@@ -529,7 +500,6 @@
 **Description:** Function `settle_balances` has cyclomatic complexity of 31.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #35
 
@@ -545,7 +515,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #36
 
 | Property | Value |
@@ -559,7 +528,6 @@
 **Description:** Function `analyze_migrations` has cyclomatic complexity of 35.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #37
 
@@ -575,7 +543,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #38
 
 | Property | Value |
@@ -589,7 +556,6 @@
 **Description:** Function `inspect_database_schema` has cyclomatic complexity of 24.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #39
 
@@ -605,7 +571,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #40
 
 | Property | Value |
@@ -619,7 +584,6 @@
 **Description:** Function `verify_migration_chain` has cyclomatic complexity of 33.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #41
 
@@ -635,7 +599,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #42
 
 | Property | Value |
@@ -649,7 +612,6 @@
 **Description:** Function `show_maintenance_page` has cyclomatic complexity of 11.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #43
 
@@ -665,7 +627,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #44
 
 | Property | Value |
@@ -679,7 +640,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #45
 
@@ -695,7 +655,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #46
 
 | Property | Value |
@@ -709,7 +668,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #47
 
@@ -725,7 +683,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #48
 
 | Property | Value |
@@ -739,7 +696,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #49
 
@@ -755,7 +711,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #50
 
 | Property | Value |
@@ -769,7 +724,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #51
 
@@ -785,7 +739,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #52
 
 | Property | Value |
@@ -799,7 +752,6 @@
 **Description:** Duplicated logic block detected in: ./app/__init__.py:637, ./scripts/add-security-headers.py:17
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #53
 
@@ -815,7 +767,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #54
 
 | Property | Value |
@@ -829,7 +780,6 @@
 **Description:** Function `set_security_headers` is 92 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #55
 
@@ -845,7 +795,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #56
 
 | Property | Value |
@@ -859,7 +808,6 @@
 **Description:** Duplicated logic block detected in: ./app/__init__.py:640, ./scripts/add-security-headers.py:20
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #57
 
@@ -875,7 +823,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #58
 
 | Property | Value |
@@ -889,7 +836,6 @@
 **Description:** Duplicated logic block detected in: ./app/__init__.py:642, ./scripts/add-security-headers.py:22
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #59
 
@@ -905,7 +851,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #60
 
 | Property | Value |
@@ -919,7 +864,6 @@
 **Description:** Duplicated logic block detected in: ./app/__init__.py:644, ./scripts/add-security-headers.py:24
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #61
 
@@ -935,7 +879,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #62
 
 | Property | Value |
@@ -949,7 +892,6 @@
 **Description:** Duplicated logic block detected in: ./app/__init__.py:646, ./scripts/add-security-headers.py:26
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #63
 
@@ -965,7 +907,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #64
 
 | Property | Value |
@@ -979,7 +920,6 @@
 **Description:** Duplicated logic block detected in: ./app/__init__.py:648, ./scripts/add-security-headers.py:28
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #65
 
@@ -995,7 +935,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #66
 
 | Property | Value |
@@ -1009,7 +948,6 @@
 **Description:** Duplicated logic block detected in: ./app/__init__.py:663, ./scripts/add-security-headers.py:34
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #67
 
@@ -1025,7 +963,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #68
 
 | Property | Value |
@@ -1039,7 +976,6 @@
 **Description:** Duplicated logic block detected in: ./app/__init__.py:676, ./scripts/add-security-headers.py:50
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #69
 
@@ -1055,7 +991,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #70
 
 | Property | Value |
@@ -1069,7 +1004,6 @@
 **Description:** Duplicated logic block detected in: ./app/__init__.py:715, ./scripts/add-security-headers.py:69
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #71
 
@@ -1085,7 +1019,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #72
 
 | Property | Value |
@@ -1099,7 +1032,6 @@
 **Description:** Duplicated logic block detected in: ./app/__init__.py:717, ./scripts/add-security-headers.py:71
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #73
 
@@ -1115,7 +1047,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #74
 
 | Property | Value |
@@ -1129,7 +1060,6 @@
 **Description:** Duplicated logic block detected in: ./app/__init__.py:719, ./scripts/add-security-headers.py:73
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #75
 
@@ -1145,7 +1075,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #76
 
 | Property | Value |
@@ -1159,7 +1088,6 @@
 **Description:** Duplicated logic block detected in: ./app/__init__.py:721, ./scripts/add-security-headers.py:75
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #77
 
@@ -1175,7 +1103,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #78
 
 | Property | Value |
@@ -1189,7 +1116,6 @@
 **Description:** Duplicated logic block detected in: ./app/__init__.py:723, ./scripts/add-security-headers.py:77
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #79
 
@@ -1205,7 +1131,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #80
 
 | Property | Value |
@@ -1219,7 +1144,6 @@
 **Description:** Duplicated logic block detected in: ./app/attendance.py:121, ./app/attendance.py:163
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #81
 
@@ -1235,7 +1159,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #82
 
 | Property | Value |
@@ -1249,7 +1172,6 @@
 **Description:** Duplicated logic block detected in: ./app/attendance.py:123, ./app/attendance.py:165
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #83
 
@@ -1265,7 +1187,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #84
 
 | Property | Value |
@@ -1279,7 +1200,6 @@
 **Description:** Duplicated logic block detected in: ./app/attendance.py:125, ./app/attendance.py:167
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #85
 
@@ -1295,7 +1215,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #86
 
 | Property | Value |
@@ -1309,7 +1228,6 @@
 **Description:** Duplicated logic block detected in: ./app/attendance.py:127, ./app/attendance.py:169
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #87
 
@@ -1325,7 +1243,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #88
 
 | Property | Value |
@@ -1339,7 +1256,6 @@
 **Description:** Duplicated logic block detected in: ./app/attendance.py:129, ./app/attendance.py:171
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #89
 
@@ -1355,7 +1271,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #90
 
 | Property | Value |
@@ -1369,7 +1284,6 @@
 **Description:** Duplicated logic block detected in: ./app/attendance.py:131, ./app/attendance.py:173
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #91
 
@@ -1385,7 +1299,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #92
 
 | Property | Value |
@@ -1399,7 +1312,6 @@
 **Description:** Duplicated logic block detected in: ./app/attendance.py:135, ./app/attendance.py:177
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #93
 
@@ -1415,7 +1327,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #94
 
 | Property | Value |
@@ -1429,7 +1340,6 @@
 **Description:** Duplicated logic block detected in: ./app/attendance.py:136, ./app/attendance.py:178
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #95
 
@@ -1445,7 +1355,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #96
 
 | Property | Value |
@@ -1459,7 +1368,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #97
 
@@ -1475,7 +1383,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #98
 
 | Property | Value |
@@ -1489,7 +1396,6 @@
 **Description:** Function `calculate_unpaid_attendance_seconds` has cyclomatic complexity of 16.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #99
 
@@ -1505,7 +1411,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #100
 
 | Property | Value |
@@ -1519,7 +1424,6 @@
 **Description:** Duplicated logic block detected in: ./app/attendance.py:58, ./app/attendance.py:133, ./app/attendance.py:175
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #101
 
@@ -1535,7 +1439,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #102
 
 | Property | Value |
@@ -1549,7 +1452,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #103
 
@@ -1565,7 +1467,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #104
 
 | Property | Value |
@@ -1579,7 +1480,6 @@
 **Description:** Duplicated logic block detected in: ./app/auth.py:106, ./app/auth.py:163
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #105
 
@@ -1595,7 +1495,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #106
 
 | Property | Value |
@@ -1609,7 +1508,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #107
 
@@ -1625,7 +1523,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #108
 
 | Property | Value |
@@ -1639,7 +1536,6 @@
 **Description:** Duplicated logic block detected in: ./app/auth.py:129, ./app/auth.py:169, ./app/auth.py:185
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #109
 
@@ -1655,7 +1551,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #110
 
 | Property | Value |
@@ -1669,7 +1564,6 @@
 **Description:** Duplicated logic block detected in: ./app/auth.py:165, ./app/auth.py:181
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #111
 
@@ -1685,7 +1579,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #112
 
 | Property | Value |
@@ -1699,7 +1592,6 @@
 **Description:** Duplicated logic block detected in: ./app/auth.py:167, ./app/auth.py:183
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #113
 
@@ -1715,7 +1607,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #114
 
 | Property | Value |
@@ -1729,7 +1620,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #115
 
@@ -1745,7 +1635,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #116
 
 | Property | Value |
@@ -1759,7 +1648,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #117
 
@@ -1775,7 +1663,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #118
 
 | Property | Value |
@@ -1789,7 +1676,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #119
 
@@ -1805,7 +1691,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #120
 
 | Property | Value |
@@ -1819,7 +1704,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #121
 
@@ -1835,7 +1719,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #122
 
 | Property | Value |
@@ -1849,7 +1732,6 @@
 **Description:** Function `decorated_function` is 177 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #123
 
@@ -1865,7 +1747,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #124
 
 | Property | Value |
@@ -1879,7 +1760,6 @@
 **Description:** Duplicated logic block detected in: ./app/cli_commands.py:38, ./app/routes/admin.py:631
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #125
 
@@ -1895,7 +1775,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #126
 
 | Property | Value |
@@ -1909,7 +1788,6 @@
 **Description:** Duplicated logic block detected in: ./app/cli_commands.py:40, ./app/routes/admin.py:633
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #127
 
@@ -1925,7 +1803,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #128
 
 | Property | Value |
@@ -1939,7 +1816,6 @@
 **Description:** Duplicated logic block detected in: ./app/cli_commands.py:42, ./app/routes/student.py:596, ./app/routes/student.py:993...
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #129
 
@@ -1955,7 +1831,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #130
 
 | Property | Value |
@@ -1969,7 +1844,6 @@
 **Description:** Duplicated logic block detected in: ./app/cli_commands.py:44, ./app/routes/admin.py:637
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #131
 
@@ -1985,7 +1859,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #132
 
 | Property | Value |
@@ -1999,7 +1872,6 @@
 **Description:** Duplicated logic block detected in: ./app/cli_commands.py:46, ./app/routes/admin.py:639
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #133
 
@@ -2015,7 +1887,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #134
 
 | Property | Value |
@@ -2029,7 +1900,6 @@
 **Description:** Duplicated logic block detected in: ./app/cli_commands.py:55, ./app/routes/admin.py:649
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #135
 
@@ -2045,7 +1915,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #136
 
 | Property | Value |
@@ -2059,7 +1928,6 @@
 **Description:** Duplicated logic block detected in: ./app/cli_commands.py:57, ./app/routes/admin.py:651
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #137
 
@@ -2075,7 +1943,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #138
 
 | Property | Value |
@@ -2089,7 +1956,6 @@
 **Description:** Duplicated logic block detected in: ./app/cli_commands.py:59, ./app/routes/admin.py:653
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #139
 
@@ -2105,7 +1971,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #140
 
 | Property | Value |
@@ -2119,7 +1984,6 @@
 **Description:** Duplicated logic block detected in: ./app/forms.py:375, ./app/forms.py:406
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #141
 
@@ -2135,7 +1999,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #142
 
 | Property | Value |
@@ -2149,7 +2012,6 @@
 **Description:** Duplicated logic block detected in: ./app/forms.py:377, ./app/forms.py:408
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #143
 
@@ -2165,7 +2027,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #144
 
 | Property | Value |
@@ -2179,7 +2040,6 @@
 **Description:** Function `get_checking_balance` is 96 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #145
 
@@ -2195,7 +2055,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #146
 
 | Property | Value |
@@ -2209,7 +2068,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:318, ./app/models.py:415, ./app/models.py:496
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #147
 
@@ -2225,7 +2083,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #148
 
 | Property | Value |
@@ -2239,7 +2096,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:320, ./app/models.py:417, ./app/models.py:498
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #149
 
@@ -2255,7 +2111,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #150
 
 | Property | Value |
@@ -2269,7 +2124,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:328, ./app/models.py:425
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #151
 
@@ -2285,7 +2139,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #152
 
 | Property | Value |
@@ -2299,7 +2152,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:330, ./app/models.py:427
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #153
 
@@ -2315,7 +2167,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #154
 
 | Property | Value |
@@ -2329,7 +2180,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:332, ./app/models.py:429
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #155
 
@@ -2345,7 +2195,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #156
 
 | Property | Value |
@@ -2359,7 +2208,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:334, ./app/models.py:431
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #157
 
@@ -2375,7 +2223,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #158
 
 | Property | Value |
@@ -2389,7 +2236,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:336, ./app/models.py:433
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #159
 
@@ -2405,7 +2251,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #160
 
 | Property | Value |
@@ -2419,7 +2264,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:338, ./app/models.py:435
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #161
 
@@ -2435,7 +2279,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #162
 
 | Property | Value |
@@ -2449,7 +2292,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:340, ./app/models.py:437
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #163
 
@@ -2465,7 +2307,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #164
 
 | Property | Value |
@@ -2479,7 +2320,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:342, ./app/models.py:439
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #165
 
@@ -2495,7 +2335,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #166
 
 | Property | Value |
@@ -2509,7 +2348,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:362, ./app/models.py:459
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #167
 
@@ -2525,7 +2363,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #168
 
 | Property | Value |
@@ -2539,7 +2376,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:364, ./app/models.py:461
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #169
 
@@ -2555,7 +2391,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #170
 
 | Property | Value |
@@ -2569,7 +2404,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:372, ./app/models.py:469
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #171
 
@@ -2585,7 +2419,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #172
 
 | Property | Value |
@@ -2599,7 +2432,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:374, ./app/models.py:471
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #173
 
@@ -2615,7 +2447,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #174
 
 | Property | Value |
@@ -2629,7 +2460,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:376, ./app/models.py:473
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #175
 
@@ -2645,7 +2475,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #176
 
 | Property | Value |
@@ -2659,7 +2488,6 @@
 **Description:** Function `get_savings_balance` is 80 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #177
 
@@ -2675,7 +2503,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #178
 
 | Property | Value |
@@ -2689,7 +2516,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #179
 
@@ -2705,7 +2531,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #180
 
 | Property | Value |
@@ -2719,7 +2544,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:676, ./app/models.py:1642
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #181
 
@@ -2735,7 +2559,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #182
 
 | Property | Value |
@@ -2749,7 +2572,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:678, ./app/models.py:1644
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #183
 
@@ -2765,7 +2587,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #184
 
 | Property | Value |
@@ -2779,7 +2600,6 @@
 **Description:** Duplicated logic block detected in: ./app/models.py:680, ./app/models.py:1646
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #185
 
@@ -2795,7 +2615,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #186
 
 | Property | Value |
@@ -2809,7 +2628,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #187
 
@@ -2825,7 +2643,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #188
 
 | Property | Value |
@@ -2839,7 +2656,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #189
 
@@ -2855,7 +2671,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #190
 
 | Property | Value |
@@ -2869,7 +2684,6 @@
 **Description:** Function `calculate_payroll_breakdown` is 91 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #191
 
@@ -2885,7 +2699,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #192
 
 | Property | Value |
@@ -2899,7 +2712,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #193
 
@@ -2915,7 +2727,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #194
 
 | Property | Value |
@@ -2929,7 +2740,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #195
 
@@ -2945,7 +2755,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #196
 
 | Property | Value |
@@ -2959,7 +2768,6 @@
 **Description:** Duplicated logic block detected in: ./app/payroll.py:33, ./app/payroll.py:77
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #197
 
@@ -2975,7 +2783,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #198
 
 | Property | Value |
@@ -2989,7 +2796,6 @@
 **Description:** Duplicated logic block detected in: ./app/payroll.py:35, ./app/payroll.py:79
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #199
 
@@ -3005,7 +2811,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #200
 
 | Property | Value |
@@ -3019,7 +2824,6 @@
 **Description:** Function `_calculate_seconds_in_memory` has cyclomatic complexity of 14.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #201
 
@@ -3035,7 +2839,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #202
 
 | Property | Value |
@@ -3049,7 +2852,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #203
 
@@ -3065,7 +2867,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #204
 
 | Property | Value |
@@ -3079,7 +2880,6 @@
 **Description:** Function `get_cached_payroll_with_meta` has cyclomatic complexity of 12.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #205
 
@@ -3095,7 +2895,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #206
 
 | Property | Value |
@@ -3109,7 +2908,6 @@
 **Description:** Duplicated logic block detected in: ./app/payroll.py:48, ./app/payroll.py:90
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #207
 
@@ -3125,7 +2923,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #208
 
 | Property | Value |
@@ -3139,7 +2936,6 @@
 **Description:** Duplicated logic block detected in: ./app/payroll.py:49, ./app/payroll.py:91
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #209
 
@@ -3155,7 +2951,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #210
 
 | Property | Value |
@@ -3169,7 +2964,6 @@
 **Description:** Duplicated logic block detected in: ./app/payroll.py:59, ./app/payroll.py:112
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #211
 
@@ -3185,7 +2979,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #212
 
 | Property | Value |
@@ -3199,7 +2992,6 @@
 **Description:** Function `get_daily_limit_seconds` has cyclomatic complexity of 13.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #213
 
@@ -3215,7 +3007,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #214
 
 | Property | Value |
@@ -3229,7 +3020,6 @@
 **Description:** Function `signup` is 241 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #215
 
@@ -3245,7 +3035,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #216
 
 | Property | Value |
@@ -3259,7 +3048,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #217
 
@@ -3275,7 +3063,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #218
 
 | Property | Value |
@@ -3289,7 +3076,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #219
 
@@ -3305,7 +3091,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #220
 
 | Property | Value |
@@ -3319,7 +3104,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #221
 
@@ -3335,7 +3119,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #222
 
 | Property | Value |
@@ -3349,7 +3132,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #223
 
@@ -3365,7 +3147,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #224
 
 | Property | Value |
@@ -3379,7 +3160,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:1185, ./app/routes/admin.py:1214
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #225
 
@@ -3395,7 +3175,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #226
 
 | Property | Value |
@@ -3409,7 +3188,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:1187, ./app/routes/admin.py:1216
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #227
 
@@ -3425,7 +3203,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #228
 
 | Property | Value |
@@ -3439,7 +3216,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:1189, ./app/routes/admin.py:1218, ./app/routes/admin.py:1254
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #229
 
@@ -3455,7 +3231,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #230
 
 | Property | Value |
@@ -3469,7 +3244,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:1191, ./app/routes/admin.py:1220, ./app/routes/admin.py:1256
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #231
 
@@ -3485,7 +3259,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #232
 
 | Property | Value |
@@ -3499,7 +3272,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:1193, ./app/routes/admin.py:1222
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #233
 
@@ -3515,7 +3287,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #234
 
 | Property | Value |
@@ -3529,7 +3300,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #235
 
@@ -3545,7 +3315,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #236
 
 | Property | Value |
@@ -3559,7 +3328,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:1212, ./app/routes/admin.py:1247
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #237
 
@@ -3575,7 +3343,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #238
 
 | Property | Value |
@@ -3589,7 +3356,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:1248, ./app/routes/admin.py:1580
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #239
 
@@ -3605,7 +3371,6 @@
 
 **Why This Matters:** Swallowing exceptions hides errors and makes debugging difficult.
 
-
 ### Finding #240
 
 | Property | Value |
@@ -3619,7 +3384,6 @@
 **Description:** Function `recover` is 156 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #241
 
@@ -3635,7 +3399,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #242
 
 | Property | Value |
@@ -3649,7 +3412,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #243
 
@@ -3665,7 +3427,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #244
 
 | Property | Value |
@@ -3679,7 +3440,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #245
 
@@ -3695,7 +3455,6 @@
 
 **Why This Matters:** Swallowing exceptions hides errors and makes debugging difficult.
 
-
 ### Finding #246
 
 | Property | Value |
@@ -3709,7 +3468,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #247
 
@@ -3725,7 +3483,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #248
 
 | Property | Value |
@@ -3739,7 +3496,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:1465, ./app/routes/admin.py:1511, ./app/routes/admin.py:1680
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #249
 
@@ -3755,7 +3511,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #250
 
 | Property | Value |
@@ -3769,7 +3524,6 @@
 **Description:** Function `reset_credentials` has cyclomatic complexity of 15.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #251
 
@@ -3785,7 +3539,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #252
 
 | Property | Value |
@@ -3799,7 +3552,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:1513, ./app/routes/admin.py:1682
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #253
 
@@ -3815,7 +3567,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #254
 
 | Property | Value |
@@ -3829,7 +3580,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:1515, ./app/routes/admin.py:1684
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #255
 
@@ -3845,7 +3595,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #256
 
 | Property | Value |
@@ -3859,7 +3608,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #257
 
@@ -3875,7 +3623,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #258
 
 | Property | Value |
@@ -3889,7 +3636,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #259
 
@@ -3905,7 +3651,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #260
 
 | Property | Value |
@@ -3919,7 +3664,6 @@
 **Description:** Function `_get_rent_privileges_for_student` has cyclomatic complexity of 13.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #261
 
@@ -3935,7 +3679,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #262
 
 | Property | Value |
@@ -3949,7 +3692,6 @@
 **Description:** Function `students` is 190 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #263
 
@@ -3965,7 +3707,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #264
 
 | Property | Value |
@@ -3979,7 +3720,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #265
 
@@ -3995,7 +3735,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #266
 
 | Property | Value |
@@ -4009,7 +3748,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #267
 
@@ -4025,7 +3763,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #268
 
 | Property | Value |
@@ -4039,7 +3776,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:2202, ./app/routes/admin.py:6924
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #269
 
@@ -4055,7 +3791,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #270
 
 | Property | Value |
@@ -4069,7 +3804,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #271
 
@@ -4085,7 +3819,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #272
 
 | Property | Value |
@@ -4099,7 +3832,6 @@
 **Description:** Function `student_detail` is 122 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #273
 
@@ -4115,7 +3847,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #274
 
 | Property | Value |
@@ -4129,7 +3860,6 @@
 **Description:** Function `edit_student` is 248 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #275
 
@@ -4145,7 +3875,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #276
 
 | Property | Value |
@@ -4159,7 +3888,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #277
 
@@ -4175,7 +3903,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #278
 
 | Property | Value |
@@ -4189,7 +3916,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #279
 
@@ -4205,7 +3931,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #280
 
 | Property | Value |
@@ -4219,7 +3944,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:2617, ./app/routes/admin.py:3108, ./app/routes/admin.py:3274
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #281
 
@@ -4235,7 +3959,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #282
 
 | Property | Value |
@@ -4249,7 +3972,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:2619, ./app/routes/admin.py:3110, ./app/routes/admin.py:3276
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #283
 
@@ -4265,7 +3987,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #284
 
 | Property | Value |
@@ -4279,7 +4000,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:2621, ./app/routes/admin.py:3112, ./app/routes/admin.py:3278
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #285
 
@@ -4295,7 +4015,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #286
 
 | Property | Value |
@@ -4309,7 +4028,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:2623, ./app/routes/admin.py:3114, ./app/routes/admin.py:3280
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #287
 
@@ -4325,7 +4043,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #288
 
 | Property | Value |
@@ -4339,7 +4056,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #289
 
@@ -4355,7 +4071,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #290
 
 | Property | Value |
@@ -4369,7 +4084,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #291
 
@@ -4385,7 +4099,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #292
 
 | Property | Value |
@@ -4399,7 +4112,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:2934, ./app/routes/admin.py:2981
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #293
 
@@ -4415,7 +4127,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #294
 
 | Property | Value |
@@ -4429,7 +4140,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:2936, ./app/routes/admin.py:2983
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #295
 
@@ -4445,7 +4155,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #296
 
 | Property | Value |
@@ -4459,7 +4168,6 @@
 **Description:** Function `add_individual_student` is 149 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #297
 
@@ -4475,7 +4183,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #298
 
 | Property | Value |
@@ -4489,7 +4196,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3006, ./app/routes/admin.py:3167
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #299
 
@@ -4505,7 +4211,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #300
 
 | Property | Value |
@@ -4519,7 +4224,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3008, ./app/routes/admin.py:3169
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #301
 
@@ -4535,7 +4239,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #302
 
 | Property | Value |
@@ -4549,7 +4252,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3010, ./app/routes/admin.py:3171
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #303
 
@@ -4565,7 +4267,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #304
 
 | Property | Value |
@@ -4579,7 +4280,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3012, ./app/routes/admin.py:3173
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #305
 
@@ -4595,7 +4295,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #306
 
 | Property | Value |
@@ -4609,7 +4308,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3014, ./app/routes/admin.py:3175
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #307
 
@@ -4625,7 +4323,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #308
 
 | Property | Value |
@@ -4639,7 +4336,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3016, ./app/routes/admin.py:3177
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #309
 
@@ -4655,7 +4351,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #310
 
 | Property | Value |
@@ -4669,7 +4364,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3018, ./app/routes/admin.py:3179
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #311
 
@@ -4685,7 +4379,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #312
 
 | Property | Value |
@@ -4699,7 +4392,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3020, ./app/routes/admin.py:3181
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #313
 
@@ -4715,7 +4407,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #314
 
 | Property | Value |
@@ -4729,7 +4420,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3022, ./app/routes/admin.py:3183
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #315
 
@@ -4745,7 +4435,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #316
 
 | Property | Value |
@@ -4759,7 +4448,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3039, ./app/routes/admin.py:3198
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #317
 
@@ -4775,7 +4463,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #318
 
 | Property | Value |
@@ -4789,7 +4476,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3041, ./app/routes/admin.py:3200
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #319
 
@@ -4805,7 +4491,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #320
 
 | Property | Value |
@@ -4819,7 +4504,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3043, ./app/routes/admin.py:3202
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #321
 
@@ -4835,7 +4519,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #322
 
 | Property | Value |
@@ -4849,7 +4532,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3045, ./app/routes/admin.py:3204
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #323
 
@@ -4865,7 +4547,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #324
 
 | Property | Value |
@@ -4879,7 +4560,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3047, ./app/routes/admin.py:3206
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #325
 
@@ -4895,7 +4575,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #326
 
 | Property | Value |
@@ -4909,7 +4588,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3049, ./app/routes/admin.py:3208
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #327
 
@@ -4925,7 +4603,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #328
 
 | Property | Value |
@@ -4939,7 +4616,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3082, ./app/routes/admin.py:3232
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #329
 
@@ -4955,7 +4631,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #330
 
 | Property | Value |
@@ -4969,7 +4644,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3084, ./app/routes/admin.py:3234
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #331
 
@@ -4985,7 +4659,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #332
 
 | Property | Value |
@@ -4999,7 +4672,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3094, ./app/routes/admin.py:3260
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #333
 
@@ -5015,7 +4687,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #334
 
 | Property | Value |
@@ -5029,7 +4700,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3096, ./app/routes/admin.py:3262
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #335
 
@@ -5045,7 +4715,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #336
 
 | Property | Value |
@@ -5059,7 +4728,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3098, ./app/routes/admin.py:3264
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #337
 
@@ -5075,7 +4743,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #338
 
 | Property | Value |
@@ -5089,7 +4756,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3100, ./app/routes/admin.py:3266
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #339
 
@@ -5105,7 +4771,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #340
 
 | Property | Value |
@@ -5119,7 +4784,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3102, ./app/routes/admin.py:3268
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #341
 
@@ -5135,7 +4799,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #342
 
 | Property | Value |
@@ -5149,7 +4812,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3104, ./app/routes/admin.py:3270
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #343
 
@@ -5165,7 +4827,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #344
 
 | Property | Value |
@@ -5179,7 +4840,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3106, ./app/routes/admin.py:3272
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #345
 
@@ -5195,7 +4855,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #346
 
 | Property | Value |
@@ -5209,7 +4868,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3120, ./app/routes/admin.py:3289
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #347
 
@@ -5225,7 +4883,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #348
 
 | Property | Value |
@@ -5239,7 +4896,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3122, ./app/routes/admin.py:3291
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #349
 
@@ -5255,7 +4911,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #350
 
 | Property | Value |
@@ -5269,7 +4924,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3124, ./app/routes/admin.py:3293, ./app/routes/admin.py:6993
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #351
 
@@ -5285,7 +4939,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #352
 
 | Property | Value |
@@ -5299,7 +4952,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3133, ./app/routes/admin.py:3303
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #353
 
@@ -5315,7 +4967,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #354
 
 | Property | Value |
@@ -5329,7 +4980,6 @@
 **Description:** Function `add_manual_student` has cyclomatic complexity of 18.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #355
 
@@ -5345,7 +4995,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #356
 
 | Property | Value |
@@ -5359,7 +5008,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #357
 
@@ -5375,7 +5023,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #358
 
 | Property | Value |
@@ -5389,7 +5036,6 @@
 **Description:** Function `store_management` is 332 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #359
 
@@ -5405,7 +5051,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #360
 
 | Property | Value |
@@ -5419,7 +5064,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #361
 
@@ -5435,7 +5079,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #362
 
 | Property | Value |
@@ -5449,7 +5092,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #363
 
@@ -5465,7 +5107,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #364
 
 | Property | Value |
@@ -5479,7 +5120,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #365
 
@@ -5495,7 +5135,6 @@
 
 **Why This Matters:** Swallowing exceptions hides errors and makes debugging difficult.
 
-
 ### Finding #366
 
 | Property | Value |
@@ -5509,7 +5148,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #367
 
@@ -5525,7 +5163,6 @@
 
 **Why This Matters:** Swallowing exceptions hides errors and makes debugging difficult.
 
-
 ### Finding #368
 
 | Property | Value |
@@ -5539,7 +5176,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3661, ./app/routes/admin.py:4733
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #369
 
@@ -5555,7 +5191,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #370
 
 | Property | Value |
@@ -5569,7 +5204,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3687, ./app/routes/admin.py:3706
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #371
 
@@ -5585,7 +5219,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #372
 
 | Property | Value |
@@ -5599,7 +5232,6 @@
 **Description:** Function `_sync_rent_items_to_store` has cyclomatic complexity of 19.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #373
 
@@ -5615,7 +5247,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #374
 
 | Property | Value |
@@ -5629,7 +5260,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #375
 
@@ -5645,7 +5275,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #376
 
 | Property | Value |
@@ -5659,7 +5288,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #377
 
@@ -5675,7 +5303,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #378
 
 | Property | Value |
@@ -5689,7 +5316,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #379
 
@@ -5705,7 +5331,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #380
 
 | Property | Value |
@@ -5719,7 +5344,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #381
 
@@ -5735,7 +5359,6 @@
 
 **Why This Matters:** Swallowing exceptions hides errors and makes debugging difficult.
 
-
 ### Finding #382
 
 | Property | Value |
@@ -5749,7 +5372,6 @@
 **Description:** Function `rent_settings` is 494 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #383
 
@@ -5765,7 +5387,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #384
 
 | Property | Value |
@@ -5779,7 +5400,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3922, ./app/routes/admin.py:4536
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #385
 
@@ -5795,7 +5415,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #386
 
 | Property | Value |
@@ -5809,7 +5428,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:3924, ./app/routes/admin.py:4538
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #387
 
@@ -5825,7 +5443,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #388
 
 | Property | Value |
@@ -5839,7 +5456,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #389
 
@@ -5855,7 +5471,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #390
 
 | Property | Value |
@@ -5869,7 +5484,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #391
 
@@ -5885,7 +5499,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #392
 
 | Property | Value |
@@ -5899,7 +5512,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #393
 
@@ -5915,7 +5527,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #394
 
 | Property | Value |
@@ -5929,7 +5540,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #395
 
@@ -5945,7 +5555,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #396
 
 | Property | Value |
@@ -5959,7 +5568,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #397
 
@@ -5975,7 +5583,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #398
 
 | Property | Value |
@@ -5989,7 +5596,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #399
 
@@ -6005,7 +5611,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #400
 
 | Property | Value |
@@ -6019,7 +5624,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #401
 
@@ -6035,7 +5639,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #402
 
 | Property | Value |
@@ -6049,7 +5652,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #403
 
@@ -6065,7 +5667,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #404
 
 | Property | Value |
@@ -6079,7 +5680,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #405
 
@@ -6095,7 +5695,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #406
 
 | Property | Value |
@@ -6109,7 +5708,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #407
 
@@ -6125,7 +5723,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #408
 
 | Property | Value |
@@ -6139,7 +5736,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #409
 
@@ -6155,7 +5751,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #410
 
 | Property | Value |
@@ -6169,7 +5764,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #411
 
@@ -6185,7 +5779,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #412
 
 | Property | Value |
@@ -6199,7 +5792,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #413
 
@@ -6215,7 +5807,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #414
 
 | Property | Value |
@@ -6229,7 +5820,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #415
 
@@ -6245,7 +5835,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #416
 
 | Property | Value |
@@ -6259,7 +5848,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #417
 
@@ -6275,7 +5863,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #418
 
 | Property | Value |
@@ -6289,7 +5876,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #419
 
@@ -6305,7 +5891,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #420
 
 | Property | Value |
@@ -6319,7 +5904,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #421
 
@@ -6335,7 +5919,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #422
 
 | Property | Value |
@@ -6349,7 +5932,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:4726, ./app/routes/admin.py:4794, ./app/routes/admin.py:4815...
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #423
 
@@ -6365,7 +5947,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #424
 
 | Property | Value |
@@ -6379,7 +5960,6 @@
 **Description:** Function `process_claim` is 217 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #425
 
@@ -6395,7 +5975,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #426
 
 | Property | Value |
@@ -6409,7 +5988,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #427
 
@@ -6425,7 +6003,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #428
 
 | Property | Value |
@@ -6439,7 +6016,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #429
 
@@ -6455,7 +6031,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #430
 
 | Property | Value |
@@ -6469,7 +6044,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #431
 
@@ -6485,7 +6059,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #432
 
 | Property | Value |
@@ -6499,7 +6072,6 @@
 **Description:** Function `void_transaction` is 243 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #433
 
@@ -6515,7 +6087,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #434
 
 | Property | Value |
@@ -6529,7 +6100,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:5201, ./app/routes/admin.py:6461
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #435
 
@@ -6545,7 +6115,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #436
 
 | Property | Value |
@@ -6559,7 +6128,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #437
 
@@ -6575,7 +6143,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #438
 
 | Property | Value |
@@ -6589,7 +6156,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #439
 
@@ -6605,7 +6171,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #440
 
 | Property | Value |
@@ -6619,7 +6184,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #441
 
@@ -6635,7 +6199,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #442
 
 | Property | Value |
@@ -6649,7 +6212,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #443
 
@@ -6665,7 +6227,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #444
 
 | Property | Value |
@@ -6679,7 +6240,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #445
 
@@ -6695,7 +6255,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #446
 
 | Property | Value |
@@ -6709,7 +6268,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:5291, ./app/routes/admin.py:5325, ./app/routes/admin.py:5372
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #447
 
@@ -6725,7 +6283,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #448
 
 | Property | Value |
@@ -6739,7 +6296,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:5293, ./app/routes/admin.py:5327, ./app/routes/admin.py:5374
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #449
 
@@ -6755,7 +6311,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #450
 
 | Property | Value |
@@ -6769,7 +6324,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:5295, ./app/routes/admin.py:5329, ./app/routes/admin.py:5376
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #451
 
@@ -6785,7 +6339,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #452
 
 | Property | Value |
@@ -6799,7 +6352,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:5297, ./app/routes/admin.py:5331, ./app/routes/admin.py:5378...
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #453
 
@@ -6815,7 +6367,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #454
 
 | Property | Value |
@@ -6829,7 +6380,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:5299, ./app/routes/admin.py:5333, ./app/routes/admin.py:5380...
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #455
 
@@ -6845,7 +6395,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #456
 
 | Property | Value |
@@ -6859,7 +6408,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #457
 
@@ -6875,7 +6423,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #458
 
 | Property | Value |
@@ -6889,7 +6436,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:5324, ./app/routes/admin.py:5371
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #459
 
@@ -6905,7 +6451,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #460
 
 | Property | Value |
@@ -6919,7 +6464,6 @@
 **Description:** Function `economy_health` is 160 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #461
 
@@ -6935,7 +6479,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #462
 
 | Property | Value |
@@ -6949,7 +6492,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:5599, ./app/routes/admin.py:8860
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #463
 
@@ -6965,7 +6507,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #464
 
 | Property | Value |
@@ -6979,7 +6520,6 @@
 **Description:** Function `payroll` is 259 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #465
 
@@ -6995,7 +6535,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #466
 
 | Property | Value |
@@ -7009,7 +6548,6 @@
 **Description:** Function `payroll_settings` has cyclomatic complexity of 13.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #467
 
@@ -7025,7 +6563,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #468
 
 | Property | Value |
@@ -7039,7 +6576,6 @@
 **Description:** Function `_normalize_claim_credentials_for_admin` has cyclomatic complexity of 11.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #469
 
@@ -7055,7 +6591,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #470
 
 | Property | Value |
@@ -7069,7 +6604,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #471
 
@@ -7085,7 +6619,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #472
 
 | Property | Value |
@@ -7099,7 +6632,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #473
 
@@ -7115,7 +6647,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #474
 
 | Property | Value |
@@ -7129,7 +6660,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6266, ./app/routes/admin.py:6288
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #475
 
@@ -7145,7 +6675,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #476
 
 | Property | Value |
@@ -7159,7 +6688,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6268, ./app/routes/admin.py:6290
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #477
 
@@ -7175,7 +6703,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #478
 
 | Property | Value |
@@ -7189,7 +6716,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6328, ./app/routes/admin.py:6373
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #479
 
@@ -7205,7 +6731,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #480
 
 | Property | Value |
@@ -7219,7 +6744,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6472, ./app/routes/admin.py:6527
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #481
 
@@ -7235,7 +6759,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #482
 
 | Property | Value |
@@ -7249,7 +6772,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6474, ./app/routes/admin.py:6529
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #483
 
@@ -7265,7 +6787,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #484
 
 | Property | Value |
@@ -7279,7 +6800,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6476, ./app/routes/admin.py:6531
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #485
 
@@ -7295,7 +6815,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #486
 
 | Property | Value |
@@ -7309,7 +6828,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6478, ./app/routes/admin.py:6533
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #487
 
@@ -7325,7 +6843,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #488
 
 | Property | Value |
@@ -7339,7 +6856,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6480, ./app/routes/admin.py:6535
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #489
 
@@ -7355,7 +6871,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #490
 
 | Property | Value |
@@ -7369,7 +6884,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6482, ./app/routes/admin.py:6537
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #491
 
@@ -7385,7 +6899,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #492
 
 | Property | Value |
@@ -7399,7 +6912,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6484, ./app/routes/admin.py:6539
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #493
 
@@ -7415,7 +6927,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #494
 
 | Property | Value |
@@ -7429,7 +6940,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6486, ./app/routes/admin.py:6541
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #495
 
@@ -7445,7 +6955,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #496
 
 | Property | Value |
@@ -7459,7 +6968,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6569, ./app/routes/admin.py:6618
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #497
 
@@ -7475,7 +6983,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #498
 
 | Property | Value |
@@ -7489,7 +6996,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6578, ./app/routes/admin.py:6630, ./app/routes/admin.py:6739
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #499
 
@@ -7505,7 +7011,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #500
 
 | Property | Value |
@@ -7519,7 +7024,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #501
 
@@ -7535,7 +7039,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #502
 
 | Property | Value |
@@ -7549,7 +7052,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6581, ./app/routes/admin.py:6633, ./app/routes/admin.py:6742
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #503
 
@@ -7565,7 +7067,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #504
 
 | Property | Value |
@@ -7579,7 +7080,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6583, ./app/routes/admin.py:6635, ./app/routes/admin.py:6744
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #505
 
@@ -7595,7 +7095,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #506
 
 | Property | Value |
@@ -7609,7 +7108,6 @@
 **Description:** Function `payroll_apply_fine` is 97 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #507
 
@@ -7625,7 +7123,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #508
 
 | Property | Value |
@@ -7639,7 +7136,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6628, ./app/routes/admin.py:6737
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #509
 
@@ -7655,7 +7151,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #510
 
 | Property | Value |
@@ -7669,7 +7164,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #511
 
@@ -7685,7 +7179,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #512
 
 | Property | Value |
@@ -7699,7 +7192,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6658, ./app/routes/admin.py:6769
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #513
 
@@ -7715,7 +7207,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #514
 
 | Property | Value |
@@ -7729,7 +7220,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:6660, ./app/routes/admin.py:6771
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #515
 
@@ -7745,7 +7235,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #516
 
 | Property | Value |
@@ -7759,7 +7248,6 @@
 **Description:** Function `payroll_manual_payment` is 111 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #517
 
@@ -7775,7 +7263,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #518
 
 | Property | Value |
@@ -7789,7 +7276,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #519
 
@@ -7805,7 +7291,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #520
 
 | Property | Value |
@@ -7819,7 +7304,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #521
 
@@ -7835,7 +7319,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #522
 
 | Property | Value |
@@ -7849,7 +7332,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #523
 
@@ -7865,7 +7347,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #524
 
 | Property | Value |
@@ -7879,7 +7360,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #525
 
@@ -7895,7 +7375,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #526
 
 | Property | Value |
@@ -7909,7 +7388,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #527
 
@@ -7925,7 +7403,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #528
 
 | Property | Value |
@@ -7939,7 +7416,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #529
 
@@ -7955,7 +7431,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #530
 
 | Property | Value |
@@ -7969,7 +7444,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #531
 
@@ -7985,7 +7459,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #532
 
 | Property | Value |
@@ -7999,7 +7472,6 @@
 **Description:** Function `tap_out_students` has cyclomatic complexity of 19.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #533
 
@@ -8015,7 +7487,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #534
 
 | Property | Value |
@@ -8029,7 +7500,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #535
 
@@ -8045,7 +7515,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #536
 
 | Property | Value |
@@ -8059,7 +7528,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:7221, ./app/routes/admin.py:7249, ./app/routes/admin.py:7370
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #537
 
@@ -8075,7 +7543,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #538
 
 | Property | Value |
@@ -8089,7 +7556,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:7223, ./app/routes/admin.py:7251, ./app/routes/admin.py:7372
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #539
 
@@ -8105,7 +7571,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #540
 
 | Property | Value |
@@ -8119,7 +7584,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:7225, ./app/routes/admin.py:7253, ./app/routes/admin.py:7374
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #541
 
@@ -8135,7 +7599,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #542
 
 | Property | Value |
@@ -8149,7 +7612,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:7227, ./app/routes/admin.py:7255, ./app/routes/admin.py:7376
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #543
 
@@ -8165,7 +7627,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #544
 
 | Property | Value |
@@ -8179,7 +7640,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:7236, ./app/routes/admin.py:7357, ./app/routes/admin.py:7462
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #545
 
@@ -8195,7 +7655,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #546
 
 | Property | Value |
@@ -8209,7 +7668,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:7238, ./app/routes/admin.py:7359, ./app/routes/admin.py:7464
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #547
 
@@ -8225,7 +7683,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #548
 
 | Property | Value |
@@ -8239,7 +7696,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #549
 
@@ -8255,7 +7711,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #550
 
 | Property | Value |
@@ -8269,7 +7724,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:7241, ./app/routes/admin.py:7362
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #551
 
@@ -8285,7 +7739,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #552
 
 | Property | Value |
@@ -8299,7 +7752,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:7243, ./app/routes/admin.py:7364
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #553
 
@@ -8315,7 +7767,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #554
 
 | Property | Value |
@@ -8329,7 +7780,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:7245, ./app/routes/admin.py:7366
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #555
 
@@ -8345,7 +7795,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #556
 
 | Property | Value |
@@ -8359,7 +7808,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:7246, ./app/routes/admin.py:7367
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #557
 
@@ -8375,7 +7823,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #558
 
 | Property | Value |
@@ -8389,7 +7836,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #559
 
@@ -8405,7 +7851,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #560
 
 | Property | Value |
@@ -8419,7 +7864,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:7312, ./app/routes/admin.py:7411
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #561
 
@@ -8435,7 +7879,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #562
 
 | Property | Value |
@@ -8449,7 +7892,6 @@
 **Description:** Function `tap_in_students` is 95 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #563
 
@@ -8465,7 +7907,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #564
 
 | Property | Value |
@@ -8479,7 +7920,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:7356, ./app/routes/admin.py:7461
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #565
 
@@ -8495,7 +7935,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #566
 
 | Property | Value |
@@ -8509,7 +7948,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #567
 
@@ -8525,7 +7963,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #568
 
 | Property | Value |
@@ -8539,7 +7976,6 @@
 **Description:** Function `bulk_update_hall_passes` has cyclomatic complexity of 14.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #569
 
@@ -8555,7 +7991,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #570
 
 | Property | Value |
@@ -8569,7 +8004,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #571
 
@@ -8585,7 +8019,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #572
 
 | Property | Value |
@@ -8599,7 +8032,6 @@
 **Description:** Function `banking` has cyclomatic complexity of 19.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #573
 
@@ -8615,7 +8047,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #574
 
 | Property | Value |
@@ -8629,7 +8060,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #575
 
@@ -8645,7 +8075,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #576
 
 | Property | Value |
@@ -8659,7 +8088,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #577
 
@@ -8675,7 +8103,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #578
 
 | Property | Value |
@@ -8689,7 +8116,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #579
 
@@ -8705,7 +8131,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #580
 
 | Property | Value |
@@ -8719,7 +8144,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #581
 
@@ -8735,7 +8159,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #582
 
 | Property | Value |
@@ -8749,7 +8172,6 @@
 **Description:** Unreachable code detected after return/raise/break/continue.
 
 **Why This Matters:** Unreachable code clutters the codebase and may indicate logic errors.
-
 
 ### Finding #583
 
@@ -8765,7 +8187,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #584
 
 | Property | Value |
@@ -8779,7 +8200,6 @@
 **Description:** Function `feature_settings` is 136 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #585
 
@@ -8795,7 +8215,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #586
 
 | Property | Value |
@@ -8809,7 +8228,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:7980, ./app/routes/admin.py:8043
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #587
 
@@ -8825,7 +8243,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #588
 
 | Property | Value |
@@ -8839,7 +8256,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:7982, ./app/routes/admin.py:8045
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #589
 
@@ -8855,7 +8271,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #590
 
 | Property | Value |
@@ -8869,7 +8284,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8004, ./app/routes/admin.py:8025
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #591
 
@@ -8885,7 +8299,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #592
 
 | Property | Value |
@@ -8899,7 +8312,6 @@
 **Description:** Function `copy_feature_settings` has cyclomatic complexity of 12.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #593
 
@@ -8915,7 +8327,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #594
 
 | Property | Value |
@@ -8929,7 +8340,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #595
 
@@ -8945,7 +8355,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #596
 
 | Property | Value |
@@ -8959,7 +8368,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #597
 
@@ -8975,7 +8383,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #598
 
 | Property | Value |
@@ -8989,7 +8396,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8231, ./app/routes/admin.py:8288
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #599
 
@@ -9005,7 +8411,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #600
 
 | Property | Value |
@@ -9019,7 +8424,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8233, ./app/routes/admin.py:8290
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #601
 
@@ -9035,7 +8439,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #602
 
 | Property | Value |
@@ -9049,7 +8452,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8235, ./app/routes/admin.py:8292
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #603
 
@@ -9065,7 +8467,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #604
 
 | Property | Value |
@@ -9079,7 +8480,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8237, ./app/routes/admin.py:8294
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #605
 
@@ -9095,7 +8495,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #606
 
 | Property | Value |
@@ -9109,7 +8508,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8239, ./app/routes/admin.py:8296
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #607
 
@@ -9125,7 +8523,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #608
 
 | Property | Value |
@@ -9139,7 +8536,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #609
 
@@ -9155,7 +8551,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #610
 
 | Property | Value |
@@ -9169,7 +8564,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8360, ./app/routes/admin.py:8416, ./app/routes/admin.py:8449
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #611
 
@@ -9185,7 +8579,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #612
 
 | Property | Value |
@@ -9199,7 +8592,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8362, ./app/routes/admin.py:8418, ./app/routes/admin.py:8451
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #613
 
@@ -9215,7 +8607,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #614
 
 | Property | Value |
@@ -9229,7 +8620,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8364, ./app/routes/admin.py:8420, ./app/routes/admin.py:8453
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #615
 
@@ -9245,7 +8635,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #616
 
 | Property | Value |
@@ -9259,7 +8648,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8366, ./app/routes/admin.py:8422
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #617
 
@@ -9275,7 +8663,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #618
 
 | Property | Value |
@@ -9289,7 +8676,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8368, ./app/routes/admin.py:8424
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #619
 
@@ -9305,7 +8691,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #620
 
 | Property | Value |
@@ -9319,7 +8704,6 @@
 **Description:** Function `onboarding_status` is 121 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #621
 
@@ -9335,7 +8719,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #622
 
 | Property | Value |
@@ -9349,7 +8732,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #623
 
@@ -9365,7 +8747,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #624
 
 | Property | Value |
@@ -9379,7 +8760,6 @@
 **Description:** Function `api_economy_analyze` is 114 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #625
 
@@ -9395,7 +8775,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #626
 
 | Property | Value |
@@ -9409,7 +8788,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8808, ./app/routes/admin.py:8940
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #627
 
@@ -9425,7 +8803,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #628
 
 | Property | Value |
@@ -9439,7 +8816,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8810, ./app/routes/admin.py:8942
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #629
 
@@ -9455,7 +8831,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #630
 
 | Property | Value |
@@ -9469,7 +8844,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8812, ./app/routes/admin.py:8944
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #631
 
@@ -9485,7 +8859,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #632
 
 | Property | Value |
@@ -9499,7 +8872,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:8814, ./app/routes/admin.py:8946
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #633
 
@@ -9515,7 +8887,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #634
 
 | Property | Value |
@@ -9529,7 +8900,6 @@
 **Description:** Function `api_economy_validate` is 104 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #635
 
@@ -9545,7 +8915,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #636
 
 | Property | Value |
@@ -9559,7 +8928,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #637
 
@@ -9575,7 +8943,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #638
 
 | Property | Value |
@@ -9589,7 +8956,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #639
 
@@ -9605,7 +8971,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #640
 
 | Property | Value |
@@ -9619,7 +8984,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:944, ./app/routes/admin.py:6753
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #641
 
@@ -9635,7 +8999,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #642
 
 | Property | Value |
@@ -9649,7 +9012,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:946, ./app/routes/admin.py:6755
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #643
 
@@ -9665,7 +9027,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #644
 
 | Property | Value |
@@ -9679,7 +9040,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:948, ./app/routes/admin.py:6646, ./app/routes/admin.py:6757
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #645
 
@@ -9695,7 +9055,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #646
 
 | Property | Value |
@@ -9709,7 +9068,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:950, ./app/routes/admin.py:6648, ./app/routes/admin.py:6759
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #647
 
@@ -9725,7 +9083,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #648
 
 | Property | Value |
@@ -9739,7 +9096,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:951, ./app/routes/admin.py:6649, ./app/routes/admin.py:6760
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #649
 
@@ -9755,7 +9111,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #650
 
 | Property | Value |
@@ -9769,7 +9124,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:953, ./app/routes/admin.py:6651, ./app/routes/admin.py:6762
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #651
 
@@ -9785,7 +9139,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #652
 
 | Property | Value |
@@ -9799,7 +9152,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:955, ./app/routes/admin.py:6653, ./app/routes/admin.py:6764
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #653
 
@@ -9815,7 +9167,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #654
 
 | Property | Value |
@@ -9829,7 +9180,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:957, ./app/routes/admin.py:6655, ./app/routes/admin.py:6766
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #655
 
@@ -9845,7 +9195,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #656
 
 | Property | Value |
@@ -9859,7 +9208,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:978, ./app/routes/admin.py:6677, ./app/routes/admin.py:6788
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #657
 
@@ -9875,7 +9223,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #658
 
 | Property | Value |
@@ -9889,7 +9236,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:980, ./app/routes/admin.py:6679, ./app/routes/admin.py:6790
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #659
 
@@ -9905,7 +9251,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #660
 
 | Property | Value |
@@ -9919,7 +9264,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:982, ./app/routes/admin.py:6681, ./app/routes/admin.py:6792
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #661
 
@@ -9935,7 +9279,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #662
 
 | Property | Value |
@@ -9949,7 +9292,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:986, ./app/routes/admin.py:6685, ./app/routes/admin.py:6796
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #663
 
@@ -9965,7 +9307,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #664
 
 | Property | Value |
@@ -9979,7 +9320,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:988, ./app/routes/admin.py:6687, ./app/routes/admin.py:6798
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #665
 
@@ -9995,7 +9335,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #666
 
 | Property | Value |
@@ -10009,7 +9348,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:990, ./app/routes/admin.py:6689, ./app/routes/admin.py:6800
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #667
 
@@ -10025,7 +9363,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #668
 
 | Property | Value |
@@ -10039,7 +9376,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/admin.py:992, ./app/routes/admin.py:6691, ./app/routes/admin.py:6802
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #669
 
@@ -10055,7 +9391,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #670
 
 | Property | Value |
@@ -10069,7 +9404,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #671
 
@@ -10085,7 +9419,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #672
 
 | Property | Value |
@@ -10099,7 +9432,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/analytics.py:213, ./app/routes/analytics.py:419, ./app/routes/analytics.py:463
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #673
 
@@ -10115,7 +9447,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #674
 
 | Property | Value |
@@ -10129,7 +9460,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/analytics.py:223, ./app/routes/analytics.py:291
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #675
 
@@ -10145,7 +9475,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #676
 
 | Property | Value |
@@ -10159,7 +9488,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/analytics.py:234, ./app/routes/analytics.py:355
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #677
 
@@ -10175,7 +9503,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #678
 
 | Property | Value |
@@ -10189,7 +9516,6 @@
 **Description:** Function `student_drill_down` has cyclomatic complexity of 11.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #679
 
@@ -10205,7 +9531,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #680
 
 | Property | Value |
@@ -10219,7 +9544,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #681
 
@@ -10235,7 +9559,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #682
 
 | Property | Value |
@@ -10249,7 +9572,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #683
 
@@ -10265,7 +9587,6 @@
 
 **Why This Matters:** Swallowing exceptions hides errors and makes debugging difficult.
 
-
 ### Finding #684
 
 | Property | Value |
@@ -10279,7 +9600,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #685
 
@@ -10295,7 +9615,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #686
 
 | Property | Value |
@@ -10309,7 +9628,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #687
 
@@ -10325,7 +9643,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #688
 
 | Property | Value |
@@ -10339,7 +9656,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #689
 
@@ -10355,7 +9671,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #690
 
 | Property | Value |
@@ -10369,7 +9684,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #691
 
@@ -10385,7 +9699,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #692
 
 | Property | Value |
@@ -10399,7 +9712,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #693
 
@@ -10415,7 +9727,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #694
 
 | Property | Value |
@@ -10429,7 +9740,6 @@
 **Description:** Function `get_active_hall_passes` is 86 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #695
 
@@ -10445,7 +9755,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #696
 
 | Property | Value |
@@ -10459,7 +9768,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1238, ./app/routes/api.py:1665
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #697
 
@@ -10475,7 +9783,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #698
 
 | Property | Value |
@@ -10489,7 +9796,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1240, ./app/routes/api.py:1667
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #699
 
@@ -10505,7 +9811,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #700
 
 | Property | Value |
@@ -10519,7 +9824,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1242, ./app/routes/api.py:1669
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #701
 
@@ -10535,7 +9839,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #702
 
 | Property | Value |
@@ -10549,7 +9852,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1244, ./app/routes/api.py:1671
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #703
 
@@ -10565,7 +9867,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #704
 
 | Property | Value |
@@ -10579,7 +9880,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1246, ./app/routes/api.py:1673
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #705
 
@@ -10595,7 +9895,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #706
 
 | Property | Value |
@@ -10609,7 +9908,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1247, ./app/routes/api.py:1674
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #707
 
@@ -10625,7 +9923,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #708
 
 | Property | Value |
@@ -10639,7 +9936,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1315, ./app/routes/api.py:1740
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #709
 
@@ -10655,7 +9951,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #710
 
 | Property | Value |
@@ -10669,7 +9964,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1417, ./app/routes/api.py:1468
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #711
 
@@ -10685,7 +9979,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #712
 
 | Property | Value |
@@ -10699,7 +9992,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1419, ./app/routes/api.py:1470
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #713
 
@@ -10715,7 +10007,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #714
 
 | Property | Value |
@@ -10729,7 +10020,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1421, ./app/routes/api.py:1472
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #715
 
@@ -10745,7 +10035,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #716
 
 | Property | Value |
@@ -10759,7 +10048,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1428, ./app/routes/api.py:1552
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #717
 
@@ -10775,7 +10063,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #718
 
 | Property | Value |
@@ -10789,7 +10076,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1430, ./app/routes/api.py:1554
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #719
 
@@ -10805,7 +10091,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #720
 
 | Property | Value |
@@ -10819,7 +10104,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1432, ./app/routes/api.py:1556
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #721
 
@@ -10835,7 +10119,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #722
 
 | Property | Value |
@@ -10849,7 +10132,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1434, ./app/routes/api.py:1558
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #723
 
@@ -10865,7 +10147,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #724
 
 | Property | Value |
@@ -10879,7 +10160,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1436, ./app/routes/api.py:1560
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #725
 
@@ -10895,7 +10175,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #726
 
 | Property | Value |
@@ -10909,7 +10188,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1438, ./app/routes/api.py:1562
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #727
 
@@ -10925,7 +10203,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #728
 
 | Property | Value |
@@ -10939,7 +10216,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1440, ./app/routes/api.py:1564
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #729
 
@@ -10955,7 +10231,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #730
 
 | Property | Value |
@@ -10969,7 +10244,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1442, ./app/routes/api.py:1566
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #731
 
@@ -10985,7 +10259,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #732
 
 | Property | Value |
@@ -10999,7 +10272,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1445, ./app/routes/api.py:1569
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #733
 
@@ -11015,7 +10287,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #734
 
 | Property | Value |
@@ -11029,7 +10300,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1447, ./app/routes/api.py:1571
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #735
 
@@ -11045,7 +10315,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #736
 
 | Property | Value |
@@ -11059,7 +10328,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1449, ./app/routes/api.py:1573
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #737
 
@@ -11075,7 +10343,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #738
 
 | Property | Value |
@@ -11089,7 +10356,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1482, ./app/routes/api.py:1610
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #739
 
@@ -11105,7 +10371,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #740
 
 | Property | Value |
@@ -11119,7 +10384,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1484, ./app/routes/api.py:1612
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #741
 
@@ -11135,7 +10399,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #742
 
 | Property | Value |
@@ -11149,7 +10412,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1486, ./app/routes/api.py:1614
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #743
 
@@ -11165,7 +10427,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #744
 
 | Property | Value |
@@ -11179,7 +10440,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1488, ./app/routes/api.py:1616
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #745
 
@@ -11195,7 +10455,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #746
 
 | Property | Value |
@@ -11209,7 +10468,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1490, ./app/routes/api.py:1618
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #747
 
@@ -11225,7 +10483,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #748
 
 | Property | Value |
@@ -11239,7 +10496,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1492, ./app/routes/api.py:1620
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #749
 
@@ -11255,7 +10511,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #750
 
 | Property | Value |
@@ -11269,7 +10524,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1494, ./app/routes/api.py:1622
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #751
 
@@ -11285,7 +10539,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #752
 
 | Property | Value |
@@ -11299,7 +10552,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1496, ./app/routes/api.py:1624
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #753
 
@@ -11315,7 +10567,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #754
 
 | Property | Value |
@@ -11329,7 +10580,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1538, ./app/routes/api.py:1593
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #755
 
@@ -11345,7 +10595,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #756
 
 | Property | Value |
@@ -11359,7 +10608,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1540, ./app/routes/api.py:1595
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #757
 
@@ -11375,7 +10623,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #758
 
 | Property | Value |
@@ -11389,7 +10636,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1542, ./app/routes/api.py:1597
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #759
 
@@ -11405,7 +10651,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #760
 
 | Property | Value |
@@ -11419,7 +10664,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1544, ./app/routes/api.py:1599
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #761
 
@@ -11435,7 +10679,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #762
 
 | Property | Value |
@@ -11449,7 +10692,6 @@
 **Description:** Function `get_hall_pass_queue` is 126 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #763
 
@@ -11465,7 +10707,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #764
 
 | Property | Value |
@@ -11479,7 +10720,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1779, ./app/routes/api.py:2315
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #765
 
@@ -11495,7 +10735,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #766
 
 | Property | Value |
@@ -11509,7 +10748,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1781, ./app/routes/api.py:2317
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #767
 
@@ -11525,7 +10763,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #768
 
 | Property | Value |
@@ -11539,7 +10776,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1783, ./app/routes/api.py:2319
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #769
 
@@ -11555,7 +10791,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #770
 
 | Property | Value |
@@ -11569,7 +10804,6 @@
 **Description:** Function `hall_pass_history` has cyclomatic complexity of 11.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #771
 
@@ -11585,7 +10819,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #772
 
 | Property | Value |
@@ -11599,7 +10832,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1835, ./app/routes/api.py:2075
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #773
 
@@ -11615,7 +10847,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #774
 
 | Property | Value |
@@ -11629,7 +10860,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1861, ./app/routes/api.py:2096
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #775
 
@@ -11645,7 +10875,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #776
 
 | Property | Value |
@@ -11659,7 +10888,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1868, ./app/routes/api.py:2103
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #777
 
@@ -11675,7 +10903,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #778
 
 | Property | Value |
@@ -11689,7 +10916,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1870, ./app/routes/api.py:2105
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #779
 
@@ -11705,7 +10931,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #780
 
 | Property | Value |
@@ -11719,7 +10944,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1882, ./app/routes/api.py:2123
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #781
 
@@ -11735,7 +10959,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #782
 
 | Property | Value |
@@ -11749,7 +10972,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1884, ./app/routes/api.py:2125
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #783
 
@@ -11765,7 +10987,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #784
 
 | Property | Value |
@@ -11779,7 +11000,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #785
 
@@ -11795,7 +11015,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #786
 
 | Property | Value |
@@ -11809,7 +11028,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1917, ./app/routes/api.py:2178
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #787
 
@@ -11825,7 +11043,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #788
 
 | Property | Value |
@@ -11839,7 +11056,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1919, ./app/routes/api.py:2180
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #789
 
@@ -11855,7 +11071,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #790
 
 | Property | Value |
@@ -11869,7 +11084,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:1921, ./app/routes/api.py:2182
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #791
 
@@ -11885,7 +11099,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #792
 
 | Property | Value |
@@ -11899,7 +11112,6 @@
 **Description:** Function `save_hall_pass_setup` has cyclomatic complexity of 16.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #793
 
@@ -11915,7 +11127,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #794
 
 | Property | Value |
@@ -11929,7 +11140,6 @@
 **Description:** Function `attendance_history` has cyclomatic complexity of 14.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #795
 
@@ -11945,7 +11155,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #796
 
 | Property | Value |
@@ -11959,7 +11168,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #797
 
@@ -11975,7 +11183,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #798
 
 | Property | Value |
@@ -11989,7 +11196,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #799
 
@@ -12005,7 +11211,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #800
 
 | Property | Value |
@@ -12019,7 +11224,6 @@
 **Description:** Function `handle_tap` is 377 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #801
 
@@ -12035,7 +11239,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #802
 
 | Property | Value |
@@ -12049,7 +11252,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:2258, ./app/routes/admin.py:7284
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #803
 
@@ -12065,7 +11267,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #804
 
 | Property | Value |
@@ -12079,7 +11280,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #805
 
@@ -12095,7 +11295,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #806
 
 | Property | Value |
@@ -12109,7 +11308,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #807
 
@@ -12125,7 +11323,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #808
 
 | Property | Value |
@@ -12139,7 +11336,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #809
 
@@ -12155,7 +11351,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #810
 
 | Property | Value |
@@ -12169,7 +11364,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:2456, ./app/routes/api.py:2555
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #811
 
@@ -12185,7 +11379,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #812
 
 | Property | Value |
@@ -12199,7 +11392,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #813
 
@@ -12215,7 +11407,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #814
 
 | Property | Value |
@@ -12229,7 +11420,6 @@
 **Description:** Function `get_tap_entries` has cyclomatic complexity of 11.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #815
 
@@ -12245,7 +11435,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #816
 
 | Property | Value |
@@ -12259,7 +11448,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:2582, ./app/routes/api.py:2653
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #817
 
@@ -12275,7 +11463,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #818
 
 | Property | Value |
@@ -12289,7 +11476,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #819
 
@@ -12305,7 +11491,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #820
 
 | Property | Value |
@@ -12319,7 +11504,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:2688, ./app/routes/api.py:3182
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #821
 
@@ -12335,7 +11519,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #822
 
 | Property | Value |
@@ -12349,7 +11532,6 @@
 **Description:** Function `check_and_auto_tapout_if_limit_reached` has cyclomatic complexity of 14.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #823
 
@@ -12365,7 +11547,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #824
 
 | Property | Value |
@@ -12379,7 +11560,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #825
 
@@ -12395,7 +11575,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #826
 
 | Property | Value |
@@ -12409,7 +11588,6 @@
 **Description:** Function `set_timezone` has cyclomatic complexity of 20.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #827
 
@@ -12425,7 +11603,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #828
 
 | Property | Value |
@@ -12439,7 +11616,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #829
 
@@ -12455,7 +11631,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #830
 
 | Property | Value |
@@ -12469,7 +11644,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #831
 
@@ -12485,7 +11659,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #832
 
 | Property | Value |
@@ -12499,7 +11672,6 @@
 **Description:** Empty except block detected.
 
 **Why This Matters:** Swallowing exceptions hides errors and makes debugging difficult.
-
 
 ### Finding #833
 
@@ -12515,7 +11687,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #834
 
 | Property | Value |
@@ -12529,7 +11700,6 @@
 **Description:** Empty except block detected.
 
 **Why This Matters:** Swallowing exceptions hides errors and makes debugging difficult.
-
 
 ### Finding #835
 
@@ -12545,7 +11715,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #836
 
 | Property | Value |
@@ -12559,7 +11728,6 @@
 **Description:** Empty except block detected.
 
 **Why This Matters:** Swallowing exceptions hides errors and makes debugging difficult.
-
 
 ### Finding #837
 
@@ -12575,7 +11743,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #838
 
 | Property | Value |
@@ -12589,7 +11756,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:3143, ./app/routes/api.py:3198
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #839
 
@@ -12605,7 +11771,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #840
 
 | Property | Value |
@@ -12619,7 +11784,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #841
 
@@ -12635,7 +11799,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #842
 
 | Property | Value |
@@ -12649,7 +11812,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #843
 
@@ -12665,7 +11827,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #844
 
 | Property | Value |
@@ -12679,7 +11840,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #845
 
@@ -12695,7 +11855,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #846
 
 | Property | Value |
@@ -12709,7 +11868,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #847
 
@@ -12725,7 +11883,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #848
 
 | Property | Value |
@@ -12739,7 +11896,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #849
 
@@ -12755,7 +11911,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #850
 
 | Property | Value |
@@ -12769,7 +11924,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #851
 
@@ -12785,7 +11939,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #852
 
 | Property | Value |
@@ -12799,7 +11952,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #853
 
@@ -12815,7 +11967,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #854
 
 | Property | Value |
@@ -12829,7 +11980,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:554, ./app/routes/api.py:681
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #855
 
@@ -12845,7 +11995,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #856
 
 | Property | Value |
@@ -12859,7 +12008,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:556, ./app/routes/api.py:683
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #857
 
@@ -12875,7 +12023,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #858
 
 | Property | Value |
@@ -12889,7 +12036,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:566, ./app/routes/api.py:692
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #859
 
@@ -12905,7 +12051,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #860
 
 | Property | Value |
@@ -12919,7 +12064,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:577, ./app/routes/api.py:702
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #861
 
@@ -12935,7 +12079,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #862
 
 | Property | Value |
@@ -12949,7 +12092,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #863
 
@@ -12965,7 +12107,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #864
 
 | Property | Value |
@@ -12979,7 +12120,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:632, ./app/routes/api.py:648, ./app/routes/api.py:663
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #865
 
@@ -12995,7 +12135,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #866
 
 | Property | Value |
@@ -13009,7 +12148,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #867
 
@@ -13025,7 +12163,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #868
 
 | Property | Value |
@@ -13039,7 +12176,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #869
 
@@ -13055,7 +12191,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #870
 
 | Property | Value |
@@ -13069,7 +12204,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #871
 
@@ -13085,7 +12219,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #872
 
 | Property | Value |
@@ -13099,7 +12232,6 @@
 **Description:** Function `use_item` is 137 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #873
 
@@ -13115,7 +12247,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #874
 
 | Property | Value |
@@ -13129,7 +12260,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #875
 
@@ -13145,7 +12275,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #876
 
 | Property | Value |
@@ -13159,7 +12288,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #877
 
@@ -13175,7 +12303,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #878
 
 | Property | Value |
@@ -13189,7 +12316,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:916, ./app/routes/api.py:968
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #879
 
@@ -13205,7 +12331,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #880
 
 | Property | Value |
@@ -13219,7 +12344,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:918, ./app/routes/api.py:970
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #881
 
@@ -13235,7 +12359,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #882
 
 | Property | Value |
@@ -13249,7 +12372,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:920, ./app/routes/api.py:972
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #883
 
@@ -13265,7 +12387,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #884
 
 | Property | Value |
@@ -13279,7 +12400,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:922, ./app/routes/api.py:974
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #885
 
@@ -13295,7 +12415,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #886
 
 | Property | Value |
@@ -13309,7 +12428,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:924, ./app/routes/api.py:976
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #887
 
@@ -13325,7 +12443,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #888
 
 | Property | Value |
@@ -13339,7 +12456,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:926, ./app/routes/api.py:978
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #889
 
@@ -13355,7 +12471,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #890
 
 | Property | Value |
@@ -13369,7 +12484,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:928, ./app/routes/api.py:980
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #891
 
@@ -13385,7 +12499,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #892
 
 | Property | Value |
@@ -13399,7 +12512,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/api.py:930, ./app/routes/api.py:982
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #893
 
@@ -13415,7 +12527,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #894
 
 | Property | Value |
@@ -13429,7 +12540,6 @@
 **Description:** Function `view_doc` is 182 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #895
 
@@ -13445,7 +12555,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #896
 
 | Property | Value |
@@ -13459,7 +12568,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #897
 
@@ -13475,7 +12583,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #898
 
 | Property | Value |
@@ -13489,7 +12596,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #899
 
@@ -13505,7 +12611,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #900
 
 | Property | Value |
@@ -13519,7 +12624,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #901
 
@@ -13535,7 +12639,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #902
 
 | Property | Value |
@@ -13549,7 +12652,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #903
 
@@ -13565,7 +12667,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #904
 
 | Property | Value |
@@ -13579,7 +12680,6 @@
 **Description:** Function `search` is 151 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #905
 
@@ -13595,7 +12695,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #906
 
 | Property | Value |
@@ -13609,7 +12708,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #907
 
@@ -13625,7 +12723,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #908
 
 | Property | Value |
@@ -13639,7 +12736,6 @@
 **Description:** Function `verify_identity` has cyclomatic complexity of 17.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #909
 
@@ -13655,7 +12751,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #910
 
 | Property | Value |
@@ -13669,7 +12764,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #911
 
@@ -13685,7 +12779,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #912
 
 | Property | Value |
@@ -13699,7 +12792,6 @@
 **Description:** Function `dashboard` is 335 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #913
 
@@ -13715,7 +12807,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #914
 
 | Property | Value |
@@ -13729,7 +12820,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:1156, ./app/routes/student.py:1455
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #915
 
@@ -13745,7 +12835,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #916
 
 | Property | Value |
@@ -13759,7 +12848,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #917
 
@@ -13775,7 +12863,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #918
 
 | Property | Value |
@@ -13789,7 +12876,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:1247, ./app/routes/student.py:2914
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #919
 
@@ -13805,7 +12891,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #920
 
 | Property | Value |
@@ -13819,7 +12904,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #921
 
@@ -13835,7 +12919,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #922
 
 | Property | Value |
@@ -13849,7 +12932,6 @@
 **Description:** Function `transfer` is 191 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #923
 
@@ -13865,7 +12947,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #924
 
 | Property | Value |
@@ -13879,7 +12960,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #925
 
@@ -13895,7 +12975,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #926
 
 | Property | Value |
@@ -13909,7 +12988,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:1557, ./app/routes/student.py:2003, ./app/routes/student.py:3176
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #927
 
@@ -13925,7 +13003,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #928
 
 | Property | Value |
@@ -13939,7 +13016,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:1559, ./app/routes/student.py:2005, ./app/routes/student.py:3178
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #929
 
@@ -13955,7 +13031,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #930
 
 | Property | Value |
@@ -13969,7 +13044,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:1561, ./app/routes/student.py:2007, ./app/routes/student.py:3180
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #931
 
@@ -13985,7 +13059,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #932
 
 | Property | Value |
@@ -13999,7 +13072,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #933
 
@@ -14015,7 +13087,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #934
 
 | Property | Value |
@@ -14029,7 +13100,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #935
 
@@ -14045,7 +13115,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #936
 
 | Property | Value |
@@ -14059,7 +13128,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #937
 
@@ -14075,7 +13143,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #938
 
 | Property | Value |
@@ -14089,7 +13156,6 @@
 **Description:** Function `insurance_marketplace` has cyclomatic complexity of 16.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #939
 
@@ -14105,7 +13171,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #940
 
 | Property | Value |
@@ -14119,7 +13184,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:1820, ./app/routes/student.py:2376
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #941
 
@@ -14135,7 +13199,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #942
 
 | Property | Value |
@@ -14149,7 +13212,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:1849, ./app/routes/student.py:1944
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #943
 
@@ -14165,7 +13227,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #944
 
 | Property | Value |
@@ -14179,7 +13240,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:1861, ./app/routes/student.py:1955
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #945
 
@@ -14195,7 +13255,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #946
 
 | Property | Value |
@@ -14209,7 +13268,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #947
 
@@ -14225,7 +13283,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #948
 
 | Property | Value |
@@ -14239,7 +13296,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:197, ./app/routes/admin.py:541
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #949
 
@@ -14255,7 +13311,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #950
 
 | Property | Value |
@@ -14269,7 +13324,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:198, ./app/routes/admin.py:542
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #951
 
@@ -14285,7 +13339,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #952
 
 | Property | Value |
@@ -14299,7 +13352,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:1998, ./app/routes/student.py:3171
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #953
 
@@ -14315,7 +13367,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #954
 
 | Property | Value |
@@ -14329,7 +13380,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2000, ./app/routes/student.py:3173
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #955
 
@@ -14345,7 +13395,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #956
 
 | Property | Value |
@@ -14359,7 +13408,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2002, ./app/routes/student.py:3175
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #957
 
@@ -14375,7 +13423,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #958
 
 | Property | Value |
@@ -14389,7 +13436,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2009, ./app/routes/student.py:3182, ./app/routes/api.py:470
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #959
 
@@ -14405,7 +13451,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #960
 
 | Property | Value |
@@ -14419,7 +13464,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2061, ./app/routes/student.py:3258
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #961
 
@@ -14435,7 +13479,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #962
 
 | Property | Value |
@@ -14449,7 +13492,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2063, ./app/routes/student.py:3260, ./app/routes/admin.py:984...
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #963
 
@@ -14465,7 +13507,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #964
 
 | Property | Value |
@@ -14479,7 +13520,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2071, ./app/routes/student.py:3268
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #965
 
@@ -14495,7 +13535,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #966
 
 | Property | Value |
@@ -14509,7 +13548,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2073, ./app/routes/student.py:3270, ./app/routes/admin.py:994...
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #967
 
@@ -14525,7 +13563,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #968
 
 | Property | Value |
@@ -14539,7 +13576,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2075, ./app/routes/admin.py:996, ./app/routes/admin.py:6695...
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #969
 
@@ -14555,7 +13591,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #970
 
 | Property | Value |
@@ -14569,7 +13604,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2090, ./app/routes/student.py:2337
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #971
 
@@ -14585,7 +13619,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #972
 
 | Property | Value |
@@ -14599,7 +13632,6 @@
 **Description:** Function `file_claim` is 223 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #973
 
@@ -14615,7 +13647,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #974
 
 | Property | Value |
@@ -14629,7 +13660,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #975
 
@@ -14645,7 +13675,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #976
 
 | Property | Value |
@@ -14659,7 +13688,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2135, ./app/routes/admin.py:4969
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #977
 
@@ -14675,7 +13703,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #978
 
 | Property | Value |
@@ -14689,7 +13716,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2137, ./app/routes/admin.py:4971
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #979
 
@@ -14705,7 +13731,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #980
 
 | Property | Value |
@@ -14719,7 +13744,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2139, ./app/routes/admin.py:4973
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #981
 
@@ -14735,7 +13759,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #982
 
 | Property | Value |
@@ -14749,7 +13772,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2141, ./app/routes/admin.py:4975
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #983
 
@@ -14765,7 +13787,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #984
 
 | Property | Value |
@@ -14779,7 +13800,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2143, ./app/routes/admin.py:4977
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #985
 
@@ -14795,7 +13815,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #986
 
 | Property | Value |
@@ -14809,7 +13828,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2145, ./app/routes/admin.py:4979
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #987
 
@@ -14825,7 +13843,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #988
 
 | Property | Value |
@@ -14839,7 +13856,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2183, ./app/routes/admin.py:5057
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #989
 
@@ -14855,7 +13871,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #990
 
 | Property | Value |
@@ -14869,7 +13884,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #991
 
@@ -14885,7 +13899,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #992
 
 | Property | Value |
@@ -14899,7 +13912,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #993
 
@@ -14915,7 +13927,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #994
 
 | Property | Value |
@@ -14929,7 +13940,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #995
 
@@ -14945,7 +13955,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #996
 
 | Property | Value |
@@ -14959,7 +13968,6 @@
 **Description:** Function `shop` is 198 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #997
 
@@ -14975,7 +13983,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #998
 
 | Property | Value |
@@ -14989,7 +13996,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2422, ./app/routes/api.py:284
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #999
 
@@ -15005,7 +14011,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1000
 
 | Property | Value |
@@ -15019,7 +14024,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2432, ./app/routes/student.py:3060
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1001
 
@@ -15035,7 +14039,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1002
 
 | Property | Value |
@@ -15049,7 +14052,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2437, ./app/routes/api.py:294
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1003
 
@@ -15065,7 +14067,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1004
 
 | Property | Value |
@@ -15079,7 +14080,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2476, ./app/routes/api.py:360
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1005
 
@@ -15095,7 +14095,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1006
 
 | Property | Value |
@@ -15109,7 +14108,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1007
 
@@ -15125,7 +14123,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1008
 
 | Property | Value |
@@ -15139,7 +14136,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2574, ./app/routes/api.py:211
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1009
 
@@ -15155,7 +14151,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1010
 
 | Property | Value |
@@ -15169,7 +14164,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2576, ./app/routes/api.py:213
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1011
 
@@ -15185,7 +14179,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1012
 
 | Property | Value |
@@ -15199,7 +14192,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2578, ./app/routes/api.py:215
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1013
 
@@ -15215,7 +14207,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1014
 
 | Property | Value |
@@ -15229,7 +14220,6 @@
 **Description:** Function `_calculate_rent_deadlines` has cyclomatic complexity of 16.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1015
 
@@ -15245,7 +14235,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1016
 
 | Property | Value |
@@ -15259,7 +14248,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1017
 
@@ -15275,7 +14263,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1018
 
 | Property | Value |
@@ -15289,7 +14276,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1019
 
@@ -15305,7 +14291,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1020
 
 | Property | Value |
@@ -15319,7 +14304,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2651, ./app/routes/student.py:2659
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1021
 
@@ -15335,7 +14319,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1022
 
 | Property | Value |
@@ -15349,7 +14332,6 @@
 **Description:** Function `_filter_valid_rent_payments` has cyclomatic complexity of 12.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1023
 
@@ -15365,7 +14347,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1024
 
 | Property | Value |
@@ -15379,7 +14360,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1025
 
@@ -15395,7 +14375,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1026
 
 | Property | Value |
@@ -15409,7 +14388,6 @@
 **Description:** Function `rent` is 186 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #1027
 
@@ -15425,7 +14403,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1028
 
 | Property | Value |
@@ -15439,7 +14416,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2805, ./app/routes/student.py:2990
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1029
 
@@ -15455,7 +14431,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1030
 
 | Property | Value |
@@ -15469,7 +14444,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:281, ./app/routes/student.py:307
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1031
 
@@ -15485,7 +14459,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1032
 
 | Property | Value |
@@ -15499,7 +14472,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2859, ./app/routes/student.py:3054
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1033
 
@@ -15515,7 +14487,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1034
 
 | Property | Value |
@@ -15529,7 +14500,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2861, ./app/routes/student.py:3056
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1035
 
@@ -15545,7 +14515,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1036
 
 | Property | Value |
@@ -15559,7 +14528,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2863, ./app/routes/student.py:3058
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1037
 
@@ -15575,7 +14543,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1038
 
 | Property | Value |
@@ -15589,7 +14556,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1039
 
@@ -15605,7 +14571,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1040
 
 | Property | Value |
@@ -15619,7 +14584,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2907, ./app/routes/student.py:3102
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1041
 
@@ -15635,7 +14599,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1042
 
 | Property | Value |
@@ -15649,7 +14612,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:2909, ./app/routes/student.py:3104
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1043
 
@@ -15665,7 +14627,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1044
 
 | Property | Value |
@@ -15679,7 +14640,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:294, ./app/routes/student.py:315
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1045
 
@@ -15695,7 +14655,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1046
 
 | Property | Value |
@@ -15709,7 +14668,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1047
 
@@ -15725,7 +14683,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1048
 
 | Property | Value |
@@ -15739,7 +14696,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:3262, ./app/routes/api.py:565, ./app/routes/api.py:691
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1049
 
@@ -15755,7 +14711,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1050
 
 | Property | Value |
@@ -15769,7 +14724,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:3272, ./app/routes/api.py:575, ./app/routes/api.py:700
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1051
 
@@ -15785,7 +14739,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1052
 
 | Property | Value |
@@ -15799,7 +14752,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1053
 
@@ -15815,7 +14767,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1054
 
 | Property | Value |
@@ -15829,7 +14780,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1055
 
@@ -15845,7 +14795,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1056
 
 | Property | Value |
@@ -15859,7 +14808,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1057
 
@@ -15875,7 +14823,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1058
 
 | Property | Value |
@@ -15889,7 +14836,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1059
 
@@ -15905,7 +14851,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1060
 
 | Property | Value |
@@ -15919,7 +14864,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1061
 
@@ -15935,7 +14879,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1062
 
 | Property | Value |
@@ -15949,7 +14892,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1063
 
@@ -15965,7 +14907,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1064
 
 | Property | Value |
@@ -15979,7 +14920,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1065
 
@@ -15995,7 +14935,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1066
 
 | Property | Value |
@@ -16009,7 +14948,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1067
 
@@ -16025,7 +14963,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #1068
 
 | Property | Value |
@@ -16039,7 +14976,6 @@
 **Description:** Function `demo_login` is 90 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #1069
 
@@ -16055,7 +14991,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1070
 
 | Property | Value |
@@ -16069,7 +15004,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1071
 
@@ -16085,7 +15019,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1072
 
 | Property | Value |
@@ -16099,7 +15032,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:3714, ./app/routes/student.py:3746, ./app/routes/student.py:3792...
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1073
 
@@ -16115,7 +15047,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1074
 
 | Property | Value |
@@ -16129,7 +15060,6 @@
 **Description:** Function `complete_profile` has cyclomatic complexity of 15.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1075
 
@@ -16145,7 +15075,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1076
 
 | Property | Value |
@@ -16159,7 +15088,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:3742, ./app/routes/student.py:3844
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1077
 
@@ -16175,7 +15103,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1078
 
 | Property | Value |
@@ -16189,7 +15116,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:3744, ./app/routes/student.py:3846
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1079
 
@@ -16205,7 +15131,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1080
 
 | Property | Value |
@@ -16219,7 +15144,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:3811, ./app/routes/student.py:3867
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1081
 
@@ -16235,7 +15159,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1082
 
 | Property | Value |
@@ -16249,7 +15172,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:3813, ./app/routes/student.py:3869
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1083
 
@@ -16265,7 +15187,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1084
 
 | Property | Value |
@@ -16279,7 +15200,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:3910, ./app/routes/student.py:3980
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1085
 
@@ -16295,7 +15215,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1086
 
 | Property | Value |
@@ -16309,7 +15228,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1087
 
@@ -16325,7 +15243,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1088
 
 | Property | Value |
@@ -16339,7 +15256,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1089
 
@@ -16355,7 +15271,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1090
 
 | Property | Value |
@@ -16369,7 +15284,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:454, ./app/routes/student.py:528
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1091
 
@@ -16385,7 +15299,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1092
 
 | Property | Value |
@@ -16399,7 +15312,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1093
 
@@ -16415,7 +15327,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1094
 
 | Property | Value |
@@ -16429,7 +15340,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:559, ./app/routes/student.py:948
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1095
 
@@ -16445,7 +15355,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1096
 
 | Property | Value |
@@ -16459,7 +15368,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:566, ./app/routes/student.py:956, ./app/routes/admin.py:1105...
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1097
 
@@ -16475,7 +15383,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1098
 
 | Property | Value |
@@ -16489,7 +15396,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:574, ./app/routes/student.py:978
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1099
 
@@ -16505,7 +15411,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1100
 
 | Property | Value |
@@ -16519,7 +15424,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:576, ./app/routes/student.py:980
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1101
 
@@ -16535,7 +15439,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1102
 
 | Property | Value |
@@ -16549,7 +15452,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:595, ./app/routes/student.py:992
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1103
 
@@ -16565,7 +15467,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1104
 
 | Property | Value |
@@ -16579,7 +15480,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:598, ./app/routes/student.py:995
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1105
 
@@ -16595,7 +15495,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1106
 
 | Property | Value |
@@ -16609,7 +15508,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:600, ./app/routes/student.py:997
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1107
 
@@ -16625,7 +15523,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1108
 
 | Property | Value |
@@ -16639,7 +15536,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:602, ./app/routes/student.py:999
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1109
 
@@ -16655,7 +15551,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1110
 
 | Property | Value |
@@ -16669,7 +15564,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:604, ./app/routes/student.py:1001
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1111
 
@@ -16685,7 +15579,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1112
 
 | Property | Value |
@@ -16699,7 +15592,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:622, ./app/routes/student.py:1011
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1113
 
@@ -16715,7 +15607,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1114
 
 | Property | Value |
@@ -16729,7 +15620,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1115
 
@@ -16745,7 +15635,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1116
 
 | Property | Value |
@@ -16759,7 +15648,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1117
 
@@ -16775,7 +15663,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1118
 
 | Property | Value |
@@ -16789,7 +15676,6 @@
 **Description:** Function `add_class` is 207 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #1119
 
@@ -16805,7 +15691,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #1120
 
 | Property | Value |
@@ -16819,7 +15704,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1121
 
@@ -16835,7 +15719,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1122
 
 | Property | Value |
@@ -16849,7 +15732,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1123
 
@@ -16865,7 +15747,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1124
 
 | Property | Value |
@@ -16879,7 +15760,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:953, ./app/routes/admin.py:1312
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1125
 
@@ -16895,7 +15775,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1126
 
 | Property | Value |
@@ -16909,7 +15788,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/student.py:955, ./app/routes/admin.py:1314
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1127
 
@@ -16925,7 +15803,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1128
 
 | Property | Value |
@@ -16939,7 +15816,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1017, ./app/routes/system_admin.py:1101
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1129
 
@@ -16955,7 +15831,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1130
 
 | Property | Value |
@@ -16969,7 +15844,6 @@
 **Description:** Function `delete_teacher` is 90 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #1131
 
@@ -16985,7 +15859,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1132
 
 | Property | Value |
@@ -16999,7 +15872,6 @@
 **Description:** Function `send_reward_to_reporter` has cyclomatic complexity of 11.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1133
 
@@ -17015,7 +15887,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1134
 
 | Property | Value |
@@ -17029,7 +15900,6 @@
 **Description:** Function `grafana_proxy` has cyclomatic complexity of 16.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1135
 
@@ -17045,7 +15915,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1136
 
 | Property | Value |
@@ -17059,7 +15928,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:142, ./app/routes/system_admin.py:1371
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1137
 
@@ -17075,7 +15943,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1138
 
 | Property | Value |
@@ -17089,7 +15956,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1481, ./app/routes/system_admin.py:1513, ./app/routes/system_admin.py:1529
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1139
 
@@ -17105,7 +15971,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1140
 
 | Property | Value |
@@ -17119,7 +15984,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1618, ./app/routes/system_admin.py:1675
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1141
 
@@ -17135,7 +15999,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1142
 
 | Property | Value |
@@ -17149,7 +16012,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1620, ./app/routes/system_admin.py:1677
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1143
 
@@ -17165,7 +16027,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1144
 
 | Property | Value |
@@ -17179,7 +16040,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1622, ./app/routes/system_admin.py:1679
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1145
 
@@ -17195,7 +16055,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1146
 
 | Property | Value |
@@ -17209,7 +16068,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1624, ./app/routes/system_admin.py:1681
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1147
 
@@ -17225,7 +16083,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1148
 
 | Property | Value |
@@ -17239,7 +16096,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1626, ./app/routes/system_admin.py:1683
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1149
 
@@ -17255,7 +16111,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1150
 
 | Property | Value |
@@ -17269,7 +16124,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1638, ./app/routes/admin.py:8324
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1151
 
@@ -17285,7 +16139,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1152
 
 | Property | Value |
@@ -17299,7 +16152,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1666, ./app/routes/system_admin.py:1718
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1153
 
@@ -17315,7 +16167,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1154
 
 | Property | Value |
@@ -17329,7 +16180,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1668, ./app/routes/system_admin.py:1720
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1155
 
@@ -17345,7 +16195,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1156
 
 | Property | Value |
@@ -17359,7 +16208,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1693, ./app/routes/admin.py:8386
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1157
 
@@ -17375,7 +16223,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1158
 
 | Property | Value |
@@ -17389,7 +16236,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1695, ./app/routes/admin.py:8388
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1159
 
@@ -17405,7 +16251,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1160
 
 | Property | Value |
@@ -17419,7 +16264,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1717, ./app/routes/system_admin.py:1745
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1161
 
@@ -17435,7 +16279,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1162
 
 | Property | Value |
@@ -17449,7 +16292,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1163
 
@@ -17465,7 +16307,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1164
 
 | Property | Value |
@@ -17479,7 +16320,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1752, ./app/routes/admin.py:8461
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1165
 
@@ -17495,7 +16335,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1166
 
 | Property | Value |
@@ -17509,7 +16348,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1754, ./app/routes/admin.py:8463
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1167
 
@@ -17525,7 +16363,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1168
 
 | Property | Value |
@@ -17539,7 +16376,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1756, ./app/routes/admin.py:8465
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1169
 
@@ -17555,7 +16391,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1170
 
 | Property | Value |
@@ -17569,7 +16404,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1758, ./app/routes/admin.py:8467
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1171
 
@@ -17585,7 +16419,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1172
 
 | Property | Value |
@@ -17599,7 +16432,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:1760, ./app/routes/admin.py:8469
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1173
 
@@ -17615,7 +16447,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1174
 
 | Property | Value |
@@ -17629,7 +16460,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:204, ./app/routes/admin.py:9020
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1175
 
@@ -17645,7 +16475,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1176
 
 | Property | Value |
@@ -17659,7 +16488,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:206, ./app/routes/admin.py:9022
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1177
 
@@ -17675,7 +16503,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1178
 
 | Property | Value |
@@ -17689,7 +16516,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:220, ./app/routes/admin.py:9038
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1179
 
@@ -17705,7 +16531,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1180
 
 | Property | Value |
@@ -17719,7 +16544,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:222, ./app/routes/admin.py:9040
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1181
 
@@ -17735,7 +16559,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1182
 
 | Property | Value |
@@ -17749,7 +16572,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:224, ./app/routes/system_admin.py:300, ./app/routes/admin.py:9042...
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1183
 
@@ -17765,7 +16587,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1184
 
 | Property | Value |
@@ -17779,7 +16600,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:226, ./app/routes/admin.py:9044
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1185
 
@@ -17795,7 +16615,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1186
 
 | Property | Value |
@@ -17809,7 +16628,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:228, ./app/routes/admin.py:9046
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1187
 
@@ -17825,7 +16643,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1188
 
 | Property | Value |
@@ -17839,7 +16656,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:237, ./app/routes/admin.py:9055
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1189
 
@@ -17855,7 +16671,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1190
 
 | Property | Value |
@@ -17869,7 +16684,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:239, ./app/routes/admin.py:9057
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1191
 
@@ -17885,7 +16699,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1192
 
 | Property | Value |
@@ -17899,7 +16712,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:257, ./app/routes/admin.py:9075
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1193
 
@@ -17915,7 +16727,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1194
 
 | Property | Value |
@@ -17929,7 +16740,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:259, ./app/routes/admin.py:9077
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1195
 
@@ -17945,7 +16755,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1196
 
 | Property | Value |
@@ -17959,7 +16768,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:261, ./app/routes/admin.py:9079
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1197
 
@@ -17975,7 +16783,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1198
 
 | Property | Value |
@@ -17989,7 +16796,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:263, ./app/routes/admin.py:9081
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1199
 
@@ -18005,7 +16811,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1200
 
 | Property | Value |
@@ -18019,7 +16824,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:265, ./app/routes/admin.py:9083
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1201
 
@@ -18035,7 +16839,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1202
 
 | Property | Value |
@@ -18049,7 +16852,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:267, ./app/routes/admin.py:9085
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1203
 
@@ -18065,7 +16867,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1204
 
 | Property | Value |
@@ -18079,7 +16880,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:275, ./app/routes/admin.py:9093
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1205
 
@@ -18095,7 +16895,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1206
 
 | Property | Value |
@@ -18109,7 +16908,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:277, ./app/routes/admin.py:9095
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1207
 
@@ -18125,7 +16923,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1208
 
 | Property | Value |
@@ -18139,7 +16936,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:279, ./app/routes/admin.py:9097
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1209
 
@@ -18155,7 +16951,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1210
 
 | Property | Value |
@@ -18169,7 +16964,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:281, ./app/routes/admin.py:9099
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1211
 
@@ -18185,7 +16979,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1212
 
 | Property | Value |
@@ -18199,7 +16992,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:283, ./app/routes/admin.py:9101
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1213
 
@@ -18215,7 +17007,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1214
 
 | Property | Value |
@@ -18229,7 +17020,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:296, ./app/routes/admin.py:9114
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1215
 
@@ -18245,7 +17035,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1216
 
 | Property | Value |
@@ -18259,7 +17048,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:298, ./app/routes/admin.py:9116
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1217
 
@@ -18275,7 +17063,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1218
 
 | Property | Value |
@@ -18289,7 +17076,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:302, ./app/routes/admin.py:9120
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1219
 
@@ -18305,7 +17091,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1220
 
 | Property | Value |
@@ -18319,7 +17104,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:304, ./app/routes/admin.py:9122
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1221
 
@@ -18335,7 +17119,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1222
 
 | Property | Value |
@@ -18349,7 +17132,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:312, ./app/routes/admin.py:9130
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1223
 
@@ -18365,7 +17147,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #1224
 
 | Property | Value |
@@ -18379,7 +17160,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:313, ./app/routes/admin.py:9131
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1225
 
@@ -18395,7 +17175,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1226
 
 | Property | Value |
@@ -18409,7 +17188,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:315, ./app/routes/admin.py:9133
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1227
 
@@ -18425,7 +17203,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1228
 
 | Property | Value |
@@ -18439,7 +17216,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:317, ./app/routes/admin.py:9135
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1229
 
@@ -18455,7 +17231,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1230
 
 | Property | Value |
@@ -18469,7 +17244,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:319, ./app/routes/admin.py:9137
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1231
 
@@ -18485,7 +17259,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1232
 
 | Property | Value |
@@ -18499,7 +17272,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:321, ./app/routes/admin.py:9139
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1233
 
@@ -18515,7 +17287,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1234
 
 | Property | Value |
@@ -18529,7 +17300,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:341, ./app/routes/admin.py:9159
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1235
 
@@ -18545,7 +17315,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1236
 
 | Property | Value |
@@ -18559,7 +17328,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1237
 
@@ -18575,7 +17343,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1238
 
 | Property | Value |
@@ -18589,7 +17356,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:371, ./app/routes/admin.py:9185
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1239
 
@@ -18605,7 +17371,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1240
 
 | Property | Value |
@@ -18619,7 +17384,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:405, ./app/routes/admin.py:9221
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1241
 
@@ -18635,7 +17399,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1242
 
 | Property | Value |
@@ -18649,7 +17412,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:413, ./app/routes/admin.py:9229
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1243
 
@@ -18665,7 +17427,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1244
 
 | Property | Value |
@@ -18679,7 +17440,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:415, ./app/routes/admin.py:9231
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1245
 
@@ -18695,7 +17455,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1246
 
 | Property | Value |
@@ -18709,7 +17468,6 @@
 **Description:** Duplicated logic block detected in: ./app/routes/system_admin.py:532, ./app/routes/system_admin.py:593
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1247
 
@@ -18725,7 +17483,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #1248
 
 | Property | Value |
@@ -18739,7 +17496,6 @@
 **Description:** Function `teacher_overview` is 126 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #1249
 
@@ -18755,7 +17511,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1250
 
 | Property | Value |
@@ -18769,7 +17524,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1251
 
@@ -18785,7 +17539,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1252
 
 | Property | Value |
@@ -18799,7 +17552,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1253
 
@@ -18815,7 +17567,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #1254
 
 | Property | Value |
@@ -18829,7 +17580,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:151, ./scripts/cleanup_orphaned_store_blocks.py:18
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1255
 
@@ -18845,7 +17595,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1256
 
 | Property | Value |
@@ -18859,7 +17608,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:153, ./scripts/cleanup_orphaned_store_blocks.py:20
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1257
 
@@ -18875,7 +17623,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1258
 
 | Property | Value |
@@ -18889,7 +17636,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:155, ./scripts/cleanup_orphaned_store_blocks.py:22
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1259
 
@@ -18905,7 +17651,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1260
 
 | Property | Value |
@@ -18919,7 +17664,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:157, ./scripts/cleanup_orphaned_store_blocks.py:24
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1261
 
@@ -18935,7 +17679,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1262
 
 | Property | Value |
@@ -18949,7 +17692,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:159, ./scripts/cleanup_orphaned_store_blocks.py:26
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1263
 
@@ -18965,7 +17707,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1264
 
 | Property | Value |
@@ -18979,7 +17720,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:161, ./scripts/cleanup_orphaned_store_blocks.py:28
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1265
 
@@ -18995,7 +17735,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1266
 
 | Property | Value |
@@ -19009,7 +17748,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:163, ./scripts/cleanup_orphaned_store_blocks.py:30
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1267
 
@@ -19025,7 +17763,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1268
 
 | Property | Value |
@@ -19039,7 +17776,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:165, ./scripts/cleanup_orphaned_store_blocks.py:32
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1269
 
@@ -19055,7 +17791,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1270
 
 | Property | Value |
@@ -19069,7 +17804,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:167, ./scripts/cleanup_orphaned_store_blocks.py:34
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1271
 
@@ -19085,7 +17819,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1272
 
 | Property | Value |
@@ -19099,7 +17832,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:169, ./scripts/cleanup_orphaned_store_blocks.py:36
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1273
 
@@ -19115,7 +17847,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1274
 
 | Property | Value |
@@ -19129,7 +17860,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:180, ./scripts/cleanup_orphaned_store_blocks.py:58
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1275
 
@@ -19145,7 +17875,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1276
 
 | Property | Value |
@@ -19159,7 +17888,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:182, ./scripts/cleanup_orphaned_store_blocks.py:60
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1277
 
@@ -19175,7 +17903,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1278
 
 | Property | Value |
@@ -19189,7 +17916,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:184, ./scripts/cleanup_orphaned_store_blocks.py:62
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1279
 
@@ -19205,7 +17931,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1280
 
 | Property | Value |
@@ -19219,7 +17944,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:30, ./app/routes/admin.py:681
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1281
 
@@ -19235,7 +17959,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1282
 
 | Property | Value |
@@ -19249,7 +17972,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:38, ./app/routes/admin.py:687
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1283
 
@@ -19265,7 +17987,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1284
 
 | Property | Value |
@@ -19279,7 +18000,6 @@
 **Description:** Duplicated logic block detected in: ./app/scheduled_tasks.py:40, ./app/routes/admin.py:689
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1285
 
@@ -19295,7 +18015,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1286
 
 | Property | Value |
@@ -19309,7 +18028,6 @@
 **Description:** Duplicated logic block detected in: ./app/utils/analytics_engine.py:13, ./app/utils/analytics_engine.py:441
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1287
 
@@ -19325,7 +18043,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1288
 
 | Property | Value |
@@ -19339,7 +18056,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1289
 
@@ -19355,7 +18071,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1290
 
 | Property | Value |
@@ -19369,7 +18084,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1291
 
@@ -19385,7 +18099,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1292
 
 | Property | Value |
@@ -19399,7 +18112,6 @@
 **Description:** Duplicated logic block detected in: ./app/utils/banking.py:106, ./app/routes/student.py:308
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1293
 
@@ -19415,7 +18127,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1294
 
 | Property | Value |
@@ -19429,7 +18140,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1295
 
@@ -19445,7 +18155,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1296
 
 | Property | Value |
@@ -19459,7 +18168,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1297
 
@@ -19475,7 +18183,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1298
 
 | Property | Value |
@@ -19489,7 +18196,6 @@
 **Description:** Duplicated logic block detected in: ./app/utils/banking.py:183, ./app/utils/banking.py:201
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1299
 
@@ -19505,7 +18211,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1300
 
 | Property | Value |
@@ -19519,7 +18224,6 @@
 **Description:** Duplicated logic block detected in: ./app/utils/banking.py:184, ./app/utils/banking.py:202
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1301
 
@@ -19535,7 +18239,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1302
 
 | Property | Value |
@@ -19549,7 +18252,6 @@
 **Description:** Duplicated logic block detected in: ./app/utils/banking.py:186, ./app/utils/banking.py:204
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1303
 
@@ -19565,7 +18267,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1304
 
 | Property | Value |
@@ -19579,7 +18280,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1305
 
@@ -19595,7 +18295,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1306
 
 | Property | Value |
@@ -19609,7 +18308,6 @@
 **Description:** Duplicated logic block detected in: ./app/utils/banking.py:31, ./app/utils/banking.py:51
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1307
 
@@ -19625,7 +18323,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1308
 
 | Property | Value |
@@ -19639,7 +18336,6 @@
 **Description:** Duplicated logic block detected in: ./app/utils/banking.py:68, ./app/utils/banking.py:88
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1309
 
@@ -19655,7 +18351,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1310
 
 | Property | Value |
@@ -19669,7 +18364,6 @@
 **Description:** Duplicated logic block detected in: ./app/utils/banking.py:80, ./app/utils/banking.py:132
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1311
 
@@ -19685,7 +18379,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1312
 
 | Property | Value |
@@ -19699,7 +18392,6 @@
 **Description:** Duplicated logic block detected in: ./app/utils/banking.py:82, ./app/utils/banking.py:134
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1313
 
@@ -19715,7 +18407,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1314
 
 | Property | Value |
@@ -19729,7 +18420,6 @@
 **Description:** Function `_normalize_to_weekly` has cyclomatic complexity of 11.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1315
 
@@ -19745,7 +18435,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1316
 
 | Property | Value |
@@ -19759,7 +18448,6 @@
 **Description:** Duplicated logic block detected in: ./app/utils/economy_balance.py:243, ./app/utils/economy_balance.py:313, ./app/utils/economy_balance.py:452...
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1317
 
@@ -19775,7 +18463,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #1318
 
 | Property | Value |
@@ -19789,7 +18476,6 @@
 **Description:** Function `check_insurance_balance` is 138 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #1319
 
@@ -19805,7 +18491,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1320
 
 | Property | Value |
@@ -19819,7 +18504,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1321
 
@@ -19835,7 +18519,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1322
 
 | Property | Value |
@@ -19849,7 +18532,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1323
 
@@ -19865,7 +18547,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1324
 
 | Property | Value |
@@ -19879,7 +18560,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1325
 
@@ -19895,7 +18575,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1326
 
 | Property | Value |
@@ -19909,7 +18588,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1327
 
@@ -19925,7 +18603,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1328
 
 | Property | Value |
@@ -19939,7 +18616,6 @@
 **Description:** Function `validate_rent_value` has cyclomatic complexity of 16.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1329
 
@@ -19955,7 +18631,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1330
 
 | Property | Value |
@@ -19969,7 +18644,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1331
 
@@ -19985,7 +18659,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #1332
 
 | Property | Value |
@@ -19999,7 +18672,6 @@
 **Description:** Function `validate_insurance_value` is 121 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #1333
 
@@ -20015,7 +18687,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1334
 
 | Property | Value |
@@ -20029,7 +18700,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1335
 
@@ -20045,7 +18715,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1336
 
 | Property | Value |
@@ -20059,7 +18728,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1337
 
@@ -20075,7 +18743,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1338
 
 | Property | Value |
@@ -20089,7 +18756,6 @@
 **Description:** Function `analyze_economy` has cyclomatic complexity of 11.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1339
 
@@ -20105,7 +18771,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1340
 
 | Property | Value |
@@ -20119,7 +18784,6 @@
 **Description:** Duplicated logic block detected in: ./app/utils/help_content.py:116, ./app/utils/help_content.py:204
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1341
 
@@ -20135,7 +18799,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1342
 
 | Property | Value |
@@ -20149,7 +18812,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1343
 
@@ -20165,7 +18827,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1344
 
 | Property | Value |
@@ -20179,7 +18840,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1345
 
@@ -20195,7 +18855,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1346
 
 | Property | Value |
@@ -20209,7 +18868,6 @@
 **Description:** Function `charge_overdraft_fee_if_needed` is 90 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #1347
 
@@ -20225,7 +18883,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1348
 
 | Property | Value |
@@ -20239,7 +18896,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1349
 
@@ -20255,7 +18911,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1350
 
 | Property | Value |
@@ -20269,7 +18924,6 @@
 **Description:** Function `verify_turnstile_token` has cyclomatic complexity of 11.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1351
 
@@ -20285,7 +18939,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1352
 
 | Property | Value |
@@ -20299,7 +18952,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1353
 
@@ -20315,7 +18967,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1354
 
 | Property | Value |
@@ -20329,7 +18980,6 @@
 **Description:** Duplicated logic block detected in: ./fix_db_version.py:1, ./scripts/setup_migration_db.py:4
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1355
 
@@ -20345,7 +18995,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1356
 
 | Property | Value |
@@ -20359,7 +19008,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1357
 
@@ -20375,7 +19023,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #1358
 
 | Property | Value |
@@ -20389,7 +19036,6 @@
 **Description:** Function `main` is 81 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #1359
 
@@ -20405,7 +19051,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1360
 
 | Property | Value |
@@ -20419,7 +19064,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/add-pulsetic.py:23, ./scripts/add-github-actions-to-firewall.py:50
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1361
 
@@ -20435,7 +19079,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1362
 
 | Property | Value |
@@ -20449,7 +19092,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/add-pulsetic.py:25, ./scripts/add-github-actions-to-firewall.py:52
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1363
 
@@ -20465,7 +19107,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1364
 
 | Property | Value |
@@ -20479,7 +19120,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/add-pulsetic.py:27, ./scripts/add-github-actions-to-firewall.py:54
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1365
 
@@ -20495,7 +19135,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1366
 
 | Property | Value |
@@ -20509,7 +19148,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/analyze_migrations.py:103, ./scripts/verify_chain.py:67
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1367
 
@@ -20525,7 +19163,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1368
 
 | Property | Value |
@@ -20539,7 +19176,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/analyze_migrations.py:105, ./scripts/verify_chain.py:69
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1369
 
@@ -20555,7 +19191,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1370
 
 | Property | Value |
@@ -20569,7 +19204,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/analyze_migrations.py:14, ./scripts/verify_chain.py:8
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1371
 
@@ -20585,7 +19219,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1372
 
 | Property | Value |
@@ -20599,7 +19232,6 @@
 **Description:** Function `parse_migration_file` has cyclomatic complexity of 14.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1373
 
@@ -20615,7 +19247,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1374
 
 | Property | Value |
@@ -20629,7 +19260,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1375
 
@@ -20645,7 +19275,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1376
 
 | Property | Value |
@@ -20659,7 +19288,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1377
 
@@ -20675,7 +19303,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1378
 
 | Property | Value |
@@ -20689,7 +19316,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1379
 
@@ -20705,7 +19331,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1380
 
 | Property | Value |
@@ -20719,7 +19344,6 @@
 **Description:** Empty except block detected.
 
 **Why This Matters:** Swallowing exceptions hides errors and makes debugging difficult.
-
 
 ### Finding #1381
 
@@ -20735,7 +19359,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1382
 
 | Property | Value |
@@ -20749,7 +19372,6 @@
 **Description:** Empty except block detected.
 
 **Why This Matters:** Swallowing exceptions hides errors and makes debugging difficult.
-
 
 ### Finding #1383
 
@@ -20765,7 +19387,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1384
 
 | Property | Value |
@@ -20779,7 +19400,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1385
 
@@ -20795,7 +19415,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #1386
 
 | Property | Value |
@@ -20809,7 +19428,6 @@
 **Description:** Function `backfill_join_codes` is 86 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #1387
 
@@ -20825,7 +19443,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1388
 
 | Property | Value |
@@ -20839,7 +19456,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1389
 
@@ -20855,7 +19471,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1390
 
 | Property | Value |
@@ -20869,7 +19484,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1391
 
@@ -20885,7 +19499,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1392
 
 | Property | Value |
@@ -20899,7 +19512,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1393
 
@@ -20915,7 +19527,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1394
 
 | Property | Value |
@@ -20929,7 +19540,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/cleanup_duplicates_flask.py:28, ./scripts/cleanup_duplicates_flask.py:93
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1395
 
@@ -20945,7 +19555,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1396
 
 | Property | Value |
@@ -20959,7 +19568,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/cleanup_duplicates_flask.py:30, ./scripts/cleanup_duplicates_flask.py:95
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1397
 
@@ -20975,7 +19583,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1398
 
 | Property | Value |
@@ -20989,7 +19596,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/cleanup_duplicates_flask.py:32, ./scripts/cleanup_duplicates_flask.py:97
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1399
 
@@ -21005,7 +19611,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1400
 
 | Property | Value |
@@ -21019,7 +19624,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/cleanup_duplicates_flask.py:34, ./scripts/cleanup_duplicates_flask.py:99
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1401
 
@@ -21035,7 +19639,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1402
 
 | Property | Value |
@@ -21049,7 +19652,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/cleanup_duplicates_flask.py:35, ./scripts/cleanup_duplicates_flask.py:100
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1403
 
@@ -21065,7 +19667,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1404
 
 | Property | Value |
@@ -21079,7 +19680,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/cleanup_duplicates_flask.py:37, ./scripts/cleanup_duplicates_flask.py:102
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1405
 
@@ -21095,7 +19695,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1406
 
 | Property | Value |
@@ -21109,7 +19708,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/cleanup_duplicates_flask.py:39, ./scripts/cleanup_duplicates_flask.py:104
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1407
 
@@ -21125,7 +19723,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1408
 
 | Property | Value |
@@ -21139,7 +19736,6 @@
 **Description:** Function `delete_duplicates` has cyclomatic complexity of 17.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1409
 
@@ -21155,7 +19751,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1410
 
 | Property | Value |
@@ -21169,7 +19764,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1411
 
@@ -21185,7 +19779,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1412
 
 | Property | Value |
@@ -21199,7 +19792,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/comprehensive_legacy_migration.py:138, ./scripts/comprehensive_legacy_migration.py:638
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1413
 
@@ -21215,7 +19807,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1414
 
 | Property | Value |
@@ -21229,7 +19820,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1415
 
@@ -21245,7 +19835,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1416
 
 | Property | Value |
@@ -21259,7 +19848,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/comprehensive_legacy_migration.py:230, ./scripts/comprehensive_legacy_migration.py:346
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1417
 
@@ -21275,7 +19863,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1418
 
 | Property | Value |
@@ -21289,7 +19876,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/comprehensive_legacy_migration.py:232, ./scripts/comprehensive_legacy_migration.py:348
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1419
 
@@ -21305,7 +19891,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1420
 
 | Property | Value |
@@ -21319,7 +19904,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/comprehensive_legacy_migration.py:234, ./scripts/comprehensive_legacy_migration.py:350
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1421
 
@@ -21335,7 +19919,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1422
 
 | Property | Value |
@@ -21349,7 +19932,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/comprehensive_legacy_migration.py:235, ./scripts/comprehensive_legacy_migration.py:351
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1423
 
@@ -21365,7 +19947,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1424
 
 | Property | Value |
@@ -21379,7 +19960,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/comprehensive_legacy_migration.py:237, ./scripts/comprehensive_legacy_migration.py:353
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1425
 
@@ -21395,7 +19975,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1426
 
 | Property | Value |
@@ -21409,7 +19988,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/comprehensive_legacy_migration.py:239, ./scripts/comprehensive_legacy_migration.py:355
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1427
 
@@ -21425,7 +20003,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1428
 
 | Property | Value |
@@ -21439,7 +20016,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/comprehensive_legacy_migration.py:241, ./scripts/comprehensive_legacy_migration.py:357
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1429
 
@@ -21455,7 +20031,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1430
 
 | Property | Value |
@@ -21469,7 +20044,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/comprehensive_legacy_migration.py:242, ./scripts/comprehensive_legacy_migration.py:358
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1431
 
@@ -21485,7 +20059,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1432
 
 | Property | Value |
@@ -21499,7 +20072,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/comprehensive_legacy_migration.py:244, ./scripts/comprehensive_legacy_migration.py:360
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1433
 
@@ -21515,7 +20087,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1434
 
 | Property | Value |
@@ -21529,7 +20100,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1435
 
@@ -21545,7 +20115,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #1436
 
 | Property | Value |
@@ -21559,7 +20128,6 @@
 **Description:** Function `backfill_teacher_block_join_codes` is 94 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #1437
 
@@ -21575,7 +20143,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1438
 
 | Property | Value |
@@ -21589,7 +20156,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1439
 
@@ -21605,7 +20171,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1440
 
 | Property | Value |
@@ -21619,7 +20184,6 @@
 **Description:** Function `backfill_related_tables` has cyclomatic complexity of 14.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1441
 
@@ -21635,7 +20199,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1442
 
 | Property | Value |
@@ -21649,7 +20212,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1443
 
@@ -21665,7 +20227,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1444
 
 | Property | Value |
@@ -21679,7 +20240,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1445
 
@@ -21695,7 +20255,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1446
 
 | Property | Value |
@@ -21709,7 +20268,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1447
 
@@ -21725,7 +20283,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1448
 
 | Property | Value |
@@ -21739,7 +20296,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1449
 
@@ -21755,7 +20311,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1450
 
 | Property | Value |
@@ -21769,7 +20324,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1451
 
@@ -21785,7 +20339,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1452
 
 | Property | Value |
@@ -21799,7 +20352,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1453
 
@@ -21815,7 +20367,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #1454
 
 | Property | Value |
@@ -21829,7 +20380,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1455
 
@@ -21845,7 +20395,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1456
 
 | Property | Value |
@@ -21859,7 +20408,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/create-github-actions-firewall.py:43, ./scripts/add-github-actions-to-firewall.py:43
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1457
 
@@ -21875,7 +20423,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1458
 
 | Property | Value |
@@ -21889,7 +20436,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1459
 
@@ -21905,7 +20451,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1460
 
 | Property | Value |
@@ -21919,7 +20464,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1461
 
@@ -21935,7 +20479,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1462
 
 | Property | Value |
@@ -21949,7 +20492,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/create_admin.py:48, ./scripts/create_admin.py:105
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1463
 
@@ -21965,7 +20507,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1464
 
 | Property | Value |
@@ -21979,7 +20520,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/create_admin.py:56, ./scripts/create_admin.py:113
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1465
 
@@ -21995,7 +20535,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1466
 
 | Property | Value |
@@ -22009,7 +20548,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/create_admin.py:64, ./scripts/create_admin.py:121
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1467
 
@@ -22025,7 +20563,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1468
 
 | Property | Value |
@@ -22039,7 +20576,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/create_admin.py:66, ./scripts/create_admin.py:123
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1469
 
@@ -22055,7 +20591,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1470
 
 | Property | Value |
@@ -22069,7 +20604,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/create_admin.py:68, ./scripts/create_admin.py:125
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1471
 
@@ -22085,7 +20619,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1472
 
 | Property | Value |
@@ -22099,7 +20632,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/create_admin.py:76, ./scripts/create_admin.py:133
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1473
 
@@ -22115,7 +20647,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1474
 
 | Property | Value |
@@ -22129,7 +20660,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/create_admin.py:78, ./scripts/create_admin.py:135
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1475
 
@@ -22145,7 +20675,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1476
 
 | Property | Value |
@@ -22159,7 +20688,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/create_admin.py:80, ./scripts/create_admin.py:137
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1477
 
@@ -22175,7 +20703,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1478
 
 | Property | Value |
@@ -22189,7 +20716,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/create_admin.py:82, ./scripts/create_admin.py:139
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1479
 
@@ -22205,7 +20731,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1480
 
 | Property | Value |
@@ -22219,7 +20744,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/create_admin.py:90, ./scripts/create_admin.py:147
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1481
 
@@ -22235,7 +20759,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1482
 
 | Property | Value |
@@ -22249,7 +20772,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/create_admin.py:92, ./scripts/create_admin.py:149
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1483
 
@@ -22265,7 +20787,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1484
 
 | Property | Value |
@@ -22279,7 +20800,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1485
 
@@ -22295,7 +20815,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #1486
 
 | Property | Value |
@@ -22309,7 +20828,6 @@
 **Description:** Function `debug_student_state` is 159 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #1487
 
@@ -22325,7 +20843,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1488
 
 | Property | Value |
@@ -22339,7 +20856,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1489
 
@@ -22355,7 +20871,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1490
 
 | Property | Value |
@@ -22369,7 +20884,6 @@
 **Description:** Function `check_migration_files` has cyclomatic complexity of 11.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1491
 
@@ -22385,7 +20899,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #1492
 
 | Property | Value |
@@ -22399,7 +20912,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1493
 
@@ -22415,7 +20927,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1494
 
 | Property | Value |
@@ -22429,7 +20940,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1495
 
@@ -22445,7 +20955,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1496
 
 | Property | Value |
@@ -22459,7 +20968,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1497
 
@@ -22475,7 +20983,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1498
 
 | Property | Value |
@@ -22489,7 +20996,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:10, ./scripts/dev-utilities/reset_database.py:10
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1499
 
@@ -22505,7 +21011,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1500
 
 | Property | Value |
@@ -22519,7 +21024,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:106, ./scripts/dev-utilities/reset_database.py:89
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1501
 
@@ -22535,7 +21039,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1502
 
 | Property | Value |
@@ -22549,7 +21052,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:108, ./scripts/dev-utilities/reset_database.py:91
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1503
 
@@ -22565,7 +21067,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1504
 
 | Property | Value |
@@ -22579,7 +21080,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:11, ./scripts/dev-utilities/reset_database.py:11
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1505
 
@@ -22595,7 +21095,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1506
 
 | Property | Value |
@@ -22609,7 +21108,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:111, ./scripts/dev-utilities/reset_database.py:94
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1507
 
@@ -22625,7 +21123,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1508
 
 | Property | Value |
@@ -22639,7 +21136,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:113, ./scripts/dev-utilities/reset_database.py:96
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1509
 
@@ -22655,7 +21151,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1510
 
 | Property | Value |
@@ -22669,7 +21164,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:115, ./scripts/dev-utilities/reset_database.py:98
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1511
 
@@ -22685,7 +21179,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1512
 
 | Property | Value |
@@ -22699,7 +21192,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:117, ./scripts/dev-utilities/reset_database.py:100
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1513
 
@@ -22715,7 +21207,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1514
 
 | Property | Value |
@@ -22729,7 +21220,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:119, ./scripts/dev-utilities/reset_database.py:102
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1515
 
@@ -22745,7 +21235,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1516
 
 | Property | Value |
@@ -22759,7 +21248,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:120, ./scripts/dev-utilities/reset_database.py:103
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1517
 
@@ -22775,7 +21263,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1518
 
 | Property | Value |
@@ -22789,7 +21276,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:122, ./scripts/dev-utilities/reset_database.py:105
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1519
 
@@ -22805,7 +21291,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1520
 
 | Property | Value |
@@ -22819,7 +21304,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:124, ./scripts/dev-utilities/reset_database.py:107
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1521
 
@@ -22835,7 +21319,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1522
 
 | Property | Value |
@@ -22849,7 +21332,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:126, ./scripts/dev-utilities/reset_database.py:109
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1523
 
@@ -22865,7 +21347,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1524
 
 | Property | Value |
@@ -22879,7 +21360,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:128, ./scripts/dev-utilities/reset_database.py:111
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1525
 
@@ -22895,7 +21375,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1526
 
 | Property | Value |
@@ -22909,7 +21388,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:13, ./scripts/dev-utilities/reset_database.py:13
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1527
 
@@ -22925,7 +21403,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1528
 
 | Property | Value |
@@ -22939,7 +21416,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:131, ./scripts/dev-utilities/reset_database.py:114
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1529
 
@@ -22955,7 +21431,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1530
 
 | Property | Value |
@@ -22969,7 +21444,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:133, ./scripts/dev-utilities/reset_database.py:116
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1531
 
@@ -22985,7 +21459,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1532
 
 | Property | Value |
@@ -22999,7 +21472,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:135, ./scripts/dev-utilities/reset_database.py:118
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1533
 
@@ -23015,7 +21487,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1534
 
 | Property | Value |
@@ -23029,7 +21500,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:137, ./scripts/dev-utilities/reset_database.py:120
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1535
 
@@ -23045,7 +21515,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1536
 
 | Property | Value |
@@ -23059,7 +21528,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:14, ./scripts/dev-utilities/reset_database.py:14
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1537
 
@@ -23075,7 +21543,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1538
 
 | Property | Value |
@@ -23089,7 +21556,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:16, ./scripts/dev-utilities/reset_database.py:16
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1539
 
@@ -23105,7 +21571,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1540
 
 | Property | Value |
@@ -23119,7 +21584,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:18, ./scripts/dev-utilities/reset_database.py:18
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1541
 
@@ -23135,7 +21599,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1542
 
 | Property | Value |
@@ -23149,7 +21612,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:20, ./scripts/dev-utilities/reset_database.py:20
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1543
 
@@ -23165,7 +21627,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1544
 
 | Property | Value |
@@ -23179,7 +21640,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:31, ./scripts/dev-utilities/reset_database.py:30
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1545
 
@@ -23195,7 +21655,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1546
 
 | Property | Value |
@@ -23209,7 +21668,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:33, ./scripts/dev-utilities/reset_database.py:32
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1547
 
@@ -23225,7 +21683,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1548
 
 | Property | Value |
@@ -23239,7 +21696,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1549
 
@@ -23255,7 +21711,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1550
 
 | Property | Value |
@@ -23269,7 +21724,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:69, ./scripts/dev-utilities/reset_database.py:61
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1551
 
@@ -23285,7 +21739,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1552
 
 | Property | Value |
@@ -23299,7 +21752,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:71, ./scripts/dev-utilities/reset_database.py:63
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1553
 
@@ -23315,7 +21767,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1554
 
 | Property | Value |
@@ -23329,7 +21780,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:73, ./scripts/dev-utilities/reset_database.py:65
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1555
 
@@ -23345,7 +21795,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1556
 
 | Property | Value |
@@ -23359,7 +21808,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:89, ./scripts/dev-utilities/reset_database.py:77
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1557
 
@@ -23375,7 +21823,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1558
 
 | Property | Value |
@@ -23389,7 +21836,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:90, ./scripts/dev-utilities/reset_database.py:78
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1559
 
@@ -23405,7 +21851,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1560
 
 | Property | Value |
@@ -23419,7 +21864,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/dev-utilities/reset_database_no_schema.py:92, ./scripts/dev-utilities/reset_database.py:80
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1561
 
@@ -23435,7 +21879,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1562
 
 | Property | Value |
@@ -23449,7 +21892,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:10, ./scripts/pulsetic_firewall.py:10
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1563
 
@@ -23465,7 +21907,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1564
 
 | Property | Value |
@@ -23479,7 +21920,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:132, ./scripts/pulsetic_firewall.py:136
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1565
 
@@ -23495,7 +21935,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1566
 
 | Property | Value |
@@ -23509,7 +21948,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:134, ./scripts/pulsetic_firewall.py:138
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1567
 
@@ -23525,7 +21963,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1568
 
 | Property | Value |
@@ -23539,7 +21976,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:136, ./scripts/pulsetic_firewall.py:140
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1569
 
@@ -23555,7 +21991,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1570
 
 | Property | Value |
@@ -23569,7 +22004,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:175, ./scripts/pulsetic_firewall.py:164
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1571
 
@@ -23585,7 +22019,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1572
 
 | Property | Value |
@@ -23599,7 +22032,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:177, ./scripts/pulsetic_firewall.py:166
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1573
 
@@ -23615,7 +22047,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1574
 
 | Property | Value |
@@ -23629,7 +22060,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:187, ./scripts/pulsetic_firewall.py:180
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1575
 
@@ -23645,7 +22075,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1576
 
 | Property | Value |
@@ -23659,7 +22088,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:189, ./scripts/pulsetic_firewall.py:182
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1577
 
@@ -23675,7 +22103,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1578
 
 | Property | Value |
@@ -23689,7 +22116,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:191, ./scripts/pulsetic_firewall.py:184
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1579
 
@@ -23705,7 +22131,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1580
 
 | Property | Value |
@@ -23719,7 +22144,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:193, ./scripts/pulsetic_firewall.py:186
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1581
 
@@ -23735,7 +22159,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1582
 
 | Property | Value |
@@ -23749,7 +22172,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:218, ./scripts/pulsetic_firewall.py:206
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1583
 
@@ -23765,7 +22187,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1584
 
 | Property | Value |
@@ -23779,7 +22200,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:23, ./scripts/pulsetic_firewall.py:27
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1585
 
@@ -23795,7 +22215,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1586
 
 | Property | Value |
@@ -23809,7 +22228,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:25, ./scripts/pulsetic_firewall.py:29
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1587
 
@@ -23825,7 +22243,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1588
 
 | Property | Value |
@@ -23839,7 +22256,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:27, ./scripts/pulsetic_firewall.py:31
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1589
 
@@ -23855,7 +22271,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1590
 
 | Property | Value |
@@ -23869,7 +22284,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:29, ./scripts/pulsetic_firewall.py:33
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1591
 
@@ -23885,7 +22299,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1592
 
 | Property | Value |
@@ -23899,7 +22312,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:31, ./scripts/pulsetic_firewall.py:35
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1593
 
@@ -23915,7 +22327,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1594
 
 | Property | Value |
@@ -23929,7 +22340,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:33, ./scripts/pulsetic_firewall.py:37
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1595
 
@@ -23945,7 +22355,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1596
 
 | Property | Value |
@@ -23959,7 +22368,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:41, ./scripts/pulsetic_firewall.py:51
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1597
 
@@ -23975,7 +22383,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1598
 
 | Property | Value |
@@ -23989,7 +22396,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/firewall_complete.py:9, ./scripts/pulsetic_firewall.py:9
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1599
 
@@ -24005,7 +22411,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1600
 
 | Property | Value |
@@ -24019,7 +22424,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1601
 
@@ -24035,7 +22439,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1602
 
 | Property | Value |
@@ -24049,7 +22452,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1603
 
@@ -24065,7 +22467,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1604
 
 | Property | Value |
@@ -24079,7 +22480,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1605
 
@@ -24095,7 +22495,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1606
 
 | Property | Value |
@@ -24109,7 +22508,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1607
 
@@ -24125,7 +22523,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1608
 
 | Property | Value |
@@ -24139,7 +22536,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1609
 
@@ -24155,7 +22551,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1610
 
 | Property | Value |
@@ -24169,7 +22564,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1611
 
@@ -24185,7 +22579,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1612
 
 | Property | Value |
@@ -24199,7 +22592,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1613
 
@@ -24215,7 +22607,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1614
 
 | Property | Value |
@@ -24229,7 +22620,6 @@
 **Description:** Function `main` has cyclomatic complexity of 20.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1615
 
@@ -24245,7 +22635,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1616
 
 | Property | Value |
@@ -24259,7 +22648,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1617
 
@@ -24275,7 +22663,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1618
 
 | Property | Value |
@@ -24289,7 +22676,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1619
 
@@ -24305,7 +22691,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1620
 
 | Property | Value |
@@ -24319,7 +22704,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1621
 
@@ -24335,7 +22719,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1622
 
 | Property | Value |
@@ -24349,7 +22732,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1623
 
@@ -24365,7 +22747,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1624
 
 | Property | Value |
@@ -24379,7 +22760,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1625
 
@@ -24395,7 +22775,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1626
 
 | Property | Value |
@@ -24409,7 +22788,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1627
 
@@ -24425,7 +22803,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1628
 
 | Property | Value |
@@ -24439,7 +22816,6 @@
 **Description:** Function `load_token` has cyclomatic complexity of 13.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1629
 
@@ -24455,7 +22831,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1630
 
 | Property | Value |
@@ -24469,7 +22844,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/seed_multi_tenancy_test_data.py:125, ./scripts/seed_multi_tenancy_test_data.py:134
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1631
 
@@ -24485,7 +22859,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1632
 
 | Property | Value |
@@ -24499,7 +22872,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1633
 
@@ -24515,7 +22887,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1634
 
 | Property | Value |
@@ -24529,7 +22900,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1635
 
@@ -24545,7 +22915,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1636
 
 | Property | Value |
@@ -24559,7 +22928,6 @@
 **Description:** Function `seed_database` has cyclomatic complexity of 15.
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
-
 
 ### Finding #1637
 
@@ -24575,7 +22943,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1638
 
 | Property | Value |
@@ -24589,7 +22956,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1639
 
@@ -24605,7 +22971,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1640
 
 | Property | Value |
@@ -24619,7 +22984,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1641
 
@@ -24635,7 +22999,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1642
 
 | Property | Value |
@@ -24649,7 +23012,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1643
 
@@ -24665,7 +23027,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1644
 
 | Property | Value |
@@ -24679,7 +23040,6 @@
 **Description:** Function `validate_migrations` is 160 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #1645
 
@@ -24695,7 +23055,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1646
 
 | Property | Value |
@@ -24709,7 +23068,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1647
 
@@ -24725,7 +23083,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1648
 
 | Property | Value |
@@ -24739,7 +23096,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1649
 
@@ -24755,7 +23111,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1650
 
 | Property | Value |
@@ -24769,7 +23124,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1651
 
@@ -24785,7 +23139,6 @@
 
 **Why This Matters:** High complexity indicates hard-to-test logic.
 
-
 ### Finding #1652
 
 | Property | Value |
@@ -24799,7 +23152,6 @@
 **Description:** Function `check_idempotency` is 93 lines long (max 75).
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
-
 
 ### Finding #1653
 
@@ -24815,7 +23167,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1654
 
 | Property | Value |
@@ -24829,7 +23180,6 @@
 **Description:** Duplicated logic block detected in: ./scripts/validate_students_hash.py:2, ./scripts/fix_teacher_id_nulls.py:7
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
-
 
 ### Finding #1655
 
@@ -24845,7 +23195,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1656
 
 | Property | Value |
@@ -24859,7 +23208,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1657
 
@@ -24875,7 +23223,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1658
 
 | Property | Value |
@@ -24889,7 +23236,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1659
 
@@ -24905,7 +23251,6 @@
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
 
-
 ### Finding #1660
 
 | Property | Value |
@@ -24919,7 +23264,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1661
 
@@ -24935,7 +23279,6 @@
 
 **Why This Matters:** Long functions are harder to read, test, and maintain.
 
-
 ### Finding #1662
 
 | Property | Value |
@@ -24949,7 +23292,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1663
 
@@ -24965,7 +23307,6 @@
 
 **Why This Matters:** Duplicated code violates DRY principle and complicates maintenance.
 
-
 ### Finding #1664
 
 | Property | Value |
@@ -24979,7 +23320,6 @@
 **Description:** Nesting depth > 3 detected.
 
 **Why This Matters:** Deep nesting reduces readability and increases complexity.
-
 
 ### Finding #1665
 
@@ -24995,7 +23335,6 @@
 
 **Why This Matters:** Incomplete code markers should be addressed or tracked.
 
-
 ### Finding #1666
 
 | Property | Value |
@@ -25009,7 +23348,6 @@
 **Description:** Potential unused definition: `calculate_period_attendance`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1667
 
@@ -25025,7 +23363,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1668
 
 | Property | Value |
@@ -25039,7 +23376,6 @@
 **Description:** Potential unused definition: `can_access_student_routes`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1669
 
@@ -25055,7 +23391,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1670
 
 | Property | Value |
@@ -25069,7 +23404,6 @@
 **Description:** Potential unused definition: `cleanup_demo_student_records`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1671
 
@@ -25085,7 +23419,6 @@
 
 **Why This Matters:** Incomplete code markers should be addressed or tracked.
 
-
 ### Finding #1672
 
 | Property | Value |
@@ -25099,7 +23432,6 @@
 **Description:** Potential unused definition: `validate_bundle_quantity`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1673
 
@@ -25115,7 +23447,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1674
 
 | Property | Value |
@@ -25129,7 +23460,6 @@
 **Description:** Potential unused definition: `validate_bulk_discount_percentage`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1675
 
@@ -25145,7 +23475,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1676
 
 | Property | Value |
@@ -25159,7 +23488,6 @@
 **Description:** Potential unused definition: `validate_collective_goal_target`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1677
 
@@ -25175,7 +23503,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1678
 
 | Property | Value |
@@ -25189,7 +23516,6 @@
 **Description:** Potential unused definition: `get_student_visible_status`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1679
 
@@ -25205,7 +23531,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1680
 
 | Property | Value |
@@ -25219,7 +23544,6 @@
 **Description:** Potential unused definition: `mark_step_completed`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1681
 
@@ -25235,7 +23559,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1682
 
 | Property | Value |
@@ -25249,7 +23572,6 @@
 **Description:** Potential unused definition: `complete_onboarding`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1683
 
@@ -25265,7 +23587,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1684
 
 | Property | Value |
@@ -25279,7 +23600,6 @@
 **Description:** Potential unused definition: `is_widget_task_completed`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1685
 
@@ -25295,7 +23615,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1686
 
 | Property | Value |
@@ -25309,7 +23628,6 @@
 **Description:** Potential unused definition: `get_priority_class`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1687
 
@@ -25325,7 +23643,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1688
 
 | Property | Value |
@@ -25339,7 +23656,6 @@
 **Description:** Potential unused definition: `full_name`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1689
 
@@ -25355,7 +23671,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1690
 
 | Property | Value |
@@ -25369,7 +23684,6 @@
 **Description:** Potential unused definition: `recent_deposits`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1691
 
@@ -25385,7 +23699,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1692
 
 | Property | Value |
@@ -25399,7 +23712,6 @@
 **Description:** Potential unused definition: `_sync_transaction_amount_cents`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1693
 
@@ -25415,7 +23727,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1694
 
 | Property | Value |
@@ -25429,7 +23740,6 @@
 **Description:** Potential unused definition: `login`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1695
 
@@ -25445,7 +23755,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1696
 
 | Property | Value |
@@ -25459,7 +23768,6 @@
 **Description:** `pass` statement detected.
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
-
 
 ### Finding #1697
 
@@ -25475,7 +23783,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1698
 
 | Property | Value |
@@ -25489,7 +23796,6 @@
 **Description:** `pass` statement detected.
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
-
 
 ### Finding #1699
 
@@ -25505,7 +23811,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1700
 
 | Property | Value |
@@ -25519,7 +23824,6 @@
 **Description:** Potential unused definition: `reset_credentials`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1701
 
@@ -25535,7 +23839,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1702
 
 | Property | Value |
@@ -25549,7 +23852,6 @@
 **Description:** Potential unused definition: `resume_credentials`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1703
 
@@ -25565,7 +23867,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1704
 
 | Property | Value |
@@ -25579,7 +23880,6 @@
 **Description:** Potential unused definition: `logout`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1705
 
@@ -25595,7 +23895,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1706
 
 | Property | Value |
@@ -25609,7 +23908,6 @@
 **Description:** Potential unused definition: `student_detail`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1707
 
@@ -25625,7 +23923,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1708
 
 | Property | Value |
@@ -25639,7 +23936,6 @@
 **Description:** Potential unused definition: `edit_student`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1709
 
@@ -25655,7 +23951,6 @@
 
 **Why This Matters:** Commented-out code rots and confuses readers. Use version control instead.
 
-
 ### Finding #1710
 
 | Property | Value |
@@ -25669,7 +23964,6 @@
 **Description:** Potential unused definition: `delete_student`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1711
 
@@ -25685,7 +23979,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1712
 
 | Property | Value |
@@ -25699,7 +23992,6 @@
 **Description:** Potential unused definition: `delete_block`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1713
 
@@ -25715,7 +24007,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1714
 
 | Property | Value |
@@ -25729,7 +24020,6 @@
 **Description:** Potential unused definition: `delete_pending_student`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1715
 
@@ -25745,7 +24035,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1716
 
 | Property | Value |
@@ -25759,7 +24048,6 @@
 **Description:** Potential unused definition: `bulk_delete_legacy_unclaimed_students`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1717
 
@@ -25775,7 +24063,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1718
 
 | Property | Value |
@@ -25789,7 +24076,6 @@
 **Description:** Potential unused definition: `add_manual_student`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1719
 
@@ -25805,7 +24091,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1720
 
 | Property | Value |
@@ -25819,7 +24104,6 @@
 **Description:** `pass` statement detected.
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
-
 
 ### Finding #1721
 
@@ -25835,7 +24119,6 @@
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
 
-
 ### Finding #1722
 
 | Property | Value |
@@ -25849,7 +24132,6 @@
 **Description:** Potential unused definition: `edit_store_item`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1723
 
@@ -25865,7 +24147,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1724
 
 | Property | Value |
@@ -25879,7 +24160,6 @@
 **Description:** Potential unused definition: `hard_delete_store_item`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1725
 
@@ -25895,7 +24175,6 @@
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
 
-
 ### Finding #1726
 
 | Property | Value |
@@ -25909,7 +24188,6 @@
 **Description:** `pass` statement detected.
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
-
 
 ### Finding #1727
 
@@ -25925,7 +24203,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1728
 
 | Property | Value |
@@ -25939,7 +24216,6 @@
 **Description:** Potential unused definition: `remove_rent_waiver`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1729
 
@@ -25955,7 +24231,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1730
 
 | Property | Value |
@@ -25969,7 +24244,6 @@
 **Description:** Potential unused definition: `edit_insurance_policy`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1731
 
@@ -25985,7 +24259,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1732
 
 | Property | Value |
@@ -25999,7 +24272,6 @@
 **Description:** Potential unused definition: `delete_insurance_policy`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1733
 
@@ -26015,7 +24287,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1734
 
 | Property | Value |
@@ -26029,7 +24300,6 @@
 **Description:** Potential unused definition: `view_student_policy`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1735
 
@@ -26045,7 +24315,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1736
 
 | Property | Value |
@@ -26059,7 +24328,6 @@
 **Description:** Potential unused definition: `_get_feature_settings`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1737
 
@@ -26075,7 +24343,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1738
 
 | Property | Value |
@@ -26089,7 +24356,6 @@
 **Description:** Potential unused definition: `hall_pass_setup`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1739
 
@@ -26105,7 +24371,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1740
 
 | Property | Value |
@@ -26119,7 +24384,6 @@
 **Description:** Potential unused definition: `_get_or_create_onboarding`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1741
 
@@ -26135,7 +24399,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1742
 
 | Property | Value |
@@ -26149,7 +24412,6 @@
 **Description:** Potential unused definition: `payroll`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1743
 
@@ -26165,7 +24427,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1744
 
 | Property | Value |
@@ -26179,7 +24440,6 @@
 **Description:** Potential unused definition: `payroll_add_reward`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1745
 
@@ -26195,7 +24455,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1746
 
 | Property | Value |
@@ -26209,7 +24468,6 @@
 **Description:** Potential unused definition: `payroll_add_fine`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1747
 
@@ -26225,7 +24483,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1748
 
 | Property | Value |
@@ -26239,7 +24496,6 @@
 **Description:** Potential unused definition: `payroll_edit_reward`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1749
 
@@ -26255,7 +24511,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1750
 
 | Property | Value |
@@ -26269,7 +24524,6 @@
 **Description:** Potential unused definition: `void_payroll_transaction`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1751
 
@@ -26285,7 +24539,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1752
 
 | Property | Value |
@@ -26299,7 +24552,6 @@
 **Description:** Potential unused definition: `payroll_apply_reward`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1753
 
@@ -26315,7 +24567,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1754
 
 | Property | Value |
@@ -26329,7 +24580,6 @@
 **Description:** Potential unused definition: `payroll_manual_payment`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1755
 
@@ -26345,7 +24595,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1756
 
 | Property | Value |
@@ -26359,7 +24608,6 @@
 **Description:** Potential unused definition: `upload_students`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1757
 
@@ -26375,7 +24623,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1758
 
 | Property | Value |
@@ -26389,7 +24636,6 @@
 **Description:** Potential unused definition: `export_students`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1759
 
@@ -26405,7 +24651,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1760
 
 | Property | Value |
@@ -26419,7 +24664,6 @@
 **Description:** Potential unused definition: `dashboard`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1761
 
@@ -26435,7 +24679,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1762
 
 | Property | Value |
@@ -26449,7 +24692,6 @@
 **Description:** Potential unused definition: `tap_in_students`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1763
 
@@ -26465,7 +24707,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1764
 
 | Property | Value |
@@ -26479,7 +24720,6 @@
 **Description:** Potential unused definition: `banking`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1765
 
@@ -26495,7 +24735,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1766
 
 | Property | Value |
@@ -26509,7 +24748,6 @@
 **Description:** Potential unused definition: `deletion_requests`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1767
 
@@ -26525,7 +24763,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1768
 
 | Property | Value |
@@ -26539,7 +24776,6 @@
 **Description:** Potential unused definition: `update_period_feature_settings`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1769
 
@@ -26555,7 +24791,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1770
 
 | Property | Value |
@@ -26569,7 +24804,6 @@
 **Description:** Potential unused definition: `announcement_create`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1771
 
@@ -26585,7 +24819,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1772
 
 | Property | Value |
@@ -26599,7 +24832,6 @@
 **Description:** Potential unused definition: `announcement_delete`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1773
 
@@ -26615,7 +24847,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1774
 
 | Property | Value |
@@ -26629,7 +24860,6 @@
 **Description:** Potential unused definition: `onboarding_status`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1775
 
@@ -26645,7 +24875,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1776
 
 | Property | Value |
@@ -26659,7 +24888,6 @@
 **Description:** Potential unused definition: `onboarding_skip_task`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1777
 
@@ -26675,7 +24903,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1778
 
 | Property | Value |
@@ -26689,7 +24916,6 @@
 **Description:** Potential unused definition: `onboarding_undismiss_widget`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1779
 
@@ -26705,7 +24931,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1780
 
 | Property | Value |
@@ -26719,7 +24944,6 @@
 **Description:** Potential unused definition: `api_economy_analyze`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1781
 
@@ -26735,7 +24959,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1782
 
 | Property | Value |
@@ -26749,7 +24972,6 @@
 **Description:** Potential unused definition: `give_bonus_all`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1783
 
@@ -26765,7 +24987,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1784
 
 | Property | Value |
@@ -26779,7 +25000,6 @@
 **Description:** Potential unused definition: `passkey_register_finish`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1785
 
@@ -26795,7 +25015,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1786
 
 | Property | Value |
@@ -26809,7 +25028,6 @@
 **Description:** Potential unused definition: `passkey_auth_finish`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1787
 
@@ -26825,7 +25043,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1788
 
 | Property | Value |
@@ -26839,7 +25056,6 @@
 **Description:** Potential unused definition: `passkey_delete`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1789
 
@@ -26855,7 +25071,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1790
 
 | Property | Value |
@@ -26869,7 +25084,6 @@
 **Description:** Potential unused definition: `issues_queue`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1791
 
@@ -26885,7 +25099,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1792
 
 | Property | Value |
@@ -26899,7 +25112,6 @@
 **Description:** Potential unused definition: `resolve_issue`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1793
 
@@ -26915,7 +25127,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1794
 
 | Property | Value |
@@ -26929,7 +25140,6 @@
 **Description:** Potential unused definition: `dashboard`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1795
 
@@ -26945,7 +25155,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1796
 
 | Property | Value |
@@ -26959,7 +25168,6 @@
 **Description:** Potential unused definition: `api_alerts`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1797
 
@@ -26975,7 +25183,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1798
 
 | Property | Value |
@@ -26989,7 +25196,6 @@
 **Description:** Potential unused definition: `student_drill_down`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1799
 
@@ -27005,7 +25211,6 @@
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
 
-
 ### Finding #1800
 
 | Property | Value |
@@ -27019,7 +25224,6 @@
 **Description:** Potential unused definition: `handle_hall_pass_action`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1801
 
@@ -27035,7 +25239,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1802
 
 | Property | Value |
@@ -27049,7 +25252,6 @@
 **Description:** Potential unused definition: `lookup_hall_pass`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1803
 
@@ -27065,7 +25267,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1804
 
 | Property | Value |
@@ -27079,7 +25280,6 @@
 **Description:** Potential unused definition: `hall_pass_terminal_return`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1805
 
@@ -27095,7 +25295,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1806
 
 | Property | Value |
@@ -27109,7 +25308,6 @@
 **Description:** Potential unused definition: `checkout_hall_pass`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1807
 
@@ -27125,7 +25323,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1808
 
 | Property | Value |
@@ -27139,7 +25336,6 @@
 **Description:** Potential unused definition: `checkin_hall_pass`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1809
 
@@ -27155,7 +25351,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1810
 
 | Property | Value |
@@ -27169,7 +25364,6 @@
 **Description:** Potential unused definition: `hall_pass_history`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1811
 
@@ -27185,7 +25379,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1812
 
 | Property | Value |
@@ -27199,7 +25392,6 @@
 **Description:** Potential unused definition: `save_hall_pass_setup`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1813
 
@@ -27215,7 +25407,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1814
 
 | Property | Value |
@@ -27229,7 +25420,6 @@
 **Description:** Potential unused definition: `attendance_history`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1815
 
@@ -27245,7 +25435,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1816
 
 | Property | Value |
@@ -27259,7 +25448,6 @@
 **Description:** Potential unused definition: `purchase_item`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1817
 
@@ -27275,7 +25463,6 @@
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
 
-
 ### Finding #1818
 
 | Property | Value |
@@ -27289,7 +25476,6 @@
 **Description:** `pass` statement detected.
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
-
 
 ### Finding #1819
 
@@ -27305,7 +25491,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1820
 
 | Property | Value |
@@ -27319,7 +25504,6 @@
 **Description:** Potential unused definition: `delete_tap_entry`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1821
 
@@ -27335,7 +25519,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1822
 
 | Property | Value |
@@ -27349,7 +25532,6 @@
 **Description:** Potential unused definition: `student_status`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1823
 
@@ -27365,7 +25547,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1824
 
 | Property | Value |
@@ -27379,7 +25560,6 @@
 **Description:** `pass` statement detected.
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
-
 
 ### Finding #1825
 
@@ -27395,7 +25575,6 @@
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
 
-
 ### Finding #1826
 
 | Property | Value |
@@ -27409,7 +25588,6 @@
 **Description:** `pass` statement detected.
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
-
 
 ### Finding #1827
 
@@ -27425,7 +25603,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1828
 
 | Property | Value |
@@ -27439,7 +25616,6 @@
 **Description:** Potential unused definition: `get_block_tap_settings`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1829
 
@@ -27455,7 +25631,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1830
 
 | Property | Value |
@@ -27469,7 +25644,6 @@
 **Description:** Potential unused definition: `view_as_student_status`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1831
 
@@ -27485,7 +25659,6 @@
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
 
-
 ### Finding #1832
 
 | Property | Value |
@@ -27499,7 +25672,6 @@
 **Description:** Potential unused definition: `use_item`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1833
 
@@ -27515,7 +25687,6 @@
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
 
-
 ### Finding #1834
 
 | Property | Value |
@@ -27529,7 +25700,6 @@
 **Description:** Potential unused definition: `approve_redemption`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1835
 
@@ -27545,7 +25715,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1836
 
 | Property | Value |
@@ -27559,7 +25728,6 @@
 **Description:** Potential unused definition: `index`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1837
 
@@ -27575,7 +25743,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1838
 
 | Property | Value |
@@ -27589,7 +25756,6 @@
 **Description:** Potential unused definition: `privacy`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1839
 
@@ -27605,7 +25771,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1840
 
 | Property | Value |
@@ -27619,7 +25784,6 @@
 **Description:** Potential unused definition: `offline`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1841
 
@@ -27635,7 +25799,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1842
 
 | Property | Value |
@@ -27649,7 +25812,6 @@
 **Description:** Potential unused definition: `hall_pass_terminal`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1843
 
@@ -27665,7 +25827,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1844
 
 | Property | Value |
@@ -27679,7 +25840,6 @@
 **Description:** Potential unused definition: `hall_pass_queue`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1845
 
@@ -27695,7 +25855,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1846
 
 | Property | Value |
@@ -27709,7 +25868,6 @@
 **Description:** Potential unused definition: `switch_view`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1847
 
@@ -27725,7 +25883,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1848
 
 | Property | Value |
@@ -27739,7 +25896,6 @@
 **Description:** Potential unused definition: `health_check`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1849
 
@@ -27755,7 +25911,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1850
 
 | Property | Value |
@@ -27769,7 +25924,6 @@
 **Description:** Potential unused definition: `verify_identity`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1851
 
@@ -27785,7 +25939,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1852
 
 | Property | Value |
@@ -27799,7 +25952,6 @@
 **Description:** Potential unused definition: `landing`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1853
 
@@ -27815,7 +25967,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1854
 
 | Property | Value |
@@ -27829,7 +25980,6 @@
 **Description:** Potential unused definition: `dashboard`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1855
 
@@ -27845,7 +25995,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1856
 
 | Property | Value |
@@ -27859,7 +26008,6 @@
 **Description:** Potential unused definition: `transfer`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1857
 
@@ -27875,7 +26023,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1858
 
 | Property | Value |
@@ -27889,7 +26036,6 @@
 **Description:** Potential unused definition: `insurance_marketplace`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1859
 
@@ -27905,7 +26051,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1860
 
 | Property | Value |
@@ -27919,7 +26064,6 @@
 **Description:** Potential unused definition: `cancel_insurance`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1861
 
@@ -27935,7 +26079,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1862
 
 | Property | Value |
@@ -27949,7 +26092,6 @@
 **Description:** Potential unused definition: `view_policy`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1863
 
@@ -27965,7 +26107,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1864
 
 | Property | Value |
@@ -27979,7 +26120,6 @@
 **Description:** Potential unused definition: `_add_rent_period`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1865
 
@@ -27995,7 +26135,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1866
 
 | Property | Value |
@@ -28009,7 +26148,6 @@
 **Description:** Function `check_legacy_profile` has inconsistent return statements (mixed value/no-value).
 
 **Why This Matters:** Inconsistent returns can lead to type errors and confusing behavior.
-
 
 ### Finding #1867
 
@@ -28025,7 +26163,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1868
 
 | Property | Value |
@@ -28039,7 +26176,6 @@
 **Description:** Potential unused definition: `login`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1869
 
@@ -28055,7 +26191,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1870
 
 | Property | Value |
@@ -28069,7 +26204,6 @@
 **Description:** Potential unused definition: `logout`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1871
 
@@ -28085,7 +26219,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1872
 
 | Property | Value |
@@ -28099,7 +26232,6 @@
 **Description:** Potential unused definition: `switch_period`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1873
 
@@ -28115,7 +26247,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1874
 
 | Property | Value |
@@ -28129,7 +26260,6 @@
 **Description:** Potential unused definition: `complete_profile`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1875
 
@@ -28145,7 +26275,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1876
 
 | Property | Value |
@@ -28159,7 +26288,6 @@
 **Description:** Potential unused definition: `report_transaction_issue`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1877
 
@@ -28175,7 +26303,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1878
 
 | Property | Value |
@@ -28189,7 +26316,6 @@
 **Description:** Potential unused definition: `verify_recovery`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1879
 
@@ -28205,7 +26331,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1880
 
 | Property | Value |
@@ -28219,7 +26344,6 @@
 **Description:** Potential unused definition: `claim_account`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1881
 
@@ -28235,7 +26359,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1882
 
 | Property | Value |
@@ -28249,7 +26372,6 @@
 **Description:** Potential unused definition: `setup_pin_passphrase`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1883
 
@@ -28265,7 +26387,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1884
 
 | Property | Value |
@@ -28279,7 +26400,6 @@
 **Description:** Potential unused definition: `delete_teacher`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1885
 
@@ -28295,7 +26415,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1886
 
 | Property | Value |
@@ -28309,7 +26428,6 @@
 **Description:** Potential unused definition: `view_user_report`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1887
 
@@ -28325,7 +26443,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1888
 
 | Property | Value |
@@ -28339,7 +26456,6 @@
 **Description:** Potential unused definition: `send_reward_to_reporter`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1889
 
@@ -28355,7 +26471,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1890
 
 | Property | Value |
@@ -28369,7 +26484,6 @@
 **Description:** Potential unused definition: `grafana_auth_check`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1891
 
@@ -28385,7 +26499,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1892
 
 | Property | Value |
@@ -28399,7 +26512,6 @@
 **Description:** Potential unused definition: `login`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1893
 
@@ -28415,7 +26527,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1894
 
 | Property | Value |
@@ -28429,7 +26540,6 @@
 **Description:** Potential unused definition: `announcement_edit`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1895
 
@@ -28445,7 +26555,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1896
 
 | Property | Value |
@@ -28459,7 +26568,6 @@
 **Description:** Potential unused definition: `announcement_toggle`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1897
 
@@ -28475,7 +26583,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1898
 
 | Property | Value |
@@ -28489,7 +26596,6 @@
 **Description:** Potential unused definition: `start_review_escalated_issue`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1899
 
@@ -28505,7 +26611,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1900
 
 | Property | Value |
@@ -28519,7 +26624,6 @@
 **Description:** Potential unused definition: `logout`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1901
 
@@ -28535,7 +26639,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1902
 
 | Property | Value |
@@ -28549,7 +26652,6 @@
 **Description:** Potential unused definition: `passkey_register_finish`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1903
 
@@ -28565,7 +26667,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1904
 
 | Property | Value |
@@ -28579,7 +26680,6 @@
 **Description:** Potential unused definition: `passkey_auth_finish`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1905
 
@@ -28595,7 +26695,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1906
 
 | Property | Value |
@@ -28609,7 +26708,6 @@
 **Description:** Potential unused definition: `passkey_delete`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1907
 
@@ -28625,7 +26723,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1908
 
 | Property | Value |
@@ -28639,7 +26736,6 @@
 **Description:** Potential unused definition: `dashboard`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1909
 
@@ -28655,7 +26751,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1910
 
 | Property | Value |
@@ -28669,7 +26764,6 @@
 **Description:** Potential unused definition: `error_logs`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1911
 
@@ -28685,7 +26779,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1912
 
 | Property | Value |
@@ -28699,7 +26792,6 @@
 **Description:** Potential unused definition: `network_activity`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1913
 
@@ -28715,7 +26807,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1914
 
 | Property | Value |
@@ -28729,7 +26820,6 @@
 **Description:** Potential unused definition: `test_error_401`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1915
 
@@ -28745,7 +26835,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1916
 
 | Property | Value |
@@ -28759,7 +26848,6 @@
 **Description:** Potential unused definition: `test_error_404`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1917
 
@@ -28775,7 +26863,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1918
 
 | Property | Value |
@@ -28789,7 +26876,6 @@
 **Description:** Potential unused definition: `test_error_503`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1919
 
@@ -28805,7 +26891,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1920
 
 | Property | Value |
@@ -28819,7 +26904,6 @@
 **Description:** Potential unused definition: `reset_teacher_totp`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1921
 
@@ -28835,7 +26919,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1922
 
 | Property | Value |
@@ -28849,7 +26932,6 @@
 **Description:** Potential unused definition: `manage_teachers`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1923
 
@@ -28865,7 +26947,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1924
 
 | Property | Value |
@@ -28879,7 +26960,6 @@
 **Description:** Potential unused definition: `delete_period`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1925
 
@@ -28895,7 +26975,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1926
 
 | Property | Value |
@@ -28909,7 +26988,6 @@
 **Description:** Potential unused definition: `format_warnings_for_display`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1927
 
@@ -28925,7 +27003,6 @@
 
 **Why This Matters:** Inconsistent returns can lead to type errors and confusing behavior.
 
-
 ### Finding #1928
 
 | Property | Value |
@@ -28939,7 +27016,6 @@
 **Description:** Potential unused definition: `process_bind_param`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1929
 
@@ -28955,7 +27031,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1930
 
 | Property | Value |
@@ -28969,7 +27044,6 @@
 **Description:** Found TODO/FIXME marker: # TODO: [DEPENDABOT PR #463] MarkupSafe 3.x introduces breaking changes:
 
 **Why This Matters:** Incomplete code markers should be addressed or tracked.
-
 
 ### Finding #1931
 
@@ -28985,7 +27059,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1932
 
 | Property | Value |
@@ -28999,7 +27072,6 @@
 **Description:** `pass` statement detected.
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
-
 
 ### Finding #1933
 
@@ -29015,7 +27087,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1934
 
 | Property | Value |
@@ -29029,7 +27100,6 @@
 **Description:** Potential unused definition: `get_request_info`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1935
 
@@ -29045,7 +27115,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1936
 
 | Property | Value |
@@ -29059,7 +27128,6 @@
 **Description:** Potential unused definition: `annotations`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1937
 
@@ -29075,7 +27143,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1938
 
 | Property | Value |
@@ -29089,7 +27156,6 @@
 **Description:** Potential unused definition: `fuzzy_match_last_name`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1939
 
@@ -29105,7 +27171,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1940
 
 | Property | Value |
@@ -29119,7 +27184,6 @@
 **Description:** Potential unused definition: `urllib.parse`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1941
 
@@ -29135,7 +27199,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1942
 
 | Property | Value |
@@ -29149,7 +27212,6 @@
 **Description:** `pass` statement detected.
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
-
 
 ### Finding #1943
 
@@ -29165,7 +27227,6 @@
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
 
-
 ### Finding #1944
 
 | Property | Value |
@@ -29179,7 +27240,6 @@
 **Description:** Potential unused definition: `urllib.request`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1945
 
@@ -29195,7 +27255,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1946
 
 | Property | Value |
@@ -29209,7 +27268,6 @@
 **Description:** Potential unused definition: `has_helper_function`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1947
 
@@ -29225,7 +27283,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1948
 
 | Property | Value |
@@ -29239,7 +27296,6 @@
 **Description:** `pass` statement detected.
 
 **Why This Matters:** Explicit `pass` should be avoided if possible, or replaced with docstrings/comments.
-
 
 ### Finding #1949
 
@@ -29255,7 +27311,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1950
 
 | Property | Value |
@@ -29269,7 +27324,6 @@
 **Description:** Potential unused definition: `visit_If`
 
 **Why This Matters:** Unused code adds noise and cognitive load.
-
 
 ### Finding #1951
 
@@ -29285,7 +27339,6 @@
 
 **Why This Matters:** Unused code adds noise and cognitive load.
 
-
 ### Finding #1952
 
 | Property | Value |
@@ -29299,7 +27352,6 @@
 **Description:** Function `validate_migrations` has inconsistent return statements (mixed value/no-value).
 
 **Why This Matters:** Inconsistent returns can lead to type errors and confusing behavior.
-
 
 ### Finding #1953
 

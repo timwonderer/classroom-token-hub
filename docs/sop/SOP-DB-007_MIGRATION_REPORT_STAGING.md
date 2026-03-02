@@ -1,5 +1,9 @@
 # Database Migration Report - Staging
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DB-007       | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Performed By:** Jules (AI Assistant)
 **Date:** 2025-11-24
 **Environment:** Staging (Sandbox / SQLite)

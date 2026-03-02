@@ -1,5 +1,9 @@
 # Multi-Tenancy Testing Summary
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-ARC-002      | 1.0     | 2026-03-01     | N/A        | NO            |
+
 **Branch**: `claude/fix-multi-tenancy-leaks-015yz9WmT5SE8EFgAzU8Au32`
 **Date**: 2025-11-29
 **Status**:  READY FOR STAGING DEPLOYMENT

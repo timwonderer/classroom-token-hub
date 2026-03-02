@@ -1,5 +1,9 @@
 # Access Control, Secrets, & Codebase Vulnerability & Mitigation Strategy
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SEC-AUD-010      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Scope:** Server-level access, database security, and secrets management.
 
 ### 1. Plaintext Secrets in Database

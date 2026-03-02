@@ -1,5 +1,9 @@
 # Security & Bug Analysis Report - Insurance Overhaul
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SEC-AUD-002      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Branch Evaluated:** `codex/add-insurance-claim-processing-modes`
 **Audit Date:** 2025-11-24
 **Auditor:** Claude Code

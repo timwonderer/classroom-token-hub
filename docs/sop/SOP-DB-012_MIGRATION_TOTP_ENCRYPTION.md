@@ -1,5 +1,9 @@
 # TOTP Encryption Migration Guide
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DB-012       | 1.0     | 2026-03-01     | N/A        | YES           |
+
 ## Overview
 
 This migration adds encryption-at-rest for TOTP secrets in the `admins` and `system_admins` tables.

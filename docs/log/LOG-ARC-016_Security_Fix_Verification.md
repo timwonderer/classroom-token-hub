@@ -1,5 +1,9 @@
 # Security Fix Verification Report
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-ARC-016      | 1.0     | 2026-03-01     | N/A        | NO            |
+
 **Branch Evaluated:** `codex/add-insurance-claim-processing-modes-rtnkcy`
 **Base Branch:** `codex/add-insurance-claim-processing-modes`
 **Verification Date:** 2025-11-24
@@ -11,11 +15,12 @@
 
 The fixes branch `codex/add-insurance-claim-processing-modes-rtnkcy` contains **partial security fixes** for the insurance overhaul implementation. While some improvements were made, **3 out of 5 critical/high-severity issues remain unfixed**.
 
-**Status:**   **NOT READY FOR PRODUCTION** - Critical security issues still present
+**Status:** Â  **NOT READY FOR PRODUCTION** - Critical security issues still present
 
 ---
 
-## = Detailed Fix Verification
+## =
+ Detailed Fix Verification
 
 ###  What Was Fixed
 
@@ -93,7 +98,7 @@ WHERE transaction_id IS NOT NULL;
 # Line 1752-1755: NO is_void check!
 def _claim_base_amount(target_claim):
     if target_claim.policy.claim_type == 'transaction_monetary' and target_claim.transaction:
-        return abs(target_claim.transaction.amount)  #   Uses voided transaction amount!
+        return abs(target_claim.transaction.amount)  # Â  Uses voided transaction amount!
     return target_claim.claim_amount or 0.0
 
 # Line 1846: Payout calculated from potentially voided transaction
@@ -106,10 +111,10 @@ base_amount = _claim_base_amount(claim)
 - L `_claim_base_amount()` function doesn't validate transaction status
 
 **Attack Still Possible:**
-1. Student purchases item ’ Transaction #123
+1. Student purchases item Â’ Transaction #123
 2. Student files claim for Transaction #123
 3. Admin voids Transaction #123 (refund issued)
-4. Admin approves claim ’ **Student gets double payment**
+4. Admin approves claim Â’ **Student gets double payment**
 
 **Required Fix:** Add to validation section (around line 1777):
 ```python
@@ -134,7 +139,7 @@ if claim.policy.claim_type == 'transaction_monetary' and claim.transaction:
 # Function trusts that claim.transaction belongs to claim.student
 def _claim_base_amount(target_claim):
     if target_claim.policy.claim_type == 'transaction_monetary' and target_claim.transaction:
-        return abs(target_claim.transaction.amount)  #   No ownership check!
+        return abs(target_claim.transaction.amount)  # Â  No ownership check!
     return target_claim.claim_amount or 0.0
 ```
 
@@ -147,7 +152,7 @@ def _claim_base_amount(target_claim):
 Via database manipulation or SQL injection:
 1. Student A files claim for their $20 transaction
 2. Attacker modifies database: updates claim to reference Student B's $500 transaction
-3. Admin approves ’ Student A gets $500 for Student B's purchase
+3. Admin approves Â’ Student A gets $500 for Student B's purchase
 
 **Required Fix:** Add to validation section (around line 1777):
 ```python
@@ -178,7 +183,7 @@ end_date = request.args.get('end_date')
 # Line 3277: Direct injection via f-string
 if end_date:
     query = query.filter(Transaction.timestamp < text(f"'{end_date}'::date + interval '1 day'"))
-    #   NO VALIDATION! User input directly in SQL!
+    # Â  NO VALIDATION! User input directly in SQL!
 ```
 
 **Verification:**
@@ -210,7 +215,7 @@ if end_date:
 
 ---
 
-## =Ê Fix Status Summary Table
+## =ÃŠ Fix Status Summary Table
 
 | Issue ID | Severity | Issue | Status | Fixed? |
 |----------|----------|-------|--------|--------|
@@ -224,7 +229,7 @@ if end_date:
 
 ---
 
-## <¯ What the "Fix" Branch Actually Contains
+## <Â¯ What the "Fix" Branch Actually Contains
 
 The fixes branch made only **one change**:
 
@@ -244,7 +249,7 @@ This enforces existing validation rules, but **does not add the missing critical
 
 ---
 
-##   Critical Gaps in Current Fix
+## Â  Critical Gaps in Current Fix
 
 ### Gap 1: Validation Errors List Is Incomplete
 
@@ -276,9 +281,9 @@ This enforces existing validation rules, but **does not add the missing critical
 
 ---
 
-## =¨ Security Assessment
+## =Â¨ Security Assessment
 
-### Overall Risk Level: **HIGH**  
+### Overall Risk Level: **HIGH** Â 
 
 The fixes branch provides **minimal security improvement** while leaving all critical vulnerabilities unaddressed.
 
@@ -302,7 +307,7 @@ The fixes branch provides **minimal security improvement** while leaving all cri
 
 ---
 
-## =Ë Recommended Next Steps
+## =Ã‹ Recommended Next Steps
 
 ### Immediate Actions (Before Merge)
 
@@ -370,7 +375,7 @@ Before approving this branch for merge:
 
 ---
 
-## =Ý Conclusion
+## =Ã Conclusion
 
 The `codex/add-insurance-claim-processing-modes-rtnkcy` branch makes a **minor improvement** by enforcing validation errors before approval, but **fails to address the core security vulnerabilities** identified in the original audit.
 
@@ -380,7 +385,7 @@ The good news: All critical fixes are straightforward and can be implemented qui
 
 ---
 
-## =Þ Next Steps
+## =Ãž Next Steps
 
 1. Review this verification report with the development team
 2. Implement the 4 recommended fixes listed above

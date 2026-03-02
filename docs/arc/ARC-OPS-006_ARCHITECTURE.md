@@ -6,6 +6,10 @@ roles: [developer]
 
 # Classroom Token Hub - Architecture Guide
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| ARC-OPS-006      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 Last Updated: 2026-01-03
 Purpose: Describe the current system architecture, data boundaries, and core flows.
 

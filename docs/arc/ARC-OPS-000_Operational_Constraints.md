@@ -1,4 +1,4 @@
-# ARC-OPS-000: Operational Constraints Foundation
+# Operational Constraints Foundation
 
 | Reference Number | Version | Effective Date | Supersedes | Authoritative |
 |------------------|---------|----------------|------------|---------------|

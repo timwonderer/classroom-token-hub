@@ -1,5 +1,9 @@
 # Production Deployment Instructions
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DEP-001      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Branch:** `claude/evaluate-insurance-overhaul-019oGphUSg12cNwcSiwgeqzP`
 **Feature:** Insurance Claim Processing System with Security Fixes
 **Status:** Ready for final validation and deployment

@@ -1,5 +1,9 @@
 # Release Notes - Version 1.4.0
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-REL-010      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Release Date**: December 27, 2025
 
 Version 1.4.0 is a feature-rich release focused on enhancing classroom communication and user experience. This release introduces a comprehensive announcement system for teachers, major UI/UX improvements across both teacher and student dashboards, streamlined authentication flows, and critical security fixes for URL redirection and Grafana access.

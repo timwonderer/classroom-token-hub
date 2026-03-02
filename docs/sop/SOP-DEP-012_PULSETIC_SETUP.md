@@ -1,5 +1,9 @@
 # UptimeRobot Setup Guide for Classroom Economy
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DEP-012      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 This guide explains how to set up UptimeRobot monitoring for your Classroom Economy app.
 
 ## Why UptimeRobot?

@@ -1,5 +1,9 @@
 # Migration Fix: 1a4ee2388d62 - Conditional Index Drops
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DB-005       | 1.0     | 2026-03-01     | N/A        | YES           |
+
 ## Problem
 
 The migration `1a4ee2388d62_add_teacher_analytics.py` was failing with the error:

@@ -1,5 +1,9 @@
 # Incident Postmortem and Reorganization Branch - Verification Report
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-ARC-013      | 1.0     | 2026-03-01     | N/A        | NO            |
+
 **Date:** 2026-01-13
 **Branch:** `incident-postmortem-and-reorganization`
 **Verified By:** Claude Code

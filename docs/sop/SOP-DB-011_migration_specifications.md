@@ -1,5 +1,9 @@
 # Database Migration Specifications
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DB-011       | 1.0     | 2026-03-01     | N/A        | YES           |
+
 > [!IMPORTANT]
 > This is the **Single Source of Truth** for all database migration policies, best practices, and workflows in the Classroom Economy project. All contributors must adhere to these standards.
 

@@ -1,5 +1,9 @@
 # Release Notes Archive
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-REL-003      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 This directory contains historical release notes for Classroom Token Hub.
 
 ## Available Releases

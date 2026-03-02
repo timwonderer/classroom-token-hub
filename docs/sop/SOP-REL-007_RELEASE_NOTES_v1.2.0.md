@@ -1,5 +1,9 @@
 # Release Notes - Version 1.2.0
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-REL-007      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Release Date**: December 18, 2025
 
 Version 1.2.0 is a major feature release focused on mobile experience, progressive web app capabilities, accessibility improvements, and user interface refinements. This release makes Classroom Token Hub installable as a mobile app and significantly improves usability on mobile devices while maintaining full desktop functionality.

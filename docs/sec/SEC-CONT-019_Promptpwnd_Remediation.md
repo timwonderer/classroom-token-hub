@@ -1,5 +1,9 @@
 # PromptPwnd Vulnerability Remediation
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SEC-CONT-019     | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Date:** 2025-12-22
 **Severity:** CRITICAL
 **Status:** FIXED

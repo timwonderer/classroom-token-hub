@@ -1,5 +1,9 @@
 # Fix for Missing TeacherBlock Entries
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-ARC-020      | 1.0     | 2026-03-01     | N/A        | NO            |
+
 ## Problem Summary
 
 The database analysis revealed a critical issue: **183 students have completed setup and have accounts, but no claimed TeacherBlock entries**. This prevents teachers from seeing their rosters because the TeacherBlock table is the bridge that links students to their teachers' period/block rosters.

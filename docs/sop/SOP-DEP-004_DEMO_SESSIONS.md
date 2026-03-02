@@ -1,5 +1,9 @@
 # Demo Session Lifecycle and Cleanup
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DEP-004      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 ## Overview
 Demo sessions let admins temporarily experience the student portal without impacting real data. They are intentionally short-lived and isolated:
 

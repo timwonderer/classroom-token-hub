@@ -1,5 +1,9 @@
 # Schema Change Gate
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| ARC-OPS-011      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Purpose:**  
 This document defines the **Schema Change Gate** — a mandatory checklist that determines whether a pull request involving schema changes may be merged.
 

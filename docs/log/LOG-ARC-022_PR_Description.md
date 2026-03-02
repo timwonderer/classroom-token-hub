@@ -1,5 +1,9 @@
 # Fix insurance policy scoping and add marketing badges
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-ARC-022      | 1.0     | 2026-03-01     | N/A        | NO            |
+
 ## Summary
 
 This PR fixes a critical scoping issue with insurance policies and adds fun marketing badge features for teachers to use when promoting insurance plans to students.

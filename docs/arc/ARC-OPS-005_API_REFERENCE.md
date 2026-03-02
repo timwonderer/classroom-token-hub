@@ -6,6 +6,10 @@ roles: [developer]
 
 # API Reference
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| ARC-OPS-005      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 This document provides a reference for all the API endpoints available in the Classroom Token Hub application.
 
 ## Authentication

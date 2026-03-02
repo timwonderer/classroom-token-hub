@@ -7,6 +7,10 @@ description: Client-side timezone conversion patterns and UTC storage convention
 
 # Timezone Handling
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| ARC-OPS-003      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 ## Overview
 
 The application uses a centralized JavaScript utility (`static/js/timezone-utils.js`) to handle timezone conversions for displaying timestamps to users. This ensures consistent formatting across all pages and provides a better user experience by displaying times in the user's local timezone with PST as a fallback.

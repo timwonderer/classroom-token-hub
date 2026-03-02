@@ -4,6 +4,10 @@ searchable: false
 
 # Multi-Tenancy Security Fix - Deployment Instructions
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DEP-011      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 ## Overview
 
 This document provides step-by-step instructions for deploying the multi-tenancy security fix that prevents teachers from seeing students belonging to other teachers.

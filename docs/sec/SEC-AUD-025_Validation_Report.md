@@ -1,5 +1,9 @@
 # Security Assessment Reports - Validation Report
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SEC-AUD-025      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Validation Date:** 2025-11-26  
 **Validator:** GitHub Copilot Security Analysis  
 **Reports Reviewed:**

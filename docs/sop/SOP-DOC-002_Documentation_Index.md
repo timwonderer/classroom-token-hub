@@ -1,4 +1,8 @@
-# SOP-DOC-002 Documentation Index
+# Documentation Index
+
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DOC-002      | 1.0     | 2026-03-01     | N/A        | YES           |
 
 | Reference Number | Version | Effective Date | Supersedes | Authoritative |
 |------------------|---------|----------------|------------|---------------|

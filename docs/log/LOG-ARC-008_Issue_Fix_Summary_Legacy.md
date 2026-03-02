@@ -4,6 +4,10 @@ searchable: false
 
 # Issue Fix Summary: Legacy Class Unclaimed Seats Badge
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-ARC-008      | 1.0     | 2026-03-01     | N/A        | NO            |
+
 ## Issue Description
 **Original Issue:** "Students in legacy classes still cannot sign in using code. Badges are showing incorrect unclaimed seats."
 

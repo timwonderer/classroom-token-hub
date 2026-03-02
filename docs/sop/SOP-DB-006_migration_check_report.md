@@ -1,4 +1,9 @@
 # Migration Check Report
+
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DB-006       | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Date:** 2025-12-12  
 **Branch:** claude/teacher-account-recovery-018RpNF2GLYWt8Wecu7C5QrN
 

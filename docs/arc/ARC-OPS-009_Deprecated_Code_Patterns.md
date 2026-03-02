@@ -4,6 +4,10 @@ searchable: false
 
 # Deprecated Code Patterns - Technical Debt
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| ARC-OPS-009      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Last Updated:** 2025-12-04
 **Priority:** High (P1)
 **Blocking 1.0:** No, but recommended before release

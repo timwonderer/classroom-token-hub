@@ -6,6 +6,10 @@ roles: [developer, teacher]
 
 # Deployment Guide
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DEP-006      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 This guide provides instructions for deploying the Classroom Token Hub application.
 
 ## General Deployment Steps
