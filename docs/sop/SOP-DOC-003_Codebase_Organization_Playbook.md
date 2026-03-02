@@ -1,8 +1,8 @@
-# Codebase Organization & Documentation Hygiene Playbook
+# SOP-DOC-003: Codebase Organization and Documentation Hygiene Playbook
 
-| Reference Number | Version | Effective Date | Supersedes | Authority Level |
-|------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-003      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+| Reference Number | Version | Effective Date | Supersedes       | Authority Level |
+|------------------|---------|----------------|------------------|-----------------|
+| SOP-DOC-003      | 2.0     | 2026-03-02     | SOP-DOC-003 v1.0 | Normative       |
 
 **Status:** Authoritative
 
@@ -12,42 +12,61 @@
 
 ---
 
-## 1. Non‑Negotiable Constraints
+## I. Purpose
 
-Before touching any files, the following rules MUST be honored:
-
-1. **No semantic changes during cleanup**
-
-   - File moves, renames, and deletions only
-   - No logic refactors mixed into organization work
-
-2. **All moves must preserve history**
-
-   - Use `git mv` exclusively
-   - No copy‑paste‑delete workflows
-
-3. **No broken references are allowed**
-
-   - Python imports
-   - Markdown links
-   - CI references
-   - Doc‑site navigation links
-
-4. **Every directory must have a single responsibility**
-
-   - If a directory cannot be described in one sentence, it is incorrectly scoped
+This document defines the canonical procedure for organizing the repository, eliminating documentation entropy, and maintaining clean separation between user-facing and internal documentation — without introducing regressions or broken references.
 
 ---
 
-## 2. Canonical Mental Model
+## II. Scope
 
-### Repository Root = Entry Points & Contracts
+This procedure applies to all non-runtime files in the repository, including documentation, configuration, and scripts. It governs file placement, naming, deduplication, archival, and deletion decisions.
 
-Root‑level files answer:
+---
 
-> *What is this project and how do contributors work on it safely?*
+## III. Authority Level
 
-Allowed at root:
+Normative (SOP Tier). Subordinate to ARC-INV-000 and SOP-DOC-000.
+
+---
+
+## IV. Dependencies
+
+- ARC-INV-000: Core Invariants
+- SOP-DOC-000: Documentation Standard (tier classification and naming conventions)
+
+---
+
+## V. Non-Negotiable Constraints
+
+The following rules must be honored before any file operation:
+
+1. **No semantic changes during cleanup.**
+   - File moves, renames, and deletions only.
+   - No logic refactors mixed into organization work.
+
+2. **All moves must preserve history.**
+   - Use `git mv` exclusively.
+   - No copy-paste-delete workflows.
+
+3. **No broken references are allowed.**
+   - Python imports
+   - Markdown links
+   - CI references
+   - Navigation links
+
+4. **Every directory must have a single responsibility.**
+   - If a directory cannot be described in one sentence, it is incorrectly scoped.
+
+---
+
+## VI. Canonical Repository Structure
+
+### Repository Root — Entry Points and Contracts
+
+Root-level files answer: *What is this project and how do contributors work on it safely?*
+
+Permitted at root:
 
 ```
 README.md
@@ -60,67 +79,66 @@ LICENSE
 docker-compose.yml
 ```
 
-❌ No feature documentation\
-❌ No design drafts\
-❌ No legacy notes
+Prohibited at root:
+
+- Feature documentation
+- Design drafts
+- Legacy notes
+
+Root must contain fewer than 15 files.
 
 ---
 
-### `/docs/` = Canonical Knowledge (No Runtime Code)
+### `/docs/` — Canonical Knowledge (No Runtime Code)
 
 ```
 docs/
-├── README.md                 ← documentation map
-├── development/              ← policies, gates, internal rules
-├── technical-reference/      ← system internals & architecture
-├── operations/               ← production & maintenance
-├── security/                 ← audits & threat models
-├── user-guides/              ← full user‑facing documentation
-└── archive/                  ← frozen historical docs
+├── README.md              ← documentation map
+├── arc/                   ← architecture and invariants
+├── sop/                   ← standard operating procedures
+├── sec/                   ← security audits and controls
+├── dom/                   ← domain specifications
+├── feat/                  ← feature specifications
+├── log/                   ← historical records and milestones
+└── user-guides/           ← user-facing documentation
 ```
 
 Rules:
 
-- No `misc/`, `old/`, or `notes/` folders
-- Outdated but historically useful → `archive/`
-- Outdated and useless → delete
+- No `misc/`, `old/`, or `notes/` folders.
+- Outdated but historically useful content → `docs/log/`.
+- Outdated and useless content → delete.
 
 ---
 
-### `/app/` = Runtime Code Only
+### `/app/` — Runtime Code Only
 
-Rules:
-
-- No documentation files
-- No experimental scripts
-- No commented‑out legacy modules
-- Subfolders reflect runtime responsibility, not developer convenience
+- No documentation files.
+- No experimental scripts.
+- No commented-out legacy modules.
+- Subfolders reflect runtime responsibility, not developer convenience.
 
 ---
 
-## 3. Documentation Audience Separation (Critical)
+## VII. Documentation Audience Classification
 
-Documentation is an **interface**, and different audiences require different interfaces.
+Documentation is an interface. Different audiences require different interfaces. The three tiers defined in SOP-DOC-000 map directly to audience:
 
-### Three Documentation Classes
+| Tier            | Audience                     | Location                  |
+|-----------------|------------------------------|---------------------------|
+| Constitutional  | Architects and maintainers   | `docs/arc/ARC-INV-*`     |
+| Normative       | Contributors and AI agents   | `docs/arc/`, `docs/sop/`, `docs/dom/`, `docs/feat/`, `.claude/rules/` |
+| Informative     | End users, public            | `docs/user-guides/`, root files, `docs/log/` |
 
-1. **User‑Facing (Public, Low‑Trust)**
-2. **Developer‑Facing (Medium‑Trust)**
-3. **Internal / Operational (High‑Trust)**
-
-Each document MUST answer the question:
-
-> *Who is this written for?*
-
-That answer determines **where it lives** and **whether it may appear on the doc site**.
+Each document must answer: *Who is this written for?* That answer determines where it lives and whether it may appear on the public documentation site.
 
 ---
 
-## 4. Canonical Source of Truth Rules
+## VIII. Canonical Source of Truth
 
-### GitHub Repository
+### Repository
 
-The repository contains the **complete, authoritative documentation**:
+The repository contains the complete, authoritative documentation:
 
 - Policies
 - Enforcement rules
@@ -128,67 +146,61 @@ The repository contains the **complete, authoritative documentation**:
 - Failure modes
 - Operational runbooks
 
-Nothing in the doc site is considered canonical.
+No external site or mirror is considered canonical.
 
 ---
 
 ### Documentation Site
 
-The documentation site is a **curated projection**, not a mirror.
+The documentation site is a curated projection of user-facing content, not a mirror of the repository.
 
 It must be:
 
 - Shorter
-- Safer
-- Outcome‑focused
-- Free of enforcement and internal mechanics
+- Outcome-focused
+- Free of enforcement mechanisms and internal operational details
 
-**Golden Rule:**
+**Golden Rule:** Users get guarantees, not mechanisms.
 
-> *Users get guarantees, not mechanisms.*
+Permitted source for the documentation site: `docs/user-guides/` only.
 
----
+Prohibited patterns:
 
-## 5. Handling the Same Topic for Different Audiences
-
-### ❌ Forbidden Patterns
-
-- Copy‑pasting full docs and “simplifying” them
-- Maintaining two parallel canonical versions
-- Linking from doc site → internal GitHub docs
+- Copy-pasting full normative docs and "simplifying" them.
+- Maintaining two parallel canonical versions of the same content.
+- Linking from the documentation site to internal normative GitHub docs.
 
 ---
 
-### ✅ Approved Pattern: Layered Documentation
+## IX. Approved Layering Pattern
 
-**Canonical (GitHub):**
+For topics that span both normative and user-facing audiences:
+
+**Normative version (canonical, in repository):**
 
 ```
-docs/development/SCHEMA_CONTRACTION_POLICY.md
+docs/sop/SOP-DOC-XXX_[Topic].md
 ```
 
 - Full details
 - Enforcement language
-- CI rules
 - Incident references
 
-**Doc Site Summary:**
+**User-facing summary (documentation site):**
 
-```
-docs-site/concepts/schema-changes.md
-```
+Derived from the normative version, containing:
 
-- High‑level intent only
-- User‑visible guarantees
-- No implementation details
+- High-level intent only
+- User-visible guarantees
+- No implementation details or enforcement mechanics
 
-Doc‑site versions must never explain *how* something is enforced.
+The user-facing version must never explain how something is enforced.
 
 ---
 
-## 6. Cleanup Procedure (Safe Order)
+## X. Cleanup Procedure
 
-### Phase 1: Inventory (Read‑Only)
+### Phase 1: Inventory (Read-Only)
 
 1. Generate repository tree:
 
@@ -196,135 +208,122 @@ Doc‑site versions must never explain *how* something is enforced.
    tree -L 4 > repo_tree.txt
    ```
 
-2. Classify all non‑code files as:
-
+2. Classify all non-code files as one of:
    - Canonical
    - Duplicate
    - Outdated but historical
    - Outdated and useless
    - Orphaned (unreferenced)
 
-No moves during this phase.
+   No file operations during this phase.
 
 ---
 
 ### Phase 2: Canonical Location Assignment
 
-For every topic, define **exactly one home**.
+For every topic, define exactly one canonical home per SOP-DOC-000 namespace rules.
 
-If two files compete:
+If two files compete for the same topic:
 
-- Keep the newer or more complete
-- Archive or delete the rest
+- Keep the newer or more complete version.
+- Archive or delete the other.
 
 ---
 
-### Phase 3: Move Files
+### Phase 3: Execute File Operations
 
 Rules:
 
-- Use `git mv`
-- One logical group per commit
+- Use `git mv` for all moves.
+- One logical group per commit.
 - Commit message format:
   ```
-  docs: move <topic> docs to canonical location
+  docs: move [topic] to canonical location
   ```
 
 ---
 
-## 7. Broken Reference Detection
+## XI. Broken Reference Verification
 
-### 7.1 Application Code
+After any file operation:
 
-After code‑related moves:
+### Application Code
 
 ```bash
 pytest -q
 flask routes
 ```
 
----
+### Markdown Links
 
-### 7.2 Markdown Links
-
-For each moved doc:
+For each moved document:
 
 ```bash
 rg "old_path|old_filename" docs/
 ```
 
-Fix **all inbound links**.
+Fix all inbound links before committing.
 
 ---
 
-### 7.3 Doc Site Integrity
-
-If using a static doc site:
-
-- Update nav/sidebars
-- Run local doc build
-- Cleanup fails if site build fails
-
----
-
-## 8. Duplicate, Archive, and Delete Policy
+## XII. Duplicate, Archive, and Delete Policy
 
 ### Decision Tree
 
-- Same topic, different content → merge, archive duplicate
-- Same topic, one obsolete → archive obsolete
-- Same topic, both obsolete → archive one, delete one
+- Same topic, different content → merge, archive duplicate.
+- Same topic, one obsolete → archive obsolete version.
+- Same topic, both obsolete → archive one, delete the other.
 
-Archived docs:
+### Archived Documents
 
-- Read‑only
-- No new links allowed
+- Archived documents are read-only.
+- No new links may point to archived documents.
+- Archived content belongs in `docs/log/`.
+
+### Deletion Criteria
+
+A file may be deleted only if all of the following are true:
+
+- It is not referenced by any active document, CI configuration, or navigation file.
+- It contains no content that is not fully superseded by an active document.
+- It has been confirmed orphaned via reference search (Section XI).
+
+Commit message format:
+
+```
+docs: remove obsolete [topic] documentation
+```
 
 ---
 
-## 9. Deletion Checklist
-
-A file may be deleted only if:
-
-- [ ] TODO: Define deletion criteria here.
-
-Commit message:
-
-```
-docs: remove obsolete <topic> documentation
-```
-
----
-
-## 10. Preventing Future Entropy
+## XIII. Entropy Prevention
 
 ### Mandatory Guardrails
 
-1. `docs/README.md` explaining folder purpose
-2. No new root‑level files without explicit justification
-3. Doc‑site build may only read from:
-   - `docs/user-guides/`
-   - `docs-site/`
-
-Attempting to ingest internal docs MUST fail the build.
+1. `docs/README.md` must explain the purpose of each namespace folder.
+2. No new root-level files without explicit justification documented in a commit message.
+3. The public documentation site may only source content from `docs/user-guides/`.
 
 ---
 
-## 11. Completion Criteria
+## XIV. Completion Criteria
 
-Cleanup is complete when:
+A cleanup pass is complete when:
 
-- No duplicate documentation exists
-- Every doc has a clear home
-- Root directory contains < 15 files
-- No broken links
-- Tests and CI pass
+- No duplicate documentation exists.
+- Every document has a canonical home per SOP-DOC-000.
+- Repository root contains fewer than 15 files.
+- No broken links exist.
+- Tests and CI pass.
+
+> If nothing was deleted, nothing was cleaned. Archiving is mercy. Deletion is hygiene.
 
 ---
 
-## 12. Final Rule
+## XV. Amendment
 
-> **If nothing was deleted, nothing was cleaned.**
+Revisions to this document must:
 
-Archiving is mercy. Deletion is hygiene.
-
+1. Increment the version number.
+2. Update the Effective Date.
+3. Maintain consistency with ARC-INV-000 and SOP-DOC-000.
