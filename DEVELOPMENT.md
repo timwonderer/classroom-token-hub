@@ -43,7 +43,7 @@
 - ✅ **Insurance Class Scoping** - Fixed insurance management filters to respect selected class period
 - ✅ **Security Hardening** - Improved Grafana proxy content-type filtering to prevent XSS
 
-See [RELEASE_NOTES_v1.8.0.md](docs/sop/SOP-REL-015_RELEASE_NOTES_v1.8.0.md) for full details.
+See [RELEASE_NOTES_v1.8.0.md](docs/log/LOG-REL-015_RELEASE_NOTES_v1.8.0.md) for full details.
 
 ### ✅ Version 1.7.0 - January 9, 2026
 
@@ -60,7 +60,7 @@ See [RELEASE_NOTES_v1.8.0.md](docs/sop/SOP-REL-015_RELEASE_NOTES_v1.8.0.md) for 
 - ✅ **ToS Acknowledgment** - Compliance modal during admin signup
 - ✅ **Issue Resolution Improvements** - EasyMDE form fixes and zero-value event display
 
-See [RELEASE_NOTES_v1.7.0.md](docs/sop/SOP-REL-013_RELEASE_NOTES_v1.7.0.md) for full details.
+See [RELEASE_NOTES_v1.7.0.md](docs/log/LOG-REL-013_RELEASE_NOTES_v1.7.0.md) for full details.
 
 ### ✅ Version 1.6.0 - January 1, 2026
 
@@ -72,7 +72,7 @@ See [RELEASE_NOTES_v1.7.0.md](docs/sop/SOP-REL-013_RELEASE_NOTES_v1.7.0.md) for 
 - ✅ **Passkey Authentication Fixes** - Improved environment variable loading and error handling
 - ✅ **Documentation Updates** - Standardized file paths and references
 
-See [RELEASE_NOTES_v1.6.0.md](docs/sop/SOP-REL-012_RELEASE_NOTES_v1.6.0.md) for full details.
+See [RELEASE_NOTES_v1.6.0.md](docs/log/LOG-REL-012_RELEASE_NOTES_v1.6.0.md) for full details.
 
 ### ✅ Version 1.5.0 - December 29, 2025
 
@@ -84,7 +84,7 @@ See [RELEASE_NOTES_v1.6.0.md](docs/sop/SOP-REL-012_RELEASE_NOTES_v1.6.0.md) for 
 - ✅ **Security Hardening** - Comprehensive attack surface audit and remediation
 - ✅ **Time Handling** - Standardized UTC timestamp formatting
 
-See [RELEASE_NOTES_v1.5.0.md](docs/sop/SOP-REL-011_RELEASE_NOTES_v1.5.0.md) for full details.
+See [RELEASE_NOTES_v1.5.0.md](docs/log/LOG-REL-011_RELEASE_NOTES_v1.5.0.md) for full details.
 
 ### ✅ Version 1.4.0 - December 27, 2025
 
@@ -97,7 +97,7 @@ See [RELEASE_NOTES_v1.5.0.md](docs/sop/SOP-REL-011_RELEASE_NOTES_v1.5.0.md) for 
 - ✅ **Streamlined Authentication** - Improved login flow with better error handling
 - ✅ **Student Dashboard Improvements** - Side-by-side account cards with projected interest
 
-See [RELEASE_NOTES_v1.4.0.md](docs/sop/SOP-REL-010_RELEASE_NOTES_v1.4.0.md) for full details.
+See [RELEASE_NOTES_v1.4.0.md](docs/log/LOG-REL-010_RELEASE_NOTES_v1.4.0.md) for full details.
 
 ### ✅ Version 1.3.0 - December 25, 2025
 
@@ -109,7 +109,7 @@ See [RELEASE_NOTES_v1.4.0.md](docs/sop/SOP-REL-010_RELEASE_NOTES_v1.4.0.md) for 
 - ✅ **Security Audit** - Comprehensive attack surface security audit completed
 - ✅ **Service Worker Fixes** - Resolved persistent browser console errors
 
-See [RELEASE_NOTES_v1.3.0.md](docs/sop/SOP-REL-009_RELEASE_NOTES_v1.3.0.md) for full details.
+See [RELEASE_NOTES_v1.3.0.md](docs/log/LOG-REL-009_RELEASE_NOTES_v1.3.0.md) for full details.
 
 ### ✅ Version 1.2.0 - December 18, 2025
 
@@ -123,7 +123,7 @@ See [RELEASE_NOTES_v1.3.0.md](docs/sop/SOP-REL-009_RELEASE_NOTES_v1.3.0.md) for 
 - ✅ **Critical Payroll Fix** - Resolved multi-tenancy data leak in payroll system
 - ✅ **Improved Terminology** - "Start Work/Break Done" replaces "Tap In/Out"
 
-See [RELEASE_NOTES_v1.2.0.md](docs/sop/SOP-REL-007_RELEASE_NOTES_v1.2.0.md) for full details.
+See [RELEASE_NOTES_v1.2.0.md](docs/log/LOG-REL-007_RELEASE_NOTES_v1.2.0.md) for full details.
 
 ### ✅ Version 1.0.0 - November 29, 2024
 
@@ -219,7 +219,7 @@ See [RELEASE_NOTES_v1.2.0.md](docs/sop/SOP-REL-007_RELEASE_NOTES_v1.2.0.md) for 
 - 🔄 Teacher analytics for payroll and store performance (partial - economy health page provides CWI analysis)
 - ⏳ Enhanced reporting and export capabilities (planned for future release)
 
-**See:** [RELEASE_NOTES_v1.1.0.md](docs/sop/SOP-REL-005_RELEASE_NOTES_v1.1.0.md) for complete details
+**See:** [RELEASE_NOTES_v1.1.0.md](docs/log/LOG-REL-005_RELEASE_NOTES_v1.1.0.md) for complete details
 
 ### Version 1.2 - Mobile Experience
 - Progressive Web App (PWA) capabilities
