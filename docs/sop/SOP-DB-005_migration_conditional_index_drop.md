@@ -1,8 +1,8 @@
 # Migration Fix: 1a4ee2388d62 - Conditional Index Drops
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DB-005       | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DB-005       | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## Problem
 

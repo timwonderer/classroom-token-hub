@@ -7,9 +7,9 @@ roles: [teacher, developer]
 
 # Classroom Economy Analytics System — Development Specification
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| ARC-OPS-004      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| ARC-OPS-004      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 This document defines the scope, constraints, metrics, and invariants governing the Analytics feature in the Classroom Economy App.
 

@@ -1,8 +1,8 @@
 # Hall Pass Feature Specification
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| FEAT-ARC-001     | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| FEAT-ARC-001     | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 Status: Active (Normative)
 Last Updated: 2026-02-24

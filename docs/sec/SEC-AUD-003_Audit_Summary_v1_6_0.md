@@ -1,8 +1,8 @@
 # v1.6.0 Release Preparation - Comprehensive Audit Summary
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SEC-AUD-003      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SEC-AUD-003      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Date**: January 1, 2026  
 **Auditor**: Repository Review Team  

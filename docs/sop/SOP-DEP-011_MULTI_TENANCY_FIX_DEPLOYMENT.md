@@ -4,9 +4,9 @@ searchable: false
 
 # Multi-Tenancy Security Fix - Deployment Instructions
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DEP-011      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DEP-011      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## Overview
 

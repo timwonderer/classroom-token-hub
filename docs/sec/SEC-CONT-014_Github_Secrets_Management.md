@@ -1,8 +1,8 @@
 # How to Add SSH Host Key to GitHub Secrets
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SEC-CONT-014     | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SEC-CONT-014     | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## Quick Start (5 Minutes)
 

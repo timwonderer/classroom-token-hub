@@ -1,8 +1,8 @@
 # GitHub Pages Configuration
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DEP-014      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DEP-014      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Last Updated:** February 9, 2026  
 **Version:** 1.8.0

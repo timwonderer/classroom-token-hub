@@ -1,8 +1,8 @@
 # Grafana Access Fix Guide
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DEP-008      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DEP-008      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## Problem
 

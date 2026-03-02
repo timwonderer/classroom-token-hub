@@ -1,8 +1,8 @@
 # Release Notes - Version 1.4.0
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-REL-010      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-REL-010      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 **Release Date**: December 27, 2025
 

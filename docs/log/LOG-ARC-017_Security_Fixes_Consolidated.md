@@ -1,8 +1,8 @@
 # Security Fixes Consolidation Summary
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-ARC-017      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-017      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 **Consolidated Branch:** `claude/evaluate-insurance-overhaul-019oGphUSg12cNwcSiwgeqzP`
 **Consolidation Date:** 2025-11-24

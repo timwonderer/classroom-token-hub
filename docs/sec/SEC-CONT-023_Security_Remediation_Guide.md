@@ -1,8 +1,8 @@
 # Security Remediation Implementation Guide
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SEC-CONT-023     | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SEC-CONT-023     | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Date:** 2025-12-22
 **Purpose:** Step-by-step instructions to fix critical and high-severity security issues

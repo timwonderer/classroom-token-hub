@@ -1,8 +1,8 @@
 # Database Migration Report - Staging
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DB-007       | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DB-007       | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Performed By:** Jules (AI Assistant)
 **Date:** 2025-11-24

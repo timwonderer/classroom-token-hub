@@ -1,8 +1,8 @@
 # PWA Documentation
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| ARC-OPS-002      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| ARC-OPS-002      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## Overview
 

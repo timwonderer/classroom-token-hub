@@ -1,8 +1,8 @@
 # Rent Item Types Implementation Plan
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| FEAT-ARC-002     | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| FEAT-ARC-002     | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Feature:** Rent Item Type Extension (Privilege / Per-Use / Hall Pass)
 **Date:** 2026-02-06

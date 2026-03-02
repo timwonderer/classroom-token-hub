@@ -1,8 +1,8 @@
 # ARC-SEC-027: Multi-Tenancy Threat Model
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| ARC-SEC-027      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| ARC-SEC-027      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## I. Purpose
 Document threat vectors, attack scenarios, and required mitigations strictly concerning multi-tenancy boundaries and `join_code` scoping.

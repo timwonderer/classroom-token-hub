@@ -1,8 +1,8 @@
 # DevOps Documentation Migration Plan
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-MILE-002     | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-MILE-002     | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 **Status:** ✅ Completed (Archived)
 **Date:** 2026-03-01

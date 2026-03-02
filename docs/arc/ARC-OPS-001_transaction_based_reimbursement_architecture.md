@@ -1,8 +1,8 @@
 # Transaction-Based Reimbursement Architecture — Specification & Invariants
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| ARC-OPS-001      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| ARC-OPS-001      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 This document defines the **architecture** for transaction-based insurance reimbursement (claim type: `transaction_monetary` or of similar type).
 

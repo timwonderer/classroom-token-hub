@@ -1,8 +1,8 @@
 # Documentation Taxonomy and Namespace
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DOC-001      | 1.0     | 2026-02-28 | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DOC-001      | 1.0     | 2026-02-28 | N/A        | Constitutional            |
 
 ---
 

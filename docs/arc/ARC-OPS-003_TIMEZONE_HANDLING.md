@@ -7,9 +7,9 @@ description: Client-side timezone conversion patterns and UTC storage convention
 
 # Timezone Handling
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| ARC-OPS-003      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| ARC-OPS-003      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## Overview
 

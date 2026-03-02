@@ -7,9 +7,9 @@ roles: [developer, teacher]
 
 # Classroom Token Hub - Project History and Philosophy
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-ARC-031      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-031      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 **Note:** This file has been consolidated and moved to the repository root.
 

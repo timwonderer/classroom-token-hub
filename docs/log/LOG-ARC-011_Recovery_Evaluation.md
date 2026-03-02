@@ -1,8 +1,8 @@
 # Teacher Account Recovery Evaluation
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-ARC-011      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-011      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 ## Overview
 The "student-assisted" account recovery method allows a teacher to reset their credentials by validating their identity through a trusted network of students. This approach is designed to be "self-serve" (avoiding System Administrator intervention) while collecting minimal PII.

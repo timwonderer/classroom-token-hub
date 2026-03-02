@@ -1,8 +1,8 @@
 # Economy Balance Checker - Implementation Guide
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| DOM-ARC-002      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| DOM-ARC-002      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## Overview
 

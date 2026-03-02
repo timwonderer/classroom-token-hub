@@ -1,8 +1,8 @@
 # Regression Testing Report - Staging Environment
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-ARC-019      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-019      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 **Tester:** Jules (AI Assistant)
 **Date:** 2025-11-24

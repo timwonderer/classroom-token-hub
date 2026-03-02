@@ -1,8 +1,8 @@
 # Release Notes Archive
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-REL-003      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-REL-003      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 This directory contains historical release notes for Classroom Token Hub.
 

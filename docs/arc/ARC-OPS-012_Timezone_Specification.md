@@ -1,8 +1,8 @@
 # Datetime Handling Specification
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| ARC-OPS-012      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| ARC-OPS-012      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 Classroom Economy / Classroom Token Hub
 

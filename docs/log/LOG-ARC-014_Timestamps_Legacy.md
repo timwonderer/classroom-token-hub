@@ -1,8 +1,8 @@
 # Timestamp Handling (General)
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-ARC-014      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-014      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 ## Goal
 Ensure timestamps display correctly across the app regardless of server or user timezone.

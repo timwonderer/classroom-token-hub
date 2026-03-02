@@ -1,8 +1,8 @@
 # Comprehensive Attack Surface Security Audit
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SEC-AUD-012      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SEC-AUD-012      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Date:** 2025-12-22
 **Auditor:** Claude Code Security Analysis

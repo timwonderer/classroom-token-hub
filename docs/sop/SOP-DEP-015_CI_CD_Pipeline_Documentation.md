@@ -1,8 +1,8 @@
 # CI/CD Pipeline Documentation
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DEP-015      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DEP-015      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## I. Purpose
 Document the Continuous Integration and Continuous Deployment (CI/CD) pipelines, primarily configured via GitHub Actions, defining automated tests, staging deploy processes, and failure handling.

@@ -1,8 +1,8 @@
 # Migration Check Report
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DB-006       | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DB-006       | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Date:** 2025-12-12  
 **Branch:** claude/teacher-account-recovery-018RpNF2GLYWt8Wecu7C5QrN
@@ -38,7 +38,7 @@ dd4ee5ff6aa7 - Add student verification for teacher account recovery (HEAD)
 
 ### 4. Migration File Integrity
 | Migration | Status | Has Upgrade | Has Downgrade | Syntax |
-|-----------|--------|-------------|---------------|---------|
+|-----------|--------|-------------|-----------------|---------|
 | cc3dd4ee5ff6 |  | Yes | Yes | Valid |
 | dd4ee5ff6aa7 |  | Yes | Yes | Valid |
 

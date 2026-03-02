@@ -1,8 +1,8 @@
 # Fix insurance policy scoping and add marketing badges
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-ARC-022      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-022      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 ## Summary
 

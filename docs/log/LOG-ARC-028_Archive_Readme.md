@@ -1,8 +1,8 @@
 # Archive Documentation
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-ARC-028      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-028      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 This directory contains historical documentation, bug fix reports, and PR summaries from the project's development history.
 

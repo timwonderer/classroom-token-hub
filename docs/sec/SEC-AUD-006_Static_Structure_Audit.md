@@ -1,8 +1,8 @@
 # Stage 1 Audit Report: Static Structural Analysis
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SEC-AUD-006      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SEC-AUD-006      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## Summary
 - **Total Findings:** 1953

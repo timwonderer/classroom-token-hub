@@ -1,8 +1,8 @@
 # Rollback Procedures
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DEP-016      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DEP-016      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## I. Purpose
 Establish a repeatable workflow for rolling back non-functional or severely bugged deployments to a prior stable state across staging and production environments.

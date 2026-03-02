@@ -1,8 +1,8 @@
 # Template Redesign Recommendations
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-ARC-012      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-012      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 ## Summary
 This document outlines templates that have been redesigned or could benefit from redesign to improve UX, reduce clutter, and prevent overflow issues.

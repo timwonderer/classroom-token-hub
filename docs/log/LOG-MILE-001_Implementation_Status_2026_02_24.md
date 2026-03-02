@@ -1,8 +1,8 @@
 # Implementation Status vs Spec (2026-02-24)
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-MILE-001     | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-MILE-001     | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 Scope:
 - `docs/development/HALL_PASS_FEATURE_SPEC.md`

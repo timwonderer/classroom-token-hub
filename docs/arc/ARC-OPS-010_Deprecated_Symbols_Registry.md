@@ -1,8 +1,8 @@
 # Deprecated Symbols Registry
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| ARC-OPS-010      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| ARC-OPS-010      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 This document describes symbols that are **explicitly prohibited** from appearing in application code.
 

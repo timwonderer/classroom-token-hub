@@ -1,8 +1,8 @@
 # Security Improvements Implementation Guide
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SEC-CONT-022     | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SEC-CONT-022     | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Date:** 2025-11-28
 **Implementation Status:**  Pending fixes

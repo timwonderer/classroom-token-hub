@@ -4,9 +4,9 @@ searchable: false
 
 # Migration Status Report
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DB-003       | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DB-003       | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## Date: 2025-11-29
 

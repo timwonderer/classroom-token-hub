@@ -1,8 +1,8 @@
 # Operational Constraints Foundation
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| ARC-OPS-000      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| ARC-OPS-000      | 1.0     | 2026-03-01     | N/A        | Constitutional            |
 
 ## I. Purpose
 Define non-negotiable operational constraints for the Classroom Token Hub application, setting the baseline for performance, resources, limits, dependencies, time zone handling, and data retention.

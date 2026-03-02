@@ -1,8 +1,8 @@
 # Account Recovery & Reclaim Specification
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| FEAT-ARC-004     | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| FEAT-ARC-004     | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 Purpose
 

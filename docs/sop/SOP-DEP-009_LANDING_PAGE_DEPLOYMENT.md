@@ -1,8 +1,8 @@
 # Landing Page Deployment Guide
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DEP-009      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DEP-009      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Version:** 1.7.0
 **Last Updated:** January 9, 2026

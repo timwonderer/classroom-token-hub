@@ -1,8 +1,8 @@
 # Stage 2 – Economic Invariant Risk Audit
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SEC-AUD-007      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SEC-AUD-007      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Date:** 2026-02-16
 

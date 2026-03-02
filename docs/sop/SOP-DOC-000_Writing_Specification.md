@@ -1,8 +1,8 @@
 # Classroom Token Hub Documentation Specification
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DOC-000      | 1.0     | 2026-02-28     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DOC-000      | 2.0     | 2026-03-01     | N/A        | Constitutional  |
 
 ---
 
@@ -102,14 +102,19 @@ Historical documents may include narrative but must not define rules.
 
 ## V. Authority Hierarchy
 
-1. ARC-INV documents define constitutional-level constraints.
+All documents must specify one of three Authority Levels in their metadata header:
+
+1. **Constitutional**: Represents the highest level of authority. Other levels cannot violate Constitutional rules. Lower-level documents must reference the relevant Constitutional document when implementing logic. Includes Core Invariants and foundational rulebooks.
+2. **Normative**: Represents the second level of authority. Defines rules, expectations, standards, and conventions. Must reference Constitutional documentation but cannot define constitutional-level behaviors. Includes Domain, Feature, Security, and SOP documents.
+3. **Informative**: The lowest level of authority. Describes, presents, and records events, guides, and other information that does not define how the application operates. Includes Milestone, Archive, and Historical Log documents.
+
+**Resolution of Conflict**:
+1. Constitutional documents supersede Normative documents.
 2. ARC and DOM documents define authoritative application structure.
 3. FEAT documents must conform to ARC and DOM documents.
 4. SOP documents govern human procedures and must not conflict with ARC or DOM documents.
 5. SEC documents may mandate remediation actions but must remain consistent with ARC-INV-000.
-6. LOG documents are descriptive and hold no normative authority.
-
-In the event of conflict, ARC documents take precedence.
+6. Informative LOG documents hold no normative authority.
 
 ---
 

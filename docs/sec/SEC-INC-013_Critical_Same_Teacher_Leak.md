@@ -1,8 +1,8 @@
 #  RESOLVED: Same-Teacher Multi-Period Data Leak
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SEC-INC-013      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SEC-INC-013      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Severity:** P0 CRITICAL (Originally)
 **Date Identified:** 2025-11-29

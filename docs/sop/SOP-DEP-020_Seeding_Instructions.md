@@ -1,8 +1,8 @@
 # Multi-Tenancy Test Data Seeding Instructions
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DEP-020      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DEP-020      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 This document explains how to use the `seed_multi_tenancy_test_data.py` script to populate your database with comprehensive test data for validating the join_code-based multi-tenancy fixes.
 

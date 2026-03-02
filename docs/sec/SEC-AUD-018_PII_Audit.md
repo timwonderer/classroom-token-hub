@@ -4,9 +4,9 @@ searchable: false
 
 # PII Audit for Multi-Tenancy Rollout
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SEC-AUD-018      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SEC-AUD-018      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 We reviewed the multi-tenant data model and request flows to confirm no new personally identifiable information (PII) is stored beyond the existing minimal surface:
 

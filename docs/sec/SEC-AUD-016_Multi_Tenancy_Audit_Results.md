@@ -1,8 +1,8 @@
 # Multi-Tenancy Security Audit Results
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SEC-AUD-016      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SEC-AUD-016      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Date:** 2025-12-23
 **Auditor:** Claude Code

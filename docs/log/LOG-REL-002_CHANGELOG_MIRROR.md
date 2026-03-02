@@ -7,9 +7,9 @@ keywords: [changelog, updates, version history, releases, what's new, bug fixes,
 
 # Changelog
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-REL-002      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-REL-002      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 **Note:** The changelog has been consolidated at the repository root per Keep a Changelog standards.
 

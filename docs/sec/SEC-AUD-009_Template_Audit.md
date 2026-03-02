@@ -1,8 +1,8 @@
 # Template Audit Report
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SEC-AUD-009      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SEC-AUD-009      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Date:** 2026-02-18  
 **Scope:** `templates/` directory  

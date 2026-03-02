@@ -1,8 +1,8 @@
 # Incident Post-Mortem: `teacher_id` Removal Regression
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-ARC-032      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-032      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 **Date:** 2026-01-12
 **Severity:** Critical (Production Regression)

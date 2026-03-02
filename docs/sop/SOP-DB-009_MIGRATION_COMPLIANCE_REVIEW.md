@@ -1,8 +1,8 @@
 # Migration Compliance Review Report
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DB-009       | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DB-009       | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Branch:** `claude/review-migration-compliance-9Qj73`
 **Date:** 2026-02-04
@@ -70,7 +70,7 @@ This violates the core principle from `MIGRATION_BEST_PRACTICES.md`:
 This is the **exact error** that the project documentation references as a real-world incident.
 
 | Migration File | Line | Columns Added | Table | Impact |
-|----------------|------|---------------|-------|---------|
+|----------------|------|-----------------|-------|---------|
 | `1e2f3a4b5c6d_add_username_lookup_hash.py` | 20 | `username_lookup_hash` | `students` | P0 - Security feature |
 | `3e1b8bd76b40_add_block_column_to_hall_pass_settings_.py` | 18 | `block` | `hall_pass_settings` | P1 - Multi-tenancy |
 | `2060c104e884_add_display_name_and_class_label.py` | 22, 26 | `display_name`, `class_label` | `teacher_blocks` | P1 - UX feature |

@@ -1,8 +1,8 @@
 # Release Notes - Version 1.5.0
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-REL-011      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-REL-011      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 **Release Date**: December 29, 2025  
 **Focus**: Issue reporting lifecycle, security hardening, and operational polish

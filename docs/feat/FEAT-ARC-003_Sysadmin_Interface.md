@@ -1,8 +1,8 @@
 # System Admin Interface - Comprehensive Design
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| FEAT-ARC-003     | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| FEAT-ARC-003     | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## Overview
 The System Admin interface is the super-user control panel for the Classroom Token Hub. It provides complete visibility and control over all aspects of the system.

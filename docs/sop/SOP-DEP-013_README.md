@@ -1,8 +1,8 @@
 # Operations Documentation
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DEP-013      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DEP-013      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 This directory contains operational guides and troubleshooting documentation for managing the Classroom Token Hub in production.
 

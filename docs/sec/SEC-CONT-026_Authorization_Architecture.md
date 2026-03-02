@@ -1,8 +1,8 @@
 # ARC-SEC-026: Authorization Architecture
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| ARC-SEC-026      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| ARC-SEC-026      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## I. Purpose
 Define the Role-Based Access Control (RBAC) model, role definitions, permission scoping, and authoritative access constraints.

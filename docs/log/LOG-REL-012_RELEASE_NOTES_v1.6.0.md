@@ -1,8 +1,8 @@
 # Release Notes - Version 1.6.0
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-REL-012      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-REL-012      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 **Release Date**: January 1, 2026  
 **Focus**: Repository organization, multi-tenancy fixes, and operational stability

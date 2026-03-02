@@ -1,8 +1,8 @@
 # Database Configuration
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DB-010       | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DB-010       | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 ## Automatic Branch-Based Database Switching
 

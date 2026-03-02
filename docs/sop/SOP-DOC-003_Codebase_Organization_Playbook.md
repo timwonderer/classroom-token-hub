@@ -1,8 +1,8 @@
 # Codebase Organization & Documentation Hygiene Playbook
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| SOP-DOC-003      | 1.0     | 2026-03-01     | N/A        | YES           |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| SOP-DOC-003      | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
 **Status:** Authoritative
 

@@ -1,8 +1,8 @@
 # Documentation Review Report
 
-| Reference Number | Version | Effective Date | Supersedes | Authoritative |
-|------------------|---------|----------------|------------|---------------|
-| LOG-ARC-004      | 1.0     | 2026-03-01     | N/A        | NO            |
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-004      | 1.0     | 2026-03-01     | N/A        | Informative                |
 
 **Date:** 2026-01-03
 **Reviewer:** Claude Code
