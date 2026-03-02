@@ -1,5 +1,9 @@
 # Grafana Access Fix Guide
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DEP-008      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 ## Problem
 
 Clicking the Grafana link in the system admin dashboard results in "connection refused" errors with infinite redirect loops.

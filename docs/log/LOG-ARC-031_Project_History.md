@@ -7,6 +7,10 @@ roles: [developer, teacher]
 
 # Classroom Token Hub - Project History and Philosophy
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-ARC-031      | 1.0     | 2026-03-01     | N/A        | NO            |
+
 **Note:** This file has been consolidated and moved to the repository root.
 
 Please see: [`../../PROJECT_HISTORY.md`](../../PROJECT_HISTORY.md)

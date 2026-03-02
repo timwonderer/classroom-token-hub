@@ -1,5 +1,9 @@
 # Release Notes - Version 1.5.0
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-REL-011      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Release Date**: December 29, 2025  
 **Focus**: Issue reporting lifecycle, security hardening, and operational polish
 

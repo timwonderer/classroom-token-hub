@@ -1,5 +1,9 @@
 # Transaction-Based Reimbursement Architecture — Specification & Invariants
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| ARC-OPS-001      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 This document defines the **architecture** for transaction-based insurance reimbursement (claim type: `transaction_monetary` or of similar type).
 
 It focuses on **specification**, **invariants**, and **system boundaries** so the implementation remains correct under manual review, retries, and future feature growth.
@@ -69,7 +73,6 @@ Responsibilities:
 - Create claims (manual or automated).
 - Enforce 1:1 transaction→claim.
 - Store decision state (pending/approved/paid/rejected).
-
 
 ## 4. Data Contracts
 
@@ -181,7 +184,6 @@ No duplicated eligibility logic in templates/controllers.
    - compute payout
    - create reimbursement transaction
    - mark claim paid
-
 
 ---
 ## 7. Eligibility Model (Layered)

@@ -7,6 +7,10 @@ roles: [teacher, developer]
 
 # Classroom Economy Analytics System — Development Specification
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| ARC-OPS-004      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 This document defines the scope, constraints, metrics, and invariants governing the Analytics feature in the Classroom Economy App.
 
 The Analytics system exists to observe system health and behavioral patterns, not to grade students, rank individuals, or recreate general-purpose BI tools.
@@ -23,8 +27,6 @@ projections and simulations
 
 drill-down views
 
-
-
 ---
 
 1. Core Purpose (Non-Negotiable)
@@ -32,8 +34,6 @@ drill-down views
 The Analytics system exists to answer one question:
 
 > “Is the classroom economy behaving as designed?”
-
-
 
 Analytics must evaluate:
 
@@ -43,7 +43,6 @@ model compliance
 
 behavioral divergence
 
-
 Analytics must not evaluate:
 
 student worth
@@ -51,8 +50,6 @@ student worth
 student morality
 
 comparative ranking between students
-
-
 
 ---
 
@@ -72,7 +69,6 @@ favor trends over snapshots
 
 bias toward actionable interpretation
 
-
 Analytics must never require:
 
 custom formulas
@@ -83,9 +79,7 @@ pivot tables
 
 spreadsheet-like manipulation
 
-
 If a teacher has to “figure out what to look for,” the system has failed.
-
 
 ---
 
@@ -105,7 +99,6 @@ leaderboards
 
 raw wealth rankings
 
-
 3.2 Required Framing
 
 All monetary analytics must be expressed as one of the following:
@@ -116,10 +109,8 @@ percentage of students within defined CWI bands
 
 trend relative to CWI over time
 
-
 CWI is the baseline model.
 Analytics measure deviation from the model, not absolute outcomes.
-
 
 ---
 
@@ -141,7 +132,6 @@ percentage of students within CWI deviation bands
 
 budget survival test pass rate
 
-
 Rules:
 
 must be aggregated at class level
@@ -149,8 +139,6 @@ must be aggregated at class level
 must update automatically
 
 must be readable in under 5 seconds
-
-
 
 ---
 
@@ -168,7 +156,6 @@ rising hoarding behavior
 
 prolonged inactivity
 
-
 Rules:
 
 must be trend-based
@@ -176,8 +163,6 @@ must be trend-based
 must include directionality (improving / worsening)
 
 must never default to blaming students
-
-
 
 ---
 
@@ -195,7 +180,6 @@ expense category distribution
 
 intervention history
 
-
 Rules:
 
 must never be shown by default
@@ -203,8 +187,6 @@ must never be shown by default
 must be contextualized with CWI expectations
 
 must explain why the metric matters
-
-
 
 ---
 
@@ -219,7 +201,6 @@ All analytics must specify:
 the time window evaluated (e.g., week, pay cycle, rent cycle)
 
 whether values are cumulative or rolling
-
 
 Undefined time scopes are prohibited.
 
@@ -237,9 +218,7 @@ wildcard constraints
 
 holidays or shortened weeks
 
-
 Charts without context are considered incomplete.
-
 
 ---
 
@@ -257,13 +236,11 @@ be adjustable by teachers within bounded ranges
 
 default to conservative, non-punitive values
 
-
 Examples:
 
 “>20% of students outside −20% CWI deviation”
 
 “Money velocity dropped >30% week-over-week”
-
 
 6.2 Alert Behavior
 
@@ -275,7 +252,6 @@ explain why it might matter
 
 suggest possible interventions
 
-
 Alerts must never:
 
 shame students
@@ -283,8 +259,6 @@ shame students
 prescribe discipline
 
 trigger automatic penalties
-
-
 
 ---
 
@@ -306,7 +280,6 @@ insurance premiums
 
 fines
 
-
 7.2 Required Outputs
 
 Simulations must report:
@@ -317,7 +290,6 @@ projected CWI deviation distribution
 
 projected engagement risk
 
-
 Simulations must never:
 
 directly apply changes
@@ -326,10 +298,8 @@ persist results
 
 overwrite live data
 
-
 Analytics simulate.
 Other systems decide.
-
 
 ---
 
@@ -341,16 +311,13 @@ Analytics answer: “Is something wrong?”
 
 Logs answer: “What exactly happened?”
 
-
 Analytics must never:
 
 display full transaction lists by default
 
 function as an audit ledger
 
-
 Logs must be accessible only via intentional navigation.
-
 
 ---
 
@@ -366,9 +333,7 @@ comparative ranking is prohibited
 
 visual language must avoid “failure” framing
 
-
 Analytics are about system behavior, not student character.
-
 
 ---
 
@@ -382,9 +347,7 @@ cached by time window
 
 resilient to partial data
 
-
 Real-time recalculation of historical metrics is prohibited unless required for correctness.
-
 
 ---
 
@@ -400,9 +363,7 @@ relation to CWI
 
 interpretation intent
 
-
 If a metric cannot explain why it exists, it should not exist.
-
 
 ---
 
@@ -410,23 +371,15 @@ If a metric cannot explain why it exists, it should not exist.
 
 1. Analytics observe systems, not students.
 
-
 2. All monetary analytics are CWI-relative.
-
 
 3. Trends matter more than totals.
 
-
 4. Alerts guide action, not punishment.
-
 
 5. Analytics never replace teacher judgment.
 
-
 6. If it feels like Excel, it’s wrong.
-
-
-
 
 ---
 
@@ -435,8 +388,6 @@ If a metric cannot explain why it exists, it should not exist.
 A teacher should be able to glance at the Analytics page and say:
 
 > “Something is drifting — and I know what lever to pull.”
-
-
 
 If analytics do more than that, they are doing too much.
 If they do less than that, they are not worth building.

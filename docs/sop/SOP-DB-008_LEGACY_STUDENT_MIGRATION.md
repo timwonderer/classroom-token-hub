@@ -1,5 +1,9 @@
 # Description
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DB-008       | 1.0     | 2026-03-01     | N/A        | YES           |
+
 Adds a data migration system to transition legacy students from the deprecated `teacher_id` field to the modern multi-tenancy system using `StudentTeacher` associations and proper `TeacherBlock` entries.
 
 **Problem Solved:**

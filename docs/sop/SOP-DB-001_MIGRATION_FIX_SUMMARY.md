@@ -1,5 +1,9 @@
 # Migration Fix Summary
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DB-001       | 1.0     | 2026-03-01     | N/A        | YES           |
+
 ## Branch Analyzed
 `claude/fix-multi-tenancy-leaks-015yz9WmT5SE8EFgAzU8Au32`
 

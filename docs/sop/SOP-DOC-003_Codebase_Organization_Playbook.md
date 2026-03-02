@@ -1,5 +1,9 @@
 # Codebase Organization & Documentation Hygiene Playbook
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DOC-003      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Status:** Authoritative
 
 **Primary Goal:** Create a clean, navigable, low-entropy repository by eliminating misplaced, duplicated, and outdated files **without introducing regressions or broken references**.
@@ -283,7 +287,6 @@ Archived docs:
 A file may be deleted only if:
 
 - [ ] TODO: Define deletion criteria here.
-
 
 Commit message:
 

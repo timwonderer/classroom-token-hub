@@ -1,5 +1,9 @@
 # Template Audit Report
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SEC-AUD-009      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Date:** 2026-02-18  
 **Scope:** `templates/` directory  
 **Goal:** Verify design-system unification and identify remaining non-compliant patterns.

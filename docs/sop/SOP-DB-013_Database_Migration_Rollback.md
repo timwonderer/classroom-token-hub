@@ -1,4 +1,4 @@
-# SOP-DB-013: Database Migration Rollback Procedures
+# Database Migration Rollback Procedures
 
 | Reference Number | Version | Effective Date | Supersedes | Authoritative |
 |------------------|---------|----------------|------------|---------------|

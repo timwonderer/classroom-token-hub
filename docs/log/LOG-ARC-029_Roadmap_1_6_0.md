@@ -1,5 +1,9 @@
 # Classroom Token Hub - v1.6.0 Roadmap and Half-Built Features
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-ARC-029      | 1.0     | 2026-03-01     | N/A        | NO            |
+
 **Document Date**: January 1, 2026  
 **Current Version**: 1.6.0  
 **Target Version**: 1.7.0

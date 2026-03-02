@@ -1,5 +1,9 @@
 # Admin (Teacher) Identity Handling Specification
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| DOM-ARC-001      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 Status: Active (Normative)
 Last Updated: 2026-02-24
 Owner: Platform / Identity & Security

@@ -4,6 +4,10 @@ searchable: false
 
 # PII Audit for Multi-Tenancy Rollout
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SEC-AUD-018      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 We reviewed the multi-tenant data model and request flows to confirm no new personally identifiable information (PII) is stored beyond the existing minimal surface:
 
 - Student identity continues to use encrypted `first_name` plus `last_initial`, with no additional profile fields introduced in the rollout.

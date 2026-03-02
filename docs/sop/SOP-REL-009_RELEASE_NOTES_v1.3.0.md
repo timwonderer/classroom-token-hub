@@ -1,5 +1,9 @@
 # Release Notes - Version 1.3.0
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-REL-009      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Release Date**: December 25, 2025
 
 Version 1.3.0 is a major security-focused release introducing modern passwordless authentication for both teachers and system administrators. This release implements WebAuthn/FIDO2 passkey support, adds encrypted TOTP storage, resolves critical security vulnerabilities, and fixes several Service Worker bugs affecting the PWA experience.

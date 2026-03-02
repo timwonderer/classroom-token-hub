@@ -4,6 +4,10 @@ searchable: false
 
 # Cleanup Duplicate Students
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DEP-002      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 ## Problem
 Due to an algorithm bug in a previous commit, duplicate students were created when the roster was uploaded twice. The duplicate detection failed because it was using a different hashing algorithm.
 

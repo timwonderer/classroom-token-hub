@@ -1,5 +1,9 @@
 # Archived PR Reports
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-ARC-021      | 1.0     | 2026-03-01     | N/A        | NO            |
+
 This directory contains historical pull request reports and documentation that were generated during specific development cycles. These files are kept for historical reference but are no longer actively maintained. For the current PR template, see `.github/PULL_REQUEST_TEMPLATE.md`.
 
 ## Contents

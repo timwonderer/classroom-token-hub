@@ -1,5 +1,9 @@
 # Release Notes - Version 1.8.0
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-REL-015      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Release Date**: February 9, 2026
 **Focus**: Rent item types, coverage-period tracking, and stability/security fixes
 

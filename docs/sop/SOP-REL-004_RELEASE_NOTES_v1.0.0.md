@@ -1,5 +1,9 @@
 # Classroom Token Hub v1.0.0
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-REL-004      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Release Date:** December 2025
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)
 

@@ -1,5 +1,9 @@
 # Legacy Account Migration Guide
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DEP-010      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Date:** 2025-12-19
 **Version:** 1.2.x
 **Status:** Ready for deployment

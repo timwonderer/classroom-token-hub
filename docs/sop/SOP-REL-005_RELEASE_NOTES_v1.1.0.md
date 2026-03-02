@@ -1,5 +1,9 @@
 # Release Notes - Version 1.1.0
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-REL-005      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Release Date**: December 13, 2024
 
 Version 1.1.0 brings exciting new analytics features, a completely redesigned user interface, and important quality-of-life improvements for teachers managing classroom economies.

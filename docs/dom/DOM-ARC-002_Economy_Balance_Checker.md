@@ -1,5 +1,9 @@
 # Economy Balance Checker - Implementation Guide
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| DOM-ARC-002      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 ## Overview
 
 The Economy Balance Checker is a centralized system that validates all economy settings against the **Classroom Wage Index (CWI)** per the AGENTS financial setup specification.

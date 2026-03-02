@@ -1,5 +1,9 @@
 # Economy Balancing Implementation Report
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-ARC-005      | 1.0     | 2026-03-01     | N/A        | NO            |
+
 **Date:** December 9, 2025
 **Review Type:** Comprehensive Implementation Verification
 **Specification:** AGENTS financial setup.md

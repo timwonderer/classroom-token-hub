@@ -1,5 +1,9 @@
 # Public Demo Environment (Teacher + Student)
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DEP-003      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 This guide describes how to stand up the read-only style demo endpoints that power the landing page iframes and buttons in `docs/index.html`. It uses the built-in demo student lifecycle (10-minute TTL, auto-cleanup) and a dedicated demo teacher with seeded data.
 
 ## What already exists in the codebase

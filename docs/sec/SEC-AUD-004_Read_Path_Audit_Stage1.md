@@ -1,5 +1,9 @@
 # Stage 1 Read-Path Performance Audit
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SEC-AUD-004      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Date:** 2025-02-22
 **Auditor:** Jules
 **Scope:** Admin Dashboard, Student Roster, Payroll Management

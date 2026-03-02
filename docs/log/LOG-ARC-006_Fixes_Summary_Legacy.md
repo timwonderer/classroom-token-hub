@@ -1,5 +1,9 @@
 # Multi-Tenancy Security Fixes - Summary
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-ARC-006      | 1.0     | 2026-03-01     | N/A        | NO            |
+
 **Branch:** `claude/fix-multi-tenancy-leaks-015yz9WmT5SE8EFgAzU8Au32`
 **Commit:** `5bcad94`
 **Status:**  COMPLETED AND PUSHED

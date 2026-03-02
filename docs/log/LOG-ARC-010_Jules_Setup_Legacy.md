@@ -1,5 +1,9 @@
 # Jules Environment Setup Guide
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-ARC-010      | 1.0     | 2026-03-01     | N/A        | NO            |
+
 This guide explains how to set up a consistent development environment for the Classroom Economy platform using the automated setup script.
 
 ## Quick Start

@@ -6,6 +6,10 @@ roles: [developer]
 
 # Economy Specification (Developer)
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| ARC-OPS-008      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 This document defines the **formulas, constraints, ratios, and rules** used by automated tools when generating or modifying monetary values in the Classroom Economy App.
 
 Teachers should use the [Classroom Economy Guide](../user-guides/economy_guide) for a human-friendly version of these ranges.

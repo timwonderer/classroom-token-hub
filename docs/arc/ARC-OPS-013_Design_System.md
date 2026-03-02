@@ -1,5 +1,9 @@
 # Unified Design System Reference
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| ARC-OPS-013      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Status:** Implementation Complete (v1.8.0)
 **Source of Truth:** `static/css/tokens.css`
 

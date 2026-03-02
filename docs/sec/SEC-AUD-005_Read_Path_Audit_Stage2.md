@@ -1,5 +1,9 @@
 # Stage 2: Read-Path Re-Audit & Optimization Report
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SEC-AUD-005      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Date:** 2025-02-22
 **Focus:** Verification of Read-Path Optimizations (Balance Service & Write-on-Read Removal)
 

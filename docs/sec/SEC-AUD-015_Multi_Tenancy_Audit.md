@@ -1,5 +1,9 @@
 # P0 MULTI-TENANCY DATA LEAK AUDIT
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SEC-AUD-015      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Date:** 2025-11-29
 **Severity:** CRITICAL (P0)
 **Status:** ACTIVE SECURITY VULNERABILITY

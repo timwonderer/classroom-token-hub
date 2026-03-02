@@ -1,5 +1,9 @@
 # Release Notes - Version 1.7.1
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-REL-014      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Release Date**: January 22, 2026
 **Focus**: Critical Financial Precision Updates, Payroll Stability, and Documentation Hygiene
 

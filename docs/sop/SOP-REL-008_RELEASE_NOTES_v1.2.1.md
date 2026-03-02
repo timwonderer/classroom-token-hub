@@ -1,5 +1,9 @@
 # Release Notes - Version 1.2.1
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-REL-008      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Release Date**: December 21, 2025  
 **Focus**: Multi-tenancy hardening, legacy migration completion, operational clarity
 

@@ -7,6 +7,10 @@ roles: [developer]
 
 # Claude Development Guide
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DOC-004      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Note:** This file has been moved to `.claude/CLAUDE.md` in the repository root for easier access.
 
 Please see: `.claude/CLAUDE.md` in the repository root.

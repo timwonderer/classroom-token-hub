@@ -1,4 +1,4 @@
-# SOP-DEP-015: CI/CD Pipeline Documentation
+# CI/CD Pipeline Documentation
 
 | Reference Number | Version | Effective Date | Supersedes | Authoritative |
 |------------------|---------|----------------|------------|---------------|

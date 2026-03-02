@@ -1,5 +1,9 @@
 # Migration Compliance Review Report
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SOP-DB-009       | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Branch:** `claude/review-migration-compliance-9Qj73`
 **Date:** 2026-02-04
 **Reviewer:** Claude Code Agent

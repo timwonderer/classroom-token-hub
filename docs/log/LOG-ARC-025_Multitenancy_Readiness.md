@@ -1,5 +1,9 @@
 # Multi-Tenancy Readiness Assessment Report
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| LOG-ARC-025      | 1.0     | 2026-03-01     | N/A        | NO            |
+
 **Date:** 2025-11-24  
 **Status:**  READY FOR PRODUCTION  
 **Test Coverage:** 37/37 tests passing (including 10 new multi-tenancy tests)

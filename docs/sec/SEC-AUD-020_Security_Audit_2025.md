@@ -1,5 +1,9 @@
 # Security Audit Report - November 2025
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SEC-AUD-020      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Date:** 2025-11-28
 **Server:** classroom-economy-beta (DigitalOcean)
 **Auditor:** Automated Security Review

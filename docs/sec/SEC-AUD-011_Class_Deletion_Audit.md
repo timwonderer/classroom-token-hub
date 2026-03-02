@@ -1,5 +1,9 @@
 # Class Deletion Audit
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| SEC-AUD-011      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 **Date:** 2026-02-21
 **Author:** Claude (automated audit)
 **Severity:** Mixed — one confirmed data bug (P1), several inconsistency and UX risks (P2/P3)

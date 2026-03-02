@@ -1,5 +1,9 @@
 # PWA Documentation
 
+| Reference Number | Version | Effective Date | Supersedes | Authoritative |
+|------------------|---------|----------------|------------|---------------|
+| ARC-OPS-002      | 1.0     | 2026-03-01     | N/A        | YES           |
+
 ## Overview
 
 The Progressive Web App (PWA) implementation provides a native app-like experience on mobile devices with full offline support, mobile navigation, and installation capability.
