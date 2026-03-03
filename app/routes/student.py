@@ -645,7 +645,6 @@ def claim_account():
                 'credential_matches': credential_matches,
                 'last_name_matches': last_name_matches,
                 'dob_sum_matches': dob_sum_matches,
-                'provided_dob_sum': dob_sum
             })
 
             if credential_matches and last_name_matches and dob_sum_matches:
