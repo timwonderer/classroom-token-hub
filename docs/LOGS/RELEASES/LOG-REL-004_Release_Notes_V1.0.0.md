@@ -295,7 +295,7 @@ See [../../DEVELOPMENT.md](../../DEVELOPMENT.md) for the complete roadmap.
 
 Classroom Token Hub is released under the **PolyForm Noncommercial License 1.0.0**. This software is free for educational and nonprofit use. Commercial use is not permitted under this license.
 
-For questions about licensing, please see [LICENSE.md](LICENSE.md).
+For questions about licensing, please see [LICENSE.md](../../user-guides/legal/license.md).
 
 ---
 

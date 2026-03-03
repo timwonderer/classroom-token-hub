@@ -47,7 +47,7 @@ User visits classroomtokenhub.com
    - SEO-optimized meta tags
    - Relative paths for sign-in links
 
-2. **[docs/.nojekyll](docs/.nojekyll)** - Prevents markdown processing
+2. **[docs/.nojekyll](../../GITHUB_SITE/.nojekyll)** - Prevents markdown processing
 
 3. **[docs/README_GITHUB_PAGES.md](docs/README_GITHUB_PAGES.md)** - Configuration guide
    - Production configuration section

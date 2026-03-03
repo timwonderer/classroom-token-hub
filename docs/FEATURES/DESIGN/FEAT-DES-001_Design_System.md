@@ -1,19 +1,30 @@
-# Unified Design System Reference
+# FEAT-DES-001: Unified Design System Reference
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-013      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+| FEAT-DES-001     | 1.0     | 2026-03-01     | N/A        | Normative       |
 
-**Status:** Implementation Complete (v1.8.0)
-**Source of Truth:** `static/css/tokens.css`
+## I. Purpose
 
----
+This document provides a unified design system reference for the Classroom Token Hub.
 
-## Philosophy
+## II. Scope
+
+All CSS tokens, HTML component structures, layout patterns, and visual semantics across all user roles. Source of Truth: `static/css/tokens.css`.
+
+## III. Authority Level
+
+Normative (FEAT Tier). Subordinate to INV-CORE-000.
+
+## IV. Dependencies
+
+- `INV-CORE-000_Core_Invariants.md`
+
+## V. Philosophy
 
 Classroom Token Hub uses a **semantic, role-based token system** to maintain consistency across three distinct user roles (Teacher, Student, Sysadmin) while sharing a single codebase.
 
-### Core Principles
+### 1. Core Principles
 
 1.  **Context-Aware Roles** — The same HTML/CSS renders differently based on the user's role:
     -   **Teacher (Advisor Green)**: Professional, authoritative, warm (Teal/Gold).
@@ -28,9 +39,7 @@ Classroom Token Hub uses a **semantic, role-based token system** to maintain con
     -   **Radius**: Small (4px) for data density, Medium (6px) for interactivity.
     -   **Shadows**: Subtle lift only for overlays/modals.
 
----
-
-## Token Architecture
+## VI. Token Architecture
 
 The system is defined in `static/css/tokens.css` and is split into two layers:
 
@@ -56,9 +65,7 @@ These tokens change values depending on the active body class (`student-shell`, 
 | `--secondary` | Accent color | Gold (`#d3af37`) | Bronze (`#ac8255`) | Gold (`#D4A857`) |
 | `--secondary-text` | Text color on secondary bg | Dark (`#171717`) | White (`#ffffff`) | Dark (`#171717`) |
 
----
-
-## Semantic Usage Rules
+## VII. Semantic Usage Rules
 
 ### 1. Backgrounds
 Use `bg-*-subtle` utilities for containers, alerts, and sections. **DO NOT use opacity hacks.**
@@ -99,11 +106,9 @@ Use standard Bootstrap buttons. We have overridden them to match the active them
 Use `border` utility (uses `--border-color` / `--neutral-200`).
 For colored borders, use semantic utilities: `border-primary`, `border-danger`.
 
----
+## VIII. Anti-Patterns (Examples of What NOT to Do)
 
-## Anti-Patterns (Examples of What NOT to Do)
-
-### ❌ Hardcoded Colors
+### 1. Hardcoded Colors
 ```html
 <!-- BAD: Hardcoded hex -->
 <div style="background-color: #1a4d47; color: white;">...</div>
@@ -112,7 +117,7 @@ For colored borders, use semantic utilities: `border-primary`, `border-danger`.
 <div class="bg-primary text-white">...</div>
 ```
 
-### ❌ Bootstrap Opacity Hacks
+### 2. Bootstrap Opacity Hacks
 ```html
 <!-- BAD: Relies on Bootstrap's default opacity which is inconsistent across themes -->
 <div class="bg-success bg-opacity-25">...</div>
@@ -121,7 +126,7 @@ For colored borders, use semantic utilities: `border-primary`, `border-danger`.
 <div class="bg-success-subtle">...</div>
 ```
 
-### ❌ Role-Specific Logic in Templates
+### 3. Role-Specific Logic in Templates
 ```html
 <!-- BAD: Changing class based on role manually -->
 {% if role == 'student' %}
@@ -134,11 +139,9 @@ For colored borders, use semantic utilities: `border-primary`, `border-danger`.
 <div class="bg-primary">...</div>
 ```
 
----
+## IX. Component Guide
 
-## Component Guide
-
-### Cards
+### 1. Cards
 Always use `card` with `shadow-sm` and `border-0`.
 ```html
 <div class="card border-0 shadow-sm mb-4">
@@ -151,7 +154,7 @@ Always use `card` with `shadow-sm` and `border-0`.
 </div>
 ```
 
-### Tables
+### 2. Tables
 Use `table` with `align-middle`.
 ```html
 <table class="table align-middle">
@@ -162,7 +165,7 @@ Use `table` with `align-middle`.
 </table>
 ```
 
-### Icons
+### 3. Icons
 ALWAYS use **Material Symbols Outlined**.
 ```html
 <!-- GOOD -->
@@ -173,9 +176,16 @@ ALWAYS use **Material Symbols Outlined**.
 <i class="fa fa-cog"></i>
 ```
 
-## Adding New Tokens
+## X. Adding New Tokens
 If you need a new constant value (e.g., a specific chart color), add it to `tokens.css`.
 
 1.  Is it shared? Add to `:root` (Base).
 2.  Is it theme-dependent? Add to the theme blocks (`.student-shell`, etc.).
 3.  **Naming Convention**: `--{category}-{property}-{modifier}` (e.g., `--chart-primary-fill`).
+
+## XI. Amendment
+
+Revisions to this document must:
+1. Increment the version number.
+2. Update the Effective Date.
+3. Maintain consistency with `INV-CORE-000`.

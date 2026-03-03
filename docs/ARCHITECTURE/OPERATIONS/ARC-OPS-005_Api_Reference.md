@@ -1,18 +1,28 @@
 ---
-title: API Reference
-category: technical-reference
-roles: [developer]
----
-
-# API Reference
+# ARC-OPS-005: API Reference
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-005      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+| ARC-OPS-005      | 1.0     | 2026-03-01     | N/A        | Constitutional  |
+
+## I. Purpose
 
 This document provides a reference for all the API endpoints available in the Classroom Token Hub application.
 
-## Authentication
+## II. Scope
+
+All HTTP API endpoints and routes exposed by the application, including public, student, admin, and system admin routes.
+
+## III. Authority Level
+
+Constitutional (ARC Tier). Subordinate to INV-CORE-000.
+
+## IV. Dependencies
+
+- `INV-CORE-000_Core_Invariants.md`
+- `ARC-OPS-000_Operational_Constraints.md`
+
+## V. Authentication
 
 API endpoints are protected based on user roles. The required authentication is noted for each endpoint.
 
@@ -23,9 +33,9 @@ API endpoints are protected based on user roles. The required authentication is 
 
 ---
 
-## Public API Endpoints
+## VI. Public API Endpoints
 
-### Set Timezone
+### 1. Set Timezone
 
 -   **Endpoint**: `POST /api/set-timezone`
 -   **Description**: Sets the user's timezone in the session for localized date and time formatting. This is typically called once by the frontend.
@@ -62,11 +72,11 @@ API endpoints are protected based on user roles. The required authentication is 
 
 ---
 
-## Student API Endpoints
+## VII. Student API Endpoints
 
 These endpoints require an active student login session.
 
-### Purchase Store Item
+### 1. Purchase Store Item
 
 -   **Endpoint**: `POST /api/purchase-item`
 -   **Description**: Allows a student to purchase an item from the classroom store.
@@ -103,7 +113,7 @@ These endpoints require an active student login session.
         { "status": "error", "message": "This item is not available." }
         ```
 
-### Use Store Item
+### 2. Use Store Item
 
 -   **Endpoint**: `POST /api/use-item`
 -   **Description**: Allows a student to use a "delayed" type item they have purchased, submitting it for admin approval.
@@ -135,7 +145,7 @@ These endpoints require an active student login session.
         { "status": "error", "message": "You do not own this item." }
         ```
 
-### Tap In / Tap Out
+### 3. Tap In / Tap Out
 
 -   **Endpoint**: `POST /api/tap`
 -   **Description**: Records an attendance event for a student. This is an append-only log.
@@ -178,7 +188,7 @@ These endpoints require an active student login session.
         { "error": "Invalid PIN" }
         ```
 
-### Get Student Status
+### 4. Get Student Status
 
 -   **Endpoint**: `GET /api/student-status`
 -   **Description**: Retrieves the current attendance status (active, done, duration), projected pay (respecting block-level payroll settings), and current hall pass state for all of a student's class blocks.
@@ -212,11 +222,11 @@ These endpoints require an active student login session.
 
 ---
 
-## Admin API Endpoints
+## VIII. Admin API Endpoints
 
 These endpoints require an active administrator login session.
 
-### Approve Item Redemption
+### 1. Approve Item Redemption
 
 -   **Endpoint**: `POST /api/approve-redemption`
 -   **Description**: Allows an admin to approve a student's request to use a store item.
@@ -255,11 +265,11 @@ These endpoints require an active administrator login session.
 
 ---
 
-## Web Page Routes
+## IX. Web Page Routes
 
 The following routes render HTML pages and are not part of the JSON API. They provide the user interface for the application.
 
-### Public & Setup Routes
+### 1. Public & Setup Routes
 
 These routes are accessible without logging in. They handle the initial setup and login for all user types.
 
@@ -274,7 +284,7 @@ These routes are accessible without logging in. They handle the initial setup an
 -   **`GET /privacy`**: Displays the privacy policy.
 -   **`GET /terms`**: Displays the terms of service.
 
-### Student Routes (`@login_required`)
+### 2. Student Routes (`@login_required`)
 
 These routes require an active student login session.
 
@@ -285,7 +295,7 @@ These routes require an active student login session.
 -   **`GET /student/shop`**: The classroom store where students can purchase items with their earnings.
 -   **`GET /student/logout`**: Logs the student out of their session.
 
-### Admin Routes (`@admin_required`)
+### 3. Admin Routes (`@admin_required`)
 
 These routes require an active admin (teacher) login session.
 
@@ -306,7 +316,7 @@ These routes require an active admin (teacher) login session.
 -   **`GET /admin/attendance-log`**: Shows a complete log of all student tap-in and tap-out events.
 -   **`GET /admin/logout`**: Logs the admin out of their session.
 
-### System Admin Routes (`@system_admin_required`)
+### 4. System Admin Routes (`@system_admin_required`)
 
 These routes require an active system administrator login session.
 
@@ -314,3 +324,9 @@ These routes require an active system administrator login session.
 -   **`GET /sysadmin/logs`**: Displays the application's log file output.
 -   **`GET /sysadmin/logout`**: Logs the system admin out of their session.
 
+## X. Amendment
+
+Revisions to this document must:
+1. Increment the version number.
+2. Update the Effective Date.
+3. Maintain consistency with `INV-CORE-000`.

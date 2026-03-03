@@ -1,18 +1,28 @@
 ---
-title: Database Schema Documentation
-category: technical-reference
-roles: [developer]
----
-
-# Database Schema Documentation
+# ARC-OPS-007: Database Schema Documentation
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-007      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+| ARC-OPS-007      | 1.0     | 2026-03-01     | N/A        | Constitutional  |
+
+## I. Purpose
 
 This document summarizes the database schema for Classroom Token Hub based on `app/models.py`. All timestamps are stored in UTC.
 
-## Core Models
+## II. Scope
+
+All SQLAlchemy ORM models, their properties, foreign key associations, and column data types within the Classroom Token Hub.
+
+## III. Authority Level
+
+Constitutional (ARC Tier). Subordinate to INV-CORE-000.
+
+## IV. Dependencies
+
+- `INV-CORE-000_Core_Invariants.md`
+- `ARC-OPS-000_Operational_Constraints.md`
+
+## V. Core Models
 
 ### `students`
 Stores student records and credentials.
@@ -426,10 +436,16 @@ Key fields: `student_id`, `created_at`, `expires_at`.
 
 ---
 
-## Notes
+## VI. Notes
 - Prefer `student_teachers` for ownership; `students.teacher_id` is scheduled for removal once all data is migrated.
-- All monetary values are stored as floating point; rounding is handled in business logic.
+- Monetary values must be stored using `Numeric(12,2)` (e.g., `Transaction.amount`) to ensure exact decimal precision and prevent floating-point drift.
 - Indices are defined on frequent lookup fields (e.g., join codes, student/teacher IDs, timestamps) to support pagination and scoped queries.
 - **v1.7.0** added analytics models (`analytics_snapshots`, `analytics_events`, `analytics_alerts`) for system health monitoring and rent itemization (`rent_items`) for transparent rent breakdown.
 - All new models properly scoped by `join_code` for multi-tenancy compliance.
 
+## VII. Amendment
+
+Revisions to this document must:
+1. Increment the version number.
+2. Update the Effective Date.
+3. Maintain consistency with `INV-CORE-000`.

@@ -1,17 +1,11 @@
 ---
-title: Architecture Guide
-category: technical-reference
-roles: [developer]
----
-
-# Classroom Token Hub - Architecture Guide
+# LOG-ARC-037: Architecture Overview
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-006      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+| LOG-ARC-037      | 1.0     | 2026-03-01     | N/A        | Informative     |
 
-Last Updated: 2026-01-03
-Purpose: Describe the current system architecture, data boundaries, and core flows.
+Purpose: Describe the historical system architecture, data boundaries, and core flows.
 
 ## What This Document Covers
 
