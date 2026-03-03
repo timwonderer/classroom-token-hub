@@ -37,10 +37,10 @@ def teacher_with_two_classes(client):
         join_code="JOINA123",
         first_name="Placeholder",
         last_initial="P",
-        dob_sum=100,
+        dob_sum_hash=None,
         salt=salt,
         first_half_hash="hash1",
-        last_name_hash_by_part=["part1"]
+        last_name_hash_by_part=None
     )
     db.session.add(tb_a)
 
@@ -51,10 +51,10 @@ def teacher_with_two_classes(client):
         join_code="JOINB456",
         first_name="Placeholder",
         last_initial="P",
-        dob_sum=100,
+        dob_sum_hash=None,
         salt=salt,
         first_half_hash="hash2",
-        last_name_hash_by_part=["part2"]
+        last_name_hash_by_part=None
     )
     db.session.add(tb_b)
 
@@ -428,10 +428,10 @@ def test_no_data_shown_for_class_without_insurance(
         join_code="JOINC789",
         first_name="Placeholder",
         last_initial="P",
-        dob_sum=100,
+        dob_sum_hash=None,
         salt=salt,
         first_half_hash="hash3",
-        last_name_hash_by_part=["part3"]
+        last_name_hash_by_part=None
     )
     db.session.add(tb_c)
     db.session.commit()

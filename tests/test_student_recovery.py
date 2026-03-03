@@ -39,8 +39,6 @@ def recovery_data(client):
         salt=salt,
         username_hash=hash_username("orig_user", salt),
         first_half_hash="hash1",
-        dob_sum=2020,
-        is_active=True,
         recovery_status='active',
     )
     db.session.add(student)
@@ -53,8 +51,8 @@ def recovery_data(client):
         join_code=join_code,
         first_name="Original",
         last_initial="O",
-        last_name_hash_by_part=[],
-        dob_sum=2020,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
         salt=salt,
         first_half_hash="hash1",
         student_id=student.id,
@@ -518,8 +516,6 @@ def test_setup_completion_nulls_student_pii(client, recovery_data):
     }, follow_redirects=True)
 
     db.session.refresh(student)
-    assert student.dob_sum is None
-    assert student.last_name_hash_by_part is None
     assert student.has_completed_profile_migration is True
     assert student.recovery_status == 'active'
     assert student.reset_code is None

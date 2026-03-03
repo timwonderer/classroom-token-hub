@@ -33,7 +33,7 @@ def teacher_block(test_teacher):
         first_name='encrypted_test_name',
         last_initial='T',
         last_name_hash_by_part=['hash1'],
-        dob_sum=2000,
+        dob_sum_hash=None,
         salt=b'testsalt12345678',
         first_half_hash='testhash123',
     )
@@ -188,7 +188,7 @@ class TestAnnouncementMultiTenancy:
             first_name='encrypted_test_name',
             last_initial='T',
             last_name_hash_by_part=['hash1'],
-            dob_sum=2000,
+            dob_sum_hash=None,
             salt=b'testsalt12345678',
             first_half_hash='testhash123',
         )
@@ -199,7 +199,7 @@ class TestAnnouncementMultiTenancy:
             first_name='encrypted_test_name',
             last_initial='T',
             last_name_hash_by_part=['hash1'],
-            dob_sum=2000,
+            dob_sum_hash=None,
             salt=b'testsalt87654321',
             first_half_hash='testhash456',
         )

@@ -32,11 +32,11 @@ def test_attendance_status_isolation(client):
     
     tb1 = TeacherBlock(
         teacher_id=t1.id, block="PERIOD 1", join_code="JC1", student_id=student.id, is_claimed=True,
-        first_name="Shared", last_initial="S", salt=b'salt', first_half_hash="hash", dob_sum=10, last_name_hash_by_part="hash"
+        first_name="Shared", last_initial="S", salt=b'salt', first_half_hash="hash"
     )
     tb2 = TeacherBlock(
         teacher_id=t2.id, block="PERIOD 1", join_code="JC2", student_id=student.id, is_claimed=True,
-        first_name="Shared", last_initial="S", salt=b'salt', first_half_hash="hash", dob_sum=10, last_name_hash_by_part="hash"
+        first_name="Shared", last_initial="S", salt=b'salt', first_half_hash="hash"
     )
     db.session.add_all([tb1, tb2])
     db.session.commit()

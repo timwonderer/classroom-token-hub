@@ -214,9 +214,9 @@ class TeacherBlock(db.Model):
     # Nulled out after the seat is claimed (PII cleanup).
     last_name_hash_by_part = db.Column(db.JSON, nullable=True)
 
-    # Privacy-aligned DOB sum for verification (non-reversible).
+    # Privacy-aligned DOB sum stored as HMAC-SHA256 hash (non-reversible).
     # Nulled out after the seat is claimed (PII cleanup).
-    dob_sum = db.Column(db.Integer, nullable=True)
+    dob_sum_hash = db.Column(db.String(64), nullable=True)
 
     # Hashing
     salt = db.Column(db.LargeBinary(16), nullable=False)

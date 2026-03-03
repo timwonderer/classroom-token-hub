@@ -16,8 +16,8 @@ def teacher_with_classes(client):
     db.session.commit()
     
     # Create two classes (blocks)
-    block_a = TeacherBlock(teacher_id=teacher.id, block="BlockA", join_code="JOIN_A", first_name="P", last_initial="P", last_name_hash_by_part={}, dob_sum=0, salt=b'0', first_half_hash="0")
-    block_b = TeacherBlock(teacher_id=teacher.id, block="BlockB", join_code="JOIN_B", first_name="P", last_initial="P", last_name_hash_by_part={}, dob_sum=0, salt=b'0', first_half_hash="0")
+    block_a = TeacherBlock(teacher_id=teacher.id, block="BlockA", join_code="JOIN_A", first_name="P", last_initial="P", last_name_hash_by_part=None, dob_sum_hash=None, salt=b'0', first_half_hash="0")
+    block_b = TeacherBlock(teacher_id=teacher.id, block="BlockB", join_code="JOIN_B", first_name="P", last_initial="P", last_name_hash_by_part=None, dob_sum_hash=None, salt=b'0', first_half_hash="0")
     db.session.add_all([block_a, block_b])
     db.session.commit()
     

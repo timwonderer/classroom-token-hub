@@ -26,7 +26,7 @@ def student_in_class(client, teacher_admin):
     seat = TeacherBlock(
         teacher_id=teacher_admin.id, block='A', join_code='REJECT123',
         student_id=student.id, is_claimed=True,
-        first_name='TestRejection', last_initial='S', last_name_hash_by_part=[], dob_sum=0, salt=b'salt', first_half_hash='hash'
+        first_name='TestRejection', last_initial='S', last_name_hash_by_part=None, dob_sum_hash=None, salt=b'salt', first_half_hash='hash'
     )
     db.session.add(seat)
     db.session.commit()

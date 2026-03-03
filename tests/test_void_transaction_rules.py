@@ -50,8 +50,8 @@ def _build_teacher_student(join_code='VOID123'):
         is_claimed=True,
         first_name='Void',
         last_initial='T',
-        last_name_hash_by_part=[],
-        dob_sum=0,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
         salt=b'salt',
         first_half_hash='hash',
     ))

@@ -535,7 +535,7 @@ def complete_profile():
                 last_name_parts = hash_last_name_parts(last_name, student.salt)
                 for block in teacher_blocks:
                     block.last_name_hash_by_part = last_name_parts
-                    block.dob_sum = dob_sum
+                    block.dob_sum_hash = hash_hmac(str(dob_sum).encode(), block.salt)
                     block.first_half_hash = student.first_half_hash
                     block.last_initial = student.last_initial
                 
@@ -624,7 +624,7 @@ def claim_account():
                 seat.first_half_hash,
                 first_initial,
                 seat.last_initial,
-                seat.dob_sum,
+                dob_sum,
                 seat.salt,
             )
 
@@ -635,15 +635,16 @@ def claim_account():
                 seat.salt
             )
 
-            # Track match details for debugging
-            dob_sum_matches = seat.dob_sum == dob_sum
+            # Verify DOB sum via hash comparison
+            dob_sum_matches = (
+                seat.dob_sum_hash is not None
+                and hash_hmac(str(dob_sum).encode(), seat.salt) == seat.dob_sum_hash
+            )
             match_attempts.append({
                 'seat_id': seat.id,
                 'credential_matches': credential_matches,
                 'last_name_matches': last_name_matches,
                 'dob_sum_matches': dob_sum_matches,
-                'seat_dob_sum': seat.dob_sum,
-                'provided_dob_sum': dob_sum
             })
 
             if credential_matches and last_name_matches and dob_sum_matches:
@@ -675,7 +676,7 @@ def claim_account():
             matched_seat.is_claimed = True
             matched_seat.claimed_at = utc_now()
             # Null out PII on the now-claimed seat — no longer needed for matching
-            matched_seat.dob_sum = None
+            matched_seat.dob_sum_hash = None
             matched_seat.last_name_hash_by_part = None
 
             # Create StudentTeacher link
@@ -739,7 +740,7 @@ def claim_account():
                 matched_seat.is_claimed = True
                 matched_seat.claimed_at = utc_now()
                 # Null out PII on the now-claimed seat
-                matched_seat.dob_sum = None
+                matched_seat.dob_sum_hash = None
                 matched_seat.last_name_hash_by_part = None
 
                 # Create StudentTeacher link if not exists
@@ -782,7 +783,7 @@ def claim_account():
         # Null out PII on the now-claimed seat — the student record carries dob_sum
         # through the setup flow; it will be nulled on the student record itself
         # after setup completes in setup_pin_passphrase.
-        matched_seat.dob_sum = None
+        matched_seat.dob_sum_hash = None
         matched_seat.last_name_hash_by_part = None
 
         # Create StudentTeacher link
@@ -1008,7 +1009,7 @@ def add_class():
                 seat.first_half_hash,
                 first_initial,
                 seat.last_initial,
-                seat.dob_sum,
+                dob_sum,
                 seat.salt,
             )
 
@@ -1025,7 +1026,11 @@ def add_class():
                 and seat.last_initial == student.last_initial
             )
 
-            if credential_matches and last_name_matches and name_matches and seat.dob_sum == dob_sum:
+            dob_sum_matches = (
+                seat.dob_sum_hash is not None
+                and hash_hmac(str(dob_sum).encode(), seat.salt) == seat.dob_sum_hash
+            )
+            if credential_matches and last_name_matches and name_matches and dob_sum_matches:
                 if canonical_hash and not matched_primary:
                     seat.first_half_hash = canonical_hash
                 matched_seat = seat
@@ -1052,7 +1057,7 @@ def add_class():
         matched_seat.student_id = student.id
         matched_seat.is_claimed = True
         matched_seat.claimed_at = utc_now()
-        matched_seat.dob_sum = None
+        matched_seat.dob_sum_hash = None
         matched_seat.last_name_hash_by_part = None
 
         # Create StudentTeacher link if it doesn't exist

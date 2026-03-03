@@ -37,8 +37,8 @@ def test_data(app):
             first_name='Admin',
             last_initial='F',
             salt=salt,
-            dob_sum=dob_sum,
-            last_name_hash_by_part=last_name_hashes,
+            dob_sum_hash=None,
+            last_name_hash_by_part=None,
             first_half_hash=first_half,
         )
         db.session.add(tb)
@@ -54,7 +54,6 @@ def test_data(app):
             last_initial='T',
             block='A',
             salt=salt,
-            dob_sum=dob_sum,
             username_hash=u_hash,
             username_lookup_hash=ul_hash,
             pin_hash=p_hash,
