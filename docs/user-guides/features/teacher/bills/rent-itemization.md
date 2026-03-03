@@ -28,5 +28,5 @@ Go to **Bills > Rent** and open the **Itemization** tab.
 If enabled, itemized rent can point to alternative store purchases tied to line items.
 
 ## Related guides
-- [Rent Itemization Setup (Detailed)](/docs/user-guides/features/rent/itemization-guide)
-- [Teacher Rent Itemization Diagnostics](/docs/user-guides/diagnostics/teacher-rent-itemization)
+- [Rent Itemization Setup (Detailed)](../../rent/itemization-guide.md)
+- [Teacher Rent Itemization Diagnostics](../../../diagnostics/teacher-rent-itemization.md)

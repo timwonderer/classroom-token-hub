@@ -27,5 +27,5 @@ Use filters to narrow by class, event type, and date range. The table shows the 
 If records are missing, expand the date range and clear filters. If a student reports a mistake, verify their event list and update payroll expectations.
 
 ## Related guides
-- [Start and End Work (Student)](/docs/user-guides/features/student/work/start-end-work)
-- [Run Payroll](/docs/user-guides/features/teacher/economy/payroll-run)
+- [Start and End Work (Student)](../../student/work/start-end-work.md)
+- [Run Payroll](../economy/payroll-run.md)

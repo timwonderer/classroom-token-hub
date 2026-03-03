@@ -26,5 +26,5 @@ Go to **Classroom > Attendance**.
 Attendance issues affect payroll. Correct the records before running payroll when possible.
 
 ## Related guides
-- [Attendance and Approvals](/docs/user-guides/features/teacher/classroom/attendance-approvals)
-- [Teacher Attendance and Payroll Diagnostics](/docs/user-guides/diagnostics/teacher-attendance-payroll)
+- [Attendance and Approvals](attendance-approvals.md)
+- [Teacher Attendance and Payroll Diagnostics](../../../diagnostics/teacher-attendance-payroll.md)

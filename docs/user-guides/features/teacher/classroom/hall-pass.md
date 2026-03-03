@@ -26,4 +26,4 @@ Close a pass when the student returns. Closing keeps the request history accurat
 If requests are not showing, check the diagnostics guide.
 
 ## Related guides
-- [Teacher Hall Pass Diagnostics](/docs/user-guides/diagnostics/teacher-hall-pass)
+- [Teacher Hall Pass Diagnostics](../../../diagnostics/teacher-hall-pass.md)

@@ -28,4 +28,4 @@ Edit or delete older announcements to keep the list focused and current.
 If students report missing announcements, check the diagnostics guide.
 
 ## Related guides
-- [Teacher Announcements Diagnostics](/docs/user-guides/diagnostics/teacher-announcements-issues)
+- [Teacher Announcements Diagnostics](../../../diagnostics/teacher-announcements-issues.md)

@@ -22,5 +22,5 @@ If you cannot log in, your teacher can reset your account so you can claim it ag
 Your username is shown during setup. Write it down or keep it in a safe place.
 
 ## Related guides
-- [Student Login Diagnostics](/docs/user-guides/diagnostics/student-login)
-- [Report Issues](/docs/user-guides/features/student/support/report-issues)
+- [Student Login Diagnostics](../../../diagnostics/student-login.md)
+- [Report Issues](../support/report-issues.md)

@@ -12,22 +12,22 @@ keywords: [student, features, guide, accounts, work, store, bills, support]
 Use this index to jump straight to the exact task you need.
 
 ## Account and Access
-- [Account Features](/docs/user-guides/features/student/account/index)
+- [Account Features](store/index.md)
 
 ## Work and Pay
-- [Work and Pay Features](/docs/user-guides/features/student/work/index)
+- [Work and Pay Features](store/index.md)
 
 ## Store
-- [Store Features](/docs/user-guides/features/student/store/index)
+- [Store Features](store/index.md)
 
 ## Banking
-- [Banking Features](/docs/user-guides/features/student/banking/index)
+- [Banking Features](store/index.md)
 
 ## Bills
-- [Bills Features](/docs/user-guides/features/student/bills/index)
+- [Bills Features](store/index.md)
 
 ## Help and Support
-- [Support Features](/docs/user-guides/features/student/support/index)
+- [Support Features](store/index.md)
 
 ## Diagnostics
-- [Student Diagnostics Index](/docs/user-guides/diagnostics/student)
+- [Student Diagnostics Index](../../diagnostics/student.md)

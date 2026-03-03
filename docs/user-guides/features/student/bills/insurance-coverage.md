@@ -23,4 +23,4 @@ Choose a policy and follow the prompts to enroll if your teacher has enabled ins
 Use the claim option to request coverage when eligible.
 
 ## Related guides
-- [Student Rent and Insurance Diagnostics](/docs/user-guides/diagnostics/student-rent-insurance)
+- [Student Rent and Insurance Diagnostics](../../../diagnostics/student-rent-insurance.md)

@@ -21,4 +21,4 @@ Go to **Settings > Passkey**.
 - Remove old passkeys you no longer use.
 
 ## Related guides
-- [Teacher Login Diagnostics](/docs/user-guides/diagnostics/teacher-login)
+- [Teacher Login Diagnostics](../../../diagnostics/teacher-login.md)

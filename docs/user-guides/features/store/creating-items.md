@@ -153,7 +153,7 @@ Items marked as "Available in Store" in your Rent Settings automatically appear 
   - **Per-Use**: Consumable (e.g., Pencil).
 - **Restrictions**: Cannot be deleted from the store directly (must remove from Rent Settings).
 
-For full details on configuring these, see the [Rent Itemization Guide](/docs/user-guides/features/rent/itemization-guide).
+For full details on configuring these, see the [Rent Itemization Guide](../rent/itemization-guide.md).
 
 ### Immediate Use Items
 
@@ -339,12 +339,12 @@ Items the whole class works toward together:
 
 ## Related Articles
 
-- [Rent Itemization Guide](/docs/user-guides/features/rent/itemization-guide)
-- [Teacher Store Diagnostics](/docs/user-guides/diagnostics/teacher-store)
-- [Economy Guide](/docs/user-guides/economy_guide)
+- [Rent Itemization Guide](../rent/itemization-guide.md)
+- [Teacher Store Diagnostics](../../diagnostics/teacher-store.md)
+- [Economy Guide](../../economy_guide.md)
 
 ## Need More Help?
 
-- View the [Teacher Diagnostics Index](/docs/user-guides/diagnostics/teacher)
-- Check [Economy Guide](/docs/user-guides/economy_guide) for pricing guidance
+- View the [Teacher Diagnostics Index](../../diagnostics/teacher.md)
+- Check [Economy Guide](../../economy_guide.md) for pricing guidance
 - Contact support if items aren't working as expected

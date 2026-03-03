@@ -26,4 +26,4 @@ Use the Transfer tab to move money between checking and savings.
 Use the Transactions tab to review recent activity.
 
 ## Related guides
-- [Student Money Diagnostics](/docs/user-guides/diagnostics/student-money)
+- [Student Money Diagnostics](../../../diagnostics/student-money.md)

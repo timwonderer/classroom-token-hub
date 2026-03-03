@@ -23,5 +23,5 @@ Go to **Dashboard** from the student sidebar.
 - Quick links to Store and Bills.
 
 ## Related guides
-- [Accounts and Transfers](/docs/user-guides/features/student/banking/accounts-transfers)
-- [Attendance History and Pay Status](/docs/user-guides/features/student/work/attendance-history)
+- [Accounts and Transfers](../banking/accounts-transfers.md)
+- [Attendance History and Pay Status](../work/attendance-history.md)

@@ -24,4 +24,4 @@ Go to **Settings > Account Deletion Requests**.
 Use the request list to see pending and resolved requests.
 
 ## Related guides
-- [Teacher Login Diagnostics](/docs/user-guides/diagnostics/teacher-login)
+- [Teacher Login Diagnostics](../../../diagnostics/teacher-login.md)

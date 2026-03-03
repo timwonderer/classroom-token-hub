@@ -26,5 +26,5 @@ Use your username and PIN to log in on the student login page.
 Ask your teacher to confirm your roster details and join code.
 
 ## Related guides
-- [Reset or Recover Your Account](/docs/user-guides/features/student/account/reset-recovery)
-- [Join or Add a Class](/docs/user-guides/features/student/account/join-class)
+- [Reset or Recover Your Account](reset-recovery.md)
+- [Join or Add a Class](join-class.md)

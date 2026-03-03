@@ -12,7 +12,7 @@ keywords: [support, help, report issue]
 This section covers help resources and issue reporting.
 
 ## Help center
-- [Help Center Basics](/docs/user-guides/features/student/support/help-center)
+- [Help Center Basics](help-center.md)
 
 ## Issue reporting
-- [Report Issues](/docs/user-guides/features/student/support/report-issues)
+- [Report Issues](report-issues.md)

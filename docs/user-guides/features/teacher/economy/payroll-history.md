@@ -22,4 +22,4 @@ Go to **Economy > Payroll** and open the **Payroll History** tab.
 - Student-level entries for the run.
 
 ## Related guides
-- [Run Payroll](/docs/user-guides/features/teacher/economy/payroll-run)
+- [Run Payroll](payroll-run.md)

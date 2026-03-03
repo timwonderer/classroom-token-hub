@@ -23,4 +23,4 @@ Select the class you want. The dashboard updates to the selected class.
 Use **Add Class** with the join code from your teacher.
 
 ## Related guides
-- [Join or Add a Class](/docs/user-guides/features/student/account/join-class)
+- [Join or Add a Class](join-class.md)

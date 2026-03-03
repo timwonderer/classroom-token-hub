@@ -29,5 +29,5 @@ Use **Add New Policy** to create coverage or edit an existing policy in **Existi
 Use **Active Student Policies** to see who is enrolled and manage coverage.
 
 ## Related guides
-- [Insurance Claims and Coverage](/docs/user-guides/features/teacher/bills/insurance-claims)
-- [Teacher Rent and Insurance Diagnostics](/docs/user-guides/diagnostics/teacher-rent-insurance)
+- [Insurance Claims and Coverage](../../student/bills/insurance-claims.md)
+- [Teacher Rent and Insurance Diagnostics](../../../diagnostics/teacher-rent-insurance.md)

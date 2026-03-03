@@ -27,5 +27,5 @@ Go to **Add Class** from the student sidebar.
 3. Submit the form to add the class.
 
 ## Related guides
-- [Switch Classes](/docs/user-guides/features/student/account/switch-class)
-- [Class Setup and Join Codes (Teacher)](/docs/user-guides/features/teacher/classroom/class-setup)
+- [Switch Classes](switch-class.md)
+- [Class Setup and Join Codes (Teacher)](../../teacher/classroom/class-setup.md)
