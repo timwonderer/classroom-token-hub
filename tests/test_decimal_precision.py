@@ -58,8 +58,8 @@ class TestDecimalPrecision:
             block='A',
             first_name='Test',
             last_initial='S',
-            last_name_hash_by_part=['hash1'],
-            dob_sum=1234,
+            last_name_hash_by_part=None,
+            dob_sum_hash=None,
             salt=b'test_salt_123456',
             first_half_hash='test_hash'
         )
@@ -195,8 +195,8 @@ class TestDecimalPrecision:
             block='A',
             first_name='Rent',
             last_initial='T',
-            last_name_hash_by_part=['hash1'],
-            dob_sum=1234,
+            last_name_hash_by_part=None,
+            dob_sum_hash=None,
             salt=b'test_salt_123456',
             first_half_hash='test_hash'
         )
@@ -348,8 +348,8 @@ class TestDecimalPrecision:
             block='A',
             first_name='Zero',
             last_initial='T',
-            last_name_hash_by_part=['hash1'],
-            dob_sum=1234,
+            last_name_hash_by_part=None,
+            dob_sum_hash=None,
             salt=b'test_salt_123456',
             first_half_hash='test_hash'
         )
@@ -444,8 +444,8 @@ class TestDecimalPrecision:
             block='A',
             first_name='Negative',
             last_initial='T',
-            last_name_hash_by_part=['hash1'],
-            dob_sum=1234,
+            last_name_hash_by_part=None,
+            dob_sum_hash=None,
             salt=b'test_salt_123456',
             first_half_hash='test_hash'
         )

@@ -126,7 +126,7 @@ def test_real_unclaimed_seats_still_counted(client):
         first_name="RealStudent",  # NOT the placeholder name
         last_initial="R",
         last_name_hash_by_part=["hash1"],
-        dob_sum=2025,
+        dob_sum_hash=None,
         salt=salt,
         first_half_hash=hash_hmac("R2025".encode(), salt),
         join_code="ABC123",
@@ -180,7 +180,7 @@ def test_mixed_legacy_and_unclaimed_seats(client):
         first_name="NewStudent",
         last_initial="N",
         last_name_hash_by_part=["hash1"],
-        dob_sum=2026,
+        dob_sum_hash=None,
         salt=salt,
         first_half_hash=hash_hmac("N2026".encode(), salt),
         join_code="DEF456",

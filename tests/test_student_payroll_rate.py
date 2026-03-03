@@ -30,8 +30,8 @@ def test_student_payroll_uses_teacher_block_pay_rate(client):
             is_claimed=True,
             first_name="Rate",
             last_initial="S",
-            last_name_hash_by_part=[],
-            dob_sum=0,
+            last_name_hash_by_part=None,
+            dob_sum_hash=None,
             salt=b"salt",
             first_half_hash="hash_rate_a",
         )

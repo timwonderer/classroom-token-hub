@@ -18,7 +18,7 @@ def _teacher_block(teacher_id, block="A", join_code="JOINA"):
         first_name="Seat",
         last_initial="S",
         last_name_hash_by_part=["hash"],
-        dob_sum=1234,
+        dob_sum_hash=None,
         salt=b"0123456789abcdef",
         first_half_hash=f"hash-{teacher_id}-{block}",
         join_code=join_code,

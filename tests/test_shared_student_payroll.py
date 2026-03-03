@@ -29,12 +29,12 @@ def test_shared_student_diff_teacher_diff_period(client):
     # T1 -> Period 1 (JC1)
     tb1 = TeacherBlock(
         teacher_id=t1.id, block="PERIOD 1", join_code="JC1", student_id=student.id, is_claimed=True,
-        first_name="S", last_initial="S", salt=b's', first_half_hash="h", dob_sum=1, last_name_hash_by_part="h"
+        first_name="S", last_initial="S", salt=b's', first_half_hash="h", dob_sum_hash=None, last_name_hash_by_part=None
     )
     # T2 -> Period 2 (JC2)
     tb2 = TeacherBlock(
         teacher_id=t2.id, block="PERIOD 2", join_code="JC2", student_id=student.id, is_claimed=True,
-        first_name="S", last_initial="S", salt=b's', first_half_hash="h", dob_sum=1, last_name_hash_by_part="h"
+        first_name="S", last_initial="S", salt=b's', first_half_hash="h", dob_sum_hash=None, last_name_hash_by_part=None
     )
     db.session.add_all([tb1, tb2])
     
@@ -90,12 +90,12 @@ def test_same_teacher_same_block_diff_context(client):
     # Seat 1: Algebra (Period 1) -> JC1
     tb1 = TeacherBlock(
         teacher_id=t1.id, block="PERIOD 1", join_code="JC1", student_id=student.id, is_claimed=True,
-        first_name="S", last_initial="S", salt=b's', first_half_hash="h", dob_sum=1, last_name_hash_by_part="h"
+        first_name="S", last_initial="S", salt=b's', first_half_hash="h", dob_sum_hash=None, last_name_hash_by_part=None
     )
     # Seat 2: Geometry (Period 1) -> JC2 (Same Block Name!)
     tb2 = TeacherBlock(
         teacher_id=t1.id, block="PERIOD 1", join_code="JC2", student_id=student.id, is_claimed=True,
-        first_name="S", last_initial="S", salt=b's', first_half_hash="h", dob_sum=1, last_name_hash_by_part="h"
+        first_name="S", last_initial="S", salt=b's', first_half_hash="h", dob_sum_hash=None, last_name_hash_by_part=None
     )
     db.session.add_all([tb1, tb2])
     

@@ -55,10 +55,10 @@ def test_calculate_payroll(client):
         is_claimed=True,
         first_name="Test",
         last_initial="S",
-        last_name_hash_by_part=['mock_hash'],
+        last_name_hash_by_part=None,
         first_half_hash='hash123',
         salt=b's',
-        dob_sum=123
+        dob_sum_hash=None
     )
     db.session.add(tb)
     db.session.commit()
@@ -317,7 +317,7 @@ def test_get_cached_payroll_with_meta(client):
     # Link
     tb = TeacherBlock(
         teacher_id=teacher.id, student_id=student.id, block="A", join_code="CACHE1", is_claimed=True,
-        first_name="CacheUser", last_initial="T", last_name_hash_by_part=['h'], first_half_hash='h', salt=b's', dob_sum=1
+        first_name="CacheUser", last_initial="T", last_name_hash_by_part=None, first_half_hash='h', salt=b's', dob_sum_hash=None
     )
     db.session.add(tb)
     db.session.commit()

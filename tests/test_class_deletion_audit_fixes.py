@@ -74,7 +74,6 @@ def _create_student(teacher: Admin, first_name: str, block: str, join_code: str)
         block=block,
         salt=salt,
         first_half_hash=first_half_hash,
-        dob_sum=2025,
     )
     db.session.add(student)
     db.session.flush()
@@ -85,8 +84,8 @@ def _create_student(teacher: Admin, first_name: str, block: str, join_code: str)
         block=block,
         first_name=first_name,
         last_initial=first_name[0].upper(),
-        last_name_hash_by_part=[],
-        dob_sum=2025,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
         salt=salt,
         first_half_hash=first_half_hash,
         join_code=join_code,
@@ -209,7 +208,6 @@ def test_sysadmin_period_deletion_endpoint_is_disabled(client):
         block="",          # deliberately does NOT equal "Z"
         salt=salt,
         first_half_hash=fhh,
-        dob_sum=2025,
     )
     db.session.add(student)
     db.session.flush()
@@ -219,8 +217,8 @@ def test_sysadmin_period_deletion_endpoint_is_disabled(client):
         block="Z",
         first_name="Zara",
         last_initial="Z",
-        last_name_hash_by_part=[],
-        dob_sum=2025,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
         salt=salt,
         first_half_hash=fhh,
         join_code="SZJC1",
@@ -327,7 +325,6 @@ def test_payroll_settings_preserved_when_other_join_code_for_block_exists(client
         block="A",
         salt=salt2,
         first_half_hash=fhh2,
-        dob_sum=2025,
     )
     db.session.add(student2)
     db.session.flush()
@@ -337,8 +334,8 @@ def test_payroll_settings_preserved_when_other_join_code_for_block_exists(client
         block="A",
         first_name="Paula",
         last_initial="P",
-        last_name_hash_by_part=[],
-        dob_sum=2025,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
         salt=salt2,
         first_half_hash=fhh2,
         join_code="PSKP2",  # different join code, same block

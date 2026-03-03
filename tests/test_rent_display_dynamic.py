@@ -49,7 +49,7 @@ def setup_rent_with_items(client):
         first_name="Test",
         last_initial="S",
         last_name_hash_by_part=["hash_a"],
-        dob_sum=2025,
+        dob_sum_hash=None,
         salt=os.urandom(16),
         first_half_hash="hash_a",
         join_code="TESTA",
