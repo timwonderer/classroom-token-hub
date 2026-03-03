@@ -5,7 +5,6 @@ import sqlalchemy as sa
 from app.extensions import db
 from app.models import (
     BalanceCache,
-    DemoStudent,
     HallPassLog,
     InsuranceClaim,
     Issue,
@@ -118,7 +117,6 @@ def _delete_student_scoped_rows(student_id, student_item_ids, issue_ids, insuran
     StudentInsurance.query.filter(StudentInsurance.student_id == student_id).delete(synchronize_session=False)
     UserReport.query.filter(UserReport._student_id == student_id).delete(synchronize_session=False)
     StudentRecoveryCode.query.filter(StudentRecoveryCode.student_id == student_id).delete(synchronize_session=False)
-    DemoStudent.query.filter(DemoStudent.student_id == student_id).delete(synchronize_session=False)
     Transaction.query.filter(Transaction.student_id == student_id).delete(synchronize_session=False)
     TapEvent.query.filter(TapEvent.student_id == student_id).delete(synchronize_session=False)
     HallPassLog.query.filter(HallPassLog.student_id == student_id).delete(synchronize_session=False)

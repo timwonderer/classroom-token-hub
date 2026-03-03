@@ -415,11 +415,6 @@ Student-submitted reports (e.g., bugs or feedback).
 
 Key fields: `_student_id` (FK), `category`, `description`, `contact`, `status`, `reward_amount`, review metadata, `submitted_at`, `ip_address`, `user_agent`.
 
-### `demo_students`
-Ephemeral demo accounts used for “view as student”.
-
-Key fields: `student_id`, `created_at`, `expires_at`.
-
 ---
 
 ## Notes

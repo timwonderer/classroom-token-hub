@@ -144,7 +144,6 @@ Deletes the entire teacher account. This removes all teacher-owned configuration
 | `DeletionRequest` | Explicitly deleted before `Admin` row to avoid FK flush issue |
 | `TeacherBlock` | All rows for this teacher |
 | `BankingSettings` | Filtered by `teacher_id` |
-| `DemoStudent` | Filtered by `admin_id` |
 | `FeatureSettings` | Filtered by `teacher_id` |
 | `HallPassSettings` | Filtered by `teacher_id` |
 | `PayrollFine` | Filtered by `teacher_id` |

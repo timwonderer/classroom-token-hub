@@ -7,11 +7,11 @@ The simplified recovery flow:
             (credentials cleared here; first_name/last_initial unchanged)
   Step 3 — Student creates a new username at /student/create-username
   Step 4 — Student sets new PIN + passphrase at /student/setup-pin-passphrase
-            (dob_sum / last_name_hash_by_part nulled out here post-setup)
 
 No PII re-entry is required. Identity (first_name, last_initial) is preserved
 from the teacher-managed roster and is not editable by the student.
 """
+import re
 import pytest
 from datetime import timedelta
 from app import db
@@ -482,12 +482,42 @@ def test_interrupting_reclaim_after_lookup(client, recovery_data):
     assert student.recovery_status == 'to_be_claimed'
 
 
+def test_recovery_username_uses_random_four_digit_segment(client, recovery_data, monkeypatch):
+    """Recovery username generation uses a transient random 4-digit segment."""
+    student = recovery_data["student"]
+    join_code = recovery_data["join_code"]
+
+    student.reset_code = "RAND4001"
+    student.reset_code_expires_at = utc_now() + timedelta(minutes=10)
+    student.recovery_status = 'to_be_claimed'
+    db.session.commit()
+
+    client.post("/recovery/lookup", data={
+        "join_code": join_code,
+        "reset_code": "RAND4001",
+    }, follow_redirects=False)
+
+    monkeypatch.setattr("app.routes.student.random.randint", lambda _a, _b: 4242)
+
+    resp = client.post('/student/create-username', data={
+        'write_in_word': 'galaxy',
+    }, follow_redirects=False)
+    assert resp.status_code == 302
+
+    with client.session_transaction() as sess:
+        generated_username = sess.get('generated_username')
+
+    assert generated_username is not None
+    assert "4242" in generated_username
+    assert re.search(r"4242OO$", generated_username) is not None
+
+
 # ------------------------------------------------------------------
-# Post-Setup PII Cleanup Tests
+# Post-Setup Completion Tests
 # ------------------------------------------------------------------
 
 def test_setup_completion_nulls_student_pii(client, recovery_data):
-    """After setup_pin_passphrase, dob_sum and last_name_hash_by_part are nulled."""
+    """After setup_pin_passphrase, recovery state is fully consumed."""
     student = recovery_data["student"]
     join_code = recovery_data["join_code"]
 

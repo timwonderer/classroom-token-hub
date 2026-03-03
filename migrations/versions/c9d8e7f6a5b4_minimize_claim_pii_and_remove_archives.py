@@ -1,7 +1,7 @@
 """Minimize claim PII persistence and remove archive columns.
 
-Revision ID: a9b8c7d6e5f4
-Revises: z2a3b4c5d6e7
+Revision ID: c9d8e7f6a5b4
+Revises: b33ed424ad95
 Create Date: 2026-03-02
 """
 from alembic import op
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'a9b8c7d6e5f4'
+revision = 'c9d8e7f6a5b4'
 down_revision = 'b33ed424ad95'
 branch_labels = None
 depends_on = None

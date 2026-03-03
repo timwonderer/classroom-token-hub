@@ -106,7 +106,6 @@ classroom-economy/
 ## Background Jobs
 
 - `enforce_daily_limits_job`: auto-tap out students who exceed daily limits.
-- `cleanup_expired_demo_sessions_job`: removes expired demo students and related data.
 
 ## Related References
 

@@ -25,9 +25,9 @@ from app.utils.claim_credentials import normalize_claim_hash
 
 @click.command('normalize-claim-credentials')
 def normalize_claim_credentials_command():
-    """Backfill canonical claim hashes for all students and roster seats."""
+    """Backfill canonical claim hashes for roster seats when possible."""
 
-    click.echo("Normalizing student and roster claim credentials to canonical format...")
+    click.echo("Normalizing roster claim credentials to canonical format...")
 
     updated = 0
 
@@ -42,7 +42,7 @@ def normalize_claim_credentials_command():
             seat.first_half_hash,
             first_initial,
             seat.last_initial,
-            seat.dob_sum,
+            None,
             seat.salt,
         )
         if changed and updated_hash:
@@ -56,7 +56,13 @@ def normalize_claim_credentials_command():
         click.echo(f"Failed to normalize claim credentials: {exc}", err=True)
         raise click.Abort()
 
-    click.echo(f"Updated {updated} record(s) to use canonical claim hashes.")
+    if updated == 0:
+        click.echo(
+            "No records were updated. Canonical normalization requires plaintext DOB sums, "
+            "which are no longer stored."
+        )
+    else:
+        click.echo(f"Updated {updated} record(s) to use canonical claim hashes.")
 
 
 def init_app(app):
