@@ -5,6 +5,7 @@ from flask import current_app
 from app.extensions import db
 # Import from shared utilities to avoid circular dependency with payroll.py
 from app.utils.attendance_helpers import get_join_code_for_student_period
+from app.utils.seat_scope import get_seat_ids_for_student_join, seat_scoped_filter
 
 def get_last_payroll_time(student_id=None):
     """
@@ -39,9 +40,11 @@ def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, j
     from datetime import datetime, timezone
 
     last_payroll_time = ensure_utc(last_payroll_time)
+    seat_ids = get_seat_ids_for_student_join(student_id, join_code) if join_code else []
+    tap_scope = seat_scoped_filter(TapEvent, student_id, seat_ids)
 
     base_query = TapEvent.query.filter(
-        TapEvent.student_id == student_id,
+        tap_scope,
         TapEvent.period == period,
         TapEvent.is_deleted == False  # Exclude deleted events
     )
@@ -71,7 +74,7 @@ def calculate_unpaid_attendance_seconds(student_id, period, last_payroll_time, j
 
     # --- If payroll history exists ---
     last_event_before_payroll = TapEvent.query.filter(
-        TapEvent.student_id == student_id,
+        tap_scope,
         TapEvent.period == period,
         TapEvent.timestamp <= last_payroll_time,
         TapEvent.is_deleted == False  # Exclude deleted events
@@ -239,6 +242,7 @@ def get_all_block_statuses(student, join_code=None):
         student_blocks = [seat.block.strip() for seat in claimed_seats if seat.block]
         teacher_ids = {seat.teacher_id for seat in claimed_seats if seat.teacher_id is not None}
         teacher_id = next(iter(teacher_ids)) if len(teacher_ids) == 1 else None
+        join_scope_seat_ids = get_seat_ids_for_student_join(student.id, join_code)
     else:
         student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
         mapped_teacher_ids = {
@@ -250,6 +254,7 @@ def get_all_block_statuses(student, join_code=None):
             if row.admin_id is not None
         }
         teacher_id = next(iter(mapped_teacher_ids)) if len(mapped_teacher_ids) == 1 else None
+        join_scope_seat_ids = []
     period_states = {}
 
     last_payroll_time = get_last_payroll_time(student_id=student.id)
@@ -258,9 +263,11 @@ def get_all_block_statuses(student, join_code=None):
         blk = block_original.upper()
 
         latest_event_query = TapEvent.query.filter_by(
-            student_id=student.id,
             period=blk,
             is_deleted=False
+        )
+        latest_event_query = latest_event_query.filter(
+            seat_scoped_filter(TapEvent, student.id, join_scope_seat_ids)
         )
 
         if join_code:
@@ -270,7 +277,7 @@ def get_all_block_statuses(student, join_code=None):
         is_active = latest_event.status == "active" if latest_event else False
 
         done_query = TapEvent.query.filter(
-            TapEvent.student_id == student.id,
+            seat_scoped_filter(TapEvent, student.id, join_scope_seat_ids),
             TapEvent.period == blk,
             func.date(TapEvent.timestamp) == today,
             TapEvent.reason != None,

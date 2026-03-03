@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from app import db
 from app.models import Transaction, TransactionStatus, BalanceCache, AccountType
 from app.utils.time import utc_now
+from app.utils.seat_scope import get_seat_ids_for_student_join, transaction_scope_filter
 
 logger = logging.getLogger(__name__)
 
@@ -31,17 +32,32 @@ def settle_balances(student_id: int, join_code: str) -> None:
         raise RuntimeError("Settlement attempted during read-only request context")
 
     try:
+        seat_ids = get_seat_ids_for_student_join(student_id, join_code)
+        scope_filter = transaction_scope_filter(Transaction, student_id, seat_ids)
+
         cache_was_created = False
         # 1. Lock (or Create) BalanceCache Row
         # ---------------------------------------------------------
         # We must lock the cache row to prevent concurrent settlements
         # or balance updates for the same student/class.
-        cache = (
-            BalanceCache.query
-            .filter_by(student_id=student_id, join_code=join_code)
-            .with_for_update()
-            .first()
-        )
+        cache = None
+        if seat_ids:
+            cache = (
+                BalanceCache.query
+                .filter(
+                    BalanceCache.join_code == join_code,
+                    BalanceCache.seat_id.in_(seat_ids),
+                )
+                .with_for_update()
+                .first()
+            )
+        if not cache:
+            cache = (
+                BalanceCache.query
+                .filter_by(student_id=student_id, join_code=join_code)
+                .with_for_update()
+                .first()
+            )
         
         if not cache:
             # If cache doesn't exist (e.g. new student), create it.
@@ -49,7 +65,11 @@ def settle_balances(student_id: int, join_code: str) -> None:
             # but usually we're inside a transaction so this insert blocks others.
             try:
                 with db.session.begin_nested():
-                    cache = BalanceCache(student_id=student_id, join_code=join_code)
+                    cache = BalanceCache(
+                        student_id=student_id,
+                        seat_id=(seat_ids[0] if seat_ids else None),
+                        join_code=join_code,
+                    )
                     db.session.add(cache)
                     db.session.flush() # Persist to get ID and lock
                     cache_was_created = True
@@ -69,10 +89,10 @@ def settle_balances(student_id: int, join_code: str) -> None:
         # ---------------------------------------------------------
         pending_txs = (
             Transaction.query
-            .filter_by(
-                student_id=student_id, 
-                join_code=join_code, 
-                status=TransactionStatus.PENDING
+            .filter(
+                scope_filter,
+                Transaction.join_code == join_code,
+                Transaction.status == TransactionStatus.PENDING,
             )
             .order_by(Transaction.timestamp)
             .with_for_update()
@@ -85,10 +105,10 @@ def settle_balances(student_id: int, join_code: str) -> None:
         if not cache_was_created:
             unsettled_posted_txs = (
                 Transaction.query
-                .filter_by(
-                    student_id=student_id,
-                    join_code=join_code,
-                    status=TransactionStatus.POSTED,
+                .filter(
+                    scope_filter,
+                    Transaction.join_code == join_code,
+                    Transaction.status == TransactionStatus.POSTED,
                 )
                 .filter(
                     Transaction.is_void == False,
@@ -104,13 +124,13 @@ def settle_balances(student_id: int, join_code: str) -> None:
         if cache_was_created:
             seed_time = utc_now()
             all_checking = db.session.query(db.func.sum(Transaction.amount)).filter(
-                Transaction.student_id == student_id,
+                scope_filter,
                 Transaction.join_code == join_code,
                 Transaction.account_type == 'checking',
                 Transaction.is_void == False,
             ).scalar() or Decimal('0.00')
             pending_checking = db.session.query(db.func.sum(Transaction.amount)).filter(
-                Transaction.student_id == student_id,
+                scope_filter,
                 Transaction.join_code == join_code,
                 Transaction.status == TransactionStatus.PENDING,
                 Transaction.account_type == 'checking',
@@ -118,13 +138,13 @@ def settle_balances(student_id: int, join_code: str) -> None:
             ).scalar() or Decimal('0.00')
 
             all_savings = db.session.query(db.func.sum(Transaction.amount)).filter(
-                Transaction.student_id == student_id,
+                scope_filter,
                 Transaction.join_code == join_code,
                 Transaction.account_type == 'savings',
                 Transaction.is_void == False,
             ).scalar() or Decimal('0.00')
             pending_savings = db.session.query(db.func.sum(Transaction.amount)).filter(
-                Transaction.student_id == student_id,
+                scope_filter,
                 Transaction.join_code == join_code,
                 Transaction.status == TransactionStatus.PENDING,
                 Transaction.account_type == 'savings',
@@ -137,10 +157,10 @@ def settle_balances(student_id: int, join_code: str) -> None:
 
             seeded_posted_txs = (
                 Transaction.query
-                .filter_by(
-                    student_id=student_id,
-                    join_code=join_code,
-                    status=TransactionStatus.POSTED,
+                .filter(
+                    scope_filter,
+                    Transaction.join_code == join_code,
+                    Transaction.status == TransactionStatus.POSTED,
                 )
                 .filter(
                     Transaction.is_void == False,

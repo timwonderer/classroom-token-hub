@@ -30,7 +30,7 @@ from app.models import (
     Transaction, TransactionStatus, TapEvent, HallPassLog, StudentItem, RentPayment,
     StudentInsurance, InsuranceClaim, StudentTeacher, TeacherBlock, StudentBlock, UserReport,
     FeatureSettings, TeacherOnboarding, RentSettings, BankingSettings,
-    DemoStudent, HallPassSettings, PayrollFine, PayrollReward,
+    HallPassSettings, PayrollFine, PayrollReward,
     PayrollSettings, StoreItem, Announcement, Issue, IssueStatusHistory, IssueResolutionAction
 )
 from app.auth import system_admin_required, SESSION_TIMEOUT_MINUTES
@@ -518,10 +518,7 @@ def dashboard():
     """
     # Gather statistics
     total_teachers = Admin.query.count()
-    demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
-    total_students = Student.query.filter(
-        ~Student.id.in_(sa.select(demo_ids_subq)),
-    ).count()
+    total_students = Student.query.count()
     active_invites = AdminInviteCode.query.filter_by(used=False).count()
     system_admin_count = SystemAdmin.query.count()
 
@@ -1022,14 +1019,12 @@ def manage_teachers():
     # Batch query: teacher-student relationships
     if all_teachers:
         teacher_ids = [t.id for t in all_teachers]
-        demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
         teacher_students = db.session.query(
             StudentTeacher.admin_id.label('teacher_id'),
             Student.id.label('student_id'),
             Student.block.label('block')
         ).join(Student, Student.id == StudentTeacher.student_id).filter(
             StudentTeacher.admin_id.in_(teacher_ids),
-            ~Student.id.in_(sa.select(demo_ids_subq)),
         ).subquery()
 
         teacher_student_count_rows = db.session.query(
@@ -1130,7 +1125,6 @@ def teacher_overview():
 
     # Batch query: Get all teacher-student relationships in one query
     # Uses StudentTeacher table only (Multi-Teacher Hardening)
-    demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
     teacher_students = db.session.query(
         StudentTeacher.admin_id.label('teacher_id'),
         Student.id.label('student_id'),
@@ -1139,7 +1133,6 @@ def teacher_overview():
         Student, Student.id == StudentTeacher.student_id
     ).filter(
         StudentTeacher.admin_id.in_([t.id for t in teachers]),
-        ~Student.id.in_(sa.select(demo_ids_subq)),
     ).subquery()
 
     # Get total student counts per teacher in a single query

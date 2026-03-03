@@ -36,12 +36,12 @@ import pytz
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
+    Student, Admin, JoinCode, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
-    DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
+    Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
     RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent,
     BalanceCache,
 )
@@ -192,6 +192,48 @@ def parse_dob_input(dob_str):
 
     # If both formats fail, raise error
     raise ValueError("Invalid date format. Please use the date picker.")
+
+
+def _parse_dob_date(dob_str):
+    """Parse DOB input and return a date object."""
+    if not dob_str:
+        raise ValueError("Date of birth is required")
+
+    dob_str = dob_str.strip()
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(dob_str, fmt).date()
+        except ValueError:
+            continue
+
+    raise ValueError("Invalid date format. Please use the date picker.")
+
+
+def _normalize_full_name_for_dedupe(first_name: str, last_name: str) -> str:
+    """Return lowercase letters-only full name for dedupe key input."""
+    return re.sub(r"[^a-z]", "", f"{first_name}{last_name}".lower())
+
+
+def _resolve_join_code_id(teacher_id: int, join_code: str) -> str:
+    """Get or create the canonical JoinCode row and return join_code_id."""
+    row = JoinCode.query.filter_by(join_code_token=join_code).first()
+    if row:
+        if row.teacher_id != teacher_id:
+            raise ValueError("Join code belongs to a different teacher.")
+        return row.join_code_id
+
+    row = JoinCode(join_code_token=join_code, teacher_id=teacher_id, is_active=True)
+    db.session.add(row)
+    db.session.flush()
+    return row.join_code_id
+
+
+def _build_teacher_block_dedupe_key(join_code_id: str, first_name: str, last_name: str, dob_date) -> str:
+    """Build deterministic dedupe key: join_code_id|normalized_full_name|YYYYMMDD."""
+    normalized_full_name = _normalize_full_name_for_dedupe(first_name, last_name)
+    dob_yyyymmdd = dob_date.strftime("%Y%m%d")
+    dedupe_input = f"{join_code_id}|{normalized_full_name}|{dob_yyyymmdd}".encode()
+    return hash_hmac(dedupe_input, b"")
 
 
 def _find_admin_by_auth_username(username: str):
@@ -619,7 +661,6 @@ def _delete_teacher_residual_ownership_rows(teacher_id):
 def _delete_teacher_settings_activity_and_audit_rows(teacher_id):
     """Delete teacher-scoped settings, activity, and audit rows."""
     BankingSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
-    DemoStudent.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
     FeatureSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
     HallPassSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
     PayrollFine.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
@@ -820,6 +861,8 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
     if not join_code:
         return
 
+    join_code_id = _resolve_join_code_id(teacher_id, join_code)
+
     existing_seat = TeacherBlock.query.filter_by(
         teacher_id=teacher_id,
         join_code=join_code,
@@ -845,6 +888,7 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
         teacher_id=teacher_id,
         block=block,
         join_code=join_code,
+        join_code_id=join_code_id,
         class_label=f"Teacher's Student Account",
         first_name=first_name,
         last_initial=last_initial,
@@ -903,6 +947,7 @@ def _link_student_to_admin(student: Student, admin_id):
             # Generate new join_code for this teacher+block
             join_code = generate_join_code()
             class_label = None
+        join_code_id = _resolve_join_code_id(admin_id, join_code)
 
         # Create new TeacherBlock record
         new_teacher_block = TeacherBlock(
@@ -910,6 +955,7 @@ def _link_student_to_admin(student: Student, admin_id):
             student_id=student.id,
             block=student.block,
             join_code=join_code,
+            join_code_id=join_code_id,
             class_label=class_label,  # Preserve class_label if it exists
             is_claimed=True,  # Mark as claimed since teacher manually added them
             first_name=student.first_name,
@@ -1205,11 +1251,9 @@ def dashboard():
     )
 
     # Recent transactions (limited to 5 for display)
-    demo_ids_subq = db.session.query(DemoStudent.student_id).subquery()
     recent_transactions = (
         Transaction.query
         .filter(Transaction.student_id.in_(sa.select(student_ids_subq)))
-        .filter(~Transaction.student_id.in_(sa.select(demo_ids_subq)))
         .filter_by(is_void=False)
         .order_by(Transaction.timestamp.desc())
         .limit(5)
@@ -1218,7 +1262,6 @@ def dashboard():
     total_transactions_today = (
         Transaction.query
         .filter(Transaction.student_id.in_(sa.select(student_ids_subq)))
-        .filter(~Transaction.student_id.in_(sa.select(demo_ids_subq)))
         .filter(
             Transaction.timestamp >= utc_now().replace(hour=0, minute=0, second=0, microsecond=0),
             Transaction.is_void == False,
@@ -3227,39 +3270,13 @@ def edit_student():
                     )
             # If 'start_fresh', do nothing - student starts with $0 in that period
 
-    # Check if name changed (need to recalculate hashes)
+    # Check if name changed (keep seat identity fields in sync).
     name_changed = (new_first_name != student.first_name or new_last_initial != student.last_initial)
-    dob_changed = False
-    dob_sum_value = 0
-    last_name_parts = []
 
     # Update basic fields
     student.first_name = new_first_name
     student.last_initial = new_last_initial
     student.block = new_blocks
-
-    # If name changed, refresh last name hashes
-    if name_changed:
-        last_name_parts = hash_last_name_parts(last_name_input, student.salt)
-
-    # Update DOB sum if provided (and recalculate second_half_hash)
-    dob_sum_str = request.form.get('dob_sum', '').strip()
-    if dob_sum_str:
-        try:
-            new_dob_sum = parse_dob_input(dob_sum_str)
-        except ValueError:
-            flash("Invalid date of birth. Please use the date picker.", "error")
-            return redirect(url_for('admin.students'))
-
-        dob_sum_value = new_dob_sum
-        # Regenerate second_half_hash (DOB sum hash)
-        student.second_half_hash = hash_hmac(str(new_dob_sum).encode(), student.salt)
-        dob_changed = True
-
-    if name_changed or dob_changed:
-        claim_hash = compute_primary_claim_hash(new_first_name[:1], dob_sum_value, student.salt)
-        if claim_hash:
-            student.first_half_hash = claim_hash
 
     # Handle account reset — generate recovery code per recovery spec
     reset_login = request.form.get('reset_login') == 'on'
@@ -3277,7 +3294,7 @@ def edit_student():
         flash(f"Reset code generated for {student.full_name}: {code} — Expires in 10 minutes. "
               f"Give this code to the student along with their join code.", "warning")
 
-    if name_changed or dob_changed:
+    if name_changed:
         blocks_to_update = TeacherBlock.query.filter_by(
             student_id=student.id,
             teacher_id=current_admin_id
@@ -3285,10 +3302,6 @@ def edit_student():
         for tb in blocks_to_update:
             tb.first_name = student.first_name
             tb.last_initial = student.last_initial
-            tb.last_name_hash_by_part = last_name_parts
-            if dob_changed:
-                tb.dob_sum_hash = hash_hmac(str(dob_sum_value).encode(), tb.salt)
-            tb.first_half_hash = student.first_half_hash
 
     # Handle block changes - update TeacherBlock entries
     removed_blocks = old_blocks - new_blocks_set
@@ -3353,13 +3366,12 @@ def edit_student():
             if join_code:
                 _ensure_teacher_student_seat(current_admin_id, join_code, block)
 
-            # CRITICAL FIX: Ensure first_half_hash exists before creating TeacherBlock
-            # Logic: If hash is missing (legacy student), generate it now to prevent NotNullViolation
+            # Preserve existing claim hash; edit flow no longer accepts DOB input.
             if not student.first_half_hash:
-                claim_hash = compute_primary_claim_hash(student.first_name[:1], dob_sum_value, student.salt)
-                if claim_hash:
-                    student.first_half_hash = claim_hash
-                    current_app.logger.info(f"Generated missing first_half_hash for student {student.id} during edit")
+                current_app.logger.warning(
+                    "Student %s has no first_half_hash during edit; preserving as-is",
+                    student.id,
+                )
             
             # Student is claimed if they have a username set
             is_claimed = bool(student.username_hash)
@@ -3371,11 +3383,8 @@ def edit_student():
                 block=block,
                 first_name=student.first_name,
                 last_initial=student.last_initial,
-                last_name_hash_by_part=last_name_parts if last_name_parts else None,
-                dob_sum_hash=(
-                    hash_hmac(str(dob_sum_value).encode(), student.salt)
-                    if dob_sum_value else None
-                ),
+                last_name_hash_by_part=None,
+                dob_sum_hash=None,
                 salt=student.salt,
                 first_half_hash=student.first_half_hash,
                 join_code=join_code,
@@ -3775,6 +3784,7 @@ def add_individual_student():
 
         # Parse DOB and calculate sum
         try:
+            dob_date = _parse_dob_date(dob_str)
             dob_sum = parse_dob_input(dob_str)
         except ValueError:
             flash("Invalid date of birth. Please use the date picker.", "error")
@@ -3790,9 +3800,44 @@ def add_individual_student():
         # Compute last_name_hash_by_part for fuzzy matching
         last_name_parts = hash_last_name_parts(last_name, salt)
 
+        current_admin_id = session.get("admin_id")
+        # Get or generate join code for this block.
+        existing_tb = TeacherBlock.query.filter_by(
+            teacher_id=current_admin_id,
+            block=block
+        ).first()
+        if existing_tb:
+            join_code = existing_tb.join_code
+        else:
+            join_code = None
+            for _ in range(MAX_JOIN_CODE_RETRIES):
+                candidate = generate_join_code()
+                if not TeacherBlock.query.filter_by(join_code=candidate).first():
+                    join_code = candidate
+                    break
+            else:
+                block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
+                timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
+                join_code = f"B{block_initial}{timestamp_suffix:04d}"
+
+        join_code_id = _resolve_join_code_id(current_admin_id, join_code)
+        dedupe_key = _build_teacher_block_dedupe_key(join_code_id, first_name, last_name, dob_date)
+
+        existing_seat_in_class = TeacherBlock.query.filter_by(
+            teacher_id=current_admin_id,
+            join_code_id=join_code_id,
+            dedupe_key=dedupe_key,
+        ).first()
+        if existing_seat_in_class:
+            flash(f"Student {first_name} {last_name} is already in your class.", "info")
+            return redirect(url_for('admin.students'))
+
         # Check for duplicates - need to check ALL students GLOBALLY (not scoped to teacher)
         # This prevents creating duplicate accounts when multiple teachers have the same student
-        potential_duplicates = Student.query.filter_by(first_half_hash=first_half_hash).all()
+        potential_duplicates = Student.query.filter_by(
+            first_name=first_name,
+            last_initial=last_initial,
+        ).all()
 
         # Check if any existing student matches (using new credential system)
         for existing_student in potential_duplicates:
@@ -3830,7 +3875,6 @@ def add_individual_student():
                     return redirect(url_for('admin.students'))
 
         # Create student
-        current_admin_id = session.get("admin_id")
         new_student = Student(
             first_name=first_name,
             last_initial=last_initial,
@@ -3845,29 +3889,6 @@ def add_individual_student():
         db.session.flush()
         _link_student_to_admin(new_student, current_admin_id)
         
-        # Create TeacherBlock entry for this student
-        # Get or generate join code for this block
-        existing_tb = TeacherBlock.query.filter_by(
-            teacher_id=current_admin_id,
-            block=block
-        ).first()
-        
-        if existing_tb:
-            join_code = existing_tb.join_code
-        else:
-            # Generate a unique join code with bounded retries and fallback
-            join_code = None
-            for _ in range(MAX_JOIN_CODE_RETRIES):
-                candidate = generate_join_code()
-                if not TeacherBlock.query.filter_by(join_code=candidate).first():
-                    join_code = candidate
-                    break
-            else:
-                # Fallback to timestamp-based code
-                block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
-                timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
-                join_code = f"B{block_initial}{timestamp_suffix:04d}"
-        
         new_tb = TeacherBlock(
             teacher_id=current_admin_id,
             block=block,
@@ -3876,6 +3897,8 @@ def add_individual_student():
             salt=salt,
             first_half_hash=first_half_hash,
             join_code=join_code,
+            join_code_id=join_code_id,
+            dedupe_key=dedupe_key,
             is_claimed=False,  # Student hasn't set up username yet
             student_id=new_student.id,
         )
@@ -3919,6 +3942,7 @@ def add_manual_student():
 
         # Parse DOB and calculate sum
         try:
+            dob_date = _parse_dob_date(dob_str)
             dob_sum = parse_dob_input(dob_str)
         except ValueError:
             flash("Invalid date of birth. Please use the date picker.", "error")
@@ -3934,8 +3958,43 @@ def add_manual_student():
         # Compute last_name_hash_by_part for fuzzy matching
         last_name_parts = hash_last_name_parts(last_name, salt)
 
+        current_admin_id = session.get("admin_id")
+        # Get or generate join code for this block.
+        existing_tb = TeacherBlock.query.filter_by(
+            teacher_id=current_admin_id,
+            block=block
+        ).first()
+        if existing_tb:
+            join_code = existing_tb.join_code
+        else:
+            join_code = None
+            for _ in range(MAX_JOIN_CODE_RETRIES):
+                candidate = generate_join_code()
+                if not TeacherBlock.query.filter_by(join_code=candidate).first():
+                    join_code = candidate
+                    break
+            else:
+                block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
+                timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
+                join_code = f"B{block_initial}{timestamp_suffix:04d}"
+
+        join_code_id = _resolve_join_code_id(current_admin_id, join_code)
+        dedupe_key = _build_teacher_block_dedupe_key(join_code_id, first_name, last_name, dob_date)
+
+        existing_seat_in_class = TeacherBlock.query.filter_by(
+            teacher_id=current_admin_id,
+            join_code_id=join_code_id,
+            dedupe_key=dedupe_key,
+        ).first()
+        if existing_seat_in_class:
+            flash(f"Student {first_name} {last_name} is already in your class.", "info")
+            return redirect(url_for('admin.students'))
+
         # Check for duplicates GLOBALLY (not scoped to teacher)
-        potential_duplicates = Student.query.filter_by(first_half_hash=first_half_hash).all()
+        potential_duplicates = Student.query.filter_by(
+            first_name=first_name,
+            last_initial=last_initial,
+        ).all()
 
         for existing_student in potential_duplicates:
             if existing_student.first_name == first_name:
@@ -3990,33 +4049,9 @@ def add_manual_student():
         if passphrase:
             new_student.passphrase_hash = generate_password_hash(passphrase)
 
-        current_admin_id = session.get("admin_id")
         db.session.add(new_student)
         db.session.flush()
         _link_student_to_admin(new_student, current_admin_id)
-        
-        # Create TeacherBlock entry for this student
-        # Get or generate join code for this block
-        existing_tb = TeacherBlock.query.filter_by(
-            teacher_id=current_admin_id,
-            block=block
-        ).first()
-        
-        if existing_tb:
-            join_code = existing_tb.join_code
-        else:
-            # Generate a unique join code with bounded retries and fallback
-            join_code = None
-            for _ in range(MAX_JOIN_CODE_RETRIES):
-                candidate = generate_join_code()
-                if not TeacherBlock.query.filter_by(join_code=candidate).first():
-                    join_code = candidate
-                    break
-            else:
-                # Fallback to timestamp-based code
-                block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
-                timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
-                join_code = f"B{block_initial}{timestamp_suffix:04d}"
         
         # Student is claimed if they have a username set
         is_claimed = bool(username)
@@ -4029,6 +4064,8 @@ def add_manual_student():
             salt=salt,
             first_half_hash=first_half_hash,
             join_code=join_code,
+            join_code_id=join_code_id,
+            dedupe_key=dedupe_key,
             is_claimed=is_claimed,
             student_id=new_student.id,
             claimed_at=utc_now() if is_claimed else None,
@@ -4083,6 +4120,7 @@ def store_management():
             limit_per_student=form.limit_per_student.data,
             auto_delist_date=form.auto_delist_date.data,
             auto_expiry_days=form.auto_expiry_days.data,
+            is_active=form.is_active.data,
             is_long_term_goal=form.is_long_term_goal.data,
             # Bundle settings
             is_bundle=form.is_bundle.data,
@@ -7843,6 +7881,7 @@ def upload_students():
 
     # Get or generate join codes for each block in this upload
     join_codes_by_block = {}
+    join_code_ids_by_block = {}
 
     for row in csv_input:
         try:
@@ -7894,7 +7933,11 @@ def upload_students():
                 # Ensure the teacher student seat exists for this new or existing join code
                 _ensure_teacher_student_seat(teacher_id, join_codes_by_block[block], block)
 
+            if block not in join_code_ids_by_block:
+                join_code_ids_by_block[block] = _resolve_join_code_id(teacher_id, join_codes_by_block[block])
+
             join_code = join_codes_by_block[block]
+            join_code_id = join_code_ids_by_block[block]
 
             # Generate dob_sum first (needed for duplicate detection)
             # Handle both mm/dd/yy and mm/dd/yyyy formats
@@ -7910,22 +7953,15 @@ def upload_students():
                 yyyy = year
 
             dob_sum = mm + dd + yyyy
+            dob_date = datetime.strptime(f"{yyyy:04d}-{mm:02d}-{dd:02d}", "%Y-%m-%d").date()
+            dedupe_key = _build_teacher_block_dedupe_key(join_code_id, first_name, last_name, dob_date)
 
-            # Check if this seat already exists for this teacher
-            # Duplicate detection: same teacher + block + last_initial + first_name
-            # Note: first_name is encrypted, so we must fetch candidates and check in Python
-            candidate_seats = TeacherBlock.query.filter_by(
+            # Check if this seat already exists in this join code.
+            existing_seat = TeacherBlock.query.filter_by(
                 teacher_id=teacher_id,
-                block=block,
-                last_initial=last_initial,
-            ).all()
-            
-            # Check if any candidate has matching first name (after decryption)
-            existing_seat = None
-            for seat in candidate_seats:
-                if seat.first_name == first_name:
-                    existing_seat = seat
-                    break
+                join_code_id=join_code_id,
+                dedupe_key=dedupe_key,
+            ).first()
 
             if existing_seat:
                 duplicated += 1
@@ -7954,6 +7990,8 @@ def upload_students():
                 salt=salt,
                 first_half_hash=first_half_hash,
                 join_code=join_code,
+                join_code_id=join_code_id,
+                dedupe_key=dedupe_key,
                 is_claimed=False,
             )
             db.session.add(seat)
@@ -9378,6 +9416,7 @@ def announcement_create():
                     title=form.title.data,
                     message=form.message.data,
                     priority=form.priority.data,
+                    is_active=form.is_active.data,
                     expires_at=form.expires_at.data
                 )
                 db.session.add(announcement)

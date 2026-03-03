@@ -13,7 +13,7 @@ from sqlalchemy import event
 from app import db
 from app.models import (
     Admin, Student, StudentBlock, StudentTeacher, TeacherBlock,
-    Transaction, PayrollSettings, AnalyticsAlert, DemoStudent
+    Transaction, PayrollSettings, AnalyticsAlert
 )
 from app.utils.analytics_engine import AnalyticsEngine
 from app.hash_utils import get_random_salt, hash_username
@@ -338,28 +338,6 @@ def test_trend_calculation(client, setup_analytics_test):
     # No previous: stable
     trend = engine.calculate_trend(100.0, None)
     assert trend == 'stable'
-
-
-def test_demo_students_excluded_from_enrollment(client, setup_analytics_test):
-    """Demo students should not be included in analytics enrollment."""
-    admin, join_code, block, students, payroll = setup_analytics_test
-    demo_student = students[0]
-    demo = DemoStudent(
-        admin_id=admin.id,
-        student_id=demo_student.id,
-        session_id="demo-session",
-        created_at=datetime.now(timezone.utc),
-        expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
-        is_active=True
-    )
-    db.session.add(demo)
-    db.session.commit()
-
-    engine = AnalyticsEngine(admin.id, join_code)
-    enrolled = engine._get_enrolled_students()
-
-    assert demo_student not in enrolled
-    assert len(enrolled) == 4
 
 
 def test_block_resolution_falls_back_to_student_block(client, setup_analytics_test):
