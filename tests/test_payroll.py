@@ -122,7 +122,7 @@ def test_get_pay_rate_for_block_default(test_teacher):
     rate = get_pay_rate_for_block("A", teacher_id=test_teacher.id)
     # Default is now Decimal
     from decimal import Decimal
-    assert float(rate) == DEFAULT_PAY_RATE_PER_SECOND
+    assert rate == DEFAULT_PAY_RATE_PER_SECOND
     assert isinstance(rate, Decimal)
 
 
@@ -286,7 +286,7 @@ def test_get_pay_rate_for_block_inactive_settings_ignored(test_teacher):
     
     # Should fall back to default rate since the setting is inactive
     rate = get_pay_rate_for_block("A", teacher_id=test_teacher.id)
-    assert float(rate) == DEFAULT_PAY_RATE_PER_SECOND
+    assert rate == DEFAULT_PAY_RATE_PER_SECOND
 
 
 def test_get_pay_rate_for_block_no_teacher_id(client):
@@ -295,7 +295,7 @@ def test_get_pay_rate_for_block_no_teacher_id(client):
     
     # Call without teacher_id (and outside request context)
     rate = get_pay_rate_for_block("A", teacher_id=None)
-    assert float(rate) == DEFAULT_PAY_RATE_PER_SECOND
+    assert rate == DEFAULT_PAY_RATE_PER_SECOND
 
 
 def test_get_cached_payroll_with_meta(client):
