@@ -58,8 +58,8 @@ def _create_student(teacher, first_name, join_code, block='A'):
         is_claimed=True,
         first_name=first_name,
         last_initial='S',
-        last_name_hash_by_part=[],
-        dob_sum=0,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
         salt=b'salt',
         first_half_hash=f'hash_{first_name}_{join_code}_{block}',
     ))

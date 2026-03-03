@@ -91,7 +91,7 @@ def test_student_dashboard_rendering(client):
         first_name="Render",
         last_initial="S",
         last_name_hash_by_part=["hash"],
-        dob_sum=2025,
+        dob_sum_hash=None,
         salt=os.urandom(16),
         first_half_hash="hash",
         join_code="RENDER1",

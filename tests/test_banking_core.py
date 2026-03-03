@@ -9,7 +9,7 @@ def test_ledger_flow(client):
     """Test full flow: Create PENDING -> Settle -> Verify Cache."""
     # Setup
     student = Student(first_name="Test", last_initial="S", block="A", 
-                      salt=b'123', first_half_hash="hash", dob_sum=123)
+                      salt=b'123', first_half_hash="hash")
     teacher = Admin(username="teacher", totp_secret="secret")
     db.session.add(student)
     db.session.add(teacher)
@@ -57,7 +57,7 @@ def test_ledger_flow(client):
 def test_void_pending(client):
     """Test voiding a PENDING transaction (no reversal)."""
     student = Student(first_name="Test2", last_initial="B", block="B", 
-                      salt=b'456', first_half_hash="hash2", dob_sum=456)
+                      salt=b'456', first_half_hash="hash2")
     teacher = Admin(username="teacher2", totp_secret="secret")
     db.session.add(student)
     db.session.add(teacher)
@@ -110,7 +110,7 @@ def test_void_pending(client):
 def test_void_posted_with_reversal(client):
     """Test voiding a POSTED transaction (creates reversal)."""
     student = Student(first_name="Test3", last_initial="C", block="C", 
-                      salt=b'789', first_half_hash="hash3", dob_sum=789)
+                      salt=b'789', first_half_hash="hash3")
     teacher = Admin(username="teacher3", totp_secret="secret")
     db.session.add(student)
     db.session.add(teacher)

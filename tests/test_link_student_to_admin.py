@@ -14,15 +14,14 @@ def _create_admin(username: str = "teacher") -> Admin:
     return admin
 
 
-def _create_student(block: str = "A", first_name: str = "Test", last_initial: str = "S", dob_sum: int = 1234) -> Student:
+def _create_student(block: str = "A", first_name: str = "Test", last_initial: str = "S") -> Student:
     salt = get_random_salt()
     student = Student(
         first_name=first_name,
         last_initial=last_initial,
         block=block,
         salt=salt,
-        dob_sum=dob_sum,
-        first_half_hash=f"{first_name[0].upper()}{dob_sum}",
+        first_half_hash=f"{first_name[0].upper()}1234",
         username_hash=hash_username(f"{first_name.lower()}-{block.lower()}", salt),
         pin_hash="pin",
     )
@@ -33,7 +32,6 @@ def _create_student(block: str = "A", first_name: str = "Test", last_initial: st
 
 def _create_teacher_block(admin_id: int, block: str, join_code: str, class_label: str | None, student: Student | None = None,
                           claimed: bool = False) -> TeacherBlock:
-    last_name_parts = student.last_name_hash_by_part if student and student.last_name_hash_by_part is not None else {}
     seat = TeacherBlock(
         teacher_id=admin_id,
         block=block,
@@ -43,8 +41,8 @@ def _create_teacher_block(admin_id: int, block: str, join_code: str, class_label
         student_id=student.id if student else None,
         first_name=(student.first_name if student else "Placeholder"),
         last_initial=(student.last_initial if student else "P"),
-        last_name_hash_by_part=last_name_parts,
-        dob_sum=(student.dob_sum if student else 0),
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
         salt=(student.salt if student else get_random_salt()),
         first_half_hash=(student.first_half_hash if student else "P0"),
     )
@@ -96,7 +94,7 @@ def test_link_student_claims_existing_seat(client):
 
 def test_link_student_skips_when_block_missing(client, caplog):
     admin = _create_admin("teacher-four")
-    student = _create_student(block="", dob_sum=4321)
+    student = _create_student(block="")
 
     with caplog.at_level("WARNING"):
         _link_student_to_admin(student, admin.id)

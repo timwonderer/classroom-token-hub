@@ -54,7 +54,7 @@ def test_teacher_student_lifecycle(client, teacher, app):
         assert tb is not None
         assert tb.first_name == "Teacher"
         assert tb.last_initial == "S"
-        assert tb.dob_sum == 2003 # 1+1+2001
+        assert tb.dob_sum_hash is not None
 
         # 2. Claim the account (Step 1)
         response = client.post('/student/claim-account', data={
@@ -119,7 +119,6 @@ def test_teacher_student_lifecycle(client, teacher, app):
         assert "Teacher student accounts cannot be deleted directly" in response.get_data(as_text=True)
 
         db.session.refresh(student)
-        assert student.is_active is True
 
         # B. Cannot move via edit
         response = client.post('/admin/student/edit', data={
@@ -143,9 +142,7 @@ def test_teacher_student_lifecycle(client, teacher, app):
             block="Z",
             is_teacher=False,
             salt=get_random_salt(),
-            dob_sum=100,
             first_half_hash=b'fakehash',
-            last_name_hash_by_part=["fakehashpart"]
         )
         db.session.add(regular_student)
         db.session.commit()
@@ -158,10 +155,10 @@ def test_teacher_student_lifecycle(client, teacher, app):
             is_claimed=True,
             first_name="Regular",
             last_initial="R",
-            dob_sum=100,
+            dob_sum_hash=None,
             salt=regular_student.salt,
             first_half_hash=b'fakehash',
-            last_name_hash_by_part=["fakehashpart"]
+            last_name_hash_by_part=None
         )
         db.session.add(regular_tb)
 
@@ -202,9 +199,7 @@ def test_teacher_student_lifecycle(client, teacher, app):
             block="Z",
             is_teacher=False,
             salt=get_random_salt(),
-            dob_sum=100,
             first_half_hash=b'fakehash2',
-            last_name_hash_by_part=["fakehashpart2"]
         )
         db.session.add(lazy_student)
         db.session.commit()
@@ -217,10 +212,10 @@ def test_teacher_student_lifecycle(client, teacher, app):
             is_claimed=True,
             first_name="Lazy",
             last_initial="L",
-            dob_sum=100,
+            dob_sum_hash=None,
             salt=lazy_student.salt,
             first_half_hash=b'fakehash2',
-            last_name_hash_by_part=["fakehashpart2"]
+            last_name_hash_by_part=None
         )
         db.session.add(lazy_tb)
 

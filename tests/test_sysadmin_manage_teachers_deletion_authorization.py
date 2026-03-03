@@ -35,7 +35,6 @@ def _create_student_for_teacher(teacher: Admin, block: str = "A", first_name: st
         block=block,
         salt=salt,
         first_half_hash=first_half_hash,
-        dob_sum=2025,
     )
     db.session.add(student)
     db.session.flush()

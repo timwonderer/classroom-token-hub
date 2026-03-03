@@ -107,7 +107,7 @@ def test_new_student_can_claim_in_legacy_class(client):
         first_name="NewStudent",
         last_initial="N",
         last_name_hash_by_part=[hash_hmac("smith".encode(), new_salt)],
-        dob_sum=2025,
+        dob_sum_hash=hash_hmac(b'2025', new_salt),
         salt=new_salt,
         first_half_hash=hash_hmac("N2025".encode(), new_salt),
         join_code=join_code,  # Same join code as the legacy class
@@ -180,7 +180,7 @@ def test_join_code_persists_when_new_students_added(client):
         first_name="NewStudent2",
         last_initial="N",
         last_name_hash_by_part=[hash_hmac("jones".encode(), new_salt)],
-        dob_sum=2026,
+        dob_sum_hash=None,
         salt=new_salt,
         first_half_hash=hash_hmac("N2026".encode(), new_salt),
         join_code=join_code_1,  # Must use the same join code
@@ -224,7 +224,7 @@ def test_claim_succeeds_when_seat_uses_last_initial_hash(client):
         first_name="Benjamin",
         last_initial="H",
         last_name_hash_by_part=hash_last_name_parts(last_name, salt),
-        dob_sum=2030,
+        dob_sum_hash=hash_hmac(b'2030', salt),
         salt=salt,
         first_half_hash=hash_hmac("H2030".encode(), salt),
         join_code=join_code,
@@ -273,7 +273,7 @@ def test_students_page_normalizes_legacy_claim_hashes(client):
         first_name="Ada",
         last_initial="L",
         last_name_hash_by_part=hash_last_name_parts("Lovelace", seat_salt),
-        dob_sum=2035,
+        dob_sum_hash=hash_hmac(b'2035', seat_salt),
         salt=seat_salt,
         first_half_hash=legacy_seat_hash,
         join_code="LEGACY1",
@@ -289,7 +289,6 @@ def test_students_page_normalizes_legacy_claim_hashes(client):
         block="C",
         salt=student_salt,
         first_half_hash=legacy_student_hash,
-        dob_sum=2035,
         has_completed_setup=False,
     )
     db.session.add_all([seat, student])
@@ -299,18 +298,14 @@ def test_students_page_normalizes_legacy_claim_hashes(client):
 
     _login_admin(client, teacher, secret)
 
-    # Visiting the students page should normalize both hashes to the canonical first-initial pattern
+    # Visiting the students page still works; legacy hash normalization no longer
+    # runs (dob_sum is no longer stored in plain text), so hashes remain unchanged.
     response = client.get("/admin/students")
     assert response.status_code == 200
 
     updated_seat = db.session.get(TeacherBlock, seat.id)
     updated_student = db.session.get(Student, student.id)
 
-    expected_seat_hash = compute_primary_claim_hash("A", 2035, seat_salt)
-    expected_student_hash = compute_primary_claim_hash("A", 2035, student_salt)
-
-    assert updated_seat.first_half_hash == expected_seat_hash
-    assert updated_student.first_half_hash == expected_student_hash
-    # Confirm the original legacy hashes were different so a change occurred
-    assert updated_seat.first_half_hash != legacy_seat_hash
-    assert updated_student.first_half_hash != legacy_student_hash
+    # Hashes are not changed since dob_sum is not available for re-computation
+    assert updated_seat.first_half_hash == legacy_seat_hash
+    assert updated_student.first_half_hash == legacy_student_hash

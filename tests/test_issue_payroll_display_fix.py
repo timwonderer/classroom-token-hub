@@ -21,7 +21,6 @@ def test_payroll_visibility_bug(client):
         salt=b'123',
         first_half_hash="hash1",
         second_half_hash="hash2",
-        dob_sum=123
     )
     db.session.add(student)
     db.session.commit()
@@ -35,8 +34,8 @@ def test_payroll_visibility_bug(client):
         first_name="Timothy",
         last_initial="C",
         is_claimed=True,
-        last_name_hash_by_part={},
-        dob_sum=123,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
         salt=b'123',
         first_half_hash="hash1"
     )
@@ -48,8 +47,8 @@ def test_payroll_visibility_bug(client):
         first_name="Timothy",
         last_initial="C",
         is_claimed=True,
-        last_name_hash_by_part={},
-        dob_sum=123,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
         salt=b'123',
         first_half_hash="hash1"
     )

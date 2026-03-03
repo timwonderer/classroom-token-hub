@@ -839,6 +839,7 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
     # Canonical hash for claim matching
     first_half_hash = compute_primary_claim_hash(first_name[:1], dob_sum, salt)
     last_name_hash_by_part = hash_last_name_parts("Student", salt)
+    dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
 
     teacher_seat = TeacherBlock(
         teacher_id=teacher_id,
@@ -847,6 +848,8 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
         class_label=f"Teacher's Student Account",
         first_name=first_name,
         last_initial=last_initial,
+        last_name_hash_by_part=last_name_hash_by_part,
+        dob_sum_hash=dob_sum_hash,
         salt=salt,
         first_half_hash=first_half_hash,
         is_claimed=False,
@@ -911,8 +914,8 @@ def _link_student_to_admin(student: Student, admin_id):
             is_claimed=True,  # Mark as claimed since teacher manually added them
             first_name=student.first_name,
             last_initial=student.last_initial,
-            last_name_hash_by_part=[],
-            dob_sum=0,
+            last_name_hash_by_part=None,
+            dob_sum_hash=None,
             salt=student.salt,
             first_half_hash=student.first_half_hash
         )
@@ -1052,7 +1055,7 @@ def _normalize_claim_credentials_for_admin(admin_id: int) -> int:
             seat.first_half_hash,
             first_initial,
             seat.last_initial,
-            seat.dob_sum,
+            None,
             seat.salt,
         )
         if changed and updated_hash:
@@ -2883,8 +2886,8 @@ def students():
                             # Placeholder values for required fields
                             first_name=LEGACY_PLACEHOLDER_FIRST_NAME,
                             last_initial=LEGACY_PLACEHOLDER_LAST_INITIAL,
-                            last_name_hash_by_part=[],
-                            dob_sum=0,
+                            last_name_hash_by_part=None,
+                            dob_sum_hash=None,
                             salt=placeholder_salt,
                             first_half_hash=placeholder_first_half_hash,
                         )
@@ -3275,16 +3278,17 @@ def edit_student():
               f"Give this code to the student along with their join code.", "warning")
 
     if name_changed or dob_changed:
-        TeacherBlock.query.filter_by(
+        blocks_to_update = TeacherBlock.query.filter_by(
             student_id=student.id,
             teacher_id=current_admin_id
-        ).update({
-            'first_name': student.first_name,
-            'last_initial': student.last_initial,
-            'last_name_hash_by_part': last_name_parts,
-            'dob_sum': dob_sum_value,
-            'first_half_hash': student.first_half_hash,
-        })
+        ).all()
+        for tb in blocks_to_update:
+            tb.first_name = student.first_name
+            tb.last_initial = student.last_initial
+            tb.last_name_hash_by_part = last_name_parts
+            if dob_changed:
+                tb.dob_sum_hash = hash_hmac(str(dob_sum_value).encode(), tb.salt)
+            tb.first_half_hash = student.first_half_hash
 
     # Handle block changes - update TeacherBlock entries
     removed_blocks = old_blocks - new_blocks_set
@@ -3367,8 +3371,11 @@ def edit_student():
                 block=block,
                 first_name=student.first_name,
                 last_initial=student.last_initial,
-                last_name_hash_by_part=last_name_parts,
-                dob_sum=dob_sum_value,
+                last_name_hash_by_part=last_name_parts if last_name_parts else None,
+                dob_sum_hash=(
+                    hash_hmac(str(dob_sum_value).encode(), student.salt)
+                    if dob_sum_value else None
+                ),
                 salt=student.salt,
                 first_half_hash=student.first_half_hash,
                 join_code=join_code,
@@ -7905,13 +7912,12 @@ def upload_students():
             dob_sum = mm + dd + yyyy
 
             # Check if this seat already exists for this teacher
-            # Duplicate detection: same teacher + block + last_initial + dob_sum + first_name
+            # Duplicate detection: same teacher + block + last_initial + first_name
             # Note: first_name is encrypted, so we must fetch candidates and check in Python
             candidate_seats = TeacherBlock.query.filter_by(
                 teacher_id=teacher_id,
                 block=block,
                 last_initial=last_initial,
-                dob_sum=dob_sum
             ).all()
             
             # Check if any candidate has matching first name (after decryption)
@@ -7934,6 +7940,9 @@ def upload_students():
             # Compute last_name_hash_by_part for fuzzy matching
             last_name_parts = hash_last_name_parts(last_name, salt)
 
+            # Compute dob_sum_hash (HMAC of DOB sum with the seat's salt)
+            dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
+
             # Create TeacherBlock seat (unclaimed account)
             seat = TeacherBlock(
                 teacher_id=teacher_id,
@@ -7941,7 +7950,7 @@ def upload_students():
                 first_name=first_name,
                 last_initial=last_initial,
                 last_name_hash_by_part=last_name_parts,
-                dob_sum=dob_sum,
+                dob_sum_hash=dob_sum_hash,
                 salt=salt,
                 first_half_hash=first_half_hash,
                 join_code=join_code,
