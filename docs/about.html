@@ -330,6 +330,63 @@
                 yearElement.textContent = new Date().getFullYear();
             }
         })();
+
+        (function () {
+            var modal = document.getElementById('screenshotModal');
+            var modalImg = document.getElementById('screenshotModalImage');
+            var modalTitle = document.getElementById('screenshotModalTitle');
+            var modalDesc = document.getElementById('screenshotModalDescription');
+            var closeBtn = document.getElementById('screenshotModalClose');
+            if (!modal || !closeBtn) return;
+
+            var lastFocused = null;
+
+            function openModal(card) {
+                var img = card.querySelector('.screenshot-placeholder img');
+                var title = card.querySelector('.caption h3');
+                var desc = card.querySelector('.caption p');
+                modalImg.src = img ? img.src : '';
+                modalImg.alt = img ? img.alt : '';
+                modalTitle.textContent = title ? title.textContent : '';
+                modalDesc.textContent = desc ? desc.textContent : '';
+                modal.setAttribute('aria-hidden', 'false');
+                lastFocused = document.activeElement;
+                closeBtn.focus();
+            }
+
+            function closeModal() {
+                modal.setAttribute('aria-hidden', 'true');
+                if (lastFocused) lastFocused.focus();
+            }
+
+            document.querySelectorAll('.screenshot-placeholder').forEach(function (placeholder) {
+                placeholder.setAttribute('tabindex', '0');
+                placeholder.setAttribute('role', 'button');
+                var img = placeholder.querySelector('img');
+                placeholder.setAttribute('aria-label', 'View ' + (img ? img.alt : 'screenshot') + ' enlarged');
+                placeholder.addEventListener('click', function () {
+                    openModal(placeholder.closest('.screenshot-card'));
+                });
+                placeholder.addEventListener('keydown', function (e) {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openModal(placeholder.closest('.screenshot-card'));
+                    }
+                });
+            });
+
+            closeBtn.addEventListener('click', closeModal);
+
+            modal.addEventListener('click', function (e) {
+                if (e.target === modal) closeModal();
+            });
+
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape' && modal.getAttribute('aria-hidden') === 'false') {
+                    closeModal();
+                }
+            });
+        })();
     </script>
 </body>
 
