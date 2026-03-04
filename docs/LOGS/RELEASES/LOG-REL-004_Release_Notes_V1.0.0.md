@@ -302,13 +302,13 @@ For questions about licensing, please see [LICENSE.md](../../user-guides/legal/l
 
 This project was developed to serve real classrooms and real students learning financial literacy. Special thanks to the educators who have provided feedback and testing throughout development.
 
-For technical questions, bug reports, or feature requests, please open an issue on GitHub or consult the documentation at [docs/README.md](../../GITHUB_SITE/README.md).
+For technical questions, bug reports, or feature requests, please open an issue on GitHub or consult the documentation at [docs/README.md](../../README.md).
 
 ---
 
 ## Resources
 
-- **Documentation:** [docs/README.md](../../GITHUB_SITE/README.md)
+- **Documentation:** [docs/README.md](../../README.md)
 - **Student Guide:** [docs/user-guides/student_guide.md](../../user-guides/student_guide.md)
 - **Teacher Manual:** [docs/user-guides/teacher_manual.md](../../user-guides/teacher_manual.md)
 - **Development Priorities:** [../../DEVELOPMENT.md](../../../DEVELOPMENT.md)

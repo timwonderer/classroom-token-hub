@@ -35,7 +35,7 @@ Reference archive documentation when:
 - Learning about the system's evolution
 - Researching migration patterns
 
-For current documentation, see the main [Documentation Index](../../GITHUB_SITE/README.md).
+For current documentation, see the main [Documentation Index](../../README.md).
 
 ---
 
