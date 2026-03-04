@@ -9,11 +9,11 @@ This guide describes how to stand up the read-only style demo endpoints that pow
 ## What already exists in the codebase
 - Demo student lifecycle: `app/routes/api.py:create_demo_student`, `app/routes/student.py:demo_login`, and `app/utils/demo_sessions.py:cleanup_demo_student_data`
 - Timeouts: `SESSION_TIMEOUT_MINUTES` (10 minutes) enforced in `app/auth.py` (`login_required`)
-- Automatic cleanup: scheduler job `cleanup_expired_demo_sessions_job` in `app/scheduled_tasks.py` and logout hook in `student.logout` (documented in `docs/operations/DEMO_SESSIONS.md`)
-- Schema: `demo_students` table (see `docs/technical-reference/database_schema.md`)
+- Automatic cleanup: scheduler job `cleanup_expired_demo_sessions_job` in `app/scheduled_tasks.py` and logout hook in `student.logout` (documented in `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-004_Demo_Sessions.md`)
+- Schema: `demo_students` table (see `docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md`)
 
 ## Prerequisites
-- A separate deployment for the demo (do **not** point at production data). Follow `docs/operations/Deployment_Guide.md` for the base setup.
+- A separate deployment for the demo (do **not** point at production data). Follow `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md` for the base setup.
 - Environment configured with production-like settings plus Turnstile keys (or leave unset to bypass during testing).
 - APScheduler running so `cleanup_expired_demo_sessions_job` executes every 5 minutes (see `app/scheduled_tasks.py`).
 
@@ -51,7 +51,7 @@ This guide describes how to stand up the read-only style demo endpoints that pow
 
    - Run the demo against a database snapshot that refreshes nightly.  
    - Restrict the demo teacher to a dedicated tenant with dummy students only.  
-   - Monitor demo cleanup in logs; if a session sticks, follow `docs/operations/DEMO_SESSIONS.md` to clean it manually.
+   - Monitor demo cleanup in logs; if a session sticks, follow `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-004_Demo_Sessions.md` to clean it manually.
 
 ## Verification checklist
 - Student demo iframe loads and navigates; sessions expire after ~10 minutes and disappear from admin UI.  

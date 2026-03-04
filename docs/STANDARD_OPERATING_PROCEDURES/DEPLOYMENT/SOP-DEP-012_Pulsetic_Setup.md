@@ -284,7 +284,7 @@ If you want to monitor that authentication works:
 
 - Get your firewall ID: `doctl compute firewall list`
 - Add each UptimeRobot IP from `scripts/firewall-ips.json`
-- Or follow the instructions in `docs/operations/DIGITALOCEAN_CLOUDFLARE_SETUP.md`
+- Or follow the instructions in `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-005_Digitalocean_Cloudflare_Setup.md`
 - Increase timeout to 30 seconds
 - Verify SSL certificate is valid
 

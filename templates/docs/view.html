@@ -169,38 +169,38 @@
                         <div class="accordion-item">
                             <h2 class="accordion-header">
                                 <button
-                                    class="accordion-button {% if not doc_path.startswith('technical-reference') %}collapsed{% endif %}"
+                                    class="accordion-button {% if not (doc_path.startswith('ARCHITECTURE/') or doc_path.startswith('DOMAINS/') or doc_path.startswith('FEATURES/')) %}collapsed{% endif %}"
                                     type="button" data-bs-toggle="collapse" data-bs-target="#technicalCollapse"
-                                    aria-expanded="{% if doc_path.startswith('technical-reference') %}true{% else %}false{% endif %}">
+                                    aria-expanded="{% if doc_path.startswith('ARCHITECTURE/') or doc_path.startswith('DOMAINS/') or doc_path.startswith('FEATURES/') %}true{% else %}false{% endif %}">
                                     <span class="material-symbols-outlined me-2">code</span>
                                     Technical Reference
                                 </button>
                             </h2>
                             <div id="technicalCollapse"
-                                class="accordion-collapse collapse {% if doc_path.startswith('technical-reference') %}show{% endif %}">
+                                class="accordion-collapse collapse {% if doc_path.startswith('ARCHITECTURE/') or doc_path.startswith('DOMAINS/') or doc_path.startswith('FEATURES/') %}show{% endif %}">
                                 <div class="accordion-body p-0">
                                     <ul class="nav flex-column">
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'technical-reference/architecture' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='technical-reference/architecture') }}">
+                                            <a class="nav-link {% if doc_path == 'ARCHITECTURE/ARC-CORE-000_Architecture_Foundation' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='ARCHITECTURE/ARC-CORE-000_Architecture_Foundation') }}">
                                                 Architecture
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'technical-reference/database_schema' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='technical-reference/database_schema') }}">
+                                            <a class="nav-link {% if doc_path == 'ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema') }}">
                                                 Database Schema
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'technical-reference/economy-specification' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='technical-reference/economy-specification') }}">
+                                            <a class="nav-link {% if doc_path == 'DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification') }}">
                                                 Economy Spec
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'technical-reference/api_reference' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='technical-reference/api_reference') }}">
+                                            <a class="nav-link {% if doc_path == 'ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference') }}">
                                                 API Reference
                                             </a>
                                         </li>
@@ -213,26 +213,26 @@
                         <div class="accordion-item">
                             <h2 class="accordion-header">
                                 <button
-                                    class="accordion-button {% if not (doc_path in ['CHANGELOG', 'operations/Deployment_Guide'] or doc_path.startswith('development/') or doc_path.startswith('operations/')) %}collapsed{% endif %}"
+                                    class="accordion-button {% if not (doc_path in ['LOGS/RELEASES/LOG-REL-002_Changelog_Mirror', 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide', 'STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index'] or doc_path.startswith('STANDARD_OPERATING_PROCEDURES/')) %}collapsed{% endif %}"
                                     type="button" data-bs-toggle="collapse" data-bs-target="#projectCollapse"
-                                    aria-expanded="{% if doc_path in ['CHANGELOG', 'operations/Deployment_Guide'] or doc_path.startswith('development/') or doc_path.startswith('operations/') %}true{% else %}false{% endif %}">
+                                    aria-expanded="{% if doc_path in ['LOGS/RELEASES/LOG-REL-002_Changelog_Mirror', 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide', 'STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index'] or doc_path.startswith('STANDARD_OPERATING_PROCEDURES/') %}true{% else %}false{% endif %}">
                                     <span class="material-symbols-outlined me-2">folder</span>
                                     Reference & Project
                                 </button>
                             </h2>
                             <div id="projectCollapse"
-                                class="accordion-collapse collapse {% if doc_path in ['CHANGELOG', 'operations/Deployment_Guide'] or doc_path.startswith('development/') or doc_path.startswith('operations/') %}show{% endif %}">
+                                class="accordion-collapse collapse {% if doc_path in ['LOGS/RELEASES/LOG-REL-002_Changelog_Mirror', 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide', 'STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index'] or doc_path.startswith('STANDARD_OPERATING_PROCEDURES/') %}show{% endif %}">
                                 <div class="accordion-body p-0">
                                     <ul class="nav flex-column">
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'CHANGELOG' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='CHANGELOG') }}">
+                                            <a class="nav-link {% if doc_path == 'LOGS/RELEASES/LOG-REL-002_Changelog_Mirror' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='LOGS/RELEASES/LOG-REL-002_Changelog_Mirror') }}">
                                                 Changelog
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'operations/Deployment_Guide' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='operations/Deployment_Guide') }}">
+                                            <a class="nav-link {% if doc_path == 'STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide') }}">
                                                 Deployment
                                             </a>
                                         </li>
@@ -251,9 +251,9 @@
                                             </a>
                                         </li>
                                         <li class="nav-item">
-                                            <a class="nav-link {% if doc_path == 'operations/README' %}active{% endif %}"
-                                                href="{{ url_for('docs.view_doc', doc_path='operations/README') }}">
-                                                Operations
+                                            <a class="nav-link {% if doc_path == 'STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index') }}">
+                                                Docs Index
                                             </a>
                                         </li>
                                     </ul>
@@ -287,7 +287,13 @@
                         {% if loop.last %}
                         <li class="breadcrumb-item active" aria-current="page">{{ crumb.title }}</li>
                         {% else %}
-                        <li class="breadcrumb-item"><a href="{{ crumb.url }}">{{ crumb.title }}</a></li>
+                        <li class="breadcrumb-item">
+                            {% if crumb.url %}
+                            <a href="{{ crumb.url }}">{{ crumb.title }}</a>
+                            {% else %}
+                            {{ crumb.title }}
+                            {% endif %}
+                        </li>
                         {% endif %}
                         {% endfor %}
                     </ol>

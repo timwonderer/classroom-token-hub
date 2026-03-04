@@ -98,7 +98,7 @@ See `docs/security/PROMPTPWND_REMEDIATION.md` for full details.
 
 #### References
 
-- [Aikido Security PromptPwnd Disclosure](https://www.aikido.dev/blog/promptpwnd-ai-prompt-injection-in-github-actions) (Dec 2025)
+- [Aikido Security Blog (PromptPwnd coverage)](https://www.aikido.dev/blog) (Dec 2025)
 - OWASP LLM01: Prompt Injection
 - CWE-94: Improper Control of Generation of Code
 
@@ -1058,5 +1058,5 @@ The Classroom Token Hub application demonstrates **strong security fundamentals*
 - [OWASP Top 10 2021](https://owasp.org/Top10/)
 - [CWE Top 25 Most Dangerous Software Weaknesses](https://cwe.mitre.org/top25/)
 - [NIST Cybersecurity Framework](https://www.nist.gov/cyberframework)
-- [Aikido Security PromptPwnd Research](https://www.aikido.dev/blog/promptpwnd-ai-prompt-injection-in-github-actions)
+- [Aikido Security Blog (PromptPwnd coverage)](https://www.aikido.dev/blog)
 - Project Documentation: `docs/security/`, `.claude/rules/security.md`

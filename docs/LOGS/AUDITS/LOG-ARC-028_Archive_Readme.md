@@ -8,10 +8,10 @@ This directory contains historical documentation, bug fix reports, and PR summar
 
 ## Structure
 
-### [pr-reports/](pr-reports/)
+### [LOGS/AUDITS/](../)
 Historical pull request descriptions, code reviews, and deployment instructions from major features and fixes.
 
-### [releases/](releases/)
+### [LOGS/RELEASES/](../RELEASES/)
 Detailed release notes for all versions, providing context and migration guides for each release.
 
 ### Root Level

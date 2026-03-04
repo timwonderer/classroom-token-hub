@@ -153,7 +153,7 @@ Passkey authentication endpoints now bypass maintenance mode:
 - Attack vector: Malicious prompt injection could leak `GITHUB_TOKEN` or manipulate workflows
 - Remediation: Disabled workflow by renaming to `summary.yml.DISABLED`
 - Impact: No exploitation detected - vulnerability fixed proactively
-- Reference: [Aikido Security PromptPwnd Disclosure](https://www.aikido.dev/blog/promptpwnd-ai-prompt-injection-in-github-actions)
+- Reference: [Aikido Security Blog (PromptPwnd Coverage)](https://www.aikido.dev/blog)
 
 ### Comprehensive Security Audit Completed
 

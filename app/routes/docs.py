@@ -31,6 +31,12 @@ EXCLUDED_DIRECTORIES = {'security', 'archive'}
 
 # Friendly category names for search results
 CATEGORY_MAP = {
+    'ARCHITECTURE': 'Architecture',
+    'DOMAINS': 'Domains',
+    'FEATURES': 'Features',
+    'LOGS': 'Logs',
+    'SECURITY': 'Security',
+    'STANDARD_OPERATING_PROCEDURES': 'Standard Operating Procedures',
     'user-guides': 'User Guides',
     'technical-reference': 'Technical Reference',
     'development': 'Development',
@@ -103,6 +109,15 @@ def parse_front_matter(content):
 
         # Parse YAML front matter using PyYAML
         front_matter = parts[1].strip()
+        # Only treat as front matter if at least one line looks like "key: value".
+        # This avoids false positives on markdown that starts with horizontal rules.
+        has_yaml_key = any(
+            re.match(r"^\s*[A-Za-z_][A-Za-z0-9_-]*\s*:", line)
+            for line in front_matter.splitlines()
+            if line.strip()
+        )
+        if not has_yaml_key:
+            return {}, content
         metadata = yaml.safe_load(front_matter) or {}
 
         # Ensure metadata is a dictionary
@@ -159,31 +174,35 @@ def render_markdown_content(content, toc_title='On This Page'):
     return cleaner.clean(html), cleaner.clean(toc)
 
 
-def build_breadcrumbs(category, page=None):
+def build_breadcrumbs(doc_path, docs_root):
     """
     Build breadcrumb navigation for documentation pages.
 
     Args:
-        category: Category name (e.g., 'getting-started', 'store')
-        page: Optional page name within category
+        doc_path: Full documentation path without extension
+        docs_root: Root docs directory
 
     Returns:
         list: List of dicts with 'title' and 'url' keys
     """
+    parts = Path(doc_path).parts
     breadcrumbs = []
 
-    if category:
-        category_title = category.replace('-', ' ').replace('_', ' ').title()
+    # Build intermediate directory crumbs. Only make them clickable
+    # when an index markdown file actually exists at that path.
+    for idx, part in enumerate(parts[:-1]):
+        partial_path = "/".join(parts[:idx + 1])
+        partial_file = docs_root / f"{partial_path}.md"
         breadcrumbs.append({
-            'title': category_title,
-            'url': url_for('docs.view_doc', doc_path=category)
+            'title': part.replace('-', ' ').replace('_', ' ').title(),
+            'url': url_for('docs.view_doc', doc_path=partial_path) if partial_file.exists() else None
         })
 
-    if page:
-        page_title = page.replace('-', ' ').replace('_', ' ').title()
+    # Current page crumb (always the last item, rendered as active text in template)
+    if parts:
         breadcrumbs.append({
-            'title': page_title,
-            'url': url_for('docs.view_doc', doc_path=f'{category}/{page}')
+            'title': parts[-1].replace('-', ' ').replace('_', ' ').title(),
+            'url': None
         })
 
     return breadcrumbs
@@ -289,7 +308,10 @@ def view_doc(doc_path):
 
             # Build candidate path under documentation root and normalize it
             try:
-                candidate = (root_resolved / safe_rel_path).with_suffix('.md').resolve(strict=False)
+                candidate_base = (root_resolved / safe_rel_path)
+                if candidate_base.suffix.lower() != '.md':
+                    candidate_base = Path(f"{candidate_base}.md")
+                candidate = candidate_base.resolve(strict=False)
             except OSError as e:
                 current_app.logger.warning(f"Error resolving documentation path '{untrusted_path}': {e}")
                 abort(404)
@@ -353,19 +375,12 @@ def view_doc(doc_path):
         # Convert markdown to HTML (with sanitization)
         html_content, toc = render_markdown_content(body, toc_title=doc_title)
 
-        # Determine category and page from path
+        # Determine category from path
         path_parts = Path(doc_path).parts
-        category = None
-        page = None
-        if path_parts:
-            # First segment is the category
-            category = path_parts[0]
-            # Remaining segments (if any) form the page path
-            if len(path_parts) > 1:
-                page = "/".join(path_parts[1:])
+        category = path_parts[0] if path_parts else None
 
         # Build breadcrumbs
-        breadcrumbs = build_breadcrumbs(category, page)
+        breadcrumbs = build_breadcrumbs(doc_path, docs_root)
 
         # Get related articles if specified in front matter
         related_articles = []
@@ -461,7 +476,8 @@ def search():
                 rel_path = doc_file.relative_to(DOCS_ROOT)
 
                 # Enforce audience context directory filtering
-                top_dir = rel_path.parts[0] if rel_path.parts else ''
+                top_dir_raw = rel_path.parts[0] if rel_path.parts else ''
+                top_dir = top_dir_raw.lower()
                 
                 # Skip excluded directories (internal docs)
                 if top_dir in EXCLUDED_DIRECTORIES:
@@ -472,11 +488,11 @@ def search():
                 # Strict audience isolation
                 if audience == 'user':
                     # User audience can ONLY see user-guides
-                    if top_dir != 'user-guides':
+                    if top_dir_raw != 'user-guides':
                         continue
                 else:
                     # DevOps audience can see everything EXCEPT user-guides
-                    if top_dir == 'user-guides':
+                    if top_dir_raw == 'user-guides':
                         continue
 
                 content = doc_file.read_text(encoding='utf-8')
@@ -560,7 +576,10 @@ def search():
                     category = 'Other'
                     if rel_path.parts:
                         category_key = rel_path.parts[0]
-                        category = CATEGORY_MAP.get(category_key, category_key.replace('-', ' ').title())
+                        category = CATEGORY_MAP.get(
+                            category_key,
+                            CATEGORY_MAP.get(category_key.lower(), category_key.replace('-', ' ').replace('_', ' ').title())
+                        )
 
                     results.append({
                         'title': title,

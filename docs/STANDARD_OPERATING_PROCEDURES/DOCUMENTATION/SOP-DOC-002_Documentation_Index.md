@@ -89,6 +89,8 @@ This document is the canonical index of all formal documentation.
 - [LOG-ARC-035_Part2_Final.md](../../LOGS/AUDITS/LOG-ARC-035_Part2_Final.md)
 - [LOG-ARC-036_Deprecated_Code_Patterns.md](../../LOGS/AUDITS/LOG-ARC-036_Deprecated_Code_Patterns.md)
 - [LOG-ARC-037_Architecture_Overview.md](../../LOGS/AUDITS/LOG-ARC-037_Architecture_Overview.md)
+- [LOG-ARC-038_Duplicate_Tapout_Bug_Report.md](../../LOGS/AUDITS/LOG-ARC-038_Duplicate_Tapout_Bug_Report.md)
+- [LOG-ARC-039_Project_Timeline.md](../../LOGS/AUDITS/LOG-ARC-039_Project_Timeline.md)
 - [LOG-DB-001_Migration_Fix_Summary.md](../../LOGS/AUDITS/LOG-DB-001_Migration_Fix_Summary.md)
 - [LOG-DB-002_Migration_Note_Expected_Weekly_Hours.md](../../LOGS/AUDITS/LOG-DB-002_Migration_Note_Expected_Weekly_Hours.md)
 - [LOG-DB-003_Migration_Status_Report.md](../../LOGS/AUDITS/LOG-DB-003_Migration_Status_Report.md)
@@ -103,6 +105,9 @@ This document is the canonical index of all formal documentation.
 - [LOG-DEP-011_Multi_Tenancy_Fix_Deployment.md](../../LOGS/AUDITS/LOG-DEP-011_Multi_Tenancy_Fix_Deployment.md)
 - [LOG-DEP-013_Readme.md](../../LOGS/AUDITS/LOG-DEP-013_Readme.md)
 - [LOG-DEP-014_Readme_Github_Pages.md](../../LOGS/AUDITS/LOG-DEP-014_Readme_Github_Pages.md)
+- [LOG-DEP-022_Scripts_Operations_Reference.md](../../LOGS/AUDITS/LOG-DEP-022_Scripts_Operations_Reference.md)
+- [LOG-DEP-023_Dev_Utilities_Safety_Guide.md](../../LOGS/AUDITS/LOG-DEP-023_Dev_Utilities_Safety_Guide.md)
+- [LOG-DOC-001_Documentation_Inventory_Report.md](../../LOGS/AUDITS/LOG-DOC-001_Documentation_Inventory_Report.md)
 - [LOG-MILE-001_Implementation_Status_2026_02_24.md](../../LOGS/AUDITS/LOG-MILE-001_Implementation_Status_2026_02_24.md)
 - [LOG-MILE-002_Devops_Migration_Plan.md](../../LOGS/AUDITS/LOG-MILE-002_Devops_Migration_Plan.md)
 ### LOGS
@@ -124,6 +129,7 @@ This document is the canonical index of all formal documentation.
 - [LOG-REL-013_Release_Notes_V1.7.0.md](../../LOGS/RELEASES/LOG-REL-013_Release_Notes_V1.7.0.md)
 - [LOG-REL-014_Release_Notes_V1.7.1.md](../../LOGS/RELEASES/LOG-REL-014_Release_Notes_V1.7.1.md)
 - [LOG-REL-015_Release_Notes_V1.8.0.md](../../LOGS/RELEASES/LOG-REL-015_Release_Notes_V1.8.0.md)
+- [LOG-REL-016_Release_Notes_V1.9.0.md](../../LOGS/RELEASES/LOG-REL-016_Release_Notes_V1.9.0.md)
 ### SECURITY/AUDITS
 
 - [SEC-AUD-001_Multi_Tenancy_Violations_Audit.md](../../SECURITY/AUDITS/SEC-AUD-001_Multi_Tenancy_Violations_Audit.md)

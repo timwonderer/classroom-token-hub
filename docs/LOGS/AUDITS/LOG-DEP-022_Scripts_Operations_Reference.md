@@ -85,7 +85,7 @@ python3 scripts/create-github-actions-firewall.py <droplet-id>
 Reference file containing all Cloudflare and Pulsetic IP ranges in JSON format. Use for manual setup or custom automation.
 
 
-**Documentation:** [DigitalOcean & Cloudflare Setup Guide](../docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-005_DIGITALOCEAN_CLOUDFLARE_SETUP.md)
+**Documentation:** [DigitalOcean & Cloudflare Setup Guide](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-005_Digitalocean_Cloudflare_Setup.md)
 
 ---
 
@@ -100,7 +100,7 @@ python scripts/cleanup_duplicates_flask.py --list    # Preview duplicates
 python scripts/cleanup_duplicates_flask.py --delete  # Remove duplicates
 ```
 
-**Documentation:** [Cleanup Duplicates Guide](../docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-002_CLEANUP_DUPLICATES.md)
+**Documentation:** [Cleanup Duplicates Guide](LOG-DEP-002_Cleanup_Duplicates.md)
 
 #### `cleanup_duplicates.py`
 Legacy cleanup script (simpler version). Use `cleanup_duplicates_flask.py` for production as it properly handles data migration.
@@ -124,7 +124,7 @@ python scripts/comprehensive_legacy_migration.py --dry-run
 python scripts/comprehensive_legacy_migration.py
 ```
 
-**Documentation:** [Legacy Account Migration Guide](../docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-010_LEGACY_ACCOUNT_MIGRATION.md)
+**Documentation:** [Legacy Account Migration Guide](LOG-DEP-010_Legacy_Account_Migration.md)
 
 #### `migrate_legacy_students.py`
 Migrates legacy students (pre-join-code system) to use proper `StudentTeacher` associations and `TeacherBlock` entries. **Note:** For production use, consider using `comprehensive_legacy_migration.py` instead.
@@ -265,7 +265,7 @@ bash scripts/update_packages.sh
 
 ## Development Utilities
 
-The `dev-utilities/` subdirectory contains additional development tools. See its README for details.
+The `dev-utilities/` subdirectory contains additional development tools. See [LOG-DEP-023_Dev_Utilities_Safety_Guide.md](LOG-DEP-023_Dev_Utilities_Safety_Guide.md) for details.
 
 **⚠️ WARNING:** Scripts in `dev-utilities/` can cause permanent data loss. Only use in development environments.
 
@@ -300,9 +300,9 @@ When adding new scripts to this directory:
 
 ## Related Documentation
 
-- **[Operations Guides](../docs/operations/)** - Operational procedures using these scripts
-- **[Contributing Guide](../.github/CONTRIBUTING.md)** - Development workflow and git hooks
-- **[Deployment Guide](../docs/DEPLOYMENT.md)** - Production deployment procedures
+- **[Deployment SOPs](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)** - Operational procedures using these scripts
+- **[Contributing Guide](../../../CONTRIBUTING.md)** - Development workflow and git hooks
+- **[Documentation Index](../../STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index.md)** - Canonical documentation map
 
 ---
 

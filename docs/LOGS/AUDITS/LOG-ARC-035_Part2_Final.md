@@ -65,8 +65,8 @@ User visits classroomtokenhub.com
 6. **PART2_FINAL_SUMMARY.md** - This document
 
 ### Modified Files
-1. **[.github/workflows/jekyll-gh-pages.yml](.github/workflows/jekyll-gh-pages.yml)**
-   - Changed from Jekyll build to static deployment
+1. **[.github/workflows/deploy.yml](../../../.github/workflows/deploy.yml)**
+   - Deployment workflow configuration for production publishing
    - Triggers on `main` branch `docs/**` changes
    - Deploys to GitHub Pages automatically
 
@@ -127,7 +127,7 @@ User visits classroomtokenhub.com
 ### Step 1: Commit and Push to GitHub
 
 ```bash
-git add docs/index.html docs/.nojekyll docs/README_GITHUB_PAGES.md docs/operations/LANDING_PAGE_DEPLOYMENT.md .github/workflows/jekyll-gh-pages.yml PART2_COMPLETION_SUMMARY.md PART2_FINAL_SUMMARY.md
+git add docs/index.html docs/.nojekyll docs/README_GITHUB_PAGES.md docs/operations/LANDING_PAGE_DEPLOYMENT.md .github/workflows/deploy.yml PART2_COMPLETION_SUMMARY.md PART2_FINAL_SUMMARY.md
 git commit -m "Add GitHub Pages landing page for v1.7.0
 
 - Create professional landing page with Material Symbols icons
@@ -141,7 +141,7 @@ git push origin main
 ### Step 2: Verify GitHub Pages Deployment
 
 1. Go to https://github.com/timwonderer/classroom-economy/actions
-2. Wait for "Deploy static content to GitHub Pages" workflow to complete (2-3 min)
+2. Wait for the deployment workflow to complete (2-3 min)
 3. Visit https://timwonderer.github.io/classroom-economy/
 4. Verify landing page loads correctly
 

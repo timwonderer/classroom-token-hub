@@ -1,6 +1,7 @@
-# Documentation Inventory Report
+# Documentation Inventory Report (Historical Snapshot)
 
 **Generated:** 2026-02-28 22:16:13
+**Scope Note:** This file is an archival snapshot captured before the March 2026 taxonomy cleanup. Some listed paths are intentionally historical and may not exist in the active tree.
 
 ## Executive Summary
 
@@ -365,4 +366,3 @@
 - **Security Audits** (17 files)
 - **Audit Reports** (5 files)
   - Multi-tenancy audit, vulnerability reports, compliance checks
-

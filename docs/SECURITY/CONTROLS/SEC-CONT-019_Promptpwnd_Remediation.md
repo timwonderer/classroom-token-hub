@@ -190,7 +190,7 @@ Organizations can detect PromptPwnd vulnerabilities using:
 
 ## References
 
-- [Aikido Security: PromptPwnd Disclosure](https://www.aikido.dev/blog/promptpwnd-ai-prompt-injection-in-github-actions) (December 2025)
+- [Aikido Security Blog (PromptPwnd coverage)](https://www.aikido.dev/blog) (December 2025)
 - [Google Gemini CLI Patch](https://github.com/google-gemini/gemini-cli) (Fixed within 4 days)
 - [GitHub Actions Security Hardening](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions)
 

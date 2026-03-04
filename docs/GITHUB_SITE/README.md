@@ -20,13 +20,13 @@ All documents are classified into one of three tiers. See [SOP-DOC-000 Section V
 
 | Namespace | Tier | Purpose |
 |-----------|------|---------|
-| **[ARC](arc/)** | Constitutional / Normative | Foundational invariants and operational constraints |
-| **[SOP](sop/)** | Normative | Standard operating procedures (documentation, releases, deployments, databases) |
-| **[SEC](sec/)** | Normative (CONT) / Informative | Security architecture, audits, controls, and incident records |
-| **[DOM](dom/)** | Normative | Domain specifications *(pending user-guide migration)* |
-| **[FEAT](feat/)** | Normative | Feature specifications *(pending user-guide migration)* |
-| **[LOG](log/)** | Informative | Historical archives and release logs |
-| **[user-guides/](user-guides/)** | Informative | User-facing documentation for teachers and students |
+| **[ARC](../ARCHITECTURE/)** | Constitutional / Normative | Foundational invariants and operational constraints |
+| **[SOP](../STANDARD_OPERATING_PROCEDURES/)** | Normative | Standard operating procedures (documentation, releases, deployments, databases) |
+| **[SEC](../SECURITY/)** | Normative (CONT) / Informative | Security architecture, audits, controls, and incident records |
+| **[DOM](../DOMAINS/)** | Normative | Domain specifications *(pending user-guide migration)* |
+| **[FEAT](../FEATURES/)** | Normative | Feature specifications *(pending user-guide migration)* |
+| **[LOG](../LOGS/)** | Informative | Historical archives and release logs |
+| **[user-guides/](../user-guides/)** | Informative | User-facing documentation for teachers and students |
 
 Non-namespace locations:
 

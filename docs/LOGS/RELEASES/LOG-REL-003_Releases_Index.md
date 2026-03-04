@@ -8,6 +8,7 @@ This directory contains historical release notes for Classroom Token Hub.
 
 ## Available Releases
 
+- **[v1.9.0](LOG-REL-016_Release_Notes_V1.9.0.md)** - Security/data hygiene, recovery simplification, docs-system consolidation (March 4, 2026)
 - **[v1.8.0](LOG-REL-015_Release_Notes_V1.8.0.md)** - Rent item types, coverage tracking, stability fixes (February 9, 2026)
 - **[v1.7.1](LOG-REL-014_Release_Notes_V1.7.1.md)** - Financial precision fixes, payroll stability (January 22, 2026)
 - **[v1.7.0](LOG-REL-013_Release_Notes_V1.7.0.md)** - Analytics Dashboard, Rent Itemization, Mobile Navigation (January 9, 2026)
