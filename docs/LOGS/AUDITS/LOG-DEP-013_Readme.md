@@ -8,7 +8,7 @@ This directory contains operational guides and troubleshooting documentation for
 
 ## Available Guides
 
-### [Cleanup Duplicate Students](CLEANUP_DUPLICATES.md)
+### [Cleanup Duplicate Students](LOG-DEP-002_Cleanup_Duplicates.md)
 
 Guide for identifying and safely removing duplicate student records that may have been created due to roster upload issues.
 
@@ -25,7 +25,7 @@ Guide for identifying and safely removing duplicate student records that may hav
 - Safe migration of data from duplicates to primary records
 - Preview mode to see what will happen before making changes
 
-### [Demo Session Lifecycle and Cleanup](DEMO_SESSIONS.md)
+### [Demo Session Lifecycle and Cleanup](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-004_Demo_Sessions.md)
 
 How to monitor and clean demo student sessions that power the admin "view as student" experience.
 
@@ -41,7 +41,7 @@ How to monitor and clean demo student sessions that power the admin "view as stu
 - Provides a manual cleanup snippet using `cleanup_demo_student_data`
 - Notes the foreign-key-safe deletion order and required transaction commit
 
-### [Public Demo Environment (Teacher + Student)](DEMO_ENV_SETUP.md)
+### [Public Demo Environment (Teacher + Student)](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-003_Demo_Env_Setup.md)
 
 How to stand up the landing-page demo endpoints (teacher and student) using the built-in demo session lifecycle and seeded data.
 
@@ -57,7 +57,7 @@ How to stand up the landing-page demo endpoints (teacher and student) using the 
 - References existing scheduler job and schema
 - Provides curl example to mint a demo session URL for embedding
 
-### [Pulsetic Monitoring Setup](PULSETIC_SETUP.md)
+### [Pulsetic Monitoring Setup](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-012_Pulsetic_Setup.md)
 
 Complete guide for setting up UptimeRobot monitoring and creating a public status page.
 
@@ -75,7 +75,7 @@ Complete guide for setting up UptimeRobot monitoring and creating a public statu
 - Firewall configuration for UptimeRobot IPs
 - Alert contact configuration
 
-### [DigitalOcean & Cloudflare Setup](DIGITALOCEAN_CLOUDFLARE_SETUP.md)
+### [DigitalOcean & Cloudflare Setup](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-005_Digitalocean_Cloudflare_Setup.md)
 
 Infrastructure setup guide for production deployment.
 
@@ -102,9 +102,9 @@ When creating new operational documentation:
 
 ## Related Documentation
 
-- **[Deployment Guide](Deployment_Guide.md)** - Initial setup and deployment procedures
+- **[Deployment Guide](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)** - Initial setup and deployment procedures
 - **[Migration Specifications](../../STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md)** - Database schema migrations
-- **[System Admin Design](../feat/FEAT-ARC-003_Sysadmin_Interface.md)** - Admin interface features
+- **[System Admin Design](../../ARCHITECTURE/SYSADMIN/ARC-SYS-001_Sysadmin_Interface.md)** - Admin interface features
 
 ## Emergency Procedures
 

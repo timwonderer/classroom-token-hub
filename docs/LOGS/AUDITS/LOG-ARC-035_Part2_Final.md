@@ -49,20 +49,20 @@ User visits classroomtokenhub.com
 
 2. **[docs/.nojekyll](../../GITHUB_SITE/.nojekyll)** - Prevents markdown processing
 
-3. **[docs/README_GITHUB_PAGES.md](docs/README_GITHUB_PAGES.md)** - Configuration guide
+3. **[docs/README_GITHUB_PAGES.md](LOG-DEP-014_Readme_Github_Pages.md)** - Configuration guide
    - Production configuration section
    - User flow documentation
    - Maintenance procedures
 
-4. **[docs/operations/LANDING_PAGE_DEPLOYMENT.md](docs/operations/LANDING_PAGE_DEPLOYMENT.md)** - Deployment guide
+4. **[docs/operations/LANDING_PAGE_DEPLOYMENT.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-009_Landing_Page_Deployment.md)** - Deployment guide
    - Nginx configuration examples
    - Apache configuration examples
    - Testing procedures
    - Troubleshooting guide
 
-5. **[PART2_COMPLETION_SUMMARY.md](PART2_COMPLETION_SUMMARY.md)** - Initial completion summary
+5. **PART2_COMPLETION_SUMMARY.md** - Initial completion summary
 
-6. **[PART2_FINAL_SUMMARY.md](PART2_FINAL_SUMMARY.md)** - This document
+6. **PART2_FINAL_SUMMARY.md** - This document
 
 ### Modified Files
 1. **[.github/workflows/jekyll-gh-pages.yml](.github/workflows/jekyll-gh-pages.yml)**
@@ -70,7 +70,7 @@ User visits classroomtokenhub.com
    - Triggers on `main` branch `docs/**` changes
    - Deploys to GitHub Pages automatically
 
-2. **[docs/README_GITHUB_PAGES.md](docs/README_GITHUB_PAGES.md)**
+2. **[docs/README_GITHUB_PAGES.md](LOG-DEP-014_Readme_Github_Pages.md)**
    - Added production configuration section
    - Updated user flows with `classroomtokenhub.com` domain
 
@@ -151,7 +151,7 @@ git push origin main
 
 1. Edit Nginx config: `sudo nano /etc/nginx/sites-available/classroomtokenhub`
 
-2. Add configuration from [docs/operations/LANDING_PAGE_DEPLOYMENT.md](docs/operations/LANDING_PAGE_DEPLOYMENT.md)
+2. Add configuration from [docs/operations/LANDING_PAGE_DEPLOYMENT.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-009_Landing_Page_Deployment.md)
 
 Key sections:
 ```nginx
@@ -349,7 +349,7 @@ Before going live, verify:
 - Ensure all links use relative paths or HTTPS
 - Check `proxy_set_header X-Forwarded-Proto $scheme` in Nginx
 
-**Full troubleshooting guide:** [docs/operations/LANDING_PAGE_DEPLOYMENT.md](docs/operations/LANDING_PAGE_DEPLOYMENT.md)
+**Full troubleshooting guide:** [docs/operations/LANDING_PAGE_DEPLOYMENT.md](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-009_Landing_Page_Deployment.md)
 
 ---
 

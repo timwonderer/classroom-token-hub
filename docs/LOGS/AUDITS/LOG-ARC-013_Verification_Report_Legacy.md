@@ -116,7 +116,7 @@ The incident-postmortem-and-reorganization branch implements significant improve
 
 #### ⚠️ ISSUE: Broken Link in Schema Change Gate Document
 - **File:** `docs/development/SCHEMA_CHANGE_MD.md` line 9
-- **Link:** `[Schema Contraction & Destructive Migration Policy](./Schema_Contraction_and_Destructive_Migration_Policy.md)`
+- **Link:** `Schema Contraction & Destructive Migration Policy` (`./Schema_Contraction_and_Destructive_Migration_Policy.md`)
 - **Actual Filename:** `SCHEMA_CONTRACTION_AND_DESTRUCTIVE_MIGRATION_POLICY.md`
 - **Impact:** Broken documentation link
 - **Fix Required:** Update link to match actual filename
@@ -278,7 +278,7 @@ ln -s docs/development/DEPRECATED_SYMBOLS.txt deprecated_symbols.txt
 **Required Action:**
 ```bash
 # Update link to:
-[Schema Contraction & Destructive Migration Policy](./SCHEMA_CONTRACTION_AND_DESTRUCTIVE_MIGRATION_POLICY.md)
+Schema Contraction & Destructive Migration Policy (./SCHEMA_CONTRACTION_AND_DESTRUCTIVE_MIGRATION_POLICY.md)
 ```
 
 ### 🟡 ISSUE #3: PR Template Missing Schema Gate Checklist
