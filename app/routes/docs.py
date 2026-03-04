@@ -7,7 +7,6 @@ allowing users to access help without leaving the app or losing their session.
 
 import re
 from pathlib import Path
-from urllib.parse import urlparse
 from flask import Blueprint, abort, current_app, session, request, url_for, redirect, make_response
 from werkzeug.exceptions import HTTPException
 from werkzeug.utils import safe_join
@@ -239,17 +238,8 @@ def set_audience():
     audience_arg = (request.args.get('aud') or '').strip().lower()
     audience = audience_arg if audience_arg in allowed_audiences else 'user'
 
-    next_arg = (request.args.get('next') or '').strip()
+    # Always redirect to docs index after toggle to avoid any untrusted redirect target.
     next_url = url_for('docs.index')
-    if next_arg:
-        parsed_next = urlparse(next_arg)
-        # Explicitly allow only local, relative docs URLs.
-        if (
-            not parsed_next.scheme and
-            not parsed_next.netloc and
-            next_arg.startswith('/docs')
-        ):
-            next_url = next_arg
 
     resp = make_response(redirect(next_url))
     resp.set_cookie(
