@@ -15,7 +15,23 @@
         <p  class="mb-2" style="font-size:2.5rem; font-weight:600;color:var(--primary);">
              CLASSROOM TOKEN HUB
         </p>
-        <p class="lead text-muted">Help and Support Center </p>
+        <p class="lead text-muted">{% if audience == 'user' %}Help and Support Center{% else %}Technical Documentation{% endif %}</p>
+
+        {% if not session.get('student_id') and not session.get('admin_id') %}
+        <!-- Audience Toggle -->
+        <div class="d-flex justify-content-center mt-3 mb-4">
+            <div class="btn-group" role="group" aria-label="Documentation Audience Toggle">
+                <a href="{{ url_for('docs.set_audience', aud='user') }}" class="btn {% if audience == 'user' %}btn-primary active fw-bold{% else %}btn-outline-secondary{% endif %} px-4">
+                    <span class="material-symbols-outlined" style="vertical-align: text-bottom; font-size: 1.1rem;">group</span>
+                    User Guides
+                </a>
+                <a href="{{ url_for('docs.set_audience', aud='devops') }}" class="btn {% if audience == 'devops' %}btn-primary active fw-bold{% else %}btn-outline-secondary{% endif %} px-4">
+                    <span class="material-symbols-outlined" style="vertical-align: text-bottom; font-size: 1.1rem;">terminal</span>
+                    Technical Docs
+                </a>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Search Bar -->
         <form action="{{ url_for('docs.search') }}" method="get" class="mt-4">
@@ -31,6 +47,7 @@
 
     <!-- Documentation Categories -->
     <div class="row g-4 mb-5">
+        {% if audience == 'user' %}
         <!-- Student Diagnostics -->
         <div class="col-md-6 col-lg-4">
             <div class="card h-100 shadow-sm">
@@ -99,7 +116,9 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
+        {% if audience == 'devops' %}
         <!-- Project Timeline -->
         <div class="col-md-6 col-lg-4">
             <div class="card h-100 shadow-sm">
@@ -174,6 +193,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
 
     <!-- Quick Links -->
