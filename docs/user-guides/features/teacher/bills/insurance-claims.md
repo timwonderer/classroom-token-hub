@@ -12,17 +12,21 @@ related:
 
 # Insurance Claims and Coverage
 
-Claims are reviewed and resolved from the Insurance Management page.
+## Overview
+The Insurance Management page allows you to review incoming student claims, approve coverage payouts, and resolve policy issues.
 
-## Where to work
-Go to **Bills > Insurance** and open the **Claims** tab.
+## Step-by-Step Instructions
 
-## Review claims
-Open a claim to view details, then approve or deny according to your policy rules.
+### Reviewing and Approving Claims
+1. Navigate to **Bills > Insurance** in the teacher sidebar.
+2. Open the **Claims** tab.
+3. Click on a specific claim to view the details submitted by the student.
+4. Approve or deny the claim based on the rules of your specific policy. Approving a claim will automatically deposit the coverage amount into the student's checking account.
 
-## Waiting periods
-Claims follow the waiting period configured on each policy. If a claim is missing, confirm the student has met the waiting period.
+## Important Notes
+> [!NOTE]
+> **Waiting periods:** Claims are strictly governed by the waiting period you configured for the policy. If a student complains they cannot submit a claim, verify that enough time has passed since their enrollment date.
 
 ## Related guides
 - [Insurance Policies](insurance-policies.md)
-- [Teacher Rent and Insurance Diagnostics](../../../diagnostics/teacher-rent-insurance.md)
+- [Teacher Rent and Insurance Diagnostics](../../../diagnostics/teacher/rent-insurance.md)

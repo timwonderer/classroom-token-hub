@@ -2,7 +2,7 @@
 title: Rent Itemization Troubleshooting
 category: diagnostics
 subcategory: teacher
-audience: teachers
+roles: [teacher]
 ---
 
 # Rent Itemization Troubleshooting
@@ -467,10 +467,7 @@ Students confused?
 
 ## Related Documentation
 
-- **[Rent Itemization Guide](../features/rent/itemization-guide.md)** - Complete setup guide
-- **[Managing Rent](../features/rent/managing-rent.md)** - Rent configuration
-- **[Store Management](../features/store/creating-items.md)** - Store setup
-- **[Student Guide](../student_guide.md)** - Student perspective
+- **[Student Guide](../../student_guide.md)** - Student perspective
 
 ---
 

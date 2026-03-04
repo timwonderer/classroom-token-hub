@@ -12,28 +12,31 @@ related:
 
 # Student Management Overview
 
-Use the Students hub to add, update, move, and remove students across class periods.
+## Overview
+The Students hub is your central location to add, update, move, and remove students across your class periods. 
 
-## Where to work
-Go to **Classroom > Students**.
+## Step-by-Step Instructions
 
-## Add students
-You can add students with two methods:
+### Adding Students
+1. Navigate to **Classroom > Students** in the teacher sidebar.
+2. To add an entire roster at once, use the **Bulk Upload** feature with the provided CSV template.
+3. To add a specific student, use the **Individual Add** feature.
 
-- Bulk upload with the template CSV for full rosters.
-- Individual add for single student updates.
+### Editing or Moving Students
+1. Locate the student in your Class Roster list.
+2. Click **Edit** to update their name or date of birth.
+3. From this same edit menu, you can reassign the student to a different class section if they change periods.
 
-## Edit or move students
-Use **Edit** in the Class Roster to update name, date of birth, or class section. You can move a student to another section from the same edit flow.
+### Resetting or Removing Accounts
+1. If a student forgets their credentials, use the **Reset** option. This preserves their financial data but forces them to claim their account again.
+2. If a student leaves the class permanently, use the **Remove** option to delete them from your roster.
 
-## Reset a student account
-Use **Reset** when a student forgets credentials or cannot log in. Resetting preserves account data but requires the student to claim the account again.
+## Important Notes
+> [!CAUTION]
+> **Permanent Removal:** Removing a student from a class section is permanent and deletes their financial records within that specific class period.
 
-## Remove a student
-Use **Remove** in the Class Roster to delete a student from the class. This is permanent for that class section.
-
-## Export roster
-Use **Export All** in the roster header to download a CSV of your students.
+> [!TIP]
+> **Exporting:** You can download a CSV backup of your entire roster by clicking **Export All** in the roster header.
 
 ## Related guides
 - [Class Setup and Join Codes](class-setup.md)

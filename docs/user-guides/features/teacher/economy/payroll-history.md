@@ -11,15 +11,16 @@ related:
 
 # Payroll History
 
-Review past payroll runs to confirm totals and audit activity.
+## Overview
+The Payroll History tab allows you to review past payroll runs, confirm historical totals, and audit previous activity within your economy.
 
-## Where to work
-Go to **Economy > Payroll** and open the **Payroll History** tab.
+## Step-by-Step Instructions
 
-## What you can review
-- Run date and time.
-- Total amount paid.
-- Student-level entries for the run.
+### Reviewing Past Payroll
+1. Navigate to **Economy > Payroll** in the teacher sidebar.
+2. Click on the **Payroll History** tab at the top of the page.
+3. Locate the specific payroll run using the listed date and time.
+4. Click on the run to view the total amount paid out and the specific student-level receipt entries for that run.
 
 ## Related guides
 - [Run Payroll](payroll-run.md)

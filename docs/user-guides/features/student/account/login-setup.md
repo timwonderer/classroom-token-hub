@@ -12,18 +12,24 @@ related:
 
 # Log In and First-Time Setup
 
-Use this guide if you are new or you need to claim your student account.
+## Overview
+Use this guide if you are new to the classroom economy and need to claim your student account for the first time, or if you just need to know how to log in daily.
 
-## Claim your account
-1. Go to the student login page and select the option to claim an account.
-2. Enter the join code, your name, and your date of birth exactly as your teacher entered it.
-3. Follow the prompts to set your username and PIN.
+## Step-by-Step Instructions
 
-## Log in later
-Use your username and PIN to log in on the student login page.
+### Claiming Your Account (First Time)
+1. Go to the student login page and select the option to **Claim Account**.
+2. Enter the join code provided by your teacher.
+3. Enter your first name, last name, and your date of birth exactly as your teacher entered them on their roster.
+4. Follow the prompts to create a unique username and a secure 4-digit PIN.
 
-## If you cannot claim
-Ask your teacher to confirm your roster details and join code.
+### Logging In (Daily)
+1. Go to the student login page.
+2. Enter the username and PIN you created during setup.
+
+## Important Notes
+> [!IMPORTANT]
+> **Cannot claim?:** If the system cannot find you, ask your teacher to verify the spelling of your name and your date of birth on their Class Roster.
 
 ## Related guides
 - [Reset or Recover Your Account](reset-recovery.md)

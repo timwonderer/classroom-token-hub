@@ -12,17 +12,17 @@ related:
 
 # Banking Settings
 
-Banking settings control interest, overdraft rules, and savings behavior.
+## Overview
+Banking settings allow you to control interest rates, overdraft rules, and how checking and savings accounts behave within your economy.
 
-## Where to work
-Go to **Economy > Banking**.
+## Step-by-Step Instructions
 
-## Interest settings
-Choose the interest type, rate, and payout interval. Use the class selector to configure per block.
-
-## Overdraft behavior
-Enable overdraft protection to automatically cover checking costs with savings, or set an overdraft fee when protection is off.
+### Configuring Banking Rules
+1. Navigate to **Economy > Banking** in the teacher sidebar.
+2. Under **Interest Settings**, choose the interest type, rate, and automatic payout interval.
+3. Under **Overdraft Behavior**, choose whether to enable overdraft protection (which pulls from savings) or set an overdraft penalty fee when protection is off.
+4. If you have multiple classes, use the class selector to configure settings on a per-period basis.
+5. Save your changes to apply the new banking configuration.
 
 ## Related guides
-- [Managing Banking (Detailed)](../../banking/managing-banking.md)
 - [Transactions](transactions.md)

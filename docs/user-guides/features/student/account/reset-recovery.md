@@ -12,15 +12,21 @@ related:
 
 # Reset or Recover Your Account
 
-If you cannot log in, your teacher can reset your account so you can claim it again.
+## Overview
+If you forget your username, forget your PIN, or simply cannot log in, your teacher has the ability to securely reset your account so you can regain access.
 
-## What to do
-1. Contact your teacher and ask for a reset.
-2. After the reset, claim your account again with your join code and details.
+## Step-by-Step Instructions
 
-## Keep your details safe
-Your username is shown during setup. Write it down or keep it in a safe place.
+### Recovering Your Account
+1. Contact your teacher directly and ask them to "reset" your account.
+2. Once your teacher confirms they have reset it, go to the student login page and select **Claim Account**.
+3. You will need to claim your account as if it were your first time, using your join code, name, and date of birth.
+4. You will then be prompted to create a new username and PIN. (Your money and transaction history are automatically saved and restored).
+
+## Important Notes
+> [!TIP]
+> **Keep your details safe:** Write down your new username and PIN in a safe, secure location (like a planner or notes app) so you do not have to ask for a reset again.
 
 ## Related guides
-- [Student Login Diagnostics](../../../diagnostics/student-login.md)
+- [Student Login Diagnostics](../../../diagnostics/student/login.md)
 - [Report Issues](../support/report-issues.md)

@@ -2,7 +2,7 @@
 title: Analytics Dashboard Troubleshooting
 category: diagnostics
 subcategory: teacher
-audience: teachers
+roles: [teacher]
 ---
 
 # Analytics Dashboard Troubleshooting
@@ -374,9 +374,8 @@ Before reporting an issue, verify:
 
 ## Related Documentation
 
-- **[Analytics Interpretation Guide](../features/analytics/interpreting-analytics.md)** - How to read metrics
-- **[Economy Design Guide](../economy_guide.md)** - Designing balanced economies
-- **[Teacher Manual](../teacher_manual.md)** - Complete reference
+- **[Economy Design Guide](../../economy_guide.md)** - Designing balanced economies
+- **[Teacher Manual](../../teacher_manual.md)** - Complete reference
 
 ---
 

@@ -6,7 +6,6 @@ roles: [teacher]
 description: Break rent into itemized charges and configure store alternatives.
 keywords: [rent, itemization, utilities, itemized rent]
 related:
-  - user-guides/features/rent/itemization-guide
   - user-guides/features/teacher/bills/rent-settings
   - user-guides/features/teacher/bills/rent-behaviors
   - user-guides/diagnostics/teacher-rent-itemization
@@ -14,19 +13,21 @@ related:
 
 # Rent Itemization
 
-Itemization breaks rent into smaller charges and can tie items to store alternatives.
+## Overview
+Itemization allows you to break flat rent into smaller, understandable line-item charges (like "Desk Rent", "Tablet Fee", or "Locker"). You can also explicitly tie these line items to alternative store purchases.
 
-## Where to work
-Go to **Bills > Rent** and open the **Itemization** tab.
+## Step-by-Step Instructions
 
-## Configure itemized rent
-1. Add line items that represent rent components.
-2. Set amounts and frequency for each item.
-3. Save and review the total.
+### Configuring Itemized Rent
+1. Navigate to **Bills > Rent** in the teacher sidebar and open the **Itemization** tab.
+2. Add distinct line items that represent the components of your classroom rent.
+3. Set the specific amount and frequency for each item.
+4. If you use "Store Alternatives" (e.g., allowing a student to buy a "Premium Desk" pass instead of paying basic desk rent), configure those connections here.
+5. Save your changes and review the newly calculated total rent.
 
-## Store alternatives
-If enabled, itemized rent can point to alternative store purchases tied to line items.
+## Important Notes
+> [!NOTE]
+> **Store integration:** If configured, itemized rent points to alternative store purchases, ensuring students aren't double-charged if they upgrade their living situation through the store.
 
 ## Related guides
-- [Rent Itemization Setup (Detailed)](../../rent/itemization-guide.md)
-- [Teacher Rent Itemization Diagnostics](../../../diagnostics/teacher-rent-itemization.md)
+- [Teacher Rent Itemization Diagnostics](../../../diagnostics/teacher/rent-itemization.md)

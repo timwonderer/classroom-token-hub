@@ -12,19 +12,20 @@ related:
 
 # Start and End Work
 
-Your work time is recorded using Start Work and Break or Done taps.
+## Overview
+Your daily work time is recorded using a time clock on your dashboard. You must clock in and out to prove you were present and participating so that the payroll system can calculate your pay.
 
-## Where to work
-Use the Work and Pay area on your student dashboard.
+## Step-by-Step Instructions
 
-## Start work
-Select **Start Work** when you begin class work.
+### Clocking In and Out
+1. Go to the **Dashboard** (or the **Work and Pay** area).
+2. When you arrive in class and begin your assigned work, click the **Start Work** button.
+3. Your status will change to "Working". 
+4. When class is over or you stop working, click **Done** (or **Break** if your teacher uses break settings).
 
-## End work
-Select **Break** or **Done** when you stop working.
-
-## Why it matters
-Payroll uses these taps to calculate your pay.
+## Important Notes
+> [!CAUTION]
+> **Don't forget to click Done:** If you leave class without clicking "Done", your teacher may have to manually adjust your time, which could delay your paycheck or result in lower pay.
 
 ## Related guides
 - [Attendance History and Pay Status](attendance-history.md)

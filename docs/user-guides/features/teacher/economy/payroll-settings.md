@@ -12,20 +12,22 @@ related:
 
 # Payroll Settings
 
-Payroll settings control how students earn pay from attendance.
+## Overview
+Payroll settings control how students earn pay from their attendance records.
 
-## Where to work
-Go to **Economy > Payroll** and open the **Settings** tab.
+## Step-by-Step Instructions
 
-## Configure pay rate
-Set the base hourly pay. Use the class selector to set different rates per block if needed.
+### Configuring Pay Rates
+1. Navigate to **Economy > Payroll** and open the **Settings** tab.
+2. Set the base hourly pay rate.
+3. If you teach multiple periods, use the class selector to set different rates per block if needed.
+4. Save your changes.
+5. Preview the projected pay list in the main Payroll tab to confirm the rates are applying correctly.
 
-## Confirm attendance input
-Payroll uses Start Work and Break or Done taps from the Attendance Log. Confirm that attendance taps are enabled for each class period.
-
-## Save and verify
-After saving, preview the projected pay list to confirm the rates are applying.
+## Important Notes
+> [!IMPORTANT]
+> Payroll calculations rely on "Start Work" and "Break" or "Done" taps from the Attendance Log. You must confirm that attendance taps are enabled and being used correctly for each class period for payroll to calculate automatically.
 
 ## Related guides
 - [Run Payroll](payroll-run.md)
-- [Teacher Attendance and Payroll Diagnostics](../../../diagnostics/teacher-attendance-payroll.md)
+- [Teacher Attendance and Payroll Diagnostics](../../../diagnostics/teacher/attendance-payroll.md)

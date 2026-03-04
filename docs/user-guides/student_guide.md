@@ -12,14 +12,14 @@ Here are some issues students typically encounter, plus links to focused feature
 - [Student Help and Support Guides](diagnostics/student.md)
 
 ## Common questions
-- [I cannot log in or finish setup](diagnostics/student-login.md)
-- [I cannot join or switch classes](diagnostics/student-classes.md)
-- [My work time or payroll looks wrong](diagnostics/student-attendance.md)
-- [My balance or transfers look wrong](diagnostics/student-money.md)
-- [A store item is missing or a purchase failed](diagnostics/student-store.md)
-- [Rent or insurance does not make sense](diagnostics/student-rent-insurance.md)
-- [My hall pass request is stuck](diagnostics/student-hall-pass.md)
-- [I need to report an issue](diagnostics/student-support.md)
+- [I cannot log in or finish setup](diagnostics/student/login.md)
+- [I cannot join or switch classes](diagnostics/student/classes.md)
+- [My work time or payroll looks wrong](diagnostics/student/attendance.md)
+- [My balance or transfers look wrong](diagnostics/student/money.md)
+- [A store item is missing or a purchase failed](diagnostics/student/store.md)
+- [Rent or insurance does not make sense](diagnostics/student/rent-insurance.md)
+- [My hall pass request is stuck](diagnostics/student/hall-pass.md)
+- [I need to report an issue](diagnostics/student/support.md)
 
 ## Feature Guides (Structured by Section)
 - [Student Feature Guides Index](features/student/index.md)

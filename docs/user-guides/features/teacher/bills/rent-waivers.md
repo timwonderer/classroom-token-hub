@@ -11,14 +11,20 @@ related:
 
 # Rent Waivers
 
-Use waivers to excuse rent charges for individual students.
+## Overview
+Rent waivers allow you to excuse rent charges mathematically for individual students without deleting their accounts or breaking the global class rent schedule.
 
-## Where to work
-Go to **Bills > Rent** and open the **Waivers** tab if available.
+## Step-by-Step Instructions
 
-## When to use
-- Student absence or special circumstance.
-- One-time exceptions to your rent policy.
+### Applying a Rent Waiver
+1. Navigate to **Bills > Rent** in the teacher sidebar.
+2. Open the **Waivers** tab.
+3. Locate the specific student in the roster.
+4. Select the option to waive their rent for the current or upcoming cycle. Add a note indicating the reason.
+
+## Important Notes
+> [!TIP]
+> **When to Use:** Use waivers for student absences, special circumstances, or one-time exceptions to your rent policy.
 
 ## Related guides
 - [Rent Settings](rent-settings.md)

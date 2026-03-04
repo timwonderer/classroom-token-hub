@@ -11,17 +11,22 @@ related:
 
 # Account Deletion Requests
 
-Deletion requests are reviewed by system administrators.
+## Overview
+This feature allows you to permanently delete specific class periods or your entire teacher account. All requests are securely processed and reviewed by system administrators.
 
-## Where to work
-Go to **Settings > Account Deletion Requests**.
+## Step-by-Step Instructions
 
-## Request types
-- Period or block deletion removes access to students in a specific period.
-- Account deletion removes the entire teacher account.
+### Submitting a Deletion Request
+1. Navigate to **Settings > Account Deletion Requests** in the teacher sidebar.
+2. Select the type of request:
+   - **Period/Block Deletion:** Removes access to and financial data for students in a specific period.
+   - **Account Deletion:** Removes your entire teacher account and all associated classes.
+3. Submit the request.
+4. Check back on this page to track the status of your request (Pending vs. Resolved).
 
-## Track status
-Use the request list to see pending and resolved requests.
+## Important Notes
+> [!CAUTION]
+> **Data Loss:** Account and period deletions are highly destructive actions. Once a system administrator approves the request, all student economy data associated with that period or account is permanently deleted and cannot be recovered.
 
 ## Related guides
-- [Teacher Login Diagnostics](../../../diagnostics/teacher-login.md)
+- [Teacher Login Diagnostics](../../../diagnostics/teacher/login.md)

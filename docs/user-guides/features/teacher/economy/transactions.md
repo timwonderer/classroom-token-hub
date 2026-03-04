@@ -12,17 +12,20 @@ related:
 
 # Transactions
 
-Use Transaction History to review deposits, withdrawals, fees, and interest.
+## Overview
+The Transaction History page allows you to review every deposit, withdrawal, fee, and interest payout in the economy, providing a complete audit trail.
 
-## Where to work
-Go to **Economy > Transactions**.
+## Step-by-Step Instructions
 
-## Filter transactions
-Use filters for student, block, type, and date range to find a specific entry.
+### Reviewing and Voiding Transactions
+1. Navigate to **Economy > Transactions** in the teacher sidebar.
+2. Use the provided filters for student, block, type, and date range to locate a specific entry.
+3. If you find an incorrect entry, select **Void** on the transaction row to remove its financial impact.
 
-## Void a transaction
-Select **Void** on the transaction row to mark an incorrect entry. Voided transactions remain visible for audit history.
+## Important Notes
+> [!NOTE]
+> Voided transactions remain visible in the ledger for transparency and audit history, but their values are no longer counted in the student's balance.
 
 ## Related guides
 - [Banking Settings](banking-settings.md)
-- [Teacher Transactions and Banking Diagnostics](../../../diagnostics/teacher-transactions-banking.md)
+- [Teacher Transactions and Banking Diagnostics](../../../diagnostics/teacher/transactions-banking.md)
