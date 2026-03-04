@@ -21,4 +21,4 @@ Go to **Bills > Rent** and open the **Waivers** tab if available.
 - One-time exceptions to your rent policy.
 
 ## Related guides
-- [Rent Settings](/docs/user-guides/features/teacher/bills/rent-settings)
+- [Rent Settings](rent-settings.md)

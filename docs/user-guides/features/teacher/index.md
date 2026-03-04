@@ -12,16 +12,16 @@ keywords: [teacher, features, guide, classroom, economy, bills, settings]
 Use this index to jump straight to the exact feature you need. Each section links to short, focused pages so you do not have to scan a mega-guide.
 
 ## Classroom
-- [Classroom Features](/docs/user-guides/features/teacher/classroom/index)
+- [Classroom Features](../student/store/index.md)
 
 ## Economy
-- [Economy Features](/docs/user-guides/features/teacher/economy/index)
+- [Economy Features](../student/store/index.md)
 
 ## Bills
-- [Bills Features](/docs/user-guides/features/teacher/bills/index)
+- [Bills Features](../student/store/index.md)
 
 ## Settings and Account
-- [Settings Features](/docs/user-guides/features/teacher/settings/index)
+- [Settings Features](../student/store/index.md)
 
 ## Diagnostics
-- [Teacher Diagnostics Index](/docs/user-guides/diagnostics/teacher)
+- [Teacher Diagnostics Index](../../diagnostics/teacher.md)

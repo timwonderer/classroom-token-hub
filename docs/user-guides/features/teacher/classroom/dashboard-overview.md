@@ -23,5 +23,5 @@ Go to **Dashboard** from the teacher sidebar.
 - Getting started prompts for new classes.
 
 ## Related guides
-- [Student Management Overview](/docs/user-guides/features/teacher/classroom/students-overview)
-- [Economy Health](/docs/user-guides/features/teacher/economy/economy-health)
+- [Student Management Overview](students-overview.md)
+- [Economy Health](../economy/economy-health.md)

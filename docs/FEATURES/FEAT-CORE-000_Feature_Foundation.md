@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| FEAT-ARC-000     | 1.0     | 2026-03-01     | N/A        | Constitutional            |
+| FEAT-CORE-000    | 1.0     | 2026-03-01     | N/A        | Normative       |
 
 ## I. Purpose
 To govern the creation, format, dependencies, and rollout scope of any new user-facing functionality proposed for the application.

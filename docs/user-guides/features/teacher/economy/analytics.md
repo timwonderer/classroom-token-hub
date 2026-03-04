@@ -26,5 +26,5 @@ Go to **Economy > Analytics**.
 Use the detailed analytics guide for definitions and interpretation tips.
 
 ## Related guides
-- [Interpreting Analytics (Detailed)](/docs/user-guides/features/analytics/interpreting-analytics)
-- [Teacher Analytics Diagnostics](/docs/user-guides/diagnostics/teacher-analytics)
+- [Interpreting Analytics (Detailed)](../../analytics/interpreting-analytics.md)
+- [Teacher Analytics Diagnostics](../../../diagnostics/teacher-analytics.md)

@@ -21,4 +21,4 @@ Go to **Help and Support** from the student sidebar.
 - Submit a report when something goes wrong.
 
 ## Related guides
-- [Student Diagnostics Index](/docs/user-guides/diagnostics/student)
+- [Student Diagnostics Index](../../../diagnostics/student.md)

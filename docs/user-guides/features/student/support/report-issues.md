@@ -54,5 +54,5 @@ After you submit a report, you can track its status on the **Help & Support** pa
 - **Don't Spam:** Submitting the same issue multiple times slows down the fix.
 
 ## Related guides
-- [Student Support Diagnostics](/docs/user-guides/diagnostics/student-support)
-- [Teacher Guide: Student Issues Queue](/docs/user-guides/features/teacher/classroom/student-issues)
+- [Student Support Diagnostics](../../../diagnostics/student-support.md)
+- [Teacher Guide: Student Issues Queue](../../teacher/classroom/student-issues.md)

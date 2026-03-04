@@ -96,5 +96,5 @@ Students see the status of their issues on their **Help & Support** page.
 ---
 
 ## Related Guides
-- [Student Perspective: Reporting Issues](/docs/user-guides/features/student/support/report-issues)
-- [Diagnostics: Announcements & Issues](/docs/user-guides/diagnostics/teacher-announcements-issues)
+- [Student Perspective: Reporting Issues](../../student/support/report-issues.md)
+- [Diagnostics: Announcements & Issues](../../../diagnostics/teacher-announcements-issues.md)

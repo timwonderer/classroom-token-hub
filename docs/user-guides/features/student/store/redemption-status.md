@@ -24,4 +24,4 @@ Go to **Store** and review your recent purchases.
 Submit an issue report from Help and Support.
 
 ## Related guides
-- [Student Store Diagnostics](/docs/user-guides/diagnostics/student-store)
+- [Student Store Diagnostics](../../../diagnostics/student-store.md)

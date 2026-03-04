@@ -27,5 +27,5 @@ Payroll uses Start Work and Break or Done taps from the Attendance Log. Confirm 
 After saving, preview the projected pay list to confirm the rates are applying.
 
 ## Related guides
-- [Run Payroll](/docs/user-guides/features/teacher/economy/payroll-run)
-- [Teacher Attendance and Payroll Diagnostics](/docs/user-guides/diagnostics/teacher-attendance-payroll)
+- [Run Payroll](payroll-run.md)
+- [Teacher Attendance and Payroll Diagnostics](../../../diagnostics/teacher-attendance-payroll.md)

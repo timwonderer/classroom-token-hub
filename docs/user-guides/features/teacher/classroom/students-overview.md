@@ -36,5 +36,5 @@ Use **Remove** in the Class Roster to delete a student from the class. This is p
 Use **Export All** in the roster header to download a CSV of your students.
 
 ## Related guides
-- [Class Setup and Join Codes](/docs/user-guides/features/teacher/classroom/class-setup)
-- [Log In and First-Time Setup (Student)](/docs/user-guides/features/student/account/login-setup)
+- [Class Setup and Join Codes](class-setup.md)
+- [Log In and First-Time Setup (Student)](../../student/account/login-setup.md)

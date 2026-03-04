@@ -24,5 +24,5 @@ Open a claim to view details, then approve or deny according to your policy rule
 Claims follow the waiting period configured on each policy. If a claim is missing, confirm the student has met the waiting period.
 
 ## Related guides
-- [Insurance Policies](/docs/user-guides/features/teacher/bills/insurance-policies)
-- [Teacher Rent and Insurance Diagnostics](/docs/user-guides/diagnostics/teacher-rent-insurance)
+- [Insurance Policies](insurance-policies.md)
+- [Teacher Rent and Insurance Diagnostics](../../../diagnostics/teacher-rent-insurance.md)

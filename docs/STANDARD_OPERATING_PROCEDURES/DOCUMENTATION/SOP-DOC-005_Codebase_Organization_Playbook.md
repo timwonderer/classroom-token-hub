@@ -26,13 +26,13 @@ This procedure applies to all non-runtime files in the repository, including doc
 
 ## III. Authority Level
 
-Normative (SOP Tier). Subordinate to ARC-INV-000 and SOP-DOC-000.
+Normative (SOP Tier). Subordinate to INV-CORE-000 and SOP-DOC-000.
 
 ---
 
 ## IV. Dependencies
 
-- ARC-INV-000: Core Invariants
+- INV-CORE-000: Core Invariants
 - SOP-DOC-000: Documentation Standard (tier classification and naming conventions)
 
 ---
@@ -94,19 +94,19 @@ Root must contain fewer than 15 files.
 ```
 docs/
 ├── README.md              ← documentation map
-├── arc/                   ← architecture and invariants
-├── sop/                   ← standard operating procedures
-├── sec/                   ← security audits and controls
-├── dom/                   ← domain specifications
-├── feat/                  ← feature specifications
-├── log/                   ← historical records and milestones
+├── ARCHITECTURE/          ← architecture and invariants
+├── STANDARD_OPERATING_PROCEDURES/ ← standard operating procedures
+├── SECURITY/              ← security audits and controls
+├── DOMAINS/               ← domain specifications
+├── FEATURES/              ← feature specifications
+├── LOGS/                  ← historical records and milestones
 └── user-guides/           ← user-facing documentation
 ```
 
 Rules:
 
 - No `misc/`, `old/`, or `notes/` folders.
-- Outdated but historically useful content → `docs/log/`.
+- Outdated but historically useful content → `docs/LOGS/`.
 - Outdated and useless content → delete.
 
 ---
@@ -126,9 +126,9 @@ Documentation is an interface. Different audiences require different interfaces.
 
 | Tier            | Audience                     | Location                  |
 |-----------------|------------------------------|---------------------------|
-| Constitutional  | Architects and maintainers   | `docs/arc/ARC-INV-*`     |
-| Normative       | Contributors and AI agents   | `docs/arc/`, `docs/sop/`, `docs/dom/`, `docs/feat/`, `.claude/rules/` |
-| Informative     | End users, public            | `docs/user-guides/`, root files, `docs/log/` |
+| Constitutional  | Architects and maintainers   | `docs/INV-CORE-*`     |
+| Normative       | Contributors and AI agents   | `docs/ARCHITECTURE/`, `docs/STANDARD_OPERATING_PROCEDURES/`, `docs/DOMAINS/`, `docs/FEATURES/`, `.claude/rules/` |
+| Informative     | End users, public            | `docs/user-guides/`, root files, `docs/LOGS/` |
 
 Each document must answer: *Who is this written for?* That answer determines where it lives and whether it may appear on the public documentation site.
 
@@ -326,4 +326,4 @@ Revisions to this document must:
 
 1. Increment the version number.
 2. Update the Effective Date.
-3. Maintain consistency with ARC-INV-000 and SOP-DOC-000.
+3. Maintain consistency with INV-CORE-000 and SOP-DOC-000.

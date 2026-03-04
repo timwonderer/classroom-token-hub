@@ -272,11 +272,11 @@ A: Yes! Students can view their attendance history and projected earnings on the
 
 ## Related Articles
 
-- [Teacher Payroll Diagnostics](/docs/user-guides/diagnostics/teacher-attendance-payroll)
-- [Economy Guide](/docs/user-guides/economy_guide)
+- [Teacher Payroll Diagnostics](../../diagnostics/teacher-attendance-payroll.md)
+- [Economy Guide](../../economy_guide.md)
 
 ## Need Help?
 
-- Full [Teacher Diagnostics Index](/docs/user-guides/diagnostics/teacher)
-- Check [Economy Guide](/docs/user-guides/economy_guide) for balance guidance
+- Full [Teacher Diagnostics Index](../../diagnostics/teacher.md)
+- Check [Economy Guide](../../economy_guide.md) for balance guidance
 - Contact support for technical issues

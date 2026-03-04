@@ -24,5 +24,5 @@ Use filters for student, block, type, and date range to find a specific entry.
 Select **Void** on the transaction row to mark an incorrect entry. Voided transactions remain visible for audit history.
 
 ## Related guides
-- [Banking Settings](/docs/user-guides/features/teacher/economy/banking-settings)
-- [Teacher Transactions and Banking Diagnostics](/docs/user-guides/diagnostics/teacher-transactions-banking)
+- [Banking Settings](banking-settings.md)
+- [Teacher Transactions and Banking Diagnostics](../../../diagnostics/teacher-transactions-banking.md)

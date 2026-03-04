@@ -1,32 +1,48 @@
-# PWA Documentation
+# SOP-DEP-021: PWA Icon Requirements
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-002      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+| SOP-DEP-021      | 1.0     | 2026-03-01     | N/A        | Normative       |
 
-## Overview
+## I. Purpose
+
+This document provides instructions for generating and managing Progressive Web App (PWA) icons and mobile navigation configurations.
+
+## II. Scope
+
+The PWA implementation, including icon generation, maskable icon guidelines, and mobile navigation components within the Classroom Token Hub.
+
+## III. Authority Level
+
+Normative (SOP Tier). Subordinate to INV-CORE-000.
+
+## IV. Dependencies
+
+- `INV-CORE-000_Core_Invariants.md`
+
+## V. Overview
 
 The Progressive Web App (PWA) implementation provides a native app-like experience on mobile devices with full offline support, mobile navigation, and installation capability.
 
 **Version:** 1.7.0+ includes enhanced mobile navigation with hamburger menu.
 
-## Required Icons
+## VI. Required Icons
 
 The following icon files must be created and placed in `static/images/`:
 
 1. **icon-192.png** - 192x192 pixels (maskable)
 2. **icon-512.png** - 512x512 pixels (maskable)
 
-## How to Generate Icons
+## VII. How to Generate Icons
 
-### Option 1: Online Tool
+### 1. Option 1: Online Tool
 
 1. Visit a PWA icon generator (e.g., https://www.pwabuilder.com/imageGenerator)
 2. Upload `static/images/brand-logo.svg`
 3. Generate the required sizes
 4. Download and place in `static/images/`
 
-### Option 2: Using ImageMagick (Command Line)
+### 2. Option 2: Using ImageMagick (Command Line)
 
 ```bash
 # Install ImageMagick if not already installed
@@ -38,7 +54,7 @@ rsvg-convert -w 192 -h 192 static/images/brand-logo.svg -o static/images/icon-19
 rsvg-convert -w 512 -h 512 static/images/brand-logo.svg -o static/images/icon-512.png
 ```
 
-### Option 3: Using Inkscape
+### 3. Option 3: Using Inkscape
 
 ```bash
 # Install Inkscape
@@ -50,7 +66,7 @@ inkscape static/images/brand-logo.svg --export-filename=static/images/icon-192.p
 inkscape static/images/brand-logo.svg --export-filename=static/images/icon-512.png --export-width=512 --export-height=512
 ```
 
-### Option 4: Using Python (Pillow + CairoSVG)
+### 4. Option 4: Using Python (Pillow + CairoSVG)
 
 ```python
 # Install dependencies: pip install Pillow cairosvg
@@ -70,9 +86,9 @@ svg2png(url='static/images/brand-logo.svg',
         output_height=512)
 ```
 
-## Icon Design Guidelines
+## VIII. Icon Design Guidelines
 
-### Maskable Icons
+### 1. Maskable Icons
 
 The icons use `"purpose": "any maskable"` which means:
 
@@ -80,7 +96,7 @@ The icons use `"purpose": "any maskable"` which means:
 - The outer 20% may be cropped on some devices
 - Background should be solid color (#1a4d47 - brand primary color)
 
-### Testing
+### 2. Testing
 
 After generating icons:
 
@@ -89,27 +105,25 @@ After generating icons:
 3. Verify icons appear correctly on home screen
 4. Verify icons appear correctly in app switcher
 
-## Current Status
+## IX. Current Status
 
 -  **icon-192.png**: Generated and available in `static/images/`
 -  **icon-512.png**: Generated and available in `static/images/`
 -  **brand-logo.svg**: Available and ready for conversion
 
-## References
+## X. References
 
 - [PWA Icon Requirements](https://web.dev/add-manifest/#icons)
 - [Maskable Icons](https://web.dev/maskable-icon/)
 - [PWA Builder Icon Generator](https://www.pwabuilder.com/imageGenerator)
 
----
+## XI. Mobile Navigation (v1.7.0+)
 
-## Mobile Navigation (v1.7.0+)
-
-### Overview
+### 1. Overview
 
 Version 1.7.0 introduces a floating hamburger menu for seamless navigation on mobile devices and PWA installations.
 
-### Features
+### 2. Features
 
 **Hamburger Menu:**
 - Floating button appears on screens <768px width
@@ -127,7 +141,7 @@ Version 1.7.0 introduces a floating hamburger menu for seamless navigation on mo
 - Consistent experience across desktop, mobile browser, and installed PWA
 - Full feature parity across all platforms
 
-### User Experience
+### 3. User Experience
 
 **On Desktop:**
 - Standard sidebar navigation (always visible)
@@ -146,7 +160,7 @@ Version 1.7.0 introduces a floating hamburger menu for seamless navigation on mo
 - Smooth animations
 - Full navigation access
 
-### Technical Implementation
+### 4. Technical Implementation
 
 **CSS Media Queries:**
 ```css
@@ -174,7 +188,7 @@ Version 1.7.0 introduces a floating hamburger menu for seamless navigation on mo
 - Responsive design handles layout
 - Progressive enhancement approach
 
-### Testing Mobile Navigation
+### 5. Testing Mobile Navigation
 
 **On Mobile Device:**
 1. Visit site on phone/tablet
@@ -190,7 +204,7 @@ Version 1.7.0 introduces a floating hamburger menu for seamless navigation on mo
 4. Test navigation functionality
 5. Confirm smooth animations
 
-### Troubleshooting
+### 6. Troubleshooting
 
 **Menu Not Appearing:**
 - Check screen width (should be <768px)
@@ -207,5 +221,10 @@ Version 1.7.0 introduces a floating hamburger menu for seamless navigation on mo
 - Check icon font preload in HTML
 - Review Content Security Policy settings
 
----
+## XII. Amendment
+
+Revisions to this document must:
+1. Increment the version number.
+2. Update the Effective Date.
+3. Maintain consistency with `INV-CORE-000`.
 

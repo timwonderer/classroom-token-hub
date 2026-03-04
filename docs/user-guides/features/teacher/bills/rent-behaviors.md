@@ -27,5 +27,5 @@ Go to **Bills > Rent** and open the **Settings** tab.
 Align penalties with your classroom norms so rent feels fair and predictable.
 
 ## Related guides
-- [Rent Settings](/docs/user-guides/features/teacher/bills/rent-settings)
-- [Teacher Rent and Insurance Diagnostics](/docs/user-guides/diagnostics/teacher-rent-insurance)
+- [Rent Settings](rent-settings.md)
+- [Teacher Rent and Insurance Diagnostics](../../../diagnostics/teacher-rent-insurance.md)

@@ -36,4 +36,4 @@ Consumable items (like pencils or supplies) may work differently:
 Check your balance or item availability, then try again.
 
 ## Related guides
-- [Student Store Diagnostics](/docs/user-guides/diagnostics/student-store)
+- [Student Store Diagnostics](../../../diagnostics/student-store.md)

@@ -11,10 +11,10 @@ Document threat vectors, attack scenarios, and required mitigations strictly con
 Security audits, penetration testing scenarios, and design reviews of isolated context handlers.
 
 ## III. Authority Level
-Authoritative (ARC Tier). Subservient to ARC-INV-000 constraints.
+Authoritative (ARC Tier). Subservient to INV-CORE-000 constraints.
 
 ## IV. Dependencies
-- ARC-INV-000: Core Invariants
+- INV-CORE-000: Core Invariants
 - ARC-SEC-015: Multi-Tenancy Audit
 
 ## V. Attack Vectors

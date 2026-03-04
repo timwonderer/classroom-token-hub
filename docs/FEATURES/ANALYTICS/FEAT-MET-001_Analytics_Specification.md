@@ -1,35 +1,30 @@
 ---
-title: Analytics System Specification
-description: System health observability dashboard with CWI-relative metrics and actionable insights
-keywords: [analytics, dashboard, metrics, CWI, system health, observability]
-roles: [teacher, developer]
----
-
-# Classroom Economy Analytics System — Development Specification
+# FEAT-MET-001: Analytics Specification
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-004      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+| FEAT-MET-001     | 1.0     | 2026-03-01     | N/A        | Normative       |
+
+## I. Purpose
 
 This document defines the scope, constraints, metrics, and invariants governing the Analytics feature in the Classroom Economy App.
 
+## II. Scope
+
 The Analytics system exists to observe system health and behavioral patterns, not to grade students, rank individuals, or recreate general-purpose BI tools.
 
-This specification applies to all analytics-related development, including:
+This specification applies to all analytics-related development, including dashboards, computed metrics, alerts and thresholds, projections and simulations, and drill-down views.
 
-dashboards
+## III. Authority Level
 
-computed metrics
+Normative (FEAT Tier). Subordinate to INV-CORE-000 and DOM-ECON-002.
 
-alerts and thresholds
+## IV. Dependencies
 
-projections and simulations
+- `INV-CORE-000_Core_Invariants.md`
+- `DOM-ECON-002_Economy_Specification.md`
 
-drill-down views
-
----
-
-1. Core Purpose (Non-Negotiable)
+## V. Core Purpose (Non-Negotiable)
 
 The Analytics system exists to answer one question:
 
@@ -51,13 +46,11 @@ student morality
 
 comparative ranking between students
 
----
-
-2. Design Philosophy
+## VI. Design Philosophy
 
 Analytics must follow an observability model, not a reporting model.
 
-2.1 Observability Principles
+### 1. Observability Principles
 
 Analytics must:
 
@@ -81,13 +74,11 @@ spreadsheet-like manipulation
 
 If a teacher has to “figure out what to look for,” the system has failed.
 
----
-
-3. Relationship to CWI (Foundational Rule)
+## VII. Relationship to CWI (Foundational Rule)
 
 All analytics related to money must be interpreted relative to CWI.
 
-3.1 Prohibited Metrics
+### 1. Prohibited Metrics
 
 The following metrics are not allowed as primary analytics:
 
@@ -99,7 +90,7 @@ leaderboards
 
 raw wealth rankings
 
-3.2 Required Framing
+### 2. Required Framing
 
 All monetary analytics must be expressed as one of the following:
 
@@ -112,13 +103,11 @@ trend relative to CWI over time
 CWI is the baseline model.
 Analytics measure deviation from the model, not absolute outcomes.
 
----
-
-4. Metric Classification
+## VIII. Metric Classification
 
 Analytics metrics must belong to exactly one of the following categories.
 
-4.1 System Health Metrics (Always Visible)
+### 1. System Health Metrics (Always Visible)
 
 These represent the “heartbeat” of the classroom economy.
 
@@ -142,7 +131,7 @@ must be readable in under 5 seconds
 
 ---
 
-4.2 Drift & Anomaly Metrics
+### 2. Drift & Anomaly Metrics
 
 These identify divergence from expected behavior.
 
@@ -166,7 +155,7 @@ must never default to blaming students
 
 ---
 
-4.3 Diagnostic Drill-Down Metrics
+### 3. Diagnostic Drill-Down Metrics
 
 These are available only after user interaction.
 
@@ -188,13 +177,11 @@ must be contextualized with CWI expectations
 
 must explain why the metric matters
 
----
-
-5. Temporal Rules
+## IX. Temporal Rules
 
 Analytics must respect time explicitly.
 
-5.1 Time Windows
+### 1. Time Windows
 
 All analytics must specify:
 
@@ -204,7 +191,7 @@ whether values are cumulative or rolling
 
 Undefined time scopes are prohibited.
 
-5.2 Event Annotations
+### 2. Event Annotations
 
 Analytics must support annotations for:
 
@@ -220,13 +207,11 @@ holidays or shortened weeks
 
 Charts without context are considered incomplete.
 
----
-
-6. Thresholds and Alerts
+## X. Thresholds and Alerts
 
 Analytics may surface visual alerts, not notifications, by default.
 
-6.1 Threshold Rules
+### 1. Threshold Rules
 
 Thresholds must:
 
@@ -242,7 +227,7 @@ Examples:
 
 “Money velocity dropped >30% week-over-week”
 
-6.2 Alert Behavior
+### 2. Alert Behavior
 
 Alerts must:
 
@@ -260,13 +245,11 @@ prescribe discipline
 
 trigger automatic penalties
 
----
-
-7. Projections & Simulations
+## XI. Projections & Simulations
 
 Analytics may include what-if simulations, subject to strict limits.
 
-7.1 Allowed Inputs
+### 1. Allowed Inputs
 
 Simulations may vary:
 
@@ -280,7 +263,7 @@ insurance premiums
 
 fines
 
-7.2 Required Outputs
+### 2. Required Outputs
 
 Simulations must report:
 
@@ -301,9 +284,7 @@ overwrite live data
 Analytics simulate.
 Other systems decide.
 
----
-
-8. Separation from Logs
+## XII. Separation from Logs
 
 Analytics and logs are distinct systems.
 
@@ -319,9 +300,7 @@ function as an audit ledger
 
 Logs must be accessible only via intentional navigation.
 
----
-
-9. Ethical Constraints
+## XIII. Ethical Constraints
 
 Analytics must preserve student dignity.
 
@@ -335,9 +314,7 @@ visual language must avoid “failure” framing
 
 Analytics are about system behavior, not student character.
 
----
-
-10. Performance & Computation Rules
+## XIV. Performance & Computation Rules
 
 Analytics must be:
 
@@ -349,9 +326,7 @@ resilient to partial data
 
 Real-time recalculation of historical metrics is prohibited unless required for correctness.
 
----
-
-11. Output Requirements (Developer-Facing)
+## XV. Output Requirements (Developer-Facing)
 
 Every analytics metric must document:
 
@@ -365,9 +340,7 @@ interpretation intent
 
 If a metric cannot explain why it exists, it should not exist.
 
----
-
-12. Non-Negotiable Rules (Summary)
+## XVI. Non-Negotiable Rules (Summary)
 
 1. Analytics observe systems, not students.
 
@@ -381,9 +354,7 @@ If a metric cannot explain why it exists, it should not exist.
 
 6. If it feels like Excel, it’s wrong.
 
----
-
-13. Design North Star
+## XVII. Design North Star
 
 A teacher should be able to glance at the Analytics page and say:
 
@@ -391,3 +362,10 @@ A teacher should be able to glance at the Analytics page and say:
 
 If analytics do more than that, they are doing too much.
 If they do less than that, they are not worth building.
+
+## XVIII. Amendment
+
+Revisions to this document must:
+1. Increment the version number.
+2. Update the Effective Date.
+3. Maintain consistency with `INV-CORE-000`.

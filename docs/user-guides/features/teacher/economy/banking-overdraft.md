@@ -21,4 +21,4 @@ Go to **Economy > Banking**.
 - Disable protection and set an overdraft fee.
 
 ## Related guides
-- [Banking Settings](/docs/user-guides/features/teacher/economy/banking-settings)
+- [Banking Settings](banking-settings.md)
