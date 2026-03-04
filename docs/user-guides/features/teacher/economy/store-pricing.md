@@ -23,5 +23,5 @@ Set prices in **Economy > Store** when creating or editing items.
 - Adjust prices if students are consistently broke or overloaded with cash.
 
 ## Related guides
-- [Store Items](/docs/user-guides/features/teacher/economy/store-items)
-- [Classroom Economy Guide](/docs/user-guides/economy_guide)
+- [Store Items](store-items.md)
+- [Classroom Economy Guide](../../../economy_guide.md)

@@ -12,12 +12,12 @@ keywords: [bills, rent, insurance]
 This section groups rent and insurance tools in one place.
 
 ## Rent
-- [Rent Settings](/docs/user-guides/features/teacher/bills/rent-settings)
-- [Customizing Rent Behaviors](/docs/user-guides/features/teacher/bills/rent-behaviors)
-- [Rent Itemization](/docs/user-guides/features/teacher/bills/rent-itemization)
-- [Rent Waivers](/docs/user-guides/features/teacher/bills/rent-waivers)
+- [Rent Settings](rent-settings.md)
+- [Customizing Rent Behaviors](rent-behaviors.md)
+- [Rent Itemization](rent-itemization.md)
+- [Rent Waivers](rent-waivers.md)
 
 ## Insurance
-- [Insurance Policies](/docs/user-guides/features/teacher/bills/insurance-policies)
-- [Insurance Claims and Coverage](/docs/user-guides/features/teacher/bills/insurance-claims)
-- [Insurance Enrollment](/docs/user-guides/features/teacher/bills/insurance-enrollment)
+- [Insurance Policies](insurance-policies.md)
+- [Insurance Claims and Coverage](../../student/bills/insurance-claims.md)
+- [Insurance Enrollment](insurance-enrollment.md)

@@ -40,7 +40,7 @@ From the admin dashboard:
 
 #### Basic Information
 
-- **Item Name**: What students see (e.g., "Homework Pass", "Extra Credit")
+- **Item Name**: What students see (e.g., "Homework Pass", "Bonus Points")
 - **Description**: Explain what the item does
   - Use markdown for formatting
   - Be clear about any restrictions
@@ -97,7 +97,7 @@ Choose how the item works:
 
 ### 3. Configure Limits (Optional)
 
-**Inventory** (global stock limit):
+**Inventory** (global quantity limit):
 
 - Total quantity available to ALL students across all periods
 - Example: Set to 10 if you only have 10 physical candy bars
@@ -153,7 +153,7 @@ Items marked as "Available in Store" in your Rent Settings automatically appear 
   - **Per-Use**: Consumable (e.g., Pencil).
 - **Restrictions**: Cannot be deleted from the store directly (must remove from Rent Settings).
 
-For full details on configuring these, see the [Rent Itemization Guide](/docs/user-guides/features/rent/itemization-guide).
+For full details on configuring these, see the [Rent Itemization Guide](../rent/itemization-guide.md).
 
 ### Immediate Use Items
 
@@ -326,7 +326,7 @@ Items the whole class works toward together:
 
 **Item sold out too quickly**:
 
-- Set inventory limits (total stock available)
+- Set inventory limits (total quantity available)
 - Set purchase limits per student (max they can own at once)
 - Increase the price
 - Create similar items to distribute demand
@@ -339,12 +339,12 @@ Items the whole class works toward together:
 
 ## Related Articles
 
-- [Rent Itemization Guide](/docs/user-guides/features/rent/itemization-guide)
-- [Teacher Store Diagnostics](/docs/user-guides/diagnostics/teacher-store)
-- [Economy Guide](/docs/user-guides/economy_guide)
+- [Rent Itemization Guide](../rent/itemization-guide.md)
+- [Teacher Store Diagnostics](../../diagnostics/teacher-store.md)
+- [Economy Guide](../../economy_guide.md)
 
 ## Need More Help?
 
-- View the [Teacher Diagnostics Index](/docs/user-guides/diagnostics/teacher)
-- Check [Economy Guide](/docs/user-guides/economy_guide) for pricing guidance
+- View the [Teacher Diagnostics Index](../../diagnostics/teacher.md)
+- Check [Economy Guide](../../economy_guide.md) for pricing guidance
 - Contact support if items aren't working as expected

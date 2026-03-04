@@ -26,5 +26,5 @@ Go to **Economy > Economy Health**.
 Use the Classroom Economy Guide for recommended ranges and quick checks.
 
 ## Related guides
-- [Classroom Economy Guide](/docs/user-guides/economy_guide)
-- [Analytics Dashboard](/docs/user-guides/features/teacher/economy/analytics)
+- [Classroom Economy Guide](../../../economy_guide.md)
+- [Analytics Dashboard](analytics.md)

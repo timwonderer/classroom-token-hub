@@ -20,4 +20,4 @@ Check the **Accounts** tab in Finances to see the interest rate and estimated ea
 Interest is paid on a schedule set by your teacher. The amount depends on your savings balance.
 
 ## Related guides
-- [Accounts and Transfers](/docs/user-guides/features/student/banking/accounts-transfers)
+- [Accounts and Transfers](accounts-transfers.md)

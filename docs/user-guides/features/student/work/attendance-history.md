@@ -26,5 +26,5 @@ Go to **Work and Pay** from the student sidebar.
 Use the help icon on an attendance record to report a problem.
 
 ## Related guides
-- [Start and End Work](/docs/user-guides/features/student/work/start-end-work)
-- [Student Attendance Diagnostics](/docs/user-guides/diagnostics/student-attendance)
+- [Start and End Work](start-end-work.md)
+- [Student Attendance Diagnostics](../../../diagnostics/student-attendance.md)

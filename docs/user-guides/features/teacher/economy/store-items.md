@@ -33,5 +33,5 @@ Go to **Economy > Store** and open **Add New Item** or **Manage Items**.
 Keep prices aligned to your Classroom Wage Index so rewards feel achievable.
 
 ## Related guides
-- [Store Redemptions](/docs/user-guides/features/teacher/economy/store-redemptions)
-- [Teacher Store Diagnostics](/docs/user-guides/diagnostics/teacher-store)
+- [Store Redemptions](store-redemptions.md)
+- [Teacher Store Diagnostics](../../../diagnostics/teacher-store.md)

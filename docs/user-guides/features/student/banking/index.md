@@ -12,5 +12,5 @@ keywords: [banking, checking, savings, transfers]
 This section covers balances, transfers, and interest.
 
 ## Accounts
-- [Accounts and Transfers](/docs/user-guides/features/student/banking/accounts-transfers)
-- [Savings Interest](/docs/user-guides/features/student/banking/savings-interest)
+- [Accounts and Transfers](accounts-transfers.md)
+- [Savings Interest](savings-interest.md)

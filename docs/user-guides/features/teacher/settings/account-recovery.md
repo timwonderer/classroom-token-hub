@@ -24,4 +24,4 @@ Go to **Settings > Account Recovery** if you see the setup prompt.
 The recovery flow verifies something you know and something you have, without storing sensitive contact info.
 
 ## Related guides
-- [Teacher Login Diagnostics](/docs/user-guides/diagnostics/teacher-login)
+- [Teacher Login Diagnostics](../../../diagnostics/teacher-login.md)

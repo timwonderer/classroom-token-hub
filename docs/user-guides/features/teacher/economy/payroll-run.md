@@ -29,5 +29,5 @@ Check **Payroll History** to confirm totals and spot check transactions for a fe
 Verify attendance taps and pay rates, then refresh the preview.
 
 ## Related guides
-- [Payroll Settings](/docs/user-guides/features/teacher/economy/payroll-settings)
-- [Teacher Attendance and Payroll Diagnostics](/docs/user-guides/diagnostics/teacher-attendance-payroll)
+- [Payroll Settings](payroll-settings.md)
+- [Teacher Attendance and Payroll Diagnostics](../../../diagnostics/teacher-attendance-payroll.md)

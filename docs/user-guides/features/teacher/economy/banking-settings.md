@@ -24,5 +24,5 @@ Choose the interest type, rate, and payout interval. Use the class selector to c
 Enable overdraft protection to automatically cover checking costs with savings, or set an overdraft fee when protection is off.
 
 ## Related guides
-- [Managing Banking (Detailed)](/docs/user-guides/features/banking/managing-banking)
-- [Transactions](/docs/user-guides/features/teacher/economy/transactions)
+- [Managing Banking (Detailed)](../../banking/managing-banking.md)
+- [Transactions](transactions.md)

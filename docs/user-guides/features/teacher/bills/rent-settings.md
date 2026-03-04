@@ -31,7 +31,7 @@ You can break rent down into specific items to show value. Items can be:
 - **Per-Use:** Consumables (Pencils) or services. Can grant free uses to rent payers.
 - **Hall Pass:** Adds passes to the student's balance upon payment.
 
-See the [Rent Itemization Guide](/docs/user-guides/features/rent/itemization-guide.md) for full setup instructions.
+See the [Rent Itemization Guide](../../rent/itemization-guide.md) for full setup instructions.
 
 ## Penalties and restrictions
 Enable late penalties and decide whether overdue rent blocks store purchases.
@@ -39,5 +39,5 @@ Enable late penalties and decide whether overdue rent blocks store purchases.
 - **Dynamic Purchase Blocking:** If you use Itemized Rent, late students can still buy "Rent Alternative" items (like a desk pass) but are blocked from other store purchases.
 
 ## Related guides
-- [Managing Rent (Detailed)](/docs/user-guides/features/rent/managing-rent.md)
-- [Rent Itemization Guide](/docs/user-guides/features/rent/itemization-guide.md)
+- [Managing Rent (Detailed)](../../rent/managing-rent.md)
+- [Rent Itemization Guide](../../rent/itemization-guide.md)

@@ -12,14 +12,14 @@ keywords: [settings, security, passkey]
 This section groups teacher account settings and controls.
 
 ## Personalization
-- [Personalization](/docs/user-guides/features/teacher/settings/personalization)
+- [Personalization](personalization.md)
 
 ## Security
-- [Passkey and Login Security](/docs/user-guides/features/teacher/settings/passkey)
-- [Account Recovery](/docs/user-guides/features/teacher/settings/account-recovery)
+- [Passkey and Login Security](passkey.md)
+- [Account Recovery](account-recovery.md)
 
 ## Feature Controls
-- [Feature Toggles](/docs/user-guides/features/teacher/settings/feature-toggles)
+- [Feature Toggles](feature-toggles.md)
 
 ## Account Management
-- [Account Deletion Requests](/docs/user-guides/features/teacher/settings/account-deletion)
+- [Account Deletion Requests](account-deletion.md)

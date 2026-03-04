@@ -20,4 +20,4 @@ Go to **Settings > Features**.
 Turn features on or off for your class based on your classroom plan. Changes apply immediately.
 
 ## Related guides
-- [Teacher Onboarding Diagnostics](/docs/user-guides/diagnostics/teacher-onboarding)
+- [Teacher Onboarding Diagnostics](../../../diagnostics/teacher-onboarding.md)

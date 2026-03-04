@@ -15,7 +15,23 @@
         <p  class="mb-2" style="font-size:2.5rem; font-weight:600;color:var(--primary);">
              CLASSROOM TOKEN HUB
         </p>
-        <p class="lead text-muted">Help and Support Center </p>
+        <p class="lead text-muted">{% if audience == 'user' %}Help and Support Center{% else %}Technical Documentation{% endif %}</p>
+
+        {% if not session.get('student_id') and not session.get('admin_id') %}
+        <!-- Audience Toggle -->
+        <div class="d-flex justify-content-center mt-3 mb-4">
+            <div class="btn-group" role="group" aria-label="Documentation Audience Toggle">
+                <a href="{{ url_for('docs.set_audience', aud='user') }}" class="btn {% if audience == 'user' %}btn-primary active fw-bold{% else %}btn-outline-secondary{% endif %} px-4">
+                    <span class="material-symbols-outlined" style="vertical-align: text-bottom; font-size: 1.1rem;">group</span>
+                    User Guides
+                </a>
+                <a href="{{ url_for('docs.set_audience', aud='devops') }}" class="btn {% if audience == 'devops' %}btn-primary active fw-bold{% else %}btn-outline-secondary{% endif %} px-4">
+                    <span class="material-symbols-outlined" style="vertical-align: text-bottom; font-size: 1.1rem;">terminal</span>
+                    Technical Docs
+                </a>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- Search Bar -->
         <form action="{{ url_for('docs.search') }}" method="get" class="mt-4">
@@ -31,6 +47,7 @@
 
     <!-- Documentation Categories -->
     <div class="row g-4 mb-5">
+        {% if audience == 'user' %}
         <!-- Student Diagnostics -->
         <div class="col-md-6 col-lg-4">
             <div class="card h-100 shadow-sm">
@@ -99,7 +116,9 @@
                 </div>
             </div>
         </div>
+        {% endif %}
 
+        {% if audience == 'devops' %}
         <!-- Project Timeline -->
         <div class="col-md-6 col-lg-4">
             <div class="card h-100 shadow-sm">
@@ -112,7 +131,7 @@
                     <ul>
                         <li><a href="{{ url_for('docs.timeline') }}" class="text-decoration-none fw-semibold text-primary">Interactive Timeline →</a></li>
                         <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/DEVELOPMENT.md" target="_blank" rel="noopener" class="text-decoration-none">Development Roadmap</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='operations/README') }}" class="text-decoration-none">Operations</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index') }}" class="text-decoration-none">Documentation Index</a></li>
                         <li><a href="https://github.com/timwonderer/classroom-economy/blob/main/PROJECT_HISTORY.md" target="_blank" rel="noopener" class="text-decoration-none">Project History</a></li>
                     </ul>
                 </div>
@@ -129,11 +148,11 @@
                     <h3 class="card-title h5 text-center">Developer Reference</h3>
                     <p class="card-text text-muted">Architecture, database schema, and API docs for developers and maintainers.</p>
                     <ul>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/architecture') }}" class="text-decoration-none">Architecture</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/database_schema') }}" class="text-decoration-none">Database Schema</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/analytics-specification') }}" class="text-decoration-none">Analytics Dashboard</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/economy-specification') }}" class="text-decoration-none">Economy Spec</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='technical-reference/api_reference') }}" class="text-decoration-none">API Reference</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='ARCHITECTURE/ARC-CORE-000_Architecture_Foundation') }}" class="text-decoration-none">Architecture</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema') }}" class="text-decoration-none">Database Schema</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='FEATURES/ANALYTICS/FEAT-MET-001_Analytics_Specification') }}" class="text-decoration-none">Analytics Dashboard</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification') }}" class="text-decoration-none">Economy Spec</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference') }}" class="text-decoration-none">API Reference</a></li>
                     </ul>
                 </div>
             </div>
@@ -149,8 +168,8 @@
                     <h3 class="card-title h5 text-center">Operations</h3>
                     <p class="card-text text-muted">Deployment, maintenance, and operational procedures for maintainers.</p>
                     <ul>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='operations/Deployment_Guide') }}" class="text-decoration-none">Deployment Guide</a></li>
-                        <li><a href="{{ url_for('docs.view_doc', doc_path='CHANGELOG') }}" class="text-decoration-none">Changelog</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide') }}" class="text-decoration-none">Deployment Guide</a></li>
+                        <li><a href="{{ url_for('docs.view_doc', doc_path='LOGS/RELEASES/LOG-REL-002_Changelog_Mirror') }}" class="text-decoration-none">Changelog</a></li>
                     </ul>
                 </div>
             </div>
@@ -174,6 +193,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
     </div>
 
     <!-- Quick Links -->

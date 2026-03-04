@@ -50,4 +50,4 @@ Your teacher may break down rent into specific items. These can grant you differ
 Ask your teacher about waivers or due date adjustments. If you are late, remember you can still purchase **Rent Alternative** items in the store to keep your essential privileges (like your desk) while you save up for the full rent.
 
 ## Related guides
-- [Student Rent and Insurance Diagnostics](/docs/user-guides/diagnostics/student-rent-insurance.md)
+- [Student Rent and Insurance Diagnostics](../../../diagnostics/student-rent-insurance.md)

@@ -22,4 +22,4 @@ Go to **Bills > Insurance** and open the **Active Student Policies** tab.
 - Confirm enrollment before students submit claims.
 
 ## Related guides
-- [Insurance Policies](/docs/user-guides/features/teacher/bills/insurance-policies)
+- [Insurance Policies](insurance-policies.md)

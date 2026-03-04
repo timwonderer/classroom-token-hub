@@ -26,5 +26,5 @@ Go to **Economy > Banking**.
 Keep rates modest and review the economy balance after changes.
 
 ## Related guides
-- [Banking Settings](/docs/user-guides/features/teacher/economy/banking-settings)
-- [Managing Banking (Detailed)](/docs/user-guides/features/banking/managing-banking)
+- [Banking Settings](banking-settings.md)
+- [Managing Banking (Detailed)](../../banking/managing-banking.md)

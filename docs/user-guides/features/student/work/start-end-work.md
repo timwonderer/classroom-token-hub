@@ -27,5 +27,5 @@ Select **Break** or **Done** when you stop working.
 Payroll uses these taps to calculate your pay.
 
 ## Related guides
-- [Attendance History and Pay Status](/docs/user-guides/features/student/work/attendance-history)
-- [Attendance and Approvals (Teacher)](/docs/user-guides/features/teacher/classroom/attendance-approvals)
+- [Attendance History and Pay Status](attendance-history.md)
+- [Attendance and Approvals (Teacher)](../../teacher/classroom/attendance-approvals.md)

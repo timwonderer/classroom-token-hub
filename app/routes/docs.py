@@ -7,9 +7,9 @@ allowing users to access help without leaving the app or losing their session.
 
 import re
 from pathlib import Path
-import os
-from flask import Blueprint, abort, current_app, session, request, url_for
+from flask import Blueprint, abort, current_app, session, request, url_for, redirect, make_response
 from werkzeug.exceptions import HTTPException
+from werkzeug.utils import safe_join
 import bleach
 import markdown
 import yaml
@@ -31,6 +31,12 @@ EXCLUDED_DIRECTORIES = {'security', 'archive'}
 
 # Friendly category names for search results
 CATEGORY_MAP = {
+    'ARCHITECTURE': 'Architecture',
+    'DOMAINS': 'Domains',
+    'FEATURES': 'Features',
+    'LOGS': 'Logs',
+    'SECURITY': 'Security',
+    'STANDARD_OPERATING_PROCEDURES': 'Standard Operating Procedures',
     'user-guides': 'User Guides',
     'technical-reference': 'Technical Reference',
     'development': 'Development',
@@ -103,6 +109,15 @@ def parse_front_matter(content):
 
         # Parse YAML front matter using PyYAML
         front_matter = parts[1].strip()
+        # Only treat as front matter if at least one line looks like "key: value".
+        # This avoids false positives on markdown that starts with horizontal rules.
+        has_yaml_key = any(
+            re.match(r"^\s*[A-Za-z_][A-Za-z0-9_-]*\s*:", line)
+            for line in front_matter.splitlines()
+            if line.strip()
+        )
+        if not has_yaml_key:
+            return {}, content
         metadata = yaml.safe_load(front_matter) or {}
 
         # Ensure metadata is a dictionary
@@ -159,31 +174,38 @@ def render_markdown_content(content, toc_title='On This Page'):
     return cleaner.clean(html), cleaner.clean(toc)
 
 
-def build_breadcrumbs(category, page=None):
+def build_breadcrumbs(doc_path, docs_root):
     """
     Build breadcrumb navigation for documentation pages.
 
     Args:
-        category: Category name (e.g., 'getting-started', 'store')
-        page: Optional page name within category
+        doc_path: Full documentation path without extension
+        docs_root: Root docs directory
 
     Returns:
         list: List of dicts with 'title' and 'url' keys
     """
+    parts = Path(doc_path).parts
     breadcrumbs = []
 
-    if category:
-        category_title = category.replace('-', ' ').replace('_', ' ').title()
+    # Build intermediate directory crumbs. Only make them clickable
+    # when an index markdown file actually exists at that path.
+    for idx, part in enumerate(parts[:-1]):
+        partial_path = "/".join(parts[:idx + 1])
+        partial_file = docs_root / f"{partial_path}.md"
+        partial_index = docs_root / partial_path / "index.md"
+        partial_readme = docs_root / partial_path / "README.md"
+        has_landing_doc = partial_file.exists() or partial_index.exists() or partial_readme.exists()
         breadcrumbs.append({
-            'title': category_title,
-            'url': url_for('docs.view_doc', doc_path=category)
+            'title': part.replace('-', ' ').replace('_', ' ').title(),
+            'url': url_for('docs.view_doc', doc_path=partial_path) if has_landing_doc else None
         })
 
-    if page:
-        page_title = page.replace('-', ' ').replace('_', ' ').title()
+    # Current page crumb (always the last item, rendered as active text in template)
+    if parts:
         breadcrumbs.append({
-            'title': page_title,
-            'url': url_for('docs.view_doc', doc_path=f'{category}/{page}')
+            'title': parts[-1].replace('-', ' ').replace('_', ' ').title(),
+            'url': None
         })
 
     return breadcrumbs
@@ -191,10 +213,51 @@ def build_breadcrumbs(category, page=None):
 
 # -------------------- ROUTES --------------------
 
+def get_docs_audience():
+    """Determine the documentation audience ('user' or 'devops') for the current request."""
+    # Active teacher/student session enforces 'user' mode
+    if session.get('student_id') or session.get('admin_id'):
+        return 'user'
+    
+    # Otherwise respect the chosen cookie
+    audience = request.cookies.get('docs_audience')
+    if audience in ['user', 'devops']:
+        return audience
+        
+    # Sysadmins default to 'devops'
+    if session.get('is_system_admin'):
+        return 'devops'
+        
+    # Default public audience
+    return 'user'
+
+@docs_bp.route('/set-audience')
+def set_audience():
+    """Toggle between 'user' and 'devops' documentation."""
+    allowed_audiences = {'user', 'devops'}
+    audience_arg = (request.args.get('aud') or '').strip().lower()
+    audience = audience_arg if audience_arg in allowed_audiences else 'user'
+
+    # Always redirect to docs index after toggle to avoid any untrusted redirect target.
+    next_url = url_for('docs.index')
+
+    resp = make_response(redirect(next_url))
+    resp.set_cookie(
+        'docs_audience',
+        audience,
+        max_age=31536000,  # 1 year
+        httponly=True,
+        samesite='Lax',
+        secure=request.is_secure,
+    )
+    return resp
+    
+
 @docs_bp.route('/')
 def index():
     """Documentation homepage with categories."""
-    return render_template_with_fallback('docs/index.html')
+    audience = get_docs_audience()
+    return render_template_with_fallback('docs/index.html', audience=audience)
 
 
 @docs_bp.route('/timeline')
@@ -235,9 +298,8 @@ def view_doc(doc_path):
 
             Security validation strategy:
             1. Reject absolute paths and '..' components
-            2. Resolve the path (following symlinks)
-            3. Verify resolved path is within docs root using startswith()
-               (CodeQL recognizes startswith() as a valid path safety check)
+            2. Build allowed candidate files (.md, /index.md, /README.md)
+            3. Resolve each candidate path and ensure it remains under docs root
             """
             # Normalize the untrusted path as a relative path
             safe_rel_path = Path(untrusted_path)
@@ -254,40 +316,52 @@ def view_doc(doc_path):
                 current_app.logger.error(f"Invalid DOCS_ROOT '{docs_root}': {e}")
                 abort(500)
 
-            # Build candidate path under documentation root and normalize it
+            # Build candidate paths under documentation root.
             try:
-                candidate = (root_resolved / safe_rel_path).with_suffix('.md').resolve(strict=False)
+                safe_candidate = safe_join(str(root_resolved), *safe_rel_path.parts)
+                if not safe_candidate:
+                    current_app.logger.warning(f"Path escaped DOCS_ROOT: {untrusted_path}")
+                    abort(404)
+
+                candidate_base = Path(safe_candidate)
+                if candidate_base.suffix and candidate_base.suffix.lower() != '.md':
+                    current_app.logger.warning(f"Unsupported docs suffix in path: {untrusted_path}")
+                    abort(404)
+
+                if candidate_base.suffix.lower() == '.md':
+                    candidates = [candidate_base]
+                else:
+                    candidates = [
+                        Path(f"{candidate_base}.md"),
+                        candidate_base / "index.md",
+                        candidate_base / "README.md",
+                    ]
             except OSError as e:
                 current_app.logger.warning(f"Error resolving documentation path '{untrusted_path}': {e}")
                 abort(404)
 
-            # Verify the resolved path is still within the docs root
-            # Using startswith() instead of is_relative_to() because CodeQL recognizes
-            # startswith() as a valid SafeAccessCheck pattern, preventing false positives
-            root_path_str = str(root_resolved)
-            candidate_path_str = str(candidate)
+            # Resolve candidate paths and pick the first existing file inside docs root.
+            selected_candidate = None
+            for candidate in candidates:
+                resolved_candidate = candidate.resolve(strict=False)
+                try:
+                    resolved_candidate.relative_to(root_resolved)
+                except ValueError:
+                    current_app.logger.warning(f"Path outside DOCS_ROOT: {untrusted_path}")
+                    abort(404)
 
-            # For the prefix check, ensure the root path ends with a separator
-            root_with_sep = root_path_str
-            if not root_with_sep.endswith(os.sep):
-                root_with_sep += os.sep
+                if candidate.exists():
+                    selected_candidate = resolved_candidate
+                    break
 
-            # Check if candidate is exactly the root or starts with root + separator
-            norm_candidate = os.path.normcase(candidate_path_str)
-            is_within_root = (
-                norm_candidate == os.path.normcase(root_path_str) or
-                norm_candidate.startswith(os.path.normcase(root_with_sep))
-            )
-
-            if not is_within_root:
-                current_app.logger.warning(f"Path outside DOCS_ROOT: {untrusted_path}")
-                abort(404)
+            if selected_candidate is None:
+                selected_candidate = candidates[0].resolve(strict=False)
 
             # Path has been validated through multiple layers:
             # 1. Earlier regex validation of the docs path blocks suspicious characters
             # 2. The component check in this function blocks absolute paths and '..' traversal
             # 3. The resolved path verification above ensures containment within the docs root
-            return candidate
+            return selected_candidate
 
         # Ensure we have a safe, absolute docs root
         try:
@@ -320,19 +394,12 @@ def view_doc(doc_path):
         # Convert markdown to HTML (with sanitization)
         html_content, toc = render_markdown_content(body, toc_title=doc_title)
 
-        # Determine category and page from path
+        # Determine category from path
         path_parts = Path(doc_path).parts
-        category = None
-        page = None
-        if path_parts:
-            # First segment is the category
-            category = path_parts[0]
-            # Remaining segments (if any) form the page path
-            if len(path_parts) > 1:
-                page = "/".join(path_parts[1:])
+        category = path_parts[0] if path_parts else None
 
         # Build breadcrumbs
-        breadcrumbs = build_breadcrumbs(category, page)
+        breadcrumbs = build_breadcrumbs(doc_path, docs_root)
 
         # Get related articles if specified in front matter
         related_articles = []
@@ -364,6 +431,8 @@ def view_doc(doc_path):
         elif session.get('is_system_admin'):
             user_role = 'sysadmin'
 
+        audience = get_docs_audience()
+        
         return render_template_with_fallback(
             'docs/view.html',
             content=html_content,
@@ -376,6 +445,7 @@ def view_doc(doc_path):
             related=related_articles,
             user_role=user_role,
             doc_path=doc_path,
+            audience=audience,
         )
 
     except HTTPException:
@@ -402,9 +472,10 @@ def search():
     - description: "..." - Used for search context and relevance
     """
     query = request.args.get('q', '').strip()
+    audience = get_docs_audience()
 
     if not query:
-        return render_template_with_fallback('docs/search.html', query='', results=[])
+        return render_template_with_fallback('docs/search.html', query='', results=[], audience=audience)
 
     results = []
     query_lower = query.lower()
@@ -423,11 +494,25 @@ def search():
 
                 rel_path = doc_file.relative_to(DOCS_ROOT)
 
+                # Enforce audience context directory filtering
+                top_dir_raw = rel_path.parts[0] if rel_path.parts else ''
+                top_dir = top_dir_raw.lower()
+                
                 # Skip excluded directories (internal docs)
-                if rel_path.parts and rel_path.parts[0] in EXCLUDED_DIRECTORIES:
+                if top_dir in EXCLUDED_DIRECTORIES:
                     continue
                 if 'ai' in rel_path.parts:
                     continue
+                    
+                # Strict audience isolation
+                if audience == 'user':
+                    # User audience can ONLY see user-guides
+                    if top_dir_raw != 'user-guides':
+                        continue
+                else:
+                    # DevOps audience can see everything EXCEPT user-guides
+                    if top_dir_raw == 'user-guides':
+                        continue
 
                 content = doc_file.read_text(encoding='utf-8')
                 metadata, body = parse_front_matter(content)
@@ -510,7 +595,10 @@ def search():
                     category = 'Other'
                     if rel_path.parts:
                         category_key = rel_path.parts[0]
-                        category = CATEGORY_MAP.get(category_key, category_key.replace('-', ' ').title())
+                        category = CATEGORY_MAP.get(
+                            category_key,
+                            CATEGORY_MAP.get(category_key.lower(), category_key.replace('-', ' ').replace('_', ' ').title())
+                        )
 
                     results.append({
                         'title': title,
@@ -538,5 +626,6 @@ def search():
     return render_template_with_fallback(
         'docs/search.html',
         query=query,
-        results=results
+        results=results,
+        audience=audience
     )

@@ -608,7 +608,7 @@ Use analytics to test:
 ## Related Documentation
 
 - [Economy Design Guide](../../economy_guide.md) - Designing balanced economies
-- [CWI Calculator](../../../technical-reference/economy-specification.md) - How CWI is calculated
+- [CWI Calculator](../../../DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification.md) - How CWI is calculated
 - [Teacher Manual](../../teacher_manual.md) - Complete teacher guide
 
 ---

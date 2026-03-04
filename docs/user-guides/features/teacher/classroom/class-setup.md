@@ -37,5 +37,5 @@ The roster fields you enter are the exact values students must use to claim acco
 If a student cannot join, confirm the join code and confirm their roster details match exactly.
 
 ## Related guides
-- [Student Management Overview](/docs/user-guides/features/teacher/classroom/students-overview)
-- [Join or Add a Class (Student)](/docs/user-guides/features/student/account/join-class)
+- [Student Management Overview](students-overview.md)
+- [Join or Add a Class (Student)](../../student/account/join-class.md)
