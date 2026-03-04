@@ -19,7 +19,7 @@ import hashlib
 from calendar import monthrange
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from app.utils.time import utc_now, ensure_utc
+from app.utils.time import utc_now, ensure_utc, local_date_end_utc, local_date_bounds_utc, UTC_MIN
 from decimal import Decimal, InvalidOperation
 
 from flask import (
@@ -2131,9 +2131,7 @@ def recovery_status():
         return redirect(url_for('admin.recover'))
 
     # Check if expired (handle timezone-naive datetimes from SQLite)
-    expires_at = recovery_request.expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    expires_at = ensure_utc(recovery_request.expires_at)
     if expires_at < utc_now():
         recovery_request.status = 'expired'
         db.session.commit()
@@ -4092,16 +4090,10 @@ def add_manual_student():
 # -------------------- STORE MANAGEMENT --------------------
 
 def _end_of_day_utc(date_obj):
-    """Convert a date to 23:59:59 UTC, or return None when empty."""
+    """Convert a local date to end-of-day UTC using effective teacher timezone."""
     if not date_obj:
         return None
-    return datetime(
-        date_obj.year,
-        date_obj.month,
-        date_obj.day,
-        23, 59, 59,
-        tzinfo=timezone.utc,
-    )
+    return local_date_end_utc(date_obj)
 
 
 @admin_bp.route('/store', methods=['GET', 'POST'])
@@ -4313,13 +4305,16 @@ def store_management():
         live_query = live_query.filter(RedemptionAuditLog.action == parsed_audit_action)
     if audit_start_date:
         try:
-            start_dt = datetime.strptime(audit_start_date, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+            start_day = datetime.strptime(audit_start_date, '%Y-%m-%d').date()
+            start_dt, _ = local_date_bounds_utc(start_day)
             live_query = live_query.filter(RedemptionAuditLog.timestamp >= start_dt)
         except ValueError:
             flash("Invalid audit start date format. Please use YYYY-MM-DD.", "warning")
     if audit_end_date:
         try:
-            end_dt = datetime.strptime(audit_end_date, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1)
+            end_day = datetime.strptime(audit_end_date, '%Y-%m-%d').date()
+            _, end_dt = local_date_bounds_utc(end_day)
+            end_dt = end_dt + timedelta(seconds=1)
             live_query = live_query.filter(RedemptionAuditLog.timestamp < end_dt)
         except ValueError:
             flash("Invalid audit end date format. Please use YYYY-MM-DD.", "warning")
@@ -4383,14 +4378,17 @@ def store_management():
             continue
         if audit_start_date:
             try:
-                start_dt = datetime.strptime(audit_start_date, '%Y-%m-%d').replace(tzinfo=timezone.utc)
+                start_day = datetime.strptime(audit_start_date, '%Y-%m-%d').date()
+                start_dt, _ = local_date_bounds_utc(start_day)
                 if not row['timestamp'] or ensure_utc(row['timestamp']) < start_dt:
                     continue
             except ValueError:
                 pass
         if audit_end_date:
             try:
-                end_dt = datetime.strptime(audit_end_date, '%Y-%m-%d').replace(tzinfo=timezone.utc) + timedelta(days=1)
+                end_day = datetime.strptime(audit_end_date, '%Y-%m-%d').date()
+                _, end_dt = local_date_bounds_utc(end_day)
+                end_dt = end_dt + timedelta(seconds=1)
                 if not row['timestamp'] or ensure_utc(row['timestamp']) >= end_dt:
                     continue
             except ValueError:
@@ -4408,7 +4406,7 @@ def store_management():
     } for row in live_rows]
 
     audit_rows_all = live_serialized + inferred_rows
-    audit_rows_all.sort(key=lambda r: ensure_utc(r['timestamp']) if r['timestamp'] else datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+    audit_rows_all.sort(key=lambda r: ensure_utc(r['timestamp']) if r['timestamp'] else UTC_MIN, reverse=True)
 
     audit_total = len(audit_rows_all)
     audit_total_pages = max(1, math.ceil(audit_total / audit_per_page)) if audit_total else 1
@@ -5881,16 +5879,14 @@ def process_claim(claim_id):
     def _claim_base_amount(target_claim):
         if claim_type == 'transaction_monetary' and target_claim.transaction:
             return abs(target_claim.transaction.amount)
-        return target_claim.claim_amount or 0.0
+        return target_claim.claim_amount or Decimal('0.00')
 
     # Validate claim
     validation_errors = []
 
     # Check if coverage has started (past waiting period)
     # Ensure timezone-aware comparison
-    coverage_start = enrollment.coverage_start_date
-    if coverage_start and coverage_start.tzinfo is None:
-        coverage_start = coverage_start.replace(tzinfo=timezone.utc)
+    coverage_start = ensure_utc(enrollment.coverage_start_date)
 
     if not coverage_start or coverage_start > utc_now():
         validation_errors.append("Coverage has not started yet (still in waiting period)")
@@ -5961,9 +5957,7 @@ def process_claim(claim_id):
             validation_errors.append(reason_to_message.get(reason_code, "Linked transaction is not eligible"))
 
     incident_reference = claim.transaction.timestamp if claim_type == 'transaction_monetary' and claim.transaction else claim.incident_date
-    # Ensure timezone-aware comparison
-    if incident_reference and incident_reference.tzinfo is None:
-        incident_reference = incident_reference.replace(tzinfo=timezone.utc)
+    incident_reference = ensure_utc(incident_reference)
     days_since_incident = (utc_now() - incident_reference).days if incident_reference else 0
     if claim_time_limit_days is not None and days_since_incident > claim_time_limit_days:
         validation_errors.append(f"Claim filed too late ({days_since_incident} days after incident, limit is {claim_time_limit_days} days)")
@@ -5989,10 +5983,10 @@ def process_claim(claim_id):
             InsuranceClaim.processed_date <= period_end,
             InsuranceClaim.approved_amount.isnot(None),
             InsuranceClaim.id != claim.id,
-        ).scalar() or 0.0
+        ).scalar() or Decimal('0.00')
 
         requested_amount = _claim_base_amount(claim)
-        remaining_period_cap = max(max_payout_per_period - period_payouts, 0)
+        remaining_period_cap = max(max_payout_per_period - period_payouts, Decimal('0.00'))
         if remaining_period_cap is not None and requested_amount > remaining_period_cap and claim_type != 'non_monetary':
             validation_errors.append(
                 f"Maximum payout limit would be exceeded (${period_payouts:.2f} paid + ${requested_amount:.2f} requested > ${max_payout_per_period:.2f} limit per {max_claims_period})"
@@ -6034,7 +6028,7 @@ def process_claim(claim_id):
             base_amount = _claim_base_amount(claim)
             approved_amount = base_amount
             if claim_type == 'legacy_monetary' and form.approved_amount.data is not None:
-                approved_amount = form.approved_amount.data
+                approved_amount = Decimal(str(form.approved_amount.data))
 
             if max_claim_amount:
                 approved_amount = min(approved_amount, max_claim_amount)
@@ -6791,8 +6785,7 @@ def payroll():
     last_payroll_time = get_last_payroll_time()
 
     # Normalize to UTC to avoid any naive/aware mismatches downstream
-    if last_payroll_time and last_payroll_time.tzinfo is None:
-        last_payroll_time = last_payroll_time.replace(tzinfo=timezone.utc)
+    last_payroll_time = ensure_utc(last_payroll_time)
 
 
     now_utc = utc_now()
@@ -6959,7 +6952,7 @@ def payroll():
             'unpaid_minutes': int(unpaid_minutes),
             'estimated_payout': estimated_payout,
             'last_payroll_date': last_payroll_map.get(student.id),
-            'total_earned': earnings_map.get(student.id, 0.0)
+            'total_earned': earnings_map.get(student.id, Decimal('0.00'))
         })
 
     # Get rewards and fines for this teacher
@@ -7750,7 +7743,7 @@ def payroll_manual_payment():
 
                     join_code = teacher_block.join_code if teacher_block else None
 
-                    shortfall = 0.0
+                    shortfall = Decimal('0.00')
                     if account_type == 'checking' and amount < 0:
                         allowed, shortfall, _, _ = evaluate_overdraft_allowance(
                             student,
@@ -8717,6 +8710,8 @@ def banking():
 @admin_required
 def banking_settings_update():
     """Update banking settings for a specific class or all classes."""
+    from app.models import _quantize_currency
+
     admin_id = session.get("admin_id")
     form = BankingSettingsForm()
 
@@ -8736,8 +8731,8 @@ def banking_settings_update():
                 db.session.add(settings)
 
             # Update settings from form
-            settings.savings_apy = form.savings_apy.data or 0.0
-            settings.savings_monthly_rate = form.savings_monthly_rate.data or 0.0
+            settings.savings_apy = Decimal(str(form.savings_apy.data or 0)).quantize(Decimal('0.000001'))
+            settings.savings_monthly_rate = Decimal(str(form.savings_monthly_rate.data or 0)).quantize(Decimal('0.000001'))
             settings.interest_calculation_type = form.interest_calculation_type.data or 'simple'
             settings.compound_frequency = form.compound_frequency.data or 'monthly'
             settings.interest_schedule_type = form.interest_schedule_type.data
@@ -8746,11 +8741,15 @@ def banking_settings_update():
             settings.overdraft_protection_enabled = form.overdraft_protection_enabled.data
             settings.overdraft_fee_enabled = form.overdraft_fee_enabled.data
             settings.overdraft_fee_type = form.overdraft_fee_type.data
-            settings.overdraft_fee_flat_amount = form.overdraft_fee_flat_amount.data or 0.0
-            settings.overdraft_fee_progressive_1 = form.overdraft_fee_progressive_1.data or 0.0
-            settings.overdraft_fee_progressive_2 = form.overdraft_fee_progressive_2.data or 0.0
-            settings.overdraft_fee_progressive_3 = form.overdraft_fee_progressive_3.data or 0.0
-            settings.overdraft_fee_progressive_cap = form.overdraft_fee_progressive_cap.data
+            settings.overdraft_fee_flat_amount = _quantize_currency(form.overdraft_fee_flat_amount.data or Decimal('0.00'))
+            settings.overdraft_fee_progressive_1 = _quantize_currency(form.overdraft_fee_progressive_1.data or Decimal('0.00'))
+            settings.overdraft_fee_progressive_2 = _quantize_currency(form.overdraft_fee_progressive_2.data or Decimal('0.00'))
+            settings.overdraft_fee_progressive_3 = _quantize_currency(form.overdraft_fee_progressive_3.data or Decimal('0.00'))
+            settings.overdraft_fee_progressive_cap = (
+                _quantize_currency(form.overdraft_fee_progressive_cap.data)
+                if form.overdraft_fee_progressive_cap.data is not None
+                else None
+            )
             settings.updated_at = utc_now()
 
         try:

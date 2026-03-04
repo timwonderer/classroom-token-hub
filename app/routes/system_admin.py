@@ -16,7 +16,7 @@ import sqlalchemy as sa
 import qrcode
 import requests
 from datetime import datetime, timedelta, timezone
-from app.utils.time import utc_now
+from app.utils.time import utc_now, ensure_utc
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app, jsonify, Response
@@ -130,8 +130,7 @@ def auth_check():
     last_activity_str = session.get("last_activity")
     if last_activity_str:
         last_activity = datetime.fromisoformat(last_activity_str)
-        if last_activity.tzinfo is None:
-            last_activity = last_activity.replace(tzinfo=timezone.utc)
+        last_activity = ensure_utc(last_activity)
         if (utc_now() - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
             session.pop("is_system_admin", None)
             session.pop("sysadmin_id", None)
@@ -1066,8 +1065,7 @@ def manage_teachers():
         is_inactive = False
         if teacher.last_login:
             last_login = teacher.last_login
-            if last_login.tzinfo is None:
-                last_login = last_login.replace(tzinfo=timezone.utc)
+            last_login = ensure_utc(last_login)
             is_inactive = last_login < inactivity_threshold
         else:
             is_inactive = True
@@ -1183,8 +1181,7 @@ def teacher_overview():
         if teacher.last_login:
             # Ensure last_login is timezone-aware
             last_login = teacher.last_login
-            if last_login.tzinfo is None:
-                last_login = last_login.replace(tzinfo=timezone.utc)
+            last_login = ensure_utc(last_login)
             is_inactive = last_login < inactivity_threshold
         else:
             # Never logged in - consider inactive
@@ -1479,8 +1476,7 @@ def grafana_auth_check():
     last_activity_str = session.get("last_activity")
     if last_activity_str:
         last_activity = datetime.fromisoformat(last_activity_str)
-        if last_activity.tzinfo is None:
-            last_activity = last_activity.replace(tzinfo=timezone.utc)
+        last_activity = ensure_utc(last_activity)
         if (utc_now() - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
             session.clear()
             return Response('Unauthorized: Session expired', 401)

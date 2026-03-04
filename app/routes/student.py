@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 
-from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app
+from flask import Blueprint, redirect, url_for, flash, request, session, jsonify, current_app, has_app_context
 from sqlalchemy import or_, func, select, and_
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -53,7 +53,7 @@ from app.utils.store import process_expired_collective_goals
 from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
 from app.attendance import get_all_block_statuses
 from app.payroll import get_pay_rate_for_block
-from app.utils.time import utc_now, ensure_utc, normalize_for_db
+from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone
 from app.utils.insurance_eligibility import (
     evaluate_claim_transaction_eligibility,
     collect_reimbursed_source_tx_ids,
@@ -2664,28 +2664,72 @@ def _charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, 
     )
 
 
+def _get_rent_timezone(settings):
+    """
+    Return the server-side timezone used for rent schedule semantics.
+
+    This intentionally avoids session/client timezone so browser locale changes
+    do not change due-date boundaries.
+    """
+    tz_name = getattr(settings, "timezone", None)
+    if not tz_name and has_app_context():
+        tz_name = current_app.config.get("DEFAULT_TIMEZONE")
+    return get_timezone(tz_name)
+
+
 def _calculate_rent_deadlines(settings, reference_date=None):
     """Return the due date and grace end date for the active month."""
     reference_date = ensure_utc(reference_date) if reference_date else utc_now()
+    teacher_tz = _get_rent_timezone(settings)
+    reference_local = reference_date.astimezone(teacher_tz)
+
+    def _local_due_to_utc(
+        year: int,
+        month: int,
+        day: int,
+        hour: int = 0,
+        minute: int = 0,
+        second: int = 0,
+    ) -> datetime:
+        local_due = teacher_tz.localize(datetime(year, month, day, hour, minute, second))
+        return local_due.astimezone(timezone.utc)
 
     # If first_rent_due_date is set and we haven't reached it yet, return it
     if settings.first_rent_due_date:
         first_due = ensure_utc(settings.first_rent_due_date)
+        first_due_local = first_due.astimezone(teacher_tz) if first_due else None
+        if (
+            first_due
+            and first_due.hour == 0
+            and first_due.minute == 0
+            and first_due.second == 0
+            and first_due.microsecond == 0
+        ):
+            # Preserve legacy day-only anchors that were stored as UTC midnight.
+            first_due_local = teacher_tz.localize(datetime(first_due.year, first_due.month, first_due.day, 0, 0, 0))
+            first_due = first_due_local.astimezone(timezone.utc)
         # If we're before the first due date, return the first due date
-        if reference_date < first_due:
+        if first_due_local and reference_local < first_due_local:
             grace_end_date = first_due + timedelta(days=settings.grace_period_days)
             return first_due, grace_end_date
 
         # Calculate due date based on frequency from first_rent_due_date
         if settings.frequency_type == 'monthly':
             # Calculate how many months have passed since first due date
-            months_diff = (reference_date.year - first_due.year) * 12 + (reference_date.month - first_due.month)
+            months_diff = (reference_local.year - first_due_local.year) * 12 + (reference_local.month - first_due_local.month)
             # Calculate the due date for the current period
-            target_year = first_due.year + (first_due.month + months_diff - 1) // 12
-            target_month = (first_due.month + months_diff - 1) % 12 + 1
+            target_year = first_due_local.year + (first_due_local.month + months_diff - 1) // 12
+            target_month = (first_due_local.month + months_diff - 1) % 12 + 1
             last_day_of_month = monthrange(target_year, target_month)[1]
-            due_day = min(first_due.day, last_day_of_month)
-            due_date = datetime(target_year, target_month, due_day, tzinfo=timezone.utc)
+            due_day = min(first_due_local.day, last_day_of_month)
+            due_date = _local_due_to_utc(
+                target_year,
+                target_month,
+                due_day,
+                first_due_local.hour,
+                first_due_local.minute,
+                first_due_local.second,
+            )
         else:
             # Calculate due date based on frequency
             freq_delta = None
@@ -2701,19 +2745,26 @@ def _calculate_rent_deadlines(settings, reference_date=None):
                 elif settings.custom_frequency_unit == 'months':
                     # Custom monthly logic (Every X months)
                     # Calculate how many months have passed since first due date
-                    months_diff = (reference_date.year - first_due.year) * 12 + (reference_date.month - first_due.month)
+                    months_diff = (reference_local.year - first_due_local.year) * 12 + (reference_local.month - first_due_local.month)
 
                     # Calculate the number of full periods passed
                     # We use integer division to find the start of the current cycle
                     periods = months_diff // settings.custom_frequency_value
                     total_months_add = periods * settings.custom_frequency_value
 
-                    target_year = first_due.year + (first_due.month + total_months_add - 1) // 12
-                    target_month = (first_due.month + total_months_add - 1) % 12 + 1
+                    target_year = first_due_local.year + (first_due_local.month + total_months_add - 1) // 12
+                    target_month = (first_due_local.month + total_months_add - 1) % 12 + 1
 
                     last_day_of_month = monthrange(target_year, target_month)[1]
-                    due_day = min(first_due.day, last_day_of_month)
-                    due_date = datetime(target_year, target_month, due_day, tzinfo=timezone.utc)
+                    due_day = min(first_due_local.day, last_day_of_month)
+                    due_date = _local_due_to_utc(
+                        target_year,
+                        target_month,
+                        due_day,
+                        first_due_local.hour,
+                        first_due_local.minute,
+                        first_due_local.second,
+                    )
 
             if freq_delta:
                 # Calculate periods passed for fixed time deltas
@@ -2730,19 +2781,19 @@ def _calculate_rent_deadlines(settings, reference_date=None):
                 use_fallback = True
 
             if use_fallback:
-                current_year = reference_date.year
-                current_month = reference_date.month
+                current_year = reference_local.year
+                current_month = reference_local.month
                 last_day_of_month = monthrange(current_year, current_month)[1]
                 due_day = min(settings.due_day_of_month, last_day_of_month)
-                due_date = datetime(current_year, current_month, due_day, tzinfo=timezone.utc)
+                due_date = _local_due_to_utc(current_year, current_month, due_day)
 
     else:
         # No first_rent_due_date set, use traditional monthly logic
-        current_year = reference_date.year
-        current_month = reference_date.month
+        current_year = reference_local.year
+        current_month = reference_local.month
         last_day_of_month = monthrange(current_year, current_month)[1]
         due_day = min(settings.due_day_of_month, last_day_of_month)
-        due_date = datetime(current_year, current_month, due_day, tzinfo=timezone.utc)
+        due_date = _local_due_to_utc(current_year, current_month, due_day)
 
     grace_end_date = due_date + timedelta(days=settings.grace_period_days)
     return due_date, grace_end_date
@@ -2968,8 +3019,10 @@ def _calculate_rent_coverage_due_date(settings, reference_date=None):
     # For monthly settings without a first_rent_due_date, compute the prior
     # month explicitly to preserve the configured day-of-month.
     if settings.frequency_type == 'monthly' and not settings.first_rent_due_date:
-        prev_year = current_due_date.year
-        prev_month = current_due_date.month - 1
+        teacher_tz = _get_rent_timezone(settings)
+        current_due_local = ensure_utc(current_due_date).astimezone(teacher_tz)
+        prev_year = current_due_local.year
+        prev_month = current_due_local.month - 1
         if prev_month == 0:
             prev_month = 12
             prev_year -= 1
@@ -2977,7 +3030,8 @@ def _calculate_rent_coverage_due_date(settings, reference_date=None):
         _, last_day = monthrange(prev_year, prev_month)
         due_day = settings.due_day_of_month or last_day
         due_day = min(due_day, last_day)
-        return datetime(prev_year, prev_month, due_day, tzinfo=timezone.utc)
+        previous_due_local = teacher_tz.localize(datetime(prev_year, prev_month, due_day, current_due_local.hour, current_due_local.minute, current_due_local.second))
+        return previous_due_local.astimezone(timezone.utc)
 
     delta = _get_rent_period_delta(settings)
     return current_due_date - delta
@@ -3746,16 +3800,12 @@ def demo_login(session_id):
             expires_at = now + timedelta(minutes=10)
             demo_session.expires_at = expires_at
             db.session.commit()
-        elif expires_at.tzinfo is None:
-            # Treat naive timestamps as being in the admin's timezone (or fallback to UTC), then normalize to UTC
-            tz_name = session.get('timezone') or 'UTC'
-            try:
-                local_tz = pytz.timezone(tz_name)
-                expires_at = local_tz.localize(expires_at).astimezone(timezone.utc)
-            except Exception:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            demo_session.expires_at = expires_at
-            db.session.commit()
+        else:
+            normalized_expires_at = ensure_utc(expires_at, naive_tz_name=session.get('timezone'))
+            if normalized_expires_at != expires_at:
+                expires_at = normalized_expires_at
+                demo_session.expires_at = expires_at
+                db.session.commit()
 
         if expires_at and now > expires_at:
             # Mark as inactive and cleanup
@@ -4138,9 +4188,7 @@ def verify_recovery(code_id):
 
     # Check if expired
     # Handle timezone naive/aware comparison for SQLite/Test
-    expires_at = recovery_code.recovery_request.expires_at
-    if expires_at and expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    expires_at = ensure_utc(recovery_code.recovery_request.expires_at)
 
     if expires_at < utc_now():
         flash("This recovery request has expired.", "error")

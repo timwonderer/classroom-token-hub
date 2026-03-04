@@ -5,8 +5,8 @@ Contains session management helpers, authentication decorators, and timeout logi
 """
 
 import urllib.parse
-from datetime import datetime, timedelta, timezone
-from app.utils.time import utc_now
+from datetime import datetime, timedelta
+from app.utils.time import utc_now, ensure_utc
 from functools import wraps
 
 import sqlalchemy as sa
@@ -141,11 +141,7 @@ def login_required(f):
 
                 expires_at = None
                 if demo_session and isinstance(demo_session.expires_at, datetime):
-                    if demo_session.expires_at.tzinfo is None:
-                        # Treat naive timestamps as UTC to avoid shifting into earlier local time
-                        expires_at = demo_session.expires_at.replace(tzinfo=timezone.utc)
-                    else:
-                        expires_at = demo_session.expires_at
+                    expires_at = ensure_utc(demo_session.expires_at)
                 else:
                     # If missing/invalid, refresh expiry window to prevent false expirations mid-redirect
                     expires_at = now + timedelta(minutes=10)
