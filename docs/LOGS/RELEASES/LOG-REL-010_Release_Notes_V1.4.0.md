@@ -447,7 +447,7 @@ After upgrading to v1.4.0, test the following:
 
 - [Full Changelog](../../../CHANGELOG.md#140---2025-12-27)
 - [Version 1.3.0 Release Notes](LOG-REL-009_Release_Notes_V1.3.0.md)
-- [Project README](../../README.md)
+- [Documentation Index](../../README.md)
 - [Development Priorities](../../../DEVELOPMENT.md)
 
 ---
