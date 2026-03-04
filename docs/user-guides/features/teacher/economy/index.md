@@ -18,6 +18,7 @@ This section groups all teacher economy tools in one place.
 ## Payroll
 - [Payroll Settings](payroll-settings.md)
 - [Run Payroll](payroll-run.md)
+- [Payroll Adjustments](payroll-adjustments.md)
 - [Payroll History](payroll-history.md)
 
 ## Store

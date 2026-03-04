@@ -20,6 +20,7 @@ Use this guide to price store items effectively so rewards feel achievable witho
 ### Establishing Prices
 1. Navigate to **Economy > Store** to create or edit items.
 2. Calculate your Classroom Wage Index (CWI) to establish a baseline of what an average student earns per week.
+   - **CWI Formula:** Sum of all student earnings ÷ Number of weeks = Average weekly earning per student
 3. Keep basic, frequent rewards highly affordable (e.g., a small percentage of weekly CWI).
 4. Reserve premium prices for high-value or rare items that require long-term saving.
 5. Save your pricing changes.
