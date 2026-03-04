@@ -11,14 +11,19 @@ related:
 
 # Passkey and Login Security
 
-Use Passkey settings to strengthen login security.
+## Overview
+Passkeys offer a secure, passwordless way to authenticate your teacher account using your device's built-in biometrics or security pin.
 
-## Where to work
-Go to **Settings > Passkey**.
+## Step-by-Step Instructions
 
-## What you can do
-- Register a passkey for fast sign-in.
-- Remove old passkeys you no longer use.
+### Managing Passkeys
+1. Navigate to **Settings > Passkey** in the teacher sidebar.
+2. To add a new device (like a laptop or phone), select **Register New Passkey** and follow your browser's security prompts.
+3. To remove access from an old or lost device, find it in the list of registered passkeys and click **Delete**.
+
+## Important Notes
+> [!IMPORTANT]
+> **Redundancy:** Always attempt to register at least two passkeys (e.g., your phone and your primary computer) to ensure you are not locked out if one device breaks.
 
 ## Related guides
-- [Teacher Login Diagnostics](../../../diagnostics/teacher-login.md)
+- [Teacher Login Diagnostics](../../../diagnostics/teacher/login.md)

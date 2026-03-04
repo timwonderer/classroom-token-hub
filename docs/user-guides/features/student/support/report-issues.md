@@ -12,47 +12,38 @@ related:
 
 # Report Issues
 
-If you find a bug, a mistake in your balance, or have trouble with a purchase, you can report it directly to your teacher through the Help & Support page.
+## Overview
+If you find a platform bug, discover a mistake in your balance, or have trouble with a store purchase, you can report it directly to your teacher via the Issue Resolution System.
 
-## Where to work
-Go to **Help and Support** from the student sidebar.
+## Step-by-Step Instructions
 
-## Types of Issues
-You can report two main types of issues:
-
-1.  **Transaction Issues:** Something wrong with a specific charge or deposit (e.g., "I was charged twice for a pencil").
-2.  **General Issues:** Problems not tied to a specific transaction (e.g., "I can't log in on my phone", "My total balance is wrong").
-
-## How to Report
-
-### Reporting a Transaction Issue
-The best way to report a money problem is from the transaction list itself:
-
-1.  Go to **Banking**.
-2.  Find the transaction that is wrong.
-3.  Click the **Report Issue** (flag) icon next to it.
-4.  This automatically attaches the transaction details to your report.
-5.  Explain clearly what is wrong.
+### Reporting a Transaction Issue (Recommended)
+If your issue is about a specific charge or deposit:
+1. Navigate to **Accounts** from the student sidebar and scroll to your Transactions.
+2. Locate the problematic transaction in the list.
+3. Click the **Report Issue** (flag) icon next to it. *This automatically attaches the transaction details to your report.*
+4. Describe exactly why the transaction is incorrect and click **Submit**.
 
 ### Reporting a General Issue
-1.  Go to **Help and Support**.
-2.  Click **Report an Issue**.
-3.  Choose a category (e.g., "Login Problem", "Store Purchase", "Other").
-4.  Describe the problem in detail. Include what you were doing when it happened.
+If your issue is general (e.g., "The store won't load"):
+1. Navigate to **Help and Support** from the student sidebar.
+2. Click **Report an Issue**.
+3. Choose the most relevant category from the dropdown menu.
+4. Describe the problem in detail (include what you were trying to do when it happened), then submit.
 
-## What Happens Next?
-After you submit a report, you can track its status on the **Help & Support** page:
+### Tracking Your Issue Status
+1. Return to the **Help and Support** page to view your active reports.
+2. **Pending:** Your teacher has received the report.
+3. **Escalated:** Your teacher has sent the report to the System Administrator because they suspect it is a technical bug.
+4. **Resolved:** The issue is closed. Click to read any resolution notes left by your teacher.
 
-- **Teacher Review:** Your teacher has received the report and is looking at it.
-- **Resolved:** Your teacher has fixed the issue or answered your question. Check their notes for details.
-- **Elevated / Developer Review:** Your teacher sent the issue to the system administrator (developer) because it looks like a technical bug.
-- **Resolved (Dev):** The developer fixed the technical issue. Check with your teacher if you need further help.
+## Important Notes
+> [!IMPORTANT]
+> **Be Specific:** A report saying "It doesn't work" is very difficult to fix. Always be specific: "When I click the 'Buy' button on the Blue Pencil, the screen freezes."
 
-## Tips for Getting Help Faster
-- **Be Specific:** "It doesn't work" is hard to fix. Say "When I click the 'Buy' button on the Blue Pencil, nothing happens."
-- **Check Recent Activity:** Before reporting a missing deposit, check your **Recent Activity** list to see if it's just delayed.
-- **Don't Spam:** Submitting the same issue multiple times slows down the fix.
+> [!NOTE]
+> **No duplicate reports:** Submitting the exact same issue multiple times will not get it fixed faster and may confuse your teacher. If the status is "Pending", they are aware of it.
 
 ## Related guides
-- [Student Support Diagnostics](../../../diagnostics/student-support.md)
+- [Student Support Diagnostics](../../../diagnostics/student/support.md)
 - [Teacher Guide: Student Issues Queue](../../teacher/classroom/student-issues.md)

@@ -7,24 +7,22 @@ description: Configure savings interest type, rate, and payout cadence.
 keywords: [interest, savings, payout]
 related:
   - user-guides/features/teacher/economy/banking-settings
-  - user-guides/features/banking/managing-banking
 ---
 
 # Interest and Payouts
 
-Interest settings control how savings grow for students.
+## Overview
+Interest settings control how savings accounts grow for students over time. Configuring these settings allows you to teach concepts like compound interest and long-term saving strategies.
 
-## Where to work
-Go to **Economy > Banking**.
+## Step-by-Step Instructions
 
-## Key settings
-- Interest type (simple or compound).
-- Savings APY or rate.
-- Payout interval (weekly, monthly, etc.).
+### Configuring Interest
+1. Navigate to **Economy > Banking** in the teacher sidebar.
+2. Under the Interest section, select the **Interest type** (Simple or Compound).
+3. Set the **Savings APY or Rate** percentage.
+4. Choose the **Payout interval** (e.g., weekly, monthly) determining how often the interest is calculated and deposited.
+5. Save your changes to apply the new interest rules to all student savings accounts.
 
-## Tips
-Keep rates modest and review the economy balance after changes.
-
-## Related guides
-- [Banking Settings](banking-settings.md)
-- [Managing Banking (Detailed)](../../banking/managing-banking.md)
+## Important Notes
+> [!TIP]
+> **Keep rates modest:** High compounding interest rates can rapidly inflate a classroom economy. Start small and review the economy balance via the Analytics Dashboard after making changes.

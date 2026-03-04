@@ -12,18 +12,20 @@ related:
 
 # Economy Health
 
-Economy Health summarizes whether wages, prices, and bills are balanced.
+## Overview
+The Economy Health page provides a diagnostic summary of whether wages, prices, and bills are balanced within your classroom.
 
-## Where to work
-Go to **Economy > Economy Health**.
+## Step-by-Step Instructions
 
-## What to look for
-- Wage and spending balance across your class.
-- Affordability signals for rent, insurance, and store prices.
-- Trends that suggest inflation or deflation.
+### Checking Economy Health
+1. Navigate to **Economy > Economy Health** in the teacher sidebar.
+2. Review the **Wage and Spending Balance** graph to see if students earn enough to cover their living expenses.
+3. Check the **Affordability Signals** section to evaluate the mathematical balance of your rent prices, insurance costs, and store item prices against the average base salary.
+4. If the page indicates an imbalance, refer to the [Classroom Economy Guide](../../../economy_guide.md) for recommended ranges to adjust your values.
 
-## Improve balance
-Use the Classroom Economy Guide for recommended ranges and quick checks.
+## Important Notes
+> [!TIP]
+> **Check frequently:** Regular checks of the Economy Health page can help you spot economic imbalances before they impact student motivation.
 
 ## Related guides
 - [Classroom Economy Guide](../../../economy_guide.md)

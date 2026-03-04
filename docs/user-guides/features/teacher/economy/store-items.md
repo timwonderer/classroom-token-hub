@@ -12,26 +12,30 @@ related:
 
 # Store Items
 
-Use Store Management to add, edit, and organize items students can redeem.
+## Overview
+The Store allows you to add, edit, and organize items or privileges that students can redeem with their earned economy balance.
 
-## Where to work
-Go to **Economy > Store** and open **Add New Item** or **Manage Items**.
+## Step-by-Step Instructions
 
-## Core item settings
-- Name and description students will see.
-- Price and tier for your pricing structure.
-- Item type for immediate or delayed redemption.
-- Active status to show or hide the item.
-- Class visibility to limit items to specific periods.
+### Creating a New Store Item
+1. Navigate to **Economy > Store** in the teacher sidebar.
+2. Click on **Add New Item**.
+3. Fill out the core item settings:
+   - Name and description students will see.
+   - Price and tier for your pricing structure.
+   - Item type (e.g., immediate or delayed redemption).
+   - Set the item to **Active** to make it visible.
+   - Limit visibility to specific class periods if necessary.
+4. Configure limits and constraints:
+   - **Inventory caps** limit the total number of times the item can be purchased globally.
+   - **Per-student limits** cap repeat redemptions by a single user.
+   - **Expiry or auto delist** automatically removes the item from the store after a specific date.
+5. Save the item to publish it to the student store.
 
-## Limits and constraints
-- Inventory caps limit total redemptions.
-- Per-student limits cap repeat redemptions.
-- Expiry or auto delist removes items after a date.
-
-## Best practice
-Keep prices aligned to your Classroom Wage Index so rewards feel achievable.
+## Important Notes
+> [!TIP]
+> **Pricing Strategy:** Keep prices aligned to your Classroom Wage Index so rewards feel achievable but not completely trivial.
 
 ## Related guides
 - [Store Redemptions](store-redemptions.md)
-- [Teacher Store Diagnostics](../../../diagnostics/teacher-store.md)
+- [Teacher Store Diagnostics](../../../diagnostics/teacher/store.md)

@@ -12,19 +12,21 @@ related:
 
 # Fix Attendance Errors
 
-Use this guide when attendance records are missing or incorrect.
+## Overview
+Use this guide when attendance records are missing, incomplete, or incorrect. Fixing these errors ensures accurate payroll calculations.
 
-## Where to work
-Go to **Classroom > Attendance**.
+## Step-by-Step Instructions
 
-## Common fixes
-- Expand the date range and clear filters.
-- Verify the student has both a Start Work and Break or Done tap.
-- If a session is left open too long, close it using the attendance log tools.
+### Locating and Fixing Common Errors
+1. Navigate to **Classroom > Attendance** in the teacher sidebar.
+2. Expand the date range and clear filters to locate the specific student's record.
+3. Verify the student has both a **Start Work** tap and a corresponding **Break** or **Done** tap.
+4. If a session was left open too long (e.g., student forgot to clock out), use the attendance log tools to manually close it.
 
-## Payroll impact
-Attendance issues affect payroll. Correct the records before running payroll when possible.
+## Important Notes
+> [!IMPORTANT]
+> **Payroll Impact:** Attendance issues directly affect payroll calculations. Mismatched or missing taps will result in zero pay for that shift. You must correct the records *before* running payroll.
 
 ## Related guides
 - [Attendance and Approvals](attendance-approvals.md)
-- [Teacher Attendance and Payroll Diagnostics](../../../diagnostics/teacher-attendance-payroll.md)
+- [Teacher Attendance and Payroll Diagnostics](../../../diagnostics/teacher/attendance-payroll.md)

@@ -11,16 +11,19 @@ related:
 
 # Insurance Coverage and Claims
 
-Insurance options appear in the Bills section.
+## Overview
+If your teacher offers insurance, you can enroll in policies to protect yourself against unexpected classroom costs. 
 
-## Where to work
-Go to **Bills** from the student sidebar and open the Insurance view.
+## Step-by-Step Instructions
 
-## Enroll or manage coverage
-Choose a policy and follow the prompts to enroll if your teacher has enabled insurance.
+### Enrolling in a Policy
+1. Navigate to **Bills** from the student sidebar and scroll to the **Insurance** section.
+2. Review the list of available policies. Pay attention to the premium cost (how much you pay) versus the payout amount (how much you get if something goes wrong).
+3. Select a policy and follow the prompts to enroll. Premiums will be automatically deducted from your account based on the schedule.
 
-## Submit a claim
-Use the claim option to request coverage when eligible.
+## Important Notes
+> [!TIP]
+> **Review terms:** Always check the waiting period before enrolling. Some policies require you to be enrolled for several days before you are allowed to submit your first claim.
 
 ## Related guides
-- [Student Rent and Insurance Diagnostics](../../../diagnostics/student-rent-insurance.md)
+- [Student Rent and Insurance Diagnostics](../../../diagnostics/student/rent-insurance.md)

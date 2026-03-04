@@ -6,38 +6,27 @@ roles: [teacher]
 description: Configure rent amounts, schedules, and itemized privileges.
 keywords: [rent, settings, schedule, itemization, privilege, per-use]
 related:
-  - user-guides/features/rent/managing-rent
   - user-guides/features/teacher/bills/rent-behaviors
   - user-guides/features/teacher/bills/rent-itemization
 ---
 
 # Rent Settings
 
-Rent settings control how students are billed and what privileges they receive.
+## Overview
+Rent settings determine the baseline amounts, schedules, and privileges associated with charging your students "rent" for their classroom assets. 
 
-## Where to work
-Go to **Bills > Rent** and open the **Settings** tab.
+## Step-by-Step Instructions
 
-## Configure rent
-Set the amount, frequency, and first due date. Use the class selector to configure per block if needed.
+### Establishing Baseline Rent
+1. Navigate to **Bills > Rent** in the teacher sidebar and open the **Settings** tab.
+2. Set the baseline rent amount, frequency (e.g., weekly, monthly), and first due date. 
+3. Use the class selector at the top if you need to configure different settings per block.
+4. To break rent down into specific assets, utilize the **Rent Itemization** feature.
+5. Save your changes.
 
-### Coverage Period
-Rent payments now cover specific date ranges ("Coverage Periods"). Students are only considered "Rent Active" if the current date falls within a paid period. This ensures students cannot pre-pay for future months while skipping current dues.
+## Important Notes
+> [!IMPORTANT]
+> **Coverage Periods:** Rent payments cover specific date ranges ("Coverage Periods"). Students are only considered "Rent Active" if the current date falls within a paid period. This prevents students from pre-paying for future months while skipping current dues.
 
-## Rent Item Types (v1.8+)
-You can break rent down into specific items to show value. Items can be:
-
-- **Privilege:** Ongoing access (Desk, Locker) valid for the rent period.
-- **Per-Use:** Consumables (Pencils) or services. Can grant free uses to rent payers.
-- **Hall Pass:** Adds passes to the student's balance upon payment.
-
-See the [Rent Itemization Guide](../../rent/itemization-guide.md) for full setup instructions.
-
-## Penalties and restrictions
-Enable late penalties and decide whether overdue rent blocks store purchases.
-
-- **Dynamic Purchase Blocking:** If you use Itemized Rent, late students can still buy "Rent Alternative" items (like a desk pass) but are blocked from other store purchases.
-
-## Related guides
-- [Managing Rent (Detailed)](../../rent/managing-rent.md)
-- [Rent Itemization Guide](../../rent/itemization-guide.md)
+> [!NOTE]
+> **Dynamic Purchase Blocking:** If you enable purchase restrictions for late rent and utilize Itemized Rent, students can still buy "Rent Alternative" items from the store (like a premium desk pass) but are blocked from buying purely fun items until their debt is cleared.

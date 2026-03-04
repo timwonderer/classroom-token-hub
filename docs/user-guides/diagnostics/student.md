@@ -9,11 +9,11 @@ roles: [student]
 Here are some issues that students typically encounters.
 
 
-- [Login and Setup](student-login.md)
-- [Classes and Join Codes](student-classes.md)
-- [Attendance and Payroll](student-attendance.md)
-- [Balances, Transfers, and Interest](student-money.md)
-- [Store and Purchases](student-store.md)
-- [Rent and Insurance](student-rent-insurance.md)
-- [Hall Passes](student-hall-pass.md)
-- [Help and Issue Reports](student-support.md)
+- [Login and Setup](student/login.md)
+- [Classes and Join Codes](student/classes.md)
+- [Attendance and Payroll](student/attendance.md)
+- [Balances, Transfers, and Interest](student/money.md)
+- [Store and Purchases](student/store.md)
+- [Rent and Insurance](student/rent-insurance.md)
+- [Hall Passes](student/hall-pass.md)
+- [Help and Issue Reports](student/support.md)
