@@ -8,8 +8,10 @@ allowing users to access help without leaving the app or losing their session.
 import re
 from pathlib import Path
 import os
+from urllib.parse import urlparse
 from flask import Blueprint, abort, current_app, session, request, url_for, redirect, make_response
 from werkzeug.exceptions import HTTPException
+from werkzeug.utils import safe_join
 import bleach
 import markdown
 import yaml
@@ -18,7 +20,7 @@ from markdown.extensions.codehilite import CodeHiliteExtension
 from markdown.extensions.fenced_code import FencedCodeExtension
 from markdown.extensions.tables import TableExtension
 
-from app.utils.helpers import render_template_with_fallback
+from app.utils.helpers import render_template_with_fallback, is_safe_url
 
 # Create blueprint
 docs_bp = Blueprint('docs', __name__, url_prefix='/docs')
@@ -231,12 +233,15 @@ def get_docs_audience():
 @docs_bp.route('/set-audience')
 def set_audience():
     """Toggle between 'user' and 'devops' documentation."""
-    audience = request.args.get('aud', 'user')
+    audience_arg = request.args.get('aud', 'user')
+    audience = 'devops' if audience_arg == 'devops' else 'user'
     next_url = request.args.get('next', url_for('docs.index'))
-    
-    if audience not in ['user', 'devops']:
-        audience = 'user'
-        
+
+    # Keep redirect local to this origin and prefer relative paths.
+    parsed_next = urlparse(next_url or "")
+    if parsed_next.scheme or parsed_next.netloc or not is_safe_url(next_url):
+        next_url = url_for('docs.index')
+
     resp = make_response(redirect(next_url))
     resp.set_cookie('docs_audience', audience, max_age=31536000) # 1 year
     return resp
@@ -308,7 +313,15 @@ def view_doc(doc_path):
 
             # Build candidate path under documentation root and normalize it
             try:
-                candidate_base = (root_resolved / safe_rel_path)
+                safe_candidate = safe_join(str(root_resolved), *safe_rel_path.parts)
+                if not safe_candidate:
+                    current_app.logger.warning(f"Path escaped DOCS_ROOT: {untrusted_path}")
+                    abort(404)
+
+                candidate_base = Path(safe_candidate)
+                if candidate_base.suffix and candidate_base.suffix.lower() != '.md':
+                    current_app.logger.warning(f"Unsupported docs suffix in path: {untrusted_path}")
+                    abort(404)
                 if candidate_base.suffix.lower() != '.md':
                     candidate_base = Path(f"{candidate_base}.md")
                 candidate = candidate_base.resolve(strict=False)
