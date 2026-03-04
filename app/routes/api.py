@@ -2180,6 +2180,7 @@ def handle_tap():
 
             # Keep hall-pass rent grants in sync for the active rent coverage period.
             # This applies the monthly top-off model even if the student paid rent earlier.
+            context = {'join_code': join_code, 'block': period, 'teacher_id': teacher_id}
             if should_require_pass and context:
                 _, _, hall_pass_reconciled = _ensure_rent_hall_pass_top_off(student, context)
                 if hall_pass_reconciled:
