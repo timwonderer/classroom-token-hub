@@ -483,7 +483,7 @@ Special thanks to all contributors who tested mobile functionality and provided 
 
 ##  Support
 
-**Documentation:** [docs/README.md](../../GITHUB_SITE/README.md)
+**Documentation:** [docs/README.md](../../README.md)
 **Issues:** Use GitHub Issues for bug reports and feature requests
 **Security:** Report security issues privately to project maintainers
 

@@ -2,15 +2,103 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="0; url=GITHUB_SITE/index.html">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redirecting...</title>
-    <script>
-        window.location.replace("GITHUB_SITE/index.html");
-    </script>
+    <meta name="description" content="Classroom Token Hub - An educational banking simulation platform for teaching financial literacy in classrooms">
+    <meta name="keywords" content="classroom economy, financial literacy, educational software, banking simulation, token economy">
+    <meta name="author" content="Classroom Token Hub">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://classroomtokenhub.com/">
+    <meta property="og:title" content="Classroom Token Hub - Educational Banking Simulation">
+    <meta property="og:description" content="Interactive banking and classroom management platform for teaching financial literacy">
+    <meta property="og:image" content="https://classroomtokenhub.com/student_dashboard.png">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://classroomtokenhub.com/">
+    <meta property="twitter:title" content="Classroom Token Hub - Educational Banking Simulation">
+    <meta property="twitter:description" content="Interactive banking and classroom management platform for teaching financial literacy">
+    <meta property="twitter:image" content="https://classroomtokenhub.com/student_dashboard.png">
+
+    <title>Classroom Token Hub - Educational Banking Simulation</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+    <link rel="icon" type="image/png" href="icon-192.png">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" >
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <p>Redirecting to the site homepage...</p>
-    <p>If you are not redirected, <a href="GITHUB_SITE/index.html">click here</a>.</p>
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-container">
+            <span class="material-symbols-outlined hero-icon" aria-hidden="true">local_atm</span>
+            <span class="material-symbols-outlined hero-icon" aria-hidden="true">store</span>
+            <span class="material-symbols-outlined hero-icon" aria-hidden="true">finance_mode</span>
+            <div class="version-badge">Version 1.9.0 Released</div>
+            <h1 class="mb-4 display-2" style="font-weight:500">Classroom Token Hub</h1>
+            <p style="font-weight:300">Welcome, what would you like to do today?</p>
+        </div>
+    </section>
+
+    <div class="container" id="learn-more">
+        <!-- Features Section -->
+        <section id="features" class="section">
+
+            <div class="features-grid">
+                <div class="feature-card feature-card--student">
+                    <div class="material-symbols-outlined text-white feature-card-icon" aria-hidden="true">school</div>
+                    <h3 class="text-white">Student Sign In</h3>
+                    <p class="text-white">Access your account, check balances, shop the store, and manage your classroom economy.</p>
+                    <a href="https://app.classroomtokenhub.com/student/login" class="btn btn-outline-primary">Sign In as Student</a>
+
+                </div>
+
+                <div class="feature-card feature-card--teacher">
+                    <div class="material-symbols-outlined text-white feature-card-icon" aria-hidden="true">supervisor_account</div>
+                    <h3 class="text-white">Teacher Sign In</h3>
+                    <p class="text-white">Manage your classroom, run payroll, configure settings, and view analytics.</p>
+                    <a href="https://app.classroomtokenhub.com/admin/login" class="btn btn-outline-primary">Sign In as Teacher</a>
+                </div>
+
+                <div class="feature-card feature-card--about">
+                    <div class="material-symbols-outlined text-white feature-card-icon" aria-hidden="true">info</div>
+                    <h3 class="text-white">About Us</h3>
+                    <p class="text-white">Learn more about this app and how it can help you manage your classroom economy system.</p>
+                    <a href="about.html" class="btn btn-outline-primary">Learn More</a>
+                </div>
+
+
+            </div>
+        </section>
+
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-container">
+            <div class="footer-links">
+                <a href="https://github.com/timwonderer/classroom-economy" target="_blank" rel="noopener">GitHub Repository</a>
+                <a href="https://app.classroomtokenhub.com/docs" target="_blank" rel="noopener">Documentation</a>
+                <a href="https://github.com/timwonderer/classroom-economy/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+                <a href="https://github.com/timwonderer/classroom-economy/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+                <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" target="_blank" rel="noopener">License</a>
+            </div>
+            <p>&copy; <span id="current-year"></span> Classroom Token Hub. Licensed under <a href="https://polyformproject.org/licenses/noncommercial/1.0.0/" style="color: #de9b37;" target="_blank" rel="noopener">PolyForm Noncommercial 1.0.0</a>, which makes this app free for educational use</p>
+            <p><i>Built by a classroom teacher who had the mindset of "I'll just make it myself."</i></p>
+            <img class="footer-release" alt="GitHub Release" src="https://img.shields.io/github/v/release/timwonderer/classroom-economy?link=https%3A%2F%2Fgithub.com%2Ftimwonderer%2Fclassroom-economy">
+        </div>
+    </footer>
+    <script>
+        (function () {
+            var yearElement = document.getElementById('current-year');
+            if (yearElement) {
+                yearElement.textContent = new Date().getFullYear();
+            }
+        })();
+    </script>
 </body>
 </html>
