@@ -301,7 +301,7 @@ Version 1.8.0 will focus on:
 - Performance optimizations
 - User experience improvements
 
-See [DEVELOPMENT.md](../../DEVELOPMENT.md) for the full roadmap.
+See [DEVELOPMENT.md](../../../DEVELOPMENT.md) for the full roadmap.
 
 ---
 

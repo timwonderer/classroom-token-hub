@@ -179,7 +179,7 @@ Thank you to everyone who contributed to this release through code, testing, and
 
 ## Next Steps
 
-See [DEVELOPMENT.md](../../DEVELOPMENT.md) for the roadmap toward v1.7.0, which will focus on:
+See [DEVELOPMENT.md](../../../DEVELOPMENT.md) for the roadmap toward v1.7.0, which will focus on:
 
 - Completing collective goals feature in store system
 - Enhanced analytics and reporting

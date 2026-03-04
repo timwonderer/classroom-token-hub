@@ -239,7 +239,7 @@ Classroom Token Hub enables teachers to create simulated classroom economies whe
    gunicorn -c gunicorn_config.py wsgi:app
    ```
 
-For detailed deployment instructions, see [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+For detailed deployment instructions, see [docs/DEPLOYMENT.md](../AUDITS/LOG-DEP-011_Multi_Tenancy_Fix_Deployment.md).
 
 ---
 
@@ -252,7 +252,7 @@ If upgrading from a pre-1.0 version:
 3. Update dependencies: `pip install -r requirements.txt`
 4. Run migrations: `flask db upgrade`
 5. **Interactive backfill:** If you have legacy transactions without join codes, administrators will be prompted during normal operation to verify which class period those transactions belong to
-6. Review the [CHANGELOG.md](../../CHANGELOG.md) for breaking changes
+6. Review the [CHANGELOG.md](../../../CHANGELOG.md) for breaking changes
 
 ---
 
@@ -287,7 +287,7 @@ Development continues with planned features for future releases:
 - Custom condition builder for advanced rules
 - Parent portal (optional, privacy-controlled)
 
-See [../../DEVELOPMENT.md](../../DEVELOPMENT.md) for the complete roadmap.
+See [../../DEVELOPMENT.md](../../../DEVELOPMENT.md) for the complete roadmap.
 
 ---
 
@@ -312,10 +312,10 @@ For technical questions, bug reports, or feature requests, please open an issue 
 - **Documentation:** [docs/README.md](../../GITHUB_SITE/README.md)
 - **Student Guide:** [docs/user-guides/student_guide.md](../../user-guides/student_guide.md)
 - **Teacher Manual:** [docs/user-guides/teacher_manual.md](../../user-guides/teacher_manual.md)
-- **Development Priorities:** [../../DEVELOPMENT.md](../../DEVELOPMENT.md)
+- **Development Priorities:** [../../DEVELOPMENT.md](../../../DEVELOPMENT.md)
 - **Security Audits:** [docs/security/](../../security/)
-- **Changelog:** [../../CHANGELOG.md](../../CHANGELOG.md)
-- **Project History:** [../../PROJECT_HISTORY.md](../../PROJECT_HISTORY.md)
+- **Changelog:** [../../CHANGELOG.md](../../../CHANGELOG.md)
+- **Project History:** [../../PROJECT_HISTORY.md](../../../PROJECT_HISTORY.md)
 
 ---
 

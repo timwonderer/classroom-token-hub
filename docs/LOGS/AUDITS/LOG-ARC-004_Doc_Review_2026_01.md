@@ -212,14 +212,14 @@ Despite being under size limit, this file tries to serve 3 purposes:
 #### 1. docs/README.md
 **Line 39:**
 ```markdown
-[Changelog](CHANGELOG.md)
+[Changelog](../../../CHANGELOG.md)
 ```
 **Issue:** CHANGELOG.md is in root directory, not docs/
 **Fix:** Change to `../CHANGELOG.md` OR move changelog to docs/
 
 **Line 47:**
 ```markdown
-[Deployment Guide](operations/Deployment_Guide.md)
+[Deployment Guide](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)
 ```
 **Issue:** Path is correct but inconsistent with operations/ directory structure
 **Recommendation:** Move `operations/Deployment_Guide.md` to `operations/deployment.md`

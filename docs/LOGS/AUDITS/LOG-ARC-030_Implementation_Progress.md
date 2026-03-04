@@ -21,8 +21,8 @@ Please see: [`../archive/IMPLEMENTATION_PROGRESS.md`](LOG-ARC-007_Implementation
 
 For current development priorities, see:
 
-- [`../DEVELOPMENT.md`](../DEVELOPMENT.md) - Current roadmap and priorities
-- [`../CHANGELOG.md`](../../CHANGELOG.md) - Recent changes and releases
+- [`../DEVELOPMENT.md`](../../../DEVELOPMENT.md) - Current roadmap and priorities
+- [`../CHANGELOG.md`](../../../CHANGELOG.md) - Recent changes and releases
 
 ---
 

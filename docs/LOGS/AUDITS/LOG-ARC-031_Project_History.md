@@ -13,7 +13,7 @@ roles: [developer, teacher]
 
 **Note:** This file has been consolidated and moved to the repository root.
 
-Please see: [`../../PROJECT_HISTORY.md`](../../PROJECT_HISTORY.md)
+Please see: [`../../PROJECT_HISTORY.md`](../../../PROJECT_HISTORY.md)
 
 ---
 

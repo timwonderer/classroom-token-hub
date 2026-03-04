@@ -406,7 +406,7 @@ None. This release is backward compatible with v1.2.1.
 
 ##  Links
 
-- **Full Changelog**: [CHANGELOG.md](../../CHANGELOG.md#130---2025-12-25)
+- **Full Changelog**: [CHANGELOG.md](../../../CHANGELOG.md#130---2025-12-25)
 - **Security Audit**: [docs/security/COMPREHENSIVE_ATTACK_SURFACE_AUDIT_2025.md](../../SECURITY/AUDITS/SEC-AUD-012_Attack_Surface_Audit.md)
 - **Security Remediation Guide**: [docs/security/SECURITY_REMEDIATION_GUIDE.md](../../SECURITY/CONTROLS/SEC-CONT-023_Security_Remediation_Guide.md)
 - **PromptPwnd Details**: [docs/security/PROMPTPWND_REMEDIATION.md](../../SECURITY/CONTROLS/SEC-CONT-019_Promptpwnd_Remediation.md)

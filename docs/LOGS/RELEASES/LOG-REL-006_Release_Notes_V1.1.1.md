@@ -39,4 +39,4 @@ No manual steps are required beyond the standard deployment process. Deployments
 
 ##  Full Changelog
 
-See [CHANGELOG.md](../../CHANGELOG.md) for the complete list of changes.
+See [CHANGELOG.md](../../../CHANGELOG.md) for the complete list of changes.

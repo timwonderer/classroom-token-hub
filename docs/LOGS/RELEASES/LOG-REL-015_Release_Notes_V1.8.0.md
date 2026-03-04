@@ -94,7 +94,7 @@ Verified with targeted rent item type flows, coverage-period rent checks, and re
 
 ## What's Next
 
-See [DEVELOPMENT.md](../../DEVELOPMENT.md) for the active roadmap.
+See [DEVELOPMENT.md](../../../DEVELOPMENT.md) for the active roadmap.
 
 ---
 

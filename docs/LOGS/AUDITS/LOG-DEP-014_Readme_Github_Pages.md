@@ -121,8 +121,8 @@ Visit: `http://localhost:8000`
 
 ## Related Documentation
 
-- **[GitHub Pages Setup](GITHUB_PAGES_SETUP.md)** - Setup steps and troubleshooting
-- **[Deployment Guide](Deployment_Guide.md)** - Production deployment
+- **[GitHub Pages Setup](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-007_Github_Pages_Setup.md)** - Setup steps and troubleshooting
+- **[Deployment Guide](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)** - Production deployment
 - **[Documentation Index](../../GITHUB_SITE/README.md)** - Full docs map
 
 ---

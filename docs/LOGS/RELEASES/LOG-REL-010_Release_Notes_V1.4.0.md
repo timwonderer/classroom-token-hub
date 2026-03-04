@@ -445,10 +445,10 @@ After upgrading to v1.4.0, test the following:
 
 ##  Related Links
 
-- [Full Changelog](../../CHANGELOG.md#140---2025-12-27)
-- [Version 1.3.0 Release Notes](RELEASE_NOTES_v1.3.0.md)
+- [Full Changelog](../../../CHANGELOG.md#140---2025-12-27)
+- [Version 1.3.0 Release Notes](LOG-REL-009_Release_Notes_V1.3.0.md)
 - [Project README](../../GITHUB_SITE/README.md)
-- [Development Priorities](../../DEVELOPMENT.md)
+- [Development Priorities](../../../DEVELOPMENT.md)
 
 ---
 
@@ -456,7 +456,7 @@ After upgrading to v1.4.0, test the following:
 
 If you encounter any issues with this release:
 
-1. Check the [CHANGELOG](../../CHANGELOG.md) for known issues
+1. Check the [CHANGELOG](../../../CHANGELOG.md) for known issues
 2. Review the [Documentation](../../GITHUB_SITE/README.md)
 3. Report bugs via GitHub Issues
 

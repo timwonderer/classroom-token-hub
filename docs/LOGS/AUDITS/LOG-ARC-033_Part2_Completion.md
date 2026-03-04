@@ -398,7 +398,7 @@ All criteria met ✅
 - Refresh content for clarity
 - Improve SEO/metadata
 
-**Detailed maintenance guide:** [docs/README_GITHUB_PAGES.md](docs/README_GITHUB_PAGES.md)
+**Detailed maintenance guide:** [docs/README_GITHUB_PAGES.md](LOG-DEP-014_Readme_Github_Pages.md)
 
 ---
 

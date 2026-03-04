@@ -194,7 +194,7 @@ Thanks to all contributors who helped test and provide feedback on the UI redesi
 
 ##  Full Changelog
 
-See [CHANGELOG.md](../../CHANGELOG.md) for the complete list of changes.
+See [CHANGELOG.md](../../../CHANGELOG.md) for the complete list of changes.
 
 ---
 
