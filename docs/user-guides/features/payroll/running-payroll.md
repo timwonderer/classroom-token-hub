@@ -57,7 +57,7 @@ Visit **Payroll** → **Settings** to verify:
 
 > **Note:** The "Projected Pay" students see on their dashboard automatically uses these settings. If you change the rate, their projection updates immediately to match.
 
-> **Important:** Payroll is always run manually. There is no automatic payroll feature. Set a reminder to run payroll on your chosen schedule.
+> **Tip:** Payroll can run automatically on a schedule you configure, or you can trigger it manually at any time from the Payroll page.
 
 ## How Payroll Works
 
@@ -141,15 +141,25 @@ After running:
 
 ## Payroll Schedule Planning
 
-**Payroll is always manual** - you must click "Run Payroll" to process payments.
+Payroll can run **automatically on a schedule** or be **triggered manually** at any time.
+
+### Automatic Scheduling
+
+Configure a payroll schedule in **Payroll** → **Settings** to have payments processed automatically:
+
+- Set the frequency (e.g., weekly, bi-weekly)
+- Choose the day and time that works for your class
+- The system runs payroll at the scheduled time without any action required
+
+### Manual Payroll
+
+You can also run payroll at any time by clicking **Run Payroll** on the Payroll page — even when a schedule is active. This is useful for:
+
+- Mid-cycle bonuses or corrections
+- Running payroll early before a holiday
+- Rerunning after fixing an attendance issue
 
 ### Best Practices for Consistency
-
-**Set a recurring reminder**:
-
-- Weekly: Every Friday at the same time
-- Bi-weekly: Every other Friday
-- Use your calendar app to create a recurring event
 
 **Communicate your schedule**:
 
@@ -159,7 +169,7 @@ After running:
 
 **Tips**:
 
-- Run payroll same day/time each week
+- Run (or schedule) payroll same day/time each week
 - Run before students want to shop in the store
 - Friday afternoons work well (students see earnings before weekend)
 

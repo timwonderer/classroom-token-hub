@@ -5,8 +5,9 @@ Serves feature-based documentation with markdown rendering,
 allowing users to access help without leaving the app or losing their session.
 """
 
+import posixpath
 import re
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from flask import Blueprint, abort, current_app, session, request, url_for, redirect, make_response
 from werkzeug.exceptions import HTTPException
 from werkzeug.utils import safe_join
@@ -172,6 +173,61 @@ def render_markdown_content(content, toc_title='On This Page'):
     )
 
     return cleaner.clean(html), cleaner.clean(toc)
+
+
+def rewrite_doc_links(html_content, doc_dir_rel):
+    """
+    Rewrite relative href attributes in rendered HTML to absolute /docs/ paths.
+
+    Markdown files use relative links (e.g. features/teacher/index.md).  When
+    Flask serves a "directory-index" document (README.md or index.md) at a URL
+    without a trailing slash — e.g. /docs/user-guides — the browser strips the
+    last path segment and resolves relative hrefs against /docs/ instead of
+    /docs/user-guides/.  This causes every link on index pages to 404.
+
+    This function converts every relative href to an absolute /docs/<path>
+    before the HTML reaches the template, so browser resolution is bypassed.
+
+    Args:
+        html_content: Rendered HTML string.
+        doc_dir_rel:  PurePosixPath of the document's directory relative to
+                      DOCS_ROOT (e.g. PurePosixPath('user-guides')).
+
+    Returns:
+        HTML string with rewritten hrefs.
+    """
+    def _replace_href(match):
+        href = match.group(1)
+        # Leave absolute URLs, root-relative paths, anchors, and mailto alone.
+        if not href or href.startswith(('http://', 'https://', 'mailto:', '#', '/')):
+            return match.group(0)
+
+        # Split off any anchor fragment.
+        parts = href.split('#', 1)
+        path_part = parts[0]
+        anchor = '#' + parts[1] if len(parts) > 1 else ''
+
+        if not path_part:
+            return match.group(0)
+
+        # Strip .md extension so the clean URL is used (Flask route handles both).
+        if path_part.lower().endswith('.md'):
+            path_part = path_part[:-3]
+
+        # Resolve the relative path against the document directory.
+        try:
+            resolved = posixpath.normpath(
+                str(PurePosixPath(str(doc_dir_rel)) / path_part)
+            )
+            # Reject anything that escapes the docs root.
+            if resolved.startswith('..') or resolved.startswith('/'):
+                return match.group(0)
+        except Exception:
+            return match.group(0)
+
+        return f'href="/docs/{resolved}{anchor}"'
+
+    return re.sub(r'href="([^"]*)"', _replace_href, html_content)
 
 
 def build_breadcrumbs(doc_path, docs_root):
@@ -381,6 +437,12 @@ def view_doc(doc_path):
             current_app.logger.info(f"Documentation not found: {doc_path}")
             abort(404)
 
+        # Directory of this document, relative to docs_root — used for link rewriting.
+        try:
+            doc_dir_rel = PurePosixPath(doc_file.relative_to(DOCS_ROOT.resolve(strict=False))).parent
+        except (ValueError, OSError):
+            doc_dir_rel = PurePosixPath('.')
+
         # Read and parse the file
         try:
             content = doc_file.read_text(encoding='utf-8')
@@ -393,6 +455,11 @@ def view_doc(doc_path):
 
         # Convert markdown to HTML (with sanitization)
         html_content, toc = render_markdown_content(body, toc_title=doc_title)
+
+        # Rewrite relative hrefs to absolute /docs/ paths so that browser
+        # URL resolution works correctly regardless of the serving URL.
+        html_content = rewrite_doc_links(html_content, doc_dir_rel)
+        toc = rewrite_doc_links(toc, doc_dir_rel)
 
         # Determine category from path
         path_parts = Path(doc_path).parts

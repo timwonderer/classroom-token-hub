@@ -312,7 +312,7 @@ For technical questions, bug reports, or feature requests, please open an issue 
 - **Student Guide:** [docs/user-guides/student_guide.md](../../user-guides/student_guide.md)
 - **Teacher Manual:** [docs/user-guides/teacher_manual.md](../../user-guides/teacher_manual.md)
 - **Development Priorities:** [../../DEVELOPMENT.md](../../../DEVELOPMENT.md)
-- **Security Audits:** [docs/security/](../../security/)
+- **Security Audits:** [docs/SECURITY/](../../SECURITY/)
 - **Changelog:** [../../CHANGELOG.md](../../../CHANGELOG.md)
 - **Project History:** [../../PROJECT_HISTORY.md](../../../PROJECT_HISTORY.md)
 
