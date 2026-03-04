@@ -7,7 +7,6 @@ allowing users to access help without leaving the app or losing their session.
 
 import re
 from pathlib import Path
-import os
 from urllib.parse import urlparse
 from flask import Blueprint, abort, current_app, session, request, url_for, redirect, make_response
 from werkzeug.exceptions import HTTPException
@@ -20,7 +19,7 @@ from markdown.extensions.codehilite import CodeHiliteExtension
 from markdown.extensions.fenced_code import FencedCodeExtension
 from markdown.extensions.tables import TableExtension
 
-from app.utils.helpers import render_template_with_fallback, is_safe_url
+from app.utils.helpers import render_template_with_fallback
 
 # Create blueprint
 docs_bp = Blueprint('docs', __name__, url_prefix='/docs')
@@ -195,9 +194,12 @@ def build_breadcrumbs(doc_path, docs_root):
     for idx, part in enumerate(parts[:-1]):
         partial_path = "/".join(parts[:idx + 1])
         partial_file = docs_root / f"{partial_path}.md"
+        partial_index = docs_root / partial_path / "index.md"
+        partial_readme = docs_root / partial_path / "README.md"
+        has_landing_doc = partial_file.exists() or partial_index.exists() or partial_readme.exists()
         breadcrumbs.append({
             'title': part.replace('-', ' ').replace('_', ' ').title(),
-            'url': url_for('docs.view_doc', doc_path=partial_path) if partial_file.exists() else None
+            'url': url_for('docs.view_doc', doc_path=partial_path) if has_landing_doc else None
         })
 
     # Current page crumb (always the last item, rendered as active text in template)
@@ -233,17 +235,31 @@ def get_docs_audience():
 @docs_bp.route('/set-audience')
 def set_audience():
     """Toggle between 'user' and 'devops' documentation."""
-    audience_arg = request.args.get('aud', 'user')
-    audience = 'devops' if audience_arg == 'devops' else 'user'
-    next_url = request.args.get('next', url_for('docs.index'))
+    allowed_audiences = {'user', 'devops'}
+    audience_arg = (request.args.get('aud') or '').strip().lower()
+    audience = audience_arg if audience_arg in allowed_audiences else 'user'
 
-    # Keep redirect local to this origin and prefer relative paths.
-    parsed_next = urlparse(next_url or "")
-    if parsed_next.scheme or parsed_next.netloc or not is_safe_url(next_url):
-        next_url = url_for('docs.index')
+    next_arg = (request.args.get('next') or '').strip()
+    next_url = url_for('docs.index')
+    if next_arg:
+        parsed_next = urlparse(next_arg)
+        # Explicitly allow only local, relative docs URLs.
+        if (
+            not parsed_next.scheme and
+            not parsed_next.netloc and
+            next_arg.startswith('/docs')
+        ):
+            next_url = next_arg
 
     resp = make_response(redirect(next_url))
-    resp.set_cookie('docs_audience', audience, max_age=31536000) # 1 year
+    resp.set_cookie(
+        'docs_audience',
+        audience,
+        max_age=31536000,  # 1 year
+        httponly=True,
+        samesite='Lax',
+        secure=request.is_secure,
+    )
     return resp
     
 
@@ -292,9 +308,8 @@ def view_doc(doc_path):
 
             Security validation strategy:
             1. Reject absolute paths and '..' components
-            2. Resolve the path (following symlinks)
-            3. Verify resolved path is within docs root using startswith()
-               (CodeQL recognizes startswith() as a valid path safety check)
+            2. Build allowed candidate files (.md, /index.md, /README.md)
+            3. Resolve each candidate path and ensure it remains under docs root
             """
             # Normalize the untrusted path as a relative path
             safe_rel_path = Path(untrusted_path)
@@ -311,7 +326,7 @@ def view_doc(doc_path):
                 current_app.logger.error(f"Invalid DOCS_ROOT '{docs_root}': {e}")
                 abort(500)
 
-            # Build candidate path under documentation root and normalize it
+            # Build candidate paths under documentation root.
             try:
                 safe_candidate = safe_join(str(root_resolved), *safe_rel_path.parts)
                 if not safe_candidate:
@@ -322,40 +337,41 @@ def view_doc(doc_path):
                 if candidate_base.suffix and candidate_base.suffix.lower() != '.md':
                     current_app.logger.warning(f"Unsupported docs suffix in path: {untrusted_path}")
                     abort(404)
-                if candidate_base.suffix.lower() != '.md':
-                    candidate_base = Path(f"{candidate_base}.md")
-                candidate = candidate_base.resolve(strict=False)
+
+                if candidate_base.suffix.lower() == '.md':
+                    candidates = [candidate_base]
+                else:
+                    candidates = [
+                        Path(f"{candidate_base}.md"),
+                        candidate_base / "index.md",
+                        candidate_base / "README.md",
+                    ]
             except OSError as e:
                 current_app.logger.warning(f"Error resolving documentation path '{untrusted_path}': {e}")
                 abort(404)
 
-            # Verify the resolved path is still within the docs root
-            # Using startswith() instead of is_relative_to() because CodeQL recognizes
-            # startswith() as a valid SafeAccessCheck pattern, preventing false positives
-            root_path_str = str(root_resolved)
-            candidate_path_str = str(candidate)
+            # Resolve candidate paths and pick the first existing file inside docs root.
+            selected_candidate = None
+            for candidate in candidates:
+                resolved_candidate = candidate.resolve(strict=False)
+                try:
+                    resolved_candidate.relative_to(root_resolved)
+                except ValueError:
+                    current_app.logger.warning(f"Path outside DOCS_ROOT: {untrusted_path}")
+                    abort(404)
 
-            # For the prefix check, ensure the root path ends with a separator
-            root_with_sep = root_path_str
-            if not root_with_sep.endswith(os.sep):
-                root_with_sep += os.sep
+                if candidate.exists():
+                    selected_candidate = resolved_candidate
+                    break
 
-            # Check if candidate is exactly the root or starts with root + separator
-            norm_candidate = os.path.normcase(candidate_path_str)
-            is_within_root = (
-                norm_candidate == os.path.normcase(root_path_str) or
-                norm_candidate.startswith(os.path.normcase(root_with_sep))
-            )
-
-            if not is_within_root:
-                current_app.logger.warning(f"Path outside DOCS_ROOT: {untrusted_path}")
-                abort(404)
+            if selected_candidate is None:
+                selected_candidate = candidates[0].resolve(strict=False)
 
             # Path has been validated through multiple layers:
             # 1. Earlier regex validation of the docs path blocks suspicious characters
             # 2. The component check in this function blocks absolute paths and '..' traversal
             # 3. The resolved path verification above ensures containment within the docs root
-            return candidate
+            return selected_candidate
 
         # Ensure we have a safe, absolute docs root
         try:

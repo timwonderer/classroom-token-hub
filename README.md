@@ -2,7 +2,7 @@
 
 An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.
 
-**Version:** 1.8.0
+**Version:** 1.9.0
 
 ---
 
@@ -12,7 +12,7 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Version 1.8.0 Released with active security hardening and performance work in progress. The 1.8.0 release added rent item types (privilege, per-use, hall pass), coverage period tracking, and stability fixes. Recent unreleased improvements include: post-claim PII minimisation (DOB and name hashes automatically deleted after account setup), comprehensive class deletion audit with P1/P2/P3 security fixes, timed deletion confirmation gates, hall pass and admin identity boundary hardening, and a major read-path performance optimization reducing student roster queries from ~1225 to ~10 for a class of 60 students. See [RELEASE_NOTES_v1.8.0.md](docs/LOGS/RELEASES/LOG-REL-015_Release_Notes_V1.8.0.md) for the full release and [CHANGELOG.md](CHANGELOG.md) for all changes.
+**Project Status:** Version 1.9.0 Released with active security hardening and performance work in progress. The 1.9.0 documentation release consolidates canonical taxonomy across `/docs`, resolves navigation integrity issues, and standardizes release/archive placement. Recent unreleased improvements include: post-claim PII minimisation (DOB and name hashes automatically deleted after account setup), comprehensive class deletion audit with P1/P2/P3 security fixes, timed deletion confirmation gates, hall pass and admin identity boundary hardening, and a major read-path performance optimization reducing student roster queries from ~1225 to ~10 for a class of 60 students. See [LOG-REL-016_Release_Notes_V1.9.0.md](docs/LOGS/RELEASES/LOG-REL-016_Release_Notes_V1.9.0.md) for the full release and [CHANGELOG.md](CHANGELOG.md) for all changes.
 
 ---
 

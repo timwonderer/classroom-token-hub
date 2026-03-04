@@ -12,7 +12,7 @@ keywords: [classroom, students, attendance, announcements, issues]
 This section groups all teacher classroom tools in one place.
 
 ## Dashboard
-- [Teacher Dashboard Overview](../../student/account/dashboard-overview.md)
+- [Teacher Dashboard Overview](dashboard-overview.md)
 
 ## Students and Classes
 - [Class Setup and Join Codes](class-setup.md)

@@ -25,7 +25,7 @@ This page is a shortcut list. Use diagnostics for fast troubleshooting and featu
 - [Rent itemization or privilege badges not working](diagnostics/teacher-rent-itemization.md) **(v1.7+)**
 
 ## Feature Guides (Structured by Section)
-- [Teacher Feature Guides Index](features/student/store/index.md)
+- [Teacher Feature Guides Index](features/teacher/index.md)
 - [Classroom Setup and Students](features/teacher/classroom/class-setup.md)
 - [Attendance and Payroll](features/teacher/economy/payroll-run.md)
 - [Store and Redemptions](features/teacher/economy/store-items.md)

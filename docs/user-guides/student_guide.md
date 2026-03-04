@@ -22,7 +22,7 @@ Here are some issues students typically encounter, plus links to focused feature
 - [I need to report an issue](diagnostics/student-support.md)
 
 ## Feature Guides (Structured by Section)
-- [Student Feature Guides Index](features/student/store/index.md)
+- [Student Feature Guides Index](features/student/index.md)
 - [Log In and Setup](features/student/account/login-setup.md)
 - [Work and Pay](features/student/work/start-end-work.md)
 - [Store Purchases](features/student/store/browse-buy.md)

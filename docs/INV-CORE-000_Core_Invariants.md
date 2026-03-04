@@ -1,7 +1,7 @@
 # Core Invariants of Classroom Token Hub
-| Reference Number | Version | Effective Date |  Supercedes |Authority Level|
-|------------------|---------|----------------|-----------|--------------|
-| INV-CORE-000      | 1.0     |2026-02-28    |N/A        |Foundational|
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| INV-CORE-000     | 1.0     | 2026-02-28     | N/A        | Foundational    |
 
 ## I. Purpose
 This document defines the core invariants, or underlying principles, that drives the design of this application. Any future development of this application must stay within the boundaries of these invariants. This document serves as top level authority in which all other levels of authority derives from.
