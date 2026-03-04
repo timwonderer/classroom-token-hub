@@ -182,7 +182,7 @@ After running:
 
 **Options**:
 
-1. **Allow negative**: Checking balance goes negative (becomes debt)
+1. **Allow negative**: Checking balance goes negative (overdraft)
 2. **Waive fines**: Remove some fines before running payroll
 3. **Adjust pay**: Give manual bonus to offset
 

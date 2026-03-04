@@ -515,7 +515,7 @@ Per AGENTS specification requirements:
  All pricing follows ratio bands
  Economic operations preserve student solvency
  Tools calculate and surface impacts before applying changes
- Inflation, investment, loan tools maintain coherent proportionality
+ Inflation and economy tools maintain coherent proportionality
  Output includes inputs used, ratios applied, values, and justifications
  Warnings surfaced when constraints violated
  No arbitrary values output without referencing framework

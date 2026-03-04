@@ -263,7 +263,6 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
 
 ### Low Impact, High Effort (Defer)
 - Full internationalization
-- Parent portal
 - Curriculum integration tools
 
 ---
@@ -286,7 +285,6 @@ Following comprehensive audit of the repository for v1.6.0 release, this documen
 ### Long Term (v2.0+ - Q3 2026 and beyond)
 1. Custom condition builder (12-18 weeks)
 2. Internationalization (6-8 weeks)
-3. Parent portal (8-10 weeks)
 
 ---
 

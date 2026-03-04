@@ -181,7 +181,6 @@ Comprehensive audit of the classroom-economy repository completed in preparation
 ### Long Term (v2.0+ - Q3 2026+)
 1. Custom condition builder (12-18 weeks)
 2. Internationalization (6-8 weeks)
-3. Parent portal (8-10 weeks)
 
 ---
 

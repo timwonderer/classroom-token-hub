@@ -234,7 +234,6 @@ See [RELEASE_NOTES_v1.2.0.md](docs/LOGS/RELEASES/LOG-REL-007_RELEASE_NOTES_v1.2.
 - Student engagement metrics
 
 ### Version 1.4 - Extended Features
-- Parent portal (optional, privacy-controlled)
 - Curriculum integration resources
 - Pre-built lesson plans
 - Financial literacy assessment tools

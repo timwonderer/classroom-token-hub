@@ -285,7 +285,6 @@ Development continues with planned features for future releases:
 - In-app communication and announcements
 - Jobs feature (classroom job market)
 - Custom condition builder for advanced rules
-- Parent portal (optional, privacy-controlled)
 
 See [../../DEVELOPMENT.md](../../../DEVELOPMENT.md) for the complete roadmap.
 

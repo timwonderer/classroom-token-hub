@@ -11,7 +11,7 @@ This document defines the formulas, constraints, ratios, and rules used by autom
 
 ## II. Scope
 
-This specification applies to all economy-related calculations, including price calculators, inflation engines, rent generators, insurance logic, loan approval systems, and economic simulation events. In this document, "agents" refers to automated tools and internal workflows.
+This specification applies to all economy-related calculations, including price calculators, inflation engines, rent generators, insurance logic, and economic simulation events. In this document, "agents" refers to automated tools and internal workflows.
 
 ## III. Authority Level
 
@@ -140,58 +140,6 @@ Agents must:
 
 ---
 
-## X. Loan and APR Rules
-
-### 1. Risk Bands
-
-```
-low_risk_apr:      0.08–0.15
-medium_risk_apr:   0.15–0.35
-high_risk_apr:     0.35–0.50
-```
-
-### 2. Payment Rule
-
-All loans must use:
-
-```
-installment_period = teacher_selected_pay_cycle
-```
-
-Agents must reject loans where:
-
-* Required installments exceed 40% of expected weekly earnings.
-* Student net budget after loan would become negative for >2 consecutive cycles.
-
----
-
-## XI. Investment Tools
-
-Agents must categorize investments based on risk and lock-in rules:
-
-### 1. CDs
-
-```
-cd_rate = inflation_rate + 0.01–0.03
-lock_in_required = TRUE
-```
-
-### 2. Bonds
-
-```
-bond_rate = inflation_rate + 0.00–0.02
-low_variance = TRUE
-```
-
-### 3. Stocks
-
-```
-stock_change ∈ [-0.30, +0.30] random or event-driven
-risk_flag = HIGH
-```
-
----
-
 ## XII. Savings Interest Guidance
 
 Savings interest is an engagement incentive, not a CWI-based ratio. Use modest ranges to avoid overpowering wages.
@@ -260,7 +208,7 @@ Agents must always enforce:
 2. All pricing must follow ratio bands unless overridden.
 3. Economic operations must preserve student solvency.
 4. Every tool must calculate and surface impacts before applying changes.
-5. All inflation, investment, and loan tools must maintain coherent proportionality across categories.
+5. All inflation and economy tools must maintain coherent proportionality across categories.
 
 ## XVI. Amendment
 

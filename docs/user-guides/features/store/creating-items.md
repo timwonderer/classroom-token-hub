@@ -40,7 +40,7 @@ From the admin dashboard:
 
 #### Basic Information
 
-- **Item Name**: What students see (e.g., "Homework Pass", "Extra Credit")
+- **Item Name**: What students see (e.g., "Homework Pass", "Bonus Points")
 - **Description**: Explain what the item does
   - Use markdown for formatting
   - Be clear about any restrictions
@@ -97,7 +97,7 @@ Choose how the item works:
 
 ### 3. Configure Limits (Optional)
 
-**Inventory** (global stock limit):
+**Inventory** (global quantity limit):
 
 - Total quantity available to ALL students across all periods
 - Example: Set to 10 if you only have 10 physical candy bars
@@ -326,7 +326,7 @@ Items the whole class works toward together:
 
 **Item sold out too quickly**:
 
-- Set inventory limits (total stock available)
+- Set inventory limits (total quantity available)
 - Set purchase limits per student (max they can own at once)
 - Increase the price
 - Create similar items to distribute demand
