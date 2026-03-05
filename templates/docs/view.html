@@ -546,10 +546,120 @@
     .markdown-content ol {
         padding-left: 2rem;
         margin: 1rem 0;
+        list-style-position: outside;
+    }
+
+    .markdown-content ul {
+        list-style-type: disc;
+    }
+
+    .markdown-content ol {
+        list-style-type: decimal;
     }
 
     .markdown-content li {
         margin-bottom: 0.5rem;
+        display: list-item;
+    }
+
+    /* Python markdown wraps loose-list items in <p> tags — keep them compact */
+    .markdown-content li > p {
+        margin-top: 0;
+        margin-bottom: 0.25rem;
+    }
+
+    .markdown-content li > p:last-child {
+        margin-bottom: 0;
+    }
+
+    /* Nested lists */
+    .markdown-content li > ul,
+    .markdown-content li > ol {
+        margin-top: 0.25rem;
+        margin-bottom: 0.25rem;
+    }
+
+    /* GitHub-style alert callout boxes */
+    .md-alert {
+        border-radius: 0.5rem;
+        margin: 1.25rem 0;
+        padding: 0.75rem 1rem;
+        border-left: 4px solid;
+    }
+
+    .md-alert-header {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+
+    .md-alert-icon {
+        font-size: 1.1rem;
+        vertical-align: middle;
+    }
+
+    .md-alert-body p:last-child {
+        margin-bottom: 0;
+    }
+
+    /* NOTE — blue */
+    .md-alert-note {
+        background-color: #e8f4fd;
+        border-color: #2196f3;
+    }
+
+    .md-alert-note .md-alert-header,
+    .md-alert-note .md-alert-icon {
+        color: #1565c0;
+    }
+
+    /* TIP — brand teal (primary) */
+    .md-alert-tip {
+        background-color: color-mix(in srgb, var(--primary) 10%, white);
+        border-color: var(--primary);
+    }
+
+    .md-alert-tip .md-alert-header,
+    .md-alert-tip .md-alert-icon {
+        color: var(--primary);
+    }
+
+    /* IMPORTANT — purple */
+    .md-alert-important {
+        background-color: #f5f0ff;
+        border-color: #7c3aed;
+    }
+
+    .md-alert-important .md-alert-header,
+    .md-alert-important .md-alert-icon {
+        color: #6d28d9;
+    }
+
+    /* WARNING — amber, using brand secondary as accent */
+    .md-alert-warning {
+        background-color: #fffbeb;
+        border-color: #f59e0b;
+    }
+
+    .md-alert-warning .md-alert-header,
+    .md-alert-warning .md-alert-icon {
+        color: #92400e;
+    }
+
+    /* CAUTION — red */
+    .md-alert-caution {
+        background-color: #fff5f5;
+        border-color: #dc2626;
+    }
+
+    .md-alert-caution .md-alert-header,
+    .md-alert-caution .md-alert-icon {
+        color: #b91c1c;
     }
 
     /* Table of Contents */
