@@ -163,12 +163,12 @@ def test_payroll_run_creates_payroll_transaction(client):
         student_id=student.id,
         teacher_id=admin.id,
         join_code="JOIN-PAY",
+    tx = Transaction.query.filter_by(
+        student_id=student.id,
+        teacher_id=admin.id,
+        join_code="JOIN-PAY",
         type="payroll",
-    )
-    pre_payroll_count = payroll_query.count()
-    pre_latest_payroll = payroll_query.order_by(Transaction.id.desc()).first()
-    pre_latest_payroll_id = pre_latest_payroll.id if pre_latest_payroll is not None else None
-
+    ).order_by(Transaction.id.desc()).first()
     _login_admin(client, admin.id)
     response = client.post("/admin/run-payroll", json={})
 
