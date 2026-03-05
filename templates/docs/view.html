@@ -162,6 +162,66 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Sysadmin Guides -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button
+                                    class="accordion-button {% if not doc_path.startswith('user-guides/features/sysadmin') and doc_path != 'user-guides/sysadmin_manual' %}collapsed{% endif %}"
+                                    type="button" data-bs-toggle="collapse" data-bs-target="#sysadminCollapse"
+                                    aria-expanded="{% if doc_path.startswith('user-guides/features/sysadmin') or doc_path == 'user-guides/sysadmin_manual' %}true{% else %}false{% endif %}">
+                                    <span class="material-symbols-outlined me-2">admin_panel_settings</span>
+                                    System Admin
+                                </button>
+                            </h2>
+                            <div id="sysadminCollapse"
+                                class="accordion-collapse collapse {% if doc_path.startswith('user-guides/features/sysadmin') or doc_path == 'user-guides/sysadmin_manual' %}show{% endif %}">
+                                <div class="accordion-body p-0">
+                                    <ul class="nav flex-column">
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'user-guides/features/sysadmin/index' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/features/sysadmin/index') }}">
+                                                <span class="material-symbols-outlined me-2"
+                                                    style="font-size: 1rem;">list</span>
+                                                All Sysadmin Guides
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'user-guides/features/sysadmin/dashboard-overview' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/features/sysadmin/dashboard-overview') }}">
+                                                <span class="material-symbols-outlined me-2"
+                                                    style="font-size: 1rem;">dashboard</span>
+                                                Dashboard & Logs
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'user-guides/features/sysadmin/teacher-management' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/features/sysadmin/teacher-management') }}">
+                                                <span class="material-symbols-outlined me-2"
+                                                    style="font-size: 1rem;">manage_accounts</span>
+                                                Teacher Management
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'user-guides/features/sysadmin/security-access' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/features/sysadmin/security-access') }}">
+                                                <span class="material-symbols-outlined me-2"
+                                                    style="font-size: 1rem;">shield</span>
+                                                Security & Access
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'user-guides/features/sysadmin/platform-communication' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/features/sysadmin/platform-communication') }}">
+                                                <span class="material-symbols-outlined me-2"
+                                                    style="font-size: 1rem;">campaign</span>
+                                                Announcements & Support
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
                         {% endif %}
 
                         {% if audience == 'devops' %}
@@ -563,18 +623,18 @@
     }
 
     /* Python markdown wraps loose-list items in <p> tags — keep them compact */
-    .markdown-content li > p {
+    .markdown-content li>p {
         margin-top: 0;
         margin-bottom: 0.25rem;
     }
 
-    .markdown-content li > p:last-child {
+    .markdown-content li>p:last-child {
         margin-bottom: 0;
     }
 
     /* Nested lists */
-    .markdown-content li > ul,
-    .markdown-content li > ol {
+    .markdown-content li>ul,
+    .markdown-content li>ol {
         margin-top: 0.25rem;
         margin-bottom: 0.25rem;
     }
