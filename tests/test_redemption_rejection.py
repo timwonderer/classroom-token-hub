@@ -79,7 +79,7 @@ def test_reject_redemption_refunds_student(client, teacher_admin, student_in_cla
     
     # Verify purchase deduction
     db.session.refresh(student)
-    assert student.checking_balance == float(initial_balance - Decimal('15.00'))
+    assert student.checking_balance == initial_balance - Decimal('15.00')
     
     # Get the student item
     student_item = StudentItem.query.filter_by(student_id=student.id, store_item_id=item.id).first()
@@ -114,7 +114,7 @@ def test_reject_redemption_refunds_student(client, teacher_admin, student_in_cla
     # 3. Verify Refund
     db.session.refresh(student)
     # Balance should be back to initial (100)
-    assert student.checking_balance == float(initial_balance)
+    assert student.checking_balance == initial_balance
     
     # Item should no longer be active in inventory; keep history as rejected.
     item_check = db.session.get(StudentItem, student_item.id)
@@ -177,7 +177,7 @@ def test_reject_redemption_refunds_single_unit_from_multi_quantity_purchase(clie
     assert purchase_resp.json['status'] == 'success'
 
     db.session.refresh(student)
-    assert student.checking_balance == float(initial_balance - Decimal('30.00'))
+    assert student.checking_balance == initial_balance - Decimal('30.00')
 
     student_item = StudentItem.query.filter_by(student_id=student.id, store_item_id=item.id).first()
     assert student_item is not None
@@ -202,7 +202,7 @@ def test_reject_redemption_refunds_single_unit_from_multi_quantity_purchase(clie
     assert resp.json['status'] == 'success'
 
     db.session.refresh(student)
-    assert student.checking_balance == float(initial_balance - Decimal('20.00'))
+    assert student.checking_balance == initial_balance - Decimal('20.00')
 
     refund_tx = Transaction.query.filter_by(
         student_id=student.id,

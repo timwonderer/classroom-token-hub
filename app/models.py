@@ -332,14 +332,12 @@ class Student(db.Model):
     @property
     def checking_balance(self):
         total = sum((_quantize_currency(tx.amount) for tx in self.transactions if tx.account_type == 'checking' and not tx.is_void), Decimal('0.00'))
-        # CRITICAL: Convert to float for compatibility with arithmetic calculations
-        return float(_quantize_currency(total))
+        return _quantize_currency(total)
 
     @property
     def savings_balance(self):
         total = sum((_quantize_currency(tx.amount) for tx in self.transactions if tx.account_type == 'savings' and not tx.is_void), Decimal('0.00'))
-        # CRITICAL: Convert to float for compatibility with arithmetic calculations
-        return float(_quantize_currency(total))
+        return _quantize_currency(total)
 
     def get_active_insurance(self, teacher_id):
         """Return the active insurance enrollment scoped to a teacher, if any."""
