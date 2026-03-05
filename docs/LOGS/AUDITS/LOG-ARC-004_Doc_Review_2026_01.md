@@ -227,14 +227,14 @@ Despite being under size limit, this file tries to serve 3 purposes:
 #### 2. user-guides/features/banking/transferring-money.md
 **Line 82:**
 ```markdown
-[Understanding Savings](/docs/user-guides/features/banking/understanding-savings)
+[Understanding Savings](../../user-guides/features/student/banking/savings-interest.md)
 ```
 **Issue:** File does not exist
 **Fix:** Create file OR remove link
 
 **Line 156:**
 ```markdown
-[Student Buying Guide](/docs/user-guides/features/store/student-buying)
+[Student Buying Guide](../../user-guides/features/student/store/browse-buy.md)
 ```
 **Issue:** File does not exist
 **Fix:** Create file OR remove link
