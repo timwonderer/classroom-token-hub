@@ -521,7 +521,12 @@ def view_doc(doc_path):
                 # Ensure redirect target is a relative URL without scheme or netloc
                 target = target.replace('\\', '')
                 parsed = urlparse(target)
-                if not parsed.scheme and not parsed.netloc:
+                if parsed.scheme or parsed.netloc:
+                    current_app.logger.warning(
+                        "Blocked unsafe redirect attempt to %r from path %r",
+                        target, request.path
+                    )
+                else:
                     return redirect(target, code=301)
 
         # Read and parse the file
