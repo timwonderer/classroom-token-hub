@@ -503,7 +503,7 @@ def purchase_item():
         item.bulk_discount_quantity is not None and
         item.bulk_discount_percentage is not None and
         quantity >= item.bulk_discount_quantity):
-        discount_multiplier = 1 - (item.bulk_discount_percentage / 100)
+        discount_multiplier = Decimal('1') - (Decimal(str(item.bulk_discount_percentage)) / 100)
         unit_price = item.price * discount_multiplier
 
     total_price = unit_price * quantity
