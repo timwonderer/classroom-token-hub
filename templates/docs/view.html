@@ -199,7 +199,7 @@
                                                 href="{{ url_for('docs.view_doc', doc_path='user-guides/features/sysadmin/teacher-management') }}">
                                                 <span class="material-symbols-outlined me-2"
                                                     style="font-size: 1rem;">manage_accounts</span>
-                                                Teacher Management
+                                                Teacher and Class Management
                                             </a>
                                         </li>
                                         <li class="nav-item">
@@ -216,6 +216,66 @@
                                                 <span class="material-symbols-outlined me-2"
                                                     style="font-size: 1rem;">campaign</span>
                                                 Announcements & Support
+                                            </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Legal & Licensing -->
+                        <div class="accordion-item">
+                            <h2 class="accordion-header">
+                                <button
+                                    class="accordion-button {% if not doc_path.startswith('user-guides/legal') %}collapsed{% endif %}"
+                                    type="button" data-bs-toggle="collapse" data-bs-target="#legalCollapse"
+                                    aria-expanded="{% if doc_path.startswith('user-guides/legal') %}true{% else %}false{% endif %}">
+                                    <span class="material-symbols-outlined me-2">gavel</span>
+                                    Legal &amp; Licensing
+                                </button>
+                            </h2>
+                            <div id="legalCollapse"
+                                class="accordion-collapse collapse {% if doc_path.startswith('user-guides/legal') %}show{% endif %}">
+                                <div class="accordion-body p-0">
+                                    <ul class="nav flex-column">
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'user-guides/legal/index' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/legal/index') }}">
+                                                <span class="material-symbols-outlined me-2"
+                                                    style="font-size: 1rem;">list</span>
+                                                All Legal Documents
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'user-guides/legal/license' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/legal/license') }}">
+                                                <span class="material-symbols-outlined me-2"
+                                                    style="font-size: 1rem;">description</span>
+                                                License
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'user-guides/legal/commercial' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/legal/commercial') }}">
+                                                <span class="material-symbols-outlined me-2"
+                                                    style="font-size: 1rem;">paid</span>
+                                                Commercial Use Policy
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'user-guides/legal/attribution' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/legal/attribution') }}">
+                                                <span class="material-symbols-outlined me-2"
+                                                    style="font-size: 1rem;">fact_check</span>
+                                                Attribution
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link {% if doc_path == 'user-guides/legal/third-party-notices' %}active{% endif %}"
+                                                href="{{ url_for('docs.view_doc', doc_path='user-guides/legal/third-party-notices') }}">
+                                                <span class="material-symbols-outlined me-2"
+                                                    style="font-size: 1rem;">receipt_long</span>
+                                                Third-Party Notices
                                             </a>
                                         </li>
                                     </ul>
