@@ -882,7 +882,6 @@ def _sync_transaction_amount_cents(_mapper, _connection, target):
         if seat_id:
             target.seat_id = int(seat_id)
 
-
 def _resolve_seat_id(connection, student_id, join_code):
     """Lookup seat ID for a (student_id, join_code) pair."""
     if not student_id or not join_code:
