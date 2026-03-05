@@ -8,7 +8,9 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Fixed
+- **Docs: GitHub-style alert rendering** — `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, and `> [!CAUTION]` callouts in markdown files now render as styled alert boxes instead of displaying the raw `[!TYPE]` text inside a plain blockquote. A `preprocess_github_alerts()` pre-processor was added to `app/routes/docs.py` that converts alert blockquotes in the markdown source before the library renders them, circumventing a Python `markdown` library limitation where adjacent blockquotes are merged into one element. Each alert body is rendered through a dedicated markdown pass so inline and block markup (bold, code, links, lists) inside the alert body is fully processed. Five alert types are supported with on-brand colours and Material Symbols icons: Note (blue/info), Tip (teal/lightbulb), Important (purple/priority_high), Warning (amber/warning), Caution (red/dangerous).
+- **Docs: Unordered list display** — Lists were sometimes rendering without bullets due to missing `list-style-type` declarations and Python markdown's "loose list" behaviour (wrapping each item's content in `<p>` tags, which some browser/CSS combinations display as block paragraphs). Added explicit `list-style-type: disc/decimal`, `display: list-item`, and compact `<p>`-inside-`<li>` margin rules to the documentation stylesheet.
 
 ## [1.9.0] - 2026-03-04
 

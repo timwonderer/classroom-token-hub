@@ -80,6 +80,23 @@ DOCS_ALLOWED_ATTRIBUTES = {
 }
 DOCS_ALLOWED_PROTOCOLS = ['http', 'https', 'mailto']
 
+# Configuration for GitHub-style alert callouts.  Keyed by the alert type
+# keyword (upper-case) as it appears between [! … ] in the source.
+_ALERT_CONFIG = {
+    'NOTE':      {'icon': 'info',          'label': 'Note'},
+    'TIP':       {'icon': 'lightbulb',     'label': 'Tip'},
+    'IMPORTANT': {'icon': 'priority_high', 'label': 'Important'},
+    'WARNING':   {'icon': 'warning',       'label': 'Warning'},
+    'CAUTION':   {'icon': 'dangerous',     'label': 'Caution'},
+}
+
+# Compiled regex that matches the opening line of a GitHub-style alert
+# blockquote, e.g. "> [!NOTE]" or "> [!WARNING] optional inline text".
+_ALERT_START = re.compile(
+    r'^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$',
+    re.IGNORECASE,
+)
+
 
 def parse_front_matter(content):
     """
@@ -134,6 +151,105 @@ def parse_front_matter(content):
         return {}, content
 
 
+def preprocess_github_alerts(content):
+    """
+    Pre-process markdown source to convert GitHub-style blockquote alerts
+    into styled HTML callout blocks before the main markdown renderer runs.
+
+    This avoids a Python markdown library limitation where adjacent blockquotes
+    separated by a blank line are merged into a single ``<blockquote>`` element.
+    By converting alerts here (from the raw markdown source), each alert is
+    handled independently, regardless of what surrounds it.
+
+    The alert body text is rendered through a lightweight markdown pass so
+    that inline and block markup (bold, code, links, nested lists, etc.) is
+    fully converted to HTML before being embedded in the output.  The main
+    renderer then sees the surrounding ``<div>`` elements as raw HTML blocks
+    and passes them through unchanged.
+
+    Supported syntax (identical to GitHub Flavored Markdown)::
+
+        > [!NOTE]
+        > Informational callout.
+
+        > [!TIP]
+        > **Bold** text and ``code`` work inside the body.
+
+        > [!IMPORTANT]
+        > First paragraph.
+        >
+        > Second paragraph.
+
+    Supported types: NOTE, TIP, IMPORTANT, WARNING, CAUTION
+    """
+    lines = content.split('\n')
+    out = []
+    i = 0
+
+    while i < len(lines):
+        m = _ALERT_START.match(lines[i])
+        if m:
+            alert_type = m.group(1).upper()
+            first_text = m.group(2).strip()
+            config = _ALERT_CONFIG[alert_type]
+
+            # Collect the remaining continuation lines of this blockquote.
+            # Any line whose left-stripped form starts with '>' continues the
+            # blockquote (covers "> text", ">text", ">\ttext", ">   ", etc.).
+            # A line that does NOT start with '>' (after lstrip) ends the alert.
+            body_lines = []
+            if first_text:
+                body_lines.append(first_text)
+
+            i += 1
+            while i < len(lines):
+                raw = lines[i]
+                stripped = raw.lstrip()
+                if stripped.startswith('>'):
+                    # Strip the leading '>' and exactly one optional space or
+                    # tab per the blockquote spec.  Using lstrip(' \t') would
+                    # remove multiple leading spaces and break indented code
+                    # blocks inside the alert body.
+                    after_marker = stripped[1:]
+                    if after_marker and after_marker[0] in (' ', '\t'):
+                        after_marker = after_marker[1:]
+                    # A remainder that is empty or all-whitespace is a blank
+                    # line separating paragraphs within the alert body.
+                    body_lines.append(after_marker if after_marker.strip() else '')
+                    i += 1
+                else:
+                    break
+
+            body_text = '\n'.join(body_lines).strip()
+
+            # Render the alert body through a lightweight markdown pass so
+            # that bold, code, links, and other markup are converted to HTML.
+            # Using a separate instance avoids polluting the main TOC / state.
+            body_md = markdown.Markdown(extensions=['extra', FencedCodeExtension()])
+            body_html = body_md.convert(body_text) if body_text else ''
+
+            # Emit a self-contained HTML block.  The main renderer treats
+            # block-level HTML elements (divs starting at column 0) as raw
+            # blocks and passes them through unchanged.
+            alert_html = (
+                f'<div class="md-alert md-alert-{alert_type.lower()}">'
+                f'<div class="md-alert-header">'
+                f'<span class="material-symbols-outlined md-alert-icon">'
+                f'{config["icon"]}</span>'
+                f'<span class="md-alert-label">{config["label"]}</span>'
+                f'</div>'
+                f'<div class="md-alert-body">{body_html}</div>'
+                f'</div>'
+            )
+            out.append(alert_html)
+            out.append('')
+        else:
+            out.append(lines[i])
+            i += 1
+
+    return '\n'.join(out)
+
+
 def render_markdown_content(content, toc_title='On This Page'):
     """
     Convert markdown to HTML with extensions and sanitization.
@@ -149,6 +265,11 @@ def render_markdown_content(content, toc_title='On This Page'):
     line breaks in formatted content like code blocks and tables. Standard
     markdown requires two spaces at the end of a line or a blank line for breaks.
     """
+    # Pre-process GitHub-style alerts before the markdown library sees them.
+    # This must happen first so adjacent alerts are not merged into a single
+    # blockquote by Python's markdown parser.
+    content = preprocess_github_alerts(content)
+
     md = markdown.Markdown(
         extensions=[
             'extra',
