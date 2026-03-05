@@ -63,30 +63,6 @@ If you set coverage above 5x premium or a cap outside 6x-10x, expect more volati
 
 Try to keep fine sizes consistent so students can predict consequences.
 
-### Inflation and events
-
-Inflation should be applied across rent, utilities, store pricing, and insurance together so the economy stays balanced.
-
-- Mild: 1% to 3%
-- Moderate: 3% to 6%
-- Severe: 6% to 10%
-
-### Loans and APR
-
-Risk bands:
-
-- Low risk: 8% to 15%
-- Medium risk: 15% to 35%
-- High risk: 35% to 50%
-
-Payment rule: keep installments under 40% of expected weekly earnings and avoid budgets that go negative for more than two cycles.
-
-### Investments
-
-- CDs: inflation rate + 1% to 3% (lock-in required)
-- Bonds: inflation rate + 0% to 2% (low variance)
-- Stocks: -30% to +30% swings (high risk)
-
 ### Savings interest
 
 Savings interest is a motivation tool. Keep it modest.

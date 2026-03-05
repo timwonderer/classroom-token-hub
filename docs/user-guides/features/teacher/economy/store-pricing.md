@@ -12,16 +12,22 @@ related:
 
 # Store Pricing Strategy
 
-Use this guide to price store items so rewards feel achievable without inflating the economy.
+## Overview
+Use this guide to price store items effectively so rewards feel achievable without causing runaway inflation in your economy.
 
-## Where to work
-Set prices in **Economy > Store** when creating or editing items.
+## Step-by-Step Instructions
 
-## Suggested approach
-- Use your Classroom Wage Index (CWI) as the baseline.
-- Keep basic rewards affordable and reserve premium prices for high-value items.
-- Adjust prices if students are consistently broke or overloaded with cash.
+### Establishing Prices
+1. Navigate to **Economy > Store** to create or edit items.
+2. Calculate your Classroom Wage Index (CWI) to establish a baseline of what an average student earns per week. This is a manual calculation: `CWI = (Total Student Earnings ÷ Number of Weeks)`. Compare this weekly average to item prices to ensure fairness.
+3. Keep basic, frequent rewards highly affordable (e.g., a small percentage of weekly CWI).
+4. Reserve premium prices for high-value or rare items that require long-term saving.
+5. Save your pricing changes.
+
+## Important Notes
+> [!TIP]
+> **Monitor and Adapt:** Adjust your prices dynamically throughout the year if students are consistently broke or overloaded with cash. Use the Economy Health page to monitor affordability.
 
 ## Related guides
-- [Store Items](/docs/user-guides/features/teacher/economy/store-items)
-- [Classroom Economy Guide](/docs/user-guides/economy_guide)
+- [Store Items](store-items.md)
+- [Classroom Economy Guide](../../../economy_guide.md)

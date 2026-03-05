@@ -104,4 +104,4 @@ The **licensor** is the individual or entity offering these terms, and the **sof
 
 ---
 
-**See also:** [Commercial Use Policy](/docs/user-guides/legal/commercial) for detailed guidance on permitted services vs prohibited software monetization.
+**See also:** [Commercial Use Policy](commercial.md) for detailed guidance on permitted services vs prohibited software monetization.

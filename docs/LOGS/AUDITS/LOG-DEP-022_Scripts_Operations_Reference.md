@@ -1,0 +1,309 @@
+# Scripts Directory
+
+This directory contains utility scripts for development, operations, and maintenance of the Classroom Token Hub application.
+
+## Account & Admin Utilities
+
+#### `create_admin.py`
+Creates teacher or system admin accounts.
+
+**Usage:**
+```bash
+python scripts/create_admin.py admin <username>
+python scripts/create_admin.py sysadmin <username>
+```
+
+#### `manage_invites.py`
+Create, list, or expire admin invite codes.
+
+**Usage:**
+```bash
+python scripts/manage_invites.py --help
+```
+
+#### `cleanup_invite_codes.py`
+Normalizes existing invite codes by trimming whitespace.
+
+**Usage:**
+```bash
+python scripts/cleanup_invite_codes.py
+```
+
+## Operational Scripts
+
+### Firewall Management
+
+#### `setup-firewall-complete.sh`
+Automated DigitalOcean firewall setup with Cloudflare and Pulsetic IP ranges using the official DigitalOcean `pydo` client. Creates or updates firewall rules to allow traffic only from Cloudflare's proxy and Pulsetic monitoring.
+
+**Note:** DigitalOcean firewalls allow up to 50 inbound rules. Cloudflare + Pulsetic often exceed this limit. Use separate firewalls when needed.
+
+**Usage:**
+```bash
+# Create new firewall
+./scripts/setup-firewall-complete.sh create <droplet-id> "<your-ssh-ip>"
+
+# Update existing firewall
+./scripts/setup-firewall-complete.sh update <firewall-id>
+```
+
+**Prerequisites:** `python3`, `pydo` (`pip install pydo`), and a DigitalOcean token via `DIGITALOCEAN_ACCESS_TOKEN` or doctl config.
+
+#### `setup-pulsetic-firewall.sh`
+Creates or updates a Pulsetic-only firewall (port 443) using the official DigitalOcean `pydo` client. Use alongside a separate Cloudflare firewall.
+
+**Usage:**
+```bash
+# Create new firewall
+./scripts/setup-pulsetic-firewall.sh create <droplet-id>
+
+# Update existing firewall
+./scripts/setup-pulsetic-firewall.sh update <firewall-id>
+```
+
+**Prerequisites:** `python3`, `pydo` (`pip install pydo`), and a DigitalOcean token via `DIGITALOCEAN_ACCESS_TOKEN` or doctl config.
+
+#### `add-pulsetic-to-firewall.sh`
+Adds only Pulsetic monitoring IPs to an existing firewall using `pydo`. Use this if you already have Cloudflare configured.
+
+**Usage:**
+```bash
+./scripts/add-pulsetic-to-firewall.sh <firewall-id>
+```
+
+#### `create-github-actions-firewall.py`
+Creates a **separate firewall** for GitHub Actions SSH access. This is the recommended approach since GitHub has ~70 IP ranges, which would exceed DigitalOcean's 50-rule limit per firewall.
+
+**Usage:**
+```bash
+python3 scripts/create-github-actions-firewall.py <droplet-id>
+```
+
+**Note:** Multiple firewalls can be applied to one droplet. This creates a dedicated firewall for GitHub Actions, keeping your main firewall clean.
+
+#### `firewall-ips.json`
+Reference file containing all Cloudflare and Pulsetic IP ranges in JSON format. Use for manual setup or custom automation.
+
+
+**Documentation:** [DigitalOcean & Cloudflare Setup Guide](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-005_Digitalocean_Cloudflare_Setup.md)
+
+---
+
+### Data Management
+
+#### `cleanup_duplicates_flask.py`
+Identifies and safely removes duplicate student records while preserving all related data (transactions, attendance, hall passes, etc.).
+
+**Usage:**
+```bash
+python scripts/cleanup_duplicates_flask.py --list    # Preview duplicates
+python scripts/cleanup_duplicates_flask.py --delete  # Remove duplicates
+```
+
+**Documentation:** [Cleanup Duplicates Guide](LOG-DEP-002_Cleanup_Duplicates.md)
+
+#### `cleanup_duplicates.py`
+Legacy cleanup script (simpler version). Use `cleanup_duplicates_flask.py` for production as it properly handles data migration.
+
+#### `comprehensive_legacy_migration.py` ⭐ **RECOMMENDED**
+Complete, all-in-one migration of legacy accounts to the new multi-tenancy system. This is the **recommended approach** for migrating production databases.
+
+**What it does:**
+- Migrates legacy students (creates StudentTeacher + TeacherBlock entries)
+- Backfills join_codes for all TeacherBlock entries
+- Backfills join_codes for transactions, tap events, and related tables
+- Provides comprehensive verification and error reporting
+- Supports dry-run mode for safe preview before applying changes
+
+**Usage:**
+```bash
+# Preview changes (recommended first)
+python scripts/comprehensive_legacy_migration.py --dry-run
+
+# Run migration
+python scripts/comprehensive_legacy_migration.py
+```
+
+**Documentation:** [Legacy Account Migration Guide](LOG-DEP-010_Legacy_Account_Migration.md)
+
+#### `migrate_legacy_students.py`
+Migrates legacy students (pre-join-code system) to use proper `StudentTeacher` associations and `TeacherBlock` entries. **Note:** For production use, consider using `comprehensive_legacy_migration.py` instead.
+
+**Usage:**
+```bash
+python scripts/migrate_legacy_students.py
+```
+
+**Note:** Also available as Flask CLI command: `flask migrate-legacy-students`
+
+#### `backfill_join_codes.py`
+Backfills join codes for teacher-block combinations that are missing them. **Note:** For production use, consider using `comprehensive_legacy_migration.py` instead.
+
+**Usage:**
+```bash
+python scripts/backfill_join_codes.py
+```
+
+#### `fix_missing_student_teacher_associations.py`
+Creates StudentTeacher records for students missing them. **Note:** For production use, consider using `comprehensive_legacy_migration.py` instead.
+
+**Usage:**
+```bash
+python scripts/fix_missing_student_teacher_associations.py
+```
+
+---
+
+### Diagnostics
+
+#### `check_migration.py`
+Checks the current Alembic migration version in the database and lists recent migration files.
+
+**Usage:**
+```bash
+python scripts/check_migration.py
+```
+
+#### `check_orphaned_insurance.py`
+Finds insurance policies with NULL teacher_id that won't show up in any teacher's admin panel.
+
+**Usage:**
+```bash
+python scripts/check_orphaned_insurance.py
+```
+
+#### `prompt_insurance_tier_upgrade.py`
+Flags teachers who still have legacy insurance policies so they see a one-time dashboard prompt to migrate to the new tiered design.
+
+**Usage:**
+```bash
+python scripts/prompt_insurance_tier_upgrade.py
+```
+
+#### `debug_student_state.py`
+Diagnostic script to inspect student and TeacherBlock state in the database.
+
+**Usage:**
+```bash
+python scripts/debug_student_state.py
+```
+
+---
+
+## Development Scripts
+
+### `setup_jules.sh`
+Bootstrap helper for local development environments.
+
+**Usage:**
+```bash
+bash scripts/setup_jules.sh
+```
+
+### `seed_dummy_students.py`
+Seeds the database with sample students for development and demos.
+
+**Usage:**
+```bash
+python scripts/seed_dummy_students.py
+```
+
+### `check_syntax.py`
+Validates Python syntax across migration files.
+
+**Usage:**
+```bash
+python scripts/check_syntax.py
+```
+
+### `generate_revision_id.py`
+Generates a unique Alembic-style migration revision ID.
+
+**Usage:**
+```bash
+python scripts/generate_revision_id.py
+```
+
+### `add_join_code_column.py`
+SQLite-only helper to add `join_code` to `student_blocks`.
+
+**Usage:**
+```bash
+python scripts/add_join_code_column.py
+```
+
+### `setup-hooks.sh`
+Installs git hooks for migration safety checks. **Run this after cloning the repository!**
+
+**Usage:**
+```bash
+bash scripts/setup-hooks.sh
+```
+
+This prevents migration conflicts by checking for multiple migration heads before pushing.
+
+### `check-migrations.sh`
+Pre-push git hook that validates migration integrity. Installed by `setup-hooks.sh`.
+
+### `check-migration-heads.sh`
+Quick script to verify there's exactly one migration head. Use before pushing migration changes.
+
+**Usage:**
+```bash
+bash scripts/check-migration-heads.sh
+```
+
+### `update_packages.sh`
+Updates Python package dependencies.
+
+**Usage:**
+```bash
+bash scripts/update_packages.sh
+```
+
+---
+
+## Development Utilities
+
+The `dev-utilities/` subdirectory contains additional development tools. See [LOG-DEP-023_Dev_Utilities_Safety_Guide.md](LOG-DEP-023_Dev_Utilities_Safety_Guide.md) for details.
+
+**⚠️ WARNING:** Scripts in `dev-utilities/` can cause permanent data loss. Only use in development environments.
+
+---
+
+## Adding New Scripts
+
+When adding new scripts to this directory:
+
+1. **Make scripts executable** if they should be run directly:
+   ```bash
+   chmod +x scripts/your_script.sh
+   ```
+
+2. **Add shebang** at the top of the file:
+   - Python: `#!/usr/bin/env python3`
+   - Bash: `#!/usr/bin/env bash`
+
+3. **Document in this README** with:
+   - Brief description
+   - Usage example
+   - Link to detailed documentation (if applicable)
+
+4. **Import from app package** for Python scripts:
+   ```python
+   from app import create_app, db
+   ```
+   Scripts must be run from the repository root directory for proper module resolution.
+   Avoid hardcoded paths like `/home/user/classroom-economy`
+
+5. **Add error handling** and helpful error messages
+
+## Related Documentation
+
+- **[Deployment SOPs](../../STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)** - Operational procedures using these scripts
+- **[Contributing Guide](../../../CONTRIBUTING.md)** - Development workflow and git hooks
+- **[Documentation Index](../../STANDARD_OPERATING_PROCEDURES/DOCUMENTATION/SOP-DOC-002_Documentation_Index.md)** - Canonical documentation map
+
+---
+
+**Last Updated:** 2025-12-19

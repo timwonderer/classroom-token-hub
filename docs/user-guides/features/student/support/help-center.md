@@ -11,14 +11,19 @@ related:
 
 # Help Center Basics
 
-Use Help and Support for quick answers and to reach your teacher.
+## Overview
+The Help and Support page is your starting point for diagnosing common issues or reaching out to your teacher when something goes wrong with your account or balances.
 
-## Where to work
-Go to **Help and Support** from the student sidebar.
+## Step-by-Step Instructions
 
-## What you can do
-- Find quick diagnostics for common issues.
-- Submit a report when something goes wrong.
+### Getting Help
+1. Navigate to **Help and Support** from the student sidebar.
+2. Review the provided diagnostic links (e.g., "Why is my rent late?", "Where did my checking balance go?") for immediate self-serve answers.
+3. If you cannot solve the problem yourself, use the **Report an Issue** button to formally submit a ticket to your teacher.
+
+## Important Notes
+> [!TIP]
+> **Check your History:** Before submitting a report about missing money, always double-check your **Accounts > Transactions** tab. Often, an automatic rent deduction or insurance premium is the culprit, not a bug.
 
 ## Related guides
-- [Student Diagnostics Index](/docs/user-guides/diagnostics/student)
+- [Student Diagnostics Index](../../../diagnostics/student.md)

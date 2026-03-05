@@ -1,18 +1,18 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-02-09
-**Current Version:** 1.8.0
-**Target:** 1.9.0 Future Enhancements
+**Last Updated:** 2026-03-04
+**Current Version:** 1.9.0
+**Target:** 1.10.0 Future Enhancements
 
 ---
 
 ## Quick Links
 
-- **[Architecture Guide](docs/technical-reference/architecture.md)** - System design and patterns
-- **[Database Schema](docs/technical-reference/database_schema.md)** - Current data models
-- **[API Reference](docs/technical-reference/api_reference.md)** - REST API documentation
+- **[Architecture Guide](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)** - System design and patterns
+- **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)** - Current data models
+- **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)** - REST API documentation
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute
-- **[Project History](PROJECT_HISTORY.md)** - Project evolution and philosophy
+- **[Project History](docs/LOGS/AUDITS/LOG-ARC-031_Project_History.md)** - Project evolution and philosophy
 
 ## Static Assets and Cache Busting
 
@@ -32,6 +32,18 @@
 
 ## Recent Releases
 
+### ✅ Version 1.9.0 - March 1, 2026
+
+**Documentation taxonomy and navigation integrity release:**
+
+#### 🎯 Key Accomplishments
+- ✅ **Taxonomy Consolidation** - Migrated docs into canonical namespaces and standardized paths
+- ✅ **Docs Navigation Fixes** - Repaired docs routes, links, breadcrumbs, and dotted filename handling
+- ✅ **Audience Toggle** - Added user/devops audience filtering in docs views/search
+- ✅ **Rendering Hardening** - Improved front matter detection and markdown parsing safeguards
+
+See [LOG-REL-016_Release_Notes_V1.9.0.md](docs/LOGS/RELEASES/LOG-REL-016_Release_Notes_V1.9.0.md) for full details.
+
 ### ✅ Version 1.8.0 - February 9, 2026
 
 **Major feature release focused on rent item types, coverage tracking, and stability fixes:**
@@ -43,7 +55,7 @@
 - ✅ **Insurance Class Scoping** - Fixed insurance management filters to respect selected class period
 - ✅ **Security Hardening** - Improved Grafana proxy content-type filtering to prevent XSS
 
-See [RELEASE_NOTES_v1.8.0.md](docs/archive/releases/RELEASE_NOTES_v1.8.0.md) for full details.
+See [RELEASE_NOTES_v1.8.0.md](docs/LOGS/RELEASES/LOG-REL-015_Release_Notes_V1.8.0.md) for full details.
 
 ### ✅ Version 1.7.0 - January 9, 2026
 
@@ -60,7 +72,7 @@ See [RELEASE_NOTES_v1.8.0.md](docs/archive/releases/RELEASE_NOTES_v1.8.0.md) for
 - ✅ **ToS Acknowledgment** - Compliance modal during admin signup
 - ✅ **Issue Resolution Improvements** - EasyMDE form fixes and zero-value event display
 
-See [RELEASE_NOTES_v1.7.0.md](docs/archive/releases/RELEASE_NOTES_v1.7.0.md) for full details.
+See [RELEASE_NOTES_v1.7.0.md](docs/LOGS/RELEASES/LOG-REL-013_Release_Notes_V1.7.0.md) for full details.
 
 ### ✅ Version 1.6.0 - January 1, 2026
 
@@ -72,7 +84,7 @@ See [RELEASE_NOTES_v1.7.0.md](docs/archive/releases/RELEASE_NOTES_v1.7.0.md) for
 - ✅ **Passkey Authentication Fixes** - Improved environment variable loading and error handling
 - ✅ **Documentation Updates** - Standardized file paths and references
 
-See [RELEASE_NOTES_v1.6.0.md](docs/archive/releases/RELEASE_NOTES_v1.6.0.md) for full details.
+See [RELEASE_NOTES_v1.6.0.md](docs/LOGS/RELEASES/LOG-REL-012_Release_Notes_V1.6.0.md) for full details.
 
 ### ✅ Version 1.5.0 - December 29, 2025
 
@@ -84,7 +96,7 @@ See [RELEASE_NOTES_v1.6.0.md](docs/archive/releases/RELEASE_NOTES_v1.6.0.md) for
 - ✅ **Security Hardening** - Comprehensive attack surface audit and remediation
 - ✅ **Time Handling** - Standardized UTC timestamp formatting
 
-See [RELEASE_NOTES_v1.5.0.md](docs/archive/releases/RELEASE_NOTES_v1.5.0.md) for full details.
+See [RELEASE_NOTES_v1.5.0.md](docs/LOGS/RELEASES/LOG-REL-011_Release_Notes_V1.5.0.md) for full details.
 
 ### ✅ Version 1.4.0 - December 27, 2025
 
@@ -97,7 +109,7 @@ See [RELEASE_NOTES_v1.5.0.md](docs/archive/releases/RELEASE_NOTES_v1.5.0.md) for
 - ✅ **Streamlined Authentication** - Improved login flow with better error handling
 - ✅ **Student Dashboard Improvements** - Side-by-side account cards with projected interest
 
-See [RELEASE_NOTES_v1.4.0.md](docs/archive/releases/RELEASE_NOTES_v1.4.0.md) for full details.
+See [RELEASE_NOTES_v1.4.0.md](docs/LOGS/RELEASES/LOG-REL-010_Release_Notes_V1.4.0.md) for full details.
 
 ### ✅ Version 1.3.0 - December 25, 2025
 
@@ -109,7 +121,7 @@ See [RELEASE_NOTES_v1.4.0.md](docs/archive/releases/RELEASE_NOTES_v1.4.0.md) for
 - ✅ **Security Audit** - Comprehensive attack surface security audit completed
 - ✅ **Service Worker Fixes** - Resolved persistent browser console errors
 
-See [RELEASE_NOTES_v1.3.0.md](docs/archive/releases/RELEASE_NOTES_v1.3.0.md) for full details.
+See [RELEASE_NOTES_v1.3.0.md](docs/LOGS/RELEASES/LOG-REL-009_Release_Notes_V1.3.0.md) for full details.
 
 ### ✅ Version 1.2.0 - December 18, 2025
 
@@ -123,7 +135,7 @@ See [RELEASE_NOTES_v1.3.0.md](docs/archive/releases/RELEASE_NOTES_v1.3.0.md) for
 - ✅ **Critical Payroll Fix** - Resolved multi-tenancy data leak in payroll system
 - ✅ **Improved Terminology** - "Start Work/Break Done" replaces "Tap In/Out"
 
-See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for full details.
+See [RELEASE_NOTES_v1.2.0.md](docs/LOGS/RELEASES/LOG-REL-007_Release_Notes_V1.2.0.md) for full details.
 
 ### ✅ Version 1.0.0 - November 29, 2024
 
@@ -134,7 +146,7 @@ See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for
 
 ---
 
-## Development Priorities (v1.9)
+## Development Priorities (v1.10)
 
 ### 🟠 HIGH PRIORITY
 
@@ -170,7 +182,7 @@ See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for
 
 **Tasks:**
 - [ ] Re-audit migrations for idempotency compliance
-- [ ] Update `docs/development/MIGRATION_COMPLIANCE_REVIEW.md` with current status and findings
+- [ ] Update `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-009_Migration_Compliance_Review.md` with current status and findings
 
 ### 🟡 MEDIUM PRIORITY
 
@@ -208,7 +220,7 @@ See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for
 
 ---
 
-## Future Roadmap (Post-1.0)
+## Historical Roadmap (Archived)
 
 ### Version 1.1 - Analytics & Insights ✅ **RELEASED 2024-12-13**
 - ✅ Dashboard visualizations for student progress (weekly stats card with attendance, earnings, spending)
@@ -219,7 +231,7 @@ See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for
 - 🔄 Teacher analytics for payroll and store performance (partial - economy health page provides CWI analysis)
 - ⏳ Enhanced reporting and export capabilities (planned for future release)
 
-**See:** [RELEASE_NOTES_v1.1.0.md](docs/archive/releases/RELEASE_NOTES_v1.1.0.md) for complete details
+**See:** [RELEASE_NOTES_v1.1.0.md](docs/LOGS/RELEASES/LOG-REL-005_Release_Notes_V1.1.0.md) for complete details
 
 ### Version 1.2 - Mobile Experience
 - Progressive Web App (PWA) capabilities
@@ -234,7 +246,6 @@ See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for
 - Student engagement metrics
 
 ### Version 1.4 - Extended Features
-- Parent portal (optional, privacy-controlled)
 - Curriculum integration resources
 - Pre-built lesson plans
 - Financial literacy assessment tools
@@ -263,7 +274,7 @@ See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for
 
 #### 2. Teacher Self-Serve Account Recovery (Future)
 **Status:** Documented, deferred due to security complexity
-**Documentation:** `docs/development/SYSADMIN_INTERFACE_DESIGN.md` (mentions TOTP reset)
+**Documentation:** `docs/ARCHITECTURE/SYSADMIN/ARC-SYS-001_Sysadmin_Interface.md` (mentions TOTP reset)
 
 **Problem:** Teachers who lose access to their TOTP authenticator app are locked out of their accounts. Currently requires sysadmin intervention.
 
@@ -276,13 +287,13 @@ See [RELEASE_NOTES_v1.2.0.md](docs/archive/releases/RELEASE_NOTES_v1.2.0.md) for
 - **SMS verification** - More PII, SIM-swapping attacks
 - **Printable recovery key** - User responsibility to secure physical key
 
-**Current Workaround:** System admins can reset teacher TOTP via `/sysadmin` interface (planned feature)
+**Current Approach:** Teachers recover access through student-assisted recovery, or create a new account if recovery is not possible.
 
 **Estimated Effort:** 3-4 weeks (implementation) + security review
-**Priority:** Medium (nice-to-have, but sysadmin reset is acceptable)
+**Priority:** Medium (nice-to-have, but the current recovery model is intentional by design)
 **Blocker:** Requires decision on acceptable security/PII tradeoffs
 
-**Recommendation:** Defer until v1.5+ and prioritize sysadmin-assisted TOTP reset as the primary recovery path.
+**Recommendation:** Keep the current recovery design unless there is a security-reviewed requirement to expand recovery options.
 
 #### 1. Custom Condition Builder (v1.7+)
 **Status:** Research completed, deferred to future release
@@ -491,7 +502,7 @@ When ready to finalize multi-teacher model:
 - **Queries:** Use scoped helpers for tenant-aware access
 - **Timestamps:** Use `datetime.now(timezone.utc)` (not deprecated `utcnow()`)
 - **Session Access:** Use `db.session.get(Model, id)` (not deprecated `Model.query.get()`)
-- **Schema Changes:** See **[Migration Best Practices](docs/development/MIGRATION_BEST_PRACTICES.md)** for the mandatory "Expand and Contract" workflow.
+- **Schema Changes:** See **[Migration Best Practices](docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md)** for the mandatory "Expand and Contract" workflow.
 
 ### Safe Schema Evolution (Constraint & Column Removal)
 **CRITICAL:** Adopt the **Expand and Contract** pattern. Attempting to delete Code + DB in the same release is PROHIBITED.
@@ -596,29 +607,29 @@ When ready to finalize multi-teacher model:
 - **[Teacher Manual](docs/user-guides/teacher_manual.md)** - Comprehensive admin guide
 
 ### Technical Reference
-- **[Architecture](docs/technical-reference/architecture.md)** - System design and patterns
-- **[Database Schema](docs/technical-reference/database_schema.md)** - Data models and relationships
-- **[API Reference](docs/technical-reference/api_reference.md)** - REST endpoints
-- **[Timezone Handling](docs/technical-reference/TIMEZONE_HANDLING.md)** - UTC storage and conversion
-- **[Economy Specification](docs/technical-reference/economy-specification.md)** - Financial system ratios and rules
+- **[Architecture](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)** - System design and patterns
+- **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)** - Data models and relationships
+- **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)** - REST endpoints
+- **[Timezone Handling](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-012_Datetime_Handling_Specification.md)** - UTC storage and conversion
+- **[Economy Specification](docs/DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification.md)** - Financial system ratios and rules
 
 ### Development Guides
-- **[Economy Balance Checker](docs/development/ECONOMY_BALANCE_CHECKER.md)** - CWI implementation guide
-- **[Migration Guide](docs/development/MIGRATION_GUIDE.md)** - Alembic best practices
-- **[Migration Best Practices](docs/development/MIGRATION_BEST_PRACTICES.md)** - Database migration guidelines
-- **[Seeding Instructions](docs/development/SEEDING_INSTRUCTIONS.md)** - Test data setup
-- **[Deprecated Patterns](docs/development/DEPRECATED_CODE_PATTERNS.md)** - Code modernization tracking
-- **[System Admin Design](docs/development/SYSADMIN_INTERFACE_DESIGN.md)** - Admin interface patterns
+- **[Economy Balance Checker](docs/DOMAINS/ECONOMY_DESIGN/DOM-ECON-001_Economy_Balance_Checker.md)** - CWI implementation guide
+- **[Migration Guide](docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md)** - Alembic best practices
+- **[Migration Best Practices](docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-011_Migration_Specifications.md)** - Database migration guidelines
+- **[Seeding Instructions](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-020_Seeding_Instructions.md)** - Test data setup
+- **[Deprecated Patterns](docs/LOGS/AUDITS/LOG-ARC-036_Deprecated_Code_Patterns.md)** - Code modernization tracking
+- **[System Admin Design](docs/ARCHITECTURE/SYSADMIN/ARC-SYS-001_Sysadmin_Interface.md)** - Admin interface patterns
 
 ### Operations & Deployment
-- **[Deployment Guide](docs/DEPLOYMENT.md)** - Production deployment
-- **[Operations Guides](docs/operations/)** - Maintenance procedures
-- **[Security Audits](docs/security/)** - Security assessment reports
+- **[Deployment Guide](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)** - Production deployment
+- **[Operations Guides](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/)** - Maintenance procedures
+- **[Security Audits](docs/SECURITY/)** - Security assessment reports
 
 ### Historical Reference
-- **[Project History](PROJECT_HISTORY.md)** - Evolution and philosophy
+- **[Project History](docs/LOGS/AUDITS/LOG-ARC-031_Project_History.md)** - Evolution and philosophy
 - **[Changelog](CHANGELOG.md)** - Version history
-- **[Archive](docs/archive/)** - Historical reports and fixes
+- **[Archive](docs/LOGS/AUDITS/)** - Historical reports and fixes
 
 ---
 
@@ -642,26 +653,28 @@ Version 1.0 has been successfully released with the following criteria met:
 
 ## Getting Help
 
-- **Documentation Issues:** Check [docs/README.md](docs/README.md) for navigation
-- **Technical Questions:** Review [Architecture Guide](docs/technical-reference/architecture.md)
-- **Security Concerns:** See [Security Audits](docs/security/)
+- **Documentation Issues:** Check [docs/README.md](docs/GITHUB_SITE/README.md) for navigation
+- **Technical Questions:** Review [Architecture Guide](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)
+- **Security Concerns:** See [Security Audits](docs/SECURITY/)
 - **Contributing:** Read [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ---
 
-**Next Immediate Actions (v1.2):**
+**Next Immediate Actions (v1.10):**
 
-1. Begin mobile experience improvements (PWA capabilities)
-2. Complete multi-teacher hardening (remove `students.teacher_id` dependency)
-3. Add shared-student test coverage for payroll and attendance
-4. Explore offline support for attendance tracking
-5. Continue "Admin Experience Polish" initiatives
+1. Complete multi-teacher hardening (remove `students.teacher_id` dependency)
+2. Add shared-student test coverage for payroll and attendance
+3. Publish migration runbooks and maintenance-mode pre/post checks
+4. Complete migration compliance re-audit and publish runbook updates
+5. Continue admin experience polish and export capabilities
 
 **Recent Releases:**
+- **v1.9.0** (2026-03-01) - Docs Taxonomy Consolidation and Navigation Integrity
+- **v1.8.0** (2026-02-09) - Rent Item Types, Coverage Tracking, Stability Fixes
 - **v1.7.0** (2026-01-09) - Analytics, Rent Itemization, Mobile Navigation
 - **v1.6.0** (2026-01-01) - Repository Organization
 - **v1.5.0** (2025-12-29) - Issue Resolution System
 
 ---
-**Last Updated:** 2026-01-10
+**Last Updated:** 2026-03-04
 **Maintained by:** Project maintainers and contributors

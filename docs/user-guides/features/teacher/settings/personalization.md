@@ -11,16 +11,20 @@ related:
 
 # Personalization
 
-Update your display name and class labels.
+## Overview
+Personalization settings allow you to update how your name appears to students and customize the labels you use to identify your class periods.
 
-## Where to work
-Go to **Settings > Personalization**.
+## Step-by-Step Instructions
 
-## Display name
-Set a display name for how you appear to others.
+### Updating Names and Labels
+1. Navigate to **Settings > Personalization** in the teacher sidebar.
+2. Under **Display Name**, set the name you want students to see (e.g., "Mr. Smith").
+3. Under **Class Labels**, rename your generic class sections to friendly labels that make sense for your schedule (e.g., "Period 1" or "Honors Biology").
+4. Save your changes.
 
-## Class labels
-Rename class sections so students see friendly labels like Period 1 or Honors Bio.
+## Important Notes
+> [!NOTE]
+> Students will see these updated class labels on their dashboard when they log in to your economy.
 
 ## Related guides
-- [Class Setup and Join Codes](/docs/user-guides/features/teacher/classroom/class-setup)
+- [Class Setup and Join Codes](../classroom/class-setup.md)

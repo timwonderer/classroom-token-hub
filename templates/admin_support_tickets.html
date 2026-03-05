@@ -16,6 +16,7 @@
                     <p class="text-muted">If you want to report a student issue, your student must initiate the ticket first before you can elevate it to our support team.</p>
 
                     <form method="POST" action="{{ url_for('admin.help_support') }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <div class="mb-3">
                             <label for="join_code" class="form-label">This issue applies to: <span class="text-danger">*</span></label>
                             <select class="form-select" id="join_code" name="join_code" required>

@@ -12,21 +12,21 @@ keywords: [classroom, students, attendance, announcements, issues]
 This section groups all teacher classroom tools in one place.
 
 ## Dashboard
-- [Teacher Dashboard Overview](/docs/user-guides/features/teacher/classroom/dashboard-overview)
+- [Teacher Dashboard Overview](dashboard-overview.md)
 
 ## Students and Classes
-- [Class Setup and Join Codes](/docs/user-guides/features/teacher/classroom/class-setup)
-- [Student Management Overview](/docs/user-guides/features/teacher/classroom/students-overview)
+- [Class Setup and Join Codes](class-setup.md)
+- [Student Management Overview](students-overview.md)
 
 ## Attendance
-- [Attendance and Approvals](/docs/user-guides/features/teacher/classroom/attendance-approvals)
-- [Fix Attendance Errors](/docs/user-guides/features/teacher/classroom/attendance-corrections)
+- [Attendance and Approvals](attendance-approvals.md)
+- [Fix Attendance Errors](attendance-corrections.md)
 
 ## Hall Pass
-- [Hall Pass](/docs/user-guides/features/teacher/classroom/hall-pass)
+- [Hall Pass](hall-pass.md)
 
 ## Announcements
-- [Announcements](/docs/user-guides/features/teacher/classroom/announcements)
+- [Announcements](announcements.md)
 
 ## Student Issues
-- [Student Issues Queue](/docs/user-guides/features/teacher/classroom/student-issues)
+- [Student Issues Queue](student-issues.md)

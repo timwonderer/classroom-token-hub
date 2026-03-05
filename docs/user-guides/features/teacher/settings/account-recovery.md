@@ -11,17 +11,20 @@ related:
 
 # Account Recovery
 
-Teacher recovery uses a student-assisted method rather than email or phone verification.
+## Overview
+Teacher account recovery utilizes a secure student-assisted verification method. This ensures that you can regain access to your account without the platform needing to store sensitive personal contact information like emails or phone numbers.
 
-## Where to work
-Go to **Settings > Account Recovery** if you see the setup prompt.
+## Step-by-Step Instructions
 
-## What you will need
-- Your date of birth.
-- Student usernames from classes you teach.
+### Setting Up Account Recovery
+1. Navigate to **Settings > Account Recovery** in the teacher sidebar. 
+2. Ensure you have your date of birth accurately recorded.
+3. Provide a few known student usernames from the classes you teach. 
+4. The system will use these data points (something you know + something you have access to in the physical classroom) to verify your identity if you ever lose your passkey.
 
-## Why this matters
-The recovery flow verifies something you know and something you have, without storing sensitive contact info.
+## Important Notes
+> [!IMPORTANT]
+> Keep your recovery details updated at the start of every semester to ensure you can always regain access if your device breaks.
 
 ## Related guides
-- [Teacher Login Diagnostics](/docs/user-guides/diagnostics/teacher-login)
+- [Teacher Login Diagnostics](../../../diagnostics/teacher/login.md)

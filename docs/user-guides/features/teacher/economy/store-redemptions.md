@@ -12,17 +12,21 @@ related:
 
 # Store Redemptions
 
-Review pending redemptions and confirm which items students receive.
+## Overview
+The Store Redemptions feature allows you to review pending "Delayed" purchases and confirm which items students actually receive.
 
-## Where to work
-Go to **Economy > Store** and open **Overview** or **Purchase History**.
+## Step-by-Step Instructions
 
-## Pending redemptions
-Use the overview panel to approve or deny requests for delayed items.
+### Managing Redemptions
+1. Navigate to **Economy > Store** in the teacher sidebar.
+2. In the **Overview** panel, review the list of pending redemptions requested by students.
+3. Select **Approve** or **Deny** for each request. Approving marks the item as received; denying refunds the purchase amount.
+4. To see past interactions, click the **Purchase History** tab to review what students have redeemed and when.
 
-## Purchase history
-Use the history tab to see what students have redeemed and when.
+## Important Notes
+> [!NOTE]
+> Immediate items skip the pending queue entirely and show up directly in Purchase History.
 
 ## Related guides
-- [Store Items](/docs/user-guides/features/teacher/economy/store-items)
-- [Teacher Store Diagnostics](/docs/user-guides/diagnostics/teacher-store)
+- [Store Items](store-items.md)
+- [Teacher Store Diagnostics](../../../diagnostics/teacher/store.md)

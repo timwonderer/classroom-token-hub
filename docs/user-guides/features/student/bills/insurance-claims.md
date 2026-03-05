@@ -11,18 +11,21 @@ related:
 
 # Submit an Insurance Claim
 
-Use this guide when you need to submit a claim through your insurance policy.
+## Overview
+If you experience a financial loss covered by an active insurance policy (like losing a pencil or missing a day of work), use this tool to submit a claim and request a payout.
 
-## Where to work
-Go to **Bills** and open the Insurance view.
+## Step-by-Step Instructions
 
-## Submit a claim
-1. Select your policy.
-2. Choose **Submit Claim**.
-3. Add the required details and confirm.
+### Submitting a Claim
+1. Navigate to **Bills** from the student sidebar and locate the **Insurance** section.
+2. Select the specific policy you wish to claim against (e.g., "Desk Insurance").
+3. Click **Submit Claim**.
+4. Fill out the required details explaining why you need the payout, then confirm.
+5. Your teacher will review the claim. If approved, the funds will be deposited into your Checking account.
 
-## Eligibility
-Claims follow the waiting period and limits set by your teacher.
+## Important Notes
+> [!NOTE]
+> **Eligibility:** Your claim must comply with the waiting periods and maximum claim limits set by your teacher. If the Submit Claim button is disabled, you may have just enrolled and need to wait, or you may have hit your policy limit.
 
 ## Related guides
-- [Insurance Coverage and Claims](/docs/user-guides/features/student/bills/insurance-coverage)
+- [Insurance Coverage and Claims](insurance-coverage.md)
