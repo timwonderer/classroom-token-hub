@@ -159,18 +159,32 @@ def test_payroll_run_creates_payroll_transaction(client):
     )
     db.session.commit()
 
-    _login_admin(client, admin.id)
-    response = client.post("/admin/run-payroll", json={})
-
-    assert response.status_code == 200
-    tx = Transaction.query.filter_by(
+    payroll_query = Transaction.query.filter_by(
         student_id=student.id,
         teacher_id=admin.id,
         join_code="JOIN-PAY",
         type="payroll",
-    ).first()
-    assert tx is not None
-    assert tx.amount > Decimal("0.00")
+    )
+    pre_payroll_count = payroll_query.count()
+    pre_latest_payroll = payroll_query.order_by(Transaction.id.desc()).first()
+    pre_latest_payroll_id = pre_latest_payroll.id if pre_latest_payroll is not None else None
+
+    _login_admin(client, admin.id)
+    response = client.post("/admin/run-payroll", json={})
+
+    assert response.status_code == 200
+    post_payroll_query = Transaction.query.filter_by(
+        student_id=student.id,
+        teacher_id=admin.id,
+        join_code="JOIN-PAY",
+        type="payroll",
+    )
+    assert post_payroll_query.count() > pre_payroll_count
+    latest_payroll = post_payroll_query.order_by(Transaction.id.desc()).first()
+    assert latest_payroll is not None
+    if pre_latest_payroll_id is not None:
+        assert latest_payroll.id != pre_latest_payroll_id
+    assert latest_payroll.amount > Decimal("0.00")
 
 
 def test_insurance_approval_creates_reimbursement_transaction(client):

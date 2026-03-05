@@ -227,11 +227,15 @@ jobs:
               });
 
               const failedConclusions = new Set(['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required']);
-              const failedJobs = jobs.data.jobs.filter((job) => failedConclusions.has(job.conclusion));
-              const schemaJob = failedJobs.find((job) => job.name.toLowerCase().includes('schema change gate')) || failedJobs[0];
+              const allJobs = jobs.data.jobs || [];
+              const candidateJobs = allJobs.filter((job) => failedConclusions.has(job.conclusion) || job.status === 'in_progress');
+              const schemaJob =
+                candidateJobs.find((job) => job.name?.toLowerCase().includes('schema change gate')) ||
+                candidateJobs[0] ||
+                allJobs[0];
               const failedSteps = (schemaJob?.steps || [])
-                .filter((step) => failedConclusions.has(step.conclusion))
-                .map((step) => `- ${step.name} (${step.conclusion})`);
+                .filter((step) => failedConclusions.has(step.conclusion) || step.status === 'in_progress')
+                .map((step) => `- ${step.name} (${step.conclusion || step.status})`);
 
               const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${runId}`;
               const jobUrl = schemaJob?.html_url || runUrl;
@@ -244,7 +248,7 @@ jobs:
                 : '- Failure details unavailable from job metadata; open logs link below.';
 
               const marker = '<!-- schema-gate-failure-comment -->';
-              const body = `${marker}\n⛔ **Schema Change Gate Failed**\n\nThis PR modifies the schema and the gate job failed.\n\n**Detected failure context**\n${classificationLine}\n- Job conclusion: \`${schemaJob?.conclusion || 'failure'}\`\n- Failed step(s):\n${failureSection}\n\n**Logs**\n- [Failed job logs](${jobUrl})\n- [Workflow run](${runUrl})\n\nRefer to [Schema Change Gate Policy](docs/development/SCHEMA_CHANGE_MD.md).`;
+              const body = `${marker}\n⛔ **Schema Change Gate Failed**\n\nThis PR modifies the schema and the gate job failed.\n\n**Detected failure context**\n${classificationLine}\n- Job conclusion: \`${schemaJob?.conclusion || 'failure'}\`\n- Failed step(s):\n${failureSection}\n\n**Logs**\n- [Failed job logs](${jobUrl})\n- [Workflow run](${runUrl})\n\nPlease refer to your team's schema change guidelines for next steps.`;
 
               const comments = await github.rest.issues.listComments({
                 owner,

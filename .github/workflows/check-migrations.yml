@@ -71,8 +71,35 @@ jobs:
           });
 
           const failedConclusions = new Set(['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required']);
-          const failedJobs = jobs.data.jobs.filter((job) => failedConclusions.has(job.conclusion));
-          const migrationJob = failedJobs.find((job) => job.name.toLowerCase().includes('validate-migrations')) || failedJobs[0];
+          const allJobs = jobs.data.jobs || [];
+
+          // Prefer selecting the migration job by name and completion status,
+          // with fallbacks when conclusions may still be null.
+          let migrationJob =
+            allJobs.find(
+              (job) =>
+                typeof job.name === 'string' &&
+                job.name.toLowerCase().includes('validate-migrations') &&
+                job.status === 'completed'
+            ) || null;
+
+          if (!migrationJob) {
+            const failedJobs = allJobs.filter((job) => failedConclusions.has(job.conclusion));
+            migrationJob =
+              failedJobs.find(
+                (job) =>
+                  typeof job.name === 'string' &&
+                  job.name.toLowerCase().includes('validate-migrations')
+              ) ||
+              failedJobs[0] ||
+              allJobs.find(
+                (job) =>
+                  typeof job.name === 'string' &&
+                  job.name.toLowerCase().includes('validate-migrations')
+              ) ||
+              allJobs[0] ||
+              null;
+          }
           const failedSteps = (migrationJob?.steps || [])
             .filter((step) => failedConclusions.has(step.conclusion))
             .map((step) => `- ${step.name} (${step.conclusion})`);
