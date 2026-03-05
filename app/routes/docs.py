@@ -80,6 +80,23 @@ DOCS_ALLOWED_ATTRIBUTES = {
 }
 DOCS_ALLOWED_PROTOCOLS = ['http', 'https', 'mailto']
 
+# Configuration for GitHub-style alert callouts.  Keyed by the alert type
+# keyword (upper-case) as it appears between [! … ] in the source.
+_ALERT_CONFIG = {
+    'NOTE':      {'icon': 'info',          'label': 'Note'},
+    'TIP':       {'icon': 'lightbulb',     'label': 'Tip'},
+    'IMPORTANT': {'icon': 'priority_high', 'label': 'Important'},
+    'WARNING':   {'icon': 'warning',       'label': 'Warning'},
+    'CAUTION':   {'icon': 'dangerous',     'label': 'Caution'},
+}
+
+# Compiled regex that matches the opening line of a GitHub-style alert
+# blockquote, e.g. "> [!NOTE]" or "> [!WARNING] optional inline text".
+_ALERT_START = re.compile(
+    r'^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$',
+    re.IGNORECASE,
+)
+
 
 def parse_front_matter(content):
     """
@@ -165,18 +182,6 @@ def preprocess_github_alerts(content):
 
     Supported types: NOTE, TIP, IMPORTANT, WARNING, CAUTION
     """
-    _ALERT_CONFIG = {
-        'NOTE':      {'icon': 'info',          'label': 'Note'},
-        'TIP':       {'icon': 'lightbulb',     'label': 'Tip'},
-        'IMPORTANT': {'icon': 'priority_high', 'label': 'Important'},
-        'WARNING':   {'icon': 'warning',       'label': 'Warning'},
-        'CAUTION':   {'icon': 'dangerous',     'label': 'Caution'},
-    }
-    _ALERT_START = re.compile(
-        r'^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*(.*)$',
-        re.IGNORECASE,
-    )
-
     lines = content.split('\n')
     out = []
     i = 0
@@ -189,8 +194,9 @@ def preprocess_github_alerts(content):
             config = _ALERT_CONFIG[alert_type]
 
             # Collect the remaining continuation lines of this blockquote.
-            # Lines starting with '> ' or bare '>' continue the blockquote;
-            # a truly blank line (no leading '>') ends it.
+            # Any line whose left-stripped form starts with '>' continues the
+            # blockquote (covers "> text", ">text", ">\ttext", ">   ", etc.).
+            # A line that does NOT start with '>' (after lstrip) ends the alert.
             body_lines = []
             if first_text:
                 body_lines.append(first_text)
@@ -198,11 +204,18 @@ def preprocess_github_alerts(content):
             i += 1
             while i < len(lines):
                 raw = lines[i]
-                if raw == '>':
-                    body_lines.append('')
-                    i += 1
-                elif raw.startswith('> '):
-                    body_lines.append(raw[2:])
+                stripped = raw.lstrip()
+                if stripped.startswith('>'):
+                    # Strip the leading '>' and exactly one optional space or
+                    # tab per the blockquote spec.  Using lstrip(' \t') would
+                    # remove multiple leading spaces and break indented code
+                    # blocks inside the alert body.
+                    after_marker = stripped[1:]
+                    if after_marker and after_marker[0] in (' ', '\t'):
+                        after_marker = after_marker[1:]
+                    # A remainder that is empty or all-whitespace is a blank
+                    # line separating paragraphs within the alert body.
+                    body_lines.append(after_marker if after_marker.strip() else '')
                     i += 1
                 else:
                     break
