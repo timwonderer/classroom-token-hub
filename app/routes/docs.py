@@ -17,6 +17,7 @@ from markdown.extensions.toc import TocExtension
 from markdown.extensions.codehilite import CodeHiliteExtension
 from markdown.extensions.fenced_code import FencedCodeExtension
 from markdown.extensions.tables import TableExtension
+from urllib.parse import urlparse
 
 from app.utils.helpers import render_template_with_fallback
 
@@ -516,7 +517,17 @@ def view_doc(doc_path):
 
             if canonical_path != request.path:
                 query = f"?{request.query_string.decode('utf-8')}" if request.query_string else ""
-                return redirect(f"{canonical_path}{query}", code=301)
+                target = f"{canonical_path}{query}"
+                # Ensure redirect target is a relative URL without scheme or netloc
+                target = target.replace('\\', '')
+                parsed = urlparse(target)
+                if parsed.scheme or parsed.netloc:
+                    current_app.logger.warning(
+                        "Blocked unsafe redirect attempt to %r from path %r",
+                        target, request.path
+                    )
+                else:
+                    return redirect(target, code=301)
 
         # Read and parse the file
         try:
