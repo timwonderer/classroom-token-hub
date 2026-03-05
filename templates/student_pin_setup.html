@@ -4,127 +4,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Classroom Token Hub - Set PIN & Passphrase</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&icon_names=person_check" />
-<link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
+    <title>Set PIN & Passphrase - Classroom Token Hub</title>
+    <meta name="theme-color" content="slateblue">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="{{ static_url('manifest.json') }}">
+    <link rel="apple-touch-icon" href="{{ static_url('images/icon-192.png') }}">
+    <script src="https://cdn.jsdelivr.net/npm/zxcvbn@4.4.2/dist/zxcvbn.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ static_url('css/tokens.css') }}" rel="stylesheet">
     <link href="{{ static_url('css/style.css') }}" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/zxcvbn@4.4.2/dist/zxcvbn.js"></script>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: 'Inter', sans-serif;
-            height: 100vh;
-            background: var(--neutral-50);
-        }
-        
-        .material-symbols-outlined {
-        font-variation-settings:
-        'FILL' 0,
-        'wght' 400,
-        'GRAD' 0,
-        'opsz' 48
-        }
-
-       .login-wrapper {
+            background-color: var(--background);
             display: flex;
-            height:100vh;
-            width:100vw;
-            padding: 0;
-            align-items: stretch;
-        }
-
-        .login-form-side {
-            flex: 1;
-            display:flex;
             align-items: center;
             justify-content: center;
-            background: white;
-
-            height: 100vh;
-
+            min-height: 100vh;
+            margin: 0;
         }
 
-        .branding-side {
-            flex: 1;
-
-            background: linear-gradient(135deg, var(--info) 0%, var(--info) 50%, var(--info) 100%);
+        .signup-container {
+            width: 100%;
+            max-width: 900px;
+            background: white;
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
             display: flex;
+            min-height: 600px;
+        }
+
+        .signup-left {
+            flex: 1;
+            padding: 3rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            overflow-y: auto;
+            max-height: 100vh;
+        }
+
+        .signup-right {
+            flex: 1;
+            background: var(--primary);
+            display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             color: white;
+            padding: 3rem;
             position: relative;
-            height: 100vh;
-            max-width: 400px;
+            overflow: hidden;
         }
 
-        .branding-content {
-            text-align: center;
-            z-index: 2;
-
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .signup-right::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
         }
 
-        .branding-logo-card {
-            background: color-mix(in srgb, white 96%, transparent);
-            padding: 2rem;
-            width: 300px;
-            height: 300px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .logo-img {
+            width: 400px;
+            height: 400px;
+            margin-bottom: 2rem;
+            position: relative;
+            z-index: 1;
         }
 
-        .branding-logo-card img {
-            max-width: 300px;
-            height: 300px;
-        }
-
-        .login-container {
-            width: 100%;
-
-            margin:auto;
-            max-width: 520px;
-        }
-
-        .login-container h1 {
-            margin-bottom: 0.5rem;
-            font-weight: 700;
-            color: var(--primary);
-            text-align: center;
-            font-size: 2rem;
-        }
-
-        .login-container .subtitle {
-            text-align: center;
-            color: var(--primary);
-            margin-bottom: 0.5rem;
-            font-size: 0.95rem;
+        .form-group {
+            margin-bottom: 1.5rem;
         }
 
         .btn-primary {
-            background: linear-gradient(135deg, var(--info) 0%, var(--info) 100%);
+            background: var(--primary);
             border: none;
-            padding: 0.85rem;
-            font-weight: 700;
+            color: white;
             transition: all 0.3s ease;
-            border-radius: 12px;
-            box-shadow: 0 8px 24px color-mix(in srgb, var(--info) 35%, transparent);
         }
 
         .btn-primary:hover {
-            background: linear-gradient(135deg, var(--info) 0%, var(--primary-hover) 100%);
-            transform: translateY(-2px);
+            background: var(--primary-hover);
+            color: white;
         }
 
         .btn-primary:disabled {
@@ -132,34 +99,54 @@
             cursor: not-allowed;
         }
 
-        .footer-info {
-            margin-top: 20px;
-
-            color: var(--text-secondary);
-            
-            font-size:8pt;
-        }
-
-       
-
         .form-label {
-            font-weight: 500;
-            color: var(--text-primary);
+            color: var(--secondary) !important;
+            text-transform: uppercase;
+            font-weight: 600;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
         }
 
-        .form-control:focus {
-            border-color: var(--secondary);
-            box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--secondary) 25%, transparent);
+        .form-text {
+            color: var(--secondary);
+            font-size: 0.875rem;
         }
 
-        .form-group {
-            margin-bottom: 1.5rem;
+        .subtitle {
+            color: var(--secondary) !important;
         }
 
-        .hint {
-            font-size: 0.85rem;
-            color: var(--text-secondary);
-            margin-top: 0.25rem;
+        .alert {
+            border: none;
+            border-radius: 8px;
+        }
+
+        .alert-info {
+            background-color: var(--info-subtle);
+            color: var(--info);
+        }
+
+        .alert-danger {
+            background-color: var(--danger-subtle);
+            color: var(--danger);
+        }
+
+        .footer-links {
+            text-align: center;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 2rem;
+        }
+
+        .footer-links a {
+            color: var(--secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+        }
+
+        .footer-links a:hover {
+            color: var(--primary);
+            text-decoration: underline;
         }
 
         .strength-meter {
@@ -182,6 +169,8 @@
         #strength-feedback {
             margin-top: 0.5rem;
             font-weight: 500;
+            color: var(--secondary);
+            font-size: 0.875rem;
         }
 
         .disabled-fields {
@@ -191,104 +180,133 @@
             transition: opacity 0.2s ease;
         }
 
+        .username-badge {
+            background-color: var(--info-subtle);
+            border: 1px solid var(--info);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .username-badge .material-symbols-outlined {
+            color: var(--info);
+            font-size: 1.5rem;
+        }
+
+        .username-badge-content strong {
+            color: var(--info);
+            display: block;
+            font-size: 1rem;
+        }
+
+        .username-badge-content small {
+            color: var(--secondary);
+            display: block;
+        }
+
         @media (max-width: 768px) {
-            .branding-side {
+            .signup-container {
+                flex-direction: column;
+                margin: 1rem;
+                min-height: auto;
+            }
+
+            .signup-right {
                 display: none;
             }
 
-            .login-form-side {
-                flex: 1;
+            .signup-left {
+                padding: 2rem;
             }
         }
     </style>
 </head>
 
-<body class="student-theme">
-    <div class="login-wrapper">
-        <!-- Left side: Setup Form -->
-        <div class="login-form-side">
-            <div class="login-container">
-                <h1>Set Your <span style="font-weight:300">PIN & Passphrase</span></h1>
-                <div style="background-color:var(--info-subtle);width:fit-content;margin:auto; padding:10px; border-radius:4px;border-style:solid; border-color:var(--info); margin-bottom:1rem;">
-                <p style="margin-bottom:0; font-size:18pt"> <span class="material-symbols-outlined" style="vertical-align:-10%;">person_check</span> Your username is: <strong>{{ username }}</strong></p>
-                </div>
-                <p style="font-weight: 600; margin-bottom: 1.5rem; text-align: center;">Please write it down if you haven't already, as it will not be shown again after setup is complete.</p>
+<body class="student-shell">
+    <div class="signup-container">
+        <div class="signup-left">
+            <div class="mb-3">
+                <small class="text-muted">STUDENT SETUP</small>
+                <h1 class="h3 fw-bold text-primary">Set Your PIN & Passphrase</h1>
+            </div>
 
-                <div class="form-check mb-4">
-                    <input class="form-check-input" type="checkbox" value="" id="username-ack">
-                    <label class="form-check-label" for="username-ack">
-                        I have written down my username and I know it won't be shown to me again.
-                    </label>
+            <div class="username-badge">
+                <span class="material-symbols-outlined">person_check</span>
+                <div class="username-badge-content">
+                    <strong>{{ username }}</strong>
+                    <small>Your username (write it down before continuing)</small>
                 </div>
+            </div>
 
-                {% with messages = get_flashed_messages(category_filter=['setup']) %}
-                  {% if messages %}
-                    <div class="alert alert-danger">
-                      <ul class="mb-0">
+            {% with messages = get_flashed_messages(category_filter=['setup']) %}
+            {% if messages %}
+            <div class="alert alert-danger border-0 shadow-sm mb-4" role="alert">
+                <div class="d-flex">
+                    <span class="material-symbols-outlined fs-5 me-2">error</span>
+                    <div>
                         {% for message in messages %}
-                          <li>{{ message }}</li>
+                        <div>{{ message }}</div>
                         {% endfor %}
-                      </ul>
                     </div>
-                  {% endif %}
-                {% endwith %}
+                </div>
+            </div>
+            {% endif %}
+            {% endwith %}
 
-                <form method="POST" onsubmit="return validateForm()">
-                    {{ form.hidden_tag() }}
+            <div class="form-check mb-4">
+                <input class="form-check-input" type="checkbox" value="" id="username-ack">
+                <label class="form-check-label" for="username-ack">
+                    I have written down my username and I know it won't be shown to me again.
+                </label>
+            </div>
 
-                    <fieldset id="setup-fields" class="disabled-fields" disabled>
-                        <div class="form-group">
-                            {{ form.pin.label(class="form-label") }}
-                            {{ form.pin(class="form-control", id="pin", autocomplete="off", placeholder="e.g. 938291") }}
-                            <div class="hint">Use 4-8 digits number that you will remember. You will sign in using this PIN</div>
-                            {% for error in form.pin.errors %}
-                                <div class="text-danger small">{{ error }}</div>
-                            {% endfor %}
-                        </div>
+            <form method="POST" onsubmit="return validateForm()">
+                {{ form.hidden_tag() }}
 
-                        <div class="form-group">
-                            {{ form.passphrase.label(class="form-label") }}
-                            {{ form.passphrase(class="form-control", id="passphrase", autocomplete="off", placeholder="e.g. Surprised!Banana!2!You!") }}
-                            <div class="hint">A good passphrase is at least four words long with symbols and numbers within. It should be something easy for you to remember but hard for someone else to guess</div>
-                            {% for error in form.passphrase.errors %}
-                                <div class="text-danger small">{{ error }}</div>
-                            {% endfor %}
-                            <div class="strength-meter">
-                                <div class="strength-meter-fill" id="strength-bar"></div>
-                            </div>
-                            <div id="strength-feedback" class="hint"></div>
-                        </div>
-
-                        <div class="form-group">
-                            {{ form.submit(class="btn btn-primary w-100", id="submit-button", disabled=True) }}
-                        </div>
-                    </fieldset>
-                </form>
-
-                <div class="footer-info text-center">
-                      <div class="mt-2">
-                        <a href="{{ url_for('main.privacy') }}" class="small">Click here to learn about how we use your information</a>
-                        <br>
-                        <a href="{{ url_for('main.terms') }}" class="small">Click here to read our terms of service</a>
+                <fieldset id="setup-fields" class="disabled-fields" disabled>
+                    <div class="form-group">
+                        <label class="form-label text-secondary">PIN</label>
+                        {{ form.pin(class="form-control form-control-lg", id="pin", autocomplete="off", placeholder="e.g., 938291", inputmode="numeric") }}
+                        <small class="form-text">Use 4-8 digits that you will remember. You will sign in using this PIN.</small>
+                        {% for error in form.pin.errors %}
+                        <div class="text-danger small mt-2">{{ error }}</div>
+                        {% endfor %}
                     </div>
 
-                    <small class="text-muted d-block mt-3">v1.0 Stable Release</small>
+                    <div class="form-group">
+                        <label class="form-label text-secondary">Passphrase</label>
+                        {{ form.passphrase(class="form-control form-control-lg", id="passphrase", autocomplete="off", placeholder="e.g., Surprised!Banana!2!You!") }}
+                        <small class="form-text">A good passphrase has at least four words with symbols and numbers. Make it easy to remember but hard to guess.</small>
+                        <div class="strength-meter">
+                            <div class="strength-meter-fill" id="strength-bar"></div>
+                        </div>
+                        <div id="strength-feedback"></div>
+                        {% for error in form.passphrase.errors %}
+                        <div class="text-danger small mt-2">{{ error }}</div>
+                        {% endfor %}
+                    </div>
 
-                   
+                    <div class="form-group">
+                        {{ form.submit(class="btn btn-primary w-100 btn-lg", id="submit-button", disabled=True) }}
+                    </div>
+                </fieldset>
+            </form>
+
+            <div class="footer-links">
+                <a href="{{ url_for('main.privacy') }}" class="me-3">Privacy</a>
+                <span class="text-secondary">•</span>
+                <a href="{{ url_for('main.terms') }}" class="ms-3">Terms of Service</a>
             </div>
         </div>
-
-        <!-- Right side: Branding -->
-        <div class="branding-side">
-            <div class="branding-content">
-                <div class="branding-logo-card">
-                    <img src="{{ static_url('images/student-logo-192.png') }}" alt="Student Logo">
-                </div>
-            </div>
+        <div class="signup-right">
+            <img src="{{ static_url('images/logo_student_transparent_512.png') }}" alt="Student Logo" class="logo-img">
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const passInput = document.getElementById('passphrase');
         const strengthBar = document.getElementById('strength-bar');
@@ -301,7 +319,7 @@
             const result = zxcvbn(passInput.value);
             const score = result.score;
 
-            const colors = ['red', 'orange', 'gold', 'var(--success)', 'green'];
+            const colors = ['#dc3545', '#fd7e14', '#ffc107', '#28a745', '#20c997'];
             const messages = [
                 'Very weak – try something longer and more unique.',
                 'Weak – add more variety or length.',
@@ -336,7 +354,7 @@
             const pin = document.getElementById('pin').value;
             if (!/^\d{4,8}$/.test(pin)) {
                 alert("PIN must be between 4-8 digits.");
-                window.scrollTo(0,0);
+                window.scrollTo(0, 0);
                 document.getElementById('pin').focus();
                 return false;
             }
@@ -344,4 +362,5 @@
         }
     </script>
 </body>
+
 </html>
