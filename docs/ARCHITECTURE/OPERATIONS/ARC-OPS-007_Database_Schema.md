@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-007      | 1.0     | 2026-03-01     | N/A        | Constitutional  |
+| ARC-OPS-007      | 1.1     | 2026-03-04     | 1.0        | Constitutional  |
 
 ## I. Purpose
 
@@ -23,6 +23,32 @@ Constitutional (ARC Tier). Subordinate to INV-CORE-000.
 - `ARC-OPS-000_Operational_Constraints.md`
 
 ## V. Core Models
+
+### `users`
+Global login principals.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `public_id` | String(36) | Public identifier for external references. |
+| `username` | String(255) | Unique login username. |
+| `password_hash` | Text | Login credential hash. |
+| `created_at` / `updated_at` | DateTime | Lifecycle timestamps. |
+
+### `seats`
+Join-code scoped identities bound to a user.
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | Integer | Primary key. |
+| `public_id` | String(36) | Public identifier for external references. |
+| `user_id` | Integer | FK to `users.id` (`CASCADE`). |
+| `join_code` | String(20) | Join-code scope boundary. |
+| `student_id` | Integer, nullable | Transitional FK to `students.id` (`SET NULL`). |
+| `block` | String(10), nullable | Block label for the seat. |
+| `created_at` / `updated_at` | DateTime | Lifecycle timestamps. |
+
+Constraints: unique on (`user_id`, `join_code`); indexed on `public_id`, `user_id`, `join_code`, `student_id`.
 
 ### `students`
 Stores student records and credentials.
@@ -46,7 +72,7 @@ Stores student records and credentials.
 | `second_factor_type` | String | Second factor type. |
 | `second_factor_enabled` | Boolean | Whether second factor is enabled. |
 | `has_completed_setup` | Boolean | Whether first-time setup is complete. |
-| `dob_sum` | Integer | Non-reversible DOB sum used for username generation. |
+| `dob_sum_hash` | String(64), nullable | Hashed DOB-sum verification value. |
 
 **Relationships**
 
@@ -103,9 +129,10 @@ Roster seats created during CSV uploads so students can self-claim via join code
 | `first_name` | PIIEncryptedType | Encrypted first name from roster. |
 | `last_initial` | String(1) | Last initial from roster. |
 | `last_name_hash_by_part` | JSON | Hashes for fuzzy last-name matching. |
-| `dob_sum` | Integer | Non-reversible DOB sum for matching. |
+| `dob_sum_hash` | String(64), nullable | Hashed DOB-sum matching value (cleared after claim). |
 | `salt` / `first_half_hash` | | Matching hashes. |
 | `join_code` | String(20) | Shared join code for the block. |
+| `dedupe_key` | String(64), nullable | HMAC dedupe key for roster identity matching. |
 | `student_id` | Integer | Claimed student FK. |
 | `is_claimed` | Boolean | Claim status. |
 
@@ -121,6 +148,7 @@ Ledger entries for checking/savings accounts, scoped by join code (class economy
 |---|---|---|
 | `id` | Integer | Primary key. |
 | `student_id` | Integer | FK to `students.id`. |
+| `seat_id` | Integer (nullable) | FK to `seats.id` (`SET NULL`) for seat-scoped reads/writes. |
 | `teacher_id` | Integer (nullable) | FK to `admins.id`. Legacy field kept for backward compatibility; replaced by `join_code` for scoping. |
 | `join_code` | String(20), nullable | Source of truth for class/period isolation. Indexed for performance. |
 | `amount` | Numeric(12, 2) | Positive/negative amount. **Changed from Float to Numeric for exact decimal precision** (fixes -0.00 overdraft fee bug and rent payment rounding errors). |
@@ -142,6 +170,7 @@ Append-only log of tap in/out actions.
 |---|---|---|
 | `id` | Integer | Primary key. |
 | `student_id` | Integer | FK to `students.id`. |
+| `seat_id` | Integer (nullable) | FK to `seats.id` (`SET NULL`) for seat-scoped attendance. |
 | `period` | String(10) | Class period. |
 | `status` | String(10) | `active` or `inactive`. |
 | `timestamp` | DateTime | Event timestamp. |
@@ -158,6 +187,7 @@ Per-student, per-period state (attendance gating, join-code mapping).
 |---|---|---|
 | `id` | Integer | Primary key. |
 | `student_id` | Integer | FK to `students.id` (CASCADE). |
+| `seat_id` | Integer (nullable) | FK to `seats.id` (`SET NULL`) for seat-scoped period state. |
 | `period` | String(10) | Class period label. |
 | `join_code` | String(20) | Source of truth for class isolation. Indexed. |
 | `tap_enabled` | Boolean | Whether tap in/out is enabled for this period. |
@@ -173,6 +203,7 @@ Tracks hall pass lifecycle.
 |---|---|---|
 | `id` | Integer | Primary key. |
 | `student_id` | Integer | FK to `students.id`. |
+| `seat_id` | Integer (nullable) | FK to `seats.id` (`SET NULL`) for seat-scoped hall pass history. |
 | `reason` | String(50) | Request reason. |
 | `status` | String(20) | `pending`, `approved`, `rejected`, `left`, `returned`. |
 | `pass_number` | String(3) | Assigned pass number. |
@@ -217,12 +248,12 @@ Key fields: `is_enabled`, `rent_amount`, `frequency_type`, `custom_frequency_val
 ### `rent_payments`
 Rent payment history.
 
-Key fields: `student_id`, `period`, `amount_paid`, `period_month`, `period_year`, `payment_date`, `was_late`, `late_fee_charged`, `coverage_month`, `coverage_year`.
+Key fields: `student_id`, `seat_id`, `join_code`, `period`, `amount_paid`, `period_month`, `period_year`, `payment_date`, `was_late`, `late_fee_charged`, `coverage_month`, `coverage_year`.
 
 ### `rent_waivers`
 Tracks rent waivers.
 
-Key fields: `student_id`, `waiver_start_date`, `waiver_end_date`, `periods_count`, `reason`, `created_by_admin_id`, `created_at`.
+Key fields: `student_id`, `seat_id`, `join_code`, `waiver_start_date`, `waiver_end_date`, `periods_count`, `reason`, `created_by_admin_id`, `created_at`.
 
 ---
 

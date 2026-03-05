@@ -1,6 +1,6 @@
 """Add seat_id to transaction and balance_cache with legacy backfill.
 
-Revision ID: g1h2i3j4k5l6
+Revision ID: j1k2l3m4n5o6
 Revises: f1a2b3c4d5e6
 Create Date: 2026-03-03
 """
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "g1h2i3j4k5l6"
+revision = "j1k2l3m4n5o6"
 down_revision = "f1a2b3c4d5e6"
 branch_labels = None
 depends_on = None

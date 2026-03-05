@@ -53,7 +53,7 @@ from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
 from app.attendance import get_all_block_statuses
 from app.payroll import get_pay_rate_for_block
 from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone
-from app.utils.seat_scope import get_seat_ids_for_student_join, transaction_scope_filter
+from app.utils.seat_scope import get_seat_ids_for_student_join, transaction_scope_filter, seat_scoped_filter
 from app.utils.insurance_eligibility import (
     evaluate_claim_transaction_eligibility,
     collect_reimbursed_source_tx_ids,
@@ -1243,8 +1243,9 @@ def dashboard():
 
         all_paid = True
         for period in rent_blocks:
+            rent_scope = seat_scoped_filter(RentPayment, student.id, seat_ids)
             all_payments_for_period = RentPayment.query.filter(
-                RentPayment.student_id == student.id,
+                rent_scope,
                 RentPayment.period == period,
                 RentPayment.coverage_month == coverage_month,
                 RentPayment.coverage_year == coverage_year,
@@ -1253,8 +1254,9 @@ def dashboard():
 
             payments = []
             for payment in all_payments_for_period:
+                txn_scope = transaction_scope_filter(Transaction, student.id, seat_ids)
                 txn = Transaction.query.filter(
-                    Transaction.student_id == student.id,
+                    txn_scope,
                     Transaction.type == 'Rent Payment',
                     Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
                     Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
@@ -2499,6 +2501,7 @@ def shop():
     per_use_limit_by_store_id = {}
 
     if teacher_id and join_code and current_block:
+        seat_ids = get_seat_ids_for_student_join(student.id, join_code)
         rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
         if rent_settings and rent_settings.is_enabled:
             now = utc_now()
@@ -2514,6 +2517,7 @@ def shop():
                     current_block,
                     join_code,
                     coverage_due_date,
+                    seat_ids=seat_ids,
                 )
 
             rent_store_items = RentItem.query.filter(
@@ -2892,7 +2896,7 @@ def _total_paid_by_grace(payments, grace_end_date):
     )
 
 
-def _filter_valid_rent_payments(payments, student_id, join_code):
+def _filter_valid_rent_payments(payments, student_id, join_code, seat_ids=None):
     """Return payments that have a matching, non-void rent transaction."""
     if not payments:
         return []
@@ -2908,8 +2912,9 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
 
     payment_amounts = {-(p.amount_paid) for p in payments}
 
+    txn_scope = transaction_scope_filter(Transaction, student_id, seat_ids or [])
     txn_query = Transaction.query.filter(
-        Transaction.student_id == student_id,
+        txn_scope,
         Transaction.type == 'Rent Payment',
         Transaction.timestamp >= window_start,
         Transaction.timestamp <= window_end,
@@ -2974,6 +2979,7 @@ def _is_student_coverage_period_paid(
     period,
     join_code,
     coverage_due_date,
+    seat_ids=None,
     include_late_fee=True,
 ):
     """Return True when a student's specific coverage period is fully paid."""
@@ -2983,8 +2989,9 @@ def _is_student_coverage_period_paid(
     if not normalized_period:
         return False
 
+    coverage_scope = seat_scoped_filter(RentPayment, student_id, seat_ids or [])
     coverage_payments = RentPayment.query.filter(
-        RentPayment.student_id == student_id,
+        coverage_scope,
         db.func.upper(db.func.trim(RentPayment.period)) == normalized_period,
         RentPayment.coverage_month == coverage_due_date.month,
         RentPayment.coverage_year == coverage_due_date.year,
@@ -2994,7 +3001,8 @@ def _is_student_coverage_period_paid(
     valid_payments = _filter_valid_rent_payments(
         coverage_payments,
         student_id,
-        join_code
+        join_code,
+        seat_ids=seat_ids,
     )
     return _is_coverage_period_paid(
         settings,
@@ -3058,6 +3066,7 @@ def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
     current_block = (context.get('block') or '').strip().upper()
     if not join_code or not current_block:
         return 0, 0, False
+    seat_ids = get_seat_ids_for_student_join(student.id, join_code)
 
     settings = settings or get_rent_settings_for_context(context)
     if not settings or not settings.is_enabled:
@@ -3074,6 +3083,7 @@ def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
         current_block,
         join_code,
         coverage_due_date,
+        seat_ids=seat_ids,
         include_late_fee=False,
     )
 
@@ -3152,6 +3162,7 @@ def rent():
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').strip().upper()
+    seat_ids = get_seat_ids_for_student_join(student.id, join_code) if join_code else []
     settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
@@ -3190,6 +3201,7 @@ def rent():
             current_block,
             join_code,
             coverage_due_date,
+            seat_ids=seat_ids,
         )
 
     # Only allow preview period if current coverage is already paid
@@ -3211,8 +3223,9 @@ def rent():
     period_status = {}
 
     # Get all payments that COVER the current period (pre-paid system)
+    rent_scope = seat_scoped_filter(RentPayment, student.id, seat_ids)
     all_payments_for_period = RentPayment.query.filter(
-        RentPayment.student_id == student.id,
+        rent_scope,
         RentPayment.period == current_block,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
@@ -3222,8 +3235,9 @@ def rent():
     # Filter out payments where the corresponding transaction was voided
     payments = []
     for payment in all_payments_for_period:
+        txn_scope = transaction_scope_filter(Transaction, student.id, seat_ids)
         txn = Transaction.query.filter(
-            Transaction.student_id == student.id,
+            txn_scope,
             Transaction.type == 'Rent Payment',
             Transaction.join_code == join_code,
             Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
@@ -3264,7 +3278,7 @@ def rent():
 
     # Get payment history for the current class only
     payment_history = RentPayment.query.filter(
-        RentPayment.student_id == student.id,
+        rent_scope,
         RentPayment.join_code == join_code,
     ).order_by(
         RentPayment.payment_date.desc()
@@ -3314,6 +3328,7 @@ def rent_pay(period):
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').strip().upper()
+    seat_ids = get_seat_ids_for_student_join(student.id, join_code) if join_code else []
     settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
@@ -3366,6 +3381,7 @@ def rent_pay(period):
             period,
             join_code,
             coverage_due_date,
+            seat_ids=seat_ids,
         )
 
     # Determine which due date this payment should cover
@@ -3386,8 +3402,9 @@ def rent_pay(period):
     savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
 
     # Get all existing payments that cover this period
+    rent_scope = seat_scoped_filter(RentPayment, student.id, seat_ids)
     all_payments = RentPayment.query.filter(
-        RentPayment.student_id == student.id,
+        rent_scope,
         RentPayment.period == period,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
@@ -3398,8 +3415,9 @@ def rent_pay(period):
     existing_payments = []
     for payment in all_payments:
         # Find the transaction for this payment
+        txn_scope = transaction_scope_filter(Transaction, student.id, seat_ids)
         txn = Transaction.query.filter(
-            Transaction.student_id == student.id,
+            txn_scope,
             Transaction.type == 'Rent Payment',
             Transaction.join_code == join_code,
             Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),

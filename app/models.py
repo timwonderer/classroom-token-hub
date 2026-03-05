@@ -883,6 +883,19 @@ def _sync_transaction_amount_cents(_mapper, _connection, target):
             target.seat_id = int(seat_id)
 
 
+def _resolve_seat_id(connection, student_id, join_code):
+    """Lookup seat ID for a (student_id, join_code) pair."""
+    if not student_id or not join_code:
+        return None
+    seat_id = connection.execute(
+        sa.text(
+            "SELECT id FROM seats WHERE student_id = :student_id AND join_code = :join_code LIMIT 1"
+        ),
+        {"student_id": student_id, "join_code": join_code},
+    ).scalar()
+    return int(seat_id) if seat_id else None
+
+
 class BalanceCache(db.Model):
     """
     snapshot of posted balances to allow O(1) reads.
@@ -987,14 +1000,9 @@ def _sync_student_block_seat(_mapper, connection, target):
     if not getattr(target, "student_id", None) or not getattr(target, "join_code", None):
         return
 
-    seat_id = connection.execute(
-        sa.text(
-            "SELECT id FROM seats WHERE student_id = :student_id AND join_code = :join_code LIMIT 1"
-        ),
-        {"student_id": target.student_id, "join_code": target.join_code},
-    ).scalar()
+    seat_id = _resolve_seat_id(connection, target.student_id, target.join_code)
     if seat_id:
-        target.seat_id = int(seat_id)
+        target.seat_id = seat_id
 
 
 @sa.event.listens_for(TapEvent, "before_insert")
@@ -1006,14 +1014,9 @@ def _sync_tap_event_seat(_mapper, connection, target):
     if not getattr(target, "student_id", None) or not getattr(target, "join_code", None):
         return
 
-    seat_id = connection.execute(
-        sa.text(
-            "SELECT id FROM seats WHERE student_id = :student_id AND join_code = :join_code LIMIT 1"
-        ),
-        {"student_id": target.student_id, "join_code": target.join_code},
-    ).scalar()
+    seat_id = _resolve_seat_id(connection, target.student_id, target.join_code)
     if seat_id:
-        target.seat_id = int(seat_id)
+        target.seat_id = seat_id
 
 
 # ---- Hall Pass Log Model ----
@@ -1021,6 +1024,7 @@ class HallPassLog(db.Model):
     __tablename__ = 'hall_pass_logs'
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     reason = db.Column(db.String(50), nullable=False)
     status = db.Column(db.String(20), default='pending', nullable=False) # pending, approved, rejected, left, returned
     # Legacy field retained for backward compatibility; no longer generated or displayed.
@@ -1037,6 +1041,7 @@ class HallPassLog(db.Model):
     return_time = db.Column(db.DateTime(timezone=True), nullable=True)
 
     student = db.relationship('Student', backref='hall_pass_logs')
+    seat = db.relationship('Seat', backref='hall_pass_logs')
 
 
 class HallPassSettings(db.Model):
@@ -1318,6 +1323,7 @@ class RentPayment(db.Model):
     __tablename__ = 'rent_payments'
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     period = db.Column(db.String(10), nullable=False)  # Block/Period (e.g., 'A', 'B', 'C')
 
     # CRITICAL: join_code is the source of truth for class isolation
@@ -1340,12 +1346,14 @@ class RentPayment(db.Model):
     late_fee_charged = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))
 
     student = db.relationship('Student', backref='rent_payments')
+    seat = db.relationship('Seat', backref='rent_payments')
 
 
 class RentWaiver(db.Model):
     __tablename__ = 'rent_waivers'
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     waiver_start_date = db.Column(db.DateTime(timezone=True), nullable=False)
     waiver_end_date = db.Column(db.DateTime(timezone=True), nullable=False)
@@ -1355,7 +1363,41 @@ class RentWaiver(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
 
     student = db.relationship('Student', backref='rent_waivers')
+    seat = db.relationship('Seat', backref='rent_waivers')
     created_by = db.relationship('Admin', backref='rent_waivers_created')
+
+
+@sa.event.listens_for(HallPassLog, "before_insert")
+@sa.event.listens_for(HallPassLog, "before_update")
+def _sync_hall_pass_seat(_mapper, connection, target):
+    """Dual-write bridge for hall_pass_logs.seat_id."""
+    if getattr(target, "seat_id", None):
+        return
+    seat_id = _resolve_seat_id(connection, getattr(target, "student_id", None), getattr(target, "join_code", None))
+    if seat_id:
+        target.seat_id = seat_id
+
+
+@sa.event.listens_for(RentPayment, "before_insert")
+@sa.event.listens_for(RentPayment, "before_update")
+def _sync_rent_payment_seat(_mapper, connection, target):
+    """Dual-write bridge for rent_payments.seat_id."""
+    if getattr(target, "seat_id", None):
+        return
+    seat_id = _resolve_seat_id(connection, getattr(target, "student_id", None), getattr(target, "join_code", None))
+    if seat_id:
+        target.seat_id = seat_id
+
+
+@sa.event.listens_for(RentWaiver, "before_insert")
+@sa.event.listens_for(RentWaiver, "before_update")
+def _sync_rent_waiver_seat(_mapper, connection, target):
+    """Dual-write bridge for rent_waivers.seat_id."""
+    if getattr(target, "seat_id", None):
+        return
+    seat_id = _resolve_seat_id(connection, getattr(target, "student_id", None), getattr(target, "join_code", None))
+    if seat_id:
+        target.seat_id = seat_id
 
 
 class RentItem(db.Model):

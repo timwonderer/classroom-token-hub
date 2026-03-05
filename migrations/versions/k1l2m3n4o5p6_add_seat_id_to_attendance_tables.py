@@ -1,7 +1,7 @@
 """Add seat_id to tap_events and student_blocks with backfill.
 
-Revision ID: h1i2j3k4l5m6
-Revises: g1h2i3j4k5l6
+Revision ID: k1l2m3n4o5p6
+Revises: j1k2l3m4n5o6
 Create Date: 2026-03-03
 """
 
@@ -10,8 +10,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = "h1i2j3k4l5m6"
-down_revision = "g1h2i3j4k5l6"
+revision = "k1l2m3n4o5p6"
+down_revision = "j1k2l3m4n5o6"
 branch_labels = None
 depends_on = None
 
