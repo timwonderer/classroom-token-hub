@@ -502,6 +502,12 @@ def view_doc(doc_path):
             current_app.logger.info(f"Documentation not found: {doc_path}")
             abort(404)
 
+        # Canonicalize directory-style docs URLs with trailing slash so relative markdown
+        # links resolve under the directory (e.g. /docs/user-guides/...)
+        if doc_file.name in {'index.md', 'README.md'} and not request.path.endswith('/'):
+            query = f"?{request.query_string.decode('utf-8')}" if request.query_string else ""
+            return redirect(f"{request.path}/{query}", code=301)
+
         # Read and parse the file
         try:
             content = doc_file.read_text(encoding='utf-8')
