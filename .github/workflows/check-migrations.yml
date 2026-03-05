@@ -60,9 +60,55 @@ jobs:
       uses: actions/github-script@v8
       with:
         script: |
-          github.rest.issues.createComment({
+          const { owner, repo } = context.repo;
+          const runId = context.runId;
+
+          const jobs = await github.rest.actions.listJobsForWorkflowRun({
+            owner,
+            repo,
+            run_id: runId,
+            per_page: 100
+          });
+
+          const failedConclusions = new Set(['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required']);
+          const failedJobs = jobs.data.jobs.filter((job) => failedConclusions.has(job.conclusion));
+          const migrationJob = failedJobs.find((job) => job.name.toLowerCase().includes('validate-migrations')) || failedJobs[0];
+          const failedSteps = (migrationJob?.steps || [])
+            .filter((step) => failedConclusions.has(step.conclusion))
+            .map((step) => `- ${step.name} (${step.conclusion})`);
+
+          const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${runId}`;
+          const jobUrl = migrationJob?.html_url || runUrl;
+          const failureSection = failedSteps.length
+            ? failedSteps.join('\n')
+            : '- Failure details unavailable from job metadata; open logs link below.';
+
+          const marker = '<!-- migration-validation-failure-comment -->';
+          const body = `${marker}\n⚠️ **Migration Validation Failed**\n\nThe migration validation workflow failed.\n\n**Detected failure context**\n- Job conclusion: \`${migrationJob?.conclusion || 'failure'}\`\n- Failed step(s):\n${failureSection}\n\n**What this workflow validates**\n1. Continuous revision chain (no breaks/gaps)\n2. Single migration head\n3. Correct \`upgrade()\` and \`downgrade()\` functions\n4. Idempotency guards (for example around \`add_column\`)\n\n**Logs**\n- [Failed job logs](${jobUrl})\n- [Workflow run](${runUrl})`;
+
+          const comments = await github.rest.issues.listComments({
+            owner,
+            repo,
             issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: '⚠️ **Migration Validation Failed**\n\nThe migration validation script (`scripts/validate-migrations.py`) has failed. This script checks for:\n\n1. Continuous revision chain (no breaks/gaps)\n2. Single migration head\n3. Correct `upgrade()` and `downgrade()` functions\n4. **Idempotency checks** (e.g. guards for `add_column`)\n\nPlease check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.'
-          })
+            per_page: 100
+          });
+          const existing = comments.data.find((comment) => {
+            const isBot = comment.user?.type === 'Bot' || comment.user?.login?.includes('[bot]');
+            return isBot && typeof comment.body === 'string' && comment.body.includes(marker);
+          });
+
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner,
+              repo,
+              comment_id: existing.id,
+              body
+            });
+          } else {
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner,
+              repo,
+              body
+            });
+          }

@@ -212,15 +212,66 @@ jobs:
         with:
           script: |
             const classification = '${{ steps.check_classification.outputs.classification }}';
+            const classificationOutcome = '${{ steps.check_classification.outcome }}';
             const status = '${{ job.status }}';
             
             if (status === 'failure') {
-              github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: `⛔ **Schema Change Gate Failed**\n\nThis PR modifies the schema but failed the mandatory checks.\n\n**Failure Reasons Check:**\n1. Did you select a Classification (EXPAND/CONTRACT)?\n2. Did migration rehearsal pass?\n3. Do deprecated symbols appear in code?\n4. Did critical workflow tests pass?\n\nRefer to [Schema Change Gate Policy](docs/development/SCHEMA_CHANGE_MD.md).`
+              const { owner, repo } = context.repo;
+              const runId = context.runId;
+
+              const jobs = await github.rest.actions.listJobsForWorkflowRun({
+                owner,
+                repo,
+                run_id: runId,
+                per_page: 100
               });
+
+              const failedConclusions = new Set(['failure', 'timed_out', 'cancelled', 'startup_failure', 'action_required']);
+              const failedJobs = jobs.data.jobs.filter((job) => failedConclusions.has(job.conclusion));
+              const schemaJob = failedJobs.find((job) => job.name.toLowerCase().includes('schema change gate')) || failedJobs[0];
+              const failedSteps = (schemaJob?.steps || [])
+                .filter((step) => failedConclusions.has(step.conclusion))
+                .map((step) => `- ${step.name} (${step.conclusion})`);
+
+              const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${runId}`;
+              const jobUrl = schemaJob?.html_url || runUrl;
+              const classificationLine = classification
+                ? `- Classification: \`${classification}\``
+                : `- Classification: not detected (step outcome: \`${classificationOutcome}\`)`;
+
+              const failureSection = failedSteps.length
+                ? failedSteps.join('\n')
+                : '- Failure details unavailable from job metadata; open logs link below.';
+
+              const marker = '<!-- schema-gate-failure-comment -->';
+              const body = `${marker}\n⛔ **Schema Change Gate Failed**\n\nThis PR modifies the schema and the gate job failed.\n\n**Detected failure context**\n${classificationLine}\n- Job conclusion: \`${schemaJob?.conclusion || 'failure'}\`\n- Failed step(s):\n${failureSection}\n\n**Logs**\n- [Failed job logs](${jobUrl})\n- [Workflow run](${runUrl})\n\nRefer to [Schema Change Gate Policy](docs/development/SCHEMA_CHANGE_MD.md).`;
+
+              const comments = await github.rest.issues.listComments({
+                owner,
+                repo,
+                issue_number: context.issue.number,
+                per_page: 100
+              });
+              const existing = comments.data.find((comment) => {
+                const isBot = comment.user?.type === 'Bot' || comment.user?.login?.includes('[bot]');
+                return isBot && typeof comment.body === 'string' && comment.body.includes(marker);
+              });
+
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner,
+                  repo,
+                  comment_id: existing.id,
+                  body
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner,
+                  repo,
+                  body
+                });
+              }
             } else {
                console.log("Gate Passed.");
             }
