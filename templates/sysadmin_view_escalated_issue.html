@@ -419,19 +419,67 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const copyButtons = document.querySelectorAll('.copy-correlation-value');
+
+    function fallbackCopyTextToClipboard(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.top = '0';
+        textArea.style.left = '0';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        let successful = false;
+        try {
+            successful = document.execCommand('copy');
+        } catch (err) {
+            successful = false;
+        }
+        document.body.removeChild(textArea);
+        return successful;
+    }
+
     copyButtons.forEach(function(button) {
         button.addEventListener('click', function() {
             const value = this.getAttribute('data-copy-value');
             if (!value) {
                 return;
             }
-            navigator.clipboard.writeText(value).then(() => {
-                const original = this.textContent;
-                this.textContent = 'Copied';
-                setTimeout(() => {
-                    this.textContent = original;
+
+            const buttonEl = this;
+            const originalText = buttonEl.textContent;
+
+            const onSuccess = function() {
+                buttonEl.textContent = 'Copied';
+                setTimeout(function() {
+                    buttonEl.textContent = originalText;
                 }, 1000);
-            });
+            };
+
+            const onFailure = function() {
+                buttonEl.textContent = originalText;
+                window.alert('Unable to copy value to clipboard. Please copy it manually.');
+            };
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(value)
+                    .then(onSuccess)
+                    .catch(function(err) {
+                        console.error('Failed to copy using navigator.clipboard:', err);
+                        if (fallbackCopyTextToClipboard(value)) {
+                            onSuccess();
+                        } else {
+                            onFailure();
+                        }
+                    });
+            } else {
+                if (fallbackCopyTextToClipboard(value)) {
+                    onSuccess();
+                } else {
+                    onFailure();
+                }
+            }
         });
     });
 });

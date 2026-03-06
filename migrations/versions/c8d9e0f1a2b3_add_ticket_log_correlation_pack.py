@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "c8d9e0f1a2b3"
-down_revision = "b33ed424ad95"
+down_revision = "6c7d8e9f0a1b"
 branch_labels = None
 depends_on = None
 
@@ -143,7 +143,7 @@ def _create_error_events():
             sa.Column("method", sa.String(length=10), nullable=True),
             sa.Column("error_class", sa.String(length=200), nullable=False),
             sa.Column("error_message", sa.Text(), nullable=True),
-            sa.Column("correlation_version", sa.Integer(), server_default="1", nullable=False),
+            sa.Column("correlation_version", sa.Integer(), server_default=sa.text('1'), nullable=False),
             sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
             sa.ForeignKeyConstraint(["join_code_id"], ["join_codes.join_code_id"], ondelete="SET NULL"),
             sa.PrimaryKeyConstraint("id"),
@@ -198,7 +198,7 @@ def _create_ticket_correlation_pack():
         op.create_table(
             "ticket_correlation_pack",
             sa.Column("issue_id", sa.Integer(), nullable=False),
-            sa.Column("correlation_version", sa.Integer(), server_default="1", nullable=False),
+            sa.Column("correlation_version", sa.Integer(), server_default=sa.text('1'), nullable=False),
             sa.Column("actor_type", sa.String(length=20), nullable=False),
             sa.Column("actor_opaque_id", sa.String(length=64), nullable=False),
             sa.Column("join_code_id", sa.String(length=36), nullable=True),
