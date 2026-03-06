@@ -89,6 +89,7 @@ from app.utils.student_deletion import (
     hard_delete_student_if_orphaned,
     remove_student_from_teacher_scope,
 )
+from app.utils.seat_scope import get_seat_ids_for_student_join, seat_scoped_filter
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
 from app.attendance import (
@@ -2711,9 +2712,11 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
         return rent_privileges
     coverage_month = coverage_due_date.month
     coverage_year = coverage_due_date.year
+    seat_ids = get_seat_ids_for_student_join(student.id, join_code)
+    rent_scope = seat_scoped_filter(RentPayment, student.id, seat_ids)
 
     has_paid_rent = RentPayment.query.filter(
-        RentPayment.student_id == student.id,
+        rent_scope,
         RentPayment.period == current_block,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
@@ -6250,8 +6253,10 @@ def void_transaction(transaction_id):
             tx.reversal_transaction_id = reversal_tx.id
 
         elif tx.type == 'Rent Payment':
+            seat_ids = get_seat_ids_for_student_join(tx.student_id, tx.join_code) if tx.join_code else []
+            rent_scope = seat_scoped_filter(RentPayment, tx.student_id, seat_ids)
             rent_payments_query = RentPayment.query.filter(
-                RentPayment.student_id == tx.student_id,
+                rent_scope,
                 RentPayment.amount_paid == abs(tx.amount or Decimal('0.00')),
             )
             if not tx.join_code:
