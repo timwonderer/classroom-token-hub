@@ -871,7 +871,13 @@ def _get_table_names() -> set[str]:
     db_url = str(db.engine.url)
     with _table_names_cache_lock:
         if db_url not in _table_names_cache:
-            inspector = sa.inspect(db.engine)
+            # Use the session's own connection rather than acquiring a fresh one from
+            # the engine.  Acquiring a separate connection (and returning it) causes
+            # SQLAlchemy to issue a ROLLBACK on the shared connection when using
+            # StaticPool (e.g. SQLite in-memory during tests), which silently undoes
+            # any changes already flushed by the current session.
+            conn = db.session.connection()
+            inspector = sa.inspect(conn)
             _table_names_cache[db_url] = set(inspector.get_table_names())
         return _table_names_cache[db_url]
 
