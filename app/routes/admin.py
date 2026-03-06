@@ -89,7 +89,7 @@ from app.utils.student_deletion import (
     hard_delete_student_if_orphaned,
     remove_student_from_teacher_scope,
 )
-from app.utils.seat_scope import get_seat_ids_for_student_join, seat_scoped_filter
+from app.utils.seat_scope import get_seat_ids_for_student_join, seat_scoped_filter, transaction_scope_filter
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
 from app.attendance import (
@@ -3047,17 +3047,20 @@ def student_detail(student_id):
 
     if join_code:
         session['current_join_code'] = join_code
+    seat_ids = get_seat_ids_for_student_join(student.id, join_code) if join_code else []
+    tx_scope = transaction_scope_filter(Transaction, student.id, seat_ids) if join_code else (Transaction.student_id == student.id)
+    tap_scope = seat_scoped_filter(TapEvent, student.id, seat_ids) if join_code else (TapEvent.student_id == student.id)
 
     # Remove deprecated last_tap_in/last_tap_out logic; rely on TapEvent backend.
     # Fetch last rent payment
-    rent_query = Transaction.query.filter_by(student_id=student.id, type="rent")
+    rent_query = Transaction.query.filter(tx_scope, Transaction.type == "rent")
     if join_code:
         rent_query = rent_query.filter(Transaction.join_code == join_code)
     latest_rent = rent_query.order_by(Transaction.timestamp.desc()).first()
     student.rent_last_paid = latest_rent.timestamp if latest_rent else None
 
     # Fetch last property tax payment
-    tax_query = Transaction.query.filter_by(student_id=student.id, type="property_tax")
+    tax_query = Transaction.query.filter(tx_scope, Transaction.type == "property_tax")
     if join_code:
         tax_query = tax_query.filter(Transaction.join_code == join_code)
     latest_tax = tax_query.order_by(Transaction.timestamp.desc()).first()
@@ -3076,9 +3079,9 @@ def student_detail(student_id):
     student.property_tax_due_date = tax_due
     student.property_tax_overdue = today > tax_due and (not student.property_tax_last_paid or student.property_tax_last_paid.astimezone(PACIFIC).date() <= tax_due)
 
-    transactions_query = Transaction.query.filter_by(student_id=student.id)
+    transactions_query = Transaction.query.filter(tx_scope)
     student_items_query = student.items
-    latest_tap_event_query = TapEvent.query.filter_by(student_id=student.id)
+    latest_tap_event_query = TapEvent.query.filter(tap_scope)
     if join_code:
         transactions_query = transactions_query.filter(Transaction.join_code == join_code)
         student_items_query = student_items_query.filter(StudentItem.join_code == join_code)

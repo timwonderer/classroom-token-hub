@@ -156,6 +156,48 @@ def _append_redemption_audit_log(*, student_item, student, teacher_id, action, n
     guard_state['inserted'] = True
 
 
+def _get_teacher_join_code_scope(admin_id):
+    """Return (join_code_scope_subquery, has_join_code_scope) for a teacher admin."""
+    join_code_scope = (
+        TeacherBlock.query
+        .with_entities(TeacherBlock.join_code)
+        .filter(
+            TeacherBlock.teacher_id == admin_id,
+            TeacherBlock.join_code.isnot(None),
+        )
+        .distinct()
+        .subquery()
+    )
+    has_join_code_scope = db.session.query(
+        sa.exists().where(
+            sa.and_(
+                TeacherBlock.teacher_id == admin_id,
+                TeacherBlock.join_code.isnot(None),
+            )
+        )
+    ).scalar()
+    return join_code_scope, has_join_code_scope
+
+
+def _apply_admin_join_code_scope(query, model, admin_id, accessible_student_ids_query):
+    """Apply join_code tenant scoping with legacy student_id fallback."""
+    join_code_scope, has_join_code_scope = _get_teacher_join_code_scope(admin_id)
+    if has_join_code_scope:
+        return query.filter(
+            sa.or_(
+                sa.and_(
+                    model.join_code.isnot(None),
+                    model.join_code.in_(sa.select(join_code_scope)),
+                ),
+                sa.and_(
+                    model.join_code.is_(None),
+                    model.student_id.in_(accessible_student_ids_query),
+                ),
+            )
+        )
+    return query.filter(model.student_id.in_(accessible_student_ids_query))
+
+
 # -------------------- TIPS API --------------------
 
 @api_bp.route('/tips/<user_type>')
@@ -1597,11 +1639,12 @@ def hall_pass_history():
             .with_entities(Student.id)
             .subquery()
         )
-
         # Build query with tenant scoping
-        query = (
-            HallPassLog.query
-            .filter(HallPassLog.student_id.in_(sa.select(student_ids_subquery)))
+        query = _apply_admin_join_code_scope(
+            HallPassLog.query,
+            HallPassLog,
+            session.get("admin_id"),
+            sa.select(student_ids_subquery),
         )
 
         # Apply filters
@@ -1854,11 +1897,12 @@ def attendance_history():
         
         # Get student IDs that the current admin can access (tenant-scoped)
         accessible_student_ids_query = get_admin_student_query(include_unassigned=False).with_entities(Student.id)
-        
         # Build query scoped to admin's students and exclude deleted records
-        query = TapEvent.query.filter(
-            TapEvent.student_id.in_(accessible_student_ids_query),
-            TapEvent.is_deleted.is_(False)
+        query = _apply_admin_join_code_scope(
+            TapEvent.query.filter(TapEvent.is_deleted.is_(False)),
+            TapEvent,
+            session.get("admin_id"),
+            accessible_student_ids_query,
         )
 
         # Suppress duplicate auto tap-outs from known race conditions.
@@ -2386,17 +2430,26 @@ def get_tap_entries(student_id):
         return jsonify({"error": "Unauthorized"}), 401
 
     from app.models import TapEvent
-    from app.auth import get_student_for_admin
+    from app.auth import get_student_for_admin, get_admin_student_query
 
     # SECURITY FIX: Use scoped helper to verify admin owns this student
     student = get_student_for_admin(student_id)
     if not student:
         return jsonify({"error": "Student not found or access denied"}), 404
 
-    # Get all tap events for this student
-    events = TapEvent.query.filter_by(
-        student_id=student_id
-    ).order_by(TapEvent.period, TapEvent.timestamp.asc()).all()
+    accessible_student_ids_query = get_admin_student_query(include_unassigned=False).with_entities(Student.id)
+
+    # Get all tap events for this student, scoped by teacher join_code when available.
+    events = (
+        _apply_admin_join_code_scope(
+            TapEvent.query.filter(TapEvent.student_id == student_id),
+            TapEvent,
+            admin.id,
+            accessible_student_ids_query,
+        )
+        .order_by(TapEvent.period, TapEvent.timestamp.asc())
+        .all()
+    )
 
     # Group by period and validate pairing
     periods = {}
@@ -2457,9 +2510,18 @@ def delete_tap_entry(event_id):
         return jsonify({"error": "Unauthorized"}), 401
 
     from app.models import TapEvent
-    from app.auth import get_student_for_admin
+    from app.auth import get_student_for_admin, get_admin_student_query
 
-    event = db.session.get(TapEvent, event_id)
+    accessible_student_ids_query = get_admin_student_query(include_unassigned=False).with_entities(Student.id)
+    event = (
+        _apply_admin_join_code_scope(
+            TapEvent.query.filter(TapEvent.id == event_id),
+            TapEvent,
+            admin.id,
+            accessible_student_ids_query,
+        )
+        .first()
+    )
     if not event:
         return jsonify({"error": "Tap entry not found"}), 404
 
