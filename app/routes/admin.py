@@ -1185,6 +1185,10 @@ def dashboard():
         .distinct()
         .all()
     ]
+    join_code_scope = TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
+        TeacherBlock.teacher_id == current_admin_id,
+        TeacherBlock.join_code.isnot(None),
+    ).distinct()
 
     # Get batch balances
     batch_balances = get_batch_balances(teacher_join_codes, student_ids)
@@ -1210,6 +1214,7 @@ def dashboard():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
         .filter(HallPassLog.status == 'pending')
         .count()
     )
@@ -1236,6 +1241,7 @@ def dashboard():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
         .filter(HallPassLog.status == 'pending')
         .order_by(HallPassLog.request_time.desc())
         .limit(5)
@@ -5148,6 +5154,7 @@ def rent_settings():
                         block_name,
                         join_code,
                         cursor,
+                        seat_ids=get_seat_ids_for_student_join(student.id, join_code),
                     )
                     if is_paid:
                         break
@@ -5181,6 +5188,7 @@ def rent_settings():
             RentPayment.query
             .join(Student, RentPayment.student_id == Student.id)
             .filter(Student.id.in_(sa.select(student_ids_subq)))
+            .filter(RentPayment.join_code.in_([info['join_code'] for info in classes_by_join_code.values()]))
             .order_by(RentPayment.payment_date.desc())
             .limit(200)
         )
@@ -6381,10 +6389,15 @@ def void_transaction(transaction_id):
 def hall_pass():
     """Manage hall pass requests and active passes."""
     student_ids_subq = _student_scope_subquery()
+    join_code_scope = TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
+        TeacherBlock.teacher_id == session.get('admin_id'),
+        TeacherBlock.join_code.isnot(None),
+    ).distinct()
     pending_requests = (
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
         .filter(HallPassLog.status == 'pending')
         .order_by(HallPassLog.request_time.asc())
         .all()
@@ -6393,6 +6406,7 @@ def hall_pass():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
         .filter(HallPassLog.status == 'approved')
         .order_by(HallPassLog.decision_time.asc())
         .all()
@@ -6401,6 +6415,7 @@ def hall_pass():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
         .filter(HallPassLog.status == 'left')
         .order_by(HallPassLog.left_time.asc())
         .all()
