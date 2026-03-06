@@ -5194,17 +5194,9 @@ def rent_settings():
             info['join_code']: info['block']
             for info in classes_by_join_code.values()
         }
-        settings_by_block = {
-            rs.block: rs
-            for rs in RentSettings.query.filter(
-                RentSettings.teacher_id == admin_id,
-                RentSettings.block.in_([info['block'] for info in classes_by_join_code.values()])
-            ).all()
-        }
         for payment in payment_query.all():
             payment_join = (payment.join_code or '').strip()
             payment_block = block_by_join.get(payment_join, payment.period)
-            block_settings = settings_by_block.get(payment_block)
             coverage_label = "Unknown"
             if payment.coverage_year and payment.coverage_month:
                 coverage_label = datetime(
@@ -10249,7 +10241,7 @@ def passkey_auth_finish():
         # Credentials are stored without credential_id (managed by passwordless.dev),
         # so update last_used for all credentials belonging to this admin.
         now = utc_now()
-        AdminCredential.query.filter_by(admin_id=admin_id).update({'last_used': now})
+        AdminCredential.query.filter_by(admin_id=admin_id).update({'last_used': now}, synchronize_session=False)
 
         admin.last_login = now
         db.session.commit()
