@@ -1949,6 +1949,7 @@ def view_escalated_issue(issue_id):
                          current_page='issues',
                          page_title=f'Issue #{issue.id}',
                          issue=issue,
+                         correlation_pack=issue.correlation_pack,
                          history=history,
                          format_utc_iso=format_utc_iso)
 

@@ -55,20 +55,6 @@ def upgrade():
     if not index_exists(table_name, index_name):
         op.create_index(index_name, table_name, ['join_code'], unique=False)
 
-    if table_exists('student_items') and column_exists('student_items', 'join_code') and column_exists(table_name, 'student_item_id'):
-        op.execute(
-            sa.text(
-                """
-                UPDATE redemption_audit_logs ral
-                SET join_code = si.join_code
-                FROM student_items si
-                WHERE ral.join_code IS NULL
-                  AND ral.student_item_id = si.id
-                  AND si.join_code IS NOT NULL
-                """
-            )
-        )
-
 
 def downgrade():
     table_name = 'redemption_audit_logs'

@@ -14,6 +14,7 @@ import math
 import random
 import string
 import secrets
+import threading
 import qrcode
 import hashlib
 from calendar import monthrange
@@ -43,7 +44,7 @@ from app.models import (
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
     RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent,
-    BalanceCache,
+    BalanceCache, JoinCode,
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
 from app.forms import (
@@ -135,6 +136,10 @@ FREQUENCY_TO_CLAIM_PERIOD = {
 LEGACY_PLACEHOLDER_CREDENTIAL = "LEGACY0"  # Placeholder credential for legacy classes
 LEGACY_PLACEHOLDER_FIRST_NAME = "__JOIN_CODE_PLACEHOLDER__"  # Marks legacy placeholder entries
 LEGACY_PLACEHOLDER_LAST_INITIAL = "P"  # "P" for Placeholder
+
+# Module-level cache for schema table-name lookups (keyed by DB URL to be app-config safe).
+_table_names_cache: dict[str, set[str]] = {}
+_table_names_cache_lock = threading.Lock()
 
 # Create blueprint
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -829,6 +834,8 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
     if existing_seat:
         return
 
+    join_code_id = _ensure_join_code_anchors(teacher_id, join_code, class_label=block)
+
     # Create the teacher student seat
     # Default Identity: Teacher Student, DOB 01/01/2001
     first_name = "Teacher"
@@ -844,6 +851,7 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
         teacher_id=teacher_id,
         block=block,
         join_code=join_code,
+        join_code_id=join_code_id,
         class_label=f"Teacher's Student Account",
         first_name=first_name,
         last_initial=last_initial,
@@ -856,6 +864,80 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
     )
     db.session.add(teacher_seat)
     current_app.logger.info(f"Created Teacher Student seat for teacher {teacher_id}, join_code {join_code}")
+
+
+def _get_table_names() -> set[str]:
+    """Return the set of table names for the current engine, using a module-level cache."""
+    db_url = str(db.engine.url)
+    with _table_names_cache_lock:
+        if db_url not in _table_names_cache:
+            # Use the session's own connection rather than acquiring a fresh one from
+            # the engine.  Acquiring a separate connection (and returning it) causes
+            # SQLAlchemy to issue a ROLLBACK on the shared connection when using
+            # StaticPool (e.g. SQLite in-memory during tests), which silently undoes
+            # any changes already flushed by the current session.
+            conn = db.session.connection()
+            inspector = sa.inspect(conn)
+            _table_names_cache[db_url] = set(inspector.get_table_names())
+        return _table_names_cache[db_url]
+
+
+def _ensure_join_code_anchors(teacher_id, join_code, class_label=None):
+    """Ensure legacy and canonical join code parent rows exist before child inserts."""
+    if not teacher_id or not join_code:
+        return None
+
+    now = utc_now()
+    table_names = _get_table_names()
+
+    if "class_economies" in table_names:
+        # Legacy FK compatibility: some environments still enforce teacher_blocks.join_code -> class_economies.join_code.
+        db.session.execute(
+            text(
+                """
+                INSERT INTO class_economies (
+                    join_code, display_name, status, created_at, updated_at, created_by_admin_id
+                )
+                VALUES (
+                    :join_code, :display_name, :status, :created_at, :updated_at, :created_by_admin_id
+                )
+                ON CONFLICT (join_code) DO UPDATE
+                SET updated_at = EXCLUDED.updated_at
+                """
+            ),
+            {
+                "join_code": join_code,
+                "display_name": class_label,
+                "status": "active",
+                "created_at": now.replace(tzinfo=None),
+                "updated_at": now.replace(tzinfo=None),
+                "created_by_admin_id": teacher_id,
+            },
+        )
+
+    if "join_codes" not in table_names:
+        return None
+
+    join_code_row = JoinCode.query.filter_by(join_code_token=join_code).first()
+    if join_code_row:
+        return join_code_row.join_code_id
+
+    # Create join_code row with concurrency-safe pattern: handle race on unique(join_code_token).
+    new_join_code = JoinCode(
+        join_code_token=join_code,
+        teacher_id=teacher_id,
+    )
+    try:
+        with db.session.begin_nested():
+            db.session.add(new_join_code)
+            db.session.flush()
+    except IntegrityError:
+        # Another transaction likely inserted the same join_code_token concurrently.
+        existing = JoinCode.query.filter_by(join_code_token=join_code).first()
+        if existing:
+            return existing.join_code_id
+        raise
+    return new_join_code.join_code_id
 
 
 def _link_student_to_admin(student: Student, admin_id):
@@ -903,12 +985,15 @@ def _link_student_to_admin(student: Student, admin_id):
             join_code = generate_join_code()
             class_label = None
 
+        join_code_id = _ensure_join_code_anchors(admin_id, join_code, class_label=student.block)
+
         # Create new TeacherBlock record
         new_teacher_block = TeacherBlock(
             teacher_id=admin_id,
             student_id=student.id,
             block=student.block,
             join_code=join_code,
+            join_code_id=join_code_id,
             class_label=class_label,  # Preserve class_label if it exists
             is_claimed=True,  # Mark as claimed since teacher manually added them
             first_name=student.first_name,
@@ -3364,6 +3449,7 @@ def edit_student():
             # Ensure the teacher student seat exists for this new join code
             if join_code:
                 _ensure_teacher_student_seat(current_admin_id, join_code, block)
+            join_code_id = _ensure_join_code_anchors(current_admin_id, join_code, class_label=block)
 
             # CRITICAL FIX: Ensure first_half_hash exists before creating TeacherBlock
             # Logic: If hash is missing (legacy student), generate it now to prevent NotNullViolation
@@ -3388,6 +3474,7 @@ def edit_student():
                 salt=student.salt,
                 first_half_hash=student.first_half_hash,
                 join_code=join_code,
+                join_code_id=join_code_id,
                 is_claimed=is_claimed,
                 student_id=student.id,  # Always link since student record exists
                 claimed_at=utc_now() if is_claimed else None
@@ -3878,6 +3965,7 @@ def add_individual_student():
         
         if existing_tb:
             join_code = existing_tb.join_code
+            join_code_id = _ensure_join_code_anchors(current_admin_id, join_code, class_label=block)
         else:
             # Generate a unique join code with bounded retries and fallback
             join_code = None
@@ -3891,6 +3979,7 @@ def add_individual_student():
                 block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
                 timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
                 join_code = f"B{block_initial}{timestamp_suffix:04d}"
+            join_code_id = _ensure_join_code_anchors(current_admin_id, join_code, class_label=block)
         
         new_tb = TeacherBlock(
             teacher_id=current_admin_id,
@@ -3902,6 +3991,7 @@ def add_individual_student():
             salt=salt,
             first_half_hash=first_half_hash,
             join_code=join_code,
+            join_code_id=join_code_id,
             is_claimed=False,  # Student hasn't set up username yet
             student_id=new_student.id,
         )
@@ -4044,6 +4134,7 @@ def add_manual_student():
         
         if existing_tb:
             join_code = existing_tb.join_code
+            join_code_id = _ensure_join_code_anchors(current_admin_id, join_code, class_label=block)
         else:
             # Generate a unique join code with bounded retries and fallback
             join_code = None
@@ -4057,6 +4148,7 @@ def add_manual_student():
                 block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
                 timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
                 join_code = f"B{block_initial}{timestamp_suffix:04d}"
+            join_code_id = _ensure_join_code_anchors(current_admin_id, join_code, class_label=block)
         
         # Student is claimed if they have a username set
         is_claimed = bool(username)
@@ -4071,6 +4163,7 @@ def add_manual_student():
             salt=salt,
             first_half_hash=first_half_hash,
             join_code=join_code,
+            join_code_id=join_code_id,
             is_claimed=is_claimed,
             student_id=new_student.id,
             claimed_at=utc_now() if is_claimed else None,
@@ -9587,14 +9680,9 @@ def onboarding_status():
                 # Set it in session for future requests
                 session['current_join_code'] = join_code
 
-        # If still no join_code after auto-discovery, teacher has no class periods
-        if not join_code:
-            return jsonify({
-                'status': 'success',
-                'dismissed': False,
-                'no_class_period': True,
-                'completion': {}
-            })
+        # No early return when a teacher has no class periods yet.
+        # The widget should still render the full checklist so teachers can
+        # see all setup tasks immediately.
 
         # Get all blocks for this teacher (for account-wide onboarding checks)
         all_teacher_blocks = TeacherBlock.query.filter_by(teacher_id=admin_id).all()
@@ -9667,7 +9755,6 @@ def onboarding_status():
         return jsonify({
             'status': 'success',
             'dismissed': False,
-            'no_class_period': False,
             'completion': completion,
             'data_completed': data_completed,
             'skipped': skipped_tasks

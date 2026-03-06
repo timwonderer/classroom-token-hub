@@ -551,27 +551,10 @@
                             return;
                         }
 
-                        // Check if no class period is selected
-                        if (data.no_class_period) {
-                            // Show widget but with a message about selecting a class period
-                            const widget = document.getElementById('gettingStartedWidget');
-                            if (widget) {
-                                widget.style.display = 'block';
-                            }
-                            showNoClassPeriodMessage();
-                            return;
-                        }
-
                         // Show widget
                         const widget = document.getElementById('gettingStartedWidget');
                         if (widget) {
                             widget.style.display = 'block';
-                        }
-
-                        // Remove any "no class period" message if it exists
-                        const noClassMsg = document.querySelector('.gs-no-class-period');
-                        if (noClassMsg) {
-                            noClassMsg.remove();
                         }
 
                         const completion = data.completion || {};
@@ -699,31 +682,6 @@
                 </div>
             `;
                 body.appendChild(congrats);
-            }
-        }
-
-        // Show message when no class period is selected
-        function showNoClassPeriodMessage() {
-            const body = document.querySelector('.gs-panel-body');
-            if (body && !document.querySelector('.gs-no-class-period')) {
-                // Clear existing checklist
-                const checklist = document.querySelector('.gs-checklist');
-                if (checklist) {
-                    checklist.style.display = 'none';
-                }
-
-                const message = document.createElement('div');
-                message.className = 'alert alert-info gs-no-class-period';
-                message.innerHTML = `
-                <div class="d-flex align-items-start gap-2">
-                    <span class="material-symbols-outlined">info</span>
-                    <div>
-                        <strong>Select a Class Period First</strong>
-                        <p class="mb-0 mt-2">To start setting up your classroom economy, please select or create a class period from the class period dropdown in the navigation bar.</p>
-                    </div>
-                </div>
-            `;
-                body.insertBefore(message, body.firstChild);
             }
         }
 
