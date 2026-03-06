@@ -19,6 +19,13 @@ DEFAULT_TRACE_LIMIT = 20
 DEFAULT_TRACE_TTL_DAYS = 7
 DEFAULT_ERROR_WINDOW_HOURS = 2
 DEFAULT_RECENT_ERROR_MINUTES = 15
+DEFAULT_TRACE_FETCH_MULTIPLIER = 4
+DEFAULT_NOISE_ENDPOINT_PREFIXES = (
+    "/static/",
+    "/sw.js",
+    "/favicon.ico",
+    "/api/set-timezone",
+)
 
 
 def _int_env(name: str, default: int) -> int:
@@ -44,6 +51,20 @@ def _sanitize_error_message(raw_message: str | None) -> str:
         return ""
     compact = " ".join(str(raw_message).split())
     return compact[:500]
+
+
+def _noise_endpoint_prefixes() -> tuple[str, ...]:
+    raw = os.getenv("TLCP_NOISE_ENDPOINT_PREFIXES")
+    if not raw:
+        return DEFAULT_NOISE_ENDPOINT_PREFIXES
+    prefixes = tuple(part.strip() for part in raw.split(",") if part.strip())
+    return prefixes or DEFAULT_NOISE_ENDPOINT_PREFIXES
+
+
+def _is_noise_endpoint(endpoint: str | None) -> bool:
+    if not endpoint:
+        return True
+    return any(endpoint.startswith(prefix) for prefix in _noise_endpoint_prefixes())
 
 
 def resolve_actor_context() -> dict | None:
@@ -205,15 +226,20 @@ def create_ticket_correlation_pack(
     ttl_days = _int_env("TLCP_TRACE_TTL_DAYS", DEFAULT_TRACE_TTL_DAYS)
     error_window_hours = _int_env("TLCP_ERROR_WINDOW_HOURS", DEFAULT_ERROR_WINDOW_HOURS)
 
+    fetch_limit = trace_limit * _int_env("TLCP_TRACE_FETCH_MULTIPLIER", DEFAULT_TRACE_FETCH_MULTIPLIER)
     trace_rows = (
         ActorRequestTrace.query.filter_by(
             actor_type=actor_type,
             actor_opaque_id=actor_opaque_id,
         )
         .order_by(ActorRequestTrace.created_at.desc(), ActorRequestTrace.id.desc())
-        .limit(trace_limit)
+        .limit(fetch_limit)
         .all()
     )
+
+    prioritized = [row for row in trace_rows if not _is_noise_endpoint(row.endpoint)]
+    noisy = [row for row in trace_rows if _is_noise_endpoint(row.endpoint)]
+    ranked_rows = (prioritized + noisy)[:trace_limit]
 
     request_trace_json = [
         {
@@ -224,7 +250,7 @@ def create_ticket_correlation_pack(
             "status_code": row.status_code,
             "join_code_id": row.join_code_id,
         }
-        for row in trace_rows
+        for row in ranked_rows
     ]
 
     error_window_start = ticket_created_at - timedelta(hours=error_window_hours)
