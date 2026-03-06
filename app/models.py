@@ -589,12 +589,12 @@ class Student(db.Model):
 
     @property
     def amount_needed_to_cover_bills(self):
-        total_due = 0
+        total_due = Decimal('0')
         if self.is_rent_enabled:
-            total_due += 800
+            total_due += Decimal('800')
         if self.insurance_plan != "none":
-            total_due += 200  # Estimated insurance cost
-        return max(0, total_due - self.checking_balance)
+            total_due += Decimal('200')  # Estimated insurance cost
+        return max(Decimal('0'), total_due - self.checking_balance)
 
     # Removed deprecated last_tap_in/last_tap_out properties; backend is source of truth.
 

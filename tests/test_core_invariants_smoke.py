@@ -318,6 +318,72 @@ def test_store_purchase_deducts_balance_and_records_transaction(client):
     assert purchase_tx.amount < Decimal("0.00")
 
 
+def test_store_purchase_bulk_discount_uses_quantized_total_for_funds_check(client):
+    admin = _create_admin("store-discount-admin")
+    student = _create_student("Discount")
+    _link_student_to_teacher(student, admin, "JOIN-DISC", block="A")
+    db.session.commit()
+
+    item = StoreItem(
+        teacher_id=admin.id,
+        name="Discounted Item",
+        price=Decimal("0.05"),
+        is_active=True,
+        item_type="delayed",
+        bulk_discount_enabled=True,
+        bulk_discount_quantity=1,
+        bulk_discount_percentage=10,
+    )
+    db.session.add(item)
+    db.session.add(
+        Transaction(
+            student_id=student.id,
+            teacher_id=admin.id,
+            join_code="JOIN-DISC",
+            amount=Decimal("0.04"),
+            account_type="checking",
+            status=TransactionStatus.POSTED,
+            type="Deposit",
+            description="Seed funds",
+        )
+    )
+    db.session.commit()
+
+    _login_student(client, student.id, "JOIN-DISC")
+    response = client.post(
+        "/api/purchase-item",
+        json={"item_id": item.id, "passphrase": "password", "quantity": 1},
+    )
+
+    assert response.status_code == 200
+    purchase_tx = (
+        Transaction.query.filter_by(
+            student_id=student.id,
+            teacher_id=admin.id,
+            join_code="JOIN-DISC",
+            type="purchase",
+        )
+        .order_by(Transaction.id.desc())
+        .first()
+    )
+    assert purchase_tx is not None
+    assert purchase_tx.amount == Decimal("-0.04")
+
+
+def test_amount_needed_to_cover_bills_uses_decimal_math(client):
+    student = _create_student("Bills")
+    db.session.commit()
+
+    student.is_rent_enabled = True
+    student.insurance_plan = "basic"
+    db.session.commit()
+
+    amount_needed = student.amount_needed_to_cover_bills
+
+    assert isinstance(amount_needed, Decimal)
+    assert amount_needed == Decimal("1000.00")
+
+
 def test_rent_payment_creates_rent_obligation_record(client):
     admin = _create_admin("rent-admin")
     student = _create_student("Renter")

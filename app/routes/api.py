@@ -23,7 +23,7 @@ from app.models import (
     Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
     TapEventReasonCode, HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
     StudentTeacher, TeacherBlock, StudentBlock, DemoStudent, StoreItemBlock,
-    RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource
+    RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource, _quantize_currency
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
 from app.routes.student import (
@@ -506,7 +506,8 @@ def purchase_item():
         discount_multiplier = Decimal('1') - (Decimal(str(item.bulk_discount_percentage)) / 100)
         unit_price = item.price * discount_multiplier
 
-    total_price = unit_price * quantity
+    # Align balance checks and persisted purchase amount with 2dp currency semantics.
+    total_price = _quantize_currency(unit_price * quantity)
 
     # Get banking settings for overdraft handling (reuse teacher_id from above)
     banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first()
