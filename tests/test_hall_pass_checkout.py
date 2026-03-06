@@ -8,7 +8,7 @@ without using the terminal, with proper limit enforcement.
 import pytest
 from datetime import datetime, timezone, timedelta
 from app.models import (
-    Student, Admin, HallPassLog, StudentTeacher, HallPassSettings, TapEvent
+    Student, Admin, HallPassLog, StudentTeacher, HallPassSettings, TapEvent, TeacherBlock
 )
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
@@ -68,6 +68,22 @@ def setup_hall_pass_checkout_test(client):
         join_code="TEST123"
     )
     db.session.add(hall_pass)
+
+    # Create claimed seat so current class context can be resolved in student routes.
+    db.session.add(TeacherBlock(
+        teacher_id=teacher.id,
+        block="Period1",
+        class_label="Period1",
+        first_name=student.first_name,
+        last_initial=student.last_initial,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
+        salt=b"seat-salt",
+        first_half_hash="seat-hash-1",
+        join_code="TEST123",
+        student_id=student.id,
+        is_claimed=True,
+    ))
     db.session.commit()
 
     return {
@@ -345,3 +361,86 @@ def test_checkin_rejects_non_left_pass(client, setup_hall_pass_checkout_test):
     json_data = response.get_json()
     assert json_data['status'] == 'error'
     assert 'not currently checked out' in json_data['message'].lower()
+
+
+def test_checkout_rejects_mismatched_class_context(client, setup_hall_pass_checkout_test):
+    """Checkout should fail when active class context does not match pass join_code."""
+    data = setup_hall_pass_checkout_test
+    student = data['student']
+    hall_pass = data['hall_pass']
+    teacher = data['teacher']
+
+    db.session.add(TeacherBlock(
+        teacher_id=teacher.id,
+        block="Period2",
+        class_label="Period2",
+        first_name=student.first_name,
+        last_initial=student.last_initial,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
+        salt=b"seat-salt-2",
+        first_half_hash="seat-hash-2",
+        join_code="OTHER123",
+        student_id=student.id,
+        is_claimed=True,
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['is_student'] = True
+        sess['current_join_code'] = "OTHER123"
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    response = client.post(
+        '/api/hall-pass/checkout',
+        json={'pass_id': hall_pass.id},
+        headers={'X-CSRFToken': 'test'}
+    )
+
+    assert response.status_code == 403
+    json_data = response.get_json()
+    assert json_data['status'] == 'error'
+    assert 'different class context' in json_data['message'].lower()
+
+
+def test_cancel_rejects_mismatched_class_context(client, setup_hall_pass_checkout_test):
+    """Cancel should fail when active class context does not match pass join_code."""
+    data = setup_hall_pass_checkout_test
+    student = data['student']
+    hall_pass = data['hall_pass']
+    teacher = data['teacher']
+
+    hall_pass.status = 'pending'
+    hall_pass.decision_time = None
+    db.session.add(TeacherBlock(
+        teacher_id=teacher.id,
+        block="Period2",
+        class_label="Period2",
+        first_name=student.first_name,
+        last_initial=student.last_initial,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
+        salt=b"seat-salt-3",
+        first_half_hash="seat-hash-3",
+        join_code="OTHER123",
+        student_id=student.id,
+        is_claimed=True,
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['student_id'] = student.id
+        sess['is_student'] = True
+        sess['current_join_code'] = "OTHER123"
+        sess['login_time'] = datetime.now(timezone.utc).isoformat()
+
+    response = client.post(
+        f'/api/hall-pass/cancel/{hall_pass.id}',
+        headers={'X-CSRFToken': 'test'}
+    )
+
+    assert response.status_code == 403
+    json_data = response.get_json()
+    assert json_data['status'] == 'error'
+    assert 'different class context' in json_data['message'].lower()

@@ -1404,6 +1404,26 @@ def _check_simultaneous_pass_limit(log_entry):
     return None
 
 
+def _enforce_hall_pass_student_context(student, log_entry):
+    """
+    Enforce active student class context for hall-pass state mutations.
+
+    If context cannot be resolved (legacy/test data), allow legacy ownership-only behavior.
+    """
+    context = get_current_class_context()
+    if not context:
+        return None
+
+    current_join_code = context.get("join_code")
+    if current_join_code and log_entry.join_code and log_entry.join_code != current_join_code:
+        return jsonify({
+            "status": "error",
+            "message": "This pass belongs to a different class context. Switch class and retry.",
+        }), 403
+
+    return None
+
+
 @api_bp.route('/hall-pass/terminal/use', methods=['POST'])
 def hall_pass_terminal_use():
     """Deprecated legacy route kept for compatibility."""
@@ -1432,6 +1452,9 @@ def cancel_hall_pass(pass_id):
     # Verify this pass belongs to the logged-in student
     if log_entry.student_id != student.id:
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
+    context_error = _enforce_hall_pass_student_context(student, log_entry)
+    if context_error:
+        return context_error
 
     # Only pending passes can be cancelled
     if log_entry.status != 'pending':
@@ -1461,7 +1484,10 @@ def checkout_hall_pass():
     # Verify this pass belongs to the logged-in student
     if log_entry.student_id != student.id:
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
-    
+    context_error = _enforce_hall_pass_student_context(student, log_entry)
+    if context_error:
+        return context_error
+
     # Verify pass is approved
     if log_entry.status != 'approved':
         return jsonify({"status": "error", "message": f"Pass is not approved. Current status: {log_entry.status}"}), 400
@@ -1516,6 +1542,9 @@ def checkin_hall_pass():
     # Verify this pass belongs to the logged-in student
     if log_entry.student_id != student.id:
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
+    context_error = _enforce_hall_pass_student_context(student, log_entry)
+    if context_error:
+        return context_error
     
     # Verify pass is in 'left' status
     if log_entry.status != 'left':
@@ -2570,7 +2599,24 @@ def update_student_block_settings():
     if not student:
         return jsonify({"error": "Student not found or access denied"}), 404
 
-    # Get or create StudentBlock record
+    # Resolve admin-scoped join_code for this student-period.
+    # Keep legacy fallback behavior when no seat-scope row exists yet.
+    scoped_join_codes = sorted(
+        {
+            row[0]
+            for row in TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
+                TeacherBlock.teacher_id == admin.id,
+                TeacherBlock.student_id == student_id,
+                TeacherBlock.is_claimed.is_(True),
+                func.upper(TeacherBlock.block) == period,
+                TeacherBlock.join_code.isnot(None),
+            ).all()
+        }
+    )
+    target_join_code = scoped_join_codes[0] if scoped_join_codes else None
+
+    # Get current StudentBlock record for this student+period.
+    # During migration this is still unique on (student_id, period).
     student_block = StudentBlock.query.filter_by(
         student_id=student_id,
         period=period
@@ -2580,10 +2626,15 @@ def update_student_block_settings():
         student_block = StudentBlock(
             student_id=student_id,
             period=period,
+            join_code=target_join_code,
             tap_enabled=tap_enabled
         )
         db.session.add(student_block)
     else:
+        if scoped_join_codes and student_block.join_code and student_block.join_code not in scoped_join_codes:
+            return jsonify({"error": "Student block not found or access denied"}), 403
+        if target_join_code and not student_block.join_code:
+            student_block.join_code = target_join_code
         student_block.tap_enabled = tap_enabled
 
     db.session.commit()

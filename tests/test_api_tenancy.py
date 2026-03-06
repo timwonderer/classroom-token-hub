@@ -8,7 +8,7 @@ import pyotp
 from datetime import datetime, timezone
 
 from app import app, db
-from app.models import Admin, Student, StudentTeacher, TapEvent, TeacherBlock
+from app.models import Admin, Student, StudentTeacher, TapEvent, TeacherBlock, StudentBlock
 from app.hash_utils import get_random_salt, hash_username
 
 
@@ -325,3 +325,65 @@ def test_admin_delete_tap_entry_enforces_join_code_scope(client):
     assert allow_response.status_code == 200
     db.session.refresh(tap_a)
     assert tap_a.is_deleted is True
+
+
+def test_admin_student_block_settings_rejects_out_of_scope_join_code(client):
+    """Admin must not update a StudentBlock row bound to another join code."""
+    teacher_a, secret_a = _create_admin("teacher-a")
+    teacher_b, _ = _create_admin("teacher-b")
+
+    shared_student = _create_student(
+        "SharedBlock",
+        primary_teacher=teacher_a,
+        linked_teachers=[teacher_a, teacher_b],
+    )
+    _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+    _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="A")
+
+    block = StudentBlock(
+        student_id=shared_student.id,
+        period="A",
+        join_code="JOIN_B",
+        tap_enabled=True,
+    )
+    db.session.add(block)
+    db.session.commit()
+
+    _login_admin(client, teacher_a, secret_a)
+    response = client.post(
+        "/api/admin/student-block-settings",
+        json={"student_id": shared_student.id, "period": "A", "tap_enabled": False},
+        headers={"X-CSRFToken": "test"},
+    )
+
+    assert response.status_code == 403
+    db.session.refresh(block)
+    assert block.tap_enabled is True
+
+
+def test_admin_student_block_settings_backfills_join_code_when_missing(client):
+    """Admin update should attach scoped join_code to legacy StudentBlock rows."""
+    teacher_a, secret_a = _create_admin("teacher-a")
+    student = _create_student("LegacyBlock", primary_teacher=teacher_a)
+    _create_claimed_seat(teacher_a, student, "JOIN_A", block="A")
+
+    block = StudentBlock(
+        student_id=student.id,
+        period="A",
+        join_code=None,
+        tap_enabled=True,
+    )
+    db.session.add(block)
+    db.session.commit()
+
+    _login_admin(client, teacher_a, secret_a)
+    response = client.post(
+        "/api/admin/student-block-settings",
+        json={"student_id": student.id, "period": "A", "tap_enabled": False},
+        headers={"X-CSRFToken": "test"},
+    )
+
+    assert response.status_code == 200
+    db.session.refresh(block)
+    assert block.tap_enabled is False
+    assert block.join_code == "JOIN_A"
