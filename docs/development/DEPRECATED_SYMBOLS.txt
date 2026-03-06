@@ -1,0 +1,3 @@
+# Deprecated symbol registry used by Schema Change Gate CI.
+# Source of truth: docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-014_Deprecated_Symbols_Registry.md
+teacher_id
