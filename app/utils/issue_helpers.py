@@ -180,16 +180,18 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
 
     # Attach immutable correlation snapshot at submission time.
     try:
-        create_ticket_correlation_pack(
-            issue_id=issue.id,
-            actor_type='student',
-            actor_opaque_id=opaque_ref,
-            join_code_id=join_code_id,
-            ticket_created_at=now_utc,
-            include_recent_error=include_recent_error,
-        )
+        with db.session.begin_nested():
+            create_ticket_correlation_pack(
+                issue_id=issue.id,
+                actor_type='student',
+                actor_opaque_id=opaque_ref,
+                join_code_id=join_code_id,
+                ticket_created_at=now_utc,
+                include_recent_error=include_recent_error,
+            )
     except Exception:
         # Keep student ticket submission resilient even if correlation packing fails.
+        # The savepoint is already rolled back, so the main session remains usable.
         current_app.logger.warning("Failed to attach TLCP snapshot to issue_id=%s", issue.id, exc_info=True)
 
     # Record status history

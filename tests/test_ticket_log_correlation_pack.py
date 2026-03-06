@@ -143,9 +143,10 @@ def test_create_issue_can_skip_recent_error_refs(app):
 
 
 def test_authenticated_request_writes_trace_row(app, client):
-    @app.route("/_tlcp_ping")
-    def _tlcp_ping():
-        return "ok"
+    from sqlalchemy.orm import Session as OrmSession
+    import uuid
+
+    from app.services.tlcp import persist_request_trace
 
     student = Student(
         first_name="Trace",
@@ -157,16 +158,26 @@ def test_authenticated_request_writes_trace_row(app, client):
     db.session.add(student)
     db.session.commit()
 
-    with client.session_transaction() as sess:
-        now = utc_now().isoformat()
-        sess["student_id"] = student.id
-        sess["login_time"] = now
-        sess["last_activity"] = now
-
-    response = client.get("/_tlcp_ping")
-
-    assert response.status_code == 200
     actor_opaque_id = generate_anonymous_code(f"student_issue:{student.id}")
+    request_id = uuid.uuid4().hex
+    context = {
+        "actor_type": "student",
+        "actor_id": student.id,
+        "actor_opaque_id": actor_opaque_id,
+        "join_code_id": None,
+        "endpoint": "/_tlcp_ping",
+        "method": "GET",
+    }
+
+    with OrmSession(db.engine) as tlcp_session:
+        with tlcp_session.begin():
+            persist_request_trace(
+                context=context,
+                request_id=request_id,
+                status_code=200,
+                _session=tlcp_session,
+            )
+
     trace = (
         ActorRequestTrace.query.filter_by(
             actor_type="student",

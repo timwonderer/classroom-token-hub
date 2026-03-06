@@ -14,6 +14,7 @@ import math
 import random
 import string
 import secrets
+import threading
 import qrcode
 import hashlib
 from calendar import monthrange
@@ -135,6 +136,10 @@ FREQUENCY_TO_CLAIM_PERIOD = {
 LEGACY_PLACEHOLDER_CREDENTIAL = "LEGACY0"  # Placeholder credential for legacy classes
 LEGACY_PLACEHOLDER_FIRST_NAME = "__JOIN_CODE_PLACEHOLDER__"  # Marks legacy placeholder entries
 LEGACY_PLACEHOLDER_LAST_INITIAL = "P"  # "P" for Placeholder
+
+# Module-level cache for schema table-name lookups (keyed by DB URL to be app-config safe).
+_table_names_cache: dict[str, set[str]] = {}
+_table_names_cache_lock = threading.Lock()
 
 # Create blueprint
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -861,14 +866,23 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
     current_app.logger.info(f"Created Teacher Student seat for teacher {teacher_id}, join_code {join_code}")
 
 
+def _get_table_names() -> set[str]:
+    """Return the set of table names for the current engine, using a module-level cache."""
+    db_url = str(db.engine.url)
+    with _table_names_cache_lock:
+        if db_url not in _table_names_cache:
+            inspector = sa.inspect(db.engine)
+            _table_names_cache[db_url] = set(inspector.get_table_names())
+        return _table_names_cache[db_url]
+
+
 def _ensure_join_code_anchors(teacher_id, join_code, class_label=None):
     """Ensure legacy and canonical join code parent rows exist before child inserts."""
     if not teacher_id or not join_code:
         return None
 
     now = utc_now()
-    inspector = sa.inspect(db.engine)
-    table_names = set(inspector.get_table_names())
+    table_names = _get_table_names()
 
     if "class_economies" in table_names:
         # Legacy FK compatibility: some environments still enforce teacher_blocks.join_code -> class_economies.join_code.
@@ -902,12 +916,21 @@ def _ensure_join_code_anchors(teacher_id, join_code, class_label=None):
     if join_code_row:
         return join_code_row.join_code_id
 
+    # Create join_code row with concurrency-safe pattern: handle race on unique(join_code_token).
     new_join_code = JoinCode(
         join_code_token=join_code,
         teacher_id=teacher_id,
     )
-    db.session.add(new_join_code)
-    db.session.flush()
+    try:
+        with db.session.begin_nested():
+            db.session.add(new_join_code)
+            db.session.flush()
+    except IntegrityError:
+        # Another transaction likely inserted the same join_code_token concurrently.
+        existing = JoinCode.query.filter_by(join_code_token=join_code).first()
+        if existing:
+            return existing.join_code_id
+        raise
     return new_join_code.join_code_id
 
 

@@ -10,6 +10,7 @@ import logging
 import urllib.parse
 import uuid
 import pytz
+import sqlalchemy as sa
 from datetime import datetime, date, timezone
 from logging.handlers import RotatingFileHandler
 
@@ -174,19 +175,41 @@ def register_error_handlers(app):
         )
 
         try:
-            save_error_event(
-                request_id=getattr(g, "request_id", None),
-                actor_type=context.get("actor_type"),
-                actor_opaque_id=context.get("actor_opaque_id"),
-                join_code_id=context.get("join_code_id"),
-                endpoint=endpoint,
-                method=request.method,
-                error_class=e.__class__.__name__,
-                error_message=sanitized_message,
-            )
-            db.session.commit()
-        except Exception:
+            # Roll back any partial view state so it is not accidentally committed,
+            # then persist the TLCP error event in a fresh, independent transaction.
             db.session.rollback()
+            with db.engine.begin() as conn:
+                from app.models import ErrorEvent
+                from app.utils.time import utc_now
+                if context.get("actor_type") and context.get("actor_opaque_id"):
+                    from app.services.tlcp import _sanitize_error_message
+                    conn.execute(
+                        sa.text(
+                            """
+                            INSERT INTO error_events
+                                (request_id, actor_type, actor_opaque_id, join_code_id,
+                                 endpoint, method, error_class, error_message,
+                                 correlation_version, created_at)
+                            VALUES
+                                (:request_id, :actor_type, :actor_opaque_id, :join_code_id,
+                                 :endpoint, :method, :error_class, :error_message,
+                                 :correlation_version, :created_at)
+                            """
+                        ),
+                        {
+                            "request_id": getattr(g, "request_id", None),
+                            "actor_type": context.get("actor_type"),
+                            "actor_opaque_id": context.get("actor_opaque_id"),
+                            "join_code_id": context.get("join_code_id"),
+                            "endpoint": endpoint,
+                            "method": request.method,
+                            "error_class": e.__class__.__name__,
+                            "error_message": _sanitize_error_message(sanitized_message),
+                            "correlation_version": CORRELATION_VERSION,
+                            "created_at": utc_now(),
+                        },
+                    )
+        except Exception:
             app.logger.warning("Failed to persist TLCP error event", exc_info=True)
 
         # Content-aware error response
@@ -312,6 +335,7 @@ def create_app():
     @app.after_request
     def attach_request_id_header(response):
         from app.services.tlcp import persist_request_trace
+        from sqlalchemy.orm import Session
 
         request_id = getattr(g, "request_id", None)
         if request_id:
@@ -319,10 +343,15 @@ def create_app():
         context = getattr(g, "correlation_context", None)
         if context:
             try:
-                persist_request_trace(context=context, request_id=request_id, status_code=response.status_code)
-                db.session.commit()
+                with Session(db.engine) as tlcp_session:
+                    with tlcp_session.begin():
+                        persist_request_trace(
+                            context=context,
+                            request_id=request_id,
+                            status_code=response.status_code,
+                            _session=tlcp_session,
+                        )
             except Exception:
-                db.session.rollback()
                 app.logger.warning("Failed to persist TLCP request trace", exc_info=True)
         return response
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import random
 import uuid
 from datetime import timedelta
 
@@ -20,6 +21,7 @@ DEFAULT_TRACE_TTL_DAYS = 7
 DEFAULT_ERROR_WINDOW_HOURS = 2
 DEFAULT_RECENT_ERROR_MINUTES = 15
 DEFAULT_TRACE_FETCH_MULTIPLIER = 4
+TTL_CLEANUP_PROBABILITY = 0.01  # ~1% of requests trigger global TTL cleanup
 DEFAULT_NOISE_ENDPOINT_PREFIXES = (
     "/static/",
     "/sw.js",
@@ -110,10 +112,23 @@ def resolve_actor_context() -> dict | None:
     }
 
 
-def persist_request_trace(context: dict | None, request_id: str | None, status_code: int | None) -> None:
-    """Persist request trace rows with bounded retention."""
+def persist_request_trace(
+    context: dict | None,
+    request_id: str | None,
+    status_code: int | None,
+    *,
+    _session=None,
+) -> None:
+    """Persist request trace rows with bounded retention.
+
+    Pass ``_session`` to use an isolated SQLAlchemy session instead of the
+    default request-scoped ``db.session``.  The caller is responsible for
+    committing (or rolling back) the provided session.
+    """
     if not context:
         return
+
+    sess = _session if _session is not None else db.session
 
     trace_limit = _int_env("TLCP_TRACE_LIMIT", DEFAULT_TRACE_LIMIT)
     ttl_days = _int_env("TLCP_TRACE_TTL_DAYS", DEFAULT_TRACE_TTL_DAYS)
@@ -132,11 +147,11 @@ def persist_request_trace(context: dict | None, request_id: str | None, status_c
         status_code=status_code,
         created_at=now,
     )
-    db.session.add(trace)
-    db.session.flush()
+    sess.add(trace)
+    sess.flush()
 
     ids_to_keep = (
-        db.session.query(ActorRequestTrace.id)
+        sess.query(ActorRequestTrace.id)
         .filter(
             ActorRequestTrace.actor_type == context.get("actor_type"),
             ActorRequestTrace.actor_opaque_id == context.get("actor_opaque_id"),
@@ -146,19 +161,21 @@ def persist_request_trace(context: dict | None, request_id: str | None, status_c
         .subquery()
     )
 
-    db.session.query(ActorRequestTrace).filter(
+    sess.query(ActorRequestTrace).filter(
         ActorRequestTrace.actor_type == context.get("actor_type"),
         ActorRequestTrace.actor_opaque_id == context.get("actor_opaque_id"),
         ~ActorRequestTrace.id.in_(sa.select(ids_to_keep.c.id)),
     ).delete(synchronize_session=False)
 
-    db.session.query(ActorRequestTrace).filter(
-        ActorRequestTrace.created_at < ttl_cutoff
-    ).delete(synchronize_session=False)
+    # Run global TTL cleanup probabilistically to avoid O(table) contention on every hot-path call.
+    if random.random() < TTL_CLEANUP_PROBABILITY:
+        sess.query(ActorRequestTrace).filter(
+            ActorRequestTrace.created_at < ttl_cutoff
+        ).delete(synchronize_session=False)
 
-    db.session.query(ErrorEvent).filter(
-        ErrorEvent.created_at < ttl_cutoff
-    ).delete(synchronize_session=False)
+        sess.query(ErrorEvent).filter(
+            ErrorEvent.created_at < ttl_cutoff
+        ).delete(synchronize_session=False)
 
 
 def save_error_event(
