@@ -5207,21 +5207,9 @@ def rent_settings():
             block_settings = settings_by_block.get(payment_block)
             coverage_label = "Unknown"
             if payment.coverage_year and payment.coverage_month:
-                due_day = 1
-                if block_settings:
-                    if block_settings.first_rent_due_date:
-                        due_day = ensure_utc(block_settings.first_rent_due_date).day
-                    elif block_settings.due_day_of_month:
-                        due_day = block_settings.due_day_of_month
-                month_last_day = monthrange(payment.coverage_year, payment.coverage_month)[1]
-                effective_due_day = max(1, min(int(due_day), month_last_day))
-                period_start = datetime(
-                    payment.coverage_year,
-                    payment.coverage_month,
-                    effective_due_day,
-                    tzinfo=timezone.utc,
-                ) + timedelta(days=1)
-                coverage_label = period_start.strftime('%b %Y')
+                coverage_label = datetime(
+                    payment.coverage_year, payment.coverage_month, 1
+                ).strftime('%b %Y')
             payment_log.append({
                 'student': payment.student,
                 'join_code': payment_join,
@@ -10258,12 +10246,10 @@ def passkey_auth_finish():
             return jsonify({"error": "Admin not found"}), 401
 
         # Update credential last_used timestamp
+        # Credentials are stored without credential_id (managed by passwordless.dev),
+        # so update last_used for all credentials belonging to this admin.
         now = utc_now()
-        credential_id = verified_user.credential_id
-        if credential_id:
-            credential = AdminCredential.query.filter_by(credential_id=credential_id).first()
-            if credential:
-                credential.last_used = now
+        AdminCredential.query.filter_by(admin_id=admin_id).update({'last_used': now})
 
         admin.last_login = now
         db.session.commit()
