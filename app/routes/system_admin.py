@@ -418,7 +418,10 @@ def passkey_auth_finish():
         # Credentials are stored without credential_id (managed by passwordless.dev),
         # so update last_used for all credentials belonging to this sysadmin.
         now = utc_now()
-        SystemAdminCredential.query.filter_by(sysadmin_id=sysadmin_id).update({'last_used': now})
+        SystemAdminCredential.query.filter_by(sysadmin_id=sysadmin_id).update(
+            {'last_used': now},
+            synchronize_session=False,
+        )
 
         db.session.commit()
 
