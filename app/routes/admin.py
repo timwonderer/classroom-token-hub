@@ -8266,6 +8266,9 @@ def tap_out_students():
                 continue
 
             join_code = get_join_code_for_student_period(student.id, period, teacher_id=current_admin_id)
+            if not join_code:
+                errors.append(f"{student.full_name} has no join code for period {period} in this class scope")
+                continue
 
             # Check if student is currently active in this period
             latest_event = (
@@ -8280,6 +8283,34 @@ def tap_out_students():
                 already_inactive.append(student.full_name)
                 continue
 
+            # Lock student out until midnight when teacher taps them out.
+            # Guard against cross-join updates when shared students have multiple classes.
+            student_block = StudentBlock.query.filter_by(
+                student_id=student.id,
+                period=period,
+            ).first()
+            if student_block and student_block.join_code and student_block.join_code != join_code:
+                errors.append(
+                    f"{student.full_name} block settings belong to a different class scope"
+                )
+                continue
+            if not student_block:
+                student_block = StudentBlock(
+                    student_id=student.id,
+                    period=period,
+                    join_code=join_code,
+                    tap_enabled=True,
+                )
+                db.session.add(student_block)
+            elif not student_block.join_code:
+                student_block.join_code = join_code
+
+            # Set done_for_day_date to lock them out until midnight
+            pacific = pytz.timezone('America/Los_Angeles')
+            now_pacific = now_utc.astimezone(pacific)
+            today_pacific = now_pacific.date()
+            student_block.done_for_day_date = today_pacific
+
             # Create tap-out event
             tap_out_event = TapEvent(
                 student_id=student.id,
@@ -8290,27 +8321,6 @@ def tap_out_students():
                 join_code=join_code
             )
             db.session.add(tap_out_event)
-            
-            # Lock student out until midnight when teacher taps them out
-            # Get or create StudentBlock record
-            student_block = StudentBlock.query.filter_by(
-                student_id=student.id,
-                period=period
-            ).first()
-            
-            if not student_block:
-                student_block = StudentBlock(
-                    student_id=student.id,
-                    period=period,
-                    tap_enabled=True
-                )
-                db.session.add(student_block)
-            
-            # Set done_for_day_date to lock them out until midnight
-            pacific = pytz.timezone('America/Los_Angeles')
-            now_pacific = now_utc.astimezone(pacific)
-            today_pacific = now_pacific.date()
-            student_block.done_for_day_date = today_pacific
             
             tapped_out.append(student.full_name)
 
@@ -8387,6 +8397,9 @@ def tap_in_students():
                 continue
 
             join_code = get_join_code_for_student_period(student.id, period, teacher_id=current_admin_id)
+            if not join_code:
+                errors.append(f"{student.full_name} has no join code for period {period} in this class scope")
+                continue
 
             # Check if student is currently active in this period
             latest_event = (

@@ -2,7 +2,7 @@ import pyotp
 from datetime import datetime, timezone
 
 from app import db
-from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction
+from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TapEvent, StudentBlock
 from app.hash_utils import get_random_salt, hash_username
 
 
@@ -149,3 +149,140 @@ def test_student_detail_recovers_from_stale_class_context(client):
 
     with client.session_transaction() as sess:
         assert sess["current_join_code"] == "JOINA"
+
+
+def test_tap_out_students_rejects_cross_scope_student_block(client):
+    teacher_a, secret_a = _create_admin("teacher-a")
+    teacher_b, _ = _create_admin("teacher-b")
+    shared_student = _create_student("Shared", teacher_a)
+    db.session.add(StudentTeacher(student_id=shared_student.id, admin_id=teacher_b.id))
+
+    db.session.add_all([
+        TeacherBlock(
+            teacher_id=teacher_a.id,
+            block="A",
+            class_label="A",
+            first_name="Shared",
+            last_initial="A",
+            last_name_hash_by_part=["x"],
+            dob_sum_hash=None,
+            salt=get_random_salt(),
+            first_half_hash="shared-a-seat",
+            join_code="JOINA",
+            student_id=shared_student.id,
+            is_claimed=True,
+        ),
+        TeacherBlock(
+            teacher_id=teacher_b.id,
+            block="A",
+            class_label="A",
+            first_name="Shared",
+            last_initial="A",
+            last_name_hash_by_part=["y"],
+            dob_sum_hash=None,
+            salt=get_random_salt(),
+            first_half_hash="shared-b-seat",
+            join_code="JOINB",
+            student_id=shared_student.id,
+            is_claimed=True,
+        ),
+        TapEvent(
+            student_id=shared_student.id,
+            period="A",
+            status="active",
+            join_code="JOINA",
+            reason="Start work",
+        ),
+        StudentBlock(
+            student_id=shared_student.id,
+            period="A",
+            join_code="JOINB",
+            tap_enabled=True,
+        ),
+    ])
+    db.session.commit()
+
+    _login_admin(client, teacher_a, secret_a)
+    response = client.post(
+        "/admin/tap-out-students",
+        json={"student_ids": [shared_student.id], "period": "A", "reason": "Teacher tap-out"},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["status"] == "success"
+    assert payload["tapped_out"] == []
+    assert any("different class scope" in msg for msg in payload["errors"])
+
+    block = StudentBlock.query.filter_by(student_id=shared_student.id, period="A").first()
+    assert block is not None
+    assert block.join_code == "JOINB"
+    assert block.done_for_day_date is None
+
+    inactive_count = TapEvent.query.filter_by(
+        student_id=shared_student.id,
+        period="A",
+        status="inactive",
+        join_code="JOINA",
+    ).count()
+    assert inactive_count == 0
+
+
+def test_tap_out_students_backfills_legacy_student_block_join_code(client):
+    teacher, secret = _create_admin("teacher-a")
+    student = _create_student("Alice", teacher)
+
+    db.session.add_all([
+        TeacherBlock(
+            teacher_id=teacher.id,
+            block="A",
+            class_label="A",
+            first_name="Alice",
+            last_initial="A",
+            last_name_hash_by_part=["x"],
+            dob_sum_hash=None,
+            salt=get_random_salt(),
+            first_half_hash="alice-seat",
+            join_code="JOINA",
+            student_id=student.id,
+            is_claimed=True,
+        ),
+        TapEvent(
+            student_id=student.id,
+            period="A",
+            status="active",
+            join_code="JOINA",
+            reason="Start work",
+        ),
+        StudentBlock(
+            student_id=student.id,
+            period="A",
+            join_code=None,
+            tap_enabled=True,
+        ),
+    ])
+    db.session.commit()
+
+    _login_admin(client, teacher, secret)
+    response = client.post(
+        "/admin/tap-out-students",
+        json={"student_ids": [student.id], "period": "A", "reason": "Teacher tap-out"},
+    )
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["status"] == "success"
+    assert student.full_name in payload["tapped_out"]
+
+    block = StudentBlock.query.filter_by(student_id=student.id, period="A").first()
+    assert block is not None
+    assert block.join_code == "JOINA"
+    assert block.done_for_day_date is not None
+
+    inactive_count = TapEvent.query.filter_by(
+        student_id=student.id,
+        period="A",
+        status="inactive",
+        join_code="JOINA",
+    ).count()
+    assert inactive_count == 1
