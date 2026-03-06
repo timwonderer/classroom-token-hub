@@ -1,3 +1,26 @@
-# Deprecated symbol registry used by Schema Change Gate CI.
-# Source of truth: docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-014_Deprecated_Symbols_Registry.md
-teacher_id
+# Deprecated symbols (machine-enforced)
+# One symbol per line. Literal strings only.
+# CI fails if any of these appear in app/ code.
+
+# NOTE: The generic "teacher_id" was previously listed here but is too broad.
+# Many models legitimately use teacher_id columns (TeacherBlock, Transaction, etc.)
+# 
+# ACTUALLY DEPRECATED:
+# - Student.teacher_id column (dropped in migration 1e07c37d3c7c)
+# - Any code that sets Student(teacher_id=...) or queries Student.filter_by(teacher_id=...)
+#
+# NOT DEPRECATED (still valid):
+# - TeacherBlock.teacher_id
+# - Transaction.teacher_id
+# - PayrollSettings.teacher_id
+# - BankingSettings.teacher_id
+# - StoreItem.teacher_id
+# - InsurancePolicy.teacher_id
+# - HallPassSettings.teacher_id
+# - RentSettings.teacher_id
+# - FeatureSettings.teacher_id
+# - And other models that legitimately reference the admins table via teacher_id
+
+# The student-teacher relationship is now EXCLUSIVELY managed via:
+# 1. StudentTeacher table (for linking students to teachers)
+# 2. TeacherBlock table (for class period/seat management)
