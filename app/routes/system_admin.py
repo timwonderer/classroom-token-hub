@@ -415,12 +415,13 @@ def passkey_auth_finish():
             return jsonify({"error": "Admin not found"}), 401
 
         # Update credential last_used timestamp
+        # Credentials are stored without credential_id (managed by passwordless.dev),
+        # so update last_used for all credentials belonging to this sysadmin.
         now = utc_now()
-        credential_id = verified_user.credential_id
-        if credential_id:
-            credential = SystemAdminCredential.query.filter_by(credential_id=credential_id).first()
-            if credential:
-                credential.last_used = now
+        SystemAdminCredential.query.filter_by(sysadmin_id=sysadmin_id).update(
+            {'last_used': now},
+            synchronize_session=False,
+        )
 
         db.session.commit()
 
