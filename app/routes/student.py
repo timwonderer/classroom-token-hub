@@ -63,6 +63,7 @@ from app.utils.display_name_session import (
     upsert_teacher_display_name_cache,
     clear_teacher_display_name_cache,
 )
+from app.services.tlcp import has_recent_error_for_actor
 
 # Create blueprint
 student_bp = Blueprint('student', __name__, url_prefix='/student')
@@ -4018,11 +4019,14 @@ def submit_general_issue():
         return redirect(url_for('student.dashboard'))
 
     form = StudentIssueSubmissionForm()
+    actor_opaque_id = generate_anonymous_code(f"student_issue:{student.id}")
+    show_recent_error_option = has_recent_error_for_actor('student', actor_opaque_id)
 
     # Populate category choices
     form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('general')
 
     if form.validate_on_submit():
+        include_recent_error = request.form.get('include_recent_error') == 'on' if show_recent_error_option else True
         try:
             issue = create_issue(
                 student=student,
@@ -4030,7 +4034,8 @@ def submit_general_issue():
                 join_code=class_context['join_code'],
                 category_id=form.category_id.data,
                 explanation=form.explanation.data,
-                expected_outcome=form.expected_outcome.data
+                expected_outcome=form.expected_outcome.data,
+                include_recent_error=include_recent_error,
             )
 
             flash("Your issue has been submitted. Your teacher will review it soon.", "success")
@@ -4045,7 +4050,8 @@ def submit_general_issue():
                          current_page='help',
                          page_title='Report an Issue',
                          form=form,
-                         issue_type='general')
+                         issue_type='general',
+                         show_recent_error_option=show_recent_error_option)
 
 
 @student_bp.route('/help-support/transaction/<int:transaction_id>/report', methods=['GET', 'POST'])
@@ -4071,11 +4077,14 @@ def report_transaction_issue(transaction_id):
     ).first_or_404()
 
     form = TransactionIssueSubmissionForm()
+    actor_opaque_id = generate_anonymous_code(f"student_issue:{student.id}")
+    show_recent_error_option = has_recent_error_for_actor('student', actor_opaque_id)
 
     # Populate category choices with general categories
     form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('transaction')
 
     if form.validate_on_submit():
+        include_recent_error = request.form.get('include_recent_error') == 'on' if show_recent_error_option else True
         try:
             create_issue(
                 student=student,
@@ -4085,7 +4094,8 @@ def report_transaction_issue(transaction_id):
                 explanation=form.explanation.data,
                 expected_outcome=form.expected_outcome.data,
                 related_transaction_id=transaction_id,
-                related_record_type='transaction'
+                related_record_type='transaction',
+                include_recent_error=include_recent_error,
             )
 
             flash("Your transaction issue has been submitted. Your teacher will review it soon.", "success")
@@ -4101,7 +4111,8 @@ def report_transaction_issue(transaction_id):
                          page_title='Report Transaction Issue',
                          form=form,
                          issue_type='transaction',
-                         transaction=transaction)
+                         transaction=transaction,
+                         show_recent_error_option=show_recent_error_option)
 
 
 @student_bp.route('/help-support/tap-event/<int:tap_event_id>/report', methods=['GET', 'POST'])
@@ -4127,11 +4138,14 @@ def report_tap_event_issue(tap_event_id):
     ).first_or_404()
 
     form = StudentIssueSubmissionForm()
+    actor_opaque_id = generate_anonymous_code(f"student_issue:{student.id}")
+    show_recent_error_option = has_recent_error_for_actor('student', actor_opaque_id)
 
     # Populate category choices with general categories (includes "Clock In/Out Not Working")
     form.category_id.choices = [(0, 'Select an issue type...')] + get_active_categories('general')
 
     if form.validate_on_submit():
+        include_recent_error = request.form.get('include_recent_error') == 'on' if show_recent_error_option else True
         try:
             create_issue(
                 student=student,
@@ -4142,7 +4156,8 @@ def report_tap_event_issue(tap_event_id):
                 expected_outcome=form.expected_outcome.data,
                 related_transaction_id=None,  # No transaction for tap events
                 related_record_type='tap_event',
-                related_record_id=tap_event_id
+                related_record_id=tap_event_id,
+                include_recent_error=include_recent_error,
             )
 
             flash("Your attendance issue has been submitted. Your teacher will review it soon.", "success")
@@ -4158,7 +4173,8 @@ def report_tap_event_issue(tap_event_id):
                          page_title='Report Attendance Issue',
                          form=form,
                          issue_type='attendance',
-                         tap_event=tap_event)
+                         tap_event=tap_event,
+                         show_recent_error_option=show_recent_error_option)
 
 
 # ================== TEACHER ACCOUNT RECOVERY ==================

@@ -1530,6 +1530,48 @@ class ErrorLog(db.Model):
     stack_trace = db.Column(db.Text, nullable=True)  # Full stack trace
 
 
+class ActorRequestTrace(db.Model):
+    """Short-lived request trace rows for ticket correlation."""
+
+    __tablename__ = 'actor_request_trace'
+
+    id = db.Column(db.Integer, primary_key=True)
+    actor_type = db.Column(db.String(20), nullable=False, index=True)
+    actor_opaque_id = db.Column(db.String(64), nullable=False, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='SET NULL'), nullable=True, index=True)
+    request_id = db.Column(db.String(128), nullable=False, index=True)
+    method = db.Column(db.String(10), nullable=False)
+    endpoint = db.Column(db.String(500), nullable=False)
+    status_code = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index('ix_actor_trace_actor_created', 'actor_type', 'actor_opaque_id', 'created_at'),
+    )
+
+
+class ErrorEvent(db.Model):
+    """Short-lived structured error references for TLCP snapshots."""
+
+    __tablename__ = 'error_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    request_id = db.Column(db.String(128), nullable=True, index=True)
+    actor_type = db.Column(db.String(20), nullable=True, index=True)
+    actor_opaque_id = db.Column(db.String(64), nullable=True, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='SET NULL'), nullable=True, index=True)
+    endpoint = db.Column(db.String(500), nullable=True)
+    method = db.Column(db.String(10), nullable=True)
+    error_class = db.Column(db.String(200), nullable=False)
+    error_message = db.Column(db.Text, nullable=True)
+    correlation_version = db.Column(db.Integer, nullable=False, default=1, server_default='1')
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index('ix_error_events_actor_created', 'actor_type', 'actor_opaque_id', 'created_at'),
+    )
+
+
 # ---- User Report Model (Bug Reports, Suggestions, Comments) ----
 class UserReport(db.Model):
     __tablename__ = 'user_reports'
@@ -1688,6 +1730,12 @@ class Issue(db.Model):
     related_transaction = db.relationship('Transaction', backref='related_issues')
     status_history = db.relationship('IssueStatusHistory', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueStatusHistory.changed_at.desc()')
     resolution_actions = db.relationship('IssueResolutionAction', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueResolutionAction.created_at.desc()')
+    correlation_pack = db.relationship(
+        'TicketCorrelationPack',
+        backref=db.backref('issue', uselist=False),
+        uselist=False,
+        cascade='all, delete-orphan',
+    )
 
     # Indexes
     __table_args__ = (
@@ -1714,6 +1762,25 @@ class Issue(db.Model):
 
     def __repr__(self):
         return f'<Issue #{self.id} ({self.status}) - Student {self.student_first_name} {self.student_last_initial}.>'
+
+
+class TicketCorrelationPack(db.Model):
+    """Immutable correlation snapshot attached to an issue at submission time."""
+
+    __tablename__ = 'ticket_correlation_pack'
+
+    issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), primary_key=True)
+    correlation_version = db.Column(db.Integer, nullable=False, default=1, server_default='1')
+    actor_type = db.Column(db.String(20), nullable=False)
+    actor_opaque_id = db.Column(db.String(64), nullable=False)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='SET NULL'), nullable=True)
+    request_trace_json = db.Column(db.JSON, nullable=False, default=list)
+    error_refs_json = db.Column(db.JSON, nullable=False, default=list)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+
+    __table_args__ = (
+        db.Index('ix_ticket_correlation_actor', 'actor_type', 'actor_opaque_id'),
+    )
 
 
 class IssueStatusHistory(db.Model):
