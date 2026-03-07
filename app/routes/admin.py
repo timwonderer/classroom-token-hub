@@ -1881,7 +1881,7 @@ def signup():
         # Step 1: Validate invite code
         current_app.logger.info(f"Validating invite code")
         code_row = db.session.execute(
-            text("SELECT * FROM admin_invite_codes WHERE TRIM(code) = :code"),
+            text("SELECT * FROM teacher_invite_codes WHERE TRIM(code) = :code"),
             {"code": invite_code}
         ).fetchone()
         if not code_row:
@@ -2026,7 +2026,7 @@ def signup():
 
         # Mark the exact validated invite row as used.
         invite_update = db.session.execute(
-            text("UPDATE admin_invite_codes SET used = TRUE WHERE id = :id AND used = FALSE"),
+            text("UPDATE teacher_invite_codes SET used = TRUE WHERE id = :id AND used = FALSE"),
             {"id": code_row.id}
         )
         if invite_update.rowcount != 1:

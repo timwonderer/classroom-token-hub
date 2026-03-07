@@ -24,7 +24,7 @@ def cleanup_invite_codes():
         with conn:
             with conn.cursor() as cur:
                 # Get all invite codes
-                cur.execute("SELECT id, code FROM admin_invite_codes")
+                cur.execute("SELECT id, code FROM teacher_invite_codes")
                 codes = cur.fetchall()
 
                 if not codes:
@@ -39,7 +39,7 @@ def cleanup_invite_codes():
                     if code != stripped:
                         print(f"  Updating: {repr(code)} -> {repr(stripped)}")
                         cur.execute(
-                            "UPDATE admin_invite_codes SET code = %s WHERE id = %s",
+                            "UPDATE teacher_invite_codes SET code = %s WHERE id = %s",
                             (stripped, code_id)
                         )
                         updated += 1

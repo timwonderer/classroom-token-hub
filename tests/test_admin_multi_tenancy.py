@@ -309,7 +309,7 @@ def test_orphaned_students_from_deleted_teacher(client):
     teacher2_original_id = teacher2.id
     connection = db.session.connection()
     connection.execute(
-        sa.text("UPDATE admins SET id = :new_id WHERE id = :old_id"),
+        sa.text("UPDATE teachers SET id = :new_id WHERE id = :old_id"),
         {'new_id': teacher1_id, 'old_id': teacher2_original_id}
     )
     db.session.commit()
