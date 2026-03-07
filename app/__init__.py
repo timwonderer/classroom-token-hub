@@ -10,6 +10,7 @@ import logging
 import urllib.parse
 import uuid
 import pytz
+import sqlalchemy as sa
 from datetime import datetime, date, timezone
 from logging.handlers import RotatingFileHandler
 
@@ -103,11 +104,34 @@ REQUEST_ID_HEADERS = ("X-Request-Id", "X-Correlation-Id")
 
 class RequestIdFilter(logging.Filter):
     def filter(self, record):
+        context = getattr(g, "correlation_context", None) if has_request_context() else None
         if not hasattr(record, "request_id"):
             if has_request_context():
                 record.request_id = getattr(g, "request_id", "-")
             else:
                 record.request_id = "-"
+        if not hasattr(record, "actor_type"):
+            record.actor_type = context.get("actor_type", "-") if context else "-"
+        if not hasattr(record, "actor_opaque_id"):
+            record.actor_opaque_id = context.get("actor_opaque_id", "-") if context else "-"
+        if not hasattr(record, "join_code_id"):
+            record.join_code_id = context.get("join_code_id", "-") if context else "-"
+        if not hasattr(record, "endpoint"):
+            if has_request_context():
+                if request.url_rule and request.url_rule.rule:
+                    record.endpoint = request.url_rule.rule
+                else:
+                    record.endpoint = request.path
+            else:
+                record.endpoint = "-"
+        if not hasattr(record, "method"):
+            record.method = request.method if has_request_context() else "-"
+        if not hasattr(record, "error_class"):
+            record.error_class = "-"
+        if not hasattr(record, "error_message"):
+            record.error_message = "-"
+        if not hasattr(record, "correlation_version"):
+            record.correlation_version = 1
         return True
 
 
@@ -128,14 +152,65 @@ def register_error_handlers(app):
         if isinstance(e, HTTPException):
             return e
 
+        from app.extensions import db
+        from app.services.tlcp import CORRELATION_VERSION, save_error_event
+
+        context = getattr(g, "correlation_context", None) or {}
+        endpoint = request.url_rule.rule if request.url_rule and request.url_rule.rule else request.path
+        sanitized_message = " ".join(str(e).split())[:500]
         app.logger.exception(
             "Unhandled exception",
             extra={
                 "route": request.path,
                 "method": request.method,
                 "request_id": getattr(g, "request_id", None),
+                "actor_type": context.get("actor_type"),
+                "actor_opaque_id": context.get("actor_opaque_id"),
+                "join_code_id": context.get("join_code_id"),
+                "endpoint": endpoint,
+                "error_class": e.__class__.__name__,
+                "error_message": sanitized_message,
+                "correlation_version": CORRELATION_VERSION,
             },
         )
+
+        try:
+            # Roll back any partial view state so it is not accidentally committed,
+            # then persist the TLCP error event in a fresh, independent transaction.
+            db.session.rollback()
+            with db.engine.begin() as conn:
+                from app.models import ErrorEvent
+                from app.utils.time import utc_now
+                if context.get("actor_type") and context.get("actor_opaque_id"):
+                    from app.services.tlcp import _sanitize_error_message
+                    conn.execute(
+                        sa.text(
+                            """
+                            INSERT INTO error_events
+                                (request_id, actor_type, actor_opaque_id, join_code_id,
+                                 endpoint, method, error_class, error_message,
+                                 correlation_version, created_at)
+                            VALUES
+                                (:request_id, :actor_type, :actor_opaque_id, :join_code_id,
+                                 :endpoint, :method, :error_class, :error_message,
+                                 :correlation_version, :created_at)
+                            """
+                        ),
+                        {
+                            "request_id": getattr(g, "request_id", None),
+                            "actor_type": context.get("actor_type"),
+                            "actor_opaque_id": context.get("actor_opaque_id"),
+                            "join_code_id": context.get("join_code_id"),
+                            "endpoint": endpoint,
+                            "method": request.method,
+                            "error_class": e.__class__.__name__,
+                            "error_message": _sanitize_error_message(sanitized_message),
+                            "correlation_version": CORRELATION_VERSION,
+                            "created_at": utc_now(),
+                        },
+                    )
+        except Exception:
+            app.logger.warning("Failed to persist TLCP error event", exc_info=True)
 
         # Content-aware error response
         if request.accept_mimetypes.best == "application/json":
@@ -204,7 +279,10 @@ def create_app():
     log_level = getattr(logging, log_level_name, logging.INFO)
     log_format = os.getenv(
         "LOG_FORMAT",
-        "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s]: %(message)s",
+        "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s] "
+        "[actor=%(actor_type)s:%(actor_opaque_id)s join_code_id=%(join_code_id)s] "
+        "[endpoint=%(endpoint)s method=%(method)s] "
+        "[error_class=%(error_class)s correlation_version=%(correlation_version)s]: %(message)s",
     )
 
     stream_handler = logging.StreamHandler()
@@ -248,11 +326,33 @@ def create_app():
     def ensure_request_id():
         g.request_id = _get_request_id()
 
+    @app.before_request
+    def capture_correlation_context():
+        from app.services.tlcp import resolve_actor_context
+
+        g.correlation_context = resolve_actor_context()
+
     @app.after_request
     def attach_request_id_header(response):
+        from app.services.tlcp import persist_request_trace
+        from sqlalchemy.orm import Session
+
         request_id = getattr(g, "request_id", None)
         if request_id:
             response.headers.setdefault("X-Request-Id", request_id)
+        context = getattr(g, "correlation_context", None)
+        if context:
+            try:
+                with Session(db.engine) as tlcp_session:
+                    with tlcp_session.begin():
+                        persist_request_trace(
+                            context=context,
+                            request_id=request_id,
+                            status_code=response.status_code,
+                            _session=tlcp_session,
+                        )
+            except Exception:
+                app.logger.warning("Failed to persist TLCP request trace", exc_info=True)
         return response
 
     # -------------------- ERROR HANDLERS --------------------

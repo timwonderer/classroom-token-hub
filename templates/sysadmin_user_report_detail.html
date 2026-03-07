@@ -3,9 +3,9 @@
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><span class="material-symbols-outlined me-2">description</span>Report #{{ report.id }}</h2>
+        <h2><span class="material-symbols-outlined me-2">description</span>Teacher Issue {{ report_ref[:12] }}...</h2>
         <a href="{{ url_for('sysadmin.support_tickets') }}?tab=reports" class="btn btn-secondary">
-            <span class="material-symbols-outlined me-2">arrow_back</span>Back to Reports
+            <span class="material-symbols-outlined me-2">arrow_back</span>Back to Teacher Issues
         </a>
     </div>
 
@@ -28,13 +28,8 @@
                             </span>
                         </div>
                         <div class="col-md-6">
-                            <strong>User Type:</strong>
-                            <span class="badge
-                                {% if report.user_type == 'student' %}bg-info
-                                {% elif report.user_type == 'teacher' %}bg-warning text-dark
-                                {% else %}bg-secondary{% endif %} ms-2">
-                                {{ report.user_type|title }}
-                            </span>
+                            <strong>Reporter:</strong>
+                            <span class="badge bg-warning text-dark ms-2">Teacher</span>
                         </div>
                     </div>
 
@@ -152,7 +147,7 @@
                     <h5 class="mb-0"><span class="material-symbols-outlined me-2">edit_square</span>Update Report</h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('sysadmin.update_user_report', report_id=report.id) }}">
+                    <form method="POST" action="{{ url_for('sysadmin.update_user_report', report_ref=report_ref) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                         <div class="mb-3">
@@ -160,7 +155,6 @@
                             <select class="form-select" id="status" name="status" required>
                                 <option value="new" {% if report.status == 'new' %}selected{% endif %}>New</option>
                                 <option value="reviewed" {% if report.status == 'reviewed' %}selected{% endif %}>Reviewed</option>
-                                <option value="rewarded" {% if report.status == 'rewarded' %}selected{% endif %}>Rewarded</option>
                                 <option value="closed" {% if report.status == 'closed' %}selected{% endif %}>Closed</option>
                                 <option value="spam" {% if report.status == 'spam' %}selected{% endif %}>Spam</option>
                             </select>
@@ -179,63 +173,6 @@
                 </div>
             </div>
 
-            <!-- Send Reward (Students Only) -->
-            {% if report.user_type == 'student' and report._student_id %}
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-success text-white">
-                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">redeem</span>Send Reward</h5>
-                </div>
-                <div class="card-body">
-                    {% if report.reward_amount and report.reward_amount > 0 %}
-                        <div class="alert alert-success">
-                            <span class="material-symbols-outlined me-2">check_circle</span>
-                            <strong>Reward Sent!</strong><br>
-                            Amount: ${{ "%.2f"|format(report.reward_amount) }}<br>
-                            <small class="text-muted">
-                                Sent:
-                                {% if report.reward_sent_at %}
-                                    <span class="local-timestamp" data-timestamp="{{ format_utc_iso(report.reward_sent_at) }}"></span>
-                                {% else %}
-                                    N/A
-                                {% endif %}
-                            </small>
-                        </div>
-                    {% else %}
-                        <form method="POST" action="{{ url_for('sysadmin.send_reward_to_reporter', report_id=report.id) }}">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-
-                            <div class="alert alert-info mb-3">
-                                <small><span class="material-symbols-outlined me-1">info</span>The reward will be sent anonymously. The reporter will see it as a transaction in their account.</small>
-                            </div>
-
-                            <div class="mb-3">
-                                <label for="reward_amount" class="form-label">Reward Amount ($)</label>
-                                <input type="number" class="form-control" id="reward_amount" name="reward_amount"
-                                       min="0.01" step="0.01" placeholder="5.00" required>
-                            </div>
-
-                            <button type="submit" class="btn btn-success w-100"
-                                    onclick="return confirm('Send reward to this reporter? This action cannot be undone.')">
-                                <span class="material-symbols-outlined me-2">send</span>Send Reward
-                            </button>
-                        </form>
-                    {% endif %}
-                </div>
-            </div>
-            {% else %}
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0"><span class="material-symbols-outlined me-2">info</span>Reward Info</h5>
-                </div>
-                <div class="card-body">
-                    <p class="text-muted mb-0">
-                        <span class="material-symbols-outlined me-2">warning</span>
-                        Rewards can only be sent to student reports.
-                    </p>
-                </div>
-            </div>
-            {% endif %}
-
             <!-- Quick Stats -->
             <div class="card shadow-sm">
                 <div class="card-header bg-info text-white">
@@ -245,10 +182,6 @@
                     {% set user_reports = report.__class__.query.filter_by(anonymous_code=report.anonymous_code).all() %}
                     <div class="mb-2">
                         <strong>Total Reports:</strong> {{ user_reports|length }}
-                    </div>
-                    <div class="mb-2">
-                        <strong>Rewards Earned:</strong>
-                        ${{ "%.2f"|format(user_reports|selectattr('reward_amount')|map(attribute='reward_amount')|sum) }}
                     </div>
                 </div>
             </div>

@@ -1454,7 +1454,7 @@ def test_api_hall_pass_item_skips_rent_perk_zero_cost_flow(client, teacher_admin
 
     db.session.refresh(student)
     assert student.hall_passes == starting_hall_passes + 1
-    assert student.checking_balance == pytest.approx(float(starting_balance) - 5.0)
+    assert student.checking_balance == starting_balance - Decimal('5.00')
 
     created_rows = StudentItem.query.filter_by(student_id=student.id, store_item_id=hall_pass_item.id).all()
     assert len(created_rows) == 0

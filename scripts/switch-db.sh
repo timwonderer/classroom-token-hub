@@ -2,6 +2,11 @@
 # Manual database switcher script
 # Usage: ./scripts/switch-db.sh [production_dev|classroom_economy]
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(git -C "$SCRIPT_DIR/.." rev-parse --show-toplevel 2>/dev/null || pwd)"
+# shellcheck source=/dev/null
+source "$REPO_ROOT/scripts/lib/db_branch_config.sh"
+
 if [ -z "$1" ]; then
     echo "Usage: ./scripts/switch-db.sh [production_dev|classroom_economy]"
     echo ""
@@ -15,17 +20,23 @@ if [ -z "$1" ]; then
 fi
 
 DB_NAME=$1
-ENV_FILE=".env"
+ENV_FILE="$REPO_ROOT/.env"
+BRANCH_NAME=$(git -C "$REPO_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
 
 case $DB_NAME in
     production_dev)
-        DB_URL="postgresql://postgres:postgres@localhost:5432/production_dev"
+        if is_protected_branch "$BRANCH_NAME"; then
+            echo "Error: '$BRANCH_NAME' must use classroom_economy to protect v2.0 migration chain."
+            echo "production_dev is off-limits for this branch."
+            exit 1
+        fi
+        DB_URL="$PRODUCTION_DEV_DB_URL"
         ;;
     classroom_economy)
-        DB_URL="postgresql://postgres:postgres@localhost:5432/classroom_economy"
+        DB_URL="$CLASSROOM_ECONOMY_DB_URL"
         ;;
     *)
-        echo "Error: Invalid database name. Use 'production_dev' or 'classroom_economy'"
+        echo "Error: Invalid database name. Use 'production_dev' or 'classroom_economy'."
         exit 1
         ;;
 esac
@@ -41,7 +52,8 @@ fi
 # Check if DATABASE_URL line exists
 if grep -q "^DATABASE_URL=" "$ENV_FILE"; then
     # Update existing line
-    sed -i.bak "s|^DATABASE_URL=.*|DATABASE_URL=$DB_URL|" "$ENV_FILE"
+    escaped_db_url=$(printf '%s' "$DB_URL" | sed 's/[&/|]/\\&/g')
+    sed -i.bak "s|^DATABASE_URL=.*|DATABASE_URL=$escaped_db_url|" "$ENV_FILE"
     rm -f "$ENV_FILE.bak"
 else
     # Append new line

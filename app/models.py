@@ -441,14 +441,12 @@ class Student(db.Model):
     @property
     def checking_balance(self):
         total = sum((_quantize_currency(tx.amount) for tx in self.transactions if tx.account_type == 'checking' and not tx.is_void), Decimal('0.00'))
-        # CRITICAL: Convert to float for compatibility with arithmetic calculations
-        return float(_quantize_currency(total))
+        return _quantize_currency(total)
 
     @property
     def savings_balance(self):
         total = sum((_quantize_currency(tx.amount) for tx in self.transactions if tx.account_type == 'savings' and not tx.is_void), Decimal('0.00'))
-        # CRITICAL: Convert to float for compatibility with arithmetic calculations
-        return float(_quantize_currency(total))
+        return _quantize_currency(total)
 
     def get_active_insurance(self, teacher_id):
         """Return the active insurance enrollment scoped to a teacher, if any."""
@@ -738,12 +736,12 @@ class Student(db.Model):
 
     @property
     def amount_needed_to_cover_bills(self):
-        total_due = 0
+        total_due = Decimal('0')
         if self.is_rent_enabled:
-            total_due += 800
+            total_due += Decimal('800')
         if self.insurance_plan != "none":
-            total_due += 200  # Estimated insurance cost
-        return max(0, total_due - self.checking_balance)
+            total_due += Decimal('200')  # Estimated insurance cost
+        return max(Decimal('0'), total_due - self.checking_balance)
 
     # Removed deprecated last_tap_in/last_tap_out properties; backend is source of truth.
 
@@ -1784,6 +1782,48 @@ class ErrorLog(db.Model):
     stack_trace = db.Column(db.Text, nullable=True)  # Full stack trace
 
 
+class ActorRequestTrace(db.Model):
+    """Short-lived request trace rows for ticket correlation."""
+
+    __tablename__ = 'actor_request_trace'
+
+    id = db.Column(db.Integer, primary_key=True)
+    actor_type = db.Column(db.String(20), nullable=False, index=True)
+    actor_opaque_id = db.Column(db.String(64), nullable=False, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='SET NULL'), nullable=True, index=True)
+    request_id = db.Column(db.String(128), nullable=False, index=True)
+    method = db.Column(db.String(10), nullable=False)
+    endpoint = db.Column(db.String(500), nullable=False)
+    status_code = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index('ix_actor_trace_actor_created', 'actor_type', 'actor_opaque_id', 'created_at'),
+    )
+
+
+class ErrorEvent(db.Model):
+    """Short-lived structured error references for TLCP snapshots."""
+
+    __tablename__ = 'error_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    request_id = db.Column(db.String(128), nullable=True, index=True)
+    actor_type = db.Column(db.String(20), nullable=True, index=True)
+    actor_opaque_id = db.Column(db.String(64), nullable=True, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='SET NULL'), nullable=True, index=True)
+    endpoint = db.Column(db.String(500), nullable=True)
+    method = db.Column(db.String(10), nullable=True)
+    error_class = db.Column(db.String(200), nullable=False)
+    error_message = db.Column(db.Text, nullable=True)
+    correlation_version = db.Column(db.Integer, nullable=False, default=1, server_default='1')
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index('ix_error_events_actor_created', 'actor_type', 'actor_opaque_id', 'created_at'),
+    )
+
+
 # ---- User Report Model (Bug Reports, Suggestions, Comments) ----
 class UserReport(db.Model):
     __tablename__ = 'user_reports'
@@ -1905,8 +1945,8 @@ class Issue(db.Model):
     system_metadata = db.Column(db.JSON, nullable=True)  # Recent events, browser info, etc.
 
     # Status tracking
-    status = db.Column(db.String(50), default='submitted', nullable=False, index=True)
-    # Allowed statuses: 'submitted', 'teacher_review', 'teacher_resolved', 'elevated', 'developer_review', 'developer_resolved'
+    status = db.Column(db.String(50), default='OPEN', nullable=False, index=True)
+    # Canonical statuses follow FEAT-TICK-001; legacy values are still recognized for older rows.
 
     # Teacher review and resolution
     teacher_reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -1942,6 +1982,12 @@ class Issue(db.Model):
     related_transaction = db.relationship('Transaction', backref='related_issues')
     status_history = db.relationship('IssueStatusHistory', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueStatusHistory.changed_at.desc()')
     resolution_actions = db.relationship('IssueResolutionAction', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueResolutionAction.created_at.desc()')
+    correlation_pack = db.relationship(
+        'TicketCorrelationPack',
+        backref=db.backref('issue', uselist=False),
+        uselist=False,
+        cascade='all, delete-orphan',
+    )
 
     # Indexes
     __table_args__ = (
@@ -1950,24 +1996,63 @@ class Issue(db.Model):
         db.Index('ix_issues_join_code_status', 'join_code', 'status'),
     )
 
+    # Canonical lifecycle statuses (SPEC-TICK-001).
+    STATUS_OPEN = 'OPEN'
+    STATUS_TEACHER_REVIEW = 'TEACHER_REVIEW'
+    STATUS_ESCALATED_TO_DEV = 'ESCALATED_TO_DEV'
+    STATUS_DEV_RESOLVED = 'DEV_RESOLVED'
+    STATUS_TEACHER_FINAL_REVIEW = 'TEACHER_FINAL_REVIEW'
+    STATUS_CLOSED = 'CLOSED'
+
+    # Legacy status values retained for backward-compatible reads.
+    LEGACY_TO_CANONICAL_STATUS = {
+        'submitted': STATUS_OPEN,
+        'teacher_review': STATUS_TEACHER_REVIEW,
+        'teacher_resolved': STATUS_TEACHER_FINAL_REVIEW,
+        'elevated': STATUS_ESCALATED_TO_DEV,
+        'developer_review': STATUS_ESCALATED_TO_DEV,
+        'developer_resolved': STATUS_DEV_RESOLVED,
+    }
+
     def get_student_visible_status(self):
         """Return simplified status badge for student view."""
+        canonical_status = self.LEGACY_TO_CANONICAL_STATUS.get(self.status, self.status)
         status_map = {
-            'submitted': 'Submitted',
-            'teacher_review': 'Teacher Review',
-            'teacher_resolved': 'Resolved',
-            'elevated': 'Elevated',
-            'developer_review': 'Developer Review',
-            'developer_resolved': 'Resolved - See Teacher'
+            self.STATUS_OPEN: 'Submitted',
+            self.STATUS_TEACHER_REVIEW: 'Teacher Review',
+            self.STATUS_ESCALATED_TO_DEV: 'Escalated to Developer',
+            self.STATUS_DEV_RESOLVED: 'Developer Fix Applied - Teacher Review Required',
+            self.STATUS_TEACHER_FINAL_REVIEW: 'Teacher Final Review',
+            self.STATUS_CLOSED: 'Closed',
         }
-        return status_map.get(self.status, 'Unknown')
+        return status_map.get(canonical_status, 'Unknown')
 
     def is_locked(self):
         """Check if issue is locked from further student edits (after escalation)."""
-        return self.status in ['elevated', 'developer_review', 'developer_resolved']
+        canonical_status = self.LEGACY_TO_CANONICAL_STATUS.get(self.status, self.status)
+        return canonical_status in [self.STATUS_ESCALATED_TO_DEV, self.STATUS_DEV_RESOLVED, self.STATUS_CLOSED]
 
     def __repr__(self):
         return f'<Issue #{self.id} ({self.status}) - Student {self.student_first_name} {self.student_last_initial}.>'
+
+
+class TicketCorrelationPack(db.Model):
+    """Immutable correlation snapshot attached to an issue at submission time."""
+
+    __tablename__ = 'ticket_correlation_pack'
+
+    issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), primary_key=True)
+    correlation_version = db.Column(db.Integer, nullable=False, default=1, server_default='1')
+    actor_type = db.Column(db.String(20), nullable=False)
+    actor_opaque_id = db.Column(db.String(64), nullable=False)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='SET NULL'), nullable=True)
+    request_trace_json = db.Column(db.JSON, nullable=False, default=list)
+    error_refs_json = db.Column(db.JSON, nullable=False, default=list)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+
+    __table_args__ = (
+        db.Index('ix_ticket_correlation_actor', 'actor_type', 'actor_opaque_id'),
+    )
 
 
 class IssueStatusHistory(db.Model):

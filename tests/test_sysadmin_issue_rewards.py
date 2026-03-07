@@ -1,6 +1,5 @@
 from datetime import datetime, timezone
 from decimal import Decimal
-
 from app.extensions import db
 from app.models import (
     Admin,
@@ -12,6 +11,7 @@ from app.models import (
     Transaction,
     TransactionStatus,
 )
+from app.utils.opaque_refs import make_opaque_ref
 
 
 def test_sysadmin_resolve_issue_issues_bug_reward_transaction(client):
@@ -38,7 +38,8 @@ def test_sysadmin_resolve_issue_issues_bug_reward_transaction(client):
         issue_type="general",
         student_explanation="Found a reproducible bug in the app.",
         student_expected_outcome="Expected behavior should work.",
-        status="developer_review",
+        status=Issue.STATUS_ESCALATED_TO_DEV,
+        eligible_for_reward=True,
     )
     db.session.add(issue)
     db.session.commit()
@@ -48,8 +49,9 @@ def test_sysadmin_resolve_issue_issues_bug_reward_transaction(client):
         sess["sysadmin_id"] = sysadmin.id
         sess["last_activity"] = datetime.now(timezone.utc).isoformat()
 
+    issue_ref = make_opaque_ref("issue", issue.id)
     resp = client.post(
-        f"/sysadmin/issues/{issue.id}/resolve",
+        f"/sysadmin/issues/{issue_ref}/resolve",
         data={
             "resolution_note": "Confirmed and fixed.",
             "eligible_for_reward": "on",
@@ -60,7 +62,7 @@ def test_sysadmin_resolve_issue_issues_bug_reward_transaction(client):
     assert resp.status_code == 302
 
     db.session.refresh(issue)
-    assert issue.status == "developer_resolved"
+    assert issue.status == Issue.STATUS_DEV_RESOLVED
     assert issue.eligible_for_reward is True
     assert issue.sysadmin_id == sysadmin.id
     assert issue.sysadmin_resolved_at is not None

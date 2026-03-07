@@ -164,17 +164,17 @@
                 <div class="student-content">
                     {% set help_doc_map = {
                     'dashboard': 'user-guides/diagnostics/student',
-                    'profile': 'user-guides/diagnostics/student-classes',
-                    'help': 'user-guides/diagnostics/student-support',
+                    'profile': 'user-guides/diagnostics/student/classes',
+                    'help': 'user-guides/diagnostics/student/support',
                     'student.dashboard': 'user-guides/diagnostics/student',
-                    'student.transfer': 'user-guides/diagnostics/student-money',
-                    'student.shop': 'user-guides/diagnostics/student-store',
-                    'student.payroll': 'user-guides/diagnostics/student-attendance',
-                    'student.rent': 'user-guides/diagnostics/student-rent-insurance',
-                    'student.student_insurance': 'user-guides/diagnostics/student-rent-insurance',
-                    'student.help_support': 'user-guides/diagnostics/student-support',
-                    'student.claim_account': 'user-guides/diagnostics/student-classes',
-                    'student.complete_profile': 'user-guides/diagnostics/student-classes'
+                    'student.transfer': 'user-guides/diagnostics/student/money',
+                    'student.shop': 'user-guides/diagnostics/student/store',
+                    'student.payroll': 'user-guides/diagnostics/student/attendance',
+                    'student.rent': 'user-guides/diagnostics/student/rent-insurance',
+                    'student.student_insurance': 'user-guides/diagnostics/student/rent-insurance',
+                    'student.help_support': 'user-guides/diagnostics/student/support',
+                    'student.claim_account': 'user-guides/diagnostics/student/classes',
+                    'student.complete_profile': 'user-guides/diagnostics/student/classes'
                     } %}
                     {% set help_doc_key = current_page or request.endpoint %}
                     {% set help_doc_path = help_doc_map.get(help_doc_key) %}

@@ -8,14 +8,22 @@ proper data minimization for sysadmin review.
 from datetime import datetime, timezone
 from app.utils.time import utc_now
 from decimal import Decimal
-from flask import request
+from flask import request, current_app
 import hashlib
 import secrets
 
 from app.extensions import db
-from app.models import Issue, IssueStatusHistory, IssueResolutionAction, Transaction, Student, StudentBlock
+from app.models import (
+    Issue,
+    IssueStatusHistory,
+    IssueResolutionAction,
+    Transaction,
+    Student,
+    StudentBlock,
+)
 from app.utils.helpers import generate_anonymous_code
 from app.utils.ip_handler import get_real_ip
+from app.services.tlcp import create_ticket_correlation_pack
 
 
 def generate_opaque_student_reference(student_id):
@@ -97,7 +105,8 @@ def create_context_snapshot(student, join_code, related_transaction_id=None, rel
 
 
 def create_issue(student, teacher_id, join_code, category_id, explanation, expected_outcome=None,
-                 related_transaction_id=None, related_record_type=None, related_record_id=None):
+                 related_transaction_id=None, related_record_type=None, related_record_id=None,
+                 include_recent_error=True):
     """
     Create a new issue submission.
 
@@ -111,6 +120,7 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
         related_transaction_id: Optional - for transaction-specific issues
         related_record_type: Optional - type of related record
         related_record_id: Optional - ID of related record
+        include_recent_error: Whether to include recent server errors in the ticket pack
 
     Returns:
         Issue: Created issue instance
@@ -118,7 +128,7 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
     from app.models import IssueCategory, TeacherBlock
 
     # Get category to determine issue_type
-    category = IssueCategory.query.get(category_id)
+    category = db.session.get(IssueCategory, category_id)
     if not category:
         raise ValueError("Invalid category")
 
@@ -129,6 +139,7 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
     ).first()
 
     class_label = seat.get_class_label() if seat else None
+    join_code_id = seat.join_code_id if seat else None
 
     # Generate opaque reference
     opaque_ref = generate_opaque_student_reference(student.id)
@@ -158,7 +169,7 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
         related_record_id=related_record_id,
         context_snapshot=context_snapshot,
         page_url=request.url if request else None,
-        status='submitted',
+        status=Issue.STATUS_OPEN,
         submitted_at=now_utc,
         created_at=now_utc,
         updated_at=now_utc
@@ -167,8 +178,24 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
     db.session.add(issue)
     db.session.flush()  # Get the issue ID
 
+    # Attach immutable correlation snapshot at submission time.
+    try:
+        with db.session.begin_nested():
+            create_ticket_correlation_pack(
+                issue_id=issue.id,
+                actor_type='student',
+                actor_opaque_id=opaque_ref,
+                join_code_id=join_code_id,
+                ticket_created_at=now_utc,
+                include_recent_error=include_recent_error,
+            )
+    except Exception:
+        # Keep student ticket submission resilient even if correlation packing fails.
+        # The savepoint is already rolled back, so the main session remains usable.
+        current_app.logger.warning("Failed to attach TLCP snapshot to issue_id=%s", issue.id, exc_info=True)
+
     # Record status history
-    record_status_change(issue, None, 'submitted', 'student', student.id)
+    record_status_change(issue, None, Issue.STATUS_OPEN, 'student', student.id)
 
     db.session.commit()
 

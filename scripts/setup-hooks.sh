@@ -34,15 +34,10 @@ if [ ! -d "hooks" ]; then
     exit 1
 fi
 
-# Install pre-push hook
-echo "📋 Installing pre-push hook..."
-if [ -f "hooks/pre-push" ]; then
-    cp hooks/pre-push .git/hooks/pre-push
-    chmod +x .git/hooks/pre-push
-    echo -e "${GREEN}✓ Pre-push hook installed${NC}"
-else
-    echo -e "${YELLOW}⚠️  Warning: hooks/pre-push not found, skipping${NC}"
-fi
+# Use versioned hooks directory so hooks are shared via git.
+echo "📋 Configuring git to use versioned hooks/ directory..."
+git config core.hooksPath hooks
+echo -e "${GREEN}✓ core.hooksPath set to hooks${NC}"
 
 # Summary
 echo ""
@@ -51,8 +46,9 @@ echo -e "${GREEN}│            Setup Complete! ✓                    │${NC}"
 echo -e "${GREEN}└─────────────────────────────────────────────────┘${NC}"
 echo ""
 echo "The following hooks have been installed:"
+echo "  • post-checkout: Branch-aware DATABASE_URL switching"
 echo "  • pre-push: Checks for multiple migration heads"
 echo ""
 echo "These hooks will run automatically during git operations."
-echo "To bypass a hook, use the --no-verify flag (not recommended)."
+echo "Note: git push --no-verify bypasses pre-push checks (not recommended)."
 echo ""
