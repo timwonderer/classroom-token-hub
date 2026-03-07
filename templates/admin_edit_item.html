@@ -117,6 +117,40 @@
                 </div>
             </div>
 
+            <!-- Collective Goal Settings (shown only when item type is 'collective') -->
+            <div class="card mb-3" id="collectiveGoalCard" style="display: {% if item.item_type == 'collective' %}block{% else %}none{% endif %};">
+                <div class="card-header bg-light">
+                    <h6 class="mb-0"><span class="material-symbols-outlined me-2">group</span>Collective Goal Settings</h6>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <small><strong>Info:</strong> Collective goals require multiple students to purchase before unlocking for everyone.</small>
+                    </div>
+                    <div class="mb-3">
+                        {{ form.collective_goal_type.label(class="form-label fw-bold") }}
+                        {{ form.collective_goal_type(class="form-select", id="editCollectiveGoalType") }}
+                        <small class="text-muted">Choose how the goal is calculated</small>
+                    </div>
+                    <div id="editFixedTargetDiv" style="display: {% if item.collective_goal_type == 'fixed' %}block{% else %}none{% endif %};">
+                        <div class="mb-3">
+                            {{ form.collective_goal_target.label(class="form-label fw-bold") }}
+                            {{ form.collective_goal_target(class="form-control", placeholder="e.g., 10") }}
+                            <small class="text-muted">Number of students who must purchase to unlock this item</small>
+                        </div>
+                    </div>
+                    <div id="editWholeClassInfo" style="display: {% if item.collective_goal_type == 'whole_class' %}block{% else %}none{% endif %};">
+                        <div class="alert alert-warning">
+                            <small><span class="material-symbols-outlined me-2">info</span><strong>Whole Class Mode:</strong> Every student in the class must purchase (1 per person). The target dynamically updates based on class size.</small>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        {{ form.collective_goal_expires_at.label(class="form-label fw-bold") }}
+                        {{ form.collective_goal_expires_at(class="form-control") }}
+                        <small class="text-muted">If set, the goal expires at end of this date. Pending purchases are auto-refunded on expiry. The item deactivates; reactivating always starts progress at 0.</small>
+                    </div>
+                </div>
+            </div>
+
             <!-- Accordion for Bundle, Discount, and Advanced Settings -->
             <div class="accordion mb-3" id="itemSettingsAccordion">
 
@@ -266,6 +300,35 @@ document.addEventListener('DOMContentLoaded', function() {
         bulkDiscountCheck.addEventListener('change', updateBulkDiscountVisibility);
         // Initialize
         updateBulkDiscountVisibility();
+    }
+
+    // Toggle collective goal card based on item type
+    const itemTypeSelect = document.getElementById('item_type');
+    const collectiveGoalCard = document.getElementById('collectiveGoalCard');
+    const editGoalTypeSelect = document.getElementById('editCollectiveGoalType');
+    const editFixedTargetDiv = document.getElementById('editFixedTargetDiv');
+    const editWholeClassInfo = document.getElementById('editWholeClassInfo');
+
+    function updateCollectiveGoalVisibility() {
+        if (!itemTypeSelect || !collectiveGoalCard) return;
+        const isCollective = itemTypeSelect.value === 'collective';
+        collectiveGoalCard.style.display = isCollective ? 'block' : 'none';
+        if (isCollective) updateCollectiveGoalTypeVisibility();
+    }
+
+    function updateCollectiveGoalTypeVisibility() {
+        if (!editGoalTypeSelect) return;
+        const goalType = editGoalTypeSelect.value;
+        if (editFixedTargetDiv) editFixedTargetDiv.style.display = goalType === 'fixed' ? 'block' : 'none';
+        if (editWholeClassInfo) editWholeClassInfo.style.display = goalType === 'whole_class' ? 'block' : 'none';
+    }
+
+    if (itemTypeSelect) {
+        itemTypeSelect.addEventListener('change', updateCollectiveGoalVisibility);
+        updateCollectiveGoalVisibility();
+    }
+    if (editGoalTypeSelect) {
+        editGoalTypeSelect.addEventListener('change', updateCollectiveGoalTypeVisibility);
     }
 
     // Initialize markdown editors for description and redemption_prompt fields

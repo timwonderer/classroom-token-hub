@@ -39,9 +39,11 @@ This platform is designed for classrooms, not commerce. Every feature prioritize
 ### 2. Privacy & Security
 
 - **Student data is encrypted at rest** - All personally identifiable information (PII) is protected
+- **Post-claim PII minimisation** - Identity verification hashes (date of birth, name) used only for the one-time account claim are automatically deleted immediately after account setup completes, reducing the long-term sensitive-data footprint
 - **Minimal data collection** - We only collect what's necessary for the classroom economy simulation
 - **No tracking or analytics** - No third-party analytics or advertising
 - **Teacher ownership** - Teachers control their data and can export or delete it at any time
+- **Continuously audited** - Regular security audits of critical paths (deletion flows, multi-tenancy scoping, authentication) with documented findings and fixes
 
 ### 3. Transparency
 
@@ -65,7 +67,7 @@ This project stands on the shoulders of giants. We gratefully acknowledge:
 
 ### Open Source Communities
 
-The Python, Flask, PostgreSQL, and broader open-source communities whose tools and libraries make this platform possible. See [Third-Party Notices](/docs/user-guides/legal/third-party-notices) for specific attributions.
+The Python, Flask, PostgreSQL, and broader open-source communities whose tools and libraries make this platform possible. See [Third-Party Notices](third-party-notices.md) for specific attributions.
 
 ### Educators
 
@@ -103,7 +105,7 @@ We believe in:
 
 This project permits commercial entities to offer **services** around the software (hosting, support, deployment) but prohibits **monetization of the software itself** (subscriptions, per-seat pricing, feature paywalls).
 
-See [Commercial Use Policy](/docs/user-guides/legal/commercial) for the complete commercial use policy.
+See [Commercial Use Policy](commercial.md) for the complete commercial use policy.
 
 The distinction is intentional:
 
@@ -121,7 +123,7 @@ We chose the **PolyForm Noncommercial License** because:
 3. It's legally clear and internationally recognized
 4. It aligns with our educational mission
 
-See [License](/docs/user-guides/legal/license) for the full license text.
+See [License](license.md) for the full license text.
 
 ---
 
@@ -155,4 +157,4 @@ For questions about licensing, commercial use, or the project philosophy:
 
 ---
 
-**Last Updated:** 2026-01-05
+**Last Updated:** 2026-02-25

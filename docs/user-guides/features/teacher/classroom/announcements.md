@@ -11,21 +11,24 @@ related:
 
 # Announcements
 
-Announcements help you broadcast updates to students from one place.
+## Overview
+Announcements help you broadcast updates and important information to your students from one central place on their dashboards.
 
-## Where to work
-Go to **Classroom > Announcements**.
+## Step-by-Step Instructions
 
-## Create an announcement
-1. Select **New Announcement**.
-2. Add a clear title and message.
-3. Publish when ready.
+### Creating an Announcement
+1. Navigate to **Classroom > Announcements** in the teacher sidebar.
+2. Select **New Announcement**.
+3. Add a clear title and message.
+4. Publish the announcement when ready.
 
-## Manage announcements
-Edit or delete older announcements to keep the list focused and current.
+### Managing Existing Announcements
+1. To keep the student dashboard clean, return to the **Announcements** page.
+2. Edit or delete older announcements to ensure only current information is displayed.
 
-## Troubleshooting
-If students report missing announcements, check the diagnostics guide.
+## Important Notes
+> [!NOTE]
+> **Troubleshooting:** If students report missing announcements, they may be looking at the wrong class period or have an outdated browser session. Refer to the diagnostics guide for further help.
 
 ## Related guides
-- [Teacher Announcements Diagnostics](/docs/user-guides/diagnostics/teacher-announcements-issues)
+- [Teacher Announcements Diagnostics](../../../diagnostics/teacher/announcements-issues.md)

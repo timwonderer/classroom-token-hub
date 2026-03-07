@@ -12,22 +12,24 @@ related:
 
 # Run Payroll
 
-Run payroll to pay students for recorded work time.
+## Overview
+Running payroll allows you to pay students their earned wages based on their recorded work time in the Attendance Log.
 
-## Where to work
-Go to **Economy > Payroll**.
+## Step-by-Step Instructions
 
-## Quick run
-1. Review the preview list.
-2. Select **Run Payroll**.
-3. Confirm the run.
+### Executing a Payroll Run
+1. Navigate to **Economy > Payroll** in the teacher sidebar.
+2. Review the preview list of students and their calculated pay.
+3. If everything looks correct, select **Run Payroll**.
+4. Confirm the run to deposit the funds into student accounts.
 
-## After running
-Check **Payroll History** to confirm totals and spot check transactions for a few students.
+## Important Notes
+> [!NOTE]
+> **After running:** Check the **Payroll History** tab to confirm totals and spot-check transactions for a few students.
 
-## If the preview looks wrong
-Verify attendance taps and pay rates, then refresh the preview.
+> [!TIP]
+> **If the preview looks wrong:** Verify the attendance taps and pay rates for the specific students, then return and refresh the preview page.
 
 ## Related guides
-- [Payroll Settings](/docs/user-guides/features/teacher/economy/payroll-settings)
-- [Teacher Attendance and Payroll Diagnostics](/docs/user-guides/diagnostics/teacher-attendance-payroll)
+- [Payroll Settings](payroll-settings.md)
+- [Teacher Attendance and Payroll Diagnostics](../../../diagnostics/teacher/attendance-payroll.md)

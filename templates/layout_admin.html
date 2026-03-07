@@ -90,7 +90,7 @@
                 <div> <span class="material-symbols-outlined" style="font-size: 30px; vertical-align: middle; font-weight:200"> finance_mode</span>Hub</div>
                 <hr>
                 {% if current_admin %}
-                <div class="text-white-55 mb-0" style="font-size: 20px;">{{ current_admin.get_display_name() }}</div>
+                <div class="text-white-55 mb-0" style="font-size: 20px;">{{ current_admin_display_name or current_admin.get_display_name() }}</div>
                 {% endif %}
                 <div class="mt-0" style="font-size: 12px; font-weight:300">Teacher</div>
             </div>
@@ -197,7 +197,7 @@
                             <span class="material-symbols-outlined">fingerprint</span> Passkey
                         </a>
                         <a href="{{ url_for('admin.feature_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'feature_settings' %}active{% endif %}">
-                            <span class="material-symbols-outlined">tune</span> Features
+                            <span class="material-symbols-outlined">tune</span> Economy Features
                         </a>
                         <a href="{{ url_for('admin.deletion_requests') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'deletion_requests' %}active{% endif %}">
                             <span class="material-symbols-outlined">person_cancel</span> Account Deletion
@@ -225,49 +225,49 @@
     <main id="main-content" class="main-content flex-grow-1">
                 {% set help_doc_map = {
                 'dashboard': 'user-guides/diagnostics/teacher',
-                'students': 'user-guides/diagnostics/teacher-students',
-                'attendance': 'user-guides/diagnostics/teacher-attendance-payroll',
-                'payroll': 'user-guides/diagnostics/teacher-attendance-payroll',
-                'payroll_history': 'user-guides/diagnostics/teacher-attendance-payroll',
-                'economy_health': 'user-guides/diagnostics/teacher-attendance-payroll',
-                'store': 'user-guides/diagnostics/teacher-store',
-                'banking': 'user-guides/diagnostics/teacher-transactions-banking',
-                'transactions': 'user-guides/diagnostics/teacher-transactions-banking',
-                'rent': 'user-guides/diagnostics/teacher-rent-insurance',
-                'insurance': 'user-guides/diagnostics/teacher-rent-insurance',
-                'hall_pass': 'user-guides/diagnostics/teacher-hall-pass',
-                'announcements': 'user-guides/diagnostics/teacher-announcements-issues',
-                'issues': 'user-guides/diagnostics/teacher-announcements-issues',
+                'students': 'user-guides/diagnostics/teacher/students',
+                'attendance': 'user-guides/diagnostics/teacher/attendance-payroll',
+                'payroll': 'user-guides/diagnostics/teacher/attendance-payroll',
+                'payroll_history': 'user-guides/diagnostics/teacher/attendance-payroll',
+                'economy_health': 'user-guides/diagnostics/teacher/attendance-payroll',
+                'store': 'user-guides/diagnostics/teacher/store',
+                'banking': 'user-guides/diagnostics/teacher/transactions-banking',
+                'transactions': 'user-guides/diagnostics/teacher/transactions-banking',
+                'rent': 'user-guides/diagnostics/teacher/rent-insurance',
+                'insurance': 'user-guides/diagnostics/teacher/rent-insurance',
+                'hall_pass': 'user-guides/diagnostics/teacher/hall-pass',
+                'announcements': 'user-guides/diagnostics/teacher/announcements-issues',
+                'issues': 'user-guides/diagnostics/teacher/announcements-issues',
                 'help': 'user-guides/diagnostics/teacher',
-                'onboarding': 'user-guides/diagnostics/teacher-onboarding',
-                'settings': 'user-guides/diagnostics/teacher-onboarding',
-                'feature_settings': 'user-guides/diagnostics/teacher-onboarding',
-                'passkey_settings': 'user-guides/diagnostics/teacher-login',
-                'deletion_requests': 'user-guides/diagnostics/teacher-login',
+                'onboarding': 'user-guides/diagnostics/teacher/onboarding',
+                'settings': 'user-guides/diagnostics/teacher/onboarding',
+                'feature_settings': 'user-guides/diagnostics/teacher/onboarding',
+                'passkey_settings': 'user-guides/diagnostics/teacher/login',
+                'deletion_requests': 'user-guides/diagnostics/teacher/login',
                 'admin.dashboard': 'user-guides/diagnostics/teacher',
-                'admin.students': 'user-guides/diagnostics/teacher-students',
-                'admin.attendance_log': 'user-guides/diagnostics/teacher-attendance-payroll',
-                'admin.payroll': 'user-guides/diagnostics/teacher-attendance-payroll',
-                'admin.payroll_history': 'user-guides/diagnostics/teacher-attendance-payroll',
-                'admin.economy_health': 'user-guides/diagnostics/teacher-attendance-payroll',
-                'admin.store_management': 'user-guides/diagnostics/teacher-store',
-                'admin.transactions': 'user-guides/diagnostics/teacher-transactions-banking',
-                'admin.banking': 'user-guides/diagnostics/teacher-transactions-banking',
-                'admin.rent_settings': 'user-guides/diagnostics/teacher-rent-insurance',
-                'admin.insurance_management': 'user-guides/diagnostics/teacher-rent-insurance',
-                'admin.hall_pass': 'user-guides/diagnostics/teacher-hall-pass',
-                'admin.announcements': 'user-guides/diagnostics/teacher-announcements-issues',
-                'admin.issues_queue': 'user-guides/diagnostics/teacher-announcements-issues',
-                'admin.settings': 'user-guides/diagnostics/teacher-onboarding',
-                'admin.feature_settings': 'user-guides/diagnostics/teacher-onboarding',
-                'admin.onboarding': 'user-guides/diagnostics/teacher-onboarding',
-                'admin.passkey_settings': 'user-guides/diagnostics/teacher-login',
+                'admin.students': 'user-guides/diagnostics/teacher/students',
+                'admin.attendance_log': 'user-guides/diagnostics/teacher/attendance-payroll',
+                'admin.payroll': 'user-guides/diagnostics/teacher/attendance-payroll',
+                'admin.payroll_history': 'user-guides/diagnostics/teacher/attendance-payroll',
+                'admin.economy_health': 'user-guides/diagnostics/teacher/attendance-payroll',
+                'admin.store_management': 'user-guides/diagnostics/teacher/store',
+                'admin.transactions': 'user-guides/diagnostics/teacher/transactions-banking',
+                'admin.banking': 'user-guides/diagnostics/teacher/transactions-banking',
+                'admin.rent_settings': 'user-guides/diagnostics/teacher/rent-insurance',
+                'admin.insurance_management': 'user-guides/diagnostics/teacher/rent-insurance',
+                'admin.hall_pass': 'user-guides/diagnostics/teacher/hall-pass',
+                'admin.announcements': 'user-guides/diagnostics/teacher/announcements-issues',
+                'admin.issues_queue': 'user-guides/diagnostics/teacher/announcements-issues',
+                'admin.settings': 'user-guides/diagnostics/teacher/onboarding',
+                'admin.feature_settings': 'user-guides/diagnostics/teacher/onboarding',
+                'admin.onboarding': 'user-guides/diagnostics/teacher/onboarding',
+                'admin.passkey_settings': 'user-guides/diagnostics/teacher/login',
                 'admin.help_support': 'user-guides/diagnostics/teacher',
-                'admin.deletion_requests': 'user-guides/diagnostics/teacher-login',
-                'admin.setup_recovery': 'user-guides/diagnostics/teacher-login',
-                'admin.claim_students': 'user-guides/diagnostics/teacher-students',
-                'admin.view_issue': 'user-guides/diagnostics/teacher-announcements-issues',
-                'admin.announcement_form': 'user-guides/diagnostics/teacher-announcements-issues'
+                'admin.deletion_requests': 'user-guides/diagnostics/teacher/login',
+                'admin.setup_recovery': 'user-guides/diagnostics/teacher/login',
+                'admin.claim_students': 'user-guides/diagnostics/teacher/students',
+                'admin.view_issue': 'user-guides/diagnostics/teacher/announcements-issues',
+                'admin.announcement_form': 'user-guides/diagnostics/teacher/announcements-issues'
                 } %}
                 {% set help_doc_key = current_page or request.endpoint %}
                 {% set help_doc_path = help_doc_map.get(help_doc_key) %}
@@ -329,6 +329,7 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ static_url('js/timezone-utils.js') }}"></script>
+    <script src="{{ static_url('js/sortable-table.js') }}"></script>
     <script src="{{ static_url('js/mobile-sidebar-toggle.js') }}"></script>
     <script>
         function updateTime() {

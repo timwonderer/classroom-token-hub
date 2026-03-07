@@ -1,6 +1,7 @@
 {% extends "layout_admin.html" %}
 {% set page_title = "Account Personalization" %}
 {% block title %}Account Personalization{% endblock %}
+{% set current_page = "settings" %}
 {% block page_icon %}style{% endblock %}
 
 {% block content %}
@@ -25,7 +26,7 @@
                         </h5>
                         <div class="mb-3">
                             <label for="display_name" class="form-label">
-                                This is how your name will appear to others
+                                This is how your name will appear to others. Your custom display name is never shown to the developers or system administrators.
                                
                             </label>
                             <input
@@ -34,10 +35,10 @@
                                 id="display_name"
                                 name="display_name"
                                 value="{{ admin.display_name or '' }}"
-                                placeholder="{{ admin.username }}"
+                                placeholder="{{ admin.teacher_public_id or admin.get_display_name() }}"
                                 maxlength="100">
                             <div class="form-text">
-                                If you don't change this, it will remain: <strong>{{ admin.username }}</strong>
+                                If you don't change this, it will remain: <strong>{{ admin.teacher_public_id or admin.get_display_name() }}</strong>
                             </div>
                         </div>
                     </div>
@@ -97,8 +98,9 @@
                         </h5>
                         <div class="row">
                             <div class="col-md-6 mb-2">
-                                <small class="text-muted">Username:</small>
-                                <div><strong>{{ admin.username }}</strong></div>
+                                <small class="text-muted">Teacher ID:</small>
+                                <div><strong>{{ admin.teacher_public_id or admin.get_display_name() }}</strong></div>
+                                <small class="text-muted">When you file support tickets, this is what you will be known as.</small>
                             </div>
                             <div class="col-md-6 mb-2">
                                 <small class="text-muted">Account Created:</small>

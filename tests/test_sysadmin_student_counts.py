@@ -220,3 +220,24 @@ def test_teacher_with_no_students_shows_zero_count(client):
     assert "teacher-empty" in html
     # Should show 0 or "no students" indicator
     assert "0 students" in html or "0" in html
+
+
+def test_deleted_students_are_excluded_from_teacher_counts(client):
+    """Deleted students should not contribute to sysadmin-facing teacher totals."""
+    sys_admin, sys_secret = _create_sysadmin()
+    teacher, _ = _create_admin("teacher-delete-count")
+
+    _create_student("ActiveStudent", primary_teacher=teacher)
+    deleted_student = _create_student("DeletedStudent", primary_teacher=teacher)
+    StudentTeacher.query.filter_by(student_id=deleted_student.id, admin_id=teacher.id).delete()
+    Student.query.filter_by(id=deleted_student.id).delete()
+    db.session.commit()
+
+    assert teacher.get_student_count() == 1
+
+    _login_sysadmin(client, sys_admin, sys_secret)
+    response = client.get("/sysadmin/admins")
+    assert response.status_code == 200
+    html = response.data.decode()
+    assert "teacher-delete-count" in html
+    assert "1 student" in html or "1 students" in html

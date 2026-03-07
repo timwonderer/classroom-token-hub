@@ -11,15 +11,20 @@ related:
 
 # Insurance Enrollment
 
-Use enrollment tools to manage which students are covered by each policy.
+## Overview
+The enrollment tools allow you to manage and verify which students are actively covered by your various insurance policies.
 
-## Where to work
-Go to **Bills > Insurance** and open the **Active Student Policies** tab.
+## Step-by-Step Instructions
 
-## What you can do
-- View who is enrolled in each policy.
-- Remove coverage when needed.
-- Confirm enrollment before students submit claims.
+### Managing Student Coverage
+1. Navigate to **Bills > Insurance** in the teacher sidebar.
+2. Open the **Active Student Policies** tab.
+3. Review the list to see exactly who is currently enrolled in each policy and when their coverage began.
+4. If a student needs to be removed from a policy (e.g., due to disciplinary action or policy changes), you can revoke their coverage directly from this list.
+
+## Important Notes
+> [!TIP]
+> **Verify before claims:** Use this list to confirm a student's active enrollment status before investigating any claims disputes.
 
 ## Related guides
-- [Insurance Policies](/docs/user-guides/features/teacher/bills/insurance-policies)
+- [Insurance Policies](insurance-policies.md)

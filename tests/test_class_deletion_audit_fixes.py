@@ -26,26 +26,41 @@ from app.models import (
     StudentBlock,
 )
 from app.hash_utils import get_random_salt, hash_hmac
+from app.utils.username_migration import build_hashed_username_fields
 
 
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
 
-def _create_teacher(username: str) -> tuple[Admin, str]:
+def _create_teacher(username: str) -> tuple[Admin, str, str]:
     secret = pyotp.random_base32()
-    teacher = Admin(username=username, totp_secret=secret)
+    salt, username_hash, username_lookup_hash = build_hashed_username_fields(username)
+    teacher = Admin(
+        username=None,
+        username_hash=username_hash,
+        username_lookup_hash=username_lookup_hash,
+        salt=salt,
+        totp_secret=secret,
+    )
     db.session.add(teacher)
     db.session.commit()
-    return teacher, secret
+    return teacher, secret, username
 
 
-def _create_sysadmin(username: str = "sysadmin-audit") -> tuple[SystemAdmin, str]:
+def _create_sysadmin(username: str = "sysadmin-audit") -> tuple[SystemAdmin, str, str]:
     secret = pyotp.random_base32()
-    sa = SystemAdmin(username=username, totp_secret=secret)
+    salt, username_hash, username_lookup_hash = build_hashed_username_fields(username)
+    sa = SystemAdmin(
+        username=None,
+        username_hash=username_hash,
+        username_lookup_hash=username_lookup_hash,
+        salt=salt,
+        totp_secret=secret,
+    )
     db.session.add(sa)
     db.session.commit()
-    return sa, secret
+    return sa, secret, username
 
 
 def _create_student(teacher: Admin, first_name: str, block: str, join_code: str) -> Student:
@@ -82,10 +97,10 @@ def _create_student(teacher: Admin, first_name: str, block: str, join_code: str)
     return student
 
 
-def _login_teacher(client, teacher: Admin, secret: str):
+def _login_teacher(client, teacher: Admin, secret: str, username: str):
     client.post(
         "/admin/login",
-        data={"username": teacher.username, "totp_code": pyotp.TOTP(secret).now()},
+        data={"username": username, "totp_code": pyotp.TOTP(secret).now()},
         follow_redirects=True,
     )
     with client.session_transaction() as sess:
@@ -94,10 +109,10 @@ def _login_teacher(client, teacher: Admin, secret: str):
         sess["last_activity"] = datetime.now(timezone.utc).isoformat()
 
 
-def _login_sysadmin(client, sysadmin: SystemAdmin, secret: str):
+def _login_sysadmin(client, sysadmin: SystemAdmin, secret: str, username: str):
     client.post(
         "/sysadmin/login",
-        data={"username": sysadmin.username, "totp_code": pyotp.TOTP(secret).now()},
+        data={"username": username, "totp_code": pyotp.TOTP(secret).now()},
         follow_redirects=True,
     )
 
@@ -108,7 +123,7 @@ def _login_sysadmin(client, sysadmin: SystemAdmin, secret: str):
 
 def test_balance_cache_deleted_when_join_code_deleted(client):
     """BalanceCache rows for a deleted join code must not survive."""
-    teacher, secret = _create_teacher("teacher-bc-del")
+    teacher, secret, teacher_username = _create_teacher("teacher-bc-del")
     student = _create_student(teacher, "Alice", "A", "BCDEL1")
 
     cache = BalanceCache(
@@ -121,7 +136,7 @@ def test_balance_cache_deleted_when_join_code_deleted(client):
     db.session.commit()
     cache_id = cache.id
 
-    _login_teacher(client, teacher, secret)
+    _login_teacher(client, teacher, secret, teacher_username)
     resp = client.post(
         "/admin/join-code/delete",
         json={
@@ -141,7 +156,7 @@ def test_balance_cache_deleted_when_join_code_deleted(client):
 
 def test_balance_cache_for_other_join_code_not_deleted(client):
     """BalanceCache for a different join code must survive when only one class is deleted."""
-    teacher, secret = _create_teacher("teacher-bc-keep")
+    teacher, secret, teacher_username = _create_teacher("teacher-bc-keep")
     student_a = _create_student(teacher, "Alice", "A", "BCDEL2")
     student_b = _create_student(teacher, "Bob", "B", "BCKEEP2")
 
@@ -161,7 +176,7 @@ def test_balance_cache_for_other_join_code_not_deleted(client):
     db.session.commit()
     keep_id = cache_keep.id
 
-    _login_teacher(client, teacher, secret)
+    _login_teacher(client, teacher, secret, teacher_username)
     resp = client.post(
         "/admin/join-code/delete",
         json={
@@ -182,8 +197,8 @@ def test_balance_cache_for_other_join_code_not_deleted(client):
 # ---------------------------------------------------------------------------
 
 def test_sysadmin_period_deletion_endpoint_is_disabled(client):
-    teacher, _ = _create_teacher("teacher-sz-jc")
-    sysadmin, sys_secret = _create_sysadmin("sysadmin-sz")
+    teacher, _, _ = _create_teacher("teacher-sz-jc")
+    sysadmin, sys_secret, sysadmin_username = _create_sysadmin("sysadmin-sz")
 
     # Create student whose Student.block does NOT match the period name
     salt = get_random_salt()
@@ -216,7 +231,7 @@ def test_sysadmin_period_deletion_endpoint_is_disabled(client):
     teacher.last_login = None
     db.session.commit()
 
-    _login_sysadmin(client, sysadmin, sys_secret)
+    _login_sysadmin(client, sysadmin, sys_secret, sysadmin_username)
     resp = client.post(
         f"/sysadmin/delete-period/{teacher.id}/Z",
         follow_redirects=True,
@@ -227,10 +242,10 @@ def test_sysadmin_period_deletion_endpoint_is_disabled(client):
 
 
 def test_sysadmin_teacher_deletion_endpoint_is_disabled(client):
-    teacher, _ = _create_teacher("teacher-mp-del")
-    sysadmin, sys_secret = _create_sysadmin("sysadmin-mp")
+    teacher, _, _ = _create_teacher("teacher-mp-del")
+    sysadmin, sys_secret, sysadmin_username = _create_sysadmin("sysadmin-mp")
 
-    _login_sysadmin(client, sysadmin, sys_secret)
+    _login_sysadmin(client, sysadmin, sys_secret, sysadmin_username)
     resp = client.post(
         f"/sysadmin/manage-teachers/delete/{teacher.id}",
         follow_redirects=True,
@@ -246,7 +261,7 @@ def test_sysadmin_teacher_deletion_endpoint_is_disabled(client):
 
 def test_payroll_settings_deleted_when_last_join_code_for_block_removed(client):
     """PayrollSettings for block 'A' must be removed when no TeacherBlock remains for it."""
-    teacher, secret = _create_teacher("teacher-ps-del")
+    teacher, secret, teacher_username = _create_teacher("teacher-ps-del")
     _create_student(teacher, "Pam", "A", "PSDEL1")
 
     ps = PayrollSettings(teacher_id=teacher.id, block="A", pay_rate=0.25)
@@ -254,7 +269,7 @@ def test_payroll_settings_deleted_when_last_join_code_for_block_removed(client):
     db.session.commit()
     ps_id = ps.id
 
-    _login_teacher(client, teacher, secret)
+    _login_teacher(client, teacher, secret, teacher_username)
     resp = client.post(
         "/admin/join-code/delete",
         json={
@@ -272,7 +287,7 @@ def test_payroll_settings_deleted_when_last_join_code_for_block_removed(client):
 
 def test_rent_settings_deleted_when_last_join_code_for_block_removed(client):
     """RentSettings for block 'A' must be removed when no TeacherBlock remains for it."""
-    teacher, secret = _create_teacher("teacher-rs-del")
+    teacher, secret, teacher_username = _create_teacher("teacher-rs-del")
     _create_student(teacher, "Raj", "A", "RSDEL1")
 
     rs = RentSettings(teacher_id=teacher.id, block="A", rent_amount=50)
@@ -280,7 +295,7 @@ def test_rent_settings_deleted_when_last_join_code_for_block_removed(client):
     db.session.commit()
     rs_id = rs.id
 
-    _login_teacher(client, teacher, secret)
+    _login_teacher(client, teacher, secret, teacher_username)
     resp = client.post(
         "/admin/join-code/delete",
         json={
@@ -300,7 +315,7 @@ def test_payroll_settings_preserved_when_other_join_code_for_block_exists(client
     PayrollSettings for block 'A' must NOT be deleted if the teacher still has
     another join code under that same block name.
     """
-    teacher, secret = _create_teacher("teacher-ps-keep")
+    teacher, secret, teacher_username = _create_teacher("teacher-ps-keep")
     _create_student(teacher, "Pat", "A", "PSKP1")  # will be deleted
 
     # Add a second seat in the same block A but different join code
@@ -337,7 +352,7 @@ def test_payroll_settings_preserved_when_other_join_code_for_block_exists(client
     db.session.commit()
     ps_id = ps.id
 
-    _login_teacher(client, teacher, secret)
+    _login_teacher(client, teacher, secret, teacher_username)
     # Delete only PSKP1 — PSKP2 still exists for block A
     resp = client.post(
         "/admin/join-code/delete",
@@ -356,35 +371,47 @@ def test_payroll_settings_preserved_when_other_join_code_for_block_exists(client
 
 def test_account_deletion_requires_gate(client):
     """Teacher account deletion must be blocked when gate fields are missing."""
-    teacher, secret = _create_teacher("teacher-dr-no-gate")
-    _login_teacher(client, teacher, secret)
+    teacher, secret, teacher_username = _create_teacher("teacher-dr-no-gate")
+    _login_teacher(client, teacher, secret, teacher_username)
 
-    resp = client.post(
-        "/admin/deletion-requests",
-        data={
-            "request_type": "account",
-        },
-        follow_redirects=True,
-    )
+    previous_ratelimit_enabled = client.application.config.get("RATELIMIT_ENABLED", True)
+    client.application.config["RATELIMIT_ENABLED"] = False
+    try:
+        resp = client.post(
+            "/admin/deletion-requests",
+            data={
+                "request_type": "account",
+            },
+            environ_overrides={"REMOTE_ADDR": "127.0.0.31", "HTTP_X_FORWARDED_FOR": "127.0.0.31"},
+            follow_redirects=True,
+        )
+    finally:
+        client.application.config["RATELIMIT_ENABLED"] = previous_ratelimit_enabled
     assert resp.status_code == 200
     assert b"Deletion request blocked: confirmation phrase did not match." in resp.data
     assert db.session.get(Admin, teacher.id) is not None
 
 def test_account_deletion_executes_with_valid_gate(client):
     """Teacher account deletion succeeds when timed gate evidence is present."""
-    teacher, secret = _create_teacher("teacher-dr-gated")
-    _login_teacher(client, teacher, secret)
+    teacher, secret, teacher_username = _create_teacher("teacher-dr-gated")
+    _login_teacher(client, teacher, secret, teacher_username)
 
-    resp = client.post(
-        "/admin/deletion-requests",
-        data={
-            "request_type": "account",
-            "gate_phrase": f"CONFIRM DELETE {teacher.username} ACCOUNT",
-            "gate_countdown_seconds": 30,
-            "gate_hold_seconds": 10,
-        },
-        follow_redirects=True,
-    )
+    previous_ratelimit_enabled = client.application.config.get("RATELIMIT_ENABLED", True)
+    client.application.config["RATELIMIT_ENABLED"] = False
+    try:
+        resp = client.post(
+            "/admin/deletion-requests",
+            data={
+                "request_type": "account",
+                "gate_phrase": f"CONFIRM DELETE {teacher.get_display_name()} ACCOUNT",
+                "gate_countdown_seconds": 30,
+                "gate_hold_seconds": 10,
+            },
+            environ_overrides={"REMOTE_ADDR": "127.0.0.32", "HTTP_X_FORWARDED_FOR": "127.0.0.32"},
+            follow_redirects=True,
+        )
+    finally:
+        client.application.config["RATELIMIT_ENABLED"] = previous_ratelimit_enabled
     assert resp.status_code == 200
     assert b"permanently deleted" in resp.data
     assert db.session.get(Admin, teacher.id) is None

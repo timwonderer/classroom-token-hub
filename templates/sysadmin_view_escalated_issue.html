@@ -16,12 +16,11 @@
                 <div class="card-header bg-primary text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h4 class="mb-0">
-                            <span class="material-symbols-outlined me-2">flag</span>Issue #{{ issue.id }}
+                            <span class="material-symbols-outlined me-2">flag</span>Issue {{ issue_ref[:12] }}...
                         </h4>
                         <span class="badge
-                            {% if issue.status == 'elevated' %}bg-warning text-dark
-                            {% elif issue.status == 'developer_review' %}bg-info
-                            {% elif issue.status == 'developer_resolved' %}bg-success
+                            {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}bg-warning text-dark
+                            {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}bg-success
                             {% else %}bg-secondary{% endif %}">
                             {{ issue.status|replace('_', ' ')|title }}
                         </span>
@@ -33,7 +32,7 @@
                         <h6 class="text-muted mb-2">Escalated By</h6>
                         <p class="mb-0">
                             <span class="material-symbols-outlined me-2">badge</span>
-                            <strong>{{ issue.teacher.username }}</strong>
+                            <strong>{{ issue.teacher.get_sysadmin_display_name() }}</strong>
                             {% if issue.share_class_name_with_sysadmin and issue.class_label %}
                             <span class="text-muted">| {{ issue.class_label }}</span>
                             {% endif %}
@@ -61,24 +60,6 @@
                         <h6 class="text-muted mb-2">Category</h6>
                         <span class="badge bg-secondary">{{ issue.category.name if issue.category else 'Unknown' }}</span>
                         <span class="badge bg-light text-dark ms-2">{{ issue.issue_type|title }}</span>
-                    </div>
-
-                    <hr>
-
-                    <!-- Bug Bounty Reward Eligibility -->
-                    <div class="mb-3">
-                        <h6 class="text-muted mb-2">Bug Bounty Reward Eligibility</h6>
-                        <p class="mb-0">
-                            <span class="material-symbols-outlined me-2">redeem</span>
-                            {% if issue.eligible_for_reward %}
-                                <span class="badge bg-warning text-dark">Yes</span>
-                                {% if issue.reward_amount %}
-                                <span class="text-muted ms-2">Amount: ${{ "%.2f"|format(issue.reward_amount) }}</span>
-                                {% endif %}
-                            {% else %}
-                                <span class="badge bg-secondary">No</span>
-                            {% endif %}
-                        </p>
                     </div>
 
                     <hr>
@@ -206,53 +187,121 @@
                 </div>
             </div>
             {% endif %}
+
+            {% if correlation_pack %}
+            <div class="card shadow-sm mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <span class="material-symbols-outlined me-2">hub</span>Correlation Pack
+                    </h5>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#correlationPackBody" aria-expanded="false" aria-controls="correlationPackBody">
+                        Toggle
+                    </button>
+                </div>
+                <div class="collapse" id="correlationPackBody">
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="d-flex flex-wrap gap-2">
+                                <button type="button" class="btn btn-outline-secondary btn-sm copy-correlation-value" data-copy-value="{{ correlation_pack.actor_opaque_id }}">
+                                    Copy actor_opaque_id
+                                </button>
+                                {% if correlation_pack.join_code_id %}
+                                <button type="button" class="btn btn-outline-secondary btn-sm copy-correlation-value" data-copy-value="{{ correlation_pack.join_code_id }}">
+                                    Copy join_code_id
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <h6 class="text-muted mb-2">Recent Requests</h6>
+                        {% if correlation_pack.request_trace_json %}
+                        <div class="table-responsive mb-3">
+                            <table class="table table-sm align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Method</th>
+                                        <th>Endpoint</th>
+                                        <th>Request ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for trace in correlation_pack.request_trace_json %}
+                                    <tr>
+                                        <td><span class="local-timestamp" data-timestamp="{{ trace.timestamp }}"></span></td>
+                                        <td><code>{{ trace.method }}</code></td>
+                                        <td><code>{{ trace.endpoint }}</code></td>
+                                        <td>
+                                            <code>{{ trace.request_id or 'n/a' }}</code>
+                                            {% if trace.request_id %}
+                                            <button type="button" class="btn btn-link btn-sm p-0 ms-2 copy-correlation-value" data-copy-value="{{ trace.request_id }}">Copy</button>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% else %}
+                        <p class="text-muted">No recent request traces captured.</p>
+                        {% endif %}
+
+                        <h6 class="text-muted mb-2">Recent Errors</h6>
+                        {% if correlation_pack.error_refs_json %}
+                        <div class="list-group">
+                            {% for error_ref in correlation_pack.error_refs_json %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between">
+                                    <strong>{{ error_ref.error_class }}</strong>
+                                    <small><span class="local-timestamp" data-timestamp="{{ error_ref.timestamp }}"></span></small>
+                                </div>
+                                <div class="small mt-1">
+                                    <code>{{ error_ref.endpoint }}</code>
+                                    {% if error_ref.request_id %}
+                                    <span class="ms-2"><code>{{ error_ref.request_id }}</code></span>
+                                    <button type="button" class="btn btn-link btn-sm p-0 ms-1 copy-correlation-value" data-copy-value="{{ error_ref.request_id }}">Copy</button>
+                                    {% endif %}
+                                </div>
+                                {% if error_ref.error_message %}
+                                <p class="mb-0 mt-1">{{ error_ref.error_message }}</p>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted mb-0">No correlated errors were attached to this ticket.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
         </div>
 
         <!-- Sidebar -->
         <div class="col-lg-4">
-            <!-- Start Review Button (for elevated status) -->
-            {% if issue.status == 'elevated' %}
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">play_circle</span>Start Review
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <p class="mb-3">Mark this issue as being reviewed to acknowledge it and begin investigation.</p>
-                    <form method="POST" action="{{ url_for('sysadmin.start_review_escalated_issue', issue_id=issue.id) }}">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-info w-100">
-                            <span class="material-symbols-outlined me-2">play_circle</span>Start Review
-                        </button>
-                    </form>
-                </div>
-            </div>
-            {% endif %}
-
             <!-- Actions Card -->
-            {% if issue.status in ['elevated', 'developer_review'] %}
+            {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-success text-white">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">check_circle</span>Resolve Issue
+                        <span class="material-symbols-outlined me-2">check_circle</span>Record Technical Resolution
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('sysadmin.resolve_escalated_issue', issue_id=issue.id) }}">
+                    <form method="POST" action="{{ url_for('sysadmin.resolve_escalated_issue', issue_ref=issue_ref) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                         <div class="mb-3">
                             <label for="resolution_note" class="form-label">Resolution Notes</label>
                             <textarea class="form-control" id="resolution_note" name="resolution_note" rows="4"
                                       placeholder="Describe how the issue was resolved or what action was taken..." required></textarea>
-                            <small class="form-text text-muted">This will be visible to the teacher.</small>
+                            <small class="form-text text-muted">This will be visible to the teacher. Developers cannot close the ticket.</small>
                         </div>
 
                         <div class="mb-3 form-check">
                             <input type="checkbox" class="form-check-input" id="eligible_for_reward" name="eligible_for_reward">
                             <label class="form-check-label" for="eligible_for_reward">
-                                Student eligible for bug bounty reward
+                                Legitimate bug found, issue student reward
                             </label>
                         </div>
 
@@ -263,11 +312,11 @@
                                 <input type="number" class="form-control" id="reward_amount" name="reward_amount"
                                        min="0" step="0.01" placeholder="0.00">
                             </div>
-                            <small class="form-text text-muted">Enter the bug bounty reward amount.</small>
+                            <small class="form-text text-muted">Creates a bug reward transaction for the student.</small>
                         </div>
 
                         <button type="submit" class="btn btn-success w-100">
-                            <span class="material-symbols-outlined me-2">check_circle</span>Mark as Resolved
+                            <span class="material-symbols-outlined me-2">check_circle</span>Mark Dev Resolved
                         </button>
                     </form>
                 </div>
@@ -311,13 +360,12 @@
 <script src="{{ static_url('js/timezone-utils.js') }}"></script>
 
 <script>
-// Toggle reward amount field based on checkbox
 document.addEventListener('DOMContentLoaded', function() {
     const checkbox = document.getElementById('eligible_for_reward');
     const amountField = document.getElementById('reward_amount_field');
     const amountInput = document.getElementById('reward_amount');
 
-    if (checkbox && amountField) {
+    if (checkbox && amountField && amountInput) {
         checkbox.addEventListener('change', function() {
             if (this.checked) {
                 amountField.style.display = 'block';
@@ -329,6 +377,71 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+
+    const copyButtons = document.querySelectorAll('.copy-correlation-value');
+
+    function fallbackCopyTextToClipboard(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.top = '0';
+        textArea.style.left = '0';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        let successful = false;
+        try {
+            successful = document.execCommand('copy');
+        } catch (err) {
+            successful = false;
+        }
+        document.body.removeChild(textArea);
+        return successful;
+    }
+
+    copyButtons.forEach(function(button) {
+        button.addEventListener('click', function() {
+            const value = this.getAttribute('data-copy-value');
+            if (!value) {
+                return;
+            }
+
+            const buttonEl = this;
+            const originalText = buttonEl.textContent;
+
+            const onSuccess = function() {
+                buttonEl.textContent = 'Copied';
+                setTimeout(function() {
+                    buttonEl.textContent = originalText;
+                }, 1000);
+            };
+
+            const onFailure = function() {
+                buttonEl.textContent = originalText;
+                window.alert('Unable to copy value to clipboard. Please copy it manually.');
+            };
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(value)
+                    .then(onSuccess)
+                    .catch(function(err) {
+                        console.error('Failed to copy using navigator.clipboard:', err);
+                        if (fallbackCopyTextToClipboard(value)) {
+                            onSuccess();
+                        } else {
+                            onFailure();
+                        }
+                    });
+            } else {
+                if (fallbackCopyTextToClipboard(value)) {
+                    onSuccess();
+                } else {
+                    onFailure();
+                }
+            }
+        });
+    });
 });
 </script>
 {% endblock %}

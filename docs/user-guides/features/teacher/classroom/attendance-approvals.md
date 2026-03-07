@@ -12,20 +12,25 @@ related:
 
 # Attendance and Approvals
 
-Use the Attendance Log to control student taps and review records that drive payroll.
+## Overview
+The Attendance Log allows you to review the time-tracking records that drive student payroll. You can also use it to manually control when students are allowed to tap in and out.
 
-## Where to work
-Go to **Classroom > Attendance**.
+## Step-by-Step Instructions
 
-## Control attendance taps
-You can enable or pause Start Work and Break or Done taps per class period. This is useful if a class is not meeting or if you want to prevent late taps after a cutoff.
+### Controlling Attendance Taps
+1. Navigate to **Classroom > Attendance** in the teacher sidebar.
+2. Use the controls to enable or pause **Start Work** and **Break / Done** taps for the current class period. 
+3. Pause taps if a class is not meeting or if you want to prevent late taps after a strict cutoff time.
 
-## Review attendance history
-Use filters to narrow by class, event type, and date range. The table shows the latest events with totals for start and end taps.
+### Reviewing Attendance History
+1. Scroll down to the attendance records table.
+2. Use the filters to narrow the list by class period, event type, and date range.
+3. Review the latest events and the calculated totals for start and end taps to ensure accuracy.
 
-## Resolve discrepancies
-If records are missing, expand the date range and clear filters. If a student reports a mistake, verify their event list and update payroll expectations.
+## Important Notes
+> [!TIP]
+> **Resolving Discrepancies:** If records appear missing, try expanding the date range and clearing all active filters. If a student reports a mistake, verify their event list and adjust their payroll expectations accordingly.
 
 ## Related guides
-- [Start and End Work (Student)](/docs/user-guides/features/student/work/start-end-work)
-- [Run Payroll](/docs/user-guides/features/teacher/economy/payroll-run)
+- [Start and End Work (Student)](../../student/work/start-end-work.md)
+- [Run Payroll](../economy/payroll-run.md)

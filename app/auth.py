@@ -5,8 +5,8 @@ Contains session management helpers, authentication decorators, and timeout logi
 """
 
 import urllib.parse
-from datetime import datetime, timedelta, timezone
-from app.utils.time import utc_now
+from datetime import datetime, timedelta
+from app.utils.time import utc_now, ensure_utc
 from functools import wraps
 
 import sqlalchemy as sa
@@ -76,6 +76,7 @@ def login_required(f):
                     session.pop('student_id', None)
                     session.pop('login_time', None)
                     session.pop('last_activity', None)
+                    session.pop('teacher_display_name_cache', None)
                     session['view_as_student'] = False
                     session.pop('is_demo', None)
                     session.pop('demo_session_id', None)
@@ -107,6 +108,7 @@ def login_required(f):
                     session.pop('student_id', None)
                     session.pop('login_time', None)
                     session.pop('last_activity', None)
+                    session.pop('teacher_display_name_cache', None)
                     session.pop('is_demo', None)
                     session.pop('demo_session_id', None)
                     session['view_as_student'] = False
@@ -139,11 +141,7 @@ def login_required(f):
 
                 expires_at = None
                 if demo_session and isinstance(demo_session.expires_at, datetime):
-                    if demo_session.expires_at.tzinfo is None:
-                        # Treat naive timestamps as UTC to avoid shifting into earlier local time
-                        expires_at = demo_session.expires_at.replace(tzinfo=timezone.utc)
-                    else:
-                        expires_at = demo_session.expires_at
+                    expires_at = ensure_utc(demo_session.expires_at)
                 else:
                     # If missing/invalid, refresh expiry window to prevent false expirations mid-redirect
                     expires_at = now + timedelta(minutes=10)
@@ -164,6 +162,7 @@ def login_required(f):
                         session.pop('student_id', None)
                         session.pop('login_time', None)
                         session.pop('last_activity', None)
+                        session.pop('teacher_display_name_cache', None)
                         session.pop('is_demo', None)
                         session.pop('demo_session_id', None)
                         session['view_as_student'] = False
@@ -180,6 +179,7 @@ def login_required(f):
                         session.pop('student_id', None)
                         session.pop('login_time', None)
                         session.pop('last_activity', None)
+                        session.pop('teacher_display_name_cache', None)
                         session.pop('is_demo', None)
                         session.pop('demo_session_id', None)
                         session['view_as_student'] = False
@@ -209,6 +209,7 @@ def login_required(f):
             session.pop('student_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
+            session.pop('teacher_display_name_cache', None)
             # Return JSON for API requests
             if request.path.startswith('/api/'):
                 return jsonify({"status": "error", "error": "Session is invalid. Please log in again."}), 401
@@ -221,6 +222,7 @@ def login_required(f):
             session.pop('student_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
+            session.pop('teacher_display_name_cache', None)
             # Return JSON for API requests
             if request.path.startswith('/api/'):
                 return jsonify({"status": "error", "error": "Session expired. Please log in again."}), 401
@@ -235,6 +237,7 @@ def login_required(f):
             session.pop('student_id', None)
             session.pop('login_time', None)
             session.pop('last_activity', None)
+            session.pop('teacher_display_name_cache', None)
             if request.path.startswith('/api/'):
                 return jsonify({"status": "error", "error": "Account is inactive. Contact your teacher."}), 403
             flash("Your account is inactive. Contact your teacher.", "error")
@@ -266,6 +269,8 @@ def admin_required(f):
             session.pop("is_admin", None)
             session.pop("admin_id", None)
             session.pop("last_activity", None)
+            session.pop("admin_display_name", None)
+            session.pop("admin_display_name_admin_id", None)
             flash("Admin session is invalid. Please log in again.")
             next_path = _get_safe_next_path()
             encoded_next = urllib.parse.quote(next_path, safe="")
@@ -316,6 +321,23 @@ def system_admin_required(f):
 
 # -------------------- HELPER FUNCTIONS --------------------
 
+def is_student_account_active(student):
+    """
+    Return True when a student account should be allowed to authenticate.
+
+    Legacy rows may still carry `is_active=False` until one-time cleanup runs.
+    """
+    if student is None:
+        return False
+    if not hasattr(student, "is_active"):
+        current_app.logger.warning(
+            "Student %s is missing is_active attribute; allowing access by fallback",
+            getattr(student, "id", "unknown"),
+        )
+        return True
+    return bool(student.is_active)
+
+
 def get_logged_in_student():
     """
     Get the currently logged-in student from the session.
@@ -328,7 +350,7 @@ def get_logged_in_student():
     if 'student_id' not in session:
         return None
     student = db.session.get(Student, session['student_id'])
-    if not student or not getattr(student, "is_active", True):
+    if not is_student_account_active(student):
         return None
     return student
 
@@ -386,7 +408,6 @@ def get_admin_student_query(include_unassigned=True):
     if session.get("is_system_admin"):
         demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
         return Student.query.filter(
-            Student.is_active.is_(True),
             ~Student.id.in_(sa.select(demo_ids_subq))
         )
 
@@ -407,7 +428,6 @@ def get_admin_student_query(include_unassigned=True):
     # This caused multi-tenancy leaks when teacher_id had stale data
     demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
     return Student.query.filter(
-        Student.is_active.is_(True),
         Student.id.in_(sa.select(shared_student_ids)),
         ~Student.id.in_(sa.select(demo_ids_subq))
     )

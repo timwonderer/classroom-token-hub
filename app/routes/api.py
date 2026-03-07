@@ -5,8 +5,6 @@ RESTful JSON API endpoints for student transactions, hall passes, attendance,
 and other interactive features. Most routes require authentication.
 """
 
-import random
-import string
 import re
 import pytz
 from datetime import datetime, timedelta, timezone
@@ -23,9 +21,9 @@ from werkzeug.security import check_password_hash
 from app.extensions import db, limiter
 from app.models import (
     Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
-    HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
+    TapEventReasonCode, HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
     StudentTeacher, TeacherBlock, StudentBlock, DemoStudent, StoreItemBlock,
-    RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource
+    RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource, _quantize_currency
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
 from app.routes.student import (
@@ -34,11 +32,13 @@ from app.routes.student import (
     get_rent_settings_for_context,
     _calculate_rent_coverage_due_date,
     _is_student_coverage_period_paid,
+    _ensure_rent_hall_pass_top_off,
 )
 from app.utils.join_code import generate_join_code
 from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
-from app.utils.time import utc_now, ensure_utc, normalize_for_db
+from app.utils.store import process_expired_collective_goals
+from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, local_date_bounds_utc, UTC_MIN
 
 # Import external modules
 from app.attendance import (
@@ -277,6 +277,14 @@ def purchase_item():
     if not item or not item.is_active:
         return jsonify({"status": "error", "message": "This item is not available."}), 404
 
+    # Check if a collective goal has passed its expiration deadline.
+    # If so, trigger lazy expiration processing (refunds + deactivation) and block the purchase.
+    # Use ensure_utc() so the comparison works for both PostgreSQL (aware) and SQLite (naive UTC).
+    if item.item_type == 'collective' and item.collective_goal_expires_at:
+        if ensure_utc(item.collective_goal_expires_at) <= utc_now():
+            process_expired_collective_goals(item.teacher_id)
+            return jsonify({"status": "error", "message": "This collective goal has expired and is no longer available."}), 400
+
     # For collective items with whole_class goal, enforce one purchase per student per class
     if item.item_type == 'collective' and item.collective_goal_type == 'whole_class':
         existing_purchase = StudentItem.query.filter(
@@ -387,7 +395,11 @@ def purchase_item():
 
     # Check if student has free uses remaining from rent (per-use rent items).
     # Also recover gracefully if a paid-rent student is missing the grant row.
-    if quantity == 1 and (item.is_rent_linked or per_use_rent_item or legacy_rent_perk_free_fallback):
+    if (
+        quantity == 1
+        and item.item_type != 'hall_pass'
+        and (item.is_rent_linked or per_use_rent_item or legacy_rent_perk_free_fallback)
+    ):
         # Look for an active StudentItem with uses_remaining for this store item
         rent_item_query = StudentItem.query.filter(
             StudentItem.student_id == student.id,
@@ -450,7 +462,7 @@ def purchase_item():
                 student_id=student.id,
                 teacher_id=teacher_id,
                 join_code=join_code,
-                amount=0.0,
+                amount=Decimal('0.00'),
                 account_type='checking',
                 status=TransactionStatus.PENDING,  # CRITICAL: Create as PENDING
                 type='purchase',
@@ -491,10 +503,11 @@ def purchase_item():
         item.bulk_discount_quantity is not None and
         item.bulk_discount_percentage is not None and
         quantity >= item.bulk_discount_quantity):
-        discount_multiplier = 1 - (item.bulk_discount_percentage / 100)
+        discount_multiplier = Decimal('1') - (Decimal(str(item.bulk_discount_percentage)) / 100)
         unit_price = item.price * discount_multiplier
 
-    total_price = unit_price * quantity
+    # Align balance checks and persisted purchase amount with 2dp currency semantics.
+    total_price = _quantize_currency(unit_price * quantity)
 
     # Get banking settings for overdraft handling (reuse teacher_id from above)
     banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first()
@@ -586,6 +599,8 @@ def purchase_item():
             description=purchase_description
         )
         db.session.add(purchase_tx)
+        # Ensure purchase_tx.id is available so each StudentItem can carry a stable refund link.
+        db.session.flush()
 
         # Handle inventory
         if item.inventory is not None:
@@ -683,6 +698,7 @@ def purchase_item():
                 purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
+                purchase_transaction_id=purchase_tx.id,
                 is_from_bundle=True,
                 bundle_remaining=item.bundle_quantity * quantity,  # Total uses = bundle_quantity * number of bundles purchased
                 quantity_purchased=quantity,
@@ -699,6 +715,7 @@ def purchase_item():
                 purchase_date=utc_now(),
                 expiry_date=expiry_date,
                 status=student_item_status,
+                purchase_transaction_id=purchase_tx.id,
                 is_from_bundle=False,
                 quantity_purchased=quantity,
                 uses_remaining=uses_remaining
@@ -714,6 +731,7 @@ def purchase_item():
                     purchase_date=utc_now(),
                     expiry_date=expiry_date,
                     status=student_item_status,
+                    purchase_transaction_id=purchase_tx.id,
                     is_from_bundle=False,
                     quantity_purchased=1,
                     uses_remaining=uses_remaining
@@ -861,6 +879,28 @@ def use_item():
     )
     fallback_block = context.get('block') if context else student.block
 
+    # Legacy compatibility: convert stale hall-pass inventory rows into actual pass balance.
+    # Hall-pass store purchases should not require redemption workflow.
+    if student_item.store_item and student_item.store_item.item_type == 'hall_pass':
+        try:
+            granted = max(1, int(student_item.quantity_purchased or 1))
+            student.hall_passes = (student.hall_passes or 0) + granted
+            student_item.status = 'redeemed'
+            student_item.redemption_date = utc_now()
+            student_item.redemption_details = (
+                f"{details}\n---\nConverted to {granted} hall pass(es).".strip()
+                if details else f"Converted to {granted} hall pass(es)."
+            )
+            db.session.commit()
+            return jsonify({
+                "status": "success",
+                "message": f"Added {granted} hall pass(es). Your new balance is {student.hall_passes}."
+            })
+        except (SQLAlchemyError, ValueError, TypeError) as e:
+            db.session.rollback()
+            current_app.logger.error(f"Hall pass conversion failed for student item {student_item.id}: {e}", exc_info=True)
+            return jsonify({"status": "error", "message": "An error occurred. Please try again."}), 500
+
     # Request action happens when item transitions into admin approval workflow.
     will_create_request = (
         not student_item.is_from_bundle and (
@@ -930,7 +970,7 @@ def use_item():
                 student_id=student.id,
                 teacher_id=context['teacher_id'],
                 join_code=context['join_code'],  # CRITICAL: Add join_code for period isolation
-                amount=0.0,
+                amount=Decimal('0.00'),
                 account_type='checking',
                 type='redemption',
                 description=f"Used: {student_item.store_item.name}" + (f" (bundle: {student_item.bundle_remaining} remaining)" if student_item.is_from_bundle else "")
@@ -1067,7 +1107,7 @@ def reject_redemption():
             else:
                 purchase_tx = max(
                     purchase_txs,
-                    key=lambda tx: ensure_utc(tx.timestamp) if tx.timestamp else datetime.min.replace(tzinfo=timezone.utc)
+                    key=lambda tx: ensure_utc(tx.timestamp) if tx.timestamp else UTC_MIN
                 )
 
         if purchase_tx and purchase_tx.amount is not None:
@@ -1132,6 +1172,8 @@ def reject_redemption():
         )
         db.session.add(refund_tx)
         if purchase_tx:
+            # Assign ID before linking reverse pointer.
+            db.session.flush()
             purchase_tx.reversal_transaction_id = refund_tx.id
 
         # 3. Mark item as rejected (terminal state) instead of deleting history.
@@ -1170,20 +1212,8 @@ def handle_hall_pass_action(pass_id, action):
         if should_deduct and student.hall_passes <= 0:
             return jsonify({"status": "error", "message": "Student has no hall passes left."}), 400
 
-        # Generate unique pass number (letter + 2 digits)
-        while True:
-            letter = random.choice(string.ascii_uppercase)
-            digits = random.randint(10, 99)
-            pass_number = f"{letter}{digits}"
-            # Check if this pass number already exists
-            existing = HallPassLog.query.filter_by(pass_number=pass_number).first()
-            if not existing:
-                break
-
         log_entry.status = 'approved'
         log_entry.decision_time = now
-        log_entry.pass_number = pass_number
-
         # Only deduct hall pass for regular reasons (not Office/Summons/Done for the day)
         if should_deduct:
             student.hall_passes -= 1
@@ -1206,7 +1236,7 @@ def handle_hall_pass_action(pass_id, action):
                 student_block.rent_hall_passes -= 1
 
         db.session.commit()
-        return jsonify({"status": "success", "message": "Pass approved.", "pass_number": pass_number})
+        return jsonify({"status": "success", "message": "Pass approved."})
 
     elif action == 'reject':
         if log_entry.status != 'pending':
@@ -1258,142 +1288,19 @@ def handle_hall_pass_action(pass_id, action):
     return jsonify({"status": "error", "message": "Invalid action."}), 400
 
 
-@api_bp.route('/hall-pass/verification/active', methods=['GET'])
-def get_active_hall_passes():
-    """Get last 10 students who used hall passes for verification display
-
-    This endpoint supports teacher scoping via query parameter.
-    Usage: /api/hall-pass/verification/active?teacher_id=123
-    If no teacher_id is provided, shows all hall pass activity (backward compatible).
-    """
-
-    from app.models import Admin, Student, StudentTeacher
-    from sqlalchemy import or_
-
-    # Determine which teacher's data to show (optional)
-    teacher_id = request.args.get('teacher_id', type=int)
-
-    # Start with base query
-    query = HallPassLog.query.filter(
-        HallPassLog.status.in_(['left', 'returned']),
-        HallPassLog.left_time.isnot(None)
-    )
-
-    # If teacher_id is provided, validate and scope the query
-    if teacher_id:
-        # Validate teacher exists
-        teacher = db.session.get(Admin, teacher_id)
-        if not teacher:
-            return jsonify({
-                "status": "error",
-                "message": "Invalid teacher_id"
-            }), 404
-
-        # If querying as admin, verify authorization (only their own data unless system admin)
-        if session.get('is_admin') and not session.get('is_system_admin'):
-            if session.get('admin_id') != teacher_id:
-                return jsonify({
-                    "status": "error",
-                    "message": "Unauthorized"
-                }), 403
-
-        # Build subquery for students belonging to this teacher
-        # Include both primary ownership (teacher_id) and shared access (student_teachers)
-        shared_student_ids = (
-            StudentTeacher.query.with_entities(StudentTeacher.student_id)
-            .filter(StudentTeacher.admin_id == teacher_id)
-            .subquery()
-        )
-
-        student_ids_subquery = (
-            Student.query.with_entities(Student.id)
-            .filter(
-                Student.id.in_(sa.select(shared_student_ids))
-            )
-            .subquery()
-        )
-
-        # Add teacher scoping filter
-        query = query.filter(HallPassLog.student_id.in_(sa.select(student_ids_subquery)))
-
-    # Get the last 10 students who have left class
-    recent_passes = query.order_by(HallPassLog.left_time.desc()).limit(10).all()
-
-    # Helper function to ensure times are marked as UTC
-    def format_utc_time(dt):
-        if not dt:
-            return None
-        # Ensure datetime is treated as UTC
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.isoformat()
-
-    passes_data = []
-    for log_entry in recent_passes:
-        student = log_entry.student
-        passes_data.append({
-            "student_name": student.full_name,
-            "period": log_entry.period,
-            "destination": log_entry.reason,
-            "left_time": format_utc_time(log_entry.left_time),
-            "return_time": format_utc_time(log_entry.return_time),
-            "pass_number": log_entry.pass_number,
-            "status": log_entry.status
-        })
-
-    return jsonify({
-        "status": "success",
-        "passes": passes_data
-    })
-
-
 @api_bp.route('/hall-pass/lookup/<string:pass_number>', methods=['GET'])
 def lookup_hall_pass(pass_number):
-    """Look up a hall pass by its pass number (for terminal use)"""
-    # Find the hall pass log entry by pass number
-    log_entry = HallPassLog.query.filter_by(pass_number=pass_number.upper()).first()
-
-    if not log_entry:
-        return jsonify({"status": "error", "message": "Pass number not found."}), 404
-
-    student = log_entry.student
-
-    # Return the pass information (ensure times are marked as UTC)
-    def format_utc_time(dt):
-        if not dt:
-            return None
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.isoformat()
-
+    """Deprecated legacy route kept for compatibility."""
+    _ = pass_number
     return jsonify({
-        "status": "success",
-        "pass": {
-            "id": log_entry.id,
-            "student_name": student.full_name,
-            "period": log_entry.period,
-            "destination": log_entry.reason,
-            "pass_number": log_entry.pass_number,
-            "pass_status": log_entry.status,
-            "request_time": format_utc_time(log_entry.request_time),
-            "decision_time": format_utc_time(log_entry.decision_time),
-            "left_time": format_utc_time(log_entry.left_time),
-            "return_time": format_utc_time(log_entry.return_time)
-        }
-    })
+        "status": "error",
+        "message": "Hall pass terminal lookup is deprecated. Use student self-service hall pass flow."
+    }), 410
 
 
 def _get_default_timezone():
     """Return the configured default timezone or fall back to Pacific Time."""
-    tz_name = current_app.config.get('DEFAULT_TIMEZONE', 'America/Los_Angeles')
-    try:
-        return pytz.timezone(tz_name)
-    except pytz.UnknownTimeZoneError:
-        current_app.logger.warning(
-            "Invalid DEFAULT_TIMEZONE '%s' configured; falling back to America/Los_Angeles.",
-            tz_name
-        )
-        return pytz.timezone('America/Los_Angeles')
+    return get_timezone(current_app.config.get('DEFAULT_TIMEZONE'))
 
 
 def _check_simultaneous_pass_limit(log_entry):
@@ -1460,99 +1367,20 @@ def _check_simultaneous_pass_limit(log_entry):
 
 @api_bp.route('/hall-pass/terminal/use', methods=['POST'])
 def hall_pass_terminal_use():
-    """Mark a hall pass as 'left' when student scans at terminal"""
-    data = request.get_json()
-    pass_number = data.get('pass_number', '').strip().upper()
-
-    if not pass_number:
-        return jsonify({"status": "error", "message": "Pass number is required."}), 400
-
-    log_entry = HallPassLog.query.filter_by(pass_number=pass_number).first()
-
-    if not log_entry:
-        return jsonify({"status": "error", "message": "Invalid pass number."}), 404
-
-    if log_entry.status != 'approved':
-        return jsonify({"status": "error", "message": f"Pass is not approved. Current status: {log_entry.status}"}), 400
-
-    limit_response = _check_simultaneous_pass_limit(log_entry)
-    if limit_response:
-        return limit_response
-
-    # Mark as left and create tap-out event
-    now = utc_now()
-    log_entry.status = 'left'
-    log_entry.left_time = now
-
-    # Create tap-out event for attendance tracking
-    tap_out_event = TapEvent(
-        student_id=log_entry.student_id,
-        period=log_entry.period,
-        status='inactive',
-        timestamp=now,
-        reason=log_entry.reason,
-        join_code=log_entry.join_code
-    )
-    db.session.add(tap_out_event)
-
-    try:
-        db.session.commit()
-        return jsonify({
-            "status": "success",
-            "message": f"{log_entry.student.full_name} has left for {log_entry.reason}.",
-            "student_name": log_entry.student.full_name,
-            "destination": log_entry.reason
-        })
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        current_app.logger.error(f"Hall pass terminal use failed: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": "Database error."}), 500
+    """Deprecated legacy route kept for compatibility."""
+    return jsonify({
+        "status": "error",
+        "message": "Hall pass terminal checkout is deprecated. Students must check out from their dashboard."
+    }), 410
 
 
 @api_bp.route('/hall-pass/terminal/return', methods=['POST'])
 def hall_pass_terminal_return():
-    """Mark a hall pass as 'returned' when student scans back in at terminal"""
-    data = request.get_json()
-    pass_number = data.get('pass_number', '').strip().upper()
-
-    if not pass_number:
-        return jsonify({"status": "error", "message": "Pass number is required."}), 400
-
-    log_entry = HallPassLog.query.filter_by(pass_number=pass_number).first()
-
-    if not log_entry:
-        return jsonify({"status": "error", "message": "Invalid pass number."}), 404
-
-    if log_entry.status != 'left':
-        return jsonify({"status": "error", "message": f"Student is not currently out. Status: {log_entry.status}"}), 400
-
-    # Mark as returned and create tap-in event
-    now = utc_now()
-    log_entry.status = 'returned'
-    log_entry.return_time = now
-
-    # Create tap-in event for attendance tracking
-    tap_in_event = TapEvent(
-        student_id=log_entry.student_id,
-        period=log_entry.period,
-        status='active',
-        timestamp=now,
-        reason="Returned from hall pass",
-        join_code=log_entry.join_code
-    )
-    db.session.add(tap_in_event)
-
-    try:
-        db.session.commit()
-        return jsonify({
-            "status": "success",
-            "message": f"{log_entry.student.full_name} has returned.",
-            "student_name": log_entry.student.full_name
-        })
-    except SQLAlchemyError as e:
-        db.session.rollback()
-        current_app.logger.error(f"Hall pass terminal return failed: {e}", exc_info=True)
-        return jsonify({"status": "error", "message": "Database error."}), 500
+    """Deprecated legacy route kept for compatibility."""
+    return jsonify({
+        "status": "error",
+        "message": "Hall pass terminal checkin is deprecated. Students must check in from their dashboard."
+    }), 410
 
 
 @api_bp.route('/hall-pass/cancel/<int:pass_id>', methods=['POST'])
@@ -1685,131 +1513,11 @@ def checkin_hall_pass():
 
 @api_bp.route('/hall-pass/queue', methods=['GET'])
 def get_hall_pass_queue():
-    """Get current hall pass queue (approved but not yet checked out) and currently out count
-    
-    This endpoint supports teacher scoping via query parameter.
-    Usage: /api/hall-pass/queue?teacher_id=123
-    If no teacher_id is provided and user is logged in as admin, uses session admin_id.
-    """
-    
-    from app.models import Admin
-    
-    # Determine which teacher's data to show
-    teacher_id = request.args.get('teacher_id', type=int)
-    
-    # If no teacher_id param, try to get from session (if admin is logged in)
-    if not teacher_id and session.get('is_admin'):
-        teacher_id = session.get('admin_id')
-    
-    # If still no teacher_id, return error - we need to know which teacher's queue to show
-    if not teacher_id:
-        return jsonify({
-            "status": "error",
-            "message": "teacher_id parameter required for queue display"
-        }), 400
-    
-    # Validate teacher exists
-    teacher = db.session.get(Admin, teacher_id)
-    if not teacher:
-        return jsonify({
-            "status": "error",
-            "message": "Invalid teacher_id"
-        }), 404
-    
-    # If querying as admin, verify authorization (only their own data unless system admin)
-    if session.get('is_admin') and not session.get('is_system_admin'):
-        if session.get('admin_id') != teacher_id:
-            return jsonify({
-                "status": "error",
-                "message": "Unauthorized"
-            }), 403
-    
-    # Get hall pass settings for this teacher (or use defaults)
-    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
-    if not settings:
-        # Use temporary default settings if none configured for this teacher
-        # Note: These are not persisted to the database, just used for this request
-        settings = HallPassSettings(teacher_id=teacher_id, queue_enabled=True, queue_limit=10)
-
-    # Get user's timezone from session, default to Pacific Time
-    tz_name = session.get('timezone', 'America/Los_Angeles')
-    try:
-        user_tz = pytz.timezone(tz_name)
-    except pytz.UnknownTimeZoneError:
-        current_app.logger.warning(f"Invalid timezone '{tz_name}' in session, defaulting to Pacific Time.")
-        user_tz = pytz.timezone('America/Los_Angeles')
-
-    # Get current time in user's timezone
-    now_user_tz = utc_now().astimezone(user_tz)
-
-    # Get start of today (midnight) in user's timezone
-    today_start_user_tz = now_user_tz.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    # Convert to UTC for database comparison (database stores times in UTC)
-    today_start_utc = today_start_user_tz.astimezone(pytz.utc)
-    today_start_db = normalize_for_db(today_start_utc)
-
-    # Build subquery for students belonging to this teacher
-    # Use StudentTeacher table as the source of truth for associations.
-    shared_student_ids = (
-        StudentTeacher.query.with_entities(StudentTeacher.student_id)
-        .filter(StudentTeacher.admin_id == teacher_id)
-        .subquery()
-    )
-    
-    demo_student_ids = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
-    student_ids_subquery = (
-        Student.query.with_entities(Student.id)
-        .filter(
-            Student.id.in_(sa.select(shared_student_ids)),
-            ~Student.id.in_(sa.select(demo_student_ids))
-        )
-        .subquery()
-    )
-
-    # Get approved passes from today that haven't been used yet (not left, not returned)
-    # SCOPED to this teacher's students
-    queue = HallPassLog.query.filter(
-        HallPassLog.status == 'approved',
-        HallPassLog.decision_time >= today_start_db,
-        HallPassLog.student_id.in_(sa.select(student_ids_subquery))
-    ).order_by(HallPassLog.decision_time.asc()).all()
-
-    # Get count of students currently out from today (status = 'left')
-    # SCOPED to this teacher's students
-    currently_out_count = HallPassLog.query.filter(
-        HallPassLog.status == 'left',
-        HallPassLog.left_time >= today_start_db,
-        HallPassLog.student_id.in_(sa.select(student_ids_subquery))
-    ).count()
-
-    # Helper function to ensure times are marked as UTC
-    def format_utc_time(dt):
-        if not dt:
-            return None
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.isoformat()
-
-    queue_data = []
-    for log_entry in queue:
-        student = log_entry.student
-        queue_data.append({
-            "student_name": student.full_name,
-            "destination": log_entry.reason,
-            "pass_number": log_entry.pass_number,
-            "approved_time": format_utc_time(log_entry.decision_time),
-            "period": log_entry.period
-        })
-
+    """Deprecated legacy route kept for compatibility."""
     return jsonify({
-        "status": "success",
-        "queue": queue_data,
-        "currently_out": currently_out_count,
-        "total": len(queue_data) + currently_out_count,
-        "queue_enabled": settings.queue_enabled,
-        "queue_limit": settings.queue_limit
-    })
+        "status": "error",
+        "message": "Hall pass queue endpoint is deprecated. Use student self-service hall pass flow."
+    }), 410
 
 
 @api_bp.route('/hall-pass/settings', methods=['GET', 'POST'])
@@ -1908,19 +1616,18 @@ def hall_pass_history():
 
         if start_date:
             try:
-                # Parse date and treat as UTC midnight (start of day)
-                start_datetime = datetime.strptime(start_date, '%Y-%m-%d')
-                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                start_day = datetime.strptime(start_date, '%Y-%m-%d').date()
+                start_datetime, _ = local_date_bounds_utc(start_day)
                 query = query.filter(HallPassLog.request_time >= start_datetime)
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid start date format"}), 400
 
         if end_date:
             try:
-                # Parse date and treat as UTC end of day (23:59:59)
-                end_datetime = datetime.strptime(end_date, '%Y-%m-%d')
-                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
-                query = query.filter(HallPassLog.request_time <= end_datetime)
+                end_day = datetime.strptime(end_date, '%Y-%m-%d').date()
+                next_day = end_day + timedelta(days=1)
+                next_day_start_utc, _ = local_date_bounds_utc(next_day)
+                query = query.filter(HallPassLog.request_time < next_day_start_utc)
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid end date format"}), 400
 
@@ -1938,13 +1645,7 @@ def hall_pass_history():
         def format_timestamp(dt):
             if not dt:
                 return None
-            # Ensure timestamp is treated as UTC and format properly
-            if dt.tzinfo is None:
-                # Naive datetime - assume UTC
-                return dt.replace(tzinfo=timezone.utc).isoformat().replace('+00:00', 'Z')
-            else:
-                # Convert to UTC if not already
-                return dt.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+            return ensure_utc(dt).isoformat().replace('+00:00', 'Z')
         
         # Format records for response
         records_data = []
@@ -1954,7 +1655,6 @@ def hall_pass_history():
                 "student_name": record.student.full_name if record.student else "Unknown",
                 "period": record.period,
                 "reason": record.reason,
-                "pass_number": record.pass_number,
                 "status": record.status,
                 "request_time": format_timestamp(record.request_time),
                 "decision_time": format_timestamp(record.decision_time),
@@ -2077,6 +1777,36 @@ def save_hall_pass_setup():
         return jsonify({"status": "error", "message": "Failed to save configuration"}), 500
 
 
+@api_bp.route('/hall-pass/verify-token/rotate', methods=['POST'])
+@admin_required
+def rotate_hall_pass_verify_token():
+    """
+    Rotate the teacher's hall pass public verification token.
+
+    Generates a new 256-bit random token and overwrites the old one.
+    The old token is immediately invalid. Use after a lost pass, suspicious
+    traffic, or student screenshot concern.
+    """
+    from app.models import Admin
+    teacher_id = session.get('admin_id')
+    teacher = db.session.get(Admin, teacher_id)
+    if not teacher:
+        return jsonify({"status": "error", "message": "Teacher not found."}), 404
+
+    teacher.hall_pass_verify_token = Admin.generate_verify_token()
+    try:
+        db.session.commit()
+    except SQLAlchemyError:
+        db.session.rollback()
+        current_app.logger.error("Failed to rotate hall pass verify token", exc_info=True)
+        return jsonify({"status": "error", "message": "Failed to rotate token."}), 500
+
+    return jsonify({
+        "status": "success",
+        "token": teacher.hall_pass_verify_token
+    })
+
+
 @api_bp.route('/hall-pass/available-types', methods=['GET'])
 @login_required
 def get_available_hall_pass_types():
@@ -2139,7 +1869,13 @@ def attendance_history():
         duplicate_tap = aliased(TapEvent)
         query = query.filter(~sa.and_(
             TapEvent.status == 'inactive',
-            TapEvent.reason.like('Daily limit%'),
+            or_(
+                TapEvent.reason_code == TapEventReasonCode.DAILY_LIMIT,
+                sa.and_(
+                    TapEvent.reason_code.is_(None),
+                    TapEvent.reason.like('Daily limit%')
+                )
+            ),
             sa.exists(
                 sa.select(1).where(
                     sa.and_(
@@ -2168,18 +1904,16 @@ def attendance_history():
 
         if start_date:
             try:
-                # Parse date and treat as UTC midnight (start of day)
-                start_datetime = datetime.strptime(start_date, '%Y-%m-%d')
-                start_datetime = start_datetime.replace(tzinfo=timezone.utc)
+                start_day = datetime.strptime(start_date, '%Y-%m-%d').date()
+                start_datetime = datetime.combine(start_day, datetime.min.time(), tzinfo=timezone.utc)
                 query = query.filter(TapEvent.timestamp >= normalize_for_db(start_datetime))
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid start date format"}), 400
 
         if end_date:
             try:
-                # Parse date and treat as UTC end of day (23:59:59)
-                end_datetime = datetime.strptime(end_date, '%Y-%m-%d')
-                end_datetime = end_datetime.replace(hour=23, minute=59, second=59, tzinfo=timezone.utc)
+                end_day = datetime.strptime(end_date, '%Y-%m-%d').date()
+                end_datetime = datetime.combine(end_day, datetime.max.time(), tzinfo=timezone.utc)
                 query = query.filter(TapEvent.timestamp <= normalize_for_db(end_datetime))
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid end date format"}), 400
@@ -2226,15 +1960,7 @@ def attendance_history():
             # Format timestamp as UTC with 'Z' suffix
             timestamp_str = None
             if record.timestamp:
-                # Ensure timestamp is treated as UTC and format properly
-                if record.timestamp.tzinfo is None:
-                    # Naive datetime - assume UTC
-                    timestamp_str = record.timestamp.replace(tzinfo=timezone.utc).isoformat()
-                else:
-                    # Convert to UTC if not already
-                    timestamp_str = record.timestamp.astimezone(timezone.utc).isoformat()
-                # Replace +00:00 with Z for cleaner UTC representation
-                timestamp_str = timestamp_str.replace('+00:00', 'Z')
+                timestamp_str = ensure_utc(record.timestamp).isoformat().replace('+00:00', 'Z')
 
             records_data.append({
                 "id": record.id,
@@ -2453,6 +2179,14 @@ def handle_tap():
             # Check if hall pass is required (not for Office/Summons/Done for the day)
             should_require_pass = reason.lower() not in ['office', 'summons', 'done for the day']
 
+            # Keep hall-pass rent grants in sync for the active rent coverage period.
+            # This applies the monthly top-off model even if the student paid rent earlier.
+            context = {'join_code': join_code, 'block': period, 'teacher_id': teacher_id}
+            if should_require_pass and context:
+                _, _, hall_pass_reconciled = _ensure_rent_hall_pass_top_off(student, context)
+                if hall_pass_reconciled:
+                    db.session.flush()
+
             if should_require_pass and student.hall_passes <= 0:
                 return jsonify({"error": "Insufficient hall passes."}), 400
 
@@ -2485,8 +2219,7 @@ def handle_tap():
                 "hall_pass": {
                     "id": hall_pass_log.id,
                     "status": hall_pass_log.status,
-                    "reason": hall_pass_log.reason,
-                    "pass_number": hall_pass_log.pass_number
+                    "reason": hall_pass_log.reason
                 }
             })
 
@@ -2906,7 +2639,14 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                         TapEvent.status == "inactive",
                         TapEvent.timestamp >= start_of_day_utc,
                         TapEvent.timestamp < end_of_day_utc,
-                        TapEvent.reason.like(f"Daily limit%"),  # Matches "Daily limit (X.Xh) reached"
+                        or_(
+                            TapEvent.reason_code == TapEventReasonCode.DAILY_LIMIT,
+                            # Backward-compatible fallback: legacy rows may have NULL reason_code
+                            sa.and_(
+                                TapEvent.reason_code.is_(None),
+                                TapEvent.reason.ilike("Daily limit%")
+                            ),
+                        ),
                         TapEvent.is_deleted == False
                     ).first()
 
@@ -2933,6 +2673,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                         status="inactive",
                         timestamp=tapout_timestamp,
                         reason=f"Daily limit ({hours_limit:.1f}h) reached",
+                        reason_code=TapEventReasonCode.DAILY_LIMIT,
                         join_code=join_code
                     )
                     db.session.add(tap_out_event)

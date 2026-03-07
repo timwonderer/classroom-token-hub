@@ -10,6 +10,7 @@ import logging
 import urllib.parse
 import uuid
 import pytz
+import sqlalchemy as sa
 from datetime import datetime, date, timezone
 from logging.handlers import RotatingFileHandler
 
@@ -103,11 +104,34 @@ REQUEST_ID_HEADERS = ("X-Request-Id", "X-Correlation-Id")
 
 class RequestIdFilter(logging.Filter):
     def filter(self, record):
+        context = getattr(g, "correlation_context", None) if has_request_context() else None
         if not hasattr(record, "request_id"):
             if has_request_context():
                 record.request_id = getattr(g, "request_id", "-")
             else:
                 record.request_id = "-"
+        if not hasattr(record, "actor_type"):
+            record.actor_type = context.get("actor_type", "-") if context else "-"
+        if not hasattr(record, "actor_opaque_id"):
+            record.actor_opaque_id = context.get("actor_opaque_id", "-") if context else "-"
+        if not hasattr(record, "join_code_id"):
+            record.join_code_id = context.get("join_code_id", "-") if context else "-"
+        if not hasattr(record, "endpoint"):
+            if has_request_context():
+                if request.url_rule and request.url_rule.rule:
+                    record.endpoint = request.url_rule.rule
+                else:
+                    record.endpoint = request.path
+            else:
+                record.endpoint = "-"
+        if not hasattr(record, "method"):
+            record.method = request.method if has_request_context() else "-"
+        if not hasattr(record, "error_class"):
+            record.error_class = "-"
+        if not hasattr(record, "error_message"):
+            record.error_message = "-"
+        if not hasattr(record, "correlation_version"):
+            record.correlation_version = 1
         return True
 
 
@@ -128,14 +152,65 @@ def register_error_handlers(app):
         if isinstance(e, HTTPException):
             return e
 
+        from app.extensions import db
+        from app.services.tlcp import CORRELATION_VERSION, save_error_event
+
+        context = getattr(g, "correlation_context", None) or {}
+        endpoint = request.url_rule.rule if request.url_rule and request.url_rule.rule else request.path
+        sanitized_message = " ".join(str(e).split())[:500]
         app.logger.exception(
             "Unhandled exception",
             extra={
                 "route": request.path,
                 "method": request.method,
                 "request_id": getattr(g, "request_id", None),
+                "actor_type": context.get("actor_type"),
+                "actor_opaque_id": context.get("actor_opaque_id"),
+                "join_code_id": context.get("join_code_id"),
+                "endpoint": endpoint,
+                "error_class": e.__class__.__name__,
+                "error_message": sanitized_message,
+                "correlation_version": CORRELATION_VERSION,
             },
         )
+
+        try:
+            # Roll back any partial view state so it is not accidentally committed,
+            # then persist the TLCP error event in a fresh, independent transaction.
+            db.session.rollback()
+            with db.engine.begin() as conn:
+                from app.models import ErrorEvent
+                from app.utils.time import utc_now
+                if context.get("actor_type") and context.get("actor_opaque_id"):
+                    from app.services.tlcp import _sanitize_error_message
+                    conn.execute(
+                        sa.text(
+                            """
+                            INSERT INTO error_events
+                                (request_id, actor_type, actor_opaque_id, join_code_id,
+                                 endpoint, method, error_class, error_message,
+                                 correlation_version, created_at)
+                            VALUES
+                                (:request_id, :actor_type, :actor_opaque_id, :join_code_id,
+                                 :endpoint, :method, :error_class, :error_message,
+                                 :correlation_version, :created_at)
+                            """
+                        ),
+                        {
+                            "request_id": getattr(g, "request_id", None),
+                            "actor_type": context.get("actor_type"),
+                            "actor_opaque_id": context.get("actor_opaque_id"),
+                            "join_code_id": context.get("join_code_id"),
+                            "endpoint": endpoint,
+                            "method": request.method,
+                            "error_class": e.__class__.__name__,
+                            "error_message": _sanitize_error_message(sanitized_message),
+                            "correlation_version": CORRELATION_VERSION,
+                            "created_at": utc_now(),
+                        },
+                    )
+        except Exception:
+            app.logger.warning("Failed to persist TLCP error event", exc_info=True)
 
         # Content-aware error response
         if request.accept_mimetypes.best == "application/json":
@@ -168,19 +243,24 @@ def create_app():
                 static_folder=_os.path.join(basedir, 'static'))
 
     # -------------------- CONFIGURATION --------------------
+    flask_env = os.environ["FLASK_ENV"]
+    dev_rate_limit_enabled = os.getenv("DEV_ENABLE_RATELIMIT", "").lower() in {"1", "true", "yes", "on"}
+
     app.config.from_mapping(
         DEBUG=False,
-        ENV=os.environ["FLASK_ENV"],
+        ENV=flask_env,
         SECRET_KEY=os.environ["SECRET_KEY"],
         SQLALCHEMY_DATABASE_URI=os.environ["DATABASE_URL"],
         SQLALCHEMY_TRACK_MODIFICATIONS=False,
-        SESSION_COOKIE_SECURE=os.environ["FLASK_ENV"] == "production",  # Only require HTTPS in production
+        SESSION_COOKIE_SECURE=flask_env == "production",  # Only require HTTPS in production
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_PATH="/",
         TEMPLATES_AUTO_RELOAD=True,
         TURNSTILE_SITE_KEY=os.getenv("TURNSTILE_SITE_KEY"),
         TURNSTILE_SECRET_KEY=os.getenv("TURNSTILE_SECRET_KEY"),
+        # Dev ergonomics: disable limiter in local development unless explicitly re-enabled.
+        RATELIMIT_ENABLED=(flask_env != "development") or dev_rate_limit_enabled,
     )
 
     # Enable Jinja2 template hot reloading without server restart
@@ -199,7 +279,10 @@ def create_app():
     log_level = getattr(logging, log_level_name, logging.INFO)
     log_format = os.getenv(
         "LOG_FORMAT",
-        "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s]: %(message)s",
+        "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s] "
+        "[actor=%(actor_type)s:%(actor_opaque_id)s join_code_id=%(join_code_id)s] "
+        "[endpoint=%(endpoint)s method=%(method)s] "
+        "[error_class=%(error_class)s correlation_version=%(correlation_version)s]: %(message)s",
     )
 
     stream_handler = logging.StreamHandler()
@@ -243,11 +326,33 @@ def create_app():
     def ensure_request_id():
         g.request_id = _get_request_id()
 
+    @app.before_request
+    def capture_correlation_context():
+        from app.services.tlcp import resolve_actor_context
+
+        g.correlation_context = resolve_actor_context()
+
     @app.after_request
     def attach_request_id_header(response):
+        from app.services.tlcp import persist_request_trace
+        from sqlalchemy.orm import Session
+
         request_id = getattr(g, "request_id", None)
         if request_id:
             response.headers.setdefault("X-Request-Id", request_id)
+        context = getattr(g, "correlation_context", None)
+        if context:
+            try:
+                with Session(db.engine) as tlcp_session:
+                    with tlcp_session.begin():
+                        persist_request_trace(
+                            context=context,
+                            request_id=request_id,
+                            status_code=response.status_code,
+                            _session=tlcp_session,
+                        )
+            except Exception:
+                app.logger.warning("Failed to persist TLCP request trace", exc_info=True)
         return response
 
     # -------------------- ERROR HANDLERS --------------------
@@ -524,6 +629,10 @@ def create_app():
             from app.auth import get_logged_in_student
             from app.models import TeacherBlock, Admin
             from flask import session
+            from app.utils.display_name_session import (
+                get_teacher_display_name_cache,
+                upsert_teacher_display_name_cache,
+            )
 
             student = get_logged_in_student()
             if not student:
@@ -547,27 +656,34 @@ def create_app():
                 claimed_seats[0]
             )
 
-            # Build list of available classes with teacher names
-            # Fetch all teachers at once to avoid N+1 query
-            teacher_ids = [seat.teacher_id for seat in claimed_seats]
-            teachers = {t.id: t for t in Admin.query.filter(Admin.id.in_(teacher_ids)).all()}
-            
+            # Build list of available classes with teacher names.
+            # Resolve names from session cache first to avoid repeated decryptions.
+            teacher_ids = sorted({seat.teacher_id for seat in claimed_seats if seat.teacher_id})
+            teacher_name_cache = get_teacher_display_name_cache()
+            missing_ids = [tid for tid in teacher_ids if str(tid) not in teacher_name_cache]
+            if missing_ids:
+                cache_updates = {}
+                for teacher in Admin.query.filter(Admin.id.in_(missing_ids)).all():
+                    cache_updates[str(teacher.id)] = teacher.get_display_name()
+                if cache_updates:
+                    upsert_teacher_display_name_cache(cache_updates)
+                    teacher_name_cache.update(cache_updates)
+
             available_classes = []
             for seat in claimed_seats:
-                teacher = teachers.get(seat.teacher_id)
+                teacher_name = teacher_name_cache.get(str(seat.teacher_id), 'Unknown')
                 available_classes.append({
                     'join_code': seat.join_code,
-                    'teacher_name': teacher.get_display_name() if teacher else 'Unknown',
+                    'teacher_name': teacher_name,
                     'block': seat.block,
                     'block_display': seat.get_class_label(),
                     'is_current': seat.join_code == current_seat.join_code
                 })
 
-            # Build current class context - reuse teacher from dictionary
-            current_teacher = teachers.get(current_seat.teacher_id)
+            # Build current class context from cache.
             current_class_context = {
                 'join_code': current_seat.join_code,
-                'teacher_name': current_teacher.get_display_name() if current_teacher else 'Unknown',
+                'teacher_name': teacher_name_cache.get(str(current_seat.teacher_id), 'Unknown'),
                 'teacher_id': current_seat.teacher_id,
                 'block': current_seat.block,
                 'block_display': current_seat.get_class_label()
@@ -588,15 +704,25 @@ def create_app():
         try:
             from app.models import Admin
             from flask import session
+            from app.utils.display_name_session import (
+                get_admin_display_name_cache,
+                set_admin_display_name_cache,
+            )
 
             admin_id = session.get('admin_id')
             if admin_id:
                 admin = db.session.get(Admin, admin_id)
-                return {'current_admin': admin}
-            return {'current_admin': None}
+                if not admin:
+                    return {'current_admin': None, 'current_admin_display_name': None}
+                cached_name = get_admin_display_name_cache(admin_id=admin.id)
+                if not cached_name:
+                    cached_name = admin.get_display_name()
+                    set_admin_display_name_cache(admin_id=admin.id, display_name=cached_name)
+                return {'current_admin': admin, 'current_admin_display_name': cached_name}
+            return {'current_admin': None, 'current_admin_display_name': None}
         except Exception as e:
             app.logger.warning(f"Could not load current admin: {e}")
-            return {'current_admin': None}
+            return {'current_admin': None, 'current_admin_display_name': None}
 
     @app.context_processor
     def inject_current_sysadmin():
@@ -652,14 +778,9 @@ def create_app():
         if request.path.startswith('/static/'):
             return response
 
-        # Public embeddable pages (hall pass displays for classroom use)
-        # These pages are public, read-only, and safe to embed in LMS/other sites
-        # NOTE: /hall-pass/terminal is NOT embeddable as it performs state-changing actions
-        embeddable_paths = [
-            '/hall-pass/verification',
-            '/hall-pass/queue'
-        ]
-        is_embeddable = request.path in embeddable_paths
+        # Public embeddable pages
+        # Only the office verification page is embeddable.
+        is_embeddable = request.path.startswith('/verify/hallpass/')
 
         # HTTPS Enforcement (HSTS)
         # Forces browsers to use HTTPS for 1 year, including subdomains

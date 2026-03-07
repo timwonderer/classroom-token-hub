@@ -15,7 +15,7 @@
                 </div>
                 <div>
                     <div class="sysadmin-stat-value">{{ new_reports }}</div>
-                    <div class="sysadmin-stat-label">New Reports</div>
+                    <div class="sysadmin-stat-label">New Teacher Issues</div>
                 </div>
             </div>
         </div>
@@ -47,8 +47,8 @@
                     <span class="material-symbols-outlined text-success">task_alt</span>
                 </div>
                 <div>
-                    <div class="sysadmin-stat-value">{{ rewarded_reports }}</div>
-                    <div class="sysadmin-stat-label">Rewarded Reports</div>
+                    <div class="sysadmin-stat-value">{{ reviewed_reports }}</div>
+                    <div class="sysadmin-stat-label">Reviewed Teacher Issues</div>
                 </div>
             </div>
         </div>
@@ -60,7 +60,7 @@
             <button class="nav-link {% if active_tab == 'reports' or not active_tab %}active{% endif %}"
                 id="reports-tab" data-bs-toggle="tab" data-bs-target="#reports-pane" type="button" role="tab">
                 <span class="material-symbols-outlined align-middle me-1" style="font-size:16px;">bug_report</span>
-                User Reports
+                Teacher Issues
                 {% if new_reports > 0 %}
                 <span class="badge bg-primary ms-1">{{ new_reports }}</span>
                 {% endif %}
@@ -81,7 +81,7 @@
 
     <div class="tab-content border border-top-0 rounded-bottom bg-white shadow-sm mb-4">
 
-        <!-- ── User Reports Tab ── -->
+        <!-- ── Teacher Issues Tab ── -->
         <div class="tab-pane fade {% if active_tab == 'reports' or not active_tab %}show active{% endif %}"
             id="reports-pane" role="tabpanel">
 
@@ -96,8 +96,6 @@
                             <option value="all" {% if status_filter=='all' %}selected{% endif %}>All Statuses</option>
                             <option value="new" {% if status_filter=='new' %}selected{% endif %}>New</option>
                             <option value="reviewed" {% if status_filter=='reviewed' %}selected{% endif %}>Reviewed
-                            </option>
-                            <option value="rewarded" {% if status_filter=='rewarded' %}selected{% endif %}>Rewarded
                             </option>
                             <option value="closed" {% if status_filter=='closed' %}selected{% endif %}>Closed</option>
                             <option value="spam" {% if status_filter=='spam' %}selected{% endif %}>Spam</option>
@@ -129,21 +127,20 @@
                 <table class="table table-hover align-middle mb-0" style="font-size:0.85rem;">
                     <thead class="table-light">
                         <tr>
-                            <th class="ps-3" style="width:60px;">ID</th>
+                            <th class="ps-3" style="width:120px;">Reference</th>
                             <th style="width:90px;">Type</th>
                             <th>Title</th>
                             <th style="width:90px;">Reporter</th>
                             <th style="width:80px;">Error</th>
                             <th style="width:130px;">Submitted</th>
                             <th style="width:90px;">Status</th>
-                            <th style="width:80px;">Reward</th>
                             <th style="width:70px;"></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for report in reports %}
                         <tr>
-                            <td class="ps-3"><strong>#{{ report.id }}</strong></td>
+                            <td class="ps-3"><code>{{ report_ref_for(report.id)[:12] }}...</code></td>
                             <td>
                                 <span class="badge
                                     {% if report.report_type == 'bug' %}bg-danger
@@ -154,14 +151,7 @@
                             </td>
                             <td class="text-truncate" style="max-width:200px;" title="{{ report.title }}">{{
                                 report.title }}</td>
-                            <td>
-                                <span class="badge
-                                    {% if report.user_type == 'student' %}bg-info
-                                    {% elif report.user_type == 'teacher' %}bg-warning text-dark
-                                    {% else %}bg-secondary{% endif %}" style="font-size:0.7rem;">
-                                    {{ report.user_type|title }}
-                                </span>
-                            </td>
+                            <td><span class="badge bg-warning text-dark" style="font-size:0.7rem;">Teacher</span></td>
                             <td>
                                 {% if report.error_code %}
                                 <span class="badge bg-dark" style="font-size:0.7rem;">{{ report.error_code }}</span>
@@ -181,21 +171,13 @@
                                 <span class="badge
                                     {% if report.status == 'new' %}bg-primary
                                     {% elif report.status == 'reviewed' %}bg-info
-                                    {% elif report.status == 'rewarded' %}bg-success
                                     {% elif report.status == 'closed' %}bg-secondary
                                     {% else %}bg-warning text-dark{% endif %}" style="font-size:0.7rem;">
                                     {{ report.status|title }}
                                 </span>
                             </td>
                             <td>
-                                {% if report.reward_amount and report.reward_amount > 0 %}
-                                <span class="text-success fw-bold">${{ "%.0f"|format(report.reward_amount) }}</span>
-                                {% else %}
-                                <span class="text-muted">—</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <a href="{{ url_for('sysadmin.view_user_report', report_id=report.id) }}"
+                                <a href="{{ url_for('sysadmin.view_user_report', report_ref=report_ref_for(report.id)) }}"
                                     class="btn btn-sm btn-outline-primary py-0 px-2">View</a>
                             </td>
                         </tr>
@@ -216,17 +198,11 @@
                                 {% else %}bg-secondary{% endif %} me-1" style="font-size:0.7rem;">
                                 {{ report.report_type|title }}
                             </span>
-                            <span class="badge
-                                {% if report.user_type == 'student' %}bg-info
-                                {% elif report.user_type == 'teacher' %}bg-warning text-dark
-                                {% else %}bg-secondary{% endif %}" style="font-size:0.7rem;">
-                                {{ report.user_type|title }}
-                            </span>
+                            <span class="badge bg-warning text-dark" style="font-size:0.7rem;">Teacher</span>
                         </div>
                         <span class="badge
                             {% if report.status == 'new' %}bg-primary
                             {% elif report.status == 'reviewed' %}bg-info
-                            {% elif report.status == 'rewarded' %}bg-success
                             {% elif report.status == 'closed' %}bg-secondary
                             {% else %}bg-warning text-dark{% endif %}" style="font-size:0.7rem;">
                             {{ report.status|title }}
@@ -234,13 +210,11 @@
                     </div>
                     <div class="fw-semibold mb-1" style="font-size:0.9rem;">{{ report.title }}</div>
                     <div class="text-muted mb-2" style="font-size:0.75rem;">
-                        #{{ report.id }}
+                        {{ report_ref_for(report.id)[:12] }}...
                         {% if report.submitted_at %} · <span class="local-timestamp"
                             data-timestamp="{{ format_utc_iso(report.submitted_at) }}"></span>{% endif %}
-                        {% if report.reward_amount and report.reward_amount > 0 %} · <span class="text-success">${{
-                            "%.0f"|format(report.reward_amount) }}</span>{% endif %}
                     </div>
-                    <a href="{{ url_for('sysadmin.view_user_report', report_id=report.id) }}"
+                    <a href="{{ url_for('sysadmin.view_user_report', report_ref=report_ref_for(report.id)) }}"
                         class="btn btn-sm btn-outline-primary">View Report</a>
                 </div>
                 {% endfor %}
@@ -250,9 +224,9 @@
             <div class="p-5 text-center text-muted">
                 <span class="material-symbols-outlined d-block mb-2"
                     style="font-size:56px;opacity:0.3;">chat_bubble_outline</span>
-                <h5>No reports found</h5>
+                <h5>No teacher issues found</h5>
                 <p class="mb-0">{% if status_filter != 'all' or report_type_filter != 'all' %}Try clearing the
-                    filters.{% else %}No user reports have been submitted yet.{% endif %}</p>
+                    filters.{% else %}No teacher issues have been submitted yet.{% endif %}</p>
             </div>
             {% endif %}
         </div>
@@ -302,7 +276,7 @@
                     {% if issue_list %}
                     <div class="list-group list-group-flush">
                         {% for issue in issue_list %}
-                        <a href="{{ url_for('sysadmin.view_escalated_issue', issue_id=issue.id) }}"
+                        <a href="{{ url_for('sysadmin.view_escalated_issue', issue_ref=issue_ref_for(issue.id)) }}"
                             class="list-group-item list-group-item-action py-3">
                             <div class="d-flex w-100 justify-content-between align-items-start">
                                 <div class="flex-grow-1 me-3 min-width-0">
@@ -316,16 +290,11 @@
                                             {{ issue.category.name if issue.category else 'Unknown' }}
                                         </span>
                                         <span class="badge bg-primary" style="font-size:0.7rem;">
-                                            <span class="material-symbols-outlined me-1">badge</span>{{ issue.teacher.username }}
+                                            <span class="material-symbols-outlined me-1">badge</span>{{ issue.teacher.get_sysadmin_display_name() }}
                                         </span>
                                         {% if issue.share_class_name_with_sysadmin and issue.class_label %}
                                         <span class="badge bg-info" style="font-size:0.7rem;">
                                             <span class="material-symbols-outlined me-1">door_front</span>{{ issue.class_label }}
-                                        </span>
-                                        {% endif %}
-                                        {% if issue.eligible_for_reward %}
-                                        <span class="badge bg-warning text-dark" style="font-size:0.7rem;">
-                                            <span class="material-symbols-outlined me-1">redeem</span>Reward Eligible
                                         </span>
                                         {% endif %}
                                     </div>

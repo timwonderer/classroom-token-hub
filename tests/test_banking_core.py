@@ -34,10 +34,14 @@ def test_ledger_flow(client):
     assert tx.status == TransactionStatus.PENDING
     assert tx.posted_at is None
     
-    # 2. Verify Balance Read triggers Settlement
-    # Student.get_checking_balance calls settle_balances
+    # 2. Verify Balance Read
+    # Student.get_checking_balance NO LONGER calls settle_balances (Write-on-Read fix)
     bal = student.get_checking_balance(join_code=join_code)
     assert bal == Decimal('10.50')
+
+    # Trigger explicit settlement for test purposes
+    settle_balances(student.id, join_code)
+    db.session.commit()
     
     # 3. Verify Settlement Effects
     db.session.expire_all()
@@ -83,6 +87,10 @@ def test_void_pending(client):
     # Should be 0.00 (settlement ignores VOID pending)
     assert bal == Decimal('0.00')
     
+    # Trigger explicit settlement for test purposes
+    settle_balances(student.id, join_code)
+    db.session.commit()
+
     # Verify no reversal created
     reversals = Transaction.query.filter_by(original_transaction_id=tx.id).all()
     assert len(reversals) == 0
@@ -121,7 +129,9 @@ def test_void_posted_with_reversal(client):
     db.session.add(tx)
     db.session.commit()
     
-    student.get_checking_balance(join_code=join_code) # Trigger settlement
+    # student.get_checking_balance(join_code=join_code) # NO LONGER Triggers settlement
+    settle_balances(student.id, join_code) # Explicit settlement
+    db.session.commit()
     
     db.session.expire_all()
     tx = db.session.get(Transaction, tx.id)
@@ -151,8 +161,9 @@ def test_void_posted_with_reversal(client):
     assert bal_after_void == Decimal('0.00')
     
     # 4. Trigger Settlement again (processes Reversal)
-    # get_checking_balance triggered it above.
-    # Check cache.
+    # get_checking_balance NO LONGER triggers it.
+    settle_balances(student.id, join_code)
+    db.session.commit()
     
     db.session.expire_all()
     reversal = db.session.get(Transaction, reversal.id)

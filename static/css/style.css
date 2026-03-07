@@ -1045,6 +1045,27 @@ body.sysadmin-shell .eyebrow {
     --bs-table-color: var(--text-primary);
 }
 
+/* Sortable table headers */
+table.js-sortable thead th {
+    user-select: none;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+table.js-sortable thead th:hover {
+    background-color: var(--table-sort-hover-bg);
+}
+
+table.js-sortable thead th .sort-indicator {
+    color: var(--table-sort-indicator-muted);
+    font-size: 0.8rem;
+    font-weight: 700;
+    vertical-align: middle;
+}
+
+table.js-sortable thead th:hover .sort-indicator {
+    color: var(--table-sort-indicator-active);
+}
+
 /* ─── Icon Normalization ─── */
 .material-symbols-outlined {
     font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;

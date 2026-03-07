@@ -92,6 +92,8 @@ from app.auth import (
 from app.utils.helpers import format_utc_iso, is_safe_url
 from app.utils.encryption import PIIEncryptedType
 from app.utils.constants import THEME_PROMPTS
+from app.hash_utils import hash_username_lookup
+from app.utils.username_migration import build_hashed_username_fields, normalize_auth_username
 
 
 # -------------------- FLASK CLI COMMANDS --------------------
@@ -182,12 +184,15 @@ def create_sysadmin():
     import qrcode
     from app.utils.encryption import encrypt_totp
 
-    username = input("Enter system admin username: ").strip()
+    username = normalize_auth_username(input("Enter system admin username: "))
     if not username:
         print("Username is required.")
         return
 
-    existing = SystemAdmin.query.filter_by(username=username).first()
+    lookup_hash = hash_username_lookup(username)
+    existing = SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
+    if not existing:
+        existing = SystemAdmin.query.filter_by(username=username).first()
     if existing:
         print(f"System admin '{username}' already exists.")
         return
@@ -202,7 +207,14 @@ def create_sysadmin():
     )
 
     # Save to database with encrypted secret
-    sysadmin = SystemAdmin(username=username, totp_secret=encrypt_totp(totp_secret))
+    salt, username_hash, username_lookup_hash = build_hashed_username_fields(username)
+    sysadmin = SystemAdmin(
+        username=None,
+        username_hash=username_hash,
+        username_lookup_hash=username_lookup_hash,
+        salt=salt,
+        totp_secret=encrypt_totp(totp_secret),
+    )
     db.session.add(sysadmin)
     db.session.commit()
 

@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
 from decimal import Decimal
 import logging
 from flask import g
 from sqlalchemy.exc import IntegrityError
 from app import db
 from app.models import Transaction, TransactionStatus, BalanceCache, AccountType
+from app.utils.time import utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +102,7 @@ def settle_balances(student_id: int, join_code: str) -> None:
         # Seed a newly created cache from existing posted/non-pending ledger rows.
         # This preserves legacy balances when cache rows are introduced lazily at read time.
         if cache_was_created:
-            seed_time = datetime.now(timezone.utc)
+            seed_time = utc_now()
             all_checking = db.session.query(db.func.sum(Transaction.amount)).filter(
                 Transaction.student_id == student_id,
                 Transaction.join_code == join_code,
@@ -158,7 +158,7 @@ def settle_balances(student_id: int, join_code: str) -> None:
 
         checking_delta_cents = 0
         savings_delta_cents = 0
-        now = datetime.now(timezone.utc)
+        now = utc_now()
         
         cnt_posted = 0
         cnt_voided = 0

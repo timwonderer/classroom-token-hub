@@ -369,7 +369,8 @@ def create_insurance_policies(teacher, period_name, block):
             if random.random() < 0.5:
                 continue
 
-        policy_code = f"{teacher.username[:3].upper()}{block}{idx+1:02d}"
+        teacher_code = (teacher.get_display_name() or f"T{teacher.id}")[:3].upper()
+        policy_code = f"{teacher_code}{block}{idx+1:02d}"
 
         policy = InsurancePolicy(
             policy_code=policy_code,

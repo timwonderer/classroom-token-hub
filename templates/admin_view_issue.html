@@ -21,10 +21,11 @@
                             </span>Issue Descriptions
                         </h4>
                         <span class="badge
-                            {% if issue.status == 'submitted' or issue.status == 'teacher_review' %}bg-warning text-dark
-                            {% elif issue.status == 'teacher_resolved' %}bg-success text-white
-                            {% elif issue.status == 'elevated' or issue.status == 'developer_review' %}bg-warning
-                            {% elif issue.status == 'developer_resolved' %}bg-info
+                            {% if issue.status in ['OPEN', 'TEACHER_REVIEW', 'submitted', 'teacher_review'] %}bg-warning text-dark
+                            {% elif issue.status in ['TEACHER_FINAL_REVIEW', 'teacher_resolved'] %}bg-primary
+                            {% elif issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}bg-warning
+                            {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}bg-info
+                            {% elif issue.status == 'CLOSED' %}bg-success
                             {% else %}bg-dark{% endif %}">
                             {{ issue.status|replace('_', ' ')|title }}
                         </span>
@@ -242,7 +243,7 @@
 
         <div class="col-lg-4">
             <!-- Action Panel -->
-            {% if issue.status in ['submitted', 'teacher_review'] %}
+            {% if issue.status in ['OPEN', 'TEACHER_REVIEW', 'DEV_RESOLVED', 'submitted', 'teacher_review', 'developer_resolved'] %}
             <div class="card shadow-sm mb-4 border-warning">
                 <div class="card-header bg-warning text-dark">
                     <h5 class="mb-0">
@@ -253,7 +254,7 @@
                     <p class="text-muted small mb-3">Choose how to handle this issue:</p>
 
                     <!-- Resolve Form -->
-                    <form method="POST" action="{{ url_for('admin.resolve_issue', issue_id=issue.id) }}" id="resolveForm">
+                    <form method="POST" action="{{ url_for('admin.resolve_issue', issue_ref=issue_ref) }}" id="resolveForm">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                         <div class="mb-3">
@@ -261,7 +262,7 @@
                             <select class="form-select" name="action_type" id="actionType" required>
                                 <option value="">Select an action...</option>
                                 {% if issue.related_transaction_id %}
-                                <option value="reverse_transaction">Reverse/Void Transaction</option>
+                                <option value="compensating_transaction">Post Compensating Transaction</option>
                                 {% endif %}
                                 <option value="manual_adjustment">Manual Adjustment (I'll handle it)</option>
                                 <option value="deny_issue">Deny Issue</option>
@@ -286,16 +287,18 @@
                     <hr>
 
                     <!-- Escalate Button -->
+                    {% if issue.status in ['OPEN', 'TEACHER_REVIEW', 'submitted', 'teacher_review'] %}
                     <button type="button" class="btn btn-warning w-100" data-bs-toggle="modal" data-bs-target="#escalateModal">
                         <span class="material-symbols-outlined me-2">arrow_circle_up</span>Escalate to Developer
                     </button>
+                    {% endif %}
                 </div>
             </div>
-            {% elif issue.status == 'teacher_resolved' %}
-            <div class="card shadow-sm mb-4 border-success">
-                <div class="card-header bg-success text-white">
+            {% elif issue.status in ['TEACHER_FINAL_REVIEW', 'teacher_resolved'] %}
+            <div class="card shadow-sm mb-4 border-primary">
+                <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">check_circle</span>Resolved
+                        <span class="material-symbols-outlined me-2">fact_check</span>Teacher Final Review
                     </h5>
                 </div>
                 <div class="card-body">
@@ -306,19 +309,29 @@
                         <p class="mb-0 small">{{ issue.teacher_notes }}</p>
                     </div>
                     {% endif %}
-                    <p class="text-muted small mb-0 mt-2">
-                        Resolved <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.teacher_resolved_at) }}"></span>
-                    </p>
+                    <form method="POST" action="{{ url_for('admin.close_issue', issue_ref=issue_ref) }}">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Closure Summary <span class="text-danger">*</span></label>
+                            <textarea class="form-control" name="resolution_summary" rows="3" required placeholder="Summarize the final classroom resolution for audit."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100">
+                            <span class="material-symbols-outlined me-2">task_alt</span>Close Ticket
+                        </button>
+                    </form>
                 </div>
             </div>
-            {% elif issue.status == 'developer_resolved' %}
-            <div class="card shadow-sm mb-4 border-success">
-                <div class="card-header bg-success text-white">
+            {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}
+            <div class="card shadow-sm mb-4 border-info">
+                <div class="card-header bg-info text-white">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">check_circle</span>Resolved by Developer
+                        <span class="material-symbols-outlined me-2">build_circle</span>Developer Fix Applied
                     </h5>
                 </div>
                 <div class="card-body">
+                    <div class="alert alert-info">
+                        <strong>Developer Fix Applied - Teacher Review Required</strong>
+                    </div>
                     <p class="mb-2"><strong>Original Escalation Reason:</strong> {{ issue.escalation_reason }}</p>
                     {% if issue.sysadmin_notes %}
                     <p class="mb-2"><strong>Developer Notes:</strong></p>
@@ -332,12 +345,6 @@
                         <p class="mb-0 small">{{ issue.teacher_diagnostic_note }}</p>
                     </div>
                     {% endif %}
-                    {% if issue.eligible_for_reward %}
-                    <div class="alert alert-success mt-3 mb-0">
-                        <span class="material-symbols-outlined me-2">redeem</span>
-                        <strong>Student was marked eligible for bug reward</strong>
-                    </div>
-                    {% endif %}
                     <p class="text-muted small mb-0 mt-2">
                         Escalated <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
                         {% if issue.sysadmin_resolved_at %}
@@ -346,7 +353,7 @@
                     </p>
                 </div>
             </div>
-            {% elif issue.status in ['elevated', 'developer_review'] %}
+            {% elif issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}
             <div class="card shadow-sm mb-4 border-warning">
                 <div class="card-header bg-warning">
                     <h5 class="mb-0 text-black">
@@ -361,15 +368,28 @@
                         <p class="mb-0 small">{{ issue.teacher_diagnostic_note }}</p>
                     </div>
                     {% endif %}
-                    {% if issue.eligible_for_reward %}
-                    <div class="alert alert-warning mt-3 mb-0">
-                        <span class="material-symbols-outlined me-2">redeem</span>
-                        <strong>Marked as eligible for bug reward</strong>
-                    </div>
-                    {% endif %}
                     <p class="text-muted small mb-0 mt-2">
                         Escalated <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.escalated_at) }}"></span>
                     </p>
+                </div>
+            </div>
+            {% elif issue.status == 'CLOSED' %}
+            <div class="card shadow-sm mb-4 border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <span class="material-symbols-outlined me-2">task_alt</span>Closed
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-2"><strong>Closure Summary:</strong></p>
+                    <div class="bg-light p-2 rounded">
+                        <p class="mb-0 small">{{ issue.teacher_notes or 'No summary provided.' }}</p>
+                    </div>
+                    {% if issue.closed_at %}
+                    <p class="text-muted small mb-0 mt-2">
+                        Closed <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.closed_at) }}"></span>
+                    </p>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}
@@ -419,7 +439,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <form method="POST" action="{{ url_for('admin.escalate_issue', issue_id=issue.id) }}">
+            <form method="POST" action="{{ url_for('admin.escalate_issue', issue_ref=issue_ref) }}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
                     <div class="alert alert-info">
@@ -464,18 +484,6 @@
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="eligible_for_reward" id="eligible_for_reward">
-                            <label class="form-check-label fw-bold" for="eligible_for_reward">
-                                <span class="material-symbols-outlined me-1 text-warning">redeem</span>
-                                Student may receive rewards if this bug report is legitimate
-                            </label>
-                            <small class="d-block text-muted mt-1">
-                                Check this if you believe the student discovered a genuine bug and should be rewarded.
-                            </small>
-                        </div>
-                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -490,16 +498,19 @@
 
 <script>
 // Show/hide denial reason field
-document.getElementById('actionType').addEventListener('change', function() {
-    const denialDiv = document.getElementById('denialReasonDiv');
-    if (this.value === 'deny_issue') {
-        denialDiv.style.display = 'block';
-        denialDiv.querySelector('textarea').required = true;
-    } else {
-        denialDiv.style.display = 'none';
-        denialDiv.querySelector('textarea').required = false;
-    }
-});
+const actionType = document.getElementById('actionType');
+if (actionType) {
+    actionType.addEventListener('change', function() {
+        const denialDiv = document.getElementById('denialReasonDiv');
+        if (this.value === 'deny_issue') {
+            denialDiv.style.display = 'block';
+            denialDiv.querySelector('textarea').required = true;
+        } else {
+            denialDiv.style.display = 'none';
+            denialDiv.querySelector('textarea').required = false;
+        }
+    });
+}
 </script>
 
 <style>

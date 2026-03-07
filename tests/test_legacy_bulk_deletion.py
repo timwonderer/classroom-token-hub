@@ -148,7 +148,7 @@ def _login_admin(client, admin: Admin, secret: str):
 
 
 def test_bulk_delete_legacy_unclaimed_students_by_block(client):
-    """Teachers can bulk archive legacy unclaimed students in a block."""
+    """Teachers can bulk delete legacy unclaimed students in a block."""
     teacher, secret = _create_admin("teacher-legacy-bulk1")
     
     # Create multiple legacy unclaimed students in block A
@@ -177,19 +177,17 @@ def test_bulk_delete_legacy_unclaimed_students_by_block(client):
     assert data["deleted_count"] == 3
     assert "Block A" in data["message"]
     
-    # Verify block A students are archived
+    # Verify block A students are deleted
     for student_id in student_ids:
-        refreshed = db.session.get(Student, student_id)
-        assert refreshed is not None
-        assert refreshed.is_active is False
-        assert StudentTeacher.query.filter_by(student_id=student_id).first() is not None
+        assert db.session.get(Student, student_id) is None
+        assert StudentTeacher.query.filter_by(student_id=student_id).first() is None
     
     # Verify block B student is NOT deleted
     assert db.session.get(Student, other_student_id) is not None
 
 
 def test_bulk_delete_legacy_unclaimed_students_skips_claimed(client):
-    """Bulk archive legacy unclaimed should only affect students without usernames."""
+    """Bulk delete legacy unclaimed should only affect students without usernames."""
     teacher, secret = _create_admin("teacher-legacy-bulk2")
     
     # Create legacy unclaimed students
@@ -216,11 +214,9 @@ def test_bulk_delete_legacy_unclaimed_students_skips_claimed(client):
     assert data["status"] == "success"
     assert data["deleted_count"] == 2  # Only the unclaimed ones
     
-    # Verify unclaimed students are archived
+    # Verify unclaimed students are deleted
     for student_id in unclaimed_ids:
-        refreshed = db.session.get(Student, student_id)
-        assert refreshed is not None
-        assert refreshed.is_active is False
+        assert db.session.get(Student, student_id) is None
     
     # Verify claimed student is NOT deleted
     assert db.session.get(Student, claimed_id) is not None
@@ -255,7 +251,7 @@ def test_bulk_delete_legacy_unclaimed_students_wrong_teacher(client):
 
 
 def test_bulk_delete_mixed_unclaimed_types(client):
-    """Test deleting pending seats + archiving legacy unclaimed students together."""
+    """Test deleting pending seats + deleting legacy unclaimed students together."""
     teacher, secret = _create_admin("teacher-mixed-bulk1")
     
     # Create unclaimed TeacherBlock entries
@@ -295,13 +291,11 @@ def test_bulk_delete_mixed_unclaimed_types(client):
     assert data2["status"] == "success"
     assert data2["deleted_count"] == 2
     
-    # Verify pending seats are deleted and legacy students are archived
+    # Verify pending seats and legacy students are deleted
     for tb_id in tb_ids:
         assert db.session.get(TeacherBlock, tb_id) is None
     for student_id in student_ids:
-        refreshed = db.session.get(Student, student_id)
-        assert refreshed is not None
-        assert refreshed.is_active is False
+        assert db.session.get(Student, student_id) is None
 
 
 def test_block_deletion_with_improved_transactions(client):

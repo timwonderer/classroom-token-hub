@@ -7,14 +7,16 @@ system logs, error monitoring, and debug/testing tools.
 
 import os
 import re
+import binascii
 import secrets
 import io
 import base64
 from urllib.parse import urlparse
+import sqlalchemy as sa
 import qrcode
 import requests
 from datetime import datetime, timedelta, timezone
-from app.utils.time import utc_now
+from app.utils.time import utc_now, ensure_utc
 from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, render_template, redirect, url_for, flash, request, session, current_app, jsonify, Response
@@ -36,18 +38,53 @@ from app.forms import SystemAdminLoginForm, SystemAdminInviteForm
 
 # Import utility functions
 from app.utils.helpers import is_safe_url, format_utc_iso
-from app.utils.encryption import encrypt_totp, decrypt_totp
+from app.utils.encryption import encrypt_totp, decrypt_totp, is_totp_encrypted
+from app.hash_utils import hash_username_lookup
 from app.utils.passwordless_client import (
     create_register_token,
     verify_signin_token,
     get_public_api_key
 )
+from app.utils.username_migration import (
+    normalize_auth_username,
+    needs_hashed_username_migration,
+    build_hashed_username_fields,
+)
+from app.utils.opaque_refs import make_opaque_ref, resolve_opaque_ref
 
 # Create blueprint
 sysadmin_bp = Blueprint('sysadmin', __name__, url_prefix='/sysadmin')
 
 # Constants
 INACTIVITY_THRESHOLD_DAYS = 180  # Number of days of inactivity before highlighting inactive teachers
+
+
+def _find_sysadmin_by_auth_username(username: str):
+    """Lookup sysadmin by hash, with migration-only legacy fallback."""
+    normalized = normalize_auth_username(username)
+    if not normalized:
+        return None
+
+    lookup_hash = hash_username_lookup(normalized)
+    admin = SystemAdmin.query.filter_by(username_lookup_hash=lookup_hash).first()
+    if admin:
+        return admin
+
+    # Migration-only fallback for legacy records that have not been hashed yet.
+    return SystemAdmin.query.filter(
+        SystemAdmin.username == normalized,
+        SystemAdmin.username_lookup_hash.is_(None),
+        SystemAdmin.username_hash.is_(None),
+    ).first()
+
+
+def _sysadmin_auth_username_exists(username: str, *, exclude_sysadmin_id: int | None = None) -> bool:
+    admin = _find_sysadmin_by_auth_username(username)
+    if not admin:
+        return False
+    if exclude_sysadmin_id is not None and admin.id == exclude_sysadmin_id:
+        return False
+    return True
 
 
 def _tail_log_lines(file_path: str, max_lines: int = 200, chunk_size: int = 8192):
@@ -94,8 +131,7 @@ def auth_check():
     last_activity_str = session.get("last_activity")
     if last_activity_str:
         last_activity = datetime.fromisoformat(last_activity_str)
-        if last_activity.tzinfo is None:
-            last_activity = last_activity.replace(tzinfo=timezone.utc)
+        last_activity = ensure_utc(last_activity)
         if (utc_now() - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
             session.pop("is_system_admin", None)
             session.pop("sysadmin_id", None)
@@ -113,28 +149,43 @@ def login():
     session.pop("is_system_admin", None)
     session.pop("sysadmin_id", None)
     session.pop("last_activity", None)
+    session.pop("force_sysadmin_username_migration", None)
     form = SystemAdminLoginForm()
     if form.validate_on_submit():
-        username = form.username.data.strip()
+        username = normalize_auth_username(form.username.data)
         totp_code = form.totp_code.data.strip()
-        admin = SystemAdmin.query.filter_by(username=username).first()
+        admin = _find_sysadmin_by_auth_username(username)
         if admin:
             try:
                 decrypted_secret = decrypt_totp(admin.totp_secret)
             except ValueError:
-                current_app.logger.warning(
-                    "System admin login failed: invalid encrypted TOTP secret for username=%s",
-                    username,
-                )
-                decrypted_secret = None
+                # Legacy plaintext TOTP secret - verify once, then migrate to encrypted storage.
+                decrypted_secret = admin.totp_secret
             if decrypted_secret:
-                totp = pyotp.TOTP(decrypted_secret)
-                if totp.verify(totp_code, valid_window=1):
+                totp_valid = False
+                try:
+                    totp = pyotp.TOTP(decrypted_secret)
+                    totp_valid = totp.verify(totp_code, valid_window=1)
+                except (binascii.Error, TypeError, ValueError):
+                    current_app.logger.warning(
+                        "System admin login failed: TOTP secret is not valid base32 for sysadmin_id=%s",
+                        admin.id,
+                    )
+                    totp_valid = False
+                if totp_valid:
+                    # Lazily encrypt any legacy plaintext TOTP secret.
+                    if not is_totp_encrypted(admin.totp_secret):
+                        admin.totp_secret = encrypt_totp(decrypted_secret)
+                        db.session.commit()
                     session["is_system_admin"] = True
                     session["sysadmin_id"] = admin.id
+                    session["sysadmin_auth_username"] = username
                     session['last_activity'] = utc_now().isoformat()
                     # Establish global maintenance bypass for subsequent role testing.
                     session['maintenance_global_bypass'] = True
+                    if needs_hashed_username_migration(admin):
+                        session["force_sysadmin_username_migration"] = True
+                        return redirect(url_for("sysadmin.username_migration"))
                     flash("System admin login successful.")
                     next_url = request.args.get("next")
                     redirect_target = None
@@ -154,12 +205,64 @@ def login():
     return render_template("system_admin_login.html", form=form)
 
 
+@sysadmin_bp.route('/username-migration', methods=['GET', 'POST'])
+@system_admin_required
+def username_migration():
+    """One-time migration screen for legacy plaintext sysadmin usernames."""
+    admin = db.session.get(SystemAdmin, session.get("sysadmin_id"))
+    if not admin:
+        flash("Account not found.", "error")
+        return redirect(url_for("sysadmin.login"))
+
+    if not needs_hashed_username_migration(admin):
+        session.pop("force_sysadmin_username_migration", None)
+        return redirect(url_for("sysadmin.dashboard"))
+
+    legacy_username = session.get("sysadmin_auth_username")
+    if not legacy_username:
+        flash("Could not determine your current username.", "error")
+        return redirect(url_for("sysadmin.logout"))
+
+    if request.method == "POST":
+        action = request.form.get("action", "continue")
+        chosen_username = legacy_username
+
+        if action == "update":
+            chosen_username = normalize_auth_username(request.form.get("new_username", ""))
+            if not chosen_username:
+                flash("Please enter a username.", "error")
+                return render_template("system_admin_username_migration.html", legacy_username=legacy_username)
+            if _sysadmin_auth_username_exists(chosen_username, exclude_sysadmin_id=admin.id):
+                flash("Username already exists. Choose a different username.", "error")
+                return render_template("system_admin_username_migration.html", legacy_username=legacy_username)
+
+        salt, username_hash, username_lookup_hash = build_hashed_username_fields(
+            chosen_username,
+            existing_salt=admin.salt,
+        )
+        admin.salt = salt
+        admin.username_hash = username_hash
+        admin.username_lookup_hash = username_lookup_hash
+        admin.username = None
+        db.session.commit()
+
+        session["sysadmin_auth_username"] = chosen_username
+        session.pop("force_sysadmin_username_migration", None)
+        flash("Username migration completed.", "success")
+        return redirect(url_for("sysadmin.dashboard"))
+
+    return render_template("system_admin_username_migration.html", legacy_username=legacy_username)
+
+
 @sysadmin_bp.route('/logout')
 def logout():
     """System admin logout."""
     session.pop("is_system_admin", None)
     session.pop("sysadmin_id", None)
     session.pop("last_activity", None)
+    session.pop("sysadmin_auth_username", None)
+    session.pop("passkey_sysadmin_auth_username", None)
+    session.pop("force_sysadmin_username_migration", None)
     # Intentionally DO NOT remove maintenance_global_bypass so admin can test other roles.
     flash("Logged out.")
     return redirect(url_for("sysadmin.login"))
@@ -182,8 +285,8 @@ def passkey_register_start():
 
         # Generate registration token using official SDK
         user_id = f"sysadmin_{admin.id}"
-        username = admin.username
-        displayname = f"System Admin: {admin.username}"
+        username = session.get("sysadmin_auth_username") or admin.get_display_username()
+        displayname = f"System Admin: {admin.get_display_username()}"
 
         token = create_register_token(user_id, username, displayname)
 
@@ -248,14 +351,15 @@ def passkey_auth_start():
     """
     try:
         data = request.get_json()
+        session.pop("passkey_sysadmin_auth_username", None)
 
         if not data or 'username' not in data:
             return jsonify({"error": "Missing username"}), 400
 
-        username = data['username'].strip()
+        username = normalize_auth_username(data['username'])
 
         # Verify user exists
-        admin = SystemAdmin.query.filter_by(username=username).first()
+        admin = _find_sysadmin_by_auth_username(username)
         if not admin:
             return jsonify({"error": "Invalid credentials"}), 401
 
@@ -263,6 +367,8 @@ def passkey_auth_start():
         has_passkeys = SystemAdminCredential.query.filter_by(sysadmin_id=admin.id).first() is not None
         if not has_passkeys:
             return jsonify({"error": "Invalid credentials"}), 401
+
+        session["passkey_sysadmin_auth_username"] = username
 
         return jsonify({
             "apiKey": get_public_api_key()
@@ -310,18 +416,22 @@ def passkey_auth_finish():
             return jsonify({"error": "Admin not found"}), 401
 
         # Update credential last_used timestamp
+        # Credentials are stored without credential_id (managed by passwordless.dev),
+        # so update last_used for all credentials belonging to this sysadmin.
         now = utc_now()
-        credential_id = verified_user.credential_id
-        if credential_id:
-            credential = SystemAdminCredential.query.filter_by(credential_id=credential_id).first()
-            if credential:
-                credential.last_used = now
+        SystemAdminCredential.query.filter_by(sysadmin_id=sysadmin_id).update(
+            {'last_used': now},
+            synchronize_session=False,
+        )
 
         db.session.commit()
 
         # Create session
         session["is_system_admin"] = True
         session["sysadmin_id"] = admin.id
+        session["sysadmin_auth_username"] = (
+            session.get("passkey_sysadmin_auth_username") or admin.get_display_username()
+        )
         session['last_activity'] = now.isoformat()
         session['maintenance_global_bypass'] = True
 
@@ -410,14 +520,24 @@ def dashboard():
     """
     # Gather statistics
     total_teachers = Admin.query.count()
-    total_students = Student.query.count()
+    demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
+    total_students = Student.query.filter(
+        ~Student.id.in_(sa.select(demo_ids_subq)),
+    ).count()
     active_invites = AdminInviteCode.query.filter_by(used=False).count()
     system_admin_count = SystemAdmin.query.count()
 
     # Open tickets = new user reports + pending/in-review escalated issues
-    new_reports_count = UserReport.query.filter_by(status='new').count()
+    new_reports_count = UserReport.query.filter_by(
+        status='new',
+        user_type='teacher',
+    ).count()
     open_issues_count = Issue.query.filter(
-        Issue.status.in_(['elevated', 'developer_review'])
+        Issue.status.in_([
+            Issue.STATUS_ESCALATED_TO_DEV,
+            'elevated',
+            'developer_review',
+        ])
     ).count()
     open_tickets = new_reports_count + open_issues_count
 
@@ -428,7 +548,11 @@ def dashboard():
     recent_errors = ErrorLog.query.order_by(ErrorLog.timestamp.desc()).limit(5).all()
 
     # System admins
-    system_admins = SystemAdmin.query.order_by(SystemAdmin.username.asc()).all()
+    system_admins = (
+        SystemAdmin.query
+        .order_by(SystemAdmin.id.asc())
+        .all()
+    )
 
     return render_template(
         "system_admin_dashboard.html",
@@ -723,7 +847,7 @@ def manage_admins():
     Note: System admins see teacher info and student counts only, not individual student details.
     """
     # Get all admins with student counts
-    admins = Admin.query.all()
+    admins = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     admin_data = []
 
     for admin in admins:
@@ -732,7 +856,7 @@ def manage_admins():
 
         admin_data.append({
             'id': admin.id,
-            'username': admin.username,
+            'username': admin.get_sysadmin_display_name(),
             'student_count': student_count,
             'created_at': admin.created_at,
             'last_login': admin.last_login
@@ -763,7 +887,7 @@ def reset_teacher_totp(admin_id):
 
         # Generate QR code
         totp_uri = pyotp.totp.TOTP(new_secret).provisioning_uri(
-            name=admin.username,
+            name=admin.get_sysadmin_display_name(),
             issuer_name="Classroom Economy Admin"
         )
 
@@ -775,11 +899,11 @@ def reset_teacher_totp(admin_id):
 
         return jsonify({
             "status": "success",
-            "message": f"TOTP secret reset for {admin.username}",
+            "message": f"TOTP secret reset for {admin.get_sysadmin_display_name()}",
             "totp_secret": stored_secret,
             "totp_secret_plain": new_secret,
             "qr_code": qr_b64,
-            "username": admin.username
+            "username": admin.get_sysadmin_display_name()
         })
     except Exception as e:
         db.session.rollback()
@@ -840,7 +964,7 @@ def delete_admin(admin_id):
             TeacherBlock.query.filter(TeacherBlock.student_id.in_(exclusive_student_ids)).delete(synchronize_session=False)
             Student.query.filter(Student.id.in_(exclusive_student_ids)).delete(synchronize_session=False)
 
-        admin_username = admin.username
+        admin_username = admin.get_sysadmin_display_name()
         db.session.delete(admin)
         db.session.commit()
 
@@ -901,18 +1025,20 @@ def manage_teachers():
             active_invites.append(invite)
 
     # Build rich teacher data (from teacher_overview logic)
-    all_teachers = Admin.query.order_by(Admin.username.asc()).all()
+    all_teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
 
     # Batch query: teacher-student relationships
     if all_teachers:
         teacher_ids = [t.id for t in all_teachers]
+        demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
         teacher_students = db.session.query(
             StudentTeacher.admin_id.label('teacher_id'),
             Student.id.label('student_id'),
             Student.block.label('block')
         ).join(Student, Student.id == StudentTeacher.student_id).filter(
-            StudentTeacher.admin_id.in_(teacher_ids)
+            StudentTeacher.admin_id.in_(teacher_ids),
+            ~Student.id.in_(sa.select(demo_ids_subq)),
         ).subquery()
 
         teacher_student_count_rows = db.session.query(
@@ -948,15 +1074,14 @@ def manage_teachers():
         is_inactive = False
         if teacher.last_login:
             last_login = teacher.last_login
-            if last_login.tzinfo is None:
-                last_login = last_login.replace(tzinfo=timezone.utc)
+            last_login = ensure_utc(last_login)
             is_inactive = last_login < inactivity_threshold
         else:
             is_inactive = True
 
         teachers.append({
             'id': teacher.id,
-            'username': teacher.username,
+            'username': teacher.get_sysadmin_display_name(),
             'last_login': teacher.last_login,
             'is_inactive': is_inactive,
             'total_students': total_students,
@@ -997,7 +1122,7 @@ def teacher_overview():
     Privacy-compliant teacher overview showing only aggregated student counts.
 
     System admins can view:
-    - Teacher username
+    - Teacher public ID/display name
     - Total student count per teacher
     - Student counts by period/block
     - Last login date
@@ -1007,13 +1132,14 @@ def teacher_overview():
     - Individual student names
     - Individual student details
     """
-    teachers = Admin.query.order_by(Admin.username.asc()).all()
+    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     
     # Define inactivity threshold (6 months)
     inactivity_threshold = utc_now() - timedelta(days=INACTIVITY_THRESHOLD_DAYS)
 
     # Batch query: Get all teacher-student relationships in one query
     # Uses StudentTeacher table only (Multi-Teacher Hardening)
+    demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
     teacher_students = db.session.query(
         StudentTeacher.admin_id.label('teacher_id'),
         Student.id.label('student_id'),
@@ -1021,7 +1147,8 @@ def teacher_overview():
     ).join(
         Student, Student.id == StudentTeacher.student_id
     ).filter(
-        StudentTeacher.admin_id.in_([t.id for t in teachers])
+        StudentTeacher.admin_id.in_([t.id for t in teachers]),
+        ~Student.id.in_(sa.select(demo_ids_subq)),
     ).subquery()
 
     # Get total student counts per teacher in a single query
@@ -1063,8 +1190,7 @@ def teacher_overview():
         if teacher.last_login:
             # Ensure last_login is timezone-aware
             last_login = teacher.last_login
-            if last_login.tzinfo is None:
-                last_login = last_login.replace(tzinfo=timezone.utc)
+            last_login = ensure_utc(last_login)
             is_inactive = last_login < inactivity_threshold
         else:
             # Never logged in - consider inactive
@@ -1072,7 +1198,7 @@ def teacher_overview():
 
         teacher_data.append({
             'id': teacher.id,
-            'username': teacher.username,
+            'username': teacher.get_sysadmin_display_name(),
             'total_students': total_students,
             'periods': periods,
             'last_login': teacher.last_login,
@@ -1105,20 +1231,27 @@ def delete_teacher(admin_id):
 
 # -------------------- SUPPORT TICKETS (COMBINED VIEW) --------------------
 
+def _resolve_issue_id_from_ref(issue_ref: str) -> int | None:
+    return resolve_opaque_ref('issue', issue_ref)
+
+
+def _resolve_report_id_from_ref(report_ref: str) -> int | None:
+    return resolve_opaque_ref('report', report_ref)
+
 @sysadmin_bp.route('/support')
 @system_admin_required
 def support_tickets():
     """
-    Unified support ticket dashboard combining user reports and escalated issues.
-    Tab 1: User Reports (bugs/suggestions from teachers and students)
+    Unified support ticket dashboard combining teacher issues and escalated student issues.
+    Tab 1: Teacher Issues (teacher-submitted support tickets)
     Tab 2: Escalated Issues (student-escalated issues awaiting developer review)
     """
     active_tab = request.args.get('tab', 'reports')
 
-    # ── User Reports (Tab 1) ──
+    # ── Teacher Issues (Tab 1) ──
     status_filter = request.args.get('status', 'all')
     report_type_filter = request.args.get('type', 'all')
-    report_query = UserReport.query
+    report_query = UserReport.query.filter(UserReport.user_type == 'teacher')
     if status_filter != 'all':
         report_query = report_query.filter(UserReport.status == status_filter)
     if report_type_filter != 'all':
@@ -1128,29 +1261,41 @@ def support_tickets():
     from sqlalchemy import func as sqlfunc
     status_counts = dict(
         db.session.query(UserReport.status, sqlfunc.count(UserReport.id))
+        .filter(UserReport.user_type == 'teacher')
         .group_by(UserReport.status).all()
     )
     new_reports = status_counts.get('new', 0)
-    rewarded_reports = status_counts.get('rewarded', 0)
+    reviewed_reports = status_counts.get('reviewed', 0)
 
     # ── Escalated Issues (Tab 2) ──
     all_issues = Issue.query.filter(
-        Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
+        Issue.status.in_([
+            Issue.STATUS_ESCALATED_TO_DEV,
+            Issue.STATUS_DEV_RESOLVED,
+            'elevated',
+            'developer_review',
+            'developer_resolved',
+        ])
     ).order_by(Issue.escalated_at.desc()).all()
-    issues_pending = [i for i in all_issues if i.status == 'elevated']
+    issues_pending = [
+        i for i in all_issues
+        if i.status in [Issue.STATUS_ESCALATED_TO_DEV, 'elevated']
+    ]
     issues_in_review = [i for i in all_issues if i.status == 'developer_review']
-    issues_resolved = [i for i in all_issues if i.status == 'developer_resolved']
+    issues_resolved = [i for i in all_issues if i.status in [Issue.STATUS_DEV_RESOLVED, 'developer_resolved']]
 
     return render_template(
         'sysadmin_support_tickets.html',
         current_page='support_tickets',
         active_tab=active_tab,
-        # User reports
+        # Teacher issues
         reports=reports,
         status_filter=status_filter,
         report_type_filter=report_type_filter,
         new_reports=new_reports,
-        rewarded_reports=rewarded_reports,
+        reviewed_reports=reviewed_reports,
+        issue_ref_for=lambda issue_id: make_opaque_ref('issue', issue_id),
+        report_ref_for=lambda report_id: make_opaque_ref('report', report_id),
         # Escalated issues
         issues_pending=issues_pending,
         issues_in_review=issues_in_review,
@@ -1165,13 +1310,13 @@ def support_tickets():
 @sysadmin_bp.route('/user-reports')
 @system_admin_required
 def user_reports():
-    """View all user-submitted bug reports with filtering."""
+    """View teacher-submitted support issues with filtering."""
     # Get filter parameters
     status_filter = request.args.get('status', 'all')
     report_type_filter = request.args.get('type', 'all')
     
     # Build query
-    query = UserReport.query
+    query = UserReport.query.filter(UserReport.user_type == 'teacher')
     
     # Apply filters
     if status_filter != 'all':
@@ -1184,53 +1329,66 @@ def user_reports():
     
     # Count by status - optimized to use single query
     from sqlalchemy import func
-    status_counts = dict(db.session.query(UserReport.status, func.count(UserReport.id)).group_by(UserReport.status).all())
+    status_counts = dict(
+        db.session.query(UserReport.status, func.count(UserReport.id))
+        .filter(UserReport.user_type == 'teacher')
+        .group_by(UserReport.status)
+        .all()
+    )
     new_count = status_counts.get('new', 0)
     reviewed_count = status_counts.get('reviewed', 0)
-    rewarded_count = status_counts.get('rewarded', 0)
+    closed_count = status_counts.get('closed', 0)
     
     return render_template(
         'sysadmin_user_reports.html',
         current_page='user_reports',
-        page_title='User Reports',
+        page_title='Teacher Issues',
         reports=reports,
         new_count=new_count,
         reviewed_count=reviewed_count,
-        rewarded_count=rewarded_count,
+        closed_count=closed_count,
         status_filter=status_filter,
-        report_type_filter=report_type_filter
+        report_type_filter=report_type_filter,
+        report_ref_for=lambda report_id: make_opaque_ref('report', report_id),
     )
 
 
-@sysadmin_bp.route('/user-reports/<int:report_id>')
+@sysadmin_bp.route('/user-reports/<report_ref>')
 @system_admin_required
-def view_user_report(report_id):
-    """View details of a specific user report."""
-    report = db.get_or_404(UserReport, report_id)
+def view_user_report(report_ref):
+    """View details of a specific teacher issue report."""
+    report_id = _resolve_report_id_from_ref(report_ref)
+    if report_id is None:
+        raise NotFound("Report not found")
+    report = UserReport.query.filter_by(id=report_id, user_type='teacher').first_or_404()
     
     return render_template(
         'sysadmin_user_report_detail.html',
         current_page='user_reports',
         page_title=f'Report #{report_id}',
-        report=report
+        report=report,
+        report_ref=make_opaque_ref('report', report.id),
     )
 
 
-@sysadmin_bp.route('/user-reports/<int:report_id>/update', methods=['POST'])
+@sysadmin_bp.route('/user-reports/<report_ref>/update', methods=['POST'])
 @system_admin_required
-def update_user_report(report_id):
+def update_user_report(report_ref):
     """Update the status and notes of a user report."""
-    report = db.get_or_404(UserReport, report_id)
+    report_id = _resolve_report_id_from_ref(report_ref)
+    if report_id is None:
+        raise NotFound("Report not found")
+    report = UserReport.query.filter_by(id=report_id, user_type='teacher').first_or_404()
     
     # Get form data
     new_status = request.form.get('status')
     admin_notes = request.form.get('admin_notes', '').strip()
     
     # Validate status
-    valid_statuses = ['new', 'reviewed', 'rewarded', 'closed', 'spam']
+    valid_statuses = ['new', 'reviewed', 'closed', 'spam']
     if new_status not in valid_statuses:
         flash("Invalid status selected.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
+        return redirect(url_for('sysadmin.view_user_report', report_ref=make_opaque_ref('report', report.id)))
     
     # Update report
     report.status = new_status
@@ -1246,95 +1404,7 @@ def update_user_report(report_id):
         current_app.logger.error(f"Error updating report {report_id}: {str(e)}")
         flash("Error updating report. Please try again.", "error")
     
-    return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-
-
-@sysadmin_bp.route('/user-reports/<int:report_id>/send-reward', methods=['POST'])
-@system_admin_required
-def send_reward_to_reporter(report_id):
-    """Send a reward to a student who submitted a bug report."""
-    report = db.get_or_404(UserReport, report_id)
-    
-    # Verify this is a student report with a linked student
-    if report.user_type != 'student' or not report._student_id:
-        flash("Rewards can only be sent to student reports.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-    
-    # Check if reward already sent
-    if report.reward_sent_at is not None:
-        flash("A reward has already been sent for this report.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-    
-    # Get reward amount
-    try:
-        from app.models import _quantize_currency
-        reward_amount = _quantize_currency(request.form.get('reward_amount', '0'))
-        if reward_amount <= Decimal('0'):
-            flash("Reward amount must be greater than 0.", "error")
-            return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-    except (ValueError, TypeError, InvalidOperation):
-        flash("Invalid reward amount.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-    
-    # Get the student
-    student = db.session.get(Student, report._student_id)
-    if not student:
-        flash("Student not found. Cannot send reward.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-    
-    # Get student's primary teacher for the transaction from StudentTeacher table
-    first_link = StudentTeacher.query.filter_by(student_id=student.id).first()
-    teacher_id = first_link.admin_id if first_link else None
-
-    if not teacher_id:
-        flash("Cannot determine student's teacher. Reward not sent.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-
-    # Get join_code for this student-teacher pair
-    # Query TeacherBlock to find the join_code for multi-tenancy isolation
-    teacher_block = TeacherBlock.query.filter_by(
-        student_id=student.id,
-        teacher_id=teacher_id,
-        is_claimed=True
-    ).first()
-
-    if not teacher_block or not teacher_block.join_code:
-        flash("Cannot determine student's class period. Reward not sent.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-
-    join_code = teacher_block.join_code
-
-    try:
-        # CRITICAL FIX: Add join_code to bug report reward transaction
-        transaction = Transaction(
-            student_id=student.id,
-            teacher_id=teacher_id,
-            join_code=join_code,  # CRITICAL: Add join_code for period isolation
-            amount=reward_amount,
-            account_type='checking',
-            description=f"Bug Report Reward (Report #{report_id})",
-            timestamp=utc_now(),
-            status=TransactionStatus.PENDING,
-            is_void=False
-        )
-        db.session.add(transaction)
-        
-        # Update report
-        report.reward_amount = reward_amount
-        report.reward_sent_at = utc_now()
-        report.status = 'rewarded'
-        report.reviewed_at = utc_now()
-        report.reviewed_by_sysadmin_id = session.get('sysadmin_id')
-        
-        db.session.commit()
-        
-        flash(f"Reward of ${reward_amount:.2f} sent successfully!", "success")
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error sending reward for report {report_id}: {str(e)}")
-        flash("Error sending reward. Please try again.", "error")
-
-    return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
+    return redirect(url_for('sysadmin.view_user_report', report_ref=make_opaque_ref('report', report.id)))
 
 
 @sysadmin_bp.route('/grafana/auth-check', methods=['GET'])
@@ -1359,8 +1429,7 @@ def grafana_auth_check():
     last_activity_str = session.get("last_activity")
     if last_activity_str:
         last_activity = datetime.fromisoformat(last_activity_str)
-        if last_activity.tzinfo is None:
-            last_activity = last_activity.replace(tzinfo=timezone.utc)
+        last_activity = ensure_utc(last_activity)
         if (utc_now() - last_activity) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
             session.clear()
             return Response('Unauthorized: Session expired', 401)
@@ -1376,7 +1445,8 @@ def grafana_auth_check():
         return Response('Unauthorized', 401)
 
     # Sanitize username for header (prevent response splitting)
-    username = sysadmin.username.replace('\n', '').replace('\r', '') if sysadmin.username else ''
+    raw_username = session.get("sysadmin_auth_username") or sysadmin.get_display_username()
+    username = raw_username.replace('\n', '').replace('\r', '') if raw_username else ''
 
     response = Response('OK', 200)
     response.headers['X-Auth-User'] = username
@@ -1440,7 +1510,7 @@ def grafana_proxy(path):
             # Stale session - admin was deleted
             flash("Authentication failed: user not found.", "error")
             return redirect(url_for('sysadmin.dashboard'))
-        headers['X-WEBAUTH-USER'] = admin.username
+        headers['X-WEBAUTH-USER'] = session.get("sysadmin_auth_username") or admin.get_display_username()
 
         # Make the request to Grafana
         resp = requests.request(
@@ -1612,7 +1682,7 @@ def announcements():
     for announcement in announcements_list:
         if announcement.audience_type == 'teacher_all_classes' and announcement.target_teacher_id:
             teacher = teachers_dict.get(announcement.target_teacher_id)
-            announcement.audience_display = f"All classes of {teacher.get_display_name() if teacher else 'Unknown Teacher'}"
+            announcement.audience_display = f"All classes of {teacher.get_sysadmin_display_name() if teacher else 'Unknown Teacher'}"
         else:
             announcement.audience_display = announcement.get_audience_label()
 
@@ -1634,9 +1704,9 @@ def announcement_create():
     form = SystemAdminAnnouncementForm()
 
     # Populate teacher choices
-    teachers = Admin.query.order_by(Admin.username).all()
+    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     form.target_teacher.choices = [('', '-- Select Teacher --')] + [
-        (teacher.id, f"{teacher.get_display_name()} ({teacher.username})")
+        (teacher.id, teacher.get_sysadmin_display_name())
         for teacher in teachers
     ]
 
@@ -1691,9 +1761,9 @@ def announcement_edit(announcement_id):
     form = SystemAdminAnnouncementForm(obj=announcement)
 
     # Populate teacher choices
-    teachers = Admin.query.order_by(Admin.username).all()
+    teachers = Admin.query.order_by(db.func.coalesce(Admin.teacher_public_id, ''), Admin.id.asc()).all()
     form.target_teacher.choices = [('', '-- Select Teacher --')] + [
-        (teacher.id, f"{teacher.get_display_name()} ({teacher.username})")
+        (teacher.id, teacher.get_sysadmin_display_name())
         for teacher in teachers
     ]
 
@@ -1793,15 +1863,21 @@ def escalated_issues():
     System admin view of all escalated issues from teachers.
     Shows issues that have been escalated for developer/sysadmin review.
     """
-    # Get all escalated issues (elevated, developer_review, developer_resolved)
+    # Get all escalated issues (canonical + legacy compatibility)
     issues = Issue.query.filter(
-        Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
+        Issue.status.in_([
+            Issue.STATUS_ESCALATED_TO_DEV,
+            Issue.STATUS_DEV_RESOLVED,
+            'elevated',
+            'developer_review',
+            'developer_resolved',
+        ])
     ).order_by(Issue.escalated_at.desc()).all()
 
     # Separate by status
-    pending_issues = [i for i in issues if i.status == 'elevated']
+    pending_issues = [i for i in issues if i.status in [Issue.STATUS_ESCALATED_TO_DEV, 'elevated']]
     in_review_issues = [i for i in issues if i.status == 'developer_review']
-    resolved_issues = [i for i in issues if i.status == 'developer_resolved']
+    resolved_issues = [i for i in issues if i.status in [Issue.STATUS_DEV_RESOLVED, 'developer_resolved']]
 
     return render_template('sysadmin_escalated_issues.html',
                          current_page='issues',
@@ -1809,17 +1885,27 @@ def escalated_issues():
                          pending_issues=pending_issues,
                          in_review_issues=in_review_issues,
                          resolved_issues=resolved_issues,
+                         issue_ref_for=lambda issue_id: make_opaque_ref('issue', issue_id),
                          format_utc_iso=format_utc_iso)
 
 
-@sysadmin_bp.route('/issues/<int:issue_id>')
+@sysadmin_bp.route('/issues/<issue_ref>')
 @system_admin_required
-def view_escalated_issue(issue_id):
+def view_escalated_issue(issue_ref):
     """View detailed information about a specific escalated issue."""
+    issue_id = _resolve_issue_id_from_ref(issue_ref)
+    if issue_id is None:
+        raise NotFound("Issue not found")
     # Get the issue and verify it's escalated
     issue = Issue.query.filter(
         Issue.id == issue_id,
-        Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
+        Issue.status.in_([
+            Issue.STATUS_ESCALATED_TO_DEV,
+            Issue.STATUS_DEV_RESOLVED,
+            'elevated',
+            'developer_review',
+            'developer_resolved',
+        ])
     ).first_or_404()
 
     # Get status history
@@ -1829,82 +1915,80 @@ def view_escalated_issue(issue_id):
 
     return render_template('sysadmin_view_escalated_issue.html',
                          current_page='issues',
-                         page_title=f'Issue #{issue.id}',
-                         issue=issue,
-                         history=history,
-                         format_utc_iso=format_utc_iso)
+        page_title=f'Issue #{issue.id}',
+        issue=issue,
+        issue_ref=make_opaque_ref('issue', issue.id),
+        report_ref_for=lambda report_id: make_opaque_ref('report', report_id),
+        correlation_pack=issue.correlation_pack,
+        history=history,
+        format_utc_iso=format_utc_iso)
 
 
-@sysadmin_bp.route('/issues/<int:issue_id>/start-review', methods=['POST'])
+@sysadmin_bp.route('/issues/<issue_ref>/start-review', methods=['POST'])
 @system_admin_required
-def start_review_escalated_issue(issue_id):
-    """Mark an escalated issue as being reviewed by sysadmin."""
+def start_review_escalated_issue(issue_ref):
+    """Legacy endpoint: no-op under canonical lifecycle."""
+    issue_id = _resolve_issue_id_from_ref(issue_ref)
+    if issue_id is None:
+        raise NotFound("Issue not found")
     issue = Issue.query.filter(
         Issue.id == issue_id,
-        Issue.status == 'elevated'
+        Issue.status.in_([Issue.STATUS_ESCALATED_TO_DEV, 'elevated', 'developer_review'])
     ).first_or_404()
 
-    try:
-        issue.status = 'developer_review'
-
-        # Record status change
-        from app.utils.issue_helpers import record_status_change
-        record_status_change(issue, 'elevated', 'developer_review', 'sysadmin', session.get('sysadmin_id'))
-
-        db.session.commit()
-        flash("Issue marked as being reviewed.", "success")
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error starting review for issue {issue_id}: {e}")
-        flash("An error occurred while starting the review.", "error")
-
-    return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+    flash("Status remains Escalated to Developer until technical resolution is recorded.", "info")
+    return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
 
-@sysadmin_bp.route('/issues/<int:issue_id>/resolve', methods=['POST'])
+@sysadmin_bp.route('/issues/<issue_ref>/resolve', methods=['POST'])
 @system_admin_required
-def resolve_escalated_issue(issue_id):
-    """Mark an escalated issue as resolved by sysadmin."""
+def resolve_escalated_issue(issue_ref):
+    """Mark technical fix complete, optionally issue bug bounty, then return to teacher final review."""
+    issue_id = _resolve_issue_id_from_ref(issue_ref)
+    if issue_id is None:
+        raise NotFound("Issue not found")
     issue = Issue.query.filter(
         Issue.id == issue_id,
-        Issue.status.in_(['elevated', 'developer_review'])
+        Issue.status.in_([Issue.STATUS_ESCALATED_TO_DEV, 'elevated', 'developer_review'])
     ).first_or_404()
 
     resolution_note = request.form.get('resolution_note', '').strip()
     eligible_for_reward = request.form.get('eligible_for_reward') == 'on'
-    reward_amount = request.form.get('reward_amount', '').strip()
+    reward_amount_raw = request.form.get('reward_amount', '').strip()
     sysadmin_id = session.get('sysadmin_id')
 
     if not sysadmin_id:
         flash("System admin session is invalid. Please log in again.", "error")
         return redirect(url_for('sysadmin.login', next=request.path))
 
+    if not resolution_note:
+        flash("Resolution notes are required.", "error")
+        return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
+
     try:
         reward_amount_value = None
         if eligible_for_reward:
-            if not reward_amount:
-                flash("Reward amount is required when reward eligibility is selected.", "error")
-                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+            if not reward_amount_raw:
+                flash("Reward amount is required when bug bounty is selected.", "error")
+                return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
             try:
                 from app.models import _quantize_currency
-                reward_amount_value = _quantize_currency(reward_amount)
-            except (ValueError, InvalidOperation):
-                flash("Invalid reward amount. Please enter a valid number.", "error")
-                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+                reward_amount_value = _quantize_currency(reward_amount_raw)
+            except (ValueError, TypeError, InvalidOperation):
+                flash("Invalid reward amount.", "error")
+                return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
             if reward_amount_value <= Decimal('0'):
                 flash("Reward amount must be greater than 0.", "error")
-                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+                return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
         old_status = issue.status
-        issue.status = 'developer_resolved'
+        issue.status = Issue.STATUS_DEV_RESOLVED
         issue.sysadmin_resolved_at = utc_now()
         issue.sysadmin_notes = resolution_note
         issue.sysadmin_id = sysadmin_id
         issue.eligible_for_reward = eligible_for_reward
 
-        reward_transaction = None
-        if eligible_for_reward and reward_amount_value is not None:
+        if reward_amount_value is not None:
             reward_transaction = Transaction(
                 student_id=issue.student_id,
                 teacher_id=issue.teacher_id,
@@ -1934,22 +2018,32 @@ def resolve_escalated_issue(issue_id):
 
         # Record status change
         from app.utils.issue_helpers import record_status_change
-        status_note = (
-            f"Bug reward issued: ${reward_amount_value:.2f}"
+        reward_note = (
+            f" | Bug reward: ${reward_amount_value:.2f}"
             if reward_amount_value is not None
-            else None
+            else ""
         )
-        record_status_change(issue, old_status, 'developer_resolved', 'sysadmin', sysadmin_id, notes=status_note)
+        record_status_change(
+            issue,
+            old_status,
+            Issue.STATUS_DEV_RESOLVED,
+            'sysadmin',
+            sysadmin_id,
+            notes=f"{resolution_note}{reward_note}",
+        )
 
         db.session.commit()
         if reward_amount_value is not None:
-            flash(f"Issue resolved and reward of ${reward_amount_value:.2f} was issued.", "success")
+            flash(
+                f"Technical fix recorded, bug reward of ${reward_amount_value:.2f} issued, and ticket returned to teacher review.",
+                "success",
+            )
         else:
-            flash("Issue has been marked as resolved.", "success")
+            flash("Technical fix recorded. Ticket returned to teacher for final review.", "success")
 
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error resolving escalated issue {issue_id}: {e}")
         flash("An error occurred while resolving the issue.", "error")
 
-    return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+    return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))

@@ -12,8 +12,8 @@ keywords: [bills, rent, insurance]
 This section covers rent and insurance actions.
 
 ## Rent
-- [Pay Rent](/docs/user-guides/features/student/bills/rent-payments)
+- [Pay Rent](rent-payments.md)
 
 ## Insurance
-- [Insurance Coverage and Claims](/docs/user-guides/features/student/bills/insurance-coverage)
-- [Submit an Insurance Claim](/docs/user-guides/features/student/bills/insurance-claims)
+- [Insurance Coverage and Claims](insurance-coverage.md)
+- [Submit an Insurance Claim](insurance-claims.md)

@@ -232,20 +232,23 @@ def test_onboarding_status_endpoint_dismissed(client):
 
 
 def test_onboarding_status_endpoint_no_class_period(client):
-    """Test status endpoint when no class period is selected."""
+    """Test that status endpoint returns full checklist even when no class period is selected."""
     admin = login_admin(client)
-    
+
     # Don't set a join_code in session
     with client.session_transaction() as sess:
         if 'join_code' in sess:
             del sess['join_code']
-    
+
     # Check status
     response = client.get('/admin/onboarding/status')
     assert response.status_code == 200
     data = json.loads(response.data)
-    
+
     assert data['status'] == 'success'
     assert data['dismissed'] is False
-    assert data['no_class_period'] is True
-    assert data['completion'] == {}
+    # The onboarding widget always renders the full checklist regardless of
+    # whether a class period is selected, so no_class_period is no longer returned.
+    assert 'no_class_period' not in data
+    assert 'completion' in data
+    assert isinstance(data['completion'], dict)

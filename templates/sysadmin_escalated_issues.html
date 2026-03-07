@@ -79,7 +79,7 @@
             {% if pending_issues %}
                 <div class="list-group">
                     {% for issue in pending_issues %}
-                    <a href="{{ url_for('sysadmin.view_escalated_issue', issue_id=issue.id) }}" class="list-group-item list-group-item-action">
+                    <a href="{{ url_for('sysadmin.view_escalated_issue', issue_ref=issue_ref_for(issue.id)) }}" class="list-group-item list-group-item-action">
                         <div class="d-flex w-100 justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
@@ -89,7 +89,7 @@
                                     </h6>
                                     <span class="badge bg-secondary">{{ issue.category.name if issue.category else 'Unknown' }}</span>
                                     <span class="badge bg-primary ms-2">
-                                        <span class="material-symbols-outlined me-1">badge</span>{{ issue.teacher.username }}
+                                        <span class="material-symbols-outlined me-1">badge</span>{{ issue.teacher.get_sysadmin_display_name() }}
                                     </span>
                                     {% if issue.share_class_name_with_sysadmin and issue.class_label %}
                                     <span class="badge bg-info ms-2">
@@ -131,7 +131,7 @@
             {% if in_review_issues %}
                 <div class="list-group">
                     {% for issue in in_review_issues %}
-                    <a href="{{ url_for('sysadmin.view_escalated_issue', issue_id=issue.id) }}" class="list-group-item list-group-item-action">
+                    <a href="{{ url_for('sysadmin.view_escalated_issue', issue_ref=issue_ref_for(issue.id)) }}" class="list-group-item list-group-item-action">
                         <div class="d-flex w-100 justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
@@ -141,7 +141,7 @@
                                     </h6>
                                     <span class="badge bg-secondary">{{ issue.category.name if issue.category else 'Unknown' }}</span>
                                     <span class="badge bg-primary ms-2">
-                                        <span class="material-symbols-outlined me-1">badge</span>{{ issue.teacher.username }}
+                                        <span class="material-symbols-outlined me-1">badge</span>{{ issue.teacher.get_sysadmin_display_name() }}
                                     </span>
                                     {% if issue.share_class_name_with_sysadmin and issue.class_label %}
                                     <span class="badge bg-info ms-2">
@@ -183,7 +183,7 @@
             {% if resolved_issues %}
                 <div class="list-group">
                     {% for issue in resolved_issues %}
-                    <a href="{{ url_for('sysadmin.view_escalated_issue', issue_id=issue.id) }}" class="list-group-item list-group-item-action">
+                    <a href="{{ url_for('sysadmin.view_escalated_issue', issue_ref=issue_ref_for(issue.id)) }}" class="list-group-item list-group-item-action">
                         <div class="d-flex w-100 justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
@@ -193,7 +193,7 @@
                                     </h6>
                                     <span class="badge bg-secondary">{{ issue.category.name if issue.category else 'Unknown' }}</span>
                                     <span class="badge bg-primary ms-2">
-                                        <span class="material-symbols-outlined me-1">badge</span>{{ issue.teacher.username }}
+                                        <span class="material-symbols-outlined me-1">badge</span>{{ issue.teacher.get_sysadmin_display_name() }}
                                     </span>
                                     {% if issue.eligible_for_reward %}
                                     <span class="badge bg-warning text-dark ms-2">

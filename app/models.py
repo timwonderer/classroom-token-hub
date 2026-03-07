@@ -9,6 +9,7 @@ from datetime import timezone, timedelta
 from decimal import Decimal, InvalidOperation
 import enum
 import logging
+import secrets
 import uuid
 
 import sqlalchemy as sa
@@ -17,6 +18,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import validates
 from app.extensions import db
+from app.hash_utils import get_random_salt, hash_username, hash_username_lookup
 from app.utils.encryption import PIIEncryptedType, normalize_totp_for_storage
 from app.utils.time import utc_now, ensure_utc
 
@@ -64,6 +66,12 @@ def _current_utc_year():
 
 
 # -------------------- ENUMS --------------------
+
+class TapEventReasonCode(str, enum.Enum):
+    """Reason codes for TapEvent records, enabling programmatic identification without string matching."""
+    DAILY_LIMIT = 'daily_limit'
+    AUTO_SWITCH = 'auto_switch'
+
 
 class TransactionStatus(str, enum.Enum):
     PENDING = 'pending'
@@ -159,6 +167,28 @@ class AnalyticsAlert(db.Model):
             f'{self.window_start.date()}–{self.window_end.date()}>'
         )
 
+
+class JoinCode(db.Model):
+    """
+    Canonical class-universe anchor.
+    A join code belongs to exactly one teacher and defines the tenancy boundary.
+    """
+    __tablename__ = 'join_codes'
+
+    join_code_id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    join_code_token = db.Column(db.String(20), nullable=False, unique=True, index=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False, index=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
+    is_archived = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    is_expired = db.Column(db.Boolean, nullable=False, default=False, server_default='false')
+    expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    archived_at = db.Column(db.DateTime(timezone=True), nullable=True)
+    metadata_json = db.Column(db.JSON, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+
+    teacher = db.relationship('Admin', backref=db.backref('join_codes', lazy='dynamic', passive_deletes=True))
+
+
 class TeacherBlock(db.Model):
     """
     Represents an unclaimed seat in a teacher's class roster.
@@ -198,6 +228,7 @@ class TeacherBlock(db.Model):
 
     # Join code for this period (shared across all students in same teacher-block)
     join_code = db.Column(db.String(20), nullable=False)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
 
     # Claim status
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
@@ -236,6 +267,8 @@ class Student(db.Model):
     first_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=False)
     last_initial = db.Column(db.String(1), nullable=False)
     block = db.Column(db.String(10), nullable=False)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
 
     # Hash and credential fields
     # Credential: CONCAT(first_initial, DOB_sum) - simpler than old name_code system
@@ -276,7 +309,8 @@ class Student(db.Model):
     dob_sum = db.Column(db.Integer, nullable=True)
     # Track if student has completed the legacy profile migration
     has_completed_profile_migration = db.Column(db.Boolean, default=False)
-    # Soft-delete flag: archived students cannot log in and are hidden from roster queries.
+    # Legacy field retained for backward compatibility. New deletion flow removes
+    # student records instead of using inactive/archived student state.
     is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
     # Teacher Identity Flag (prevents deletion and analytics skew)
@@ -286,7 +320,7 @@ class Student(db.Model):
     reset_code = db.Column(db.String(8), nullable=True, unique=True)  # 8-char alphanumeric code
     reset_code_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     money_action_cooldown_until = db.Column(db.DateTime(timezone=True), nullable=True)
-    recovery_status = db.Column(db.String(20), default='active', nullable=False)  # active, to_be_claimed, archived
+    recovery_status = db.Column(db.String(20), default='active', nullable=False)  # active, to_be_claimed
 
     @property
     def full_name(self):
@@ -298,14 +332,12 @@ class Student(db.Model):
     @property
     def checking_balance(self):
         total = sum((_quantize_currency(tx.amount) for tx in self.transactions if tx.account_type == 'checking' and not tx.is_void), Decimal('0.00'))
-        # CRITICAL: Convert to float for compatibility with arithmetic calculations
-        return float(_quantize_currency(total))
+        return _quantize_currency(total)
 
     @property
     def savings_balance(self):
         total = sum((_quantize_currency(tx.amount) for tx in self.transactions if tx.account_type == 'savings' and not tx.is_void), Decimal('0.00'))
-        # CRITICAL: Convert to float for compatibility with arithmetic calculations
-        return float(_quantize_currency(total))
+        return _quantize_currency(total)
 
     def get_active_insurance(self, teacher_id):
         """Return the active insurance enrollment scoped to a teacher, if any."""
@@ -338,22 +370,8 @@ class Student(db.Model):
             # Proper scoping by join_code (period-level isolation)
             # Use Ledger + Settlement model (BalanceCache)
             from app.models import BalanceCache, Transaction, TransactionStatus
-
-            # Best-effort eager settlement for pending rows in this class context.
-            # This keeps balance reads and transaction statuses consistent even when
-            # asynchronous settlement is unavailable (e.g., tests/local dev).
-            has_pending = db.session.query(Transaction.id).filter(
-                Transaction.student_id == self.id,
-                Transaction.join_code == join_code,
-                Transaction.status == TransactionStatus.PENDING,
-            ).first()
-            if has_pending:
-                try:
-                    from app.utils.banking import settle_balances
-                    settle_balances(self.id, join_code)
-                except Exception:
-                    # Fall back to read path below if settlement cannot run here.
-                    pass
+            # Note: eager settlement removed to prevent write-on-read performance issues.
+            # Balances are settled on transaction creation or async.
 
             # 2. Read Posted from Cache
             cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()
@@ -439,20 +457,8 @@ class Student(db.Model):
             # Proper scoping by join_code (period-level isolation)
             # Use Ledger + Settlement model (BalanceCache)
             from app.models import BalanceCache, Transaction, TransactionStatus
-
-            # Best-effort eager settlement for pending rows in this class context.
-            has_pending = db.session.query(Transaction.id).filter(
-                Transaction.student_id == self.id,
-                Transaction.join_code == join_code,
-                Transaction.status == TransactionStatus.PENDING,
-            ).first()
-            if has_pending:
-                try:
-                    from app.utils.banking import settle_balances
-                    settle_balances(self.id, join_code)
-                except Exception:
-                    # Fall back to read path below if settlement cannot run here.
-                    pass
+            # Note: eager settlement removed to prevent write-on-read performance issues.
+            # Balances are settled on transaction creation or async.
 
             # 2. Read Posted from Cache
             cache = BalanceCache.query.filter_by(student_id=self.id, join_code=join_code).first()
@@ -583,12 +589,12 @@ class Student(db.Model):
 
     @property
     def amount_needed_to_cover_bills(self):
-        total_due = 0
+        total_due = Decimal('0')
         if self.is_rent_enabled:
-            total_due += 800
+            total_due += Decimal('800')
         if self.insurance_plan != "none":
-            total_due += 200  # Estimated insurance cost
-        return max(0, total_due - self.checking_balance)
+            total_due += Decimal('200')  # Estimated insurance cost
+        return max(Decimal('0'), total_due - self.checking_balance)
 
     # Removed deprecated last_tap_in/last_tap_out properties; backend is source of truth.
 
@@ -608,6 +614,7 @@ class StudentTeacher(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
     admin_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=True)
 
     __table_args__ = (
@@ -649,6 +656,7 @@ class DeletionRequest(db.Model):
     __tablename__ = 'deletion_requests'
     id = db.Column(db.Integer, primary_key=True)
     admin_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
     request_type = db.Column(db.Enum(DeletionRequestType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     period = db.Column(db.String(10), nullable=True)  # Specified for period deletions only
     reason = db.Column(db.Text, nullable=True)  # Optional reason from teacher
@@ -675,12 +683,31 @@ class DeletionRequest(db.Model):
 class SystemAdmin(db.Model):
     __tablename__ = 'system_admins'
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    username = db.Column(db.String(80), unique=True, nullable=True)  # Legacy plaintext username (deprecated)
+    username_hash = db.Column(db.String(64), unique=True, nullable=True)
+    username_lookup_hash = db.Column(db.String(64), unique=True, nullable=True, index=True)
+    salt = db.Column(db.LargeBinary(16), nullable=True)
     totp_secret = db.Column(db.String(200), nullable=False)  # Stores base64-encoded encrypted TOTP secret
 
     @validates('totp_secret')
     def _validate_totp_secret(self, key, value):
         return normalize_totp_for_storage(value)
+
+    @validates('username')
+    def _normalize_legacy_username(self, key, value):
+        """Normalize legacy plaintext usernames on assignment.
+
+        Hash fields must only be set through the explicit migration process
+        (build_hashed_username_fields) so that needs_hashed_username_migration
+        correctly identifies accounts that still require migration.
+        """
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized if normalized else None
+
+    def get_display_username(self):
+        return f"sysadmin_{self.id}"
 
 
 class SystemAdminCredential(db.Model):
@@ -849,6 +876,7 @@ class TapEvent(db.Model):
     # All times stored as UTC (see header note)
     timestamp = db.Column(db.DateTime(timezone=True), default=utc_now)
     reason = db.Column(db.String(50), nullable=True)
+    reason_code = db.Column(db.Enum(TapEventReasonCode, values_callable=lambda x: [e.value for e in x]), nullable=True, index=True)
 
     # Flag to indicate if this event was deleted by a teacher
     is_deleted = db.Column(db.Boolean, default=False, nullable=False, index=True)
@@ -866,7 +894,8 @@ class HallPassLog(db.Model):
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     reason = db.Column(db.String(50), nullable=False)
     status = db.Column(db.String(20), default='pending', nullable=False) # pending, approved, rejected, left, returned
-    pass_number = db.Column(db.String(3), nullable=True, unique=True) # Format: letter + 2 digits (e.g., A42)
+    # Legacy field retained for backward compatibility; no longer generated or displayed.
+    pass_number = db.Column(db.String(3), nullable=True, unique=True)
     period = db.Column(db.String(10), nullable=True) # Which period the request was made in
 
     # CRITICAL: join_code is the source of truth for class isolation
@@ -885,6 +914,8 @@ class HallPassSettings(db.Model):
     __tablename__ = 'hall_pass_settings'
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Queue system toggle
@@ -935,6 +966,8 @@ class PayrollCache(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False, unique=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
     cached_breakdown = db.Column(db.JSON, nullable=True)  # Stores the breakdown: {"(id, code)": amount}
     last_calculated_at = db.Column(db.DateTime(timezone=True), default=utc_now)
 
@@ -950,6 +983,8 @@ class StoreItem(db.Model):
     __tablename__ = 'store_items'
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
     price = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
@@ -974,6 +1009,7 @@ class StoreItem(db.Model):
     # Collective goal settings (only for item_type='collective')
     collective_goal_type = db.Column(db.String(20), nullable=True)  # 'fixed' or 'whole_class'
     collective_goal_target = db.Column(db.Integer, nullable=True)  # Fixed number of purchases needed (used when type='fixed')
+    collective_goal_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)  # Optional deadline; unmet goals are auto-refunded on expiration
 
     # Redemption prompt (for delayed use items)
     redemption_prompt = db.Column(db.Text, nullable=True)  # Optional prompt shown to students when redeeming delayed items
@@ -1015,6 +1051,7 @@ class StoreItemBlock(db.Model):
     __tablename__ = 'store_item_blocks'
     store_item_id = db.Column(db.Integer, db.ForeignKey('store_items.id', ondelete='CASCADE'), primary_key=True)
     block = db.Column(db.String(10), primary_key=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
 
     __table_args__ = (
         db.Index('ix_store_item_blocks_item', 'store_item_id'),
@@ -1038,6 +1075,8 @@ class StudentItem(db.Model):
     status = db.Column(db.String(20), default='purchased', nullable=False)
     redemption_details = db.Column(db.Text, nullable=True) # For student notes on usage
     redemption_date = db.Column(db.DateTime(timezone=True), nullable=True) # When student used it
+    # Stable link to the purchase transaction for accurate refunds even if item metadata changes.
+    purchase_transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True, index=True)
 
     # Bundle tracking - for items purchased as part of a bundle
     is_from_bundle = db.Column(db.Boolean, default=False, nullable=False)
@@ -1079,6 +1118,7 @@ class RedemptionAuditLog(db.Model):
     )
     notes = db.Column(db.Text, nullable=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True, index=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
     timestamp = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, index=True)
     source = db.Column(
         db.Enum(
@@ -1104,13 +1144,15 @@ class RentSettings(db.Model):
     __tablename__ = 'rent_settings'
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Main toggle
     is_enabled = db.Column(db.Boolean, default=True)
 
     # Rent amount and frequency
-    rent_amount = db.Column(db.Numeric(precision=12, scale=2), default=50.0)
+    rent_amount = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('50.00'))
     frequency_type = db.Column(db.String(20), default='monthly')  # 'daily', 'weekly', 'monthly', 'custom'
     custom_frequency_value = db.Column(db.Integer, nullable=True)  # For custom: x per time unit
     custom_frequency_unit = db.Column(db.String(20), nullable=True)  # 'days', 'weeks', 'months'
@@ -1121,7 +1163,7 @@ class RentSettings(db.Model):
 
     # Grace period and late penalties
     grace_period_days = db.Column(db.Integer, default=3)
-    late_penalty_amount = db.Column(db.Numeric(precision=12, scale=2), default=10.0)
+    late_penalty_amount = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('10.00'))
     late_penalty_type = db.Column(db.String(20), default='once')  # 'once' or 'recurring'
     late_penalty_frequency_days = db.Column(db.Integer, nullable=True)  # For recurring type
 
@@ -1166,7 +1208,7 @@ class RentPayment(db.Model):
     coverage_year = db.Column(db.Integer, nullable=False, default=_current_utc_year)  # Year covered (e.g., 2025)
 
     was_late = db.Column(db.Boolean, default=False)
-    late_fee_charged = db.Column(db.Numeric(precision=12, scale=2), default=0.0)
+    late_fee_charged = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))
 
     student = db.relationship('Student', backref='rent_payments')
 
@@ -1175,6 +1217,7 @@ class RentWaiver(db.Model):
     __tablename__ = 'rent_waivers'
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
     waiver_start_date = db.Column(db.DateTime(timezone=True), nullable=False)
     waiver_end_date = db.Column(db.DateTime(timezone=True), nullable=False)
     periods_count = db.Column(db.Integer, nullable=False)  # Number of rent periods to skip
@@ -1195,6 +1238,8 @@ class RentItem(db.Model):
     __tablename__ = 'rent_items'
     id = db.Column(db.Integer, primary_key=True)
     rent_setting_id = db.Column(db.Integer, db.ForeignKey('rent_settings.id'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
 
     # Item details
     name = db.Column(db.String(100), nullable=False)
@@ -1228,7 +1273,10 @@ class InsurancePolicy(db.Model):
     __tablename__ = 'insurance_policies'
     id = db.Column(db.Integer, primary_key=True)
     policy_code = db.Column(db.String(16), unique=True, nullable=False, index=True)  # Unique code per teacher's policy
+    version_number = db.Column(db.Integer, nullable=False, default=1)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)  # Owner teacher
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
     premium = db.Column(db.Numeric(precision=12, scale=2), nullable=False)  # Monthly cost
@@ -1306,11 +1354,24 @@ class InsurancePolicy(db.Model):
         return self.claim_type != 'non_monetary'
 
 
+@sa.event.listens_for(InsurancePolicy, "before_update")
+def _increment_insurance_policy_version(_mapper, _connection, target):
+    """Bump template version whenever mutable policy fields are edited."""
+    state = sa.inspect(target)
+    changed_fields = {attr.key for attr in state.attrs if attr.history.has_changes()}
+    if not changed_fields:
+        return
+    if changed_fields.issubset({"updated_at", "version_number"}):
+        return
+    target.version_number = (target.version_number or 1) + 1
+
+
 class InsurancePolicyBlock(db.Model):
     """Association model for insurance policy block visibility."""
     __tablename__ = 'insurance_policy_blocks'
     policy_id = db.Column(db.Integer, db.ForeignKey('insurance_policies.id', ondelete='CASCADE'), primary_key=True)
     block = db.Column(db.String(10), primary_key=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
 
     __table_args__ = (
         db.Index('ix_insurance_policy_blocks_policy', 'policy_id'),
@@ -1328,7 +1389,7 @@ class StudentInsurance(db.Model):
     # Each insurance enrollment should be scoped to the specific class/period
     join_code = db.Column(db.String(20), nullable=True, index=True)
 
-    status = db.Column(db.String(20), default='active')  # active, cancelled, suspended
+    status = db.Column(db.String(20), default='active')  # active, cancelled, suspended, expired
     purchase_date = db.Column(db.DateTime(timezone=True), default=utc_now)
     cancel_date = db.Column(db.DateTime(timezone=True), nullable=True)
     last_payment_date = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -1339,9 +1400,87 @@ class StudentInsurance(db.Model):
     payment_current = db.Column(db.Boolean, default=True)
     days_unpaid = db.Column(db.Integer, default=0)
 
+    # Immutable snapshot of the policy terms at purchase time.
+    frozen_policy_title = db.Column(db.String(100), nullable=True)
+    frozen_policy_description = db.Column(db.Text, nullable=True)
+    frozen_max_claim_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+    frozen_max_payout_per_period = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
+    frozen_max_claims_count = db.Column(db.Integer, nullable=True)
+    frozen_max_claims_period = db.Column(db.String(20), nullable=True)
+    frozen_claim_time_limit_days = db.Column(db.Integer, nullable=True)
+    policy_version = db.Column(db.Integer, nullable=True)
+
     # Relationships
     student = db.relationship('Student', backref='insurance_policies')
     claims = db.relationship('InsuranceClaim', backref='student_policy', lazy='dynamic')
+
+    def freeze_policy_snapshot(self, policy):
+        """Copy mutable template values into this enrollment's immutable contract snapshot."""
+        self.frozen_policy_title = policy.title
+        self.frozen_policy_description = policy.description
+        self.frozen_max_claim_amount = policy.max_claim_amount
+        self.frozen_max_payout_per_period = policy.max_payout_per_period
+        self.frozen_max_claims_count = policy.max_claims_count
+        self.frozen_max_claims_period = policy.max_claims_period
+        self.frozen_claim_time_limit_days = policy.claim_time_limit_days
+        self.policy_version = policy.version_number or 1
+
+    def build_renewed_enrollment(self, policy):
+        """Create a new enrollment row with a fresh snapshot for the next coverage period."""
+        renewal = StudentInsurance(
+            student_id=self.student_id,
+            policy_id=policy.id,
+            join_code=self.join_code,
+            status='active',
+            purchase_date=utc_now(),
+            last_payment_date=utc_now(),
+            next_payment_due=utc_now() + timedelta(days=30),
+            coverage_start_date=utc_now() + timedelta(days=policy.waiting_period_days),
+            payment_current=True,
+            days_unpaid=0,
+        )
+        renewal.freeze_policy_snapshot(policy)
+        return renewal
+
+    @property
+    def contract_title(self):
+        return self.frozen_policy_title or (self.policy.title if self.policy else "")
+
+    @property
+    def contract_description(self):
+        return self.frozen_policy_description if self.frozen_policy_description is not None else (
+            self.policy.description if self.policy else None
+        )
+
+    @property
+    def contract_max_claim_amount(self):
+        return self.frozen_max_claim_amount if self.frozen_max_claim_amount is not None else (
+            self.policy.max_claim_amount if self.policy else None
+        )
+
+    @property
+    def contract_max_payout_per_period(self):
+        return self.frozen_max_payout_per_period if self.frozen_max_payout_per_period is not None else (
+            self.policy.max_payout_per_period if self.policy else None
+        )
+
+    @property
+    def contract_max_claims_count(self):
+        return self.frozen_max_claims_count if self.frozen_max_claims_count is not None else (
+            self.policy.max_claims_count if self.policy else None
+        )
+
+    @property
+    def contract_max_claims_period(self):
+        return self.frozen_max_claims_period if self.frozen_max_claims_period else (
+            self.policy.max_claims_period if self.policy else "month"
+        )
+
+    @property
+    def contract_claim_time_limit_days(self):
+        return self.frozen_claim_time_limit_days if self.frozen_claim_time_limit_days is not None else (
+            self.policy.claim_time_limit_days if self.policy else None
+        )
 
 
 class InsuranceClaim(db.Model):
@@ -1353,6 +1492,7 @@ class InsuranceClaim(db.Model):
     student_insurance_id = db.Column(db.Integer, db.ForeignKey('student_insurance.id'), nullable=False)
     policy_id = db.Column(db.Integer, db.ForeignKey('insurance_policies.id'), nullable=False)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
 
     incident_date = db.Column(db.DateTime(timezone=True), nullable=False)  # When incident occurred
     filed_date = db.Column(db.DateTime(timezone=True), default=utc_now)
@@ -1390,6 +1530,48 @@ class ErrorLog(db.Model):
     stack_trace = db.Column(db.Text, nullable=True)  # Full stack trace
 
 
+class ActorRequestTrace(db.Model):
+    """Short-lived request trace rows for ticket correlation."""
+
+    __tablename__ = 'actor_request_trace'
+
+    id = db.Column(db.Integer, primary_key=True)
+    actor_type = db.Column(db.String(20), nullable=False, index=True)
+    actor_opaque_id = db.Column(db.String(64), nullable=False, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='SET NULL'), nullable=True, index=True)
+    request_id = db.Column(db.String(128), nullable=False, index=True)
+    method = db.Column(db.String(10), nullable=False)
+    endpoint = db.Column(db.String(500), nullable=False)
+    status_code = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index('ix_actor_trace_actor_created', 'actor_type', 'actor_opaque_id', 'created_at'),
+    )
+
+
+class ErrorEvent(db.Model):
+    """Short-lived structured error references for TLCP snapshots."""
+
+    __tablename__ = 'error_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    request_id = db.Column(db.String(128), nullable=True, index=True)
+    actor_type = db.Column(db.String(20), nullable=True, index=True)
+    actor_opaque_id = db.Column(db.String(64), nullable=True, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='SET NULL'), nullable=True, index=True)
+    endpoint = db.Column(db.String(500), nullable=True)
+    method = db.Column(db.String(10), nullable=True)
+    error_class = db.Column(db.String(200), nullable=False)
+    error_message = db.Column(db.Text, nullable=True)
+    correlation_version = db.Column(db.Integer, nullable=False, default=1, server_default='1')
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False, index=True)
+
+    __table_args__ = (
+        db.Index('ix_error_events_actor_created', 'actor_type', 'actor_opaque_id', 'created_at'),
+    )
+
+
 # ---- User Report Model (Bug Reports, Suggestions, Comments) ----
 class UserReport(db.Model):
     __tablename__ = 'user_reports'
@@ -1398,6 +1580,7 @@ class UserReport(db.Model):
     # Anonymous user identification (HMAC of user identifier)
     anonymous_code = db.Column(db.String(64), nullable=False, index=True)
     user_type = db.Column(db.String(20), nullable=False)  # 'student', 'teacher', 'anonymous'
+    join_code = db.Column(db.String(20), nullable=True, index=True)
 
     # Report details
     report_type = db.Column(db.String(20), nullable=False, default='bug')  # 'bug', 'suggestion', 'comment'
@@ -1510,8 +1693,8 @@ class Issue(db.Model):
     system_metadata = db.Column(db.JSON, nullable=True)  # Recent events, browser info, etc.
 
     # Status tracking
-    status = db.Column(db.String(50), default='submitted', nullable=False, index=True)
-    # Allowed statuses: 'submitted', 'teacher_review', 'teacher_resolved', 'elevated', 'developer_review', 'developer_resolved'
+    status = db.Column(db.String(50), default='OPEN', nullable=False, index=True)
+    # Canonical statuses follow FEAT-TICK-001; legacy values are still recognized for older rows.
 
     # Teacher review and resolution
     teacher_reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -1547,6 +1730,12 @@ class Issue(db.Model):
     related_transaction = db.relationship('Transaction', backref='related_issues')
     status_history = db.relationship('IssueStatusHistory', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueStatusHistory.changed_at.desc()')
     resolution_actions = db.relationship('IssueResolutionAction', backref='issue', lazy='dynamic', cascade='all, delete-orphan', order_by='IssueResolutionAction.created_at.desc()')
+    correlation_pack = db.relationship(
+        'TicketCorrelationPack',
+        backref=db.backref('issue', uselist=False),
+        uselist=False,
+        cascade='all, delete-orphan',
+    )
 
     # Indexes
     __table_args__ = (
@@ -1555,24 +1744,63 @@ class Issue(db.Model):
         db.Index('ix_issues_join_code_status', 'join_code', 'status'),
     )
 
+    # Canonical lifecycle statuses (SPEC-TICK-001).
+    STATUS_OPEN = 'OPEN'
+    STATUS_TEACHER_REVIEW = 'TEACHER_REVIEW'
+    STATUS_ESCALATED_TO_DEV = 'ESCALATED_TO_DEV'
+    STATUS_DEV_RESOLVED = 'DEV_RESOLVED'
+    STATUS_TEACHER_FINAL_REVIEW = 'TEACHER_FINAL_REVIEW'
+    STATUS_CLOSED = 'CLOSED'
+
+    # Legacy status values retained for backward-compatible reads.
+    LEGACY_TO_CANONICAL_STATUS = {
+        'submitted': STATUS_OPEN,
+        'teacher_review': STATUS_TEACHER_REVIEW,
+        'teacher_resolved': STATUS_TEACHER_FINAL_REVIEW,
+        'elevated': STATUS_ESCALATED_TO_DEV,
+        'developer_review': STATUS_ESCALATED_TO_DEV,
+        'developer_resolved': STATUS_DEV_RESOLVED,
+    }
+
     def get_student_visible_status(self):
         """Return simplified status badge for student view."""
+        canonical_status = self.LEGACY_TO_CANONICAL_STATUS.get(self.status, self.status)
         status_map = {
-            'submitted': 'Submitted',
-            'teacher_review': 'Teacher Review',
-            'teacher_resolved': 'Resolved',
-            'elevated': 'Elevated',
-            'developer_review': 'Developer Review',
-            'developer_resolved': 'Resolved - See Teacher'
+            self.STATUS_OPEN: 'Submitted',
+            self.STATUS_TEACHER_REVIEW: 'Teacher Review',
+            self.STATUS_ESCALATED_TO_DEV: 'Escalated to Developer',
+            self.STATUS_DEV_RESOLVED: 'Developer Fix Applied - Teacher Review Required',
+            self.STATUS_TEACHER_FINAL_REVIEW: 'Teacher Final Review',
+            self.STATUS_CLOSED: 'Closed',
         }
-        return status_map.get(self.status, 'Unknown')
+        return status_map.get(canonical_status, 'Unknown')
 
     def is_locked(self):
         """Check if issue is locked from further student edits (after escalation)."""
-        return self.status in ['elevated', 'developer_review', 'developer_resolved']
+        canonical_status = self.LEGACY_TO_CANONICAL_STATUS.get(self.status, self.status)
+        return canonical_status in [self.STATUS_ESCALATED_TO_DEV, self.STATUS_DEV_RESOLVED, self.STATUS_CLOSED]
 
     def __repr__(self):
         return f'<Issue #{self.id} ({self.status}) - Student {self.student_first_name} {self.student_last_initial}.>'
+
+
+class TicketCorrelationPack(db.Model):
+    """Immutable correlation snapshot attached to an issue at submission time."""
+
+    __tablename__ = 'ticket_correlation_pack'
+
+    issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), primary_key=True)
+    correlation_version = db.Column(db.Integer, nullable=False, default=1, server_default='1')
+    actor_type = db.Column(db.String(20), nullable=False)
+    actor_opaque_id = db.Column(db.String(64), nullable=False)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='SET NULL'), nullable=True)
+    request_trace_json = db.Column(db.JSON, nullable=False, default=list)
+    error_refs_json = db.Column(db.JSON, nullable=False, default=list)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+
+    __table_args__ = (
+        db.Index('ix_ticket_correlation_actor', 'actor_type', 'actor_opaque_id'),
+    )
 
 
 class IssueStatusHistory(db.Model):
@@ -1584,6 +1812,7 @@ class IssueStatusHistory(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
 
     previous_status = db.Column(db.String(50), nullable=True)
     new_status = db.Column(db.String(50), nullable=False)
@@ -1605,6 +1834,7 @@ class IssueResolutionAction(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     issue_id = db.Column(db.Integer, db.ForeignKey('issues.id', ondelete='CASCADE'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
 
     action_type = db.Column(db.String(100), nullable=False)
     # Action types: 'reverse_transaction', 'correct_amount', 'correct_time', 'waive_fee', 'deny_issue', 'manual_adjustment', etc.
@@ -1632,8 +1862,11 @@ class IssueResolutionAction(db.Model):
 class Admin(db.Model):
     __tablename__ = 'admins'
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    display_name = db.Column(db.String(100), nullable=True)  # Teacher's display name (defaults to username if not set)
+    username = db.Column(db.String(80), unique=True, nullable=True)  # Legacy plaintext username (deprecated)
+    username_hash = db.Column(db.String(64), unique=True, nullable=True)
+    username_lookup_hash = db.Column(db.String(64), unique=True, nullable=True, index=True)
+    teacher_public_id = db.Column(db.String(120), unique=True, nullable=True, index=True)
+    display_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=True)  # Teacher's display name (defaults to teacher_public_id if not set)
     # TOTP-only: store secret (base64-encoded encrypted data)
     totp_secret = db.Column(db.String(200), nullable=False)  # Stores base64-encoded encrypted TOTP secret
     # Account recovery: Hashed DOB sum (similar to student system)
@@ -1647,20 +1880,64 @@ class Admin(db.Model):
     tos_accepted = db.Column(db.Boolean, default=False, nullable=False, server_default='false')
     tos_accepted_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
+    # Hall pass public verification token (256-bit, capability-based, rotatable)
+    # Used for /verify/hallpass/<token> — not derived from teacher_id
+    hall_pass_verify_token = db.Column(db.String(64), unique=True, nullable=True, index=True)
+
+    @staticmethod
+    def generate_verify_token():
+        """Generate a new 256-bit random hall pass verification token."""
+        return secrets.token_hex(32)
+
     @validates('totp_secret')
     def _validate_totp_secret(self, key, value):
         return normalize_totp_for_storage(value)
 
+    @validates('username')
+    def _normalize_legacy_username(self, key, value):
+        """Backfill hashed auth fields when legacy plaintext usernames are assigned."""
+        if value is None:
+            return None
+        normalized = value.strip()
+        if not normalized:
+            return None
+        if not self.salt:
+            self.salt = get_random_salt()
+        if not self.username_hash:
+            self.username_hash = hash_username(normalized, self.salt)
+        if not self.username_lookup_hash:
+            self.username_lookup_hash = hash_username_lookup(normalized)
+        if not self.teacher_public_id:
+            self.teacher_public_id = normalized
+        return normalized
+
     def get_display_name(self):
-        """Return display_name if set, otherwise fall back to username"""
-        return self.display_name if self.display_name else self.username
+        """Return display_name if set, otherwise fall back to public teacher ID."""
+        if self.display_name:
+            return self.display_name
+        if self.teacher_public_id:
+            return self.teacher_public_id
+        return f"teacher_{self.id}"
+
+    def get_sysadmin_display_name(self):
+        """Return the minimal-PII teacher identifier for sysadmin contexts."""
+        if self.teacher_public_id:
+            return self.teacher_public_id
+        return f"teacher_{self.id}"
 
     def get_student_count(self):
-        """Return count of unique students linked to this teacher via StudentTeacher."""
-        # StudentTeacher is defined earlier in this file
-        return db.session.query(StudentTeacher.student_id).filter(
-            StudentTeacher.admin_id == self.id
-        ).distinct().count()
+        """Return non-demo unique students linked via StudentTeacher."""
+        demo_ids_subq = db.session.query(DemoStudent.student_id).subquery()
+        return (
+            db.session.query(StudentTeacher.student_id)
+            .join(Student, Student.id == StudentTeacher.student_id)
+            .filter(
+                StudentTeacher.admin_id == self.id,
+                ~Student.id.in_(sa.select(demo_ids_subq)),
+            )
+            .distinct()
+            .count()
+        )
 
 
 class AdminCredential(db.Model):
@@ -1695,6 +1972,7 @@ class RecoveryRequest(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
     dob_sum_hash = db.Column(db.String(64), nullable=True)  # Hashed input for verification trail
 
     # Status tracking
@@ -1724,6 +2002,7 @@ class StudentRecoveryCode(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     recovery_request_id = db.Column(db.Integer, db.ForeignKey('recovery_requests.id'), nullable=False, index=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
 
     # Verification code (6-digit, hashed)
     code_hash = db.Column(db.String(64), nullable=True)  # NULL until student verifies
@@ -1742,6 +2021,8 @@ class PayrollSettings(db.Model):
     __tablename__ = 'payroll_settings'
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global/default settings
     pay_rate = db.Column(db.Numeric(precision=12, scale=2), nullable=False, default=0.25)  # $ per minute
     payroll_frequency_days = db.Column(db.Integer, nullable=False, default=14)
@@ -1790,6 +2071,7 @@ class PayrollReward(db.Model):
     __tablename__ = 'payroll_rewards'
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
     amount = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
@@ -1808,6 +2090,7 @@ class PayrollFine(db.Model):
     __tablename__ = 'payroll_fines'
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
     amount = db.Column(db.Numeric(precision=12, scale=2), nullable=False)  # Positive value, will be deducted
@@ -1826,11 +2109,13 @@ class BankingSettings(db.Model):
     __tablename__ = 'banking_settings'
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
+    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Interest settings for savings
-    savings_apy = db.Column(db.Numeric(precision=8, scale=6), default=0.0)  # Annual Percentage Yield (e.g., 5.0 for 5%)
-    savings_monthly_rate = db.Column(db.Numeric(precision=8, scale=6), default=0.0)  # Monthly rate (calculated or custom)
+    savings_apy = db.Column(db.Numeric(precision=8, scale=6), default=Decimal('0.000000'))  # Annual Percentage Yield (e.g., 5.0 for 5%)
+    savings_monthly_rate = db.Column(db.Numeric(precision=8, scale=6), default=Decimal('0.000000'))  # Monthly rate (calculated or custom)
     interest_calculation_type = db.Column(db.String(20), default='simple')  # 'simple' or 'compound'
     compound_frequency = db.Column(db.String(20), default='monthly')  # 'daily', 'weekly', 'monthly'
 
@@ -1845,12 +2130,12 @@ class BankingSettings(db.Model):
     # Overdraft/NSF fees
     overdraft_fee_enabled = db.Column(db.Boolean, default=False)  # Enable/disable overdraft fees
     overdraft_fee_type = db.Column(db.String(20), default='flat')  # 'flat' or 'progressive'
-    overdraft_fee_flat_amount = db.Column(db.Numeric(precision=12, scale=2), default=0.0)  # Flat fee per transaction
+    overdraft_fee_flat_amount = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))  # Flat fee per transaction
 
     # Progressive fee settings
-    overdraft_fee_progressive_1 = db.Column(db.Numeric(precision=12, scale=2), default=0.0)  # First tier fee
-    overdraft_fee_progressive_2 = db.Column(db.Numeric(precision=12, scale=2), default=0.0)  # Second tier fee
-    overdraft_fee_progressive_3 = db.Column(db.Numeric(precision=12, scale=2), default=0.0)  # Third tier fee
+    overdraft_fee_progressive_1 = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))  # First tier fee
+    overdraft_fee_progressive_2 = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))  # Second tier fee
+    overdraft_fee_progressive_3 = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))  # Third tier fee
     overdraft_fee_progressive_cap = db.Column(db.Numeric(precision=12, scale=2), nullable=True)  # Maximum total fees per period
 
     # Metadata
@@ -1876,6 +2161,7 @@ class DemoStudent(db.Model):
 
     # Admin who created this demo session
     admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
 
     # The temporary student record created for this demo
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
@@ -1888,8 +2174,8 @@ class DemoStudent(db.Model):
     ended_at = db.Column(db.DateTime(timezone=True), nullable=True)
 
     # Demo configuration (snapshot of initial state)
-    config_checking_balance = db.Column(db.Numeric(precision=12, scale=2), default=0.0)
-    config_savings_balance = db.Column(db.Numeric(precision=12, scale=2), default=0.0)
+    config_checking_balance = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))
+    config_savings_balance = db.Column(db.Numeric(precision=12, scale=2), default=Decimal('0.00'))
     config_hall_passes = db.Column(db.Integer, default=3)
     config_insurance_plan = db.Column(db.String(50), default='none')
     config_is_rent_enabled = db.Column(db.Boolean, default=True)
@@ -2151,10 +2437,7 @@ class Announcement(db.Model):
         if self.expires_at is None:
             return False
 
-        # Handle timezone-naive datetimes from database
-        expires_at = self.expires_at
-        if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        expires_at = ensure_utc(self.expires_at)
 
         return utc_now() > expires_at
 

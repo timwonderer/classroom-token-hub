@@ -11,13 +11,19 @@ related:
 
 # Savings Interest
 
-Savings accounts earn interest based on your teacher's settings.
+## Overview
+Your savings account earns interest automatically over time, allowing your money to grow simply by keeping it in savings rather than checking.
 
-## Where to work
-Check the **Accounts** tab in Finances to see the interest rate and estimated earnings.
+## Step-by-Step Instructions
 
-## What to expect
-Interest is paid on a schedule set by your teacher. The amount depends on your savings balance.
+### Viewing Your Interest Rate
+1. Navigate to the **Accounts** tab from the student sidebar.
+2. Look at the Savings section of your dashboard.
+3. If your teacher has enabled interest, you will see your current **Interest Rate** displayed (e.g., 2% per week) alongside your estimated upcoming earnings.
+
+## Important Notes
+> [!TIP]
+> **How to earn more:** Interest is calculated based on your total savings balance when the payout occurs. To earn the most money, transfer extra funds from checking to savings *before* the scheduled payout day!
 
 ## Related guides
-- [Accounts and Transfers](/docs/user-guides/features/student/banking/accounts-transfers)
+- [Accounts and Transfers](accounts-transfers.md)

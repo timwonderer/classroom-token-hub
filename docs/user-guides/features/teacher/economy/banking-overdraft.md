@@ -11,14 +11,19 @@ related:
 
 # Overdraft Rules
 
-Overdraft settings decide what happens when checking goes below zero.
+## Overview
+Overdraft settings determine what happens when a student attempts a transaction but their checking account balance goes below zero. You can choose to protect students or charge them penalties.
 
-## Where to work
-Go to **Economy > Banking**.
+## Step-by-Step Instructions
 
-## Options
-- Enable overdraft protection to pull from savings.
-- Disable protection and set an overdraft fee.
+### Configuring Overdraft Behavior
+1. Navigate to **Economy > Banking** in the teacher sidebar.
+2. Locate the Overdraft Settings section.
+3. Choose one of the following options:
+   - **Enable overdraft protection:** The system will automatically pull funds from the student's savings account to cover the deficit.
+   - **Disable protection and set a fee:** The transaction will be blocked (or balance goes negative), and the student is charged a flat overdraft penalty fee.
+4. Save your changes to enforce the new overdraft rules.
 
-## Related guides
-- [Banking Settings](/docs/user-guides/features/teacher/economy/banking-settings)
+## Important Notes
+> [!NOTE]
+> Overdraft behaviors only apply if Banking features are globally enabled for the class period.

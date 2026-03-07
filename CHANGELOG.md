@@ -8,8 +8,17 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Fixed
+- **Broken help/guide links after doc system revamp** — Updated all doc path references in `layout_admin.html`, `layout_student.html`, `admin_insurance.html`, `admin_store.html`, and `admin_payroll.html` from hyphenated paths (e.g., `teacher-students`) to the new slash-separated directory structure (e.g., `teacher/students`).
+- **Passkey "Never used" always displayed** — Passkeys are tracked in our database without a `credential_id` (credentials are managed on the Passwordless.dev servers). The auth-finish handler was looking up credentials by `credential_id` (which is always `NULL`), so `last_used` was never updated. Fixed by updating `last_used` on all credentials for the authenticated admin/sysadmin when a successful passkey sign-in occurs.
+- **Rent coverage month label off by one for end-of-month due dates** — The coverage month label was computed by building a datetime for the due date and adding 1 day, which caused due dates on the last day of the month (e.g., Jan 31) to roll into the next month (Feb). Coverage month is now derived directly from `payment.coverage_month` and `payment.coverage_year`, which already hold the correct billing period.
+- **Docs: GitHub-style alert rendering** — `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, and `> [!CAUTION]` callouts in markdown files now render as styled alert boxes instead of displaying the raw `[!TYPE]` text inside a plain blockquote. A `preprocess_github_alerts()` pre-processor was added to `app/routes/docs.py` that converts alert blockquotes in the markdown source before the library renders them, circumventing a Python `markdown` library limitation where adjacent blockquotes are merged into one element. Each alert body is rendered through a dedicated markdown pass so inline and block markup (bold, code, links, lists) inside the alert body is fully processed. Five alert types are supported with on-brand colours and Material Symbols icons: Note (blue/info), Tip (teal/lightbulb), Important (purple/priority_high), Warning (amber/warning), Caution (red/dangerous).
+- **Docs: Unordered list display** — Lists were sometimes rendering without bullets due to missing `list-style-type` declarations and Python markdown's "loose list" behaviour (wrapping each item's content in `<p>` tags, which some browser/CSS combinations display as block paragraphs). Added explicit `list-style-type: disc/decimal`, `display: list-item`, and compact `<p>`-inside-`<li>` margin rules to the documentation stylesheet.
+
+## [1.9.0] - 2026-03-04
+
 ### Security
-- **Class Deletion Audit** — Comprehensive audit of all four class/period deletion paths, identifying inconsistent semantics, a P1 BalanceCache orphaning bug, sysadmin use of the deprecated `Student.block` field, and missing data-loss warnings in sysadmin confirmation dialogs. See `docs/security/CLASS_DELETION_AUDIT.md`.
+- **Class Deletion Audit** — Comprehensive audit of all four class/period deletion paths, identifying inconsistent semantics, a P1 BalanceCache orphaning bug, sysadmin use of the deprecated `Student.block` field, and missing data-loss warnings in sysadmin confirmation dialogs. See `docs/SECURITY/AUDITS/SEC-AUD-011_Class_Deletion_Audit.md`.
 - **P1 fix: BalanceCache orphaning** — `_hard_delete_join_code_scope` now deletes `balance_cache` rows for the deleted `join_code`, preventing stale balance reads after class deletion.
 - **P2 fix: Sysadmin period deletion scope** — `delete_period` now resolves the period name to its `join_code(s)` via `TeacherBlock` before finding enrolled students, replacing the deprecated `Student.block` field lookup.
 - **P2 fix: Sysadmin confirmation UX** — Period and teacher account deletion dialogs now accurately describe what is preserved versus removed and note the action cannot be undone.
@@ -25,8 +34,18 @@ and this project follows semantic versioning principles.
   - `recovery.verify_identity` is retired; the route now redirects to `recovery.account_lookup` so bookmarked URLs remain functional.
 - **`add_class` credential verification scoped to target class** — When a student adds a new class, credentials (first initial, last name, DOB) are now verified exclusively against the target class's own unclaimed roster seat hashes. The previous pre-check against the student's stored `dob_sum` (which is null post-claim) has been removed. Each join_code is an independent verification universe; claiming one class does not expose or depend on hashes from another.
 - **`claim_account` duplicate detection** — Finding an existing student during initial claim now uses `first_half_hash` lookup instead of `dob_sum` filter, which remains correct after post-claim PII cleanup.
+- **Documentation system consolidation** — Migrated remaining loose markdown files into the canonical documentation taxonomy under `docs/LOGS/AUDITS`, updated references to the new locations, and refreshed the canonical docs index.
 
 ### Added
+- **Collective Goal Expiration** — Teachers can now set an optional expiration date on collective goal store items.
+  - If the goal is met before the deadline, the item unlocks normally (existing behavior unchanged).
+  - If the deadline passes without the goal being reached, all pending purchases are automatically refunded, the item is deactivated, and a `voided` status is recorded for each affected `StudentItem`.
+  - Expiration is processed lazily: triggered on admin store page load, student shop load, and at purchase time — no background scheduler required.
+  - Teacher deactivating an active collective item also triggers automatic refund for all pending purchasers.
+  - A reactivated collective goal always starts progress at zero because voided `StudentItem` records are excluded from the progress count.
+  - New `collective_goal_expires_at` column on `StoreItem` with Alembic migration `e3f4g5h6i7j8`.
+  - New `app/utils/store.py` module with `refund_pending_collective_purchases()` and `process_expired_collective_goals()` helpers.
+  - 16 new tests in `tests/test_collective_goal_expiration.py` covering happy paths, edge cases, API blocking, and multi-tenancy scoping.
 - **Admin Transaction Backfill** — One-time remediation page (`/admin/backfill-transactions`) that lets teachers fix student balances when past transactions lack a class-period `join_code`. Detected automatically on dashboard load; teachers select the correct period for each affected student and the system links all orphaned transactions to the right class context.
 - **Interactive Project Timeline** — New `/docs/timeline` page showcasing the full development history of Classroom Token Hub
   - Visual vertical timeline organized into four eras: Genesis, Crisis Resolution, Feature Expansion, and Refinement
@@ -35,7 +54,7 @@ and this project follows semantic versioning principles.
   - Design Philosophy section with all ten anti-goals and core educational principles
   - Scroll-triggered entry animations with intersection observer
   - Linked from the Help & Support Center (`/docs/`) index and Quick Links section
-  - Added `PROJECT_TIMELINE.md` to repository root as the source document
+  - Added `docs/LOGS/AUDITS/LOG-ARC-039_Project_Timeline.md` as the source timeline document
 
 ### Changed
 - **System Admin interface redesigned** - Complete redesign matching teacher/student interface patterns
@@ -56,6 +75,13 @@ and this project follows semantic versioning principles.
 - **`support_tickets` route** (`/sysadmin/support`) - New consolidated support ticket view combining user reports and escalated issues
 - **`open_tickets` stat** on dashboard - Shows sum of new user reports + pending/in-review escalated issues
 
+### Performance
+- **Read-Path Audit & Optimization** - Conducted comprehensive audit of student list rendering and admin dashboard performance
+  - **Removed Write-on-Read Side Effects**: Refactored `Student.checking_balance`, `Student.savings_balance`, and `Student.total_earnings` properties to be read-only calculations. Moved legacy automated settlement logic (which triggered database writes during read operations) to explicit mutation endpoints (`/transfer`, `/pay-rent`). This eliminates race conditions and significantly improves read performance.
+  - **Optimized Admin Dashboard internals**: Refactored daily limit enforcement (`auto_tapout`) to use batch processing instead of per-student iteration and moved dashboard balance calculations to batched, scoped queries. Stage 2 audit kept dashboard query totals unchanged at 402 (explicit dashboard query-count reduction remains out of scope for this stage).
+  - **Optimized Student Roster**: Eliminated N+1 query patterns in the student management table by batch-fetching balances and rent privileges. Query count reduced from ~1225 to ~10 for a class of 60 students.
+  - **Scoped Balance Calculations**: Fixed a critical multi-tenancy flaw where student balances were aggregated across all classes instead of being scoped to the current teacher's context. Dashboard and roster now correctly reflect class-specific financial state.
+
 ### Fixed
 - **Student rent/shop regression follow-up** - Addressed review-driven cleanup after the rent/store hotfix
   - Added shared helper logic for determining whether a student's current rent coverage period is paid, and reused it across student rent/shop and API purchase flows to reduce duplicated validation code
@@ -65,7 +91,7 @@ and this project follows semantic versioning principles.
 - **Student store block scoping** - Student shop and purchase APIs now enforce block visibility while preserving the existing "no block mapping = visible to all blocks" semantics for unscoped legacy items
 - **Student markdown toolbar icons restored** - Reintroduced Font Awesome in the student layout so markdown editor toolbar icons render correctly on student issue forms
 - **Student payroll rate lookup** - Student payroll page and status projections now pass teacher context into pay-rate resolution so block-specific teacher rates display correctly instead of defaulting
-- **P0: Duplicate auto-tap-out events causing payroll overpayment** - Added idempotency check to prevent race conditions when multiple sources (student browser polling, scheduled job, admin dashboard) call auto-tap-out logic simultaneously. Previously, duplicate "Daily limit reached" tap-out events would be created, causing payroll to count the same session multiple times and resulting in massive overpayment. Now checks if a daily limit tap-out already exists before creating a new one. Includes cleanup script (`cleanup_duplicate_tapouts.py`) to fix existing duplicate records. See `DUPLICATE_TAPOUT_BUG_REPORT.md` for full details.
+- **P0: Duplicate auto-tap-out events causing payroll overpayment** - Added idempotency check to prevent race conditions when multiple sources (student browser polling, scheduled job, admin dashboard) call auto-tap-out logic simultaneously. Previously, duplicate "Daily limit reached" tap-out events would be created, causing payroll to count the same session multiple times and resulting in massive overpayment. Now checks if a daily limit tap-out already exists before creating a new one. Includes cleanup script (`cleanup_duplicate_tapouts.py`) to fix existing duplicate records. See `docs/LOGS/AUDITS/LOG-ARC-038_Duplicate_Tapout_Bug_Report.md` for full details.
 - **Void redemption creating transactions without join_code** - Fixed `/api/reject-redemption` endpoint creating refund transactions with `join_code=NULL` when voiding redemptions for legacy StudentItem records. Added fallback logic to resolve join_code from TeacherBlock or current session when StudentItem.join_code is NULL, preventing balance fix warnings for teachers. This resolves the "Fix Student Balances" alert appearing after voiding old redemptions.
 - **Void transaction CSRF 400 error** - Fixed student detail page void transaction button failing with 400 error. Added missing X-CSRFToken header to fetch request in `voidTransaction()` JavaScript function. Teachers can now successfully void transactions from student detail pages.
 - **P0: Rent payment applied to wrong period with bill preview enabled** - Fixed critical bug where students with unpaid overdue rent were allowed to pre-pay for future periods instead of paying overdue amounts first. When bill preview was enabled with a long preview period (e.g., 30 days), the system incorrectly classified overdue students as being in "preview period" for next month's rent. This caused payments to be recorded for the wrong coverage period (next month instead of current/overdue month), preventing students from receiving rent benefits even after paying. Now verifies current coverage period is fully paid before allowing preview period payments. Students must pay oldest overdue period first, and benefits are granted immediately when current period is paid. Also fixed rent page to display correct period being paid for with OVERDUE badge when applicable.
@@ -74,6 +100,7 @@ and this project follows semantic versioning principles.
   - Added missing `tokens.css` includes in standalone recovery/claim templates
   - Corrected student recovery layout shell class from `student-theme` to `student-shell`
   - Restored valid template syntax in `student_detail.html` that affected recovery-related page rendering/tests
+- **Documentation site link integrity** - Corrected stale docs navigation paths, breadcrumb dead links, and release-note route resolution so technical docs render from the current taxonomy with validated internal/external links.
 
 ## [1.8.0] - 2026-02-09
 
@@ -538,7 +565,7 @@ and this project follows semantic versioning principles.
     - Added explicit permissions to `toggle-maintenance.yml`, `check-migrations.yml`, and `deploy.yml`
     - Follows principle of least privilege for workflow security
     - Reduces workflow attack surface
-  - **Documentation**: Added `docs/archive/SECURITY_FIXES_SUMMARY.md` with complete analysis of all 62 alerts
+  - **Documentation**: Added `docs/LOGS/AUDITS/SECURITY_FIXES_SUMMARY.md` with complete analysis of all 62 alerts
   - **Summary**: Fixed 23+ real security issues, suppressed 2 false positives, reviewed 37 false positives (already mitigated)
 - **Enhanced Open Redirect Protection** - Improved URL validation in student class enrollment redirects
   - Upgraded `_is_safe_url()` function to use same-origin validation
@@ -625,7 +652,7 @@ and this project follows semantic versioning principles.
   - Added `encrypt_totp()` and `decrypt_totp()` helper functions in `app/utils/encryption.py`
   - All new admin/system admin accounts store encrypted TOTP secrets (base64-encoded)
   - Backward compatible: `decrypt_totp()` handles both encrypted and legacy plaintext secrets transparently
-  - **MIGRATION REQUIRED**: Column length expanded from VARCHAR(32) to VARCHAR(200) - See `docs/archive/MIGRATION_TOTP_ENCRYPTION.md`
+  - **MIGRATION REQUIRED**: Column length expanded from VARCHAR(32) to VARCHAR(200) - See `docs/LOGS/AUDITS/MIGRATION_TOTP_ENCRYPTION.md`
   - Defense in depth: Database compromise alone no longer sufficient to generate valid 2FA codes
   - **Note:** Still requires `ENCRYPTION_KEY` security - future migration to AWS Secrets Manager/Vault recommended
   - Files changed: `app/utils/encryption.py`, `app/models.py`, `app/routes/admin.py`, `app/routes/system_admin.py`, `wsgi.py`, `create_admin.py`
@@ -809,7 +836,7 @@ First stable release of Classroom Token Hub! All critical security issues resolv
 
 ### Project Status
 The project is ready for version 1.0 release. All critical blockers have been resolved:
-- ✅ **P0 Critical Data Leak:** Fixed and deployed (2025-11-29) - See [docs/security/CRITICAL_SAME_TEACHER_LEAK.md](docs/security/CRITICAL_SAME_TEACHER_LEAK.md)
+- ✅ **P0 Critical Data Leak:** Fixed and deployed (2025-11-29) - See [docs/security/CRITICAL_SAME_TEACHER_LEAK.md](docs/SECURITY/INCIDENTS/SEC-INC-013_Critical_Same_Teacher_Leak.md)
 - ✅ **P1 Deprecated Patterns:** All updated to Python 3.12+ and SQLAlchemy 2.0+ (2025-12-06)
 - 🔄 **Backfill:** Legacy transaction data being backfilled with interactive verification
 
@@ -820,16 +847,16 @@ The project is ready for version 1.0 release. All critical blockers have been re
 
 ### Changed (2025-12-11)
 - **Major documentation consolidation:**
-  - Merged `docs/development/TODO.md`, `docs/development/MULTI_TENANCY_TODO.md`, and `ROADMAP_TO_1.0.md` into single `DEVELOPMENT.md`
+  - Merged `DEVELOPMENT.md`, `docs/development/MULTI_TENANCY_TODO.md`, and `ROADMAP_TO_1.0.md` into single `DEVELOPMENT.md`
   - Updated all references to point to new unified documentation structure
   - Updated README.md to reflect v1.0 readiness (all critical blockers resolved)
-  - Moved implementation reports to `docs/archive/` for historical reference
+  - Moved implementation reports to `docs/LOGS/AUDITS/` for historical reference
 - **Security documentation updates:**
   - Updated `CRITICAL_SAME_TEACHER_LEAK.md` status to RESOLVED (deployed with backfill in progress)
   - Updated `docs/README.md` to remove "P0 BLOCKER" label
 
 ### Removed (2025-12-11)
-- `docs/development/TODO.md` — Consolidated into DEVELOPMENT.md
+- `DEVELOPMENT.md` — Consolidated into DEVELOPMENT.md
 - `docs/development/MULTI_TENANCY_TODO.md` — Consolidated into DEVELOPMENT.md
 - `docs/development/TECHNICAL_DEBT_ISSUES.md` — Superseded by DEPRECATED_CODE_PATTERNS.md
 - `ROADMAP_TO_1.0.md` — Consolidated into DEVELOPMENT.md
@@ -844,7 +871,7 @@ The project is ready for version 1.0 release. All critical blockers have been re
   - Moved security audits to `docs/security/` (CRITICAL_SAME_TEACHER_LEAK.md, MULTI_TENANCY_AUDIT.md)
   - Moved development guides to `docs/development/` (JULES_SETUP.md, SEEDING_INSTRUCTIONS.md, TESTING_SUMMARY.md, MIGRATION_STATUS_REPORT.md)
   - Moved operations docs to `docs/operations/` (MULTI_TENANCY_FIX_DEPLOYMENT.md)
-  - Archived historical fix summaries to `docs/archive/` (FIXES_SUMMARY.md, JOIN_CODE_FIX_SUMMARY.md, MIGRATION_FIX_SUMMARY.md, STAGING_MIGRATION_FIX.md)
+  - Archived historical fix summaries to `docs/LOGS/AUDITS/` (FIXES_SUMMARY.md, JOIN_CODE_FIX_SUMMARY.md, MIGRATION_FIX_SUMMARY.md, STAGING_MIGRATION_FIX.md)
 - Updated `docs/README.md` with comprehensive documentation map including security and archive sections
 - Updated main README with version 0.9.0 status and platform-agnostic deployment language
 - Removed hardcoded IP addresses from GitHub Actions workflows (now use `secrets.PRODUCTION_SERVER_IP`)
@@ -863,7 +890,7 @@ The project is ready for version 1.0 release. All critical blockers have been re
 ### Previous Changes
 - Continued repository organization and documentation cleanup
 - Moved `PULSETIC_SETUP.md` to `docs/operations/` for better organization
-- Moved additional PR-specific reports to `docs/archive/pr-reports/`
+- Moved additional PR-specific reports to `docs/LOGS/AUDITS/pr-reports/`
 - Updated `docs/operations/README.md` with comprehensive guide listings
 - Added migration to align `rent_settings` schema with application model by including the `block` column
 - Added migration to bring the `banking_settings` table in sync with the model by introducing the missing `block` column
@@ -877,7 +904,7 @@ The project is ready for version 1.0 release. All critical blockers have been re
 - System admin and token-based maintenance bypass with session persistence (`maintenance_global_bypass`)
 - System admin login access during maintenance (`/sysadmin/login`) and login link on `maintenance.html`
 - Badge icon/text server-side mapping and status description rendering fallback when JS disabled
-- Documentation for maintenance variables and operational workflow (see `docs/DEPLOYMENT.md`)
+- Documentation for maintenance variables and operational workflow (see `docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md`)
 
 ### Changed
 - `deploy_updates.sh` now detects existing maintenance state instead of resetting it
@@ -890,7 +917,7 @@ The project is ready for version 1.0 release. All critical blockers have been re
 ## [2025-11-24] - Repository Housekeeping
 
 ### Added
-- Archive directory for historical PR reports (`docs/archive/pr-reports/`)
+- Archive directory for historical PR reports (`docs/LOGS/AUDITS/pr-reports/`)
 - README documentation for scripts directory
 - README documentation for archived PR reports
 - CLI command `normalize-claim-credentials` to backfill student and roster claim hashes to the canonical format
@@ -950,9 +977,9 @@ The project is ready for version 1.0 release. All critical blockers have been re
 ## Documentation Maintenance
 
 This changelog tracks significant changes to the codebase. For:
-- **Current development tasks**: See [docs/development/TODO.md](docs/development/TODO.md)
-- **Planned features**: See [docs/development/TODO.md](docs/development/TODO.md) Roadmap section
-- **Technical details**: See [docs/technical-reference/architecture.md](docs/technical-reference/architecture.md)
+- **Current development tasks**: See [DEVELOPMENT.md](DEVELOPMENT.md)
+- **Planned features**: See [DEVELOPMENT.md](DEVELOPMENT.md) Roadmap section
+- **Technical details**: See [docs/technical-reference/architecture.md](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)
 
 ## Changelog Guidelines
 

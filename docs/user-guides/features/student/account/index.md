@@ -12,12 +12,12 @@ keywords: [student account, login, class]
 This section groups account access and class management tools.
 
 ## Dashboard
-- [Student Dashboard Overview](/docs/user-guides/features/student/account/dashboard-overview)
+- [Student Dashboard Overview](dashboard-overview.md)
 
 ## Login and Setup
-- [Log In and First-Time Setup](/docs/user-guides/features/student/account/login-setup)
-- [Reset or Recover Your Account](/docs/user-guides/features/student/account/reset-recovery)
+- [Log In and First-Time Setup](login-setup.md)
+- [Reset or Recover Your Account](reset-recovery.md)
 
 ## Classes
-- [Join or Add a Class](/docs/user-guides/features/student/account/join-class)
-- [Switch Classes](/docs/user-guides/features/student/account/switch-class)
+- [Join or Add a Class](join-class.md)
+- [Switch Classes](switch-class.md)
