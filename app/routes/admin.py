@@ -10551,7 +10551,7 @@ def resolve_issue(issue_ref):
         if action_type == 'compensating_transaction' and issue.related_transaction_id:
             # Append-only correction: create a compensating ledger entry.
             transaction = db.session.get(Transaction, issue.related_transaction_id)
-            if not transaction or transaction.student_id != issue.student_id:
+            if not transaction or transaction.student_id != issue.student_id or transaction.is_void:
                 flash("The related transaction could not be found for this issue.", "error")
                 return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
