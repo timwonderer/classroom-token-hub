@@ -1,8 +1,8 @@
 import pyotp
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from app import db
-from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TapEvent, StudentBlock
+from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TapEvent, StudentBlock, PayrollSettings
 from app.hash_utils import get_random_salt, hash_username
 
 
@@ -423,3 +423,151 @@ def test_tap_in_students_backfills_legacy_student_block_join_code(client):
         join_code="JOINA",
     ).count()
     assert active_count == 1
+
+
+def test_enforce_daily_limits_ignores_other_join_code_activity(client):
+    teacher_a, secret_a = _create_admin("teacher-a")
+    teacher_b, _ = _create_admin("teacher-b")
+    shared_student = _create_student("SharedLimit", teacher_a)
+    db.session.add(StudentTeacher(student_id=shared_student.id, admin_id=teacher_b.id))
+
+    db.session.add_all([
+        TeacherBlock(
+            teacher_id=teacher_a.id,
+            block="A",
+            class_label="A",
+            first_name="SharedLimit",
+            last_initial="A",
+            last_name_hash_by_part=["x"],
+            dob_sum_hash=None,
+            salt=get_random_salt(),
+            first_half_hash="shared-limit-a-seat",
+            join_code="JOINA",
+            student_id=shared_student.id,
+            is_claimed=True,
+        ),
+        TeacherBlock(
+            teacher_id=teacher_b.id,
+            block="A",
+            class_label="A",
+            first_name="SharedLimit",
+            last_initial="A",
+            last_name_hash_by_part=["y"],
+            dob_sum_hash=None,
+            salt=get_random_salt(),
+            first_half_hash="shared-limit-b-seat",
+            join_code="JOINB",
+            student_id=shared_student.id,
+            is_claimed=True,
+        ),
+        PayrollSettings(
+            teacher_id=teacher_a.id,
+            block="A",
+            is_active=True,
+            settings_mode="simple",
+            daily_limit_hours=0.001,  # ~3.6 seconds
+            pay_rate=0.25,
+            payroll_frequency_days=14,
+        ),
+        TapEvent(
+            student_id=shared_student.id,
+            period="A",
+            status="active",
+            join_code="JOINB",
+            reason="Start work",
+            timestamp=datetime.now(timezone.utc) - timedelta(hours=2),
+        ),
+    ])
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["is_admin"] = True
+        sess["admin_id"] = teacher_a.id
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+    response = client.post("/admin/enforce-daily-limits")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["status"] == "success"
+    assert payload["checked"] == 0
+    assert payload["tapped_out"] == []
+
+    inactive_count = TapEvent.query.filter_by(
+        student_id=shared_student.id,
+        period="A",
+        status="inactive",
+        join_code="JOINA",
+    ).count()
+    assert inactive_count == 0
+
+
+def test_enforce_daily_limits_taps_out_when_limit_reached_in_scope(client):
+    teacher, secret = _create_admin("teacher-a")
+    student = _create_student("AliceLimit", teacher)
+
+    db.session.add_all([
+        TeacherBlock(
+            teacher_id=teacher.id,
+            block="A",
+            class_label="A",
+            first_name="AliceLimit",
+            last_initial="A",
+            last_name_hash_by_part=["x"],
+            dob_sum_hash=None,
+            salt=get_random_salt(),
+            first_half_hash="alice-limit-seat",
+            join_code="JOINA",
+            student_id=student.id,
+            is_claimed=True,
+        ),
+        PayrollSettings(
+            teacher_id=teacher.id,
+            block="A",
+            is_active=True,
+            settings_mode="simple",
+            daily_limit_hours=0.001,  # ~3.6 seconds
+            pay_rate=0.25,
+            payroll_frequency_days=14,
+        ),
+        TapEvent(
+            student_id=student.id,
+            period="A",
+            status="active",
+            join_code="JOINA",
+            reason="Start work",
+            timestamp=datetime.now(timezone.utc) - timedelta(hours=2),
+        ),
+        StudentBlock(
+            student_id=student.id,
+            period="A",
+            join_code=None,
+            tap_enabled=True,
+        ),
+    ])
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess["is_admin"] = True
+        sess["admin_id"] = teacher.id
+        sess["last_activity"] = datetime.now(timezone.utc).isoformat()
+    response = client.post("/admin/enforce-daily-limits")
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["status"] == "success"
+    assert payload["checked"] >= 1
+    assert any(student.full_name in entry for entry in payload["tapped_out"])
+
+    block = StudentBlock.query.filter_by(student_id=student.id, period="A").first()
+    assert block is not None
+    assert block.join_code == "JOINA"
+    assert block.done_for_day_date is not None
+
+    inactive_count = TapEvent.query.filter(
+        TapEvent.student_id == student.id,
+        TapEvent.period == "A",
+        TapEvent.status == "inactive",
+        TapEvent.join_code == "JOINA",
+        TapEvent.reason.ilike("Daily limit%"),
+    ).count()
+    assert inactive_count == 1

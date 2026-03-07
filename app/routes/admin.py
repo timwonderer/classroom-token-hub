@@ -8133,61 +8133,124 @@ def enforce_daily_limits():
     Manually trigger auto tap-out for all students who have exceeded their daily limit.
     Returns a report of students who were auto-tapped out.
     """
-    from app.routes.api import check_and_auto_tapout_if_limit_reached
-    import pytz
     from app.payroll import get_daily_limit_seconds
+    from app.attendance import calculate_period_attendance_utc_range
 
     students = _scoped_students().all()
     tapped_out = []
     checked = 0
     errors = []
+    current_admin_id = session.get('admin_id')
 
     pacific = pytz.timezone('America/Los_Angeles')
+    now_utc = utc_now()
+    now_pacific = now_utc.astimezone(pacific)
+    today_pacific = now_pacific.date()
+
+    start_of_day_pacific = pacific.localize(datetime.combine(today_pacific, datetime.min.time()))
+    start_of_day_utc = start_of_day_pacific.astimezone(timezone.utc)
+    end_of_day_pacific = start_of_day_pacific + timedelta(days=1)
+    end_of_day_utc = end_of_day_pacific.astimezone(timezone.utc)
 
     for student in students:
+        period_upper = None
         try:
-            # Get the student's current active sessions
             student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
             for block_original in student_blocks:
                 period_upper = block_original.upper()
+                join_code = get_join_code_for_student_period(student.id, period_upper, teacher_id=current_admin_id)
+                if not join_code:
+                    continue
+
+                seat_ids = get_seat_ids_for_student_join(student.id, join_code)
+                tap_scope = seat_scoped_filter(TapEvent, student.id, seat_ids)
+
                 latest_event = (
                     TapEvent.query
-                    .filter_by(student_id=student.id, period=period_upper)
+                    .filter(
+                        tap_scope,
+                        TapEvent.period == period_upper,
+                        TapEvent.join_code == join_code,
+                        TapEvent.is_deleted == False,
+                    )
                     .order_by(TapEvent.timestamp.desc())
                     .first()
                 )
 
-                # If student is active, check their limit
-                if latest_event and latest_event.status == "active":
-                    checked += 1
-                    daily_limit = get_daily_limit_seconds(block_original)
+                if not latest_event or latest_event.status != "active":
+                    continue
 
-                    if daily_limit:
-                        # Log the check for debugging
-                        current_app.logger.info(
-                            f"Checking student {student.id} ({student.full_name}) in period {period_upper} - limit: {daily_limit/3600:.1f}h"
-                        )
-                        check_and_auto_tapout_if_limit_reached(student)
+                checked += 1
+                daily_limit = get_daily_limit_seconds(block_original, teacher_id=current_admin_id)
+                if not daily_limit:
+                    continue
 
-                        # Check if they were tapped out (latest event changed)
-                        new_latest = (
-                            TapEvent.query
-                            .filter_by(student_id=student.id, period=period_upper)
-                            .order_by(TapEvent.timestamp.desc())
-                            .first()
-                        )
-                        if new_latest and new_latest.status == "inactive" and new_latest.id != latest_event.id:
-                            tapped_out.append(f"{student.full_name} (Period {period_upper})")
-                    break  # Only check once per student
+                today_attendance = calculate_period_attendance_utc_range(
+                    student.id, period_upper, start_of_day_utc, end_of_day_utc
+                )
+                if latest_event.timestamp:
+                    last_tap_in_utc = ensure_utc(latest_event.timestamp)
+                    if start_of_day_utc <= last_tap_in_utc < end_of_day_utc:
+                        today_attendance += (now_utc - last_tap_in_utc).total_seconds()
+
+                if today_attendance < daily_limit:
+                    continue
+
+                existing_limit_tapout = TapEvent.query.filter(
+                    tap_scope,
+                    TapEvent.period == period_upper,
+                    TapEvent.join_code == join_code,
+                    TapEvent.status == "inactive",
+                    TapEvent.timestamp >= start_of_day_utc,
+                    TapEvent.timestamp < end_of_day_utc,
+                    TapEvent.reason.ilike("Daily limit%"),
+                    TapEvent.is_deleted == False,
+                ).first()
+                if existing_limit_tapout:
+                    continue
+
+                student_block = StudentBlock.query.filter_by(
+                    student_id=student.id,
+                    period=period_upper,
+                ).first()
+                if student_block and student_block.join_code and student_block.join_code != join_code:
+                    errors.append(
+                        f"Skipped {student.full_name} ({period_upper}): block settings belong to a different class scope"
+                    )
+                    continue
+                if not student_block:
+                    student_block = StudentBlock(
+                        student_id=student.id,
+                        period=period_upper,
+                        join_code=join_code,
+                        tap_enabled=True,
+                    )
+                    db.session.add(student_block)
+                elif not student_block.join_code:
+                    student_block.join_code = join_code
+                student_block.done_for_day_date = today_pacific
+
+                db.session.add(TapEvent(
+                    student_id=student.id,
+                    period=period_upper,
+                    status="inactive",
+                    timestamp=now_utc,
+                    reason=f"Daily limit reached ({daily_limit / 3600:.1f}h)",
+                    join_code=join_code,
+                ))
+                tapped_out.append(f"{student.full_name} (Period {period_upper})")
+                break
         except Exception as e:
             errors.append(
-                f"Error when executing auto-timeout for {student.full_name} (ID {student.id}, Period {period_upper})"
+                f"Error when executing auto-timeout for {student.full_name} (ID {student.id}, Period {period_upper or 'unknown'})"
             )
             current_app.logger.error(
-                f"Error enforcing limits for student {student.id} ({student.full_name}) in period {period_upper}",
+                f"Error enforcing limits for student {student.id} ({student.full_name}) in period {period_upper or 'unknown'}",
                 exc_info=True,
             )
             continue
+
+    db.session.commit()
 
     message = f"Checked {checked} active students. Auto-tapped out {len(tapped_out)} student(s)."
 
