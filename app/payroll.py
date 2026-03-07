@@ -16,7 +16,9 @@ from decimal import Decimal
 
 
 DEFAULT_PAY_RATE_PER_MINUTE = Decimal('0.25')
-DEFAULT_PAY_RATE_PER_SECOND = DEFAULT_PAY_RATE_PER_MINUTE / Decimal('60')
+DEFAULT_PAY_RATE_PER_SECOND_DECIMAL = DEFAULT_PAY_RATE_PER_MINUTE / Decimal('60')
+# Backward-compatible public constant used by tests and callers expecting float semantics.
+DEFAULT_PAY_RATE_PER_SECOND = float(DEFAULT_PAY_RATE_PER_SECOND_DECIMAL)
 
 
 def with_teacher_id_fallback(func):
@@ -49,7 +51,7 @@ def get_pay_rate_for_block(block, teacher_id=None):
     
     # Can't lookup settings without a teacher_id - return default
     if teacher_id is None:
-        return DEFAULT_PAY_RATE_PER_SECOND
+        return DEFAULT_PAY_RATE_PER_SECOND_DECIMAL
 
     # Try block-specific settings first
     if block:
@@ -72,7 +74,7 @@ def get_pay_rate_for_block(block, teacher_id=None):
         return global_setting.pay_rate / Decimal('60')
 
     # Ultimate fallback to hardcoded default
-    return DEFAULT_PAY_RATE_PER_SECOND
+    return DEFAULT_PAY_RATE_PER_SECOND_DECIMAL
 
 
 @with_teacher_id_fallback
@@ -214,7 +216,7 @@ def calculate_payroll_breakdown(students, last_payroll_time, teacher_id=None):
             block_upper = block_original.upper()
 
             # lookup rate
-            rate_per_second = pay_rates.get(block_upper, pay_rates.get(None, DEFAULT_PAY_RATE_PER_SECOND))
+            rate_per_second = pay_rates.get(block_upper, pay_rates.get(None, DEFAULT_PAY_RATE_PER_SECOND_DECIMAL))
 
             # lookup join code
             join_code = student_join_codes.get((student.id, block_upper))

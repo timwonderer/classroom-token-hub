@@ -169,12 +169,12 @@
                                                 {% endif %}
                                             </h6>
                                             <span class="badge
-                                                {% if issue.status == 'submitted' %}bg-primary
-                                                {% elif issue.status == 'teacher_review' %}bg-info
-                                                {% elif issue.status == 'teacher_resolved' %}bg-success
-                                                {% elif issue.status == 'elevated' %}bg-warning text-dark
-                                                {% elif issue.status == 'developer_review' %}bg-warning text-dark
-                                                {% elif issue.status == 'developer_resolved' %}bg-success
+                                                {% if issue.status in ['OPEN', 'submitted'] %}bg-primary
+                                                {% elif issue.status in ['TEACHER_REVIEW', 'teacher_review'] %}bg-info
+                                                {% elif issue.status in ['TEACHER_FINAL_REVIEW', 'teacher_resolved'] %}bg-primary
+                                                {% elif issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}bg-warning text-dark
+                                                {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}bg-info
+                                                {% elif issue.status == 'CLOSED' %}bg-success
                                                 {% else %}bg-secondary{% endif %}">
                                                 {{ issue.get_student_visible_status() }}
                                             </span>
