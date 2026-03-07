@@ -14,6 +14,19 @@
 - **[Contributing Guide](CONTRIBUTING.md)** - How to contribute
 - **[Project History](docs/LOGS/AUDITS/LOG-ARC-031_Project_History.md)** - Project evolution and philosophy
 
+## Git Hooks
+
+Run once after clone:
+
+```bash
+./scripts/setup-hooks.sh
+```
+
+This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch-aware DB switching:
+
+- Protected v2 branches (`join-code-centric-architecture-rebuild`, `codex/fix-database-model-for-dob-sum-storage`) -> `classroom_economy`
+- All other branches -> `production_dev`
+
 ## Static Assets and Cache Busting
 
 - Always reference CSS/JS/images in templates with `static_url('<path>')` so Flask appends a file timestamp query parameter.
