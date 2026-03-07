@@ -2,7 +2,7 @@
 import pytest
 from decimal import Decimal
 from datetime import datetime, timezone
-from app.models import Admin, Student, Transaction, StoreItem, StudentItem, TeacherBlock, StudentTeacher
+from app.models import Admin, Student, Transaction, StoreItem, StudentItem, TeacherBlock, StudentTeacher, ClassEconomy, ClassMembership
 from app.extensions import db
 from werkzeug.security import generate_password_hash
 
@@ -29,6 +29,12 @@ def student_in_class(client, teacher_admin):
         first_name='TestRejection', last_initial='S', last_name_hash_by_part=None, dob_sum_hash=None, salt=b'salt', first_half_hash='hash'
     )
     db.session.add(seat)
+    db.session.add(seat)
+    
+    # Setup Class Context
+    db.session.add(ClassEconomy(join_code='REJECT123', status="active", created_by_admin_id=teacher_admin.id))
+    db.session.add(ClassMembership(join_code='REJECT123', admin_id=teacher_admin.id, role="admin", status="active"))
+    db.session.add(ClassMembership(join_code='REJECT123', student_id=student.id, role="student", status="active"))
     db.session.commit()
     return student
 

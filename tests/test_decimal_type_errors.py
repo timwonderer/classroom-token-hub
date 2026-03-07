@@ -325,13 +325,12 @@ class TestDecimalTypeErrors:
         
         # This should NOT raise TypeError
         with patch('app.routes.student.get_current_class_context', return_value=mock_context):
-            with patch('app.routes.student.get_current_teacher_id', return_value=teacher.id):
-                try:
-                    apply_savings_interest(student)
-                    success = True
-                except TypeError as e:
-                    success = False
-                    pytest.fail(f"TypeError occurred in apply_savings_interest: {e}")
+            try:
+                apply_savings_interest(student)
+                success = True
+            except TypeError as e:
+                success = False
+                pytest.fail(f"TypeError occurred in apply_savings_interest: {e}")
 
         assert success
 

@@ -246,12 +246,12 @@ def get_all_block_statuses(student, join_code=None):
     else:
         student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
         mapped_teacher_ids = {
-            row.admin_id
-            for row in StudentTeacher.query.with_entities(StudentTeacher.admin_id)
+            row.teacher_id
+            for row in StudentTeacher.query.with_entities(StudentTeacher.teacher_id)
             .filter(StudentTeacher.student_id == student.id)
             .distinct()
             .all()
-            if row.admin_id is not None
+            if row.teacher_id is not None
         }
         teacher_id = next(iter(mapped_teacher_ids)) if len(mapped_teacher_ids) == 1 else None
         join_scope_seat_ids = []
@@ -292,7 +292,7 @@ def get_all_block_statuses(student, join_code=None):
         duration = calculate_unpaid_attendance_seconds(student.id, blk, last_payroll_time, join_code=join_code)
 
         # Use block-specific payroll settings (fallback handled in helper)
-        rate_per_second = get_pay_rate_for_block(block_original, teacher_id=teacher_id)
+        rate_per_second = get_pay_rate_for_block(block_original, teacher_id=teacher_id, join_code=join_code)
         projected_pay = duration * rate_per_second
 
         # Get latest relevant hall pass for this period
@@ -482,7 +482,7 @@ def batch_auto_tapout_students(admin_id):
     # 1. Get all students for this admin via StudentTeacher
     student_ids = [
         row[0] for row in db.session.query(StudentTeacher.student_id)
-        .filter(StudentTeacher.admin_id == admin_id)
+        .filter(StudentTeacher.teacher_id == admin_id)
         .distinct()
         .all()
     ]

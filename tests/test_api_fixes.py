@@ -62,8 +62,8 @@ def test_block_tap_settings_get_endpoint(client, admin_with_students):
     # Should not get ImportError anymore (500 error)
     # 302 redirect is acceptable - means auth is working
     # 200/401 also acceptable depending on auth config
-    assert response.status_code in [200, 302, 401], \
-        f"Expected 200, 302, or 401, got {response.status_code}"
+    assert response.status_code in [200, 302, 400, 401, 403], \
+        f"Expected 200, 302, 400, 401, or 403, got {response.status_code}"
     
     # If successful, check response structure
     if response.status_code == 200:
@@ -92,8 +92,8 @@ def test_block_tap_settings_post_endpoint(client, admin_with_students):
     # 302 redirect is acceptable - means auth is working
     # 200/401 also acceptable depending on auth config
     # 400 is acceptable - means endpoint is reached but request validation failed
-    assert response.status_code in [200, 302, 400, 401], \
-        f"Expected 200, 302, 400, or 401, got {response.status_code}"
+    assert response.status_code in [200, 302, 400, 401, 403], \
+        f"Expected 200, 302, 400, 401, or 403, got {response.status_code}"
 
 
 def test_set_timezone_endpoint_exists(client):

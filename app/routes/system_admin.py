@@ -924,7 +924,7 @@ def delete_admin(admin_id):
         # SECURITY FIX: Only use StudentTeacher table, NOT deprecated teacher_id
         # Get all students linked to this teacher via StudentTeacher table
         linked_student_ids = [
-            st.student_id for st in StudentTeacher.query.filter_by(admin_id=admin.id)
+            st.student_id for st in StudentTeacher.query.filter_by(teacher_id=admin.id)
         ]
 
         candidate_student_ids = set(linked_student_ids)
@@ -936,7 +936,7 @@ def delete_admin(admin_id):
                 sid for (sid,) in db.session.query(StudentTeacher.student_id)
                 .filter(
                     StudentTeacher.student_id.in_(candidate_student_ids),
-                    StudentTeacher.admin_id != admin.id,
+                    StudentTeacher.teacher_id != admin.id,
                 )
             )
 
@@ -944,7 +944,7 @@ def delete_admin(admin_id):
 
         if shared_student_ids:
             StudentTeacher.query.filter(
-                StudentTeacher.admin_id == admin.id,
+                StudentTeacher.teacher_id == admin.id,
                 StudentTeacher.student_id.in_(shared_student_ids),
             ).delete(synchronize_session=False)
 
@@ -1029,11 +1029,11 @@ def manage_teachers():
     if all_teachers:
         teacher_ids = [t.id for t in all_teachers]
         teacher_students = db.session.query(
-            StudentTeacher.admin_id.label('teacher_id'),
+            StudentTeacher.teacher_id.label('teacher_id'),
             Student.id.label('student_id'),
             Student.block.label('block')
         ).join(Student, Student.id == StudentTeacher.student_id).filter(
-            StudentTeacher.admin_id.in_(teacher_ids),
+            StudentTeacher.teacher_id.in_(teacher_ids),
         ).subquery()
 
         teacher_student_count_rows = db.session.query(
@@ -1135,13 +1135,13 @@ def teacher_overview():
     # Batch query: Get all teacher-student relationships in one query
     # Uses StudentTeacher table only (Multi-Teacher Hardening)
     teacher_students = db.session.query(
-        StudentTeacher.admin_id.label('teacher_id'),
+        StudentTeacher.teacher_id.label('teacher_id'),
         Student.id.label('student_id'),
         Student.block.label('block')
     ).join(
         Student, Student.id == StudentTeacher.student_id
     ).filter(
-        StudentTeacher.admin_id.in_([t.id for t in teachers]),
+        StudentTeacher.teacher_id.in_([t.id for t in teachers]),
     ).subquery()
 
     # Get total student counts per teacher in a single query

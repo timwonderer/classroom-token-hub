@@ -255,7 +255,7 @@ class AdminClaimProcessForm(FlaskForm):
     ], validators=[DataRequired()])
     approved_amount = FloatField('Approved Amount', validators=[Optional()])
     rejection_reason = TextAreaField('Rejection Reason (if rejected)')
-    admin_notes = TextAreaField('Admin Notes')
+    teacher_notes = TextAreaField('Teacher Notes')
     submit = SubmitField('Update Claim')
 
 

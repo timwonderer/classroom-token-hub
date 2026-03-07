@@ -1,7 +1,7 @@
 import pytest
 import re
 from decimal import Decimal
-from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher
+from app.models import RentItem, RentSettings, RentPayment, StoreItem, StudentItem, Student, Transaction, StudentBlock, Admin, TeacherBlock, StudentTeacher, ClassEconomy, ClassMembership
 from app.extensions import db
 from datetime import datetime, timezone, timedelta
 
@@ -36,6 +36,12 @@ def student_in_class(client, teacher_admin):
         first_name='Test', last_initial='S', salt=b'salt', first_half_hash='hash'
     )
     db.session.add(seat)
+    db.session.add(seat)
+    
+    # Setup Class Context
+    db.session.add(ClassEconomy(join_code='JOINCODE123', status="active", created_by_admin_id=teacher_admin.id))
+    db.session.add(ClassMembership(join_code='JOINCODE123', admin_id=teacher_admin.id, role="admin", status="active"))
+    db.session.add(ClassMembership(join_code='JOINCODE123', student_id=student.id, role="student", status="active"))
     db.session.commit()
     db.session.refresh(student)
     return student
@@ -940,6 +946,7 @@ def test_per_use_free_purchase_without_precreated_grant_when_rent_paid(client, t
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -1026,6 +1033,7 @@ def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -1038,6 +1046,7 @@ def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin
 
     privilege_store_item = StoreItem(
         teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
         name='Desk Privilege',
         price=Decimal('50.00'),
         is_active=True,
@@ -1046,6 +1055,7 @@ def test_shop_only_disables_privilege_items_when_rent_paid(client, teacher_admin
     )
     per_use_store_item = StoreItem(
         teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
         name='Pencil Per Use',
         price=Decimal('3.00'),
         is_active=True,
@@ -1147,6 +1157,7 @@ def test_shop_keeps_item_purchasable_when_per_use_and_privilege_links_overlap(cl
 
     store_item = StoreItem(
         teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
         name='Mixed Rent Link',
         price=Decimal('8.00'),
         is_active=True,
@@ -1222,6 +1233,7 @@ def test_shop_treats_legacy_privilege_with_per_use_duration_as_per_use(client, t
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -1234,6 +1246,7 @@ def test_shop_treats_legacy_privilege_with_per_use_duration_as_per_use(client, t
 
     store_item = StoreItem(
         teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
         name='Legacy Per Use Link',
         price=Decimal('9.00'),
         is_active=True,
@@ -1304,6 +1317,7 @@ def test_api_allows_zero_cost_rent_linked_purchase_when_paid_without_per_use_map
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -1317,6 +1331,7 @@ def test_api_allows_zero_cost_rent_linked_purchase_when_paid_without_per_use_map
     # Rent-linked store item without a RentItem mapping row (legacy/stale linkage).
     store_item = StoreItem(
         teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
         name='Link Only Perk',
         price=Decimal('12.00'),
         is_active=True,
@@ -1519,6 +1534,7 @@ def test_shop_displays_rent_perk_price_as_free(client, teacher_admin, student_in
 
     store_item = StoreItem(
         teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
         name='Rent Linked Pencil',
         price=Decimal('7.00'),
         is_active=True,
@@ -1557,6 +1573,7 @@ def test_shop_displays_rent_perk_price_as_free_when_rent_paid_without_grant_row(
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',
@@ -1569,6 +1586,7 @@ def test_shop_displays_rent_perk_price_as_free_when_rent_paid_without_grant_row(
 
     per_use_store_item = StoreItem(
         teacher_id=teacher_admin.id,
+        join_code='JOINCODE123',
         name='Paid Rent Pencil',
         price=Decimal('4.00'),
         is_active=True,
@@ -1912,6 +1930,7 @@ def test_per_use_free_purchase_recovers_from_exhausted_grant_row_when_rent_paid(
     settings = RentSettings(
         teacher_id=teacher_admin.id,
         block='A',
+        join_code='JOINCODE123',
         is_enabled=True,
         rent_amount=Decimal('10.00'),
         frequency_type='monthly',

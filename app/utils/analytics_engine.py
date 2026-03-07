@@ -98,7 +98,7 @@ class AnalyticsEngine:
                 .join(StudentTeacher, StudentTeacher.student_id == Student.id)
                 .filter(
                     StudentBlock.join_code == self.join_code,
-                    StudentTeacher.admin_id == self.teacher_id,
+                    StudentTeacher.teacher_id == self.teacher_id,
                 )
                 .first()
             )
@@ -111,7 +111,7 @@ class AnalyticsEngine:
         query = (
             Student.query
             .join(StudentTeacher, StudentTeacher.student_id == Student.id)
-            .filter(StudentTeacher.admin_id == self.teacher_id)
+            .filter(StudentTeacher.teacher_id == self.teacher_id)
         )
 
         block = self._get_block_for_join_code()

@@ -151,7 +151,7 @@ def remove_student_from_teacher_scope(student_id, teacher_id):
     """
     StudentTeacher.query.filter(
         StudentTeacher.student_id == student_id,
-        StudentTeacher.admin_id == teacher_id,
+        StudentTeacher.teacher_id == teacher_id,
     ).delete(synchronize_session=False)
     TeacherBlock.query.filter(
         TeacherBlock.student_id == student_id,

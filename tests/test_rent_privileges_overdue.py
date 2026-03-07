@@ -60,6 +60,7 @@ def test_overdue_rent_payment_restores_privileges(client):
     rent_settings = RentSettings(
         teacher_id=teacher.id,
         block="A",
+        join_code=join_code,
         is_enabled=True,
         rent_amount=Decimal("50.00"),
         first_rent_due_date=now - timedelta(days=5),
@@ -72,6 +73,7 @@ def test_overdue_rent_payment_restores_privileges(client):
 
     store_item = StoreItem(
         teacher_id=teacher.id,
+        join_code=join_code,
         name="Desk Privilege",
         description="Desk access",
         price=Decimal("5.00"),
@@ -182,6 +184,7 @@ def test_voided_payment_does_not_restore_privileges(client):
     rent_settings = RentSettings(
         teacher_id=teacher.id,
         block="A",
+        join_code=join_code,
         is_enabled=True,
         rent_amount=Decimal("50.00"),
         first_rent_due_date=now - timedelta(days=5),
@@ -194,6 +197,7 @@ def test_voided_payment_does_not_restore_privileges(client):
 
     store_item = StoreItem(
         teacher_id=teacher.id,
+        join_code=join_code,
         name="Desk Privilege",
         description="Desk access",
         price=Decimal("5.00"),
@@ -332,6 +336,7 @@ def test_overdue_rent_payment_with_timestamp_drift_restores_privileges(client):
     rent_settings = RentSettings(
         teacher_id=teacher.id,
         block="A",
+        join_code=join_code,
         is_enabled=True,
         rent_amount=Decimal("50.00"),
         first_rent_due_date=now - timedelta(days=5),
@@ -344,6 +349,7 @@ def test_overdue_rent_payment_with_timestamp_drift_restores_privileges(client):
 
     store_item = StoreItem(
         teacher_id=teacher.id,
+        join_code=join_code,
         name="Desk Privilege Drift",
         description="Desk access",
         price=Decimal("5.00"),

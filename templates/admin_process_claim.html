@@ -110,9 +110,9 @@
         <div class="bg-danger-subtle p-3 rounded text-danger">{{ claim.rejection_reason | markdown }}</div>
         {% endif %}
 
-        {% if claim.admin_notes %}
-        <h6>Admin Notes:</h6>
-        <div class="bg-info-subtle p-3 rounded">{{ claim.admin_notes | markdown }}</div>
+        {% if claim.teacher_notes %}
+        <h6>Teacher Notes:</h6>
+        <div class="bg-info-subtle p-3 rounded">{{ claim.teacher_notes | markdown }}</div>
         {% endif %}
       </div>
     </div>
@@ -255,8 +255,8 @@
       </div>
 
       <div class="mb-3">
-        {{ form.admin_notes.label(class="form-label") }}
-        {{ form.admin_notes(class="form-control", rows=3) }}
+        {{ form.teacher_notes.label(class="form-label") }}
+        {{ form.teacher_notes(class="form-control", rows=3) }}
       </div>
 
       <div class="d-flex gap-2">
@@ -269,10 +269,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/easymde/dist/easymde.min.js"></script>
 <script>
-  // Initialize markdown editors for rejection reason and admin notes
+  // Initialize markdown editors for rejection reason and teacher notes
   document.addEventListener('DOMContentLoaded', function() {
     const rejectionReasonField = document.getElementById('rejection_reason');
-    const adminNotesField = document.getElementById('admin_notes');
+    const adminNotesField = document.getElementById('teacher_notes');
 
     if (rejectionReasonField) {
       new EasyMDE({

@@ -1145,8 +1145,8 @@
                         {% endif %}
                       </small>
                     </td>
-                    <td class="text-end">${{ "%.2f"|format(student.checking_balance) }}</td>
-                    <td class="text-end">${{ "%.2f"|format(student.savings_balance) }}</td>
+                    <td class="text-end">${{ "%.2f"|format(scoped_balances_by_student.get(student.id, {}).get('checking', 0)) }}</td>
+                    <td class="text-end">${{ "%.2f"|format(scoped_balances_by_student.get(student.id, {}).get('savings', 0)) }}</td>
                   </tr>
                   {% endfor %}
                   {% else %}

@@ -315,6 +315,8 @@ class TestTeacherDeletionCascade:
 
     def test_teacher_blocks_cascade_on_teacher_delete(self, client_with_fk):
         """Test that TeacherBlocks are CASCADE deleted when teacher is deleted."""
+        from app.models import ClassEconomy
+
         # Create a teacher
         admin = Admin(
             username='blocks_cascade_test',
@@ -323,6 +325,13 @@ class TestTeacherDeletionCascade:
         db.session.add(admin)
         db.session.commit()
         teacher_id = admin.id
+
+        # Ensure ClassEconomy exists for FK constraints
+        if not db.session.get(ClassEconomy, 'TEST123'):
+            db.session.add(ClassEconomy(join_code='TEST123', display_name='Class TEST123'))
+        if not db.session.get(ClassEconomy, 'TEST456'):
+            db.session.add(ClassEconomy(join_code='TEST456', display_name='Class TEST456'))
+        db.session.commit()
 
         # Create teacher blocks
         # PIIEncryptedType will handle encryption automatically

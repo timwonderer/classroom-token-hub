@@ -235,9 +235,9 @@
     </div>
 
     <script>
-        // Get teacher_id from URL parameter
+        // Get join_code from URL parameter
         const urlParams = new URLSearchParams(window.location.search);
-        const teacherId = urlParams.get('teacher_id');
+        const joinCode = urlParams.get('join_code');
         
         function formatTime(isoString) {
             const date = new Date(isoString);
@@ -322,11 +322,11 @@
         }
 
         function fetchQueue() {
-            // Build URL with teacher_id if available
-            let url = '/api/hall-pass/queue';
-            if (teacherId) {
-                url += `?teacher_id=${teacherId}`;
+            if (!joinCode) {
+                console.error('Missing join_code parameter for queue display');
+                return;
             }
+            const url = `/api/hall-pass/queue?join_code=${encodeURIComponent(joinCode)}`;
             
             fetch(url)
                 .then(response => response.json())

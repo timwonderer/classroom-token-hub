@@ -167,6 +167,7 @@
             </div>
             <span class="badge bg-info text-white" id="queueLimitBadge"></span>
         </div>
+        <div id="queuePreview" class="small text-muted mb-3" style="display: none !important;"></div>
 
         {% for period in student_blocks %}
         <div class="block-row" data-block-row="{{ period }}">
@@ -355,11 +356,11 @@
 
 {% block extra_scripts %}
 <script>
-    const TEACHER_ID = {{ teacher_id }};
+    const CURRENT_JOIN_CODE = {{ current_join_code|tojson }};
 
     // Load available pass types from teacher configuration
     function loadPassTypes() {
-        fetch(`/api/hall-pass/available-types?teacher_id=${TEACHER_ID}`)
+        fetch(`/api/hall-pass/available-types?join_code=${encodeURIComponent(CURRENT_JOIN_CODE)}`)
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
