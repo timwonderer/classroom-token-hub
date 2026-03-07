@@ -1,4 +1,5 @@
 import pyotp
+import re
 from datetime import datetime, timezone, timedelta
 
 from app import db
@@ -571,3 +572,56 @@ def test_enforce_daily_limits_taps_out_when_limit_reached_in_scope(client):
         TapEvent.reason.ilike("Daily limit%"),
     ).count()
     assert inactive_count == 1
+
+
+def test_student_detail_ignores_student_block_from_other_join_code(client):
+    teacher_a, secret_a = _create_admin("teacher-a")
+    teacher_b, _ = _create_admin("teacher-b")
+    shared_student = _create_student("SharedDetail", teacher_a)
+    db.session.add(StudentTeacher(student_id=shared_student.id, admin_id=teacher_b.id))
+
+    db.session.add_all([
+        TeacherBlock(
+            teacher_id=teacher_a.id,
+            block="A",
+            class_label="A",
+            first_name="SharedDetail",
+            last_initial="A",
+            last_name_hash_by_part=["x"],
+            dob_sum_hash=None,
+            salt=get_random_salt(),
+            first_half_hash="shared-detail-a-seat",
+            join_code="JOINA",
+            student_id=shared_student.id,
+            is_claimed=True,
+        ),
+        TeacherBlock(
+            teacher_id=teacher_b.id,
+            block="A",
+            class_label="A",
+            first_name="SharedDetail",
+            last_initial="A",
+            last_name_hash_by_part=["y"],
+            dob_sum_hash=None,
+            salt=get_random_salt(),
+            first_half_hash="shared-detail-b-seat",
+            join_code="JOINB",
+            student_id=shared_student.id,
+            is_claimed=True,
+        ),
+        StudentBlock(
+            student_id=shared_student.id,
+            period="A",
+            join_code="JOINB",
+            tap_enabled=False,
+        ),
+    ])
+    db.session.commit()
+
+    _login_admin(client, teacher_a, secret_a)
+    response = client.get(f"/admin/students/{shared_student.id}?join_code=JOINA")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'id="tapToggleA"' in body
+    assert re.search(r'<input[^>]*id="tapToggleA"[^>]*checked', body) is not None

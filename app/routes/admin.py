@@ -3104,10 +3104,20 @@ def student_detail(student_id):
     student_blocks_settings = {}
     student_periods = [b.strip().upper() for b in (student.block or "").split(',') if b.strip()]
     for period in student_periods:
-        student_block = StudentBlock.query.filter_by(
-            student_id=student.id,
-            period=period
-        ).first()
+        if join_code:
+            student_block = StudentBlock.query.filter(
+                StudentBlock.student_id == student.id,
+                StudentBlock.period == period,
+                sa.or_(
+                    StudentBlock.join_code == join_code,
+                    StudentBlock.join_code.is_(None),
+                ),
+            ).order_by(StudentBlock.join_code.desc()).first()
+        else:
+            student_block = StudentBlock.query.filter_by(
+                student_id=student.id,
+                period=period
+            ).first()
         student_blocks_settings[period] = {
             'tap_enabled': student_block.tap_enabled if student_block else True,
             'done_for_day_date': student_block.done_for_day_date if student_block else None
