@@ -159,6 +159,21 @@ An interactive banking and classroom management platform for teaching students a
    ```
    Navigate to `http://localhost:5000`
 
+### Git Hooks Setup
+
+After cloning, configure git to use the versioned `hooks/` directory:
+
+```bash
+./scripts/setup-hooks.sh
+```
+
+This enables:
+
+- `post-checkout`: branch-aware `DATABASE_URL` switching
+  - `join-code-centric-architecture-rebuild`, `codex/fix-database-model-for-dob-sum-storage`, and `codex/v2.0` -> `classroom_economy`
+  - other branches -> `production_dev`
+- `pre-push`: migration-head safety checks
+
 ### Testing with Sample Data
 
 - Use `student_upload_template.csv` as a reference for CSV roster uploads

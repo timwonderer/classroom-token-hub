@@ -10,7 +10,7 @@ Thank you for your interest in contributing to the Classroom Token Hub project!
     ```bash
     bash scripts/setup-hooks.sh
     ```
-    This installs a pre-push hook that prevents migration conflicts.
+    This configures `core.hooksPath=hooks` and enables shared repo hooks (`post-checkout` and `pre-push`).
 4.  **Set up the development environment:**
     ```bash
     python3 -m venv venv
@@ -105,7 +105,7 @@ flask db migrate -m "Your change description"
 
 ### Pre-Push Hook:
 
-A pre-push hook is automatically installed via `scripts/setup-hooks.sh` (see [Getting Started](#getting-started) step 3) that checks for multiple migration heads before pushing. This prevents most migration conflicts from reaching the repository.
+The versioned `hooks/pre-push` hook is enabled via `scripts/setup-hooks.sh` (see [Getting Started](#getting-started) step 3), which sets `core.hooksPath=hooks`. This hook checks for multiple migration heads before pushing and prevents most migration conflicts from reaching the repository.
 
 If you haven't run the setup script yet:
 ```bash
@@ -260,7 +260,7 @@ If deployment fails with a "multiple heads" error, follow this procedure careful
 
 This repository has **three layers** of migration protection:
 
-1. **Pre-Push Hook (Developer)** - Installed via `scripts/setup-hooks.sh`
+1. **Pre-Push Hook (Developer)** - Enabled via `scripts/setup-hooks.sh` (`core.hooksPath=hooks`)
    - Blocks pushes with multiple heads
    - Runs on every `git push`
    - Can be bypassed with `--no-verify` (not recommended)
