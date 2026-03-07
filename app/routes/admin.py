@@ -8238,6 +8238,8 @@ def tap_out_students():
                     continue
 
                 join_code = get_join_code_for_student_period(student.id, period, teacher_id=current_admin_id)
+                if not join_code:
+                    continue
 
                 # Check if student is currently active in this period
                 latest_event = (
@@ -8413,6 +8415,28 @@ def tap_in_students():
             if latest_event and latest_event.status == "active":
                 already_active.append(student.full_name)
                 continue
+
+            # Clear done-for-day lock in the same join-code scope only.
+            student_block = StudentBlock.query.filter_by(
+                student_id=student.id,
+                period=period,
+            ).first()
+            if student_block and student_block.join_code and student_block.join_code != join_code:
+                errors.append(
+                    f"{student.full_name} block settings belong to a different class scope"
+                )
+                continue
+            if not student_block:
+                student_block = StudentBlock(
+                    student_id=student.id,
+                    period=period,
+                    join_code=join_code,
+                    tap_enabled=True,
+                )
+                db.session.add(student_block)
+            elif not student_block.join_code:
+                student_block.join_code = join_code
+            student_block.done_for_day_date = None
 
             # Create tap-in event
             tap_in_event = TapEvent(
