@@ -42,7 +42,7 @@ from app.models import (
     BankingSettings, TeacherBlock, DeletionRequest,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
-    RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent,
+    RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent, Seat,
     BalanceCache,
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
@@ -1278,11 +1278,7 @@ def dashboard():
 
     # Recent attendance logs (limited to 5 for display)
     raw_logs = (
-        db.session.query(
-            TapEvent,
-            Student.first_name,
-            Student.last_initial
-        )
+        db.session.query(TapEvent, Student)
         .join(Student, TapEvent.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
         .order_by(TapEvent.timestamp.desc())
@@ -1290,10 +1286,10 @@ def dashboard():
         .all()
     )
     recent_logs = []
-    for log, first_name, last_initial in raw_logs:
+    for log, student in raw_logs:
         recent_logs.append({
             'student_id': log.student_id,
-            'student_name': f"{first_name} {last_initial}.",
+            'student_name': student.full_name if student else 'Unknown',
             'period': log.period,
             'timestamp': log.timestamp,
             'reason': log.reason,
@@ -3105,14 +3101,11 @@ def student_detail(student_id):
     student_periods = [b.strip().upper() for b in (student.block or "").split(',') if b.strip()]
     for period in student_periods:
         if join_code:
-            student_block = StudentBlock.query.filter(
-                StudentBlock.student_id == student.id,
-                StudentBlock.period == period,
-                sa.or_(
-                    StudentBlock.join_code == join_code,
-                    StudentBlock.join_code.is_(None),
-                ),
-            ).order_by(StudentBlock.join_code.desc()).first()
+            student_block = StudentBlock.query.filter_by(
+                student_id=student.id,
+                period=period,
+                join_code=join_code,
+            ).first()
         else:
             student_block = StudentBlock.query.filter_by(
                 student_id=student.id,
@@ -3278,13 +3271,28 @@ def edit_student():
 
                 if tb and tb.join_code:
                     target_join_code = tb.join_code
+                    target_seat_id = (
+                        Seat.query
+                        .with_entities(Seat.id)
+                        .filter(
+                            Seat.student_id == student.id,
+                            Seat.join_code == target_join_code,
+                        )
+                        .scalar()
+                    )
 
                     # Transfer transactions from old blocks to this new block
                     for old_join_code in old_join_codes:
+                        update_values = {
+                            'join_code': target_join_code,
+                            # Ensure seat scope tracks the transferred join_code.
+                            # If target seat is missing, clear legacy seat link to avoid stale cross-scope seat_id.
+                            'seat_id': target_seat_id,
+                        }
                         Transaction.query.filter_by(
                             student_id=student.id,
                             join_code=old_join_code
-                        ).update({'join_code': target_join_code})
+                        ).update(update_values, synchronize_session=False)
 
                     transferred_blocks.append(block)
                     current_app.logger.info(
@@ -8075,6 +8083,19 @@ def download_csv_template():
 @admin_required
 def export_students():
     """Export all student data to CSV."""
+    admin_id = session.get('admin_id')
+    requested_join_code = (request.args.get('join_code') or '').strip()
+    selected_join_code = None
+
+    if requested_join_code:
+        has_scope = TeacherBlock.query.filter(
+            TeacherBlock.teacher_id == admin_id,
+            TeacherBlock.join_code == requested_join_code,
+        ).first()
+        if not has_scope:
+            return jsonify({"error": "Invalid class scope"}), 403
+        selected_join_code = requested_join_code
+
     # Create CSV in memory
     output = io.StringIO()
     writer = csv.writer(output)
@@ -8087,8 +8108,21 @@ def export_students():
     ])
 
     # Write student data
-    students = _scoped_students().order_by(Student.first_name, Student.last_initial).all()
-    teacher_id = session.get('admin_id')
+    students_query = _scoped_students().order_by(Student.first_name, Student.last_initial)
+    if selected_join_code:
+        students_query = students_query.filter(
+            Student.id.in_(
+                db.session.query(TeacherBlock.student_id).filter(
+                    TeacherBlock.teacher_id == admin_id,
+                    TeacherBlock.join_code == selected_join_code,
+                    TeacherBlock.student_id.isnot(None),
+                    TeacherBlock.is_claimed.is_(True),
+                )
+            )
+        )
+
+    students = students_query.all()
+    teacher_id = admin_id
 
     # Prefetch active insurances to avoid N+1 queries
     student_ids = [s.id for s in students]
@@ -8100,24 +8134,47 @@ def export_students():
             StudentInsurance.student_id.in_(student_ids),
             StudentInsurance.status == 'active',
             InsurancePolicy.teacher_id == teacher_id
-        ).all()
+        )
+        if selected_join_code:
+            scoped_insurances = scoped_insurances.filter(StudentInsurance.join_code == selected_join_code)
+        scoped_insurances = scoped_insurances.all()
 
         for ins in scoped_insurances:
             if ins.student_id not in active_insurances_map:
                 active_insurances_map[ins.student_id] = ins
 
     for student in students:
+        export_block = student.block
+        if selected_join_code:
+            scoped_seat = TeacherBlock.query.filter(
+                TeacherBlock.teacher_id == teacher_id,
+                TeacherBlock.student_id == student.id,
+                TeacherBlock.join_code == selected_join_code,
+                TeacherBlock.is_claimed.is_(True),
+            ).first()
+            if scoped_seat and scoped_seat.block:
+                export_block = scoped_seat.block
+
         # Get active insurance for this student from pre-fetched map
         active_insurance = active_insurances_map.get(student.id)
         insurance_name = active_insurance.policy.title if active_insurance else 'None'
 
+        if selected_join_code:
+            checking_balance = student.get_checking_balance(join_code=selected_join_code)
+            savings_balance = student.get_savings_balance(join_code=selected_join_code)
+            total_earnings = student.get_total_earnings(join_code=selected_join_code)
+        else:
+            checking_balance = student.checking_balance
+            savings_balance = student.savings_balance
+            total_earnings = student.total_earnings
+
         writer.writerow([
             _sanitize_csv_field(student.first_name),
             _sanitize_csv_field(student.last_initial),
-            _sanitize_csv_field(student.block),
-            f"{student.checking_balance:.2f}",
-            f"{student.savings_balance:.2f}",
-            f"{student.total_earnings:.2f}",
+            _sanitize_csv_field(export_block),
+            f"{checking_balance:.2f}",
+            f"{savings_balance:.2f}",
+            f"{total_earnings:.2f}",
             _sanitize_csv_field(insurance_name),
             'Yes' if student.is_rent_enabled else 'No',
             'Yes' if student.has_completed_setup else 'No'
@@ -8228,6 +8285,11 @@ def enforce_daily_limits():
                         f"Skipped {student.full_name} ({period_upper}): block settings belong to a different class scope"
                     )
                     continue
+                if student_block and not student_block.join_code:
+                    errors.append(
+                        f"Skipped {student.full_name} ({period_upper}): block settings missing class scope"
+                    )
+                    continue
                 if not student_block:
                     student_block = StudentBlock(
                         student_id=student.id,
@@ -8236,8 +8298,6 @@ def enforce_daily_limits():
                         tap_enabled=True,
                     )
                     db.session.add(student_block)
-                elif not student_block.join_code:
-                    student_block.join_code = join_code
                 student_block.done_for_day_date = today_pacific
 
                 db.session.add(TapEvent(
@@ -8369,6 +8429,11 @@ def tap_out_students():
                     f"{student.full_name} block settings belong to a different class scope"
                 )
                 continue
+            if student_block and not student_block.join_code:
+                errors.append(
+                    f"{student.full_name} block settings missing class scope"
+                )
+                continue
             if not student_block:
                 student_block = StudentBlock(
                     student_id=student.id,
@@ -8377,8 +8442,6 @@ def tap_out_students():
                     tap_enabled=True,
                 )
                 db.session.add(student_block)
-            elif not student_block.join_code:
-                student_block.join_code = join_code
 
             # Set done_for_day_date to lock them out until midnight
             pacific = pytz.timezone('America/Los_Angeles')
@@ -8499,6 +8562,11 @@ def tap_in_students():
                     f"{student.full_name} block settings belong to a different class scope"
                 )
                 continue
+            if student_block and not student_block.join_code:
+                errors.append(
+                    f"{student.full_name} block settings missing class scope"
+                )
+                continue
             if not student_block:
                 student_block = StudentBlock(
                     student_id=student.id,
@@ -8507,8 +8575,6 @@ def tap_in_students():
                     tap_enabled=True,
                 )
                 db.session.add(student_block)
-            elif not student_block.join_code:
-                student_block.join_code = join_code
             student_block.done_for_day_date = None
 
             # Create tap-in event

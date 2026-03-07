@@ -3,7 +3,7 @@ import re
 from datetime import datetime, timezone, timedelta
 
 from app import db
-from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TapEvent, StudentBlock, PayrollSettings
+from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction, TapEvent, StudentBlock, PayrollSettings, User, Seat
 from app.hash_utils import get_random_salt, hash_username
 
 
@@ -229,7 +229,7 @@ def test_tap_out_students_rejects_cross_scope_student_block(client):
     assert inactive_count == 0
 
 
-def test_tap_out_students_backfills_legacy_student_block_join_code(client):
+def test_tap_out_students_rejects_null_join_code_student_block(client):
     teacher, secret = _create_admin("teacher-a")
     student = _create_student("Alice", teacher)
 
@@ -273,12 +273,13 @@ def test_tap_out_students_backfills_legacy_student_block_join_code(client):
 
     assert response.status_code == 200
     assert payload["status"] == "success"
-    assert student.full_name in payload["tapped_out"]
+    assert payload["tapped_out"] == []
+    assert any("missing class scope" in msg for msg in payload["errors"])
 
     block = StudentBlock.query.filter_by(student_id=student.id, period="A").first()
     assert block is not None
-    assert block.join_code == "JOINA"
-    assert block.done_for_day_date is not None
+    assert block.join_code is None
+    assert block.done_for_day_date is None
 
     inactive_count = TapEvent.query.filter_by(
         student_id=student.id,
@@ -286,7 +287,7 @@ def test_tap_out_students_backfills_legacy_student_block_join_code(client):
         status="inactive",
         join_code="JOINA",
     ).count()
-    assert inactive_count == 1
+    assert inactive_count == 0
 
 
 def test_tap_in_students_rejects_cross_scope_student_block(client):
@@ -365,7 +366,7 @@ def test_tap_in_students_rejects_cross_scope_student_block(client):
     assert active_count == 0
 
 
-def test_tap_in_students_backfills_legacy_student_block_join_code(client):
+def test_tap_in_students_rejects_null_join_code_student_block(client):
     teacher, secret = _create_admin("teacher-a")
     student = _create_student("AliceIn", teacher)
 
@@ -410,12 +411,13 @@ def test_tap_in_students_backfills_legacy_student_block_join_code(client):
 
     assert response.status_code == 200
     assert payload["status"] == "success"
-    assert student.full_name in payload["tapped_in"]
+    assert payload["tapped_in"] == []
+    assert any("missing class scope" in msg for msg in payload["errors"])
 
     block = StudentBlock.query.filter_by(student_id=student.id, period="A").first()
     assert block is not None
-    assert block.join_code == "JOINA"
-    assert block.done_for_day_date is None
+    assert block.join_code is None
+    assert block.done_for_day_date is not None
 
     active_count = TapEvent.query.filter_by(
         student_id=student.id,
@@ -423,7 +425,7 @@ def test_tap_in_students_backfills_legacy_student_block_join_code(client):
         status="active",
         join_code="JOINA",
     ).count()
-    assert active_count == 1
+    assert active_count == 0
 
 
 def test_enforce_daily_limits_ignores_other_join_code_activity(client):
@@ -538,12 +540,6 @@ def test_enforce_daily_limits_taps_out_when_limit_reached_in_scope(client):
             reason="Start work",
             timestamp=datetime.now(timezone.utc) - timedelta(hours=2),
         ),
-        StudentBlock(
-            student_id=student.id,
-            period="A",
-            join_code=None,
-            tap_enabled=True,
-        ),
     ])
     db.session.commit()
 
@@ -625,3 +621,82 @@ def test_student_detail_ignores_student_block_from_other_join_code(client):
     assert response.status_code == 200
     assert 'id="tapToggleA"' in body
     assert re.search(r'<input[^>]*id="tapToggleA"[^>]*checked', body) is not None
+
+
+def test_edit_student_transfer_updates_transaction_seat_scope(client):
+    teacher, secret = _create_admin("teacher-a")
+    student = _create_student("TransferSeat", teacher)
+
+    db.session.add_all([
+        TeacherBlock(
+            teacher_id=teacher.id,
+            block="A",
+            class_label="A",
+            first_name="TransferSeat",
+            last_initial="A",
+            last_name_hash_by_part=["x"],
+            dob_sum_hash=None,
+            salt=get_random_salt(),
+            first_half_hash="transfer-seat-a",
+            join_code="JOINA",
+            student_id=student.id,
+            is_claimed=True,
+        ),
+        TeacherBlock(
+            teacher_id=teacher.id,
+            block="B",
+            class_label="B",
+            first_name="TransferSeat",
+            last_initial="A",
+            last_name_hash_by_part=["y"],
+            dob_sum_hash=None,
+            salt=get_random_salt(),
+            first_half_hash="transfer-seat-b",
+            join_code="JOINB",
+            student_id=student.id,
+            is_claimed=True,
+        ),
+    ])
+    db.session.flush()
+
+    user = User(
+        username="transfer-seat-user",
+        password_hash="pw",
+    )
+    db.session.add(user)
+    db.session.flush()
+
+    seat_a = Seat(user_id=user.id, student_id=student.id, join_code="JOINA", block="A")
+    seat_b = Seat(user_id=user.id, student_id=student.id, join_code="JOINB", block="B")
+    db.session.add_all([seat_a, seat_b])
+    db.session.flush()
+
+    tx = Transaction(
+        student_id=student.id,
+        seat_id=seat_a.id,
+        join_code="JOINA",
+        amount=10,
+        account_type="checking",
+        type="bonus",
+        description="pre-transfer",
+    )
+    db.session.add(tx)
+    db.session.commit()
+
+    _login_admin(client, teacher, secret)
+    response = client.post(
+        "/admin/student/edit",
+        data={
+            "student_id": student.id,
+            "first_name": "TransferSeat",
+            "last_name": "A",
+            "blocks": ["B"],
+            "balance_action_B": "transfer",
+        },
+        follow_redirects=False,
+    )
+
+    assert response.status_code in (302, 303)
+    db.session.refresh(tx)
+    assert tx.join_code == "JOINB"
+    assert tx.seat_id == seat_b.id

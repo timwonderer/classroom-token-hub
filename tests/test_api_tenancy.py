@@ -59,7 +59,7 @@ def _login_admin(client, admin: Admin, secret: str):
     response = client.post(
         "/admin/login",
         data={"username": admin.username, "totp_code": pyotp.TOTP(secret).now()},
-        follow_redirects=True,
+        follow_redirects=False,
     )
     with client.session_transaction() as sess:
         sess.setdefault("is_admin", True)
@@ -361,8 +361,8 @@ def test_admin_student_block_settings_rejects_out_of_scope_join_code(client):
     assert block.tap_enabled is True
 
 
-def test_admin_student_block_settings_backfills_join_code_when_missing(client):
-    """Admin update should attach scoped join_code to legacy StudentBlock rows."""
+def test_admin_student_block_settings_rejects_null_join_code_row(client):
+    """Admin update should reject StudentBlock rows without join-code scope in v2 mode."""
     teacher_a, secret_a = _create_admin("teacher-a")
     student = _create_student("LegacyBlock", primary_teacher=teacher_a)
     _create_claimed_seat(teacher_a, student, "JOIN_A", block="A")
@@ -383,7 +383,81 @@ def test_admin_student_block_settings_backfills_join_code_when_missing(client):
         headers={"X-CSRFToken": "test"},
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 403
     db.session.refresh(block)
-    assert block.tap_enabled is False
-    assert block.join_code == "JOIN_A"
+    assert block.tap_enabled is True
+    assert block.join_code is None
+
+
+def test_admin_block_tap_settings_get_ignores_out_of_scope_join_code_row(client):
+    """Block-level tap state should ignore StudentBlock rows from other join-code scopes."""
+    teacher_a, secret_a = _create_admin("teacher-a")
+    teacher_b, _ = _create_admin("teacher-b")
+
+    shared_student = _create_student(
+        "SharedTapState",
+        primary_teacher=teacher_a,
+        linked_teachers=[teacher_a, teacher_b],
+    )
+    _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+    _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="A")
+
+    # Out-of-scope row for teacher A should not drive block-level state.
+    db.session.add(
+        StudentBlock(
+            student_id=shared_student.id,
+            period="A",
+            join_code="JOIN_B",
+            tap_enabled=False,
+        )
+    )
+    db.session.commit()
+
+    _login_admin(client, teacher_a, secret_a)
+    response = client.get("/api/admin/block-tap-settings?block=A")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    # Teacher A has no scoped disabled row; default remains enabled.
+    assert payload["tap_enabled"] is True
+
+
+def test_admin_block_tap_settings_post_preserves_out_of_scope_join_code_row(client):
+    """Bulk block tap updates must not mutate another join-code's StudentBlock row."""
+    teacher_a, secret_a = _create_admin("teacher-a")
+    teacher_b, _ = _create_admin("teacher-b")
+
+    shared_student = _create_student(
+        "SharedTapBulk",
+        primary_teacher=teacher_a,
+        linked_teachers=[teacher_a, teacher_b],
+    )
+    _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+    _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="A")
+
+    foreign_row = StudentBlock(
+        student_id=shared_student.id,
+        period="A",
+        join_code="JOIN_B",
+        tap_enabled=True,
+    )
+    db.session.add(foreign_row)
+    db.session.commit()
+
+    _login_admin(client, teacher_a, secret_a)
+    response = client.post(
+        "/api/admin/block-tap-settings",
+        json={"block": "A", "tap_enabled": False},
+        headers={"X-CSRFToken": "test"},
+    )
+
+    assert response.status_code == 200
+    db.session.refresh(foreign_row)
+    assert foreign_row.tap_enabled is True
+
+    scoped_row = StudentBlock.query.filter_by(
+        student_id=shared_student.id,
+        period="A",
+        join_code="JOIN_A",
+    ).first()
+    assert scoped_row is None

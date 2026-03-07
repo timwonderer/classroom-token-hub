@@ -2600,7 +2600,6 @@ def update_student_block_settings():
         return jsonify({"error": "Student not found or access denied"}), 404
 
     # Resolve admin-scoped join_code for this student-period.
-    # Keep legacy fallback behavior when no seat-scope row exists yet.
     scoped_join_codes = sorted(
         {
             row[0]
@@ -2613,14 +2612,27 @@ def update_student_block_settings():
             ).all()
         }
     )
-    target_join_code = scoped_join_codes[0] if scoped_join_codes else None
+    if not scoped_join_codes:
+        return jsonify({"error": "Student block not found or access denied"}), 403
+    target_join_code = scoped_join_codes[0]
 
-    # Get current StudentBlock record for this student+period.
-    # During migration this is still unique on (student_id, period).
+    # Strict v2 scope: student+period+join_code must match.
     student_block = StudentBlock.query.filter_by(
         student_id=student_id,
-        period=period
+        period=period,
+        join_code=target_join_code,
     ).first()
+
+    conflicting_block = StudentBlock.query.filter(
+        StudentBlock.student_id == student_id,
+        StudentBlock.period == period,
+        or_(
+            StudentBlock.join_code.is_(None),
+            StudentBlock.join_code != target_join_code,
+        ),
+    ).first()
+    if conflicting_block:
+        return jsonify({"error": "Student block not found or access denied"}), 403
 
     if not student_block:
         student_block = StudentBlock(
@@ -2631,10 +2643,6 @@ def update_student_block_settings():
         )
         db.session.add(student_block)
     else:
-        if scoped_join_codes and student_block.join_code and student_block.join_code not in scoped_join_codes:
-            return jsonify({"error": "Student block not found or access denied"}), 403
-        if target_join_code and not student_block.join_code:
-            student_block.join_code = target_join_code
         student_block.tap_enabled = tap_enabled
 
     db.session.commit()
@@ -2728,11 +2736,8 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                 if today_attendance >= daily_limit:
                     hours_limit = daily_limit / 3600.0
 
-                    # Prioritize join_code from the active event we are closing
+                    # v2 strict mode: active events must always carry join_code.
                     join_code = latest_event.join_code
-                    if not join_code:
-                        # Fallback for legacy events without a join_code
-                        join_code = get_join_code_for_student_period(student.id, period_upper)
 
                     if not join_code:
                         current_app.logger.warning(
@@ -2749,14 +2754,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                         TapEvent.status == "inactive",
                         TapEvent.timestamp >= start_of_day_utc,
                         TapEvent.timestamp < end_of_day_utc,
-                        or_(
-                            TapEvent.reason_code == TapEventReasonCode.DAILY_LIMIT,
-                            # Backward-compatible fallback: legacy rows may have NULL reason_code
-                            sa.and_(
-                                TapEvent.reason_code.is_(None),
-                                TapEvent.reason.ilike("Daily limit%")
-                            ),
-                        ),
+                        TapEvent.reason_code == TapEventReasonCode.DAILY_LIMIT,
                         TapEvent.is_deleted == False
                     ).first()
 
@@ -2947,9 +2945,26 @@ def get_block_tap_settings():
     # false if all students have it disabled
     any_enabled = False
     for student in students_in_block:
+        scoped_join_codes = sorted(
+            {
+                row[0]
+                for row in TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
+                    TeacherBlock.teacher_id == admin.id,
+                    TeacherBlock.student_id == student.id,
+                    TeacherBlock.is_claimed.is_(True),
+                    func.upper(TeacherBlock.block) == block,
+                    TeacherBlock.join_code.isnot(None),
+                ).all()
+            }
+        )
+        if not scoped_join_codes:
+            continue
+        target_join_code = scoped_join_codes[0]
+
         student_block = StudentBlock.query.filter_by(
             student_id=student.id,
-            period=block
+            period=block,
+            join_code=target_join_code,
         ).first()
         
         if student_block:
@@ -2995,16 +3010,44 @@ def update_block_tap_settings():
         
         updated_count = 0
         for student in students_in_block:
-            # Get or create StudentBlock record
+            scoped_join_codes = sorted(
+                {
+                    row[0]
+                    for row in TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
+                        TeacherBlock.teacher_id == admin.id,
+                        TeacherBlock.student_id == student.id,
+                        TeacherBlock.is_claimed.is_(True),
+                        func.upper(TeacherBlock.block) == block,
+                        TeacherBlock.join_code.isnot(None),
+                    ).all()
+                }
+            )
+            if not scoped_join_codes:
+                continue
+            target_join_code = scoped_join_codes[0]
+
+            # Strict v2 scope: only mutate student+period+join_code rows.
             student_block = StudentBlock.query.filter_by(
                 student_id=student.id,
-                period=block
+                period=block,
+                join_code=target_join_code,
             ).first()
-            
+            conflicting_row = StudentBlock.query.filter(
+                StudentBlock.student_id == student.id,
+                StudentBlock.period == block,
+                or_(
+                    StudentBlock.join_code.is_(None),
+                    StudentBlock.join_code != target_join_code,
+                ),
+            ).first()
+            if conflicting_row:
+                continue
+
             if not student_block:
                 student_block = StudentBlock(
                     student_id=student.id,
                     period=block,
+                    join_code=target_join_code,
                     tap_enabled=tap_enabled
                 )
                 db.session.add(student_block)

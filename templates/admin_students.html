@@ -265,7 +265,7 @@
         <h5 class="mb-0 fs-3"><span class="material-symbols-outlined me-2 align-middle fs-1">groups</span>Class Roster
         </h5>
         <div>
-          <a href="{{ url_for('admin.export_students') }}" class="btn btn-light btn-sm me-2">
+          <a href="{{ url_for('admin.export_students', join_code=session.get('current_join_code')) }}" class="btn btn-light btn-sm me-2">
             <span class="material-symbols-outlined me-1" style="vertical-align: middle;">download</span> Export All
           </a>
         </div>
@@ -426,7 +426,7 @@
                         <td>
                           <a href="{{ url_for('admin.student_detail', student_id=student.id, join_code=join_codes_by_block.get(block|upper, '')) }}"
                             class="text-decoration-none">
-                            <span class="fw-bold">{{ student.first_name }} {{ student.last_initial }}.</span>
+                            <span class="fw-bold">{{ student.full_name }}</span>
                           </a>
                         </td>
                         <td>
@@ -591,8 +591,8 @@
                         <td>
                           <button class="btn btn-sm btn-outline-primary quick-action-btn me-1" data-bs-toggle="modal"
                             data-bs-target="#editStudentModal" data-student-id="{{ student.id }}"
-                            data-student-name="{{ student.first_name }}"
-                            data-student-last-initial="{{ student.last_initial }}"
+                            data-student-name="{{ student.display_first_name }}"
+                            data-student-last-initial="{{ student.display_last_initial }}"
                             data-student-block="{{ student.block }}">
                             <span class="material-symbols-outlined" style="vertical-align: middle;">edit</span>
                           </button>
