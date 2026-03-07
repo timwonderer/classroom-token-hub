@@ -24,7 +24,7 @@ All other branches may use:
 
 ### How It Works
 
-When you checkout a branch, the `.git/hooks/post-checkout` hook automatically updates the `DATABASE_URL` in your `.env` file.
+When you checkout a branch, the `hooks/post-checkout` hook automatically updates the `DATABASE_URL` in your `.env` file.
 
 ### Manual Database Switching
 
@@ -55,8 +55,9 @@ Manual switch command:
 
 If the automatic switching isn't working:
 
-1. Verify the hook exists: `ls -la .git/hooks/post-checkout`
-2. Verify it's executable: `chmod +x .git/hooks/post-checkout`
-3. Manually switch using the script:
+1. Verify the hook exists: `ls -la hooks/post-checkout`
+2. Verify hooks path config: `git config --get core.hooksPath` (should be `hooks`)
+3. Verify it's executable: `chmod +x hooks/post-checkout`
+4. Manually switch using the script:
    - Protected branches: `./scripts/switch-db.sh classroom_economy`
    - Other branches: `./scripts/switch-db.sh production_dev`
