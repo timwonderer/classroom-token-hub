@@ -1694,7 +1694,7 @@ class Issue(db.Model):
 
     # Status tracking
     status = db.Column(db.String(50), default='OPEN', nullable=False, index=True)
-    # Canonical statuses follow SPEC-TICK-001; legacy values are still recognized for older rows.
+    # Canonical statuses follow FEAT-TICK-001; legacy values are still recognized for older rows.
 
     # Teacher review and resolution
     teacher_reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)

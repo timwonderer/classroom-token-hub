@@ -171,7 +171,6 @@
                                 <span class="badge
                                     {% if report.status == 'new' %}bg-primary
                                     {% elif report.status == 'reviewed' %}bg-info
-                                    {% elif report.status == 'reviewed' %}bg-info
                                     {% elif report.status == 'closed' %}bg-secondary
                                     {% else %}bg-warning text-dark{% endif %}" style="font-size:0.7rem;">
                                     {{ report.status|title }}
@@ -203,7 +202,6 @@
                         </div>
                         <span class="badge
                             {% if report.status == 'new' %}bg-primary
-                            {% elif report.status == 'reviewed' %}bg-info
                             {% elif report.status == 'reviewed' %}bg-info
                             {% elif report.status == 'closed' %}bg-secondary
                             {% else %}bg-warning text-dark{% endif %}" style="font-size:0.7rem;">
