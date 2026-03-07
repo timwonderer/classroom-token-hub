@@ -37,14 +37,14 @@ import pytz
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, Admin, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
+    Student, Admin, JoinCode, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
     BankingSettings, TeacherBlock, DeletionRequest,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
-    DemoStudent, Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
-    RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent,
-    BalanceCache, JoinCode,
+    Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
+    RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent, Seat,
+    BalanceCache,
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
 from app.forms import (
@@ -91,6 +91,7 @@ from app.utils.student_deletion import (
     hard_delete_student_if_orphaned,
     remove_student_from_teacher_scope,
 )
+from app.utils.seat_scope import get_seat_ids_for_student_join, seat_scoped_filter, transaction_scope_filter
 from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.payroll import calculate_payroll, calculate_payroll_breakdown, get_cached_payroll_with_meta
 from app.attendance import (
@@ -198,6 +199,48 @@ def parse_dob_input(dob_str):
 
     # If both formats fail, raise error
     raise ValueError("Invalid date format. Please use the date picker.")
+
+
+def _parse_dob_date(dob_str):
+    """Parse DOB input and return a date object."""
+    if not dob_str:
+        raise ValueError("Date of birth is required")
+
+    dob_str = dob_str.strip()
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(dob_str, fmt).date()
+        except ValueError:
+            continue
+
+    raise ValueError("Invalid date format. Please use the date picker.")
+
+
+def _normalize_full_name_for_dedupe(first_name: str, last_name: str) -> str:
+    """Return lowercase letters-only full name for dedupe key input."""
+    return re.sub(r"[^a-z]", "", f"{first_name}{last_name}".lower())
+
+
+def _resolve_join_code_id(teacher_id: int, join_code: str) -> str:
+    """Get or create the canonical JoinCode row and return join_code_id."""
+    row = JoinCode.query.filter_by(join_code_token=join_code).first()
+    if row:
+        if row.teacher_id != teacher_id:
+            raise ValueError("Join code belongs to a different teacher.")
+        return row.join_code_id
+
+    row = JoinCode(join_code_token=join_code, teacher_id=teacher_id, is_active=True)
+    db.session.add(row)
+    db.session.flush()
+    return row.join_code_id
+
+
+def _build_teacher_block_dedupe_key(join_code_id: str, first_name: str, last_name: str, dob_date) -> str:
+    """Build deterministic dedupe key: join_code_id|normalized_full_name|YYYYMMDD."""
+    normalized_full_name = _normalize_full_name_for_dedupe(first_name, last_name)
+    dob_yyyymmdd = dob_date.strftime("%Y%m%d")
+    dedupe_input = f"{join_code_id}|{normalized_full_name}|{dob_yyyymmdd}".encode()
+    return hash_hmac(dedupe_input, b"")
 
 
 def _find_admin_by_auth_username(username: str):
@@ -625,7 +668,6 @@ def _delete_teacher_residual_ownership_rows(teacher_id):
 def _delete_teacher_settings_activity_and_audit_rows(teacher_id):
     """Delete teacher-scoped settings, activity, and audit rows."""
     BankingSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
-    DemoStudent.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
     FeatureSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
     HallPassSettings.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
     PayrollFine.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
@@ -826,6 +868,8 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
     if not join_code:
         return
 
+    join_code_id = _resolve_join_code_id(teacher_id, join_code)
+
     existing_seat = TeacherBlock.query.filter_by(
         teacher_id=teacher_id,
         join_code=join_code,
@@ -847,6 +891,7 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
     # Canonical hash for claim matching
     first_half_hash = compute_primary_claim_hash(first_name[:1], dob_sum, salt)
     last_name_hash_by_part = hash_last_name_parts("Student", salt)
+    dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
 
     teacher_seat = TeacherBlock(
         teacher_id=teacher_id,
@@ -857,7 +902,7 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
         first_name=first_name,
         last_initial=last_initial,
         last_name_hash_by_part=last_name_hash_by_part,
-        dob_sum=dob_sum,
+        dob_sum_hash=dob_sum_hash,
         salt=salt,
         first_half_hash=first_half_hash,
         is_claimed=False,
@@ -985,6 +1030,7 @@ def _link_student_to_admin(student: Student, admin_id):
             # Generate new join_code for this teacher+block
             join_code = generate_join_code()
             class_label = None
+        join_code_id = _resolve_join_code_id(admin_id, join_code)
 
         join_code_id = _ensure_join_code_anchors(admin_id, join_code, class_label=student.block)
 
@@ -999,8 +1045,8 @@ def _link_student_to_admin(student: Student, admin_id):
             is_claimed=True,  # Mark as claimed since teacher manually added them
             first_name=student.first_name,
             last_initial=student.last_initial,
-            last_name_hash_by_part=student.last_name_hash_by_part,
-            dob_sum=student.dob_sum,
+            last_name_hash_by_part=None,
+            dob_sum_hash=None,
             salt=student.salt,
             first_half_hash=student.first_half_hash
         )
@@ -1140,26 +1186,11 @@ def _normalize_claim_credentials_for_admin(admin_id: int) -> int:
             seat.first_half_hash,
             first_initial,
             seat.last_initial,
-            seat.dob_sum,
+            None,
             seat.salt,
         )
         if changed and updated_hash:
             seat.first_half_hash = updated_hash
-            updated += 1
-
-    # Normalize Student records scoped to this admin
-    students = _scoped_students().yield_per(100)
-    for student in students:
-        first_initial = student.first_name.strip()[0].upper() if student.first_name else None
-        updated_hash, changed = normalize_claim_hash(
-            student.first_half_hash,
-            first_initial,
-            student.last_initial,
-            student.dob_sum,
-            student.salt,
-        )
-        if changed and updated_hash:
-            student.first_half_hash = updated_hash
             updated += 1
 
     if updated:
@@ -1238,6 +1269,10 @@ def dashboard():
         .distinct()
         .all()
     ]
+    join_code_scope = TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
+        TeacherBlock.teacher_id == current_admin_id,
+        TeacherBlock.join_code.isnot(None),
+    ).distinct()
 
     # Get batch balances
     batch_balances = get_batch_balances(teacher_join_codes, student_ids)
@@ -1263,6 +1298,7 @@ def dashboard():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
         .filter(HallPassLog.status == 'pending')
         .count()
     )
@@ -1289,6 +1325,7 @@ def dashboard():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
         .filter(HallPassLog.status == 'pending')
         .order_by(HallPassLog.request_time.desc())
         .limit(5)
@@ -1305,11 +1342,9 @@ def dashboard():
     )
 
     # Recent transactions (limited to 5 for display)
-    demo_ids_subq = db.session.query(DemoStudent.student_id).subquery()
     recent_transactions = (
         Transaction.query
         .filter(Transaction.student_id.in_(sa.select(student_ids_subq)))
-        .filter(~Transaction.student_id.in_(sa.select(demo_ids_subq)))
         .filter_by(is_void=False)
         .order_by(Transaction.timestamp.desc())
         .limit(5)
@@ -1318,7 +1353,6 @@ def dashboard():
     total_transactions_today = (
         Transaction.query
         .filter(Transaction.student_id.in_(sa.select(student_ids_subq)))
-        .filter(~Transaction.student_id.in_(sa.select(demo_ids_subq)))
         .filter(
             Transaction.timestamp >= utc_now().replace(hour=0, minute=0, second=0, microsecond=0),
             Transaction.is_void == False,
@@ -1328,11 +1362,7 @@ def dashboard():
 
     # Recent attendance logs (limited to 5 for display)
     raw_logs = (
-        db.session.query(
-            TapEvent,
-            Student.first_name,
-            Student.last_initial
-        )
+        db.session.query(TapEvent, Student)
         .join(Student, TapEvent.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
         .order_by(TapEvent.timestamp.desc())
@@ -1340,10 +1370,10 @@ def dashboard():
         .all()
     )
     recent_logs = []
-    for log, first_name, last_initial in raw_logs:
+    for log, student in raw_logs:
         recent_logs.append({
             'student_id': log.student_id,
-            'student_name': f"{first_name} {last_initial}.",
+            'student_name': student.full_name if student else 'Unknown',
             'period': log.period,
             'timestamp': log.timestamp,
             'reason': log.reason,
@@ -2768,9 +2798,11 @@ def _get_rent_privileges_for_student(student, teacher_id, join_code):
         return rent_privileges
     coverage_month = coverage_due_date.month
     coverage_year = coverage_due_date.year
+    seat_ids = get_seat_ids_for_student_join(student.id, join_code)
+    rent_scope = seat_scoped_filter(RentPayment, student.id, seat_ids)
 
     has_paid_rent = RentPayment.query.filter(
-        RentPayment.student_id == student.id,
+        rent_scope,
         RentPayment.period == current_block,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
@@ -2986,8 +3018,8 @@ def students():
                             # Placeholder values for required fields
                             first_name=LEGACY_PLACEHOLDER_FIRST_NAME,
                             last_initial=LEGACY_PLACEHOLDER_LAST_INITIAL,
-                            last_name_hash_by_part=[],
-                            dob_sum=0,
+                            last_name_hash_by_part=None,
+                            dob_sum_hash=None,
                             salt=placeholder_salt,
                             first_half_hash=placeholder_first_half_hash,
                         )
@@ -3095,17 +3127,20 @@ def student_detail(student_id):
 
     if join_code:
         session['current_join_code'] = join_code
+    seat_ids = get_seat_ids_for_student_join(student.id, join_code) if join_code else []
+    tx_scope = transaction_scope_filter(Transaction, student.id, seat_ids) if join_code else (Transaction.student_id == student.id)
+    tap_scope = seat_scoped_filter(TapEvent, student.id, seat_ids) if join_code else (TapEvent.student_id == student.id)
 
     # Remove deprecated last_tap_in/last_tap_out logic; rely on TapEvent backend.
     # Fetch last rent payment
-    rent_query = Transaction.query.filter_by(student_id=student.id, type="rent")
+    rent_query = Transaction.query.filter(tx_scope, Transaction.type == "rent")
     if join_code:
         rent_query = rent_query.filter(Transaction.join_code == join_code)
     latest_rent = rent_query.order_by(Transaction.timestamp.desc()).first()
     student.rent_last_paid = latest_rent.timestamp if latest_rent else None
 
     # Fetch last property tax payment
-    tax_query = Transaction.query.filter_by(student_id=student.id, type="property_tax")
+    tax_query = Transaction.query.filter(tx_scope, Transaction.type == "property_tax")
     if join_code:
         tax_query = tax_query.filter(Transaction.join_code == join_code)
     latest_tax = tax_query.order_by(Transaction.timestamp.desc()).first()
@@ -3124,9 +3159,9 @@ def student_detail(student_id):
     student.property_tax_due_date = tax_due
     student.property_tax_overdue = today > tax_due and (not student.property_tax_last_paid or student.property_tax_last_paid.astimezone(PACIFIC).date() <= tax_due)
 
-    transactions_query = Transaction.query.filter_by(student_id=student.id)
+    transactions_query = Transaction.query.filter(tx_scope)
     student_items_query = student.items
-    latest_tap_event_query = TapEvent.query.filter_by(student_id=student.id)
+    latest_tap_event_query = TapEvent.query.filter(tap_scope)
     if join_code:
         transactions_query = transactions_query.filter(Transaction.join_code == join_code)
         student_items_query = student_items_query.filter(StudentItem.join_code == join_code)
@@ -3149,10 +3184,17 @@ def student_detail(student_id):
     student_blocks_settings = {}
     student_periods = [b.strip().upper() for b in (student.block or "").split(',') if b.strip()]
     for period in student_periods:
-        student_block = StudentBlock.query.filter_by(
-            student_id=student.id,
-            period=period
-        ).first()
+        if join_code:
+            student_block = StudentBlock.query.filter_by(
+                student_id=student.id,
+                period=period,
+                join_code=join_code,
+            ).first()
+        else:
+            student_block = StudentBlock.query.filter_by(
+                student_id=student.id,
+                period=period
+            ).first()
         student_blocks_settings[period] = {
             'tap_enabled': student_block.tap_enabled if student_block else True,
             'done_for_day_date': student_block.done_for_day_date if student_block else None
@@ -3313,13 +3355,28 @@ def edit_student():
 
                 if tb and tb.join_code:
                     target_join_code = tb.join_code
+                    target_seat_id = (
+                        Seat.query
+                        .with_entities(Seat.id)
+                        .filter(
+                            Seat.student_id == student.id,
+                            Seat.join_code == target_join_code,
+                        )
+                        .scalar()
+                    )
 
                     # Transfer transactions from old blocks to this new block
                     for old_join_code in old_join_codes:
+                        update_values = {
+                            'join_code': target_join_code,
+                            # Ensure seat scope tracks the transferred join_code.
+                            # If target seat is missing, clear legacy seat link to avoid stale cross-scope seat_id.
+                            'seat_id': target_seat_id,
+                        }
                         Transaction.query.filter_by(
                             student_id=student.id,
                             join_code=old_join_code
-                        ).update({'join_code': target_join_code})
+                        ).update(update_values, synchronize_session=False)
 
                     transferred_blocks.append(block)
                     current_app.logger.info(
@@ -3327,38 +3384,13 @@ def edit_student():
                     )
             # If 'start_fresh', do nothing - student starts with $0 in that period
 
-    # Check if name changed (need to recalculate hashes)
+    # Check if name changed (keep seat identity fields in sync).
     name_changed = (new_first_name != student.first_name or new_last_initial != student.last_initial)
-    dob_changed = False
 
     # Update basic fields
     student.first_name = new_first_name
     student.last_initial = new_last_initial
     student.block = new_blocks
-
-    # If name changed, refresh last name hashes
-    if name_changed:
-        student.last_name_hash_by_part = hash_last_name_parts(last_name_input, student.salt)
-
-    # Update DOB sum if provided (and recalculate second_half_hash)
-    dob_sum_str = request.form.get('dob_sum', '').strip()
-    if dob_sum_str:
-        try:
-            new_dob_sum = parse_dob_input(dob_sum_str)
-        except ValueError:
-            flash("Invalid date of birth. Please use the date picker.", "error")
-            return redirect(url_for('admin.students'))
-
-        if new_dob_sum != student.dob_sum:
-            student.dob_sum = new_dob_sum
-            # Regenerate second_half_hash (DOB sum hash)
-            student.second_half_hash = hash_hmac(str(new_dob_sum).encode(), student.salt)
-            dob_changed = True
-
-    if name_changed or dob_changed:
-        claim_hash = compute_primary_claim_hash(new_first_name[:1], student.dob_sum, student.salt)
-        if claim_hash:
-            student.first_half_hash = claim_hash
 
     # Handle account reset — generate recovery code per recovery spec
     reset_login = request.form.get('reset_login') == 'on'
@@ -3376,17 +3408,14 @@ def edit_student():
         flash(f"Reset code generated for {student.full_name}: {code} — Expires in 10 minutes. "
               f"Give this code to the student along with their join code.", "warning")
 
-    if name_changed or dob_changed:
-        TeacherBlock.query.filter_by(
+    if name_changed:
+        blocks_to_update = TeacherBlock.query.filter_by(
             student_id=student.id,
             teacher_id=current_admin_id
-        ).update({
-            'first_name': student.first_name,
-            'last_initial': student.last_initial,
-            'last_name_hash_by_part': student.last_name_hash_by_part or [],
-            'dob_sum': student.dob_sum or 0,
-            'first_half_hash': student.first_half_hash,
-        })
+        ).all()
+        for tb in blocks_to_update:
+            tb.first_name = student.first_name
+            tb.last_initial = student.last_initial
 
     # Handle block changes - update TeacherBlock entries
     removed_blocks = old_blocks - new_blocks_set
@@ -3452,13 +3481,12 @@ def edit_student():
                 _ensure_teacher_student_seat(current_admin_id, join_code, block)
             join_code_id = _ensure_join_code_anchors(current_admin_id, join_code, class_label=block)
 
-            # CRITICAL FIX: Ensure first_half_hash exists before creating TeacherBlock
-            # Logic: If hash is missing (legacy student), generate it now to prevent NotNullViolation
+            # Preserve existing claim hash; edit flow no longer accepts DOB input.
             if not student.first_half_hash:
-                claim_hash = compute_primary_claim_hash(student.first_name[:1], student.dob_sum or 0, student.salt)
-                if claim_hash:
-                    student.first_half_hash = claim_hash
-                    current_app.logger.info(f"Generated missing first_half_hash for student {student.id} during edit")
+                current_app.logger.warning(
+                    "Student %s has no first_half_hash during edit; preserving as-is",
+                    student.id,
+                )
             
             # Student is claimed if they have a username set
             is_claimed = bool(student.username_hash)
@@ -3470,8 +3498,8 @@ def edit_student():
                 block=block,
                 first_name=student.first_name,
                 last_initial=student.last_initial,
-                last_name_hash_by_part=student.last_name_hash_by_part or [],
-                dob_sum=student.dob_sum or 0,
+                last_name_hash_by_part=None,
+                dob_sum_hash=None,
                 salt=student.salt,
                 first_half_hash=student.first_half_hash,
                 join_code=join_code,
@@ -3872,6 +3900,7 @@ def add_individual_student():
 
         # Parse DOB and calculate sum
         try:
+            dob_date = _parse_dob_date(dob_str)
             dob_sum = parse_dob_input(dob_str)
         except ValueError:
             flash("Invalid date of birth. Please use the date picker.", "error")
@@ -3887,11 +3916,43 @@ def add_individual_student():
         # Compute last_name_hash_by_part for fuzzy matching
         last_name_parts = hash_last_name_parts(last_name, salt)
 
+        current_admin_id = session.get("admin_id")
+        # Get or generate join code for this block.
+        existing_tb = TeacherBlock.query.filter_by(
+            teacher_id=current_admin_id,
+            block=block
+        ).first()
+        if existing_tb:
+            join_code = existing_tb.join_code
+        else:
+            join_code = None
+            for _ in range(MAX_JOIN_CODE_RETRIES):
+                candidate = generate_join_code()
+                if not TeacherBlock.query.filter_by(join_code=candidate).first():
+                    join_code = candidate
+                    break
+            else:
+                block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
+                timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
+                join_code = f"B{block_initial}{timestamp_suffix:04d}"
+
+        join_code_id = _resolve_join_code_id(current_admin_id, join_code)
+        dedupe_key = _build_teacher_block_dedupe_key(join_code_id, first_name, last_name, dob_date)
+
+        existing_seat_in_class = TeacherBlock.query.filter_by(
+            teacher_id=current_admin_id,
+            join_code_id=join_code_id,
+            dedupe_key=dedupe_key,
+        ).first()
+        if existing_seat_in_class:
+            flash(f"Student {first_name} {last_name} is already in your class.", "info")
+            return redirect(url_for('admin.students'))
+
         # Check for duplicates - need to check ALL students GLOBALLY (not scoped to teacher)
         # This prevents creating duplicate accounts when multiple teachers have the same student
         potential_duplicates = Student.query.filter_by(
+            first_name=first_name,
             last_initial=last_initial,
-            dob_sum=dob_sum
         ).all()
 
         # Check if any existing student matches (using new credential system)
@@ -3906,17 +3967,7 @@ def add_individual_student():
                     existing_student.salt,
                 )
 
-                # Also check fuzzy last name matching
-                fuzzy_match = False
-                if existing_student.last_name_hash_by_part:
-                    fuzzy_match = verify_last_name_parts(
-                        last_name,
-                        existing_student.last_name_hash_by_part,
-                        existing_student.salt
-                    )
-
-                # Match if BOTH credential AND last name match
-                if credential_matches and fuzzy_match:
+                if credential_matches:
                     if canonical_hash and not is_primary:
                         existing_student.first_half_hash = canonical_hash
                     # Student already exists - link to this teacher instead of creating duplicate
@@ -3940,7 +3991,6 @@ def add_individual_student():
                     return redirect(url_for('admin.students'))
 
         # Create student
-        current_admin_id = session.get("admin_id")
         new_student = Student(
             first_name=first_name,
             last_initial=last_initial,
@@ -3948,51 +3998,23 @@ def add_individual_student():
             salt=salt,
             first_half_hash=first_half_hash,
             second_half_hash=second_half_hash,
-            dob_sum=dob_sum,
-            last_name_hash_by_part=last_name_parts,
             has_completed_setup=False,
         )
 
         db.session.add(new_student)
         db.session.flush()
         _link_student_to_admin(new_student, current_admin_id)
-        
-        # Create TeacherBlock entry for this student
-        # Get or generate join code for this block
-        existing_tb = TeacherBlock.query.filter_by(
-            teacher_id=current_admin_id,
-            block=block
-        ).first()
-        
-        if existing_tb:
-            join_code = existing_tb.join_code
-            join_code_id = _ensure_join_code_anchors(current_admin_id, join_code, class_label=block)
-        else:
-            # Generate a unique join code with bounded retries and fallback
-            join_code = None
-            for _ in range(MAX_JOIN_CODE_RETRIES):
-                candidate = generate_join_code()
-                if not TeacherBlock.query.filter_by(join_code=candidate).first():
-                    join_code = candidate
-                    break
-            else:
-                # Fallback to timestamp-based code
-                block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
-                timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
-                join_code = f"B{block_initial}{timestamp_suffix:04d}"
-            join_code_id = _ensure_join_code_anchors(current_admin_id, join_code, class_label=block)
-        
+
         new_tb = TeacherBlock(
             teacher_id=current_admin_id,
             block=block,
             first_name=first_name,
             last_initial=last_initial,
-            last_name_hash_by_part=last_name_parts,
-            dob_sum=dob_sum,
             salt=salt,
             first_half_hash=first_half_hash,
             join_code=join_code,
             join_code_id=join_code_id,
+            dedupe_key=dedupe_key,
             is_claimed=False,  # Student hasn't set up username yet
             student_id=new_student.id,
         )
@@ -4036,6 +4058,7 @@ def add_manual_student():
 
         # Parse DOB and calculate sum
         try:
+            dob_date = _parse_dob_date(dob_str)
             dob_sum = parse_dob_input(dob_str)
         except ValueError:
             flash("Invalid date of birth. Please use the date picker.", "error")
@@ -4051,10 +4074,42 @@ def add_manual_student():
         # Compute last_name_hash_by_part for fuzzy matching
         last_name_parts = hash_last_name_parts(last_name, salt)
 
+        current_admin_id = session.get("admin_id")
+        # Get or generate join code for this block.
+        existing_tb = TeacherBlock.query.filter_by(
+            teacher_id=current_admin_id,
+            block=block
+        ).first()
+        if existing_tb:
+            join_code = existing_tb.join_code
+        else:
+            join_code = None
+            for _ in range(MAX_JOIN_CODE_RETRIES):
+                candidate = generate_join_code()
+                if not TeacherBlock.query.filter_by(join_code=candidate).first():
+                    join_code = candidate
+                    break
+            else:
+                block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
+                timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
+                join_code = f"B{block_initial}{timestamp_suffix:04d}"
+
+        join_code_id = _resolve_join_code_id(current_admin_id, join_code)
+        dedupe_key = _build_teacher_block_dedupe_key(join_code_id, first_name, last_name, dob_date)
+
+        existing_seat_in_class = TeacherBlock.query.filter_by(
+            teacher_id=current_admin_id,
+            join_code_id=join_code_id,
+            dedupe_key=dedupe_key,
+        ).first()
+        if existing_seat_in_class:
+            flash(f"Student {first_name} {last_name} is already in your class.", "info")
+            return redirect(url_for('admin.students'))
+
         # Check for duplicates GLOBALLY (not scoped to teacher)
         potential_duplicates = Student.query.filter_by(
+            first_name=first_name,
             last_initial=last_initial,
-            dob_sum=dob_sum
         ).all()
 
         for existing_student in potential_duplicates:
@@ -4068,16 +4123,7 @@ def add_manual_student():
                     existing_student.salt,
                 )
 
-                # Also check fuzzy last name matching
-                fuzzy_match = False
-                if existing_student.last_name_hash_by_part:
-                    fuzzy_match = verify_last_name_parts(
-                        last_name,
-                        existing_student.last_name_hash_by_part,
-                        existing_student.salt
-                    )
-
-                if credential_matches and fuzzy_match:
+                if credential_matches:
                     if canonical_hash and not is_primary:
                         existing_student.first_half_hash = canonical_hash
                     flash(f"Student {first_name} {last_name} already exists. Linking to your class.", "warning")
@@ -4101,8 +4147,6 @@ def add_manual_student():
             salt=salt,
             first_half_hash=first_half_hash,
             second_half_hash=second_half_hash,
-            dob_sum=dob_sum,
-            last_name_hash_by_part=last_name_parts,
             hall_passes=hall_passes,
             is_rent_enabled=rent_enabled,
             has_completed_setup=setup_complete,
@@ -4121,36 +4165,10 @@ def add_manual_student():
         if passphrase:
             new_student.passphrase_hash = generate_password_hash(passphrase)
 
-        current_admin_id = session.get("admin_id")
         db.session.add(new_student)
         db.session.flush()
         _link_student_to_admin(new_student, current_admin_id)
-        
-        # Create TeacherBlock entry for this student
-        # Get or generate join code for this block
-        existing_tb = TeacherBlock.query.filter_by(
-            teacher_id=current_admin_id,
-            block=block
-        ).first()
-        
-        if existing_tb:
-            join_code = existing_tb.join_code
-            join_code_id = _ensure_join_code_anchors(current_admin_id, join_code, class_label=block)
-        else:
-            # Generate a unique join code with bounded retries and fallback
-            join_code = None
-            for _ in range(MAX_JOIN_CODE_RETRIES):
-                candidate = generate_join_code()
-                if not TeacherBlock.query.filter_by(join_code=candidate).first():
-                    join_code = candidate
-                    break
-            else:
-                # Fallback to timestamp-based code
-                block_initial = block[:FALLBACK_BLOCK_PREFIX_LENGTH].ljust(FALLBACK_BLOCK_PREFIX_LENGTH, 'X')
-                timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
-                join_code = f"B{block_initial}{timestamp_suffix:04d}"
-            join_code_id = _ensure_join_code_anchors(current_admin_id, join_code, class_label=block)
-        
+
         # Student is claimed if they have a username set
         is_claimed = bool(username)
         
@@ -4159,12 +4177,11 @@ def add_manual_student():
             block=block,
             first_name=first_name,
             last_initial=last_initial,
-            last_name_hash_by_part=last_name_parts,
-            dob_sum=dob_sum,
             salt=salt,
             first_half_hash=first_half_hash,
             join_code=join_code,
             join_code_id=join_code_id,
+            dedupe_key=dedupe_key,
             is_claimed=is_claimed,
             student_id=new_student.id,
             claimed_at=utc_now() if is_claimed else None,
@@ -5244,6 +5261,7 @@ def rent_settings():
                         block_name,
                         join_code,
                         cursor,
+                        seat_ids=get_seat_ids_for_student_join(student.id, join_code),
                     )
                     if is_paid:
                         break
@@ -5277,6 +5295,7 @@ def rent_settings():
             RentPayment.query
             .join(Student, RentPayment.student_id == Student.id)
             .filter(Student.id.in_(sa.select(student_ids_subq)))
+            .filter(RentPayment.join_code.in_([info['join_code'] for info in classes_by_join_code.values()]))
             .order_by(RentPayment.payment_date.desc())
             .limit(200)
         )
@@ -6329,8 +6348,10 @@ def void_transaction(transaction_id):
             tx.reversal_transaction_id = reversal_tx.id
 
         elif tx.type == 'Rent Payment':
+            seat_ids = get_seat_ids_for_student_join(tx.student_id, tx.join_code) if tx.join_code else []
+            rent_scope = seat_scoped_filter(RentPayment, tx.student_id, seat_ids)
             rent_payments_query = RentPayment.query.filter(
-                RentPayment.student_id == tx.student_id,
+                rent_scope,
                 RentPayment.amount_paid == abs(tx.amount or Decimal('0.00')),
             )
             if not tx.join_code:
@@ -6455,10 +6476,15 @@ def void_transaction(transaction_id):
 def hall_pass():
     """Manage hall pass requests and active passes."""
     student_ids_subq = _student_scope_subquery()
+    join_code_scope = TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
+        TeacherBlock.teacher_id == session.get('admin_id'),
+        TeacherBlock.join_code.isnot(None),
+    ).distinct()
     pending_requests = (
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
         .filter(HallPassLog.status == 'pending')
         .order_by(HallPassLog.request_time.asc())
         .all()
@@ -6467,6 +6493,7 @@ def hall_pass():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
         .filter(HallPassLog.status == 'approved')
         .order_by(HallPassLog.decision_time.asc())
         .all()
@@ -6475,6 +6502,7 @@ def hall_pass():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
+        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
         .filter(HallPassLog.status == 'left')
         .order_by(HallPassLog.left_time.asc())
         .all()
@@ -7960,6 +7988,7 @@ def upload_students():
 
     # Get or generate join codes for each block in this upload
     join_codes_by_block = {}
+    join_code_ids_by_block = {}
 
     for row in csv_input:
         try:
@@ -8011,7 +8040,11 @@ def upload_students():
                 # Ensure the teacher student seat exists for this new or existing join code
                 _ensure_teacher_student_seat(teacher_id, join_codes_by_block[block], block)
 
+            if block not in join_code_ids_by_block:
+                join_code_ids_by_block[block] = _resolve_join_code_id(teacher_id, join_codes_by_block[block])
+
             join_code = join_codes_by_block[block]
+            join_code_id = join_code_ids_by_block[block]
 
             # Generate dob_sum first (needed for duplicate detection)
             # Handle both mm/dd/yy and mm/dd/yyyy formats
@@ -8027,23 +8060,15 @@ def upload_students():
                 yyyy = year
 
             dob_sum = mm + dd + yyyy
+            dob_date = datetime.strptime(f"{yyyy:04d}-{mm:02d}-{dd:02d}", "%Y-%m-%d").date()
+            dedupe_key = _build_teacher_block_dedupe_key(join_code_id, first_name, last_name, dob_date)
 
-            # Check if this seat already exists for this teacher
-            # Duplicate detection: same teacher + block + last_initial + dob_sum + first_name
-            # Note: first_name is encrypted, so we must fetch candidates and check in Python
-            candidate_seats = TeacherBlock.query.filter_by(
+            # Check if this seat already exists in this join code.
+            existing_seat = TeacherBlock.query.filter_by(
                 teacher_id=teacher_id,
-                block=block,
-                last_initial=last_initial,
-                dob_sum=dob_sum
-            ).all()
-            
-            # Check if any candidate has matching first name (after decryption)
-            existing_seat = None
-            for seat in candidate_seats:
-                if seat.first_name == first_name:
-                    existing_seat = seat
-                    break
+                join_code_id=join_code_id,
+                dedupe_key=dedupe_key,
+            ).first()
 
             if existing_seat:
                 duplicated += 1
@@ -8058,6 +8083,9 @@ def upload_students():
             # Compute last_name_hash_by_part for fuzzy matching
             last_name_parts = hash_last_name_parts(last_name, salt)
 
+            # Compute dob_sum_hash (HMAC of DOB sum with the seat's salt)
+            dob_sum_hash = hash_hmac(str(dob_sum).encode(), salt)
+
             # Create TeacherBlock seat (unclaimed account)
             seat = TeacherBlock(
                 teacher_id=teacher_id,
@@ -8065,10 +8093,12 @@ def upload_students():
                 first_name=first_name,
                 last_initial=last_initial,
                 last_name_hash_by_part=last_name_parts,
-                dob_sum=dob_sum,
+                dob_sum_hash=dob_sum_hash,
                 salt=salt,
                 first_half_hash=first_half_hash,
                 join_code=join_code,
+                join_code_id=join_code_id,
+                dedupe_key=dedupe_key,
                 is_claimed=False,
             )
             db.session.add(seat)
@@ -8119,6 +8149,19 @@ def download_csv_template():
 @admin_required
 def export_students():
     """Export all student data to CSV."""
+    admin_id = session.get('admin_id')
+    requested_join_code = (request.args.get('join_code') or '').strip()
+    selected_join_code = None
+
+    if requested_join_code:
+        has_scope = TeacherBlock.query.filter(
+            TeacherBlock.teacher_id == admin_id,
+            TeacherBlock.join_code == requested_join_code,
+        ).first()
+        if not has_scope:
+            return jsonify({"error": "Invalid class scope"}), 403
+        selected_join_code = requested_join_code
+
     # Create CSV in memory
     output = io.StringIO()
     writer = csv.writer(output)
@@ -8131,8 +8174,21 @@ def export_students():
     ])
 
     # Write student data
-    students = _scoped_students().order_by(Student.first_name, Student.last_initial).all()
-    teacher_id = session.get('admin_id')
+    students_query = _scoped_students().order_by(Student.first_name, Student.last_initial)
+    if selected_join_code:
+        students_query = students_query.filter(
+            Student.id.in_(
+                db.session.query(TeacherBlock.student_id).filter(
+                    TeacherBlock.teacher_id == admin_id,
+                    TeacherBlock.join_code == selected_join_code,
+                    TeacherBlock.student_id.isnot(None),
+                    TeacherBlock.is_claimed.is_(True),
+                )
+            )
+        )
+
+    students = students_query.all()
+    teacher_id = admin_id
 
     # Prefetch active insurances to avoid N+1 queries
     student_ids = [s.id for s in students]
@@ -8144,24 +8200,47 @@ def export_students():
             StudentInsurance.student_id.in_(student_ids),
             StudentInsurance.status == 'active',
             InsurancePolicy.teacher_id == teacher_id
-        ).all()
+        )
+        if selected_join_code:
+            scoped_insurances = scoped_insurances.filter(StudentInsurance.join_code == selected_join_code)
+        scoped_insurances = scoped_insurances.all()
 
         for ins in scoped_insurances:
             if ins.student_id not in active_insurances_map:
                 active_insurances_map[ins.student_id] = ins
 
     for student in students:
+        export_block = student.block
+        if selected_join_code:
+            scoped_seat = TeacherBlock.query.filter(
+                TeacherBlock.teacher_id == teacher_id,
+                TeacherBlock.student_id == student.id,
+                TeacherBlock.join_code == selected_join_code,
+                TeacherBlock.is_claimed.is_(True),
+            ).first()
+            if scoped_seat and scoped_seat.block:
+                export_block = scoped_seat.block
+
         # Get active insurance for this student from pre-fetched map
         active_insurance = active_insurances_map.get(student.id)
         insurance_name = active_insurance.policy.title if active_insurance else 'None'
 
+        if selected_join_code:
+            checking_balance = student.get_checking_balance(join_code=selected_join_code)
+            savings_balance = student.get_savings_balance(join_code=selected_join_code)
+            total_earnings = student.get_total_earnings(join_code=selected_join_code)
+        else:
+            checking_balance = student.checking_balance
+            savings_balance = student.savings_balance
+            total_earnings = student.total_earnings
+
         writer.writerow([
             _sanitize_csv_field(student.first_name),
             _sanitize_csv_field(student.last_initial),
-            _sanitize_csv_field(student.block),
-            f"{student.checking_balance:.2f}",
-            f"{student.savings_balance:.2f}",
-            f"{student.total_earnings:.2f}",
+            _sanitize_csv_field(export_block),
+            f"{checking_balance:.2f}",
+            f"{savings_balance:.2f}",
+            f"{total_earnings:.2f}",
             _sanitize_csv_field(insurance_name),
             'Yes' if student.is_rent_enabled else 'No',
             'Yes' if student.has_completed_setup else 'No'
@@ -8187,61 +8266,127 @@ def enforce_daily_limits():
     Manually trigger auto tap-out for all students who have exceeded their daily limit.
     Returns a report of students who were auto-tapped out.
     """
-    from app.routes.api import check_and_auto_tapout_if_limit_reached
-    import pytz
     from app.payroll import get_daily_limit_seconds
+    from app.attendance import calculate_period_attendance_utc_range
 
     students = _scoped_students().all()
     tapped_out = []
     checked = 0
     errors = []
+    current_admin_id = session.get('admin_id')
 
     pacific = pytz.timezone('America/Los_Angeles')
+    now_utc = utc_now()
+    now_pacific = now_utc.astimezone(pacific)
+    today_pacific = now_pacific.date()
+
+    start_of_day_pacific = pacific.localize(datetime.combine(today_pacific, datetime.min.time()))
+    start_of_day_utc = start_of_day_pacific.astimezone(timezone.utc)
+    end_of_day_pacific = start_of_day_pacific + timedelta(days=1)
+    end_of_day_utc = end_of_day_pacific.astimezone(timezone.utc)
 
     for student in students:
+        period_upper = None
         try:
-            # Get the student's current active sessions
             student_blocks = [b.strip() for b in student.block.split(',') if b.strip()]
             for block_original in student_blocks:
                 period_upper = block_original.upper()
+                join_code = get_join_code_for_student_period(student.id, period_upper, teacher_id=current_admin_id)
+                if not join_code:
+                    continue
+
+                seat_ids = get_seat_ids_for_student_join(student.id, join_code)
+                tap_scope = seat_scoped_filter(TapEvent, student.id, seat_ids)
+
                 latest_event = (
                     TapEvent.query
-                    .filter_by(student_id=student.id, period=period_upper)
+                    .filter(
+                        tap_scope,
+                        TapEvent.period == period_upper,
+                        TapEvent.join_code == join_code,
+                        TapEvent.is_deleted == False,
+                    )
                     .order_by(TapEvent.timestamp.desc())
                     .first()
                 )
 
-                # If student is active, check their limit
-                if latest_event and latest_event.status == "active":
-                    checked += 1
-                    daily_limit = get_daily_limit_seconds(block_original)
+                if not latest_event or latest_event.status != "active":
+                    continue
 
-                    if daily_limit:
-                        # Log the check for debugging
-                        current_app.logger.info(
-                            f"Checking student {student.id} ({student.full_name}) in period {period_upper} - limit: {daily_limit/3600:.1f}h"
-                        )
-                        check_and_auto_tapout_if_limit_reached(student)
+                checked += 1
+                daily_limit = get_daily_limit_seconds(block_original, teacher_id=current_admin_id)
+                if not daily_limit:
+                    continue
 
-                        # Check if they were tapped out (latest event changed)
-                        new_latest = (
-                            TapEvent.query
-                            .filter_by(student_id=student.id, period=period_upper)
-                            .order_by(TapEvent.timestamp.desc())
-                            .first()
-                        )
-                        if new_latest and new_latest.status == "inactive" and new_latest.id != latest_event.id:
-                            tapped_out.append(f"{student.full_name} (Period {period_upper})")
-                    break  # Only check once per student
+                today_attendance = calculate_period_attendance_utc_range(
+                    student.id, period_upper, start_of_day_utc, end_of_day_utc
+                )
+                if latest_event.timestamp:
+                    last_tap_in_utc = ensure_utc(latest_event.timestamp)
+                    if start_of_day_utc <= last_tap_in_utc < end_of_day_utc:
+                        today_attendance += (now_utc - last_tap_in_utc).total_seconds()
+
+                if today_attendance < daily_limit:
+                    continue
+
+                existing_limit_tapout = TapEvent.query.filter(
+                    tap_scope,
+                    TapEvent.period == period_upper,
+                    TapEvent.join_code == join_code,
+                    TapEvent.status == "inactive",
+                    TapEvent.timestamp >= start_of_day_utc,
+                    TapEvent.timestamp < end_of_day_utc,
+                    TapEvent.reason.ilike("Daily limit%"),
+                    TapEvent.is_deleted == False,
+                ).first()
+                if existing_limit_tapout:
+                    continue
+
+                student_block = StudentBlock.query.filter_by(
+                    student_id=student.id,
+                    period=period_upper,
+                ).first()
+                if student_block and student_block.join_code and student_block.join_code != join_code:
+                    errors.append(
+                        f"Skipped {student.full_name} ({period_upper}): block settings belong to a different class scope"
+                    )
+                    continue
+                if student_block and not student_block.join_code:
+                    errors.append(
+                        f"Skipped {student.full_name} ({period_upper}): block settings missing class scope"
+                    )
+                    continue
+                if not student_block:
+                    student_block = StudentBlock(
+                        student_id=student.id,
+                        period=period_upper,
+                        join_code=join_code,
+                        tap_enabled=True,
+                    )
+                    db.session.add(student_block)
+                student_block.done_for_day_date = today_pacific
+
+                db.session.add(TapEvent(
+                    student_id=student.id,
+                    period=period_upper,
+                    status="inactive",
+                    timestamp=now_utc,
+                    reason=f"Daily limit reached ({daily_limit / 3600:.1f}h)",
+                    join_code=join_code,
+                ))
+                tapped_out.append(f"{student.full_name} (Period {period_upper})")
+                break
         except Exception as e:
             errors.append(
-                f"Error when executing auto-timeout for {student.full_name} (ID {student.id}, Period {period_upper})"
+                f"Error when executing auto-timeout for {student.full_name} (ID {student.id}, Period {period_upper or 'unknown'})"
             )
             current_app.logger.error(
-                f"Error enforcing limits for student {student.id} ({student.full_name}) in period {period_upper}",
+                f"Error enforcing limits for student {student.id} ({student.full_name}) in period {period_upper or 'unknown'}",
                 exc_info=True,
             )
             continue
+
+    db.session.commit()
 
     message = f"Checked {checked} active students. Auto-tapped out {len(tapped_out)} student(s)."
 
@@ -8292,6 +8437,8 @@ def tap_out_students():
                     continue
 
                 join_code = get_join_code_for_student_period(student.id, period, teacher_id=current_admin_id)
+                if not join_code:
+                    continue
 
                 # Check if student is currently active in this period
                 latest_event = (
@@ -8320,6 +8467,9 @@ def tap_out_students():
                 continue
 
             join_code = get_join_code_for_student_period(student.id, period, teacher_id=current_admin_id)
+            if not join_code:
+                errors.append(f"{student.full_name} has no join code for period {period} in this class scope")
+                continue
 
             # Check if student is currently active in this period
             latest_event = (
@@ -8334,6 +8484,37 @@ def tap_out_students():
                 already_inactive.append(student.full_name)
                 continue
 
+            # Lock student out until midnight when teacher taps them out.
+            # Guard against cross-join updates when shared students have multiple classes.
+            student_block = StudentBlock.query.filter_by(
+                student_id=student.id,
+                period=period,
+            ).first()
+            if student_block and student_block.join_code and student_block.join_code != join_code:
+                errors.append(
+                    f"{student.full_name} block settings belong to a different class scope"
+                )
+                continue
+            if student_block and not student_block.join_code:
+                errors.append(
+                    f"{student.full_name} block settings missing class scope"
+                )
+                continue
+            if not student_block:
+                student_block = StudentBlock(
+                    student_id=student.id,
+                    period=period,
+                    join_code=join_code,
+                    tap_enabled=True,
+                )
+                db.session.add(student_block)
+
+            # Set done_for_day_date to lock them out until midnight
+            pacific = pytz.timezone('America/Los_Angeles')
+            now_pacific = now_utc.astimezone(pacific)
+            today_pacific = now_pacific.date()
+            student_block.done_for_day_date = today_pacific
+
             # Create tap-out event
             tap_out_event = TapEvent(
                 student_id=student.id,
@@ -8344,27 +8525,6 @@ def tap_out_students():
                 join_code=join_code
             )
             db.session.add(tap_out_event)
-            
-            # Lock student out until midnight when teacher taps them out
-            # Get or create StudentBlock record
-            student_block = StudentBlock.query.filter_by(
-                student_id=student.id,
-                period=period
-            ).first()
-            
-            if not student_block:
-                student_block = StudentBlock(
-                    student_id=student.id,
-                    period=period,
-                    tap_enabled=True
-                )
-                db.session.add(student_block)
-            
-            # Set done_for_day_date to lock them out until midnight
-            pacific = pytz.timezone('America/Los_Angeles')
-            now_pacific = now_utc.astimezone(pacific)
-            today_pacific = now_pacific.date()
-            student_block.done_for_day_date = today_pacific
             
             tapped_out.append(student.full_name)
 
@@ -8441,6 +8601,9 @@ def tap_in_students():
                 continue
 
             join_code = get_join_code_for_student_period(student.id, period, teacher_id=current_admin_id)
+            if not join_code:
+                errors.append(f"{student.full_name} has no join code for period {period} in this class scope")
+                continue
 
             # Check if student is currently active in this period
             latest_event = (
@@ -8454,6 +8617,31 @@ def tap_in_students():
             if latest_event and latest_event.status == "active":
                 already_active.append(student.full_name)
                 continue
+
+            # Clear done-for-day lock in the same join-code scope only.
+            student_block = StudentBlock.query.filter_by(
+                student_id=student.id,
+                period=period,
+            ).first()
+            if student_block and student_block.join_code and student_block.join_code != join_code:
+                errors.append(
+                    f"{student.full_name} block settings belong to a different class scope"
+                )
+                continue
+            if student_block and not student_block.join_code:
+                errors.append(
+                    f"{student.full_name} block settings missing class scope"
+                )
+                continue
+            if not student_block:
+                student_block = StudentBlock(
+                    student_id=student.id,
+                    period=period,
+                    join_code=join_code,
+                    tap_enabled=True,
+                )
+                db.session.add(student_block)
+            student_block.done_for_day_date = None
 
             # Create tap-in event
             tap_in_event = TapEvent(

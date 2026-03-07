@@ -54,7 +54,6 @@ def _create_student_with_student_block(first_name: str, teacher: Admin, block: s
         block=block,
         salt=salt,
         first_half_hash=first_half_hash,
-        dob_sum=2025,
     )
     db.session.add(student)
     db.session.flush()
@@ -68,8 +67,8 @@ def _create_student_with_student_block(first_name: str, teacher: Admin, block: s
         block=block,
         first_name=first_name,
         last_initial=first_name[0].upper(),
-        last_name_hash_by_part=[],
-        dob_sum=2025,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
         salt=salt,
         first_half_hash=first_half_hash,
         join_code=join_code,
@@ -220,7 +219,6 @@ def test_bulk_delete_legacy_unclaimed_deletes_students(client):
         block="Z",
         salt=salt,
         first_half_hash=first_half_hash,
-        dob_sum=2025,
         username_hash=None,  # Legacy unclaimed - no username_hash
     )
     db.session.add(student)

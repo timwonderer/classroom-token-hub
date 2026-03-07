@@ -35,7 +35,6 @@ def test_get_total_earnings_defensive_checks(client, app):
             block="Period 1",
             salt=get_random_salt(),
             first_half_hash="test_hash_1",
-            dob_sum=2025
         )
         db.session.add(student)
         db.session.commit()
@@ -102,7 +101,6 @@ def test_get_total_earnings_with_negative_amounts(client, app):
             block="Period 2",
             salt=get_random_salt(),
             first_half_hash="test_hash_2",
-            dob_sum=2026
         )
         db.session.add(student)
         db.session.commit()
@@ -174,7 +172,6 @@ def test_get_total_earnings_with_zero_amount(client, app):
             block="Period 3",
             salt=get_random_salt(),
             first_half_hash="test_hash_3",
-            dob_sum=2027
         )
         db.session.add(student)
         db.session.commit()
@@ -233,7 +230,6 @@ def test_get_total_earnings_with_mocked_null_amount(client, app):
             block="Period 4",
             salt=get_random_salt(),
             first_half_hash="test_hash_4",
-            dob_sum=2028
         )
         db.session.add(student)
         db.session.commit()

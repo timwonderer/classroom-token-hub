@@ -34,8 +34,6 @@ from app.routes.student import (
     _is_student_coverage_period_paid,
     _ensure_rent_hall_pass_top_off,
 )
-from app.utils.join_code import generate_join_code
-from app.utils.name_utils import hash_last_name_parts
 from app.utils.overdraft import charge_overdraft_fee_if_needed
 from app.utils.store import process_expired_collective_goals
 from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone, local_date_bounds_utc, UTC_MIN
@@ -156,6 +154,48 @@ def _append_redemption_audit_log(*, student_item, student, teacher_id, action, n
         source=RedemptionAuditSource.LIVE,
     ))
     guard_state['inserted'] = True
+
+
+def _get_teacher_join_code_scope(admin_id):
+    """Return (join_code_scope_subquery, has_join_code_scope) for a teacher admin."""
+    join_code_scope = (
+        TeacherBlock.query
+        .with_entities(TeacherBlock.join_code)
+        .filter(
+            TeacherBlock.teacher_id == admin_id,
+            TeacherBlock.join_code.isnot(None),
+        )
+        .distinct()
+        .subquery()
+    )
+    has_join_code_scope = db.session.query(
+        sa.exists().where(
+            sa.and_(
+                TeacherBlock.teacher_id == admin_id,
+                TeacherBlock.join_code.isnot(None),
+            )
+        )
+    ).scalar()
+    return join_code_scope, has_join_code_scope
+
+
+def _apply_admin_join_code_scope(query, model, admin_id, accessible_student_ids_query):
+    """Apply join_code tenant scoping with legacy student_id fallback."""
+    join_code_scope, has_join_code_scope = _get_teacher_join_code_scope(admin_id)
+    if has_join_code_scope:
+        return query.filter(
+            sa.or_(
+                sa.and_(
+                    model.join_code.isnot(None),
+                    model.join_code.in_(sa.select(join_code_scope)),
+                ),
+                sa.and_(
+                    model.join_code.is_(None),
+                    model.student_id.in_(accessible_student_ids_query),
+                ),
+            )
+        )
+    return query.filter(model.student_id.in_(accessible_student_ids_query))
 
 
 # -------------------- TIPS API --------------------
@@ -1365,6 +1405,26 @@ def _check_simultaneous_pass_limit(log_entry):
     return None
 
 
+def _enforce_hall_pass_student_context(student, log_entry):
+    """
+    Enforce active student class context for hall-pass state mutations.
+
+    If context cannot be resolved (legacy/test data), allow legacy ownership-only behavior.
+    """
+    context = get_current_class_context()
+    if not context:
+        return None
+
+    current_join_code = context.get("join_code")
+    if current_join_code and log_entry.join_code and log_entry.join_code != current_join_code:
+        return jsonify({
+            "status": "error",
+            "message": "This pass belongs to a different class context. Switch class and retry.",
+        }), 403
+
+    return None
+
+
 @api_bp.route('/hall-pass/terminal/use', methods=['POST'])
 def hall_pass_terminal_use():
     """Deprecated legacy route kept for compatibility."""
@@ -1393,6 +1453,9 @@ def cancel_hall_pass(pass_id):
     # Verify this pass belongs to the logged-in student
     if log_entry.student_id != student.id:
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
+    context_error = _enforce_hall_pass_student_context(student, log_entry)
+    if context_error:
+        return context_error
 
     # Only pending passes can be cancelled
     if log_entry.status != 'pending':
@@ -1422,7 +1485,10 @@ def checkout_hall_pass():
     # Verify this pass belongs to the logged-in student
     if log_entry.student_id != student.id:
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
-    
+    context_error = _enforce_hall_pass_student_context(student, log_entry)
+    if context_error:
+        return context_error
+
     # Verify pass is approved
     if log_entry.status != 'approved':
         return jsonify({"status": "error", "message": f"Pass is not approved. Current status: {log_entry.status}"}), 400
@@ -1477,6 +1543,9 @@ def checkin_hall_pass():
     # Verify this pass belongs to the logged-in student
     if log_entry.student_id != student.id:
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
+    context_error = _enforce_hall_pass_student_context(student, log_entry)
+    if context_error:
+        return context_error
     
     # Verify pass is in 'left' status
     if log_entry.status != 'left':
@@ -1600,11 +1669,12 @@ def hall_pass_history():
             .with_entities(Student.id)
             .subquery()
         )
-
         # Build query with tenant scoping
-        query = (
-            HallPassLog.query
-            .filter(HallPassLog.student_id.in_(sa.select(student_ids_subquery)))
+        query = _apply_admin_join_code_scope(
+            HallPassLog.query,
+            HallPassLog,
+            session.get("admin_id"),
+            sa.select(student_ids_subquery),
         )
 
         # Apply filters
@@ -1857,11 +1927,12 @@ def attendance_history():
         
         # Get student IDs that the current admin can access (tenant-scoped)
         accessible_student_ids_query = get_admin_student_query(include_unassigned=False).with_entities(Student.id)
-        
         # Build query scoped to admin's students and exclude deleted records
-        query = TapEvent.query.filter(
-            TapEvent.student_id.in_(accessible_student_ids_query),
-            TapEvent.is_deleted.is_(False)
+        query = _apply_admin_join_code_scope(
+            TapEvent.query.filter(TapEvent.is_deleted.is_(False)),
+            TapEvent,
+            session.get("admin_id"),
+            accessible_student_ids_query,
         )
 
         # Suppress duplicate auto tap-outs from known race conditions.
@@ -1905,7 +1976,7 @@ def attendance_history():
         if start_date:
             try:
                 start_day = datetime.strptime(start_date, '%Y-%m-%d').date()
-                start_datetime = datetime.combine(start_day, datetime.min.time(), tzinfo=timezone.utc)
+                start_datetime, _ = local_date_bounds_utc(start_day, timezone_name='UTC')
                 query = query.filter(TapEvent.timestamp >= normalize_for_db(start_datetime))
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid start date format"}), 400
@@ -1913,7 +1984,7 @@ def attendance_history():
         if end_date:
             try:
                 end_day = datetime.strptime(end_date, '%Y-%m-%d').date()
-                end_datetime = datetime.combine(end_day, datetime.max.time(), tzinfo=timezone.utc)
+                _, end_datetime = local_date_bounds_utc(end_day, timezone_name='UTC')
                 query = query.filter(TapEvent.timestamp <= normalize_for_db(end_datetime))
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid end date format"}), 400
@@ -2389,17 +2460,26 @@ def get_tap_entries(student_id):
         return jsonify({"error": "Unauthorized"}), 401
 
     from app.models import TapEvent
-    from app.auth import get_student_for_admin
+    from app.auth import get_student_for_admin, get_admin_student_query
 
     # SECURITY FIX: Use scoped helper to verify admin owns this student
     student = get_student_for_admin(student_id)
     if not student:
         return jsonify({"error": "Student not found or access denied"}), 404
 
-    # Get all tap events for this student
-    events = TapEvent.query.filter_by(
-        student_id=student_id
-    ).order_by(TapEvent.period, TapEvent.timestamp.asc()).all()
+    accessible_student_ids_query = get_admin_student_query(include_unassigned=False).with_entities(Student.id)
+
+    # Get all tap events for this student, scoped by teacher join_code when available.
+    events = (
+        _apply_admin_join_code_scope(
+            TapEvent.query.filter(TapEvent.student_id == student_id),
+            TapEvent,
+            admin.id,
+            accessible_student_ids_query,
+        )
+        .order_by(TapEvent.period, TapEvent.timestamp.asc())
+        .all()
+    )
 
     # Group by period and validate pairing
     periods = {}
@@ -2460,9 +2540,18 @@ def delete_tap_entry(event_id):
         return jsonify({"error": "Unauthorized"}), 401
 
     from app.models import TapEvent
-    from app.auth import get_student_for_admin
+    from app.auth import get_student_for_admin, get_admin_student_query
 
-    event = db.session.get(TapEvent, event_id)
+    accessible_student_ids_query = get_admin_student_query(include_unassigned=False).with_entities(Student.id)
+    event = (
+        _apply_admin_join_code_scope(
+            TapEvent.query.filter(TapEvent.id == event_id),
+            TapEvent,
+            admin.id,
+            accessible_student_ids_query,
+        )
+        .first()
+    )
     if not event:
         return jsonify({"error": "Tap entry not found"}), 404
 
@@ -2511,16 +2600,46 @@ def update_student_block_settings():
     if not student:
         return jsonify({"error": "Student not found or access denied"}), 404
 
-    # Get or create StudentBlock record
+    # Resolve admin-scoped join_code for this student-period.
+    scoped_join_codes = sorted(
+        {
+            row[0]
+            for row in TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
+                TeacherBlock.teacher_id == admin.id,
+                TeacherBlock.student_id == student_id,
+                TeacherBlock.is_claimed.is_(True),
+                func.upper(TeacherBlock.block) == period,
+                TeacherBlock.join_code.isnot(None),
+            ).all()
+        }
+    )
+    if not scoped_join_codes:
+        return jsonify({"error": "Student block not found or access denied"}), 403
+    target_join_code = scoped_join_codes[0]
+
+    # Strict v2 scope: student+period+join_code must match.
     student_block = StudentBlock.query.filter_by(
         student_id=student_id,
-        period=period
+        period=period,
+        join_code=target_join_code,
     ).first()
+
+    conflicting_block = StudentBlock.query.filter(
+        StudentBlock.student_id == student_id,
+        StudentBlock.period == period,
+        or_(
+            StudentBlock.join_code.is_(None),
+            StudentBlock.join_code != target_join_code,
+        ),
+    ).first()
+    if conflicting_block:
+        return jsonify({"error": "Student block not found or access denied"}), 403
 
     if not student_block:
         student_block = StudentBlock(
             student_id=student_id,
             period=period,
+            join_code=target_join_code,
             tap_enabled=tap_enabled
         )
         db.session.add(student_block)
@@ -2618,11 +2737,8 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                 if today_attendance >= daily_limit:
                     hours_limit = daily_limit / 3600.0
 
-                    # Prioritize join_code from the active event we are closing
+                    # v2 strict mode: active events must always carry join_code.
                     join_code = latest_event.join_code
-                    if not join_code:
-                        # Fallback for legacy events without a join_code
-                        join_code = get_join_code_for_student_period(student.id, period_upper)
 
                     if not join_code:
                         current_app.logger.warning(
@@ -2639,14 +2755,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
                         TapEvent.status == "inactive",
                         TapEvent.timestamp >= start_of_day_utc,
                         TapEvent.timestamp < end_of_day_utc,
-                        or_(
-                            TapEvent.reason_code == TapEventReasonCode.DAILY_LIMIT,
-                            # Backward-compatible fallback: legacy rows may have NULL reason_code
-                            sa.and_(
-                                TapEvent.reason_code.is_(None),
-                                TapEvent.reason.ilike("Daily limit%")
-                            ),
-                        ),
+                        TapEvent.reason_code == TapEventReasonCode.DAILY_LIMIT,
                         TapEvent.is_deleted == False
                     ).first()
 
@@ -2803,139 +2912,6 @@ def set_timezone():
     return jsonify({"status": "success", "message": f"Timezone set to {timezone_name}."})
 
 
-# -------------------- VIEW AS STUDENT API --------------------
-
-@api_bp.route('/admin/create-demo-student', methods=['POST'])
-@admin_required
-def create_demo_student():
-    """Create a demo student session with custom configuration"""
-    from app.models import DemoStudent
-    from werkzeug.security import generate_password_hash
-    import secrets
-
-    try:
-        from app.models import _quantize_currency
-        admin_id = session.get('admin_id')
-        data = request.get_json()
-
-        # Extract configuration
-        checking_balance = _quantize_currency(data.get('checking_balance', '0'))
-        savings_balance = _quantize_currency(data.get('savings_balance', '0'))
-        hall_passes = int(data.get('hall_passes', 3))
-        insurance_plan = data.get('insurance_plan', 'none')
-        period = data.get('period', 'A')
-        rent_enabled = bool(data.get('rent_enabled', True))
-        join_code = generate_join_code()
-
-        # Generate a unique session ID for this demo
-        demo_session_id = secrets.token_urlsafe(32)
-
-        # Create a temporary demo student record
-        # Use encrypted first name for demo student
-        demo_student = Student(
-            first_name='Demo',
-            last_initial='S',
-            block=period,
-            salt=secrets.token_bytes(16),
-            pin_hash=generate_password_hash('1234'),  # Default PIN for demo
-            passphrase_hash=generate_password_hash('demo'),  # Default passphrase for demo
-            hall_passes=hall_passes,
-            is_rent_enabled=rent_enabled,
-            insurance_plan=insurance_plan,
-            has_completed_setup=True,
-            teacher_id=admin_id
-        )
-        demo_student.first_half_hash = secrets.token_hex(32)
-        demo_student.second_half_hash = secrets.token_hex(32)
-
-        db.session.add(demo_student)
-        db.session.flush()  # Get the student ID
-
-        # Link demo student to admin for scoped queries
-        demo_link = StudentTeacher(student_id=demo_student.id, admin_id=admin_id)
-        db.session.add(demo_link)
-
-        # Create a claimed seat for this demo student so student routes have class context
-        demo_seat = TeacherBlock(
-            teacher_id=admin_id,
-            block=period,
-            class_label=f"Demo {period}",
-            first_name='Demo',
-            last_initial='S',
-            last_name_hash_by_part=hash_last_name_parts('S', demo_student.salt),
-            dob_sum=0,
-            salt=demo_student.salt,
-            first_half_hash=secrets.token_hex(32),
-            join_code=join_code,
-            student_id=demo_student.id,
-            is_claimed=True,
-            claimed_at=utc_now()
-        )
-        db.session.add(demo_seat)
-
-        # Ensure tap settings exist for the demo block
-        db.session.add(StudentBlock(student_id=demo_student.id, period=period, tap_enabled=True))
-
-        # Create initial balance transactions
-        if checking_balance > 0:
-            checking_tx = Transaction(
-                student_id=demo_student.id,
-                teacher_id=admin_id,
-                join_code=join_code,
-                amount=checking_balance,
-                account_type='checking',
-                type='admin_adjustment',
-                description='Demo student initial balance'
-            )
-            db.session.add(checking_tx)
-
-        if savings_balance > 0:
-            savings_tx = Transaction(
-                student_id=demo_student.id,
-                teacher_id=admin_id,
-                join_code=join_code,
-                amount=savings_balance,
-                account_type='savings',
-                type='admin_adjustment',
-                description='Demo student initial balance'
-            )
-            db.session.add(savings_tx)
-
-        # Create demo session record
-        demo_session = DemoStudent(
-            admin_id=admin_id,
-            student_id=demo_student.id,
-            session_id=demo_session_id,
-            expires_at=utc_now() + timedelta(minutes=10),
-            config_checking_balance=checking_balance,
-            config_savings_balance=savings_balance,
-            config_hall_passes=hall_passes,
-            config_insurance_plan=insurance_plan,
-            config_is_rent_enabled=rent_enabled,
-            config_period=period
-        )
-        db.session.add(demo_session)
-        db.session.commit()
-
-        current_app.logger.info(f"Admin {admin_id} created demo student session {demo_session_id} with student_id={demo_student.id}")
-
-        # Return success with the session ID
-        return jsonify({
-            "status": "success",
-            "message": "Demo student session created successfully",
-            "session_id": demo_session_id,
-            "redirect_url": f"/student/demo-login/{demo_session_id}"
-        })
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Failed to create demo student: {e}", exc_info=True)
-        return jsonify({
-            "status": "error",
-            "message": "Failed to create demo student session. Please try again."
-        }), 500
-
-
 @api_bp.route('/admin/block-tap-settings', methods=['GET'])
 @admin_required
 def get_block_tap_settings():
@@ -2970,9 +2946,26 @@ def get_block_tap_settings():
     # false if all students have it disabled
     any_enabled = False
     for student in students_in_block:
+        scoped_join_codes = sorted(
+            {
+                row[0]
+                for row in TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
+                    TeacherBlock.teacher_id == admin.id,
+                    TeacherBlock.student_id == student.id,
+                    TeacherBlock.is_claimed.is_(True),
+                    func.upper(TeacherBlock.block) == block,
+                    TeacherBlock.join_code.isnot(None),
+                ).all()
+            }
+        )
+        if not scoped_join_codes:
+            continue
+        target_join_code = scoped_join_codes[0]
+
         student_block = StudentBlock.query.filter_by(
             student_id=student.id,
-            period=block
+            period=block,
+            join_code=target_join_code,
         ).first()
         
         if student_block:
@@ -3018,16 +3011,44 @@ def update_block_tap_settings():
         
         updated_count = 0
         for student in students_in_block:
-            # Get or create StudentBlock record
+            scoped_join_codes = sorted(
+                {
+                    row[0]
+                    for row in TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
+                        TeacherBlock.teacher_id == admin.id,
+                        TeacherBlock.student_id == student.id,
+                        TeacherBlock.is_claimed.is_(True),
+                        func.upper(TeacherBlock.block) == block,
+                        TeacherBlock.join_code.isnot(None),
+                    ).all()
+                }
+            )
+            if not scoped_join_codes:
+                continue
+            target_join_code = scoped_join_codes[0]
+
+            # Strict v2 scope: only mutate student+period+join_code rows.
             student_block = StudentBlock.query.filter_by(
                 student_id=student.id,
-                period=block
+                period=block,
+                join_code=target_join_code,
             ).first()
-            
+            conflicting_row = StudentBlock.query.filter(
+                StudentBlock.student_id == student.id,
+                StudentBlock.period == block,
+                or_(
+                    StudentBlock.join_code.is_(None),
+                    StudentBlock.join_code != target_join_code,
+                ),
+            ).first()
+            if conflicting_row:
+                continue
+
             if not student_block:
                 student_block = StudentBlock(
                     student_id=student.id,
                     period=block,
+                    join_code=target_join_code,
                     tap_enabled=tap_enabled
                 )
                 db.session.add(student_block)

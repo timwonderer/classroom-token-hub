@@ -26,7 +26,7 @@ def _login_admin(client):
         first_name="Student",
         last_initial="T",
         last_name_hash_by_part=["hash"],
-        dob_sum=1234,
+        dob_sum_hash=None,
         salt=b"1234567890123456",
         first_half_hash="hashvalue",
         join_code="ELA123"

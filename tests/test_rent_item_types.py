@@ -33,7 +33,7 @@ def student_in_class(client, teacher_admin):
     seat = TeacherBlock(
         teacher_id=teacher_admin.id, block='A', join_code='JOINCODE123',
         student_id=student.id, is_claimed=True,
-        first_name='Test', last_initial='S', last_name_hash_by_part=[], dob_sum=0, salt=b'salt', first_half_hash='hash'
+        first_name='Test', last_initial='S', salt=b'salt', first_half_hash='hash'
     )
     db.session.add(seat)
     db.session.commit()
@@ -694,7 +694,7 @@ def test_mid_period_lock_blocks_semantic_changes(client, teacher_admin):
     # Create a TeacherBlock with join_code
     tb = TeacherBlock(
         teacher_id=teacher_admin.id, block='A', join_code='LOCKTEST',
-        first_name='Seat', last_initial='1', last_name_hash_by_part=[], dob_sum=0,
+        first_name='Seat', last_initial='1',
         salt=b'salt', first_half_hash='hash'
     )
     db.session.add(tb)
@@ -761,7 +761,7 @@ def test_mid_period_lock_allows_new_items(client, teacher_admin):
 
     tb = TeacherBlock(
         teacher_id=teacher_admin.id, block='A', join_code='LOCKTEST2',
-        first_name='Seat', last_initial='2', last_name_hash_by_part=[], dob_sum=0,
+        first_name='Seat', last_initial='2',
         salt=b'salt', first_half_hash='hash'
     )
     db.session.add(tb)

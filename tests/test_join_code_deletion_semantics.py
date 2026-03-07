@@ -36,7 +36,6 @@ def _create_student(teacher: Admin, first_name: str, block: str, join_code: str)
         block=block,
         salt=salt,
         first_half_hash=first_half_hash,
-        dob_sum=2025,
     )
     db.session.add(student)
     db.session.flush()
@@ -47,8 +46,8 @@ def _create_student(teacher: Admin, first_name: str, block: str, join_code: str)
         block=block,
         first_name=first_name,
         last_initial=first_name[0].upper(),
-        last_name_hash_by_part=[],
-        dob_sum=2025,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
         salt=salt,
         first_half_hash=first_half_hash,
         join_code=join_code,

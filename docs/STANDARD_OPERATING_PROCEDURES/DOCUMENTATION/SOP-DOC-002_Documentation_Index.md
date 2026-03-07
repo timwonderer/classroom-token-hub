@@ -94,6 +94,7 @@ This document is the canonical index of all formal documentation.
 - [LOG-ARC-037_Architecture_Overview.md](../../LOGS/AUDITS/LOG-ARC-037_Architecture_Overview.md)
 - [LOG-ARC-038_Duplicate_Tapout_Bug_Report.md](../../LOGS/AUDITS/LOG-ARC-038_Duplicate_Tapout_Bug_Report.md)
 - [LOG-ARC-039_Project_Timeline.md](../../LOGS/AUDITS/LOG-ARC-039_Project_Timeline.md)
+- [LOG-ARC-040_Seat_Scope_Migration_Progress.md](../../LOGS/AUDITS/LOG-ARC-040_Seat_Scope_Migration_Progress.md)
 - [LOG-DB-001_Migration_Fix_Summary.md](../../LOGS/AUDITS/LOG-DB-001_Migration_Fix_Summary.md)
 - [LOG-DB-002_Migration_Note_Expected_Weekly_Hours.md](../../LOGS/AUDITS/LOG-DB-002_Migration_Note_Expected_Weekly_Hours.md)
 - [LOG-DB-003_Migration_Status_Report.md](../../LOGS/AUDITS/LOG-DB-003_Migration_Status_Report.md)
@@ -184,8 +185,6 @@ This document is the canonical index of all formal documentation.
 ### STANDARD_OPERATING_PROCEDURES/DEPLOYMENT
 
 - [SOP-DEP-001_Production_Deployment_Instructions.md](../DEPLOYMENT/SOP-DEP-001_Production_Deployment_Instructions.md)
-- [SOP-DEP-003_Demo_Env_Setup.md](../DEPLOYMENT/SOP-DEP-003_Demo_Env_Setup.md)
-- [SOP-DEP-004_Demo_Sessions.md](../DEPLOYMENT/SOP-DEP-004_Demo_Sessions.md)
 - [SOP-DEP-005_Digitalocean_Cloudflare_Setup.md](../DEPLOYMENT/SOP-DEP-005_Digitalocean_Cloudflare_Setup.md)
 - [SOP-DEP-006_Deployment_Guide.md](../DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)
 - [SOP-DEP-007_Github_Pages_Setup.md](../DEPLOYMENT/SOP-DEP-007_Github_Pages_Setup.md)

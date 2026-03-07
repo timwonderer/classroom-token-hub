@@ -289,7 +289,7 @@
                                 <div class="row g-2">
                                     <div class="col-12">
                                         <div class="small text-muted text-uppercase fw-bold">Name</div>
-                                        <div class="fs-5 fw-bold">{{ student.first_name }} {{ student.last_initial }}.
+                                        <div class="fs-5 fw-bold">{{ student.full_name }}
                                         </div>
                                     </div>
                                     <div class="col-12">
@@ -801,11 +801,6 @@
                                         value="{{ student.last_initial }}" required>
                                     <div class="form-text">First letter will become last initial</div>
                                 </div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="edit_dob" class="form-label fw-bold">Date of Birth (Optional)</label>
-                                <input type="date" class="form-control" id="edit_dob" name="dob_sum">
-                                <div class="form-text">Leave blank to keep unchanged.</div>
                             </div>
                         </div>
                     </div>

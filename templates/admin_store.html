@@ -240,7 +240,7 @@
             <tbody>
               {% for student_item in pending_redemptions %}
               <tr>
-                <td>{{ student_item.student.first_name }} {{ student_item.student.last_initial }}.</td>
+                <td>{{ student_item.student.full_name }}</td>
                 <td>{{ student_item.store_item.name }}</td>
                 <td><small class="text-muted local-timestamp" data-timestamp="{{ format_utc_iso(student_item.redemption_date) }}"></small></td>
                 <td>
@@ -300,7 +300,7 @@
             <tbody>
               {% for student_item in recent_purchases %}
               <tr>
-                <td>{{ student_item.student.first_name }} {{ student_item.student.last_initial }}.</td>
+                <td>{{ student_item.student.full_name }}</td>
                 <td>{{ student_item.store_item.name }}</td>
                 <td>${{ "%.2f"|format(student_item.store_item.price) }}</td>
                 <td><small class="text-muted local-timestamp" data-timestamp="{{ format_utc_iso(student_item.purchase_date) }}"></small></td>

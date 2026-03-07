@@ -43,7 +43,7 @@
                                     {% for student in students %}
                                     <tr>
                                         <td>
-                                            <strong>{{ student.first_name }} {{ student.last_initial }}.</strong>
+                                            <strong>{{ student.full_name }}</strong>
                                             <br>
                                             <small class="text-muted">@{{ student.username }}</small>
                                         </td>
@@ -52,7 +52,7 @@
                                                 name="student_{{ student.id }}_block"
                                                 class="form-select"
                                                 required
-                                                aria-label="Assign {{ student.first_name }} to a period"
+                                                aria-label="Assign {{ student.display_first_name }} to a period"
                                             >
                                                 <option value="">-- Select Period --</option>
                                                 {% for block in available_blocks %}

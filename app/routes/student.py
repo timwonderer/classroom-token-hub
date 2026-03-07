@@ -43,7 +43,6 @@ from app.forms import (
 from app.utils.helpers import generate_anonymous_code, is_safe_url, format_utc_iso, render_template_with_fallback as render_template
 from app.utils.constants import THEME_PROMPTS
 from app.utils.turnstile import verify_turnstile_token
-from app.utils.demo_sessions import cleanup_demo_student_data
 from app.utils.ip_handler import get_real_ip
 from app.utils.claim_credentials import compute_primary_claim_hash, match_claim_hash
 from app.utils.name_utils import hash_last_name_parts
@@ -54,6 +53,7 @@ from app.hash_utils import hash_hmac, hash_username, hash_username_lookup
 from app.attendance import get_all_block_statuses
 from app.payroll import get_pay_rate_for_block
 from app.utils.time import utc_now, ensure_utc, normalize_for_db, get_timezone
+from app.utils.seat_scope import get_seat_ids_for_student_join, transaction_scope_filter, seat_scoped_filter
 from app.utils.insurance_eligibility import (
     evaluate_claim_transaction_eligibility,
     collect_reimbursed_source_tx_ids,
@@ -291,6 +291,9 @@ def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: in
         logger.warning(f"calculate_scoped_balances called without join_code for student {student.id}")
         return checking_balance, savings_balance
 
+    seat_ids = get_seat_ids_for_student_join(student.id, join_code)
+    tx_scope = transaction_scope_filter(Transaction, student.id, seat_ids)
+
     # 1. Eager Settlement (Best Effort)
     try:
         settle_balances(student.id, join_code)
@@ -298,7 +301,14 @@ def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: in
         logger.warning(f"Eager settlement failed during read for student {student.id}: {e}")
 
     # 2. Read Posted Balance from Cache
-    cache = BalanceCache.query.filter_by(student_id=student.id, join_code=join_code).first()
+    cache = None
+    if seat_ids:
+        cache = BalanceCache.query.filter(
+            BalanceCache.join_code == join_code,
+            BalanceCache.seat_id.in_(seat_ids),
+        ).first()
+    if not cache:
+        cache = BalanceCache.query.filter_by(student_id=student.id, join_code=join_code).first()
     if cache:
         checking_balance += Decimal(cache.posted_checking_balance_cents) / 100
         savings_balance += Decimal(cache.posted_savings_balance_cents) / 100
@@ -306,26 +316,26 @@ def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: in
         # Legacy fallback for contexts not yet represented in BalanceCache.
         # Derive posted as (all non-void) - (pending) to avoid enum-label assumptions.
         all_checking = db.session.query(func.sum(Transaction.amount)).filter(
-            Transaction.student_id == student.id,
+            tx_scope,
             Transaction.join_code == join_code,
             Transaction.account_type == 'checking',
             Transaction.is_void == False,
         ).scalar() or Decimal('0.00')
         pending_checking_fallback = db.session.query(func.sum(Transaction.amount)).filter(
-            Transaction.student_id == student.id,
+            tx_scope,
             Transaction.join_code == join_code,
             Transaction.status == TransactionStatus.PENDING,
             Transaction.account_type == 'checking',
             Transaction.is_void == False,
         ).scalar() or Decimal('0.00')
         all_savings = db.session.query(func.sum(Transaction.amount)).filter(
-            Transaction.student_id == student.id,
+            tx_scope,
             Transaction.join_code == join_code,
             Transaction.account_type == 'savings',
             Transaction.is_void == False,
         ).scalar() or Decimal('0.00')
         pending_savings_fallback = db.session.query(func.sum(Transaction.amount)).filter(
-            Transaction.student_id == student.id,
+            tx_scope,
             Transaction.join_code == join_code,
             Transaction.status == TransactionStatus.PENDING,
             Transaction.account_type == 'savings',
@@ -338,7 +348,7 @@ def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: in
 
     # 3. Add Pending Transactions (aggregate in DB to avoid loading all rows)
     pending_checking = db.session.query(func.sum(Transaction.amount)).filter(
-        Transaction.student_id == student.id,
+        tx_scope,
         Transaction.join_code == join_code,
         Transaction.status == TransactionStatus.PENDING,
         Transaction.account_type == 'checking',
@@ -346,7 +356,7 @@ def calculate_scoped_balances(student: 'Student', join_code: str, teacher_id: in
     ).scalar() or Decimal('0.00')
 
     pending_savings = db.session.query(func.sum(Transaction.amount)).filter(
-        Transaction.student_id == student.id,
+        tx_scope,
         Transaction.join_code == join_code,
         Transaction.status == TransactionStatus.PENDING,
         Transaction.account_type == 'savings',
@@ -375,7 +385,7 @@ def check_legacy_profile():
     excluded_endpoints = [
         'student.login', 'student.logout', 'student.complete_profile',
         'student.claim_account', 'student.create_username', 'student.setup_pin_passphrase',
-        'student.demo_login', 'student.setup_complete', 'student.add_class'
+        'student.setup_complete', 'student.add_class'
     ]
     
     # Skip if endpoint is None or not in student blueprint
@@ -395,7 +405,7 @@ def check_legacy_profile():
     needs_migration = (
         student.has_completed_setup and
         not student.has_completed_profile_migration and
-        (not student.last_name_hash_by_part or student.dob_sum is None)
+        False
     )
     
     if needs_migration:
@@ -520,12 +530,6 @@ def complete_profile():
                 # Update last initial from last name (already validated to not be empty)
                 student.last_initial = last_name[0].upper()
                 
-                # Calculate and store DOB sum
-                student.dob_sum = dob_sum
-                
-                # Generate last_name_hash_by_part
-                student.last_name_hash_by_part = hash_last_name_parts(last_name, student.salt)
-                
                 # Regenerate first_half_hash using first initial + dob_sum
                 first_initial_char = first_name[0].upper() if first_name else ''
                 student.first_half_hash = compute_primary_claim_hash(first_initial_char, dob_sum, student.salt)
@@ -540,8 +544,10 @@ def complete_profile():
                 # Update all TeacherBlock entries for this student with new hashes
                 from app.models import TeacherBlock
                 teacher_blocks = TeacherBlock.query.filter_by(student_id=student.id).all()
+                last_name_parts = hash_last_name_parts(last_name, student.salt)
                 for block in teacher_blocks:
-                    block.last_name_hash_by_part = student.last_name_hash_by_part
+                    block.last_name_hash_by_part = last_name_parts
+                    block.dob_sum_hash = hash_hmac(str(dob_sum).encode(), block.salt)
                     block.first_half_hash = student.first_half_hash
                     block.last_initial = student.last_initial
                 
@@ -630,7 +636,7 @@ def claim_account():
                 seat.first_half_hash,
                 first_initial,
                 seat.last_initial,
-                seat.dob_sum,
+                dob_sum,
                 seat.salt,
             )
 
@@ -641,15 +647,16 @@ def claim_account():
                 seat.salt
             )
 
-            # Track match details for debugging
-            dob_sum_matches = seat.dob_sum == dob_sum
+            # Verify DOB sum via hash comparison
+            dob_sum_matches = (
+                seat.dob_sum_hash is not None
+                and hash_hmac(str(dob_sum).encode(), seat.salt) == seat.dob_sum_hash
+            )
             match_attempts.append({
                 'seat_id': seat.id,
                 'credential_matches': credential_matches,
                 'last_name_matches': last_name_matches,
                 'dob_sum_matches': dob_sum_matches,
-                'seat_dob_sum': seat.dob_sum,
-                'provided_dob_sum': dob_sum
             })
 
             if credential_matches and last_name_matches and dob_sum_matches:
@@ -681,7 +688,7 @@ def claim_account():
             matched_seat.is_claimed = True
             matched_seat.claimed_at = utc_now()
             # Null out PII on the now-claimed seat — no longer needed for matching
-            matched_seat.dob_sum = None
+            matched_seat.dob_sum_hash = None
             matched_seat.last_name_hash_by_part = None
 
             # Create StudentTeacher link
@@ -722,8 +729,6 @@ def claim_account():
             salt=matched_seat.salt,
             first_half_hash=matched_seat.first_half_hash,
             second_half_hash=second_half_hash,
-            dob_sum=matched_seat.dob_sum,
-            last_name_hash_by_part=matched_seat.last_name_hash_by_part,
             has_completed_setup=False,
             is_teacher=matched_seat.is_teacher,
         )
@@ -747,7 +752,7 @@ def claim_account():
                 matched_seat.is_claimed = True
                 matched_seat.claimed_at = utc_now()
                 # Null out PII on the now-claimed seat
-                matched_seat.dob_sum = None
+                matched_seat.dob_sum_hash = None
                 matched_seat.last_name_hash_by_part = None
 
                 # Create StudentTeacher link if not exists
@@ -787,10 +792,8 @@ def claim_account():
         matched_seat.student_id = new_student.id
         matched_seat.is_claimed = True
         matched_seat.claimed_at = utc_now()
-        # Null out PII on the now-claimed seat — the student record carries dob_sum
-        # through the setup flow; it will be nulled on the student record itself
-        # after setup completes in setup_pin_passphrase.
-        matched_seat.dob_sum = None
+        # Null out seat verification hashes once claim succeeds.
+        matched_seat.dob_sum_hash = None
         matched_seat.last_name_hash_by_part = None
 
         # Create StudentTeacher link
@@ -840,9 +843,14 @@ def create_username():
             "lucky", "mighty", "noble", "quick", "proud", "silly", "witty", "zesty", "sunny", "chill"
         ]
         adjective = random.choice(adjectives)
-        dob_sum = student.dob_sum if student.dob_sum is not None else 0
+        # Recovery resets use a transient random 4-digit segment; it is never
+        # stored separately and only survives as part of the username hash.
+        if student.recovery_status == 'to_be_claimed':
+            numeric_segment = random.randint(1000, 9999)
+        else:
+            numeric_segment = student.id or 0
         initials = f"{student.first_name[0].upper()}{student.last_initial.upper()}"
-        username = f"{adjective}{write_in_word}{dob_sum}{initials}"
+        username = f"{adjective}{write_in_word}{numeric_segment}{initials}"
         # Save username plaintext in session for display
         session['generated_username'] = username
         # Hash and store in DB
@@ -886,12 +894,7 @@ def setup_pin_passphrase():
             student.reset_code_expires_at = None
             student.recovery_status = 'active'
 
-        # Post-claim PII cleanup: dob_sum and last_name_hash_by_part are no longer
-        # needed on the student record after setup is complete. Clear them to minimise
-        # the PII footprint. has_completed_profile_migration is set to True so the
-        # legacy migration gate does not incorrectly redirect this student.
-        student.dob_sum = None
-        student.last_name_hash_by_part = None
+        # Mark profile migration complete; claim verification data is stored only on seats.
         student.has_completed_profile_migration = True
 
         db.session.commit()
@@ -916,8 +919,8 @@ def add_class():
     carries its own verification hashes (dob_sum, last_name_hash_by_part).
     Those hashes are deleted from the seat after it is claimed.
 
-    Note: The student's own account has no stored dob_sum or last_name_hash_by_part
-    after their first claim completes (post-claim PII cleanup). This is intentional —
+    Note: The student's own account has no stored dob_sum or last_name_hash_by_part.
+    This is intentional —
     we verify credentials against the target class's seat, not the student account.
     A name cross-check (encrypted first_name + last_initial) ensures the entered
     credentials correspond to a seat belonging to this student.
@@ -1021,7 +1024,7 @@ def add_class():
                 seat.first_half_hash,
                 first_initial,
                 seat.last_initial,
-                seat.dob_sum,
+                dob_sum,
                 seat.salt,
             )
 
@@ -1038,7 +1041,11 @@ def add_class():
                 and seat.last_initial == student.last_initial
             )
 
-            if credential_matches and last_name_matches and name_matches and seat.dob_sum == dob_sum:
+            dob_sum_matches = (
+                seat.dob_sum_hash is not None
+                and hash_hmac(str(dob_sum).encode(), seat.salt) == seat.dob_sum_hash
+            )
+            if credential_matches and last_name_matches and name_matches and dob_sum_matches:
                 if canonical_hash and not matched_primary:
                     seat.first_half_hash = canonical_hash
                 matched_seat = seat
@@ -1065,7 +1072,7 @@ def add_class():
         matched_seat.student_id = student.id
         matched_seat.is_claimed = True
         matched_seat.claimed_at = utc_now()
-        matched_seat.dob_sum = None
+        matched_seat.dob_sum_hash = None
         matched_seat.last_name_hash_by_part = None
 
         # Create StudentTeacher link if it doesn't exist
@@ -1238,8 +1245,9 @@ def dashboard():
 
         all_paid = True
         for period in rent_blocks:
+            rent_scope = seat_scoped_filter(RentPayment, student.id, seat_ids)
             all_payments_for_period = RentPayment.query.filter(
-                RentPayment.student_id == student.id,
+                rent_scope,
                 RentPayment.period == period,
                 RentPayment.coverage_month == coverage_month,
                 RentPayment.coverage_year == coverage_year,
@@ -1248,8 +1256,9 @@ def dashboard():
 
             payments = []
             for payment in all_payments_for_period:
+                txn_scope = transaction_scope_filter(Transaction, student.id, seat_ids)
                 txn = Transaction.query.filter(
-                    Transaction.student_id == student.id,
+                    txn_scope,
                     Transaction.type == 'Rent Payment',
                     Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
                     Transaction.timestamp <= payment.payment_date + timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
@@ -2494,6 +2503,7 @@ def shop():
     per_use_limit_by_store_id = {}
 
     if teacher_id and join_code and current_block:
+        seat_ids = get_seat_ids_for_student_join(student.id, join_code)
         rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
         if rent_settings and rent_settings.is_enabled:
             now = utc_now()
@@ -2509,6 +2519,7 @@ def shop():
                     current_block,
                     join_code,
                     coverage_due_date,
+                    seat_ids=seat_ids,
                 )
 
             rent_store_items = RentItem.query.filter(
@@ -2887,7 +2898,7 @@ def _total_paid_by_grace(payments, grace_end_date):
     )
 
 
-def _filter_valid_rent_payments(payments, student_id, join_code):
+def _filter_valid_rent_payments(payments, student_id, join_code, seat_ids=None):
     """Return payments that have a matching, non-void rent transaction."""
     if not payments:
         return []
@@ -2903,8 +2914,9 @@ def _filter_valid_rent_payments(payments, student_id, join_code):
 
     payment_amounts = {-(p.amount_paid) for p in payments}
 
+    txn_scope = transaction_scope_filter(Transaction, student_id, seat_ids or [])
     txn_query = Transaction.query.filter(
-        Transaction.student_id == student_id,
+        txn_scope,
         Transaction.type == 'Rent Payment',
         Transaction.timestamp >= window_start,
         Transaction.timestamp <= window_end,
@@ -2969,6 +2981,7 @@ def _is_student_coverage_period_paid(
     period,
     join_code,
     coverage_due_date,
+    seat_ids=None,
     include_late_fee=True,
 ):
     """Return True when a student's specific coverage period is fully paid."""
@@ -2978,8 +2991,9 @@ def _is_student_coverage_period_paid(
     if not normalized_period:
         return False
 
+    coverage_scope = seat_scoped_filter(RentPayment, student_id, seat_ids or [])
     coverage_payments = RentPayment.query.filter(
-        RentPayment.student_id == student_id,
+        coverage_scope,
         db.func.upper(db.func.trim(RentPayment.period)) == normalized_period,
         RentPayment.coverage_month == coverage_due_date.month,
         RentPayment.coverage_year == coverage_due_date.year,
@@ -2989,7 +3003,8 @@ def _is_student_coverage_period_paid(
     valid_payments = _filter_valid_rent_payments(
         coverage_payments,
         student_id,
-        join_code
+        join_code,
+        seat_ids=seat_ids,
     )
     return _is_coverage_period_paid(
         settings,
@@ -3053,6 +3068,7 @@ def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
     current_block = (context.get('block') or '').strip().upper()
     if not join_code or not current_block:
         return 0, 0, False
+    seat_ids = get_seat_ids_for_student_join(student.id, join_code)
 
     settings = settings or get_rent_settings_for_context(context)
     if not settings or not settings.is_enabled:
@@ -3069,6 +3085,7 @@ def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
         current_block,
         join_code,
         coverage_due_date,
+        seat_ids=seat_ids,
         include_late_fee=False,
     )
 
@@ -3147,6 +3164,7 @@ def rent():
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').strip().upper()
+    seat_ids = get_seat_ids_for_student_join(student.id, join_code) if join_code else []
     settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
@@ -3185,6 +3203,7 @@ def rent():
             current_block,
             join_code,
             coverage_due_date,
+            seat_ids=seat_ids,
         )
 
     # Only allow preview period if current coverage is already paid
@@ -3206,8 +3225,9 @@ def rent():
     period_status = {}
 
     # Get all payments that COVER the current period (pre-paid system)
+    rent_scope = seat_scoped_filter(RentPayment, student.id, seat_ids)
     all_payments_for_period = RentPayment.query.filter(
-        RentPayment.student_id == student.id,
+        rent_scope,
         RentPayment.period == current_block,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
@@ -3217,8 +3237,9 @@ def rent():
     # Filter out payments where the corresponding transaction was voided
     payments = []
     for payment in all_payments_for_period:
+        txn_scope = transaction_scope_filter(Transaction, student.id, seat_ids)
         txn = Transaction.query.filter(
-            Transaction.student_id == student.id,
+            txn_scope,
             Transaction.type == 'Rent Payment',
             Transaction.join_code == join_code,
             Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
@@ -3259,7 +3280,7 @@ def rent():
 
     # Get payment history for the current class only
     payment_history = RentPayment.query.filter(
-        RentPayment.student_id == student.id,
+        rent_scope,
         RentPayment.join_code == join_code,
     ).order_by(
         RentPayment.payment_date.desc()
@@ -3309,6 +3330,7 @@ def rent_pay(period):
     teacher_id = context.get('teacher_id')
     join_code = context.get('join_code')
     current_block = (context.get('block') or '').strip().upper()
+    seat_ids = get_seat_ids_for_student_join(student.id, join_code) if join_code else []
     settings = get_rent_settings_for_context(context)
 
     if not settings or not settings.is_enabled:
@@ -3361,6 +3383,7 @@ def rent_pay(period):
             period,
             join_code,
             coverage_due_date,
+            seat_ids=seat_ids,
         )
 
     # Determine which due date this payment should cover
@@ -3381,8 +3404,9 @@ def rent_pay(period):
     savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
 
     # Get all existing payments that cover this period
+    rent_scope = seat_scoped_filter(RentPayment, student.id, seat_ids)
     all_payments = RentPayment.query.filter(
-        RentPayment.student_id == student.id,
+        rent_scope,
         RentPayment.period == period,
         RentPayment.coverage_month == coverage_month,
         RentPayment.coverage_year == coverage_year,
@@ -3393,8 +3417,9 @@ def rent_pay(period):
     existing_payments = []
     for payment in all_payments:
         # Find the transaction for this payment
+        txn_scope = transaction_scope_filter(Transaction, student.id, seat_ids)
         txn = Transaction.query.filter(
-            Transaction.student_id == student.id,
+            txn_scope,
             Transaction.type == 'Rent Payment',
             Transaction.join_code == join_code,
             Transaction.timestamp >= payment.payment_date - timedelta(seconds=RENT_PAYMENT_MATCH_TOLERANCE_SECONDS),
@@ -3772,122 +3797,10 @@ def login():
     return render_template('student_login.html', setup_cta=setup_cta, form=form)
 
 
-@student_bp.route('/demo-login/<string:session_id>')
-@admin_required
-def demo_login(session_id):
-    """Auto-login for demo student sessions created by admins.
-
-    SECURITY: This route requires the user to already be logged in as the admin
-    who created the demo session. Demo links cannot be used by anonymous users
-    or other admins.
-    """
-    from app.models import DemoStudent, Admin
-
-    try:
-        # Find the demo session
-        demo_session = DemoStudent.query.filter_by(
-            session_id=session_id,
-            is_active=True
-        ).first()
-
-        if not demo_session:
-            flash("Demo session not found or has expired.", "error")
-            return redirect(url_for('admin.dashboard'))
-
-        # Check if session has expired
-        now = utc_now()
-        expires_at = demo_session.expires_at
-        if not isinstance(expires_at, datetime):
-            # If missing or invalid, refresh expiry to 10 minutes from now to avoid false immediate expiry
-            expires_at = now + timedelta(minutes=10)
-            demo_session.expires_at = expires_at
-            db.session.commit()
-        else:
-            normalized_expires_at = ensure_utc(expires_at, naive_tz_name=session.get('timezone'))
-            if normalized_expires_at != expires_at:
-                expires_at = normalized_expires_at
-                demo_session.expires_at = expires_at
-                db.session.commit()
-
-        if expires_at and now > expires_at:
-            # Mark as inactive and cleanup
-            cleanup_demo_student_data(demo_session)
-            db.session.commit()
-            flash("Demo session has expired (10 minute limit).", "error")
-            return redirect(url_for('admin.dashboard'))
-
-        # SECURITY: Verify the user is logged in as the admin who created this demo
-        # This prevents privilege escalation via demo links
-        if not session.get('is_admin') or session.get('admin_id') != demo_session.admin_id:
-            current_app.logger.warning(
-                f"Unauthorized demo login attempt for session {session_id}. "
-                f"Current admin_id={session.get('admin_id')}, required={demo_session.admin_id}"
-            )
-            flash("You must be logged in as the admin who created this demo session.", "error")
-            return redirect(url_for('admin.login'))
-
-        # Set up student session (preserving admin authentication)
-        student = demo_session.student
-
-        # Clear student-specific keys only, preserve admin session
-        session.pop('student_id', None)
-        session.pop('login_time', None)
-        session.pop('last_activity', None)
-        session.pop('is_demo', None)
-        session.pop('demo_session_id', None)
-
-        # Set student session variables
-        session['student_id'] = student.id
-        session['login_time'] = utc_now().isoformat()
-        session['last_activity'] = session['login_time']
-        session['is_demo'] = True
-        session['demo_session_id'] = session_id
-        session['view_as_student'] = True
-        # Ensure class context is set for dashboard queries
-        demo_seat = student.roster_seats[0] if student.roster_seats else None
-        if demo_seat:
-            session['current_join_code'] = demo_seat.join_code
-        _prime_student_teacher_display_name_cache(student.id)
-
-        current_app.logger.info(
-            f"Admin {demo_session.admin_id} accessed demo session {session_id} "
-            f"(student_id={student.id})"
-        )
-
-        flash("Demo session started! Session will expire in 10 minutes.", "success")
-        return redirect(url_for('student.dashboard'))
-
-    except Exception as e:
-        current_app.logger.error(f"Error during demo login: {e}", exc_info=True)
-        flash("An error occurred starting the demo session.", "error")
-        return redirect(url_for('student.login'))
-
-
 @student_bp.route('/logout')
 @login_required
 def logout():
     """Student logout."""
-    # Check if this is a demo session
-    is_demo = session.get('is_demo', False)
-    demo_session_id = session.get('demo_session_id')
-
-    if is_demo and demo_session_id:
-        # Clean up demo session
-        from app.models import DemoStudent
-        try:
-            demo_session = DemoStudent.query.filter_by(session_id=demo_session_id).first()
-            if demo_session:
-                demo_session.is_active = False
-                demo_session.ended_at = utc_now()
-
-                cleanup_demo_student_data(demo_session)
-
-                db.session.commit()
-                current_app.logger.info(f"Demo session {demo_session_id} ended and cleaned up")
-        except Exception as e:
-            db.session.rollback()
-            current_app.logger.error(f"Error cleaning up demo session: {e}", exc_info=True)
-
     session.clear()
     flash("You've been logged out.")
     return redirect(url_for('student.login'))

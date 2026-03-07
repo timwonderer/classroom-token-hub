@@ -27,7 +27,7 @@
                         <div class="mb-3">
                             <label for="first_name" class="form-label">First Name <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="first_name" name="first_name"
-                                   value="{{ form.first_name.data or student.first_name }}" required maxlength="50" autocomplete="off">
+                                   value="{{ form.first_name.data or student.display_first_name }}" required maxlength="50" autocomplete="off">
                             <small class="form-text text-muted">This can be edited if needed.</small>
                         </div>
 

@@ -6,7 +6,7 @@ Contains session management helpers, authentication decorators, and timeout logi
 
 import urllib.parse
 from datetime import datetime, timedelta
-from app.utils.time import utc_now, ensure_utc
+from app.utils.time import utc_now
 from functools import wraps
 
 import sqlalchemy as sa
@@ -68,53 +68,6 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         # Allow access if admin is viewing as student
         if is_viewing_as_student():
-            # Enforce 10-minute timeout for demo sessions even in admin view
-            if session.get('is_demo'):
-                login_time_str = session.get('login_time')
-
-                if not login_time_str:
-                    session.pop('student_id', None)
-                    session.pop('login_time', None)
-                    session.pop('last_activity', None)
-                    session.pop('teacher_display_name_cache', None)
-                    session['view_as_student'] = False
-                    session.pop('is_demo', None)
-                    session.pop('demo_session_id', None)
-                    flash("Demo session is invalid. Please start a new demo session.")
-                    return redirect(url_for('admin.dashboard'))
-
-                login_time = datetime.fromisoformat(login_time_str)
-                if (utc_now() - login_time) > timedelta(minutes=SESSION_TIMEOUT_MINUTES):
-                    demo_session_id = session.get('demo_session_id')
-
-                    try:
-                        if demo_session_id:
-                            from app.extensions import db
-                            from app.models import DemoStudent
-                            from app.utils.demo_sessions import cleanup_demo_student_data
-
-                            demo_session = DemoStudent.query.filter_by(session_id=demo_session_id).first()
-                            if demo_session:
-                                cleanup_demo_student_data(demo_session)
-                                db.session.commit()
-                            else:
-                                db.session.rollback()
-                    except Exception:
-                        current_app.logger.exception(
-                            "Failed to clean up expired demo session %s during auth check",
-                            demo_session_id,
-                        )
-
-                    session.pop('student_id', None)
-                    session.pop('login_time', None)
-                    session.pop('last_activity', None)
-                    session.pop('teacher_display_name_cache', None)
-                    session.pop('is_demo', None)
-                    session.pop('demo_session_id', None)
-                    session['view_as_student'] = False
-                    flash("Demo session expired. Please start a new demo session.")
-                    return redirect(url_for('admin.dashboard'))
-
             # Admins must also have a student context when bypassing login_required
             if 'student_id' not in session:
                 session['view_as_student'] = False
@@ -123,71 +76,6 @@ def login_required(f):
                     return jsonify({"status": "error", "error": "No student context"}), 401
                 flash("Select a student before viewing the student experience.")
                 return redirect(url_for('admin.dashboard'))
-
-            # Enforce demo session expiry for admins viewing as demo students
-            if session.get('is_demo'):
-                demo_session_id = session.get('demo_session_id')
-                if not demo_session_id:
-                    session['view_as_student'] = False
-                    # Return JSON for API requests
-                    if request.path.startswith('/api/'):
-                        return jsonify({"status": "error", "error": "Demo session expired"}), 401
-                    flash("Demo session expired. Start a new demo to continue.")
-                    return redirect(url_for('admin.dashboard'))
-
-                from app.models import DemoStudent  # Imported lazily to avoid circular import
-                demo_session = DemoStudent.query.filter_by(session_id=demo_session_id).first()
-                now = utc_now()
-
-                expires_at = None
-                if demo_session and isinstance(demo_session.expires_at, datetime):
-                    expires_at = ensure_utc(demo_session.expires_at)
-                else:
-                    # If missing/invalid, refresh expiry window to prevent false expirations mid-redirect
-                    expires_at = now + timedelta(minutes=10)
-                    if demo_session:
-                        demo_session.expires_at = expires_at
-                        from app.extensions import db
-                        db.session.commit()
-
-                if not demo_session or not demo_session.is_active or (expires_at and now > expires_at):
-                    try:
-                        if demo_session:
-                            from app.extensions import db  # Imported lazily to avoid circular import
-                            from app.utils.demo_sessions import cleanup_demo_student_data
-
-                            cleanup_demo_student_data(demo_session)
-                            db.session.commit()
-
-                        session.pop('student_id', None)
-                        session.pop('login_time', None)
-                        session.pop('last_activity', None)
-                        session.pop('teacher_display_name_cache', None)
-                        session.pop('is_demo', None)
-                        session.pop('demo_session_id', None)
-                        session['view_as_student'] = False
-                        # Return JSON for API requests
-                        if request.path.startswith('/api/'):
-                            return jsonify({"status": "error", "error": "Demo session expired"}), 401
-                        flash("Demo session expired. Start a new demo to continue.")
-                        return redirect(url_for('admin.dashboard'))
-                    except Exception:
-                        current_app.logger.exception(
-                            "Failed to clean up expired demo session %s during auth check",
-                            demo_session_id,
-                        )
-                        session.pop('student_id', None)
-                        session.pop('login_time', None)
-                        session.pop('last_activity', None)
-                        session.pop('teacher_display_name_cache', None)
-                        session.pop('is_demo', None)
-                        session.pop('demo_session_id', None)
-                        session['view_as_student'] = False
-                        # Return JSON for API requests
-                        if request.path.startswith('/api/'):
-                            return jsonify({"status": "error", "error": "Demo session expired"}), 401
-                        flash("Demo session expired. Start a new demo to continue.")
-                        return redirect(url_for('admin.dashboard'))
 
             # Update admin's last activity
             session['last_activity'] = utc_now().isoformat()
@@ -322,20 +210,8 @@ def system_admin_required(f):
 # -------------------- HELPER FUNCTIONS --------------------
 
 def is_student_account_active(student):
-    """
-    Return True when a student account should be allowed to authenticate.
-
-    Legacy rows may still carry `is_active=False` until one-time cleanup runs.
-    """
-    if student is None:
-        return False
-    if not hasattr(student, "is_active"):
-        current_app.logger.warning(
-            "Student %s is missing is_active attribute; allowing access by fallback",
-            getattr(student, "id", "unknown"),
-        )
-        return True
-    return bool(student.is_active)
+    """Return True when a student account exists and has not been deleted."""
+    return student is not None
 
 
 def get_logged_in_student():
@@ -403,13 +279,10 @@ def get_admin_student_query(include_unassigned=True):
     Args:
         include_unassigned (bool): [DEPRECATED] No longer used. Kept for backward compatibility.
     """
-    from app.models import Student, StudentTeacher, DemoStudent  # Imported lazily to avoid circular import
+    from app.models import Student, StudentTeacher  # Imported lazily to avoid circular import
 
     if session.get("is_system_admin"):
-        demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
-        return Student.query.filter(
-            ~Student.id.in_(sa.select(demo_ids_subq))
-        )
+        return Student.query
 
     admin = get_current_admin()
     if not admin:
@@ -426,10 +299,8 @@ def get_admin_student_query(include_unassigned=True):
     # SECURITY FIX: Only use StudentTeacher associations, NOT the deprecated teacher_id column
     # The old code used: sa.or_(Student.teacher_id == admin.id, Student.id.in_(shared_student_ids))
     # This caused multi-tenancy leaks when teacher_id had stale data
-    demo_ids_subq = DemoStudent.query.with_entities(DemoStudent.student_id).subquery()
     return Student.query.filter(
         Student.id.in_(sa.select(shared_student_ids)),
-        ~Student.id.in_(sa.select(demo_ids_subq))
     )
 
 

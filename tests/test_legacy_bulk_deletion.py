@@ -39,7 +39,6 @@ def _create_legacy_unclaimed_student(first_name: str, teacher: Admin, block: str
         block=block,
         salt=salt,
         first_half_hash=first_half_hash,
-        dob_sum=2025,
         username_hash=None,  # Legacy - no username yet
     )
     db.session.add(student)
@@ -54,8 +53,8 @@ def _create_legacy_unclaimed_student(first_name: str, teacher: Admin, block: str
         block=block,
         first_name=first_name,
         last_initial=first_name[0].upper(),
-        last_name_hash_by_part=[],
-        dob_sum=2025,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
         salt=salt,
         first_half_hash=first_half_hash,
         join_code=join_code,
@@ -78,8 +77,8 @@ def _create_unclaimed_teacher_block(first_name: str, teacher: Admin, block: str 
         block=block,
         first_name=first_name,
         last_initial=first_name[0].upper(),
-        last_name_hash_by_part=[],
-        dob_sum=2025,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
         salt=salt,
         first_half_hash=first_half_hash,
         join_code=f"TEST{teacher.id}{block}",
@@ -105,7 +104,6 @@ def _create_claimed_student(first_name: str, username: str, teacher: Admin, bloc
         block=block,
         salt=salt,
         first_half_hash=first_half_hash,
-        dob_sum=2025,
         username_hash=username_hash
     )
     db.session.add(student)
@@ -120,8 +118,8 @@ def _create_claimed_student(first_name: str, username: str, teacher: Admin, bloc
         block=block,
         first_name=first_name,
         last_initial=first_name[0].upper(),
-        last_name_hash_by_part=[],
-        dob_sum=2025,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
         salt=salt,
         first_half_hash=first_half_hash,
         join_code=join_code,

@@ -25,7 +25,6 @@ def test_new_admin_cannot_see_unassigned_students(client):
         block="A",
         salt=salt,
         first_half_hash="hash_unassigned",
-        dob_sum=123,
         has_completed_setup=False
     )
     db.session.add(student_b)
@@ -71,7 +70,6 @@ def test_owner_can_see_unassigned_students_if_linked(client):
         block="A",
         salt=salt,
         first_half_hash="hash_owner",
-        dob_sum=123,
         has_completed_setup=False
     )
     db.session.add(student_b)

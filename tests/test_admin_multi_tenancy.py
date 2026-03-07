@@ -33,7 +33,6 @@ def multi_teacher_data(client):
             block="A",
             salt=salt,
             first_half_hash=f"hash_t1_{i}",  # Unique hash for each student
-            dob_sum=2025 + i,  # Unique DOB sum
         )
         db.session.add(student)
         db.session.flush()
@@ -53,7 +52,6 @@ def multi_teacher_data(client):
             block="B",
             salt=salt,
             first_half_hash=f"hash_t2_{i}",  # Unique hash for each student
-            dob_sum=2030 + i,  # Unique DOB sum
         )
         db.session.add(student)
         db.session.flush()
@@ -157,7 +155,6 @@ def test_students_with_null_teacher_id_not_visible_to_teachers(client):
         block="Z",
         salt=salt,
         first_half_hash="hash_orphan",
-        dob_sum=2099,
     )
     db.session.add(orphaned_student)
     db.session.commit()
@@ -211,7 +208,6 @@ def test_system_admin_flag_not_set_accidentally(client):
             block="B",
             salt=salt,
             first_half_hash=f"hash_t2_sys_{i}",
-            dob_sum=3000 + i,
         )
         db.session.add(student)
         db.session.flush()
@@ -284,7 +280,6 @@ def test_orphaned_students_from_deleted_teacher(client):
             block="O",
             salt=salt,
             first_half_hash=f"hash_old_{i}",
-            dob_sum=4000 + i,
         )
         db.session.add(student)
         db.session.flush()
@@ -341,7 +336,6 @@ def test_orphaned_students_from_deleted_teacher(client):
                 block="O",
                 salt=salt,
                 first_half_hash=f"hash_old_orphaned_{i}",
-                dob_sum=4000 + i,
             )
             db.session.add(student)
         db.session.commit()

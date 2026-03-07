@@ -8,7 +8,7 @@ import pyotp
 from datetime import datetime, timezone
 
 from app import app, db
-from app.models import Admin, Student, StudentTeacher, TapEvent
+from app.models import Admin, Student, StudentTeacher, TapEvent, TeacherBlock, StudentBlock
 from app.hash_utils import get_random_salt, hash_username
 
 
@@ -59,7 +59,7 @@ def _login_admin(client, admin: Admin, secret: str):
     response = client.post(
         "/admin/login",
         data={"username": admin.username, "totp_code": pyotp.TOTP(secret).now()},
-        follow_redirects=True,
+        follow_redirects=False,
     )
     with client.session_transaction() as sess:
         sess.setdefault("is_admin", True)
@@ -79,6 +79,27 @@ def _create_tap_event(student: Student, status: str = "active"):
     db.session.add(tap)
     db.session.commit()
     return tap
+
+
+def _create_claimed_seat(teacher: Admin, student: Student, join_code: str, block: str = "A"):
+    """Create a claimed teacher block (seat) for join-code scoped tests."""
+    seat = TeacherBlock(
+        teacher_id=teacher.id,
+        block=block,
+        class_label=block,
+        first_name=student.first_name,
+        last_initial=student.last_initial,
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
+        salt=b"seat-salt",
+        first_half_hash=f"hash-{teacher.id}-{student.id}-{join_code}",
+        join_code=join_code,
+        student_id=student.id,
+        is_claimed=True,
+    )
+    db.session.add(seat)
+    db.session.commit()
+    return seat
 
 
 def test_attendance_history_api_scoped_to_teacher(client):
@@ -211,3 +232,232 @@ def test_attendance_history_api_system_admin_sees_all(client):
     # System admins accessing via /api routes would need admin session too
     # For now, just verify the scoping logic works for regular admins
     # (System admins typically don't use the API routes directly)
+
+
+def test_admin_tap_entries_scoped_by_join_code(client):
+    """Admin should only receive tap entries from their own join-code scope."""
+    teacher_a, secret_a = _create_admin("teacher-a")
+    teacher_b, _ = _create_admin("teacher-b")
+
+    shared_student = _create_student(
+        "SharedTap",
+        primary_teacher=teacher_a,
+        linked_teachers=[teacher_a, teacher_b],
+    )
+    _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+    _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="B")
+
+    tap_a = TapEvent(
+        student_id=shared_student.id,
+        period="A",
+        status="active",
+        timestamp=datetime.now(timezone.utc),
+        join_code="JOIN_A",
+    )
+    tap_b = TapEvent(
+        student_id=shared_student.id,
+        period="B",
+        status="active",
+        timestamp=datetime.now(timezone.utc),
+        join_code="JOIN_B",
+    )
+    db.session.add_all([tap_a, tap_b])
+    db.session.commit()
+
+    _login_admin(client, teacher_a, secret_a)
+    response = client.get(f"/api/admin/tap-entries/{shared_student.id}")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    returned_ids = {
+        event["id"]
+        for period_data in payload["periods"].values()
+        for event in period_data["events"]
+    }
+    assert tap_a.id in returned_ids
+    assert tap_b.id not in returned_ids
+
+
+def test_admin_delete_tap_entry_enforces_join_code_scope(client):
+    """Admin should not delete tap entries from another teacher's join code."""
+    teacher_a, secret_a = _create_admin("teacher-a")
+    teacher_b, _ = _create_admin("teacher-b")
+
+    shared_student = _create_student(
+        "SharedDelete",
+        primary_teacher=teacher_a,
+        linked_teachers=[teacher_a, teacher_b],
+    )
+    _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+    _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="B")
+
+    tap_a = TapEvent(
+        student_id=shared_student.id,
+        period="A",
+        status="active",
+        timestamp=datetime.now(timezone.utc),
+        join_code="JOIN_A",
+    )
+    tap_b = TapEvent(
+        student_id=shared_student.id,
+        period="B",
+        status="active",
+        timestamp=datetime.now(timezone.utc),
+        join_code="JOIN_B",
+    )
+    db.session.add_all([tap_a, tap_b])
+    db.session.commit()
+
+    _login_admin(client, teacher_a, secret_a)
+
+    deny_response = client.delete(
+        f"/api/admin/tap-entries/{tap_b.id}",
+        headers={"X-CSRFToken": "test"},
+    )
+    assert deny_response.status_code == 404
+    db.session.refresh(tap_b)
+    assert tap_b.is_deleted is False
+
+    allow_response = client.delete(
+        f"/api/admin/tap-entries/{tap_a.id}",
+        headers={"X-CSRFToken": "test"},
+    )
+    assert allow_response.status_code == 200
+    db.session.refresh(tap_a)
+    assert tap_a.is_deleted is True
+
+
+def test_admin_student_block_settings_rejects_out_of_scope_join_code(client):
+    """Admin must not update a StudentBlock row bound to another join code."""
+    teacher_a, secret_a = _create_admin("teacher-a")
+    teacher_b, _ = _create_admin("teacher-b")
+
+    shared_student = _create_student(
+        "SharedBlock",
+        primary_teacher=teacher_a,
+        linked_teachers=[teacher_a, teacher_b],
+    )
+    _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+    _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="A")
+
+    block = StudentBlock(
+        student_id=shared_student.id,
+        period="A",
+        join_code="JOIN_B",
+        tap_enabled=True,
+    )
+    db.session.add(block)
+    db.session.commit()
+
+    _login_admin(client, teacher_a, secret_a)
+    response = client.post(
+        "/api/admin/student-block-settings",
+        json={"student_id": shared_student.id, "period": "A", "tap_enabled": False},
+        headers={"X-CSRFToken": "test"},
+    )
+
+    assert response.status_code == 403
+    db.session.refresh(block)
+    assert block.tap_enabled is True
+
+
+def test_admin_student_block_settings_rejects_null_join_code_row(client):
+    """Admin update should reject StudentBlock rows without join-code scope in v2 mode."""
+    teacher_a, secret_a = _create_admin("teacher-a")
+    student = _create_student("LegacyBlock", primary_teacher=teacher_a)
+    _create_claimed_seat(teacher_a, student, "JOIN_A", block="A")
+
+    block = StudentBlock(
+        student_id=student.id,
+        period="A",
+        join_code=None,
+        tap_enabled=True,
+    )
+    db.session.add(block)
+    db.session.commit()
+
+    _login_admin(client, teacher_a, secret_a)
+    response = client.post(
+        "/api/admin/student-block-settings",
+        json={"student_id": student.id, "period": "A", "tap_enabled": False},
+        headers={"X-CSRFToken": "test"},
+    )
+
+    assert response.status_code == 403
+    db.session.refresh(block)
+    assert block.tap_enabled is True
+    assert block.join_code is None
+
+
+def test_admin_block_tap_settings_get_ignores_out_of_scope_join_code_row(client):
+    """Block-level tap state should ignore StudentBlock rows from other join-code scopes."""
+    teacher_a, secret_a = _create_admin("teacher-a")
+    teacher_b, _ = _create_admin("teacher-b")
+
+    shared_student = _create_student(
+        "SharedTapState",
+        primary_teacher=teacher_a,
+        linked_teachers=[teacher_a, teacher_b],
+    )
+    _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+    _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="A")
+
+    # Out-of-scope row for teacher A should not drive block-level state.
+    db.session.add(
+        StudentBlock(
+            student_id=shared_student.id,
+            period="A",
+            join_code="JOIN_B",
+            tap_enabled=False,
+        )
+    )
+    db.session.commit()
+
+    _login_admin(client, teacher_a, secret_a)
+    response = client.get("/api/admin/block-tap-settings?block=A")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    # Teacher A has no scoped disabled row; default remains enabled.
+    assert payload["tap_enabled"] is True
+
+
+def test_admin_block_tap_settings_post_preserves_out_of_scope_join_code_row(client):
+    """Bulk block tap updates must not mutate another join-code's StudentBlock row."""
+    teacher_a, secret_a = _create_admin("teacher-a")
+    teacher_b, _ = _create_admin("teacher-b")
+
+    shared_student = _create_student(
+        "SharedTapBulk",
+        primary_teacher=teacher_a,
+        linked_teachers=[teacher_a, teacher_b],
+    )
+    _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
+    _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="A")
+
+    foreign_row = StudentBlock(
+        student_id=shared_student.id,
+        period="A",
+        join_code="JOIN_B",
+        tap_enabled=True,
+    )
+    db.session.add(foreign_row)
+    db.session.commit()
+
+    _login_admin(client, teacher_a, secret_a)
+    response = client.post(
+        "/api/admin/block-tap-settings",
+        json={"block": "A", "tap_enabled": False},
+        headers={"X-CSRFToken": "test"},
+    )
+
+    assert response.status_code == 200
+    db.session.refresh(foreign_row)
+    assert foreign_row.tap_enabled is True
+
+    scoped_row = StudentBlock.query.filter_by(
+        student_id=shared_student.id,
+        period="A",
+        join_code="JOIN_A",
+    ).first()
+    assert scoped_row is None
