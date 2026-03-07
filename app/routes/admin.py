@@ -898,7 +898,6 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
         block=block,
         join_code=join_code,
         join_code_id=join_code_id,
-        join_code_id=join_code_id,
         class_label=f"Teacher's Student Account",
         first_name=first_name,
         last_initial=last_initial,
@@ -1039,7 +1038,6 @@ def _link_student_to_admin(student: Student, admin_id):
             student_id=student.id,
             block=student.block,
             join_code=join_code,
-            join_code_id=join_code_id,
             join_code_id=join_code_id,
             class_label=class_label,  # Preserve class_label if it exists
             is_claimed=True,  # Mark as claimed since teacher manually added them
@@ -1881,7 +1879,7 @@ def signup():
         # Step 1: Validate invite code
         current_app.logger.info(f"Validating invite code")
         code_row = db.session.execute(
-            text("SELECT * FROM admin_invite_codes WHERE TRIM(code) = :code"),
+            text("SELECT * FROM teacher_invite_codes WHERE TRIM(code) = :code"),
             {"code": invite_code}
         ).fetchone()
         if not code_row:
@@ -2026,7 +2024,7 @@ def signup():
 
         # Mark the exact validated invite row as used.
         invite_update = db.session.execute(
-            text("UPDATE admin_invite_codes SET used = TRUE WHERE id = :id AND used = FALSE"),
+            text("UPDATE teacher_invite_codes SET used = TRUE WHERE id = :id AND used = FALSE"),
             {"id": code_row.id}
         )
         if invite_update.rowcount != 1:

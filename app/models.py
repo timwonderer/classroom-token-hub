@@ -178,7 +178,7 @@ class JoinCode(db.Model):
 
     join_code_id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     join_code_token = db.Column(db.String(20), nullable=False, unique=True, index=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False, index=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False, index=True)
     is_active = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
     metadata_json = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
@@ -262,14 +262,14 @@ class TeacherBlock(db.Model):
     __tablename__ = 'teacher_blocks'
 
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
     block = db.Column(db.String(10), nullable=False)  # Legacy technical identifier
     class_label = db.Column(db.String(50), nullable=True)  # Teacher-customizable display name for this class
 
     # Student identifiers (used for matching during claim)
     first_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=False)
     last_initial = db.Column(db.String(1), nullable=False)
-    identity_id = db.Column(db.Integer, db.ForeignKey('identity_profiles.id', ondelete='SET NULL'), nullable=True, index=True)
+    identity_id = db.Column(db.Integer, db.ForeignKey('identity_profiles.id', ondelete='RESTRICT'), nullable=False, index=True)
 
     # Fuzzy name matching - stores hash of each last name part separately
     # Example: "Smith-Jones" → ["hash(smith)", "hash(jones)"]
@@ -322,15 +322,11 @@ class TeacherBlock(db.Model):
 
     @property
     def display_first_name(self):
-        if self.identity_profile and self.identity_profile.first_name:
-            return self.identity_profile.first_name
-        return self.first_name
+        return self.identity_profile.first_name if self.identity_profile else ""
 
     @property
     def display_last_initial(self):
-        if self.identity_profile and self.identity_profile.last_initial:
-            return self.identity_profile.last_initial
-        return self.last_initial
+        return self.identity_profile.last_initial if self.identity_profile else ""
 
 
 class Student(db.Model):
@@ -338,7 +334,7 @@ class Student(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     first_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=False)
     last_initial = db.Column(db.String(1), nullable=False)
-    identity_id = db.Column(db.Integer, db.ForeignKey('identity_profiles.id', ondelete='SET NULL'), nullable=True, index=True)
+    identity_id = db.Column(db.Integer, db.ForeignKey('identity_profiles.id', ondelete='RESTRICT'), nullable=False, index=True)
     block = db.Column(db.String(10), nullable=False)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
@@ -425,15 +421,11 @@ class Student(db.Model):
 
     @property
     def display_first_name(self):
-        if self.identity_profile and self.identity_profile.first_name:
-            return self.identity_profile.first_name
-        return self.first_name
+        return self.identity_profile.first_name if self.identity_profile else ""
 
     @property
     def display_last_initial(self):
-        if self.identity_profile and self.identity_profile.last_initial:
-            return self.identity_profile.last_initial
-        return self.last_initial
+        return self.identity_profile.last_initial if self.identity_profile else ""
 
     transactions = db.relationship('Transaction', backref='student', lazy=True)
 
@@ -747,7 +739,7 @@ class Student(db.Model):
 
 
 class AdminInviteCode(db.Model):
-    __tablename__ = 'admin_invite_codes'
+    __tablename__ = 'teacher_invite_codes'
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(255), unique=True, nullable=False)
     expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -760,7 +752,7 @@ class StudentTeacher(db.Model):
     __tablename__ = 'student_teachers'
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
-    admin_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+    admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=True)
 
@@ -802,7 +794,7 @@ class DeletionRequest(db.Model):
     """
     __tablename__ = 'deletion_requests'
     id = db.Column(db.Integer, primary_key=True)
-    admin_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+    admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     request_type = db.Column(db.Enum(DeletionRequestType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     period = db.Column(db.String(10), nullable=True)  # Specified for period deletions only
@@ -887,7 +879,7 @@ class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
     seat_id = db.Column(db.Integer, db.ForeignKey('seats.id', ondelete='SET NULL'), nullable=True, index=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)
 
     # CRITICAL: join_code is the source of truth for class isolation
     # Each join code represents a distinct class economy, even if same teacher
@@ -1060,7 +1052,7 @@ class TapEvent(db.Model):
     # Flag to indicate if this event was deleted by a teacher
     is_deleted = db.Column(db.Boolean, default=False, nullable=False, index=True)
     deleted_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    deleted_by = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='SET NULL'), nullable=True)
+    deleted_by = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='SET NULL'), nullable=True)
 
     student = db.relationship("Student", backref="tap_events")
     seat = db.relationship("Seat", backref="tap_events")
@@ -1128,7 +1120,7 @@ class HallPassLog(db.Model):
 class HallPassSettings(db.Model):
     __tablename__ = 'hall_pass_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
@@ -1180,7 +1172,7 @@ class PayrollCache(db.Model):
     __tablename__ = 'payroll_cache'
 
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False, unique=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False, unique=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
     cached_breakdown = db.Column(db.JSON, nullable=True)  # Stores the breakdown: {"(id, code)": amount}
@@ -1197,7 +1189,7 @@ class PayrollCache(db.Model):
 class StoreItem(db.Model):
     __tablename__ = 'store_items'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
     name = db.Column(db.String(100), nullable=False)
@@ -1332,7 +1324,7 @@ class RedemptionAuditLog(db.Model):
         index=True,
     )
     notes = db.Column(db.Text, nullable=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True, index=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     timestamp = db.Column(db.DateTime(timezone=True), nullable=False, default=utc_now, index=True)
     source = db.Column(
@@ -1358,7 +1350,7 @@ class RedemptionAuditLog(db.Model):
 class RentSettings(db.Model):
     __tablename__ = 'rent_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
@@ -1440,7 +1432,7 @@ class RentWaiver(db.Model):
     waiver_end_date = db.Column(db.DateTime(timezone=True), nullable=False)
     periods_count = db.Column(db.Integer, nullable=False)  # Number of rent periods to skip
     reason = db.Column(db.Text, nullable=True)
-    created_by_admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
+    created_by_admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
 
     student = db.relationship('Student', backref='rent_waivers')
@@ -1526,7 +1518,7 @@ class InsurancePolicy(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     policy_code = db.Column(db.String(16), unique=True, nullable=False, index=True)  # Unique code per teacher's policy
     version_number = db.Column(db.Integer, nullable=False, default=1)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)  # Owner teacher
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)  # Owner teacher
     join_code = db.Column(db.String(20), nullable=True, index=True)
     join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
     title = db.Column(db.String(100), nullable=False)
@@ -1758,7 +1750,7 @@ class InsuranceClaim(db.Model):
     admin_notes = db.Column(db.Text, nullable=True)
     approved_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
     processed_date = db.Column(db.DateTime(timezone=True), nullable=True)
-    processed_by_admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=True)
+    processed_by_admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)
     transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True)
 
     # Relationships
@@ -1921,7 +1913,7 @@ class Issue(db.Model):
     opaque_student_reference = db.Column(db.String(64), nullable=False, index=True)
 
     # Class context
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=False, index=True)
     class_label = db.Column(db.String(50), nullable=True)  # Cached class name
 
@@ -2112,7 +2104,7 @@ class IssueResolutionAction(db.Model):
 
 # ---- Admin Model ----
 class Admin(db.Model):
-    __tablename__ = 'admins'
+    __tablename__ = 'teachers'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=True)  # Legacy plaintext username (deprecated)
     username_hash = db.Column(db.String(64), unique=True, nullable=True)
@@ -2193,10 +2185,10 @@ class AdminCredential(db.Model):
     Passkey credentials for teacher authentication.
     Stores metadata for passkeys registered via passwordless.dev.
     """
-    __tablename__ = 'admin_credentials'
+    __tablename__ = 'teacher_credentials'
 
     id = db.Column(db.Integer, primary_key=True)
-    admin_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+    admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
 
     # Credential metadata
     credential_id = db.Column(db.Text, unique=False, nullable=True, index=False)  # Optional: not needed for passwordless.dev SaaS
@@ -2219,7 +2211,7 @@ class RecoveryRequest(db.Model):
     __tablename__ = 'recovery_requests'
 
     id = db.Column(db.Integer, primary_key=True)
-    admin_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     dob_sum_hash = db.Column(db.String(64), nullable=True)  # Hashed input for verification trail
 
@@ -2268,7 +2260,7 @@ class StudentRecoveryCode(db.Model):
 class PayrollSettings(db.Model):
     __tablename__ = 'payroll_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global/default settings
@@ -2318,7 +2310,7 @@ class PayrollSettings(db.Model):
 class PayrollReward(db.Model):
     __tablename__ = 'payroll_rewards'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
@@ -2337,7 +2329,7 @@ class PayrollReward(db.Model):
 class PayrollFine(db.Model):
     __tablename__ = 'payroll_fines'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
@@ -2356,7 +2348,7 @@ class PayrollFine(db.Model):
 class BankingSettings(db.Model):
     __tablename__ = 'banking_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id'), nullable=False, index=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
@@ -2419,7 +2411,7 @@ class FeatureSettings(db.Model):
     """
     __tablename__ = 'feature_settings'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
     block = db.Column(db.String(10), nullable=True)  # NULL = global defaults for teacher
 
     # Feature toggles - all default to True (enabled)
@@ -2495,7 +2487,7 @@ class TeacherOnboarding(db.Model):
     """
     __tablename__ = 'teacher_onboarding'
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False, unique=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False, unique=True)
 
     # Onboarding status
     is_completed = db.Column(db.Boolean, default=False, nullable=False)
@@ -2602,13 +2594,13 @@ class Announcement(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
     # Author (one of these will be set)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=True)
     system_admin_id = db.Column(db.Integer, db.ForeignKey('system_admins.id', ondelete='CASCADE'), nullable=True)
 
     # Audience targeting
     join_code = db.Column(db.String(20), nullable=True, index=True)  # For teacher/sysadmin specific class announcements
     audience_type = db.Column(db.String(30), default='class', nullable=False)  # 'class', 'system_wide', 'all_teachers', 'all_students', 'teacher_all_classes', 'specific_class'
-    target_teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=True)  # For 'teacher_all_classes' audience type
+    target_teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=True)  # For 'teacher_all_classes' audience type
 
     # Announcement content
     title = db.Column(db.String(200), nullable=False)
@@ -2711,7 +2703,7 @@ class AnalyticsSnapshot(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     
     # Scoping (CRITICAL: join_code is source of truth for multi-tenancy)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
     join_code = db.Column(db.String(20), nullable=False, index=True)
     
     # Time window
@@ -2775,7 +2767,7 @@ class AnalyticsEvent(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     
     # Scoping
-    teacher_id = db.Column(db.Integer, db.ForeignKey('admins.id', ondelete='CASCADE'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
     join_code = db.Column(db.String(20), nullable=False, index=True)
     
     # Event details

@@ -20,11 +20,11 @@ def fix_teacher_id_nulls():
 
     with app.app_context():
         # Get the first admin ID
-        result = db.session.execute(text("SELECT id FROM admins ORDER BY id LIMIT 1"))
+        result = db.session.execute(text("SELECT id FROM teachers ORDER BY id LIMIT 1"))
         first_admin = result.fetchone()
 
         if not first_admin:
-            print("❌ ERROR: No admins found in database!")
+            print("❌ ERROR: No teachers found in database!")
             print("   Please create an admin account first.")
             return 1
 

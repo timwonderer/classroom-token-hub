@@ -98,7 +98,7 @@ def health_check_deep():
     # Check if admin table is accessible
     try:
         admin_count = db.session.execute(
-            text('SELECT COUNT(*) FROM admins')
+            text('SELECT COUNT(*) FROM teachers')
         ).scalar()
         checks['admins_table'] = 'accessible'
         checks['admin_count'] = admin_count
@@ -411,7 +411,7 @@ def debug_admin_db_test():
     """
     try:
         admins = Admin.query.all()
-        invite_codes_count = db.session.execute(text('SELECT COUNT(*) FROM admin_invite_codes')).scalar()
+        invite_codes_count = db.session.execute(text('SELECT COUNT(*) FROM teacher_invite_codes')).scalar()
         return jsonify({
             "admin_count": len(admins),
             "invite_codes_count": invite_codes_count,

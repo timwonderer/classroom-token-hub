@@ -35,7 +35,7 @@ def create_invite(code: str, expires_at: str | None) -> None:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO admin_invite_codes (code, expires_at, used, created_at)
+                    INSERT INTO teacher_invite_codes (code, expires_at, used, created_at)
                     VALUES (%s, %s, FALSE, NOW())
                     """,
                     (code, expires_date),
@@ -55,7 +55,7 @@ def list_invites() -> None:
             cur.execute(
                 """
                 SELECT code, used, expires_at, created_at, used_at
-                FROM admin_invite_codes
+                FROM teacher_invite_codes
                 ORDER BY created_at DESC
                 """
             )
@@ -83,7 +83,7 @@ def expire_invite(code: str) -> None:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    UPDATE admin_invite_codes
+                    UPDATE teacher_invite_codes
                     SET used = TRUE, used_at = NOW()
                     WHERE code = %s AND used = FALSE
                     """,
