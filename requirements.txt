@@ -6,7 +6,7 @@ bleach==6.3.0
 blinker==1.9.0
 click==8.3.1
 exceptiongroup==1.3.1
-Flask==3.1.2
+Flask==3.1.3
 Flask-Migrate==4.1.0
 Flask-SQLAlchemy==3.1.1
 # TODO: [DEPENDABOT PR #647] gevent 25.x is a major version change. Review for
