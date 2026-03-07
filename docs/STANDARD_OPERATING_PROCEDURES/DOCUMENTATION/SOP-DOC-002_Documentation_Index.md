@@ -48,6 +48,9 @@ This document is the canonical index of all formal documentation.
 ### FEATURES/RENT
 
 - [FEAT-RENT-002_Rent_Item_Types.md](../../FEATURES/RENT/FEAT-RENT-002_Rent_Item_Types.md)
+### FEATURES/SUPPORT
+
+- [FEAT-TICK-001_Ticket_Lifecycle.md](../../FEATURES/SUPPORT/FEAT-TICK-001_Ticket_Lifecycle.md)
 ### Root
 
 - [INV-CORE-000_Core_Invariants.md](../../INV-CORE-000_Core_Invariants.md)

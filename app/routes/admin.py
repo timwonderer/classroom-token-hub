@@ -81,6 +81,7 @@ from app.utils.display_name_session import (
     set_admin_display_name_cache,
     clear_admin_display_name_cache,
 )
+from app.utils.opaque_refs import make_opaque_ref, resolve_opaque_ref
 from app.utils.username_migration import (
     normalize_auth_username,
     needs_hashed_username_migration,
@@ -10419,6 +10420,9 @@ def passkey_settings():
 
 # ==================== ISSUE RESOLUTION SYSTEM - TEACHER ROUTES ====================
 
+def _resolve_issue_id_from_ref(issue_ref: str) -> int | None:
+    return resolve_opaque_ref('issue', issue_ref)
+
 @admin_bp.route('/issues')
 @admin_required
 def issues_queue():
@@ -10441,17 +10445,31 @@ def issues_queue():
     else:
         issues_query = Issue.query.filter_by(teacher_id=admin_id)
 
-    # Get issues by status
+    # Get issues by status (canonical + legacy compatibility)
     pending_issues = issues_query.filter(
-        Issue.status.in_(['submitted', 'teacher_review'])
+        Issue.status.in_([
+            Issue.STATUS_OPEN,
+            Issue.STATUS_TEACHER_REVIEW,
+            'submitted',
+            'teacher_review',
+        ])
     ).order_by(Issue.submitted_at.desc()).all()
 
-    resolved_issues = issues_query.filter_by(
-        status='teacher_resolved'
-    ).order_by(Issue.teacher_resolved_at.desc()).limit(20).all()
+    resolved_issues = issues_query.filter(
+        Issue.status.in_([
+            Issue.STATUS_TEACHER_FINAL_REVIEW,
+            Issue.STATUS_DEV_RESOLVED,
+            'teacher_resolved',
+            'developer_resolved',
+        ])
+    ).order_by(Issue.updated_at.desc()).limit(50).all()
 
     escalated_issues = issues_query.filter(
-        Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
+        Issue.status.in_([
+            Issue.STATUS_ESCALATED_TO_DEV,
+            'elevated',
+            'developer_review',
+        ])
     ).order_by(Issue.escalated_at.desc()).all()
 
     return render_template('admin_issues_queue.html',
@@ -10460,24 +10478,29 @@ def issues_queue():
                          pending_issues=pending_issues,
                          resolved_issues=resolved_issues,
                          escalated_issues=escalated_issues,
+                         issue_ref_for=lambda issue_id: make_opaque_ref('issue', issue_id),
                          format_utc_iso=format_utc_iso)
 
 
-@admin_bp.route('/issues/<int:issue_id>')
+@admin_bp.route('/issues/<issue_ref>')
 @admin_required
-def view_issue(issue_id):
+def view_issue(issue_ref):
     """View detailed information about a specific issue."""
     from app.models import Issue
 
     admin_id = session.get('admin_id')
 
+    issue_id = _resolve_issue_id_from_ref(issue_ref)
+    if issue_id is None:
+        abort(404)
+
     # Get the issue and verify it belongs to this teacher
     issue = Issue.query.filter_by(id=issue_id, teacher_id=admin_id).first_or_404()
 
-    # Mark as being reviewed if still in submitted status
-    if issue.status == 'submitted':
+    # Mark as being reviewed if still in OPEN status.
+    if issue.status in [Issue.STATUS_OPEN, 'submitted']:
         from app.utils.issue_helpers import update_issue_status
-        update_issue_status(issue, 'teacher_review', 'teacher', admin_id)
+        update_issue_status(issue, Issue.STATUS_TEACHER_REVIEW, 'teacher', admin_id)
         issue.teacher_reviewed_at = utc_now()
         db.session.commit()
 
@@ -10485,12 +10508,13 @@ def view_issue(issue_id):
                          current_page='issues',
                          page_title=f'Issue #{issue.id}',
                          issue=issue,
+                         issue_ref=make_opaque_ref('issue', issue.id),
                          format_utc_iso=format_utc_iso)
 
 
-@admin_bp.route('/issues/<int:issue_id>/resolve', methods=['POST'])
+@admin_bp.route('/issues/<issue_ref>/resolve', methods=['POST'])
 @admin_required
-def resolve_issue(issue_id):
+def resolve_issue(issue_ref):
     """
     Resolve an issue at the teacher level.
     Can apply various resolution actions depending on issue type.
@@ -10500,31 +10524,67 @@ def resolve_issue(issue_id):
 
     admin_id = session.get('admin_id')
 
+    issue_id = _resolve_issue_id_from_ref(issue_ref)
+    if issue_id is None:
+        abort(404)
+
     # Get the issue and verify it belongs to this teacher
     issue = Issue.query.filter_by(id=issue_id, teacher_id=admin_id).first_or_404()
 
     action_type = request.form.get('action_type')
     teacher_notes = request.form.get('teacher_notes', '').strip()
+    allowed_statuses = {
+        Issue.STATUS_OPEN,
+        Issue.STATUS_TEACHER_REVIEW,
+        Issue.STATUS_DEV_RESOLVED,
+        'submitted',
+        'teacher_review',
+        'developer_resolved',
+    }
+
+    if issue.status not in allowed_statuses:
+        flash("This ticket cannot be resolved in its current state.", "error")
+        return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
     try:
         # Apply resolution based on action type
-        if action_type == 'reverse_transaction' and issue.related_transaction_id:
-            # Void the transaction
+        if action_type == 'compensating_transaction' and issue.related_transaction_id:
+            # Append-only correction: create a compensating ledger entry.
             transaction = db.session.get(Transaction, issue.related_transaction_id)
-            if transaction and transaction.student_id == issue.student_id:
-                before_value = f"is_void={transaction.is_void}"
-                transaction.is_void = True
-                after_value = f"is_void={transaction.is_void}"
+            if not transaction or transaction.student_id != issue.student_id or transaction.is_void:
+                flash("The related transaction could not be found for this issue.", "error")
+                return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
-                record_resolution_action(
-                    issue, 'reverse_transaction', 'teacher', admin_id,
-                    action_description=f"Voided transaction #{transaction.id}",
-                    related_transaction_id=transaction.id,
-                    before_value=before_value,
-                    after_value=after_value
-                )
+            compensating_tx = Transaction(
+                student_id=transaction.student_id,
+                teacher_id=transaction.teacher_id,
+                join_code=transaction.join_code,
+                amount=Decimal('0.00') - Decimal(transaction.amount),
+                account_type=transaction.account_type,
+                description=f"Issue #{issue.id} compensating entry for transaction #{transaction.id}",
+                status=TransactionStatus.PENDING,
+                type='issue_compensation',
+                original_transaction_id=transaction.id,
+                timestamp=utc_now(),
+                effective_at=utc_now(),
+                posted_at=None,
+                is_void=False,
+            )
+            db.session.add(compensating_tx)
+            db.session.flush()
 
-                issue.teacher_resolution = 'Transaction Reversed'
+            issue.teacher_resolution = 'Compensating Transaction Posted'
+            record_resolution_action(
+                issue,
+                'compensating_transaction',
+                'teacher',
+                admin_id,
+                action_description=f"Posted compensating transaction #{compensating_tx.id} for transaction #{transaction.id}",
+                related_transaction_id=compensating_tx.id,
+                amount_changed=float(compensating_tx.amount),
+                before_value=str(transaction.amount),
+                after_value=str(compensating_tx.amount),
+            )
 
         elif action_type == 'manual_adjustment':
             # Teacher handles manually (no automatic action)
@@ -10543,29 +10603,30 @@ def resolve_issue(issue_id):
                 issue, 'deny_issue', 'teacher', admin_id,
                 action_description=denial_reason
             )
+        else:
+            flash("Please select a valid resolution action.", "error")
+            return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
-        # Update issue status
-        update_issue_status(issue, 'teacher_resolved', 'teacher', admin_id, notes=teacher_notes)
+        # Move to teacher final review; closure is a separate explicit action.
+        update_issue_status(issue, Issue.STATUS_TEACHER_FINAL_REVIEW, 'teacher', admin_id, notes=teacher_notes)
         issue.teacher_resolved_at = utc_now()
         issue.teacher_notes = teacher_notes
-        issue.closed_at = utc_now()
-        issue.closed_by_type = 'teacher'
 
         db.session.commit()
 
-        flash("Issue resolved successfully.", "success")
-        return redirect(url_for('admin.issues_queue'))
+        flash("Issue moved to teacher final review. Close it after confirming classroom state.", "success")
+        return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error resolving issue {issue_id}", exc_info=True)
         flash("An error occurred while resolving the issue. Please try again.", "error")
-        return redirect(url_for('admin.view_issue', issue_id=issue_id))
+        return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
 
-@admin_bp.route('/issues/<int:issue_id>/escalate', methods=['POST'])
+@admin_bp.route('/issues/<issue_ref>/escalate', methods=['POST'])
 @admin_required
-def escalate_issue(issue_id):
+def escalate_issue(issue_ref):
     """
     Escalate an issue to sysadmin (developer).
     Teacher marks the issue for developer investigation.
@@ -10575,28 +10636,46 @@ def escalate_issue(issue_id):
 
     admin_id = session.get('admin_id')
 
+    issue_id = _resolve_issue_id_from_ref(issue_ref)
+    if issue_id is None:
+        abort(404)
+
     # Get the issue and verify it belongs to this teacher
     issue = Issue.query.filter_by(id=issue_id, teacher_id=admin_id).first_or_404()
 
     escalation_reason = request.form.get('escalation_reason', '').strip()
     diagnostic_note = request.form.get('diagnostic_note', '').strip()
     share_class_name = request.form.get('share_class_name') == 'on'
-    eligible_for_reward = request.form.get('eligible_for_reward') == 'on'
+    allowed_statuses = {
+        Issue.STATUS_OPEN,
+        Issue.STATUS_TEACHER_REVIEW,
+        'submitted',
+        'teacher_review',
+    }
+
+    if issue.status not in allowed_statuses:
+        flash("Only tickets under teacher review can be escalated.", "error")
+        return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
     if not escalation_reason:
         flash("Please provide an escalation reason.", "error")
-        return redirect(url_for('admin.view_issue', issue_id=issue_id))
+        return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
     try:
         # Update issue with escalation details
         issue.escalation_reason = escalation_reason
         issue.teacher_diagnostic_note = diagnostic_note
         issue.share_class_name_with_sysadmin = share_class_name
-        issue.eligible_for_reward = eligible_for_reward
         issue.escalated_at = utc_now()
 
         # Update status
-        update_issue_status(issue, 'elevated', 'teacher', admin_id, notes=f"Escalated: {escalation_reason}")
+        update_issue_status(
+            issue,
+            Issue.STATUS_ESCALATED_TO_DEV,
+            'teacher',
+            admin_id,
+            notes=f"Escalated: {escalation_reason}",
+        )
 
         db.session.commit()
 
@@ -10607,4 +10686,48 @@ def escalate_issue(issue_id):
         db.session.rollback()
         current_app.logger.error(f"Error escalating issue {issue_id}", exc_info=True)
         flash("An error occurred while escalating the issue. Please try again.", "error")
-        return redirect(url_for('admin.view_issue', issue_id=issue_id))
+        return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
+
+
+@admin_bp.route('/issues/<issue_ref>/close', methods=['POST'])
+@admin_required
+def close_issue(issue_ref):
+    """Teacher-only closure after final review."""
+    from app.models import Issue
+    from app.utils.issue_helpers import update_issue_status
+
+    admin_id = session.get('admin_id')
+    issue_id = _resolve_issue_id_from_ref(issue_ref)
+    if issue_id is None:
+        abort(404)
+    issue = Issue.query.filter_by(id=issue_id, teacher_id=admin_id).first_or_404()
+
+    allowed_statuses = {
+        Issue.STATUS_TEACHER_FINAL_REVIEW,
+        'teacher_resolved',
+    }
+    if issue.status not in allowed_statuses:
+        flash("This ticket is not ready to be closed.", "error")
+        return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
+
+    resolution_summary = request.form.get('resolution_summary', '').strip()
+    if not resolution_summary:
+        flash("Please include a closure summary.", "error")
+        return redirect(url_for('admin.view_issue', issue_ref=make_opaque_ref('issue', issue.id)))
+
+    try:
+        if issue.teacher_notes:
+            issue.teacher_notes = f"{issue.teacher_notes}\n\nClosure Summary: {resolution_summary}"
+        else:
+            issue.teacher_notes = resolution_summary
+        issue.closed_at = utc_now()
+        issue.closed_by_type = 'teacher'
+        update_issue_status(issue, Issue.STATUS_CLOSED, 'teacher', admin_id, notes=resolution_summary)
+        db.session.commit()
+        flash("Issue closed.", "success")
+    except Exception:
+        db.session.rollback()
+        current_app.logger.error(f"Error closing issue {issue_id}", exc_info=True)
+        flash("An error occurred while closing the issue. Please try again.", "error")
+
+    return redirect(url_for('admin.issues_queue'))

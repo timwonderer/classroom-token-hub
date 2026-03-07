@@ -16,12 +16,11 @@
                 <div class="card-header bg-primary text-white">
                     <div class="d-flex justify-content-between align-items-center">
                         <h4 class="mb-0">
-                            <span class="material-symbols-outlined me-2">flag</span>Issue #{{ issue.id }}
+                            <span class="material-symbols-outlined me-2">flag</span>Issue {{ issue_ref[:12] }}...
                         </h4>
                         <span class="badge
-                            {% if issue.status == 'elevated' %}bg-warning text-dark
-                            {% elif issue.status == 'developer_review' %}bg-info
-                            {% elif issue.status == 'developer_resolved' %}bg-success
+                            {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}bg-warning text-dark
+                            {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}bg-success
                             {% else %}bg-secondary{% endif %}">
                             {{ issue.status|replace('_', ' ')|title }}
                         </span>
@@ -61,24 +60,6 @@
                         <h6 class="text-muted mb-2">Category</h6>
                         <span class="badge bg-secondary">{{ issue.category.name if issue.category else 'Unknown' }}</span>
                         <span class="badge bg-light text-dark ms-2">{{ issue.issue_type|title }}</span>
-                    </div>
-
-                    <hr>
-
-                    <!-- Bug Bounty Reward Eligibility -->
-                    <div class="mb-3">
-                        <h6 class="text-muted mb-2">Bug Bounty Reward Eligibility</h6>
-                        <p class="mb-0">
-                            <span class="material-symbols-outlined me-2">redeem</span>
-                            {% if issue.eligible_for_reward %}
-                                <span class="badge bg-warning text-dark">Yes</span>
-                                {% if issue.reward_amount %}
-                                <span class="text-muted ms-2">Amount: ${{ "%.2f"|format(issue.reward_amount) }}</span>
-                                {% endif %}
-                            {% else %}
-                                <span class="badge bg-secondary">No</span>
-                            {% endif %}
-                        </p>
                     </div>
 
                     <hr>
@@ -298,49 +279,29 @@
 
         <!-- Sidebar -->
         <div class="col-lg-4">
-            <!-- Start Review Button (for elevated status) -->
-            {% if issue.status == 'elevated' %}
-            <div class="card shadow-sm mb-4">
-                <div class="card-header bg-info text-white">
-                    <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">play_circle</span>Start Review
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <p class="mb-3">Mark this issue as being reviewed to acknowledge it and begin investigation.</p>
-                    <form method="POST" action="{{ url_for('sysadmin.start_review_escalated_issue', issue_id=issue.id) }}">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-info w-100">
-                            <span class="material-symbols-outlined me-2">play_circle</span>Start Review
-                        </button>
-                    </form>
-                </div>
-            </div>
-            {% endif %}
-
             <!-- Actions Card -->
-            {% if issue.status in ['elevated', 'developer_review'] %}
+            {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}
             <div class="card shadow-sm mb-4">
                 <div class="card-header bg-success text-white">
                     <h5 class="mb-0">
-                        <span class="material-symbols-outlined me-2">check_circle</span>Resolve Issue
+                        <span class="material-symbols-outlined me-2">check_circle</span>Record Technical Resolution
                     </h5>
                 </div>
                 <div class="card-body">
-                    <form method="POST" action="{{ url_for('sysadmin.resolve_escalated_issue', issue_id=issue.id) }}">
+                    <form method="POST" action="{{ url_for('sysadmin.resolve_escalated_issue', issue_ref=issue_ref) }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
                         <div class="mb-3">
                             <label for="resolution_note" class="form-label">Resolution Notes</label>
                             <textarea class="form-control" id="resolution_note" name="resolution_note" rows="4"
                                       placeholder="Describe how the issue was resolved or what action was taken..." required></textarea>
-                            <small class="form-text text-muted">This will be visible to the teacher.</small>
+                            <small class="form-text text-muted">This will be visible to the teacher. Developers cannot close the ticket.</small>
                         </div>
 
                         <div class="mb-3 form-check">
                             <input type="checkbox" class="form-check-input" id="eligible_for_reward" name="eligible_for_reward">
                             <label class="form-check-label" for="eligible_for_reward">
-                                Student eligible for bug bounty reward
+                                Legitimate bug found, issue student reward
                             </label>
                         </div>
 
@@ -351,11 +312,11 @@
                                 <input type="number" class="form-control" id="reward_amount" name="reward_amount"
                                        min="0" step="0.01" placeholder="0.00">
                             </div>
-                            <small class="form-text text-muted">Enter the bug bounty reward amount.</small>
+                            <small class="form-text text-muted">Creates a bug reward transaction for the student.</small>
                         </div>
 
                         <button type="submit" class="btn btn-success w-100">
-                            <span class="material-symbols-outlined me-2">check_circle</span>Mark as Resolved
+                            <span class="material-symbols-outlined me-2">check_circle</span>Mark Dev Resolved
                         </button>
                     </form>
                 </div>
@@ -399,13 +360,12 @@
 <script src="{{ static_url('js/timezone-utils.js') }}"></script>
 
 <script>
-// Toggle reward amount field based on checkbox
 document.addEventListener('DOMContentLoaded', function() {
     const checkbox = document.getElementById('eligible_for_reward');
     const amountField = document.getElementById('reward_amount_field');
     const amountInput = document.getElementById('reward_amount');
 
-    if (checkbox && amountField) {
+    if (checkbox && amountField && amountInput) {
         checkbox.addEventListener('change', function() {
             if (this.checked) {
                 amountField.style.display = 'block';

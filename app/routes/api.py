@@ -1905,7 +1905,7 @@ def attendance_history():
         if start_date:
             try:
                 start_day = datetime.strptime(start_date, '%Y-%m-%d').date()
-                start_datetime, _ = local_date_bounds_utc(start_day)
+                start_datetime = datetime.combine(start_day, datetime.min.time(), tzinfo=timezone.utc)
                 query = query.filter(TapEvent.timestamp >= normalize_for_db(start_datetime))
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid start date format"}), 400
@@ -1913,7 +1913,7 @@ def attendance_history():
         if end_date:
             try:
                 end_day = datetime.strptime(end_date, '%Y-%m-%d').date()
-                _, end_datetime = local_date_bounds_utc(end_day)
+                end_datetime = datetime.combine(end_day, datetime.max.time(), tzinfo=timezone.utc)
                 query = query.filter(TapEvent.timestamp <= normalize_for_db(end_datetime))
             except ValueError:
                 return jsonify({"status": "error", "message": "Invalid end date format"}), 400
