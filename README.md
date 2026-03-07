@@ -170,7 +170,7 @@ After cloning, configure git to use the versioned `hooks/` directory:
 This enables:
 
 - `post-checkout`: branch-aware `DATABASE_URL` switching
-  - `join-code-centric-architecture-rebuild` and `codex/fix-database-model-for-dob-sum-storage` -> `classroom_economy`
+  - `join-code-centric-architecture-rebuild`, `codex/fix-database-model-for-dob-sum-storage`, and `codex/v2.0` -> `classroom_economy`
   - other branches -> `production_dev`
 - `pre-push`: migration-head safety checks
 

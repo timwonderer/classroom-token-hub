@@ -5,6 +5,7 @@
 PROTECTED_BRANCHES=(
     "join-code-centric-architecture-rebuild"
     "codex/fix-database-model-for-dob-sum-storage"
+    "codex/v2.0"
 )
 
 is_protected_branch() {

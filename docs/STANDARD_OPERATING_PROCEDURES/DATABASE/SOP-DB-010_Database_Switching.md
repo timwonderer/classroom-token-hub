@@ -12,6 +12,7 @@ Protected v2.0 branches:
 
 - `join-code-centric-architecture-rebuild`
 - `codex/fix-database-model-for-dob-sum-storage`
+- `codex/v2.0`
 
 These branches must always use:
 

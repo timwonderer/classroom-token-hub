@@ -24,7 +24,7 @@ Run once after clone:
 
 This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch-aware DB switching:
 
-- Protected v2 branches (`join-code-centric-architecture-rebuild`, `codex/fix-database-model-for-dob-sum-storage`) -> `classroom_economy`
+- Protected v2 branches (`join-code-centric-architecture-rebuild`, `codex/fix-database-model-for-dob-sum-storage`, `codex/v2.0`) -> `classroom_economy`
 - All other branches -> `production_dev`
 
 ## Static Assets and Cache Busting
