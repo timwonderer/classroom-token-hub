@@ -1350,7 +1350,7 @@ def _check_simultaneous_pass_limit(log_entry):
     if not teacher_id:
         # Fallback for legacy data: derive teacher from StudentTeacher link
         teacher_id = (
-            StudentTeacher.query.with_entities(StudentTeacher.admin_id)
+            StudentTeacher.query.with_entities(StudentTeacher.teacher_id)
             .filter(StudentTeacher.student_id == log_entry.student_id)
             .scalar()
         )
@@ -2713,7 +2713,7 @@ def check_and_auto_tapout_if_limit_reached(student, commit=True):
             else:
                 # Fallback: get first teacher from StudentTeacher table
                 first_link = StudentTeacher.query.filter_by(student_id=student.id).first()
-                teacher_id = first_link.admin_id if first_link else None
+                teacher_id = first_link.teacher_id if first_link else None
 
             # Get daily limit for this period (use original case for settings lookup)
             daily_limit = get_daily_limit_seconds(block_original, teacher_id=teacher_id)

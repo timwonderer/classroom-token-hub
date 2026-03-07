@@ -155,7 +155,7 @@ def collapse_universe(join_code: str, reason: str, actor_membership_id: Optional
                     ).count()
                     
                     if remaining_with_teacher == 0:
-                        StudentTeacher.query.filter_by(student_id=s_id, admin_id=t_id).delete(synchronize_session=False)
+                        StudentTeacher.query.filter_by(student_id=s_id, teacher_id=t_id).delete(synchronize_session=False)
                 
                 # Full erasure if totally orphaned
                 remaining_memberships = db.session.query(ClassMembership.id).filter_by(student_id=s_id).count()

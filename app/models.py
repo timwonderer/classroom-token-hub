@@ -752,14 +752,14 @@ class StudentTeacher(db.Model):
     __tablename__ = 'student_teachers'
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=False)
-    admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=True)
 
     __table_args__ = (
-        db.UniqueConstraint('student_id', 'admin_id', name='uq_student_teachers_student_admin'),
+        db.UniqueConstraint('student_id', 'teacher_id', name='uq_student_teachers_student_teacher'),
         db.Index('ix_student_teachers_student_id', 'student_id'),
-        db.Index('ix_student_teachers_admin_id', 'admin_id'),
+        db.Index('ix_student_teachers_teacher_id', 'teacher_id'),
     )
 
 
@@ -794,7 +794,7 @@ class DeletionRequest(db.Model):
     """
     __tablename__ = 'deletion_requests'
     id = db.Column(db.Integer, primary_key=True)
-    admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     request_type = db.Column(db.Enum(DeletionRequestType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     period = db.Column(db.String(10), nullable=True)  # Specified for period deletions only
@@ -806,16 +806,16 @@ class DeletionRequest(db.Model):
 
     # Relationships
     # No ORM cascade needed - explicit deletion in system_admin.py:871 + DB CASCADE
-    admin = db.relationship('Admin', backref=db.backref('deletion_requests', lazy='dynamic'))
+    teacher = db.relationship('Admin', backref=db.backref('deletion_requests', lazy='dynamic'))
     resolver = db.relationship('SystemAdmin', backref=db.backref('resolved_deletion_requests', lazy='dynamic'))
 
     __table_args__ = (
-        db.Index('ix_deletion_requests_admin_id', 'admin_id'),
+        db.Index('ix_deletion_requests_teacher_id', 'teacher_id'),
         db.Index('ix_deletion_requests_status', 'status'),
     )
 
     def __repr__(self):
-        return f'<DeletionRequest {self.request_type} for Admin {self.admin_id} - {self.status}>'
+        return f'<DeletionRequest {self.request_type} for Teacher {self.teacher_id} - {self.status}>'
 
 
 # -------------------- SYSTEM ADMIN MODEL --------------------
@@ -1432,7 +1432,7 @@ class RentWaiver(db.Model):
     waiver_end_date = db.Column(db.DateTime(timezone=True), nullable=False)
     periods_count = db.Column(db.Integer, nullable=False)  # Number of rent periods to skip
     reason = db.Column(db.Text, nullable=True)
-    created_by_admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)
+    created_by_teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now)
 
     student = db.relationship('Student', backref='rent_waivers')
@@ -1747,10 +1747,10 @@ class InsuranceClaim(db.Model):
 
     status = db.Column(db.String(20), default='pending')  # pending, approved, rejected, paid
     rejection_reason = db.Column(db.Text, nullable=True)
-    admin_notes = db.Column(db.Text, nullable=True)
+    teacher_notes = db.Column(db.Text, nullable=True)
     approved_amount = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
     processed_date = db.Column(db.DateTime(timezone=True), nullable=True)
-    processed_by_admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)
+    processed_by_teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)
     transaction_id = db.Column(db.Integer, db.ForeignKey('transaction.id'), nullable=True)
 
     # Relationships
@@ -2174,7 +2174,7 @@ class Admin(db.Model):
         return (
             db.session.query(StudentTeacher.student_id)
             .join(Student, Student.id == StudentTeacher.student_id)
-            .filter(StudentTeacher.admin_id == self.id)
+            .filter(StudentTeacher.teacher_id == self.id)
             .distinct()
             .count()
         )
@@ -2188,7 +2188,7 @@ class AdminCredential(db.Model):
     __tablename__ = 'teacher_credentials'
 
     id = db.Column(db.Integer, primary_key=True)
-    admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
 
     # Credential metadata
     credential_id = db.Column(db.Text, unique=False, nullable=True, index=False)  # Optional: not needed for passwordless.dev SaaS
@@ -2199,10 +2199,10 @@ class AdminCredential(db.Model):
     last_used = db.Column(db.DateTime(timezone=True))
 
     # Relationships
-    admin = db.relationship('Admin', backref=db.backref('credentials', lazy='dynamic', cascade='all, delete-orphan'))
+    teacher = db.relationship('Admin', backref=db.backref('credentials', lazy='dynamic', cascade='all, delete-orphan'))
 
     def __repr__(self):
-        return f'<AdminCredential {self.authenticator_name or "Unnamed"} for Admin {self.admin_id}>'
+        return f'<AdminCredential {self.authenticator_name or "Unnamed"} for Teacher {self.teacher_id}>'
 
 
 # ---- Account Recovery Models ----
@@ -2211,7 +2211,7 @@ class RecoveryRequest(db.Model):
     __tablename__ = 'recovery_requests'
 
     id = db.Column(db.Integer, primary_key=True)
-    admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     dob_sum_hash = db.Column(db.String(64), nullable=True)  # Hashed input for verification trail
 
@@ -2231,7 +2231,7 @@ class RecoveryRequest(db.Model):
     resume_new_username = db.Column(db.String(100), nullable=True)  # Temporary storage for new username
 
     # Relationships
-    admin = db.relationship('Admin', backref=db.backref('recovery_requests', lazy='dynamic'))
+    teacher = db.relationship('Admin', backref=db.backref('recovery_requests', lazy='dynamic'))
     verification_codes = db.relationship('StudentRecoveryCode', backref='recovery_request', lazy='dynamic', cascade='all, delete-orphan')
 
 

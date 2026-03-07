@@ -661,8 +661,8 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
 def _delete_teacher_residual_ownership_rows(teacher_id):
     """Delete teacher-owned link rows not already removed by join-code scoped deletion."""
     TeacherBlock.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
-    StudentTeacher.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
-    DeletionRequest.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
+    StudentTeacher.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    DeletionRequest.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
 
 
 def _delete_teacher_settings_activity_and_audit_rows(teacher_id):
@@ -728,13 +728,13 @@ def _delete_teacher_issue_rows(teacher_id):
 def _delete_teacher_recovery_and_credentials_rows(teacher_id):
     """Delete teacher recovery, credential, and onboarding rows."""
     recovery_ids_subq = db.session.query(RecoveryRequest.id).filter(
-        RecoveryRequest.admin_id == teacher_id
+        RecoveryRequest.teacher_id == teacher_id
     ).subquery()
     StudentRecoveryCode.query.filter(
         StudentRecoveryCode.recovery_request_id.in_(sa.select(recovery_ids_subq))
     ).delete(synchronize_session=False)
-    RecoveryRequest.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
-    AdminCredential.query.filter_by(admin_id=teacher_id).delete(synchronize_session=False)
+    RecoveryRequest.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
+    AdminCredential.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
     TeacherOnboarding.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
 
 
@@ -785,7 +785,7 @@ def _hard_delete_teacher_account_scope(teacher_id):
     }
     affected_student_ids.update(
         sid for (sid,) in db.session.query(StudentTeacher.student_id).filter(
-            StudentTeacher.admin_id == teacher_id
+            StudentTeacher.teacher_id == teacher_id
         ).distinct().all()
     )
 
@@ -942,10 +942,10 @@ def _ensure_join_code_anchors(teacher_id, join_code, class_label=None):
             text(
                 """
                 INSERT INTO class_economies (
-                    join_code, display_name, status, created_at, updated_at, created_by_admin_id
+                    join_code, display_name, status, created_at, updated_at, created_by_teacher_id
                 )
                 VALUES (
-                    :join_code, :display_name, :status, :created_at, :updated_at, :created_by_admin_id
+                    :join_code, :display_name, :status, :created_at, :updated_at, :created_by_teacher_id
                 )
                 ON CONFLICT (join_code) DO UPDATE
                 SET updated_at = EXCLUDED.updated_at
@@ -957,7 +957,7 @@ def _ensure_join_code_anchors(teacher_id, join_code, class_label=None):
                 "status": "active",
                 "created_at": now.replace(tzinfo=None),
                 "updated_at": now.replace(tzinfo=None),
-                "created_by_admin_id": teacher_id,
+                "created_by_teacher_id": teacher_id,
             },
         )
 
@@ -1001,9 +1001,9 @@ def _link_student_to_admin(student: Student, admin_id):
         return
 
     # 1. Create StudentTeacher link
-    existing_link = StudentTeacher.query.filter_by(student_id=student.id, admin_id=admin_id).first()
+    existing_link = StudentTeacher.query.filter_by(student_id=student.id, teacher_id=admin_id).first()
     if not existing_link:
-        db.session.add(StudentTeacher(student_id=student.id, admin_id=admin_id))
+        db.session.add(StudentTeacher(student_id=student.id, teacher_id=admin_id))
 
     # 2. Create or update TeacherBlock record with join_code
     # Check if TeacherBlock exists for this student + teacher + block
@@ -2122,7 +2122,7 @@ def recover():
 
         teachers_by_student = {}
         for link in links:
-            teachers_by_student.setdefault(link.student_id, set()).add(link.admin_id)
+            teachers_by_student.setdefault(link.student_id, set()).add(link.teacher_id)
 
         common_teacher_ids = None
         for student_id in student_ids:
@@ -2160,7 +2160,7 @@ def recover():
         teacher_blocks_query = (
             Student.query
             .join(StudentTeacher, Student.id == StudentTeacher.student_id)
-            .filter(StudentTeacher.admin_id == teacher_id)
+            .filter(StudentTeacher.teacher_id == teacher_id)
             .with_entities(Student.block)
             .distinct()
         )
@@ -2189,7 +2189,7 @@ def recover():
 
         # Check for existing active recovery request
         existing_request = RecoveryRequest.query.filter_by(
-            admin_id=teacher.id,
+            teacher_id=teacher.id,
             status='pending'
         ).filter(
             RecoveryRequest.expires_at > utc_now()
@@ -2203,7 +2203,7 @@ def recover():
         # Create recovery request (5-day expiration)
         expires_at = utc_now() + timedelta(days=5)
         recovery_request = RecoveryRequest(
-            admin_id=teacher.id,
+            teacher_id=teacher.id,
             dob_sum_hash=teacher.dob_sum_hash,
             status='pending',
             expires_at=expires_at
@@ -2337,7 +2337,7 @@ def reset_credentials():
             return redirect(url_for('admin.recovery_status'))
 
         # Check username uniqueness
-        if _auth_username_exists(new_username, exclude_admin_id=recovery_request.admin_id):
+        if _auth_username_exists(new_username, exclude_admin_id=recovery_request.teacher_id):
             flash("Username already exists. Please choose a different username.", "error")
             return render_template("admin_reset_credentials.html", form=form, show_qr=False)
 
@@ -2403,7 +2403,7 @@ def confirm_reset():
         flash("Invalid recovery session.", "error")
         return redirect(url_for('admin.recover'))
 
-    teacher = db.session.get(Admin, recovery_request.admin_id)
+    teacher = db.session.get(Admin, recovery_request.teacher_id)
     if not teacher:
         flash("Invalid recovery session.", "error")
         return redirect(url_for('admin.recover'))
@@ -3977,7 +3977,7 @@ def add_individual_student():
                     from app.models import StudentTeacher
                     existing_link = StudentTeacher.query.filter_by(
                         student_id=existing_student.id,
-                        admin_id=current_admin_id
+                        teacher_id=current_admin_id
                     ).first()
 
                     if existing_link:
@@ -4132,7 +4132,7 @@ def add_manual_student():
                     current_admin_id = session.get("admin_id")
                     existing_link = StudentTeacher.query.filter_by(
                         student_id=existing_student.id,
-                        admin_id=current_admin_id
+                        teacher_id=current_admin_id
                     ).first()
                     if not existing_link:
                         _link_student_to_admin(existing_student, current_admin_id)
@@ -5435,7 +5435,7 @@ def add_rent_waiver():
                 waiver_end_date=waiver_end,
                 periods_count=periods_count,
                 reason=reason,
-                created_by_admin_id=admin_id
+                created_by_teacher_id=admin_id
             )
             db.session.add(waiver)
             count += 1
@@ -6105,10 +6105,10 @@ def process_claim(claim_id):
             return redirect(url_for('admin.process_claim', claim_id=claim_id))
 
         claim.status = new_status
-        claim.admin_notes = form.admin_notes.data
+        claim.teacher_notes = form.teacher_notes.data
         claim.rejection_reason = form.rejection_reason.data if new_status == 'rejected' else None
         claim.processed_date = utc_now()
-        claim.processed_by_admin_id = session.get('admin_id')
+        claim.processed_by_teacher_id = session.get('admin_id')
 
         # Handle monetary claims - auto-deposit when approved/paid
         if requires_payout:
@@ -9903,7 +9903,7 @@ def onboarding_status():
 
         # Roster: has at least one student in ANY class OR marked complete
         # Use StudentTeacher to get all students for this teacher
-        student_count = StudentTeacher.query.filter_by(admin_id=admin_id).count()
+        student_count = StudentTeacher.query.filter_by(teacher_id=admin_id).count()
         data_completed['roster'] = student_count > 0
 
         # Payroll: has payroll settings configured for ANY block OR marked complete
@@ -9935,7 +9935,7 @@ def onboarding_status():
         data_completed['personalization'] = has_label
 
         # Passkey: check if at least one credential exists OR marked complete
-        has_passkey = AdminCredential.query.filter_by(admin_id=admin_id).first() is not None
+        has_passkey = AdminCredential.query.filter_by(teacher_id=admin_id).first() is not None
         data_completed['passkey'] = has_passkey
 
         for task_name in completion.keys():
@@ -10422,7 +10422,7 @@ def passkey_register_finish():
 
         # Save credential metadata (credential_id is optional, stored on passwordless.dev)
         credential = AdminCredential(
-            admin_id=admin_id,
+            teacher_id=admin_id,
             credential_id=None,  # Not needed - stored on passwordless.dev servers
             authenticator_name=authenticator_name
         )
@@ -10464,7 +10464,7 @@ def passkey_auth_start():
         session['passkey_auth_username'] = username
 
         # Check if user has passkeys
-        has_passkeys = AdminCredential.query.filter_by(admin_id=admin.id).first() is not None
+        has_passkeys = AdminCredential.query.filter_by(teacher_id=admin.id).first() is not None
         if not has_passkeys:
             return jsonify({"error": "Invalid credentials"}), 401
 
@@ -10517,7 +10517,7 @@ def passkey_auth_finish():
         # Credentials are stored without credential_id (managed by passwordless.dev),
         # so update last_used for all credentials belonging to this admin.
         now = utc_now()
-        AdminCredential.query.filter_by(admin_id=admin_id).update({'last_used': now}, synchronize_session=False)
+        AdminCredential.query.filter_by(teacher_id=admin_id).update({'last_used': now}, synchronize_session=False)
 
         admin.last_login = now
         db.session.commit()
@@ -10553,7 +10553,7 @@ def passkey_list():
     """List all passkeys for current teacher."""
     try:
         admin_id = session.get('admin_id')
-        credentials = AdminCredential.query.filter_by(admin_id=admin_id).order_by(AdminCredential.created_at.desc()).all()
+        credentials = AdminCredential.query.filter_by(teacher_id=admin_id).order_by(AdminCredential.created_at.desc()).all()
 
         return jsonify({
             "passkeys": [{
@@ -10576,7 +10576,7 @@ def passkey_delete(passkey_id):
     """Delete a passkey."""
     try:
         admin_id = session.get('admin_id')
-        credential = AdminCredential.query.filter_by(id=passkey_id, admin_id=admin_id).first()
+        credential = AdminCredential.query.filter_by(id=passkey_id, teacher_id=admin_id).first()
 
         if not credential:
             return jsonify({"error": "Passkey not found"}), 404
@@ -10599,7 +10599,7 @@ def passkey_settings():
     """Passkey management page."""
     admin_id = session.get('admin_id')
     admin = db.get_or_404(Admin, admin_id)
-    credentials = AdminCredential.query.filter_by(admin_id=admin_id).order_by(AdminCredential.created_at.desc()).all()
+    credentials = AdminCredential.query.filter_by(teacher_id=admin_id).order_by(AdminCredential.created_at.desc()).all()
 
     return render_template('admin_passkey_settings.html',
                          admin=admin,

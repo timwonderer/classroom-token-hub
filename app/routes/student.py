@@ -694,13 +694,13 @@ def claim_account():
             # Create StudentTeacher link
             existing_link = StudentTeacher.query.filter_by(
                 student_id=existing_student.id,
-                admin_id=matched_seat.teacher_id
+                teacher_id=matched_seat.teacher_id
             ).first()
 
             if not existing_link:
                 link = StudentTeacher(
                     student_id=existing_student.id,
-                    admin_id=matched_seat.teacher_id
+                    teacher_id=matched_seat.teacher_id
                 )
                 db.session.add(link)
 
@@ -758,13 +758,13 @@ def claim_account():
                 # Create StudentTeacher link if not exists
                 existing_link = StudentTeacher.query.filter_by(
                     student_id=existing_by_hash.id,
-                    admin_id=matched_seat.teacher_id
+                    teacher_id=matched_seat.teacher_id
                 ).first()
 
                 if not existing_link:
                     link = StudentTeacher(
                         student_id=existing_by_hash.id,
-                        admin_id=matched_seat.teacher_id
+                        teacher_id=matched_seat.teacher_id
                     )
                     db.session.add(link)
 
@@ -799,7 +799,7 @@ def claim_account():
         # Create StudentTeacher link
         link = StudentTeacher(
             student_id=new_student.id,
-            admin_id=matched_seat.teacher_id
+            teacher_id=matched_seat.teacher_id
         )
         db.session.add(link)
         db.session.commit()
@@ -1058,7 +1058,7 @@ def add_class():
         # Check if student is already linked to this teacher's block
         existing_link = StudentTeacher.query.filter_by(
             student_id=student.id,
-            admin_id=matched_seat.teacher_id
+            teacher_id=matched_seat.teacher_id
         ).first()
 
         if existing_link:
@@ -1079,7 +1079,7 @@ def add_class():
         if not existing_link:
             link = StudentTeacher(
                 student_id=student.id,
-                admin_id=matched_seat.teacher_id
+                teacher_id=matched_seat.teacher_id
             )
             db.session.add(link)
 

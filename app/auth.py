@@ -292,7 +292,7 @@ def get_admin_student_query(include_unassigned=True):
     # This is the ONLY source of truth for student-teacher associations
     shared_student_ids = (
         StudentTeacher.query.with_entities(StudentTeacher.student_id)
-        .filter(StudentTeacher.admin_id == admin.id)
+        .filter(StudentTeacher.teacher_id == admin.id)
         .subquery()
     )
 
