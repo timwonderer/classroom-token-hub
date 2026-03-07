@@ -1,0 +1,45 @@
+#!/bin/bash
+# Branch-aware database switching hook.
+# Protected v2 branches always use classroom_economy to avoid migration-chain corruption.
+
+set -e
+
+BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD)
+PRODUCTION_DEV_URL="postgresql://postgres:postgres@localhost:5432/production_dev"
+CLASSROOM_ECONOMY_URL="postgresql://postgres:postgres@localhost:5432/classroom_economy"
+ENV_FILE=".env"
+
+PROTECTED_BRANCHES=(
+  "join-code-centric-architecture-rebuild"
+  "codex/fix-database-model-for-dob-sum-storage"
+)
+
+is_protected=false
+for protected in "${PROTECTED_BRANCHES[@]}"; do
+  if [ "$BRANCH_NAME" = "$protected" ]; then
+    is_protected=true
+    break
+  fi
+done
+
+if [ ! -f "$ENV_FILE" ]; then
+  echo "Warning: .env file not found"
+  exit 0
+fi
+
+if [ "$is_protected" = true ]; then
+  target_url="$CLASSROOM_ECONOMY_URL"
+  target_name="classroom_economy"
+else
+  target_url="$PRODUCTION_DEV_URL"
+  target_name="production_dev"
+fi
+
+if grep -q "^DATABASE_URL=" "$ENV_FILE"; then
+  sed -i.bak "s|^DATABASE_URL=.*|DATABASE_URL=$target_url|" "$ENV_FILE"
+  rm -f "$ENV_FILE.bak"
+else
+  echo "DATABASE_URL=$target_url" >> "$ENV_FILE"
+fi
+
+echo "✓ Switched to $target_name database ($BRANCH_NAME branch)"

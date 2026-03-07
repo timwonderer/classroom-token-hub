@@ -2,6 +2,21 @@
 # Manual database switcher script
 # Usage: ./scripts/switch-db.sh [production_dev|classroom_economy]
 
+PROTECTED_BRANCHES=(
+    "join-code-centric-architecture-rebuild"
+    "codex/fix-database-model-for-dob-sum-storage"
+)
+
+is_protected_branch() {
+    local branch="$1"
+    for protected in "${PROTECTED_BRANCHES[@]}"; do
+        if [ "$branch" = "$protected" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 if [ -z "$1" ]; then
     echo "Usage: ./scripts/switch-db.sh [production_dev|classroom_economy]"
     echo ""
@@ -16,16 +31,22 @@ fi
 
 DB_NAME=$1
 ENV_FILE=".env"
+BRANCH_NAME=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
 
 case $DB_NAME in
     production_dev)
+        if is_protected_branch "$BRANCH_NAME"; then
+            echo "Error: '$BRANCH_NAME' must use classroom_economy to protect v2.0 migration chain."
+            echo "production_dev is off-limits for this branch."
+            exit 1
+        fi
         DB_URL="postgresql://postgres:postgres@localhost:5432/production_dev"
         ;;
     classroom_economy)
         DB_URL="postgresql://postgres:postgres@localhost:5432/classroom_economy"
         ;;
     *)
-        echo "Error: Invalid database name. Use 'production_dev' or 'classroom_economy'"
+        echo "Error: Invalid database name. Use 'production_dev' or 'classroom_economy'."
         exit 1
         ;;
 esac
