@@ -22,7 +22,7 @@ from app.extensions import db, limiter
 from app.models import (
     Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
     TapEventReasonCode, HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
-    StudentTeacher, TeacherBlock, StudentBlock, DemoStudent, StoreItemBlock,
+    StudentTeacher, TeacherBlock, StudentBlock, StoreItemBlock,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource, _quantize_currency
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
