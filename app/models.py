@@ -16,7 +16,8 @@ import sqlalchemy as sa
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import validates
+from sqlalchemy.orm import Session, validates
+from sqlalchemy import event
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username, hash_username_lookup
 from app.utils.encryption import PIIEncryptedType, normalize_totp_for_storage
@@ -200,6 +201,27 @@ class User(db.Model):
     seats = db.relationship('Seat', backref='user', lazy='dynamic', cascade='all, delete-orphan', passive_deletes=True)
 
 
+class IdentityProfile(db.Model):
+    """Canonical identity record used by student-facing entities for display."""
+
+    __tablename__ = 'identity_profiles'
+
+    id = db.Column(db.Integer, primary_key=True)
+    profile_type = db.Column(db.String(32), nullable=False, index=True)
+    first_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=False)
+    last_initial = db.Column(db.String(1), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    __table_args__ = (
+        db.Index('ix_identity_profiles_type_name', 'profile_type', 'last_initial'),
+    )
+
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_initial}."
+
+
 class Seat(db.Model):
     """Join-code scoped identity boundary for a user."""
 
@@ -247,6 +269,7 @@ class TeacherBlock(db.Model):
     # Student identifiers (used for matching during claim)
     first_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=False)
     last_initial = db.Column(db.String(1), nullable=False)
+    identity_id = db.Column(db.Integer, db.ForeignKey('identity_profiles.id', ondelete='SET NULL'), nullable=True, index=True)
 
     # Fuzzy name matching - stores hash of each last name part separately
     # Example: "Smith-Jones" → ["hash(smith)", "hash(jones)"]
@@ -280,6 +303,7 @@ class TeacherBlock(db.Model):
     # Relationships
     teacher = db.relationship('Admin', backref=db.backref('roster_seats', lazy='dynamic', passive_deletes=True))
     student = db.relationship('Student', backref='roster_seats')
+    identity_profile = db.relationship('IdentityProfile', foreign_keys=[identity_id], lazy='joined')
 
     # Indexes for efficient lookups
     __table_args__ = (
@@ -294,7 +318,19 @@ class TeacherBlock(db.Model):
 
     def __repr__(self):
         status = "claimed" if self.is_claimed else "unclaimed"
-        return f'<TeacherBlock {self.first_name} {self.last_initial}. - {self.teacher_id}/{self.block} - {status}>'
+        return f'<TeacherBlock {self.display_first_name} {self.display_last_initial}. - {self.teacher_id}/{self.block} - {status}>'
+
+    @property
+    def display_first_name(self):
+        if self.identity_profile and self.identity_profile.first_name:
+            return self.identity_profile.first_name
+        return self.first_name
+
+    @property
+    def display_last_initial(self):
+        if self.identity_profile and self.identity_profile.last_initial:
+            return self.identity_profile.last_initial
+        return self.last_initial
 
 
 class Student(db.Model):
@@ -302,6 +338,7 @@ class Student(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     first_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=False)
     last_initial = db.Column(db.String(1), nullable=False)
+    identity_id = db.Column(db.Integer, db.ForeignKey('identity_profiles.id', ondelete='SET NULL'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=False)
     join_code = db.Column(db.String(20), nullable=True, index=True)
     join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
@@ -346,10 +383,57 @@ class Student(db.Model):
     reset_code_expires_at = db.Column(db.DateTime(timezone=True), nullable=True)
     money_action_cooldown_until = db.Column(db.DateTime(timezone=True), nullable=True)
     recovery_status = db.Column(db.String(20), default='active', nullable=False)  # active, to_be_claimed
+    # Internal non-sequential DB reference for cross-table linkage.
+    internal_reference = db.Column(
+        db.String(64),
+        unique=True,
+        nullable=False,
+        index=True,
+        default=lambda: f"sint_{uuid.uuid4().hex}",
+    )
+    # Non-identifying reference for sysadmin-facing workflows.
+    opaque_reference = db.Column(
+        db.String(64),
+        unique=True,
+        nullable=False,
+        index=True,
+        default=lambda: f"stu_{uuid.uuid4().hex}",
+    )
+    identity_profile = db.relationship('IdentityProfile', foreign_keys=[identity_id], lazy='joined')
 
     @property
     def full_name(self):
-        return f"{self.first_name} {self.last_initial}."
+        return f"{self.display_first_name} {self.display_last_initial}."
+
+    @property
+    def name_identity_id(self):
+        """Identity-profile key used for centralized student display identity."""
+        return self.identity_id
+
+    @property
+    def internal_db_id(self):
+        """Non-sequential internal reference (do not expose publicly)."""
+        return self.internal_reference
+
+    @property
+    def opaque_id(self):
+        """Opaque reference safe for sysadmin views and non-PII logs."""
+        return self.opaque_reference
+
+    def get_sysadmin_reference(self):
+        return self.opaque_reference
+
+    @property
+    def display_first_name(self):
+        if self.identity_profile and self.identity_profile.first_name:
+            return self.identity_profile.first_name
+        return self.first_name
+
+    @property
+    def display_last_initial(self):
+        if self.identity_profile and self.identity_profile.last_initial:
+            return self.identity_profile.last_initial
+        return self.last_initial
 
     transactions = db.relationship('Transaction', backref='student', lazy=True)
 
@@ -2634,3 +2718,51 @@ class AnalyticsEvent(db.Model):
     
     def __repr__(self):
         return f'<AnalyticsEvent {self.event_type} on {self.event_date.date()} for {self.join_code}>'
+
+
+def _normalize_initial(value):
+    if not value:
+        return None
+    return str(value).strip().upper()[:1]
+
+
+def _sync_identity_profile(session, entity, profile_type):
+    first_name = (entity.first_name or "").strip() if entity.first_name else None
+    last_initial = _normalize_initial(entity.last_initial)
+    if not first_name or not last_initial:
+        return
+
+    profile = entity.identity_profile
+    if profile is None and getattr(entity, "identity_id", None):
+        profile = session.get(IdentityProfile, entity.identity_id)
+        if profile:
+            entity.identity_profile = profile
+
+    if profile is None:
+        profile = IdentityProfile(
+            profile_type=profile_type,
+            first_name=first_name,
+            last_initial=last_initial,
+        )
+        session.add(profile)
+        entity.identity_profile = profile
+    else:
+        profile.first_name = first_name
+        profile.last_initial = last_initial
+        if not profile.profile_type:
+            profile.profile_type = profile_type
+
+
+@event.listens_for(Session, "before_flush")
+def _ensure_identity_profiles(session, flush_context, instances):
+    for obj in session.new:
+        if isinstance(obj, Student):
+            _sync_identity_profile(session, obj, "student")
+        elif isinstance(obj, TeacherBlock):
+            _sync_identity_profile(session, obj, "teacher_block")
+
+    for obj in session.dirty:
+        if isinstance(obj, Student):
+            _sync_identity_profile(session, obj, "student")
+        elif isinstance(obj, TeacherBlock):
+            _sync_identity_profile(session, obj, "teacher_block")

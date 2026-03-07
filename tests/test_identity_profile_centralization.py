@@ -1,0 +1,113 @@
+from app import db
+from app.hash_utils import get_random_salt, hash_username
+from app.models import Admin, IdentityProfile, Student, TeacherBlock
+
+
+def _create_admin(username: str) -> Admin:
+    admin = Admin(username=username, totp_secret="TESTSECRET123456")
+    db.session.add(admin)
+    db.session.commit()
+    return admin
+
+
+def test_student_auto_creates_identity_profile(client):
+    salt = get_random_salt()
+    student = Student(
+        first_name="Alicia",
+        last_initial="Q",
+        block="A",
+        salt=salt,
+        username_hash=hash_username("alicia", salt),
+        pin_hash="fake-hash",
+    )
+    db.session.add(student)
+    db.session.commit()
+
+    assert student.identity_id is not None
+    profile = db.session.get(IdentityProfile, student.identity_id)
+    assert profile is not None
+    assert profile.profile_type == "student"
+    assert profile.first_name == "Alicia"
+    assert profile.last_initial == "Q"
+    assert student.full_name == "Alicia Q."
+    assert student.internal_db_id.startswith("sint_")
+    assert student.internal_db_id != str(student.id)
+    assert student.opaque_id.startswith("stu_")
+
+
+def test_student_name_update_syncs_identity_profile(client):
+    salt = get_random_salt()
+    student = Student(
+        first_name="Jordan",
+        last_initial="M",
+        block="A",
+        salt=salt,
+        username_hash=hash_username("jordan", salt),
+        pin_hash="fake-hash",
+    )
+    db.session.add(student)
+    db.session.commit()
+
+    student.first_name = "Jordyn"
+    student.last_initial = "N"
+    db.session.commit()
+
+    profile = db.session.get(IdentityProfile, student.identity_id)
+    assert profile.first_name == "Jordyn"
+    assert profile.last_initial == "N"
+    assert student.display_first_name == "Jordyn"
+    assert student.display_last_initial == "N"
+
+
+def test_teacher_block_auto_creates_identity_profile(client):
+    admin = _create_admin("identity-teacher")
+    salt = get_random_salt()
+
+    seat = TeacherBlock(
+        teacher_id=admin.id,
+        block="A",
+        class_label="A",
+        first_name="Mateo",
+        last_initial="R",
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
+        salt=salt,
+        first_half_hash="hash-seat",
+        join_code="JOIN-IDENTITY",
+        is_claimed=False,
+    )
+    db.session.add(seat)
+    db.session.commit()
+
+    assert seat.identity_id is not None
+    profile = db.session.get(IdentityProfile, seat.identity_id)
+    assert profile.profile_type == "teacher_block"
+    assert seat.display_first_name == "Mateo"
+    assert seat.display_last_initial == "R"
+
+
+def test_student_internal_reference_is_non_sequential_and_unique(client):
+    salt_a = get_random_salt()
+    salt_b = get_random_salt()
+    a = Student(
+        first_name="One",
+        last_initial="A",
+        block="A",
+        salt=salt_a,
+        username_hash=hash_username("one", salt_a),
+        pin_hash="fake-hash",
+    )
+    b = Student(
+        first_name="Two",
+        last_initial="B",
+        block="B",
+        salt=salt_b,
+        username_hash=hash_username("two", salt_b),
+        pin_hash="fake-hash",
+    )
+    db.session.add_all([a, b])
+    db.session.commit()
+
+    assert a.internal_reference.startswith("sint_")
+    assert b.internal_reference.startswith("sint_")
+    assert a.internal_reference != b.internal_reference

@@ -155,7 +155,7 @@
 
         {% if status.is_paid %}
         <div class="alert alert-success mb-0">
-            <strong>Great work, {{ student.first_name }}!</strong>
+            <strong>Great work, {{ student.display_first_name }}!</strong>
             {% if status.payments %}
             <br>You have paid your rent for <strong>Period {{ current_block|upper }}</strong> on <strong>{{
                 status.payments[-1].payment_date.strftime('%b %d, %Y') }}</strong>
