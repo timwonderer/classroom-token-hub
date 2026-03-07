@@ -128,7 +128,7 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
     from app.models import IssueCategory, TeacherBlock
 
     # Get category to determine issue_type
-    category = IssueCategory.query.get(category_id)
+    category = db.session.get(IssueCategory, category_id)
     if not category:
         raise ValueError("Invalid category")
 
@@ -169,7 +169,7 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
         related_record_id=related_record_id,
         context_snapshot=context_snapshot,
         page_url=request.url if request else None,
-        status='submitted',
+        status=Issue.STATUS_OPEN,
         submitted_at=now_utc,
         created_at=now_utc,
         updated_at=now_utc
@@ -195,7 +195,7 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
         current_app.logger.warning("Failed to attach TLCP snapshot to issue_id=%s", issue.id, exc_info=True)
 
     # Record status history
-    record_status_change(issue, None, 'submitted', 'student', student.id)
+    record_status_change(issue, None, Issue.STATUS_OPEN, 'student', student.id)
 
     db.session.commit()
 

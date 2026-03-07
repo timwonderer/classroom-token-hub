@@ -1693,8 +1693,8 @@ class Issue(db.Model):
     system_metadata = db.Column(db.JSON, nullable=True)  # Recent events, browser info, etc.
 
     # Status tracking
-    status = db.Column(db.String(50), default='submitted', nullable=False, index=True)
-    # Allowed statuses: 'submitted', 'teacher_review', 'teacher_resolved', 'elevated', 'developer_review', 'developer_resolved'
+    status = db.Column(db.String(50), default='OPEN', nullable=False, index=True)
+    # Canonical statuses follow SPEC-TICK-001; legacy values are still recognized for older rows.
 
     # Teacher review and resolution
     teacher_reviewed_at = db.Column(db.DateTime(timezone=True), nullable=True)
@@ -1744,21 +1744,41 @@ class Issue(db.Model):
         db.Index('ix_issues_join_code_status', 'join_code', 'status'),
     )
 
+    # Canonical lifecycle statuses (SPEC-TICK-001).
+    STATUS_OPEN = 'OPEN'
+    STATUS_TEACHER_REVIEW = 'TEACHER_REVIEW'
+    STATUS_ESCALATED_TO_DEV = 'ESCALATED_TO_DEV'
+    STATUS_DEV_RESOLVED = 'DEV_RESOLVED'
+    STATUS_TEACHER_FINAL_REVIEW = 'TEACHER_FINAL_REVIEW'
+    STATUS_CLOSED = 'CLOSED'
+
+    # Legacy status values retained for backward-compatible reads.
+    LEGACY_TO_CANONICAL_STATUS = {
+        'submitted': STATUS_OPEN,
+        'teacher_review': STATUS_TEACHER_REVIEW,
+        'teacher_resolved': STATUS_TEACHER_FINAL_REVIEW,
+        'elevated': STATUS_ESCALATED_TO_DEV,
+        'developer_review': STATUS_ESCALATED_TO_DEV,
+        'developer_resolved': STATUS_DEV_RESOLVED,
+    }
+
     def get_student_visible_status(self):
         """Return simplified status badge for student view."""
+        canonical_status = self.LEGACY_TO_CANONICAL_STATUS.get(self.status, self.status)
         status_map = {
-            'submitted': 'Submitted',
-            'teacher_review': 'Teacher Review',
-            'teacher_resolved': 'Resolved',
-            'elevated': 'Elevated',
-            'developer_review': 'Developer Review',
-            'developer_resolved': 'Resolved - See Teacher'
+            self.STATUS_OPEN: 'Submitted',
+            self.STATUS_TEACHER_REVIEW: 'Teacher Review',
+            self.STATUS_ESCALATED_TO_DEV: 'Escalated to Developer',
+            self.STATUS_DEV_RESOLVED: 'Developer Fix Applied - Teacher Review Required',
+            self.STATUS_TEACHER_FINAL_REVIEW: 'Teacher Final Review',
+            self.STATUS_CLOSED: 'Closed',
         }
-        return status_map.get(self.status, 'Unknown')
+        return status_map.get(canonical_status, 'Unknown')
 
     def is_locked(self):
         """Check if issue is locked from further student edits (after escalation)."""
-        return self.status in ['elevated', 'developer_review', 'developer_resolved']
+        canonical_status = self.LEGACY_TO_CANONICAL_STATUS.get(self.status, self.status)
+        return canonical_status in [self.STATUS_ESCALATED_TO_DEV, self.STATUS_DEV_RESOLVED, self.STATUS_CLOSED]
 
     def __repr__(self):
         return f'<Issue #{self.id} ({self.status}) - Student {self.student_first_name} {self.student_last_initial}.>'

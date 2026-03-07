@@ -72,12 +72,12 @@
                     <div class="accordion-body">
                         <p>Students see a status badge for each ticket:</p>
                         <ul>
-                            <li><span class="badge bg-secondary text-dark">Submitted</span> Ticket is awaiting review.</li>
+                            <li><span class="badge bg-secondary text-dark">Open</span> Ticket is awaiting teacher review.</li>
                             <li><span class="badge bg-secondary text-dark">Teacher Review</span> Teacher is working on the issue.</li>
-                            <li><span class="badge bg-success">Resolved</span> Issue resolved by the teacher.</li>
-                            <li><span class="badge bg-warning text-dark">Elevated</span> Escalated to developers.</li>
-                            <li><span class="badge bg-warning text-dark">Developer Review</span> Developer is investigating.</li>
-                            <li><span class="badge bg-info">Resolved - See Teacher</span> Developer resolved; student should follow up with you.</li>
+                            <li><span class="badge bg-warning text-dark">Escalated To Dev</span> Escalated to developers.</li>
+                            <li><span class="badge bg-info">Dev Resolved</span> Developer fix applied; teacher final review required.</li>
+                            <li><span class="badge bg-primary">Teacher Final Review</span> Teacher confirms classroom state and may close.</li>
+                            <li><span class="badge bg-success">Closed</span> Ticket has been closed by teacher.</li>
                         </ul>
                     </div>
                 </div>
@@ -125,7 +125,7 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h6 class="text-muted mb-1">Resolved</h6>
+                            <h6 class="text-muted mb-1">Final Review</h6>
                             <h3 class="mb-0">{{ resolved_issues|length }}</h3>
                         </div>
                         <span class="material-symbols-outlined fs-1 text-success">check_circle</span>
@@ -160,7 +160,7 @@
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="resolved-tab" data-bs-toggle="tab" data-bs-target="#resolved" type="button" role="tab">
-                <span class="material-symbols-outlined me-2">check_circle</span>Resolved
+                <span class="material-symbols-outlined me-2">fact_check</span>Teacher Final Review
             </button>
         </li>
         <li class="nav-item" role="presentation">
@@ -176,7 +176,7 @@
             {% if pending_issues %}
                 <div class="list-group">
                     {% for issue in pending_issues %}
-                    <a href="{{ url_for('admin.view_issue', issue_id=issue.id) }}" class="list-group-item list-group-item-action">
+                    <a href="{{ url_for('admin.view_issue', issue_ref=issue_ref_for(issue.id)) }}" class="list-group-item list-group-item-action">
                         <div class="d-flex w-100 justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
@@ -227,7 +227,7 @@
             {% if resolved_issues %}
                 <div class="list-group">
                     {% for issue in resolved_issues %}
-                    <a href="{{ url_for('admin.view_issue', issue_id=issue.id) }}" class="list-group-item list-group-item-action">
+                    <a href="{{ url_for('admin.view_issue', issue_ref=issue_ref_for(issue.id)) }}" class="list-group-item list-group-item-action">
                         <div class="d-flex w-100 justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
@@ -236,20 +236,22 @@
                                         {{ issue.student_first_name }} {{ issue.student_last_initial }}.
                                     </h6>
                                     <span class="badge bg-secondary">{{ issue.category.name }}</span>
-                                    {% if issue.teacher_resolution %}
-                                    <span class="badge bg-success ms-2">{{ issue.teacher_resolution }}</span>
+                                    {% if issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}
+                                    <span class="badge bg-info ms-2">Developer Fix Applied - Teacher Review Required</span>
+                                    {% elif issue.teacher_resolution %}
+                                    <span class="badge bg-primary ms-2">{{ issue.teacher_resolution }}</span>
                                     {% endif %}
                                 </div>
                                 <p class="mb-1 text-muted small">
                                     {{ issue.student_explanation[:200] }}{% if issue.student_explanation|length > 200 %}...{% endif %}
                                 </p>
                                 <small class="text-muted">
-                                    <span class="material-symbols-outlined me-1">check_circle</span>
-                                    Resolved <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.teacher_resolved_at) }}"></span>
+                                    <span class="material-symbols-outlined me-1">fact_check</span>
+                                    Updated <span class="local-timestamp" data-timestamp="{{ format_utc_iso(issue.updated_at) }}"></span>
                                 </small>
                             </div>
                             <div class="text-end">
-                                <span class="badge bg-success">Resolved</span>
+                                <span class="badge bg-primary">Teacher Final Review</span>
                             </div>
                         </div>
                     </a>
@@ -259,8 +261,8 @@
                 <div class="card">
                     <div class="card-body text-center py-5">
                         <span class="material-symbols-outlined fs-1 text-muted mb-3">inbox</span>
-                        <h5 class="text-muted">No resolved issues</h5>
-                        <p class="text-muted mb-0">Issues you've resolved will appear here.</p>
+                        <h5 class="text-muted">No tickets awaiting final review</h5>
+                        <p class="text-muted mb-0">Tickets waiting for your final review will appear here.</p>
                     </div>
                 </div>
             {% endif %}
@@ -271,7 +273,7 @@
             {% if escalated_issues %}
                 <div class="list-group">
                     {% for issue in escalated_issues %}
-                    <a href="{{ url_for('admin.view_issue', issue_id=issue.id) }}" class="list-group-item list-group-item-action">
+                    <a href="{{ url_for('admin.view_issue', issue_ref=issue_ref_for(issue.id)) }}" class="list-group-item list-group-item-action">
                         <div class="d-flex w-100 justify-content-between align-items-start">
                             <div class="flex-grow-1">
                                 <div class="d-flex align-items-center mb-2">
@@ -280,11 +282,6 @@
                                         {{ issue.student_first_name }} {{ issue.student_last_initial }}.
                                     </h6>
                                     <span class="badge bg-secondary">{{ issue.category.name }}</span>
-                                    {% if issue.eligible_for_reward %}
-                                    <span class="badge bg-warning text-dark ms-2">
-                                        <span class="material-symbols-outlined me-1">redeem</span>Reward Eligible
-                                    </span>
-                                    {% endif %}
                                 </div>
                                 <p class="mb-1 text-muted small">
                                     <strong>Escalation Reason:</strong> {{ issue.escalation_reason }}
@@ -296,9 +293,8 @@
                             </div>
                             <div class="text-end">
                                 <span class="badge
-                                    {% if issue.status == 'elevated' %}bg-warning text-dark
-                                    {% elif issue.status == 'developer_review' %}bg-warning
-                                    {% elif issue.status == 'developer_resolved' %}bg-info
+                                    {% if issue.status in ['ESCALATED_TO_DEV', 'elevated', 'developer_review'] %}bg-warning text-dark
+                                    {% elif issue.status in ['DEV_RESOLVED', 'developer_resolved'] %}bg-info
                                     {% else %}bg-secondary{% endif %}">
                                     {{ issue.status|replace('_', ' ')|title }}
                                 </span>

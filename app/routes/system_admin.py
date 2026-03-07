@@ -50,6 +50,7 @@ from app.utils.username_migration import (
     needs_hashed_username_migration,
     build_hashed_username_fields,
 )
+from app.utils.opaque_refs import make_opaque_ref, resolve_opaque_ref
 
 # Create blueprint
 sysadmin_bp = Blueprint('sysadmin', __name__, url_prefix='/sysadmin')
@@ -527,9 +528,16 @@ def dashboard():
     system_admin_count = SystemAdmin.query.count()
 
     # Open tickets = new user reports + pending/in-review escalated issues
-    new_reports_count = UserReport.query.filter_by(status='new').count()
+    new_reports_count = UserReport.query.filter_by(
+        status='new',
+        user_type='teacher',
+    ).count()
     open_issues_count = Issue.query.filter(
-        Issue.status.in_(['elevated', 'developer_review'])
+        Issue.status.in_([
+            Issue.STATUS_ESCALATED_TO_DEV,
+            'elevated',
+            'developer_review',
+        ])
     ).count()
     open_tickets = new_reports_count + open_issues_count
 
@@ -1223,20 +1231,27 @@ def delete_teacher(admin_id):
 
 # -------------------- SUPPORT TICKETS (COMBINED VIEW) --------------------
 
+def _resolve_issue_id_from_ref(issue_ref: str) -> int | None:
+    return resolve_opaque_ref('issue', issue_ref)
+
+
+def _resolve_report_id_from_ref(report_ref: str) -> int | None:
+    return resolve_opaque_ref('report', report_ref)
+
 @sysadmin_bp.route('/support')
 @system_admin_required
 def support_tickets():
     """
-    Unified support ticket dashboard combining user reports and escalated issues.
-    Tab 1: User Reports (bugs/suggestions from teachers and students)
+    Unified support ticket dashboard combining teacher issues and escalated student issues.
+    Tab 1: Teacher Issues (teacher-submitted support tickets)
     Tab 2: Escalated Issues (student-escalated issues awaiting developer review)
     """
     active_tab = request.args.get('tab', 'reports')
 
-    # ── User Reports (Tab 1) ──
+    # ── Teacher Issues (Tab 1) ──
     status_filter = request.args.get('status', 'all')
     report_type_filter = request.args.get('type', 'all')
-    report_query = UserReport.query
+    report_query = UserReport.query.filter(UserReport.user_type == 'teacher')
     if status_filter != 'all':
         report_query = report_query.filter(UserReport.status == status_filter)
     if report_type_filter != 'all':
@@ -1246,29 +1261,41 @@ def support_tickets():
     from sqlalchemy import func as sqlfunc
     status_counts = dict(
         db.session.query(UserReport.status, sqlfunc.count(UserReport.id))
+        .filter(UserReport.user_type == 'teacher')
         .group_by(UserReport.status).all()
     )
     new_reports = status_counts.get('new', 0)
-    rewarded_reports = status_counts.get('rewarded', 0)
+    reviewed_reports = status_counts.get('reviewed', 0)
 
     # ── Escalated Issues (Tab 2) ──
     all_issues = Issue.query.filter(
-        Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
+        Issue.status.in_([
+            Issue.STATUS_ESCALATED_TO_DEV,
+            Issue.STATUS_DEV_RESOLVED,
+            'elevated',
+            'developer_review',
+            'developer_resolved',
+        ])
     ).order_by(Issue.escalated_at.desc()).all()
-    issues_pending = [i for i in all_issues if i.status == 'elevated']
+    issues_pending = [
+        i for i in all_issues
+        if i.status in [Issue.STATUS_ESCALATED_TO_DEV, 'elevated']
+    ]
     issues_in_review = [i for i in all_issues if i.status == 'developer_review']
-    issues_resolved = [i for i in all_issues if i.status == 'developer_resolved']
+    issues_resolved = [i for i in all_issues if i.status in [Issue.STATUS_DEV_RESOLVED, 'developer_resolved']]
 
     return render_template(
         'sysadmin_support_tickets.html',
         current_page='support_tickets',
         active_tab=active_tab,
-        # User reports
+        # Teacher issues
         reports=reports,
         status_filter=status_filter,
         report_type_filter=report_type_filter,
         new_reports=new_reports,
-        rewarded_reports=rewarded_reports,
+        reviewed_reports=reviewed_reports,
+        issue_ref_for=lambda issue_id: make_opaque_ref('issue', issue_id),
+        report_ref_for=lambda report_id: make_opaque_ref('report', report_id),
         # Escalated issues
         issues_pending=issues_pending,
         issues_in_review=issues_in_review,
@@ -1283,13 +1310,13 @@ def support_tickets():
 @sysadmin_bp.route('/user-reports')
 @system_admin_required
 def user_reports():
-    """View all user-submitted bug reports with filtering."""
+    """View teacher-submitted support issues with filtering."""
     # Get filter parameters
     status_filter = request.args.get('status', 'all')
     report_type_filter = request.args.get('type', 'all')
     
     # Build query
-    query = UserReport.query
+    query = UserReport.query.filter(UserReport.user_type == 'teacher')
     
     # Apply filters
     if status_filter != 'all':
@@ -1302,53 +1329,66 @@ def user_reports():
     
     # Count by status - optimized to use single query
     from sqlalchemy import func
-    status_counts = dict(db.session.query(UserReport.status, func.count(UserReport.id)).group_by(UserReport.status).all())
+    status_counts = dict(
+        db.session.query(UserReport.status, func.count(UserReport.id))
+        .filter(UserReport.user_type == 'teacher')
+        .group_by(UserReport.status)
+        .all()
+    )
     new_count = status_counts.get('new', 0)
     reviewed_count = status_counts.get('reviewed', 0)
-    rewarded_count = status_counts.get('rewarded', 0)
+    closed_count = status_counts.get('closed', 0)
     
     return render_template(
         'sysadmin_user_reports.html',
         current_page='user_reports',
-        page_title='User Reports',
+        page_title='Teacher Issues',
         reports=reports,
         new_count=new_count,
         reviewed_count=reviewed_count,
-        rewarded_count=rewarded_count,
+        closed_count=closed_count,
         status_filter=status_filter,
-        report_type_filter=report_type_filter
+        report_type_filter=report_type_filter,
+        report_ref_for=lambda report_id: make_opaque_ref('report', report_id),
     )
 
 
-@sysadmin_bp.route('/user-reports/<int:report_id>')
+@sysadmin_bp.route('/user-reports/<report_ref>')
 @system_admin_required
-def view_user_report(report_id):
-    """View details of a specific user report."""
-    report = db.get_or_404(UserReport, report_id)
+def view_user_report(report_ref):
+    """View details of a specific teacher issue report."""
+    report_id = _resolve_report_id_from_ref(report_ref)
+    if report_id is None:
+        raise NotFound("Report not found")
+    report = UserReport.query.filter_by(id=report_id, user_type='teacher').first_or_404()
     
     return render_template(
         'sysadmin_user_report_detail.html',
         current_page='user_reports',
         page_title=f'Report #{report_id}',
-        report=report
+        report=report,
+        report_ref=make_opaque_ref('report', report.id),
     )
 
 
-@sysadmin_bp.route('/user-reports/<int:report_id>/update', methods=['POST'])
+@sysadmin_bp.route('/user-reports/<report_ref>/update', methods=['POST'])
 @system_admin_required
-def update_user_report(report_id):
+def update_user_report(report_ref):
     """Update the status and notes of a user report."""
-    report = db.get_or_404(UserReport, report_id)
+    report_id = _resolve_report_id_from_ref(report_ref)
+    if report_id is None:
+        raise NotFound("Report not found")
+    report = UserReport.query.filter_by(id=report_id, user_type='teacher').first_or_404()
     
     # Get form data
     new_status = request.form.get('status')
     admin_notes = request.form.get('admin_notes', '').strip()
     
     # Validate status
-    valid_statuses = ['new', 'reviewed', 'rewarded', 'closed', 'spam']
+    valid_statuses = ['new', 'reviewed', 'closed', 'spam']
     if new_status not in valid_statuses:
         flash("Invalid status selected.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
+        return redirect(url_for('sysadmin.view_user_report', report_ref=make_opaque_ref('report', report.id)))
     
     # Update report
     report.status = new_status
@@ -1364,95 +1404,7 @@ def update_user_report(report_id):
         current_app.logger.error(f"Error updating report {report_id}: {str(e)}")
         flash("Error updating report. Please try again.", "error")
     
-    return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-
-
-@sysadmin_bp.route('/user-reports/<int:report_id>/send-reward', methods=['POST'])
-@system_admin_required
-def send_reward_to_reporter(report_id):
-    """Send a reward to a student who submitted a bug report."""
-    report = db.get_or_404(UserReport, report_id)
-    
-    # Verify this is a student report with a linked student
-    if report.user_type != 'student' or not report._student_id:
-        flash("Rewards can only be sent to student reports.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-    
-    # Check if reward already sent
-    if report.reward_sent_at is not None:
-        flash("A reward has already been sent for this report.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-    
-    # Get reward amount
-    try:
-        from app.models import _quantize_currency
-        reward_amount = _quantize_currency(request.form.get('reward_amount', '0'))
-        if reward_amount <= Decimal('0'):
-            flash("Reward amount must be greater than 0.", "error")
-            return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-    except (ValueError, TypeError, InvalidOperation):
-        flash("Invalid reward amount.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-    
-    # Get the student
-    student = db.session.get(Student, report._student_id)
-    if not student:
-        flash("Student not found. Cannot send reward.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-    
-    # Get student's primary teacher for the transaction from StudentTeacher table
-    first_link = StudentTeacher.query.filter_by(student_id=student.id).first()
-    teacher_id = first_link.admin_id if first_link else None
-
-    if not teacher_id:
-        flash("Cannot determine student's teacher. Reward not sent.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-
-    # Get join_code for this student-teacher pair
-    # Query TeacherBlock to find the join_code for multi-tenancy isolation
-    teacher_block = TeacherBlock.query.filter_by(
-        student_id=student.id,
-        teacher_id=teacher_id,
-        is_claimed=True
-    ).first()
-
-    if not teacher_block or not teacher_block.join_code:
-        flash("Cannot determine student's class period. Reward not sent.", "error")
-        return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
-
-    join_code = teacher_block.join_code
-
-    try:
-        # CRITICAL FIX: Add join_code to bug report reward transaction
-        transaction = Transaction(
-            student_id=student.id,
-            teacher_id=teacher_id,
-            join_code=join_code,  # CRITICAL: Add join_code for period isolation
-            amount=reward_amount,
-            account_type='checking',
-            description=f"Bug Report Reward (Report #{report_id})",
-            timestamp=utc_now(),
-            status=TransactionStatus.PENDING,
-            is_void=False
-        )
-        db.session.add(transaction)
-        
-        # Update report
-        report.reward_amount = reward_amount
-        report.reward_sent_at = utc_now()
-        report.status = 'rewarded'
-        report.reviewed_at = utc_now()
-        report.reviewed_by_sysadmin_id = session.get('sysadmin_id')
-        
-        db.session.commit()
-        
-        flash(f"Reward of ${reward_amount:.2f} sent successfully!", "success")
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error sending reward for report {report_id}: {str(e)}")
-        flash("Error sending reward. Please try again.", "error")
-
-    return redirect(url_for('sysadmin.view_user_report', report_id=report_id))
+    return redirect(url_for('sysadmin.view_user_report', report_ref=make_opaque_ref('report', report.id)))
 
 
 @sysadmin_bp.route('/grafana/auth-check', methods=['GET'])
@@ -1911,15 +1863,21 @@ def escalated_issues():
     System admin view of all escalated issues from teachers.
     Shows issues that have been escalated for developer/sysadmin review.
     """
-    # Get all escalated issues (elevated, developer_review, developer_resolved)
+    # Get all escalated issues (canonical + legacy compatibility)
     issues = Issue.query.filter(
-        Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
+        Issue.status.in_([
+            Issue.STATUS_ESCALATED_TO_DEV,
+            Issue.STATUS_DEV_RESOLVED,
+            'elevated',
+            'developer_review',
+            'developer_resolved',
+        ])
     ).order_by(Issue.escalated_at.desc()).all()
 
     # Separate by status
-    pending_issues = [i for i in issues if i.status == 'elevated']
+    pending_issues = [i for i in issues if i.status in [Issue.STATUS_ESCALATED_TO_DEV, 'elevated']]
     in_review_issues = [i for i in issues if i.status == 'developer_review']
-    resolved_issues = [i for i in issues if i.status == 'developer_resolved']
+    resolved_issues = [i for i in issues if i.status in [Issue.STATUS_DEV_RESOLVED, 'developer_resolved']]
 
     return render_template('sysadmin_escalated_issues.html',
                          current_page='issues',
@@ -1927,17 +1885,27 @@ def escalated_issues():
                          pending_issues=pending_issues,
                          in_review_issues=in_review_issues,
                          resolved_issues=resolved_issues,
+                         issue_ref_for=lambda issue_id: make_opaque_ref('issue', issue_id),
                          format_utc_iso=format_utc_iso)
 
 
-@sysadmin_bp.route('/issues/<int:issue_id>')
+@sysadmin_bp.route('/issues/<issue_ref>')
 @system_admin_required
-def view_escalated_issue(issue_id):
+def view_escalated_issue(issue_ref):
     """View detailed information about a specific escalated issue."""
+    issue_id = _resolve_issue_id_from_ref(issue_ref)
+    if issue_id is None:
+        raise NotFound("Issue not found")
     # Get the issue and verify it's escalated
     issue = Issue.query.filter(
         Issue.id == issue_id,
-        Issue.status.in_(['elevated', 'developer_review', 'developer_resolved'])
+        Issue.status.in_([
+            Issue.STATUS_ESCALATED_TO_DEV,
+            Issue.STATUS_DEV_RESOLVED,
+            'elevated',
+            'developer_review',
+            'developer_resolved',
+        ])
     ).first_or_404()
 
     # Get status history
@@ -1947,83 +1915,80 @@ def view_escalated_issue(issue_id):
 
     return render_template('sysadmin_view_escalated_issue.html',
                          current_page='issues',
-                         page_title=f'Issue #{issue.id}',
-                         issue=issue,
-                         correlation_pack=issue.correlation_pack,
-                         history=history,
-                         format_utc_iso=format_utc_iso)
+        page_title=f'Issue #{issue.id}',
+        issue=issue,
+        issue_ref=make_opaque_ref('issue', issue.id),
+        report_ref_for=lambda report_id: make_opaque_ref('report', report_id),
+        correlation_pack=issue.correlation_pack,
+        history=history,
+        format_utc_iso=format_utc_iso)
 
 
-@sysadmin_bp.route('/issues/<int:issue_id>/start-review', methods=['POST'])
+@sysadmin_bp.route('/issues/<issue_ref>/start-review', methods=['POST'])
 @system_admin_required
-def start_review_escalated_issue(issue_id):
-    """Mark an escalated issue as being reviewed by sysadmin."""
+def start_review_escalated_issue(issue_ref):
+    """Legacy endpoint: no-op under canonical lifecycle."""
+    issue_id = _resolve_issue_id_from_ref(issue_ref)
+    if issue_id is None:
+        raise NotFound("Issue not found")
     issue = Issue.query.filter(
         Issue.id == issue_id,
-        Issue.status == 'elevated'
+        Issue.status.in_([Issue.STATUS_ESCALATED_TO_DEV, 'elevated', 'developer_review'])
     ).first_or_404()
 
-    try:
-        issue.status = 'developer_review'
-
-        # Record status change
-        from app.utils.issue_helpers import record_status_change
-        record_status_change(issue, 'elevated', 'developer_review', 'sysadmin', session.get('sysadmin_id'))
-
-        db.session.commit()
-        flash("Issue marked as being reviewed.", "success")
-
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f"Error starting review for issue {issue_id}: {e}")
-        flash("An error occurred while starting the review.", "error")
-
-    return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+    flash("Status remains Escalated to Developer until technical resolution is recorded.", "info")
+    return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
 
-@sysadmin_bp.route('/issues/<int:issue_id>/resolve', methods=['POST'])
+@sysadmin_bp.route('/issues/<issue_ref>/resolve', methods=['POST'])
 @system_admin_required
-def resolve_escalated_issue(issue_id):
-    """Mark an escalated issue as resolved by sysadmin."""
+def resolve_escalated_issue(issue_ref):
+    """Mark technical fix complete, optionally issue bug bounty, then return to teacher final review."""
+    issue_id = _resolve_issue_id_from_ref(issue_ref)
+    if issue_id is None:
+        raise NotFound("Issue not found")
     issue = Issue.query.filter(
         Issue.id == issue_id,
-        Issue.status.in_(['elevated', 'developer_review'])
+        Issue.status.in_([Issue.STATUS_ESCALATED_TO_DEV, 'elevated', 'developer_review'])
     ).first_or_404()
 
     resolution_note = request.form.get('resolution_note', '').strip()
     eligible_for_reward = request.form.get('eligible_for_reward') == 'on'
-    reward_amount = request.form.get('reward_amount', '').strip()
+    reward_amount_raw = request.form.get('reward_amount', '').strip()
     sysadmin_id = session.get('sysadmin_id')
 
     if not sysadmin_id:
         flash("System admin session is invalid. Please log in again.", "error")
         return redirect(url_for('sysadmin.login', next=request.path))
 
+    if not resolution_note:
+        flash("Resolution notes are required.", "error")
+        return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
+
     try:
         reward_amount_value = None
         if eligible_for_reward:
-            if not reward_amount:
-                flash("Reward amount is required when reward eligibility is selected.", "error")
-                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+            if not reward_amount_raw:
+                flash("Reward amount is required when bug bounty is selected.", "error")
+                return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
             try:
                 from app.models import _quantize_currency
-                reward_amount_value = _quantize_currency(reward_amount)
-            except (ValueError, InvalidOperation):
-                flash("Invalid reward amount. Please enter a valid number.", "error")
-                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+                reward_amount_value = _quantize_currency(reward_amount_raw)
+            except (ValueError, TypeError, InvalidOperation):
+                flash("Invalid reward amount.", "error")
+                return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
             if reward_amount_value <= Decimal('0'):
                 flash("Reward amount must be greater than 0.", "error")
-                return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+                return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))
 
         old_status = issue.status
-        issue.status = 'developer_resolved'
+        issue.status = Issue.STATUS_DEV_RESOLVED
         issue.sysadmin_resolved_at = utc_now()
         issue.sysadmin_notes = resolution_note
         issue.sysadmin_id = sysadmin_id
         issue.eligible_for_reward = eligible_for_reward
 
-        reward_transaction = None
-        if eligible_for_reward and reward_amount_value is not None:
+        if reward_amount_value is not None:
             reward_transaction = Transaction(
                 student_id=issue.student_id,
                 teacher_id=issue.teacher_id,
@@ -2053,22 +2018,32 @@ def resolve_escalated_issue(issue_id):
 
         # Record status change
         from app.utils.issue_helpers import record_status_change
-        status_note = (
-            f"Bug reward issued: ${reward_amount_value:.2f}"
+        reward_note = (
+            f" | Bug reward: ${reward_amount_value:.2f}"
             if reward_amount_value is not None
-            else None
+            else ""
         )
-        record_status_change(issue, old_status, 'developer_resolved', 'sysadmin', sysadmin_id, notes=status_note)
+        record_status_change(
+            issue,
+            old_status,
+            Issue.STATUS_DEV_RESOLVED,
+            'sysadmin',
+            sysadmin_id,
+            notes=f"{resolution_note}{reward_note}",
+        )
 
         db.session.commit()
         if reward_amount_value is not None:
-            flash(f"Issue resolved and reward of ${reward_amount_value:.2f} was issued.", "success")
+            flash(
+                f"Technical fix recorded, bug reward of ${reward_amount_value:.2f} issued, and ticket returned to teacher review.",
+                "success",
+            )
         else:
-            flash("Issue has been marked as resolved.", "success")
+            flash("Technical fix recorded. Ticket returned to teacher for final review.", "success")
 
     except Exception as e:
         db.session.rollback()
         current_app.logger.error(f"Error resolving escalated issue {issue_id}: {e}")
         flash("An error occurred while resolving the issue.", "error")
 
-    return redirect(url_for('sysadmin.view_escalated_issue', issue_id=issue_id))
+    return redirect(url_for('sysadmin.view_escalated_issue', issue_ref=make_opaque_ref('issue', issue.id)))

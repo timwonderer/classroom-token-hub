@@ -3,11 +3,11 @@
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><span class="material-symbols-outlined me-2">forum</span>User Reports</h2>
+        <h2><span class="material-symbols-outlined me-2">forum</span>Teacher Issues</h2>
         <div>
             <span class="badge bg-primary me-2">New: {{ new_count }}</span>
             <span class="badge bg-info me-2">Reviewed: {{ reviewed_count }}</span>
-            <span class="badge bg-success">Rewarded: {{ rewarded_count }}</span>
+            <span class="badge bg-secondary">Closed: {{ closed_count }}</span>
         </div>
     </div>
 
@@ -21,7 +21,6 @@
                         <option value="all" {% if status_filter == 'all' %}selected{% endif %}>All Statuses</option>
                         <option value="new" {% if status_filter == 'new' %}selected{% endif %}>New</option>
                         <option value="reviewed" {% if status_filter == 'reviewed' %}selected{% endif %}>Reviewed</option>
-                        <option value="rewarded" {% if status_filter == 'rewarded' %}selected{% endif %}>Rewarded</option>
                         <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>Closed</option>
                         <option value="spam" {% if status_filter == 'spam' %}selected{% endif %}>Spam</option>
                     </select>
@@ -50,21 +49,20 @@
                     <table class="table table-hover">
                         <thead class="table-dark">
                             <tr>
-                                <th>ID</th>
+                                <th>Reference</th>
                                 <th>Type</th>
                                 <th>Title</th>
-                                <th>User Type</th>
+                                <th>Reporter</th>
                                 <th>Error Code</th>
                                 <th>Submitted</th>
                                 <th>Status</th>
-                                <th>Reward</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for report in reports %}
                             <tr>
-                                <td><strong>#{{ report.id }}</strong></td>
+                                <td><code>{{ report_ref_for(report.id)[:12] }}...</code></td>
                                 <td>
                                     <span class="badge
                                         {% if report.report_type == 'bug' %}bg-danger
@@ -75,12 +73,7 @@
                                 </td>
                                 <td>{{ report.title }}</td>
                                 <td>
-                                    <span class="badge
-                                        {% if report.user_type == 'student' %}bg-info
-                                        {% elif report.user_type == 'teacher' %}bg-warning text-dark
-                                        {% else %}bg-secondary{% endif %}">
-                                        {{ report.user_type|title }}
-                                    </span>
+                                    <span class="badge bg-warning text-dark">Teacher</span>
                                 </td>
                                 <td>
                                     {% if report.error_code %}
@@ -100,21 +93,13 @@
                                     <span class="badge
                                         {% if report.status == 'new' %}bg-primary
                                         {% elif report.status == 'reviewed' %}bg-info
-                                        {% elif report.status == 'rewarded' %}bg-success
                                         {% elif report.status == 'closed' %}bg-secondary
                                         {% else %}bg-warning text-dark{% endif %}">
                                         {{ report.status|title }}
                                     </span>
                                 </td>
                                 <td>
-                                    {% if report.reward_amount and report.reward_amount > 0 %}
-                                        <span class="text-success fw-bold">${{ "%.2f"|format(report.reward_amount) }}</span>
-                                    {% else %}
-                                        <span class="text-muted">—</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <a href="{{ url_for('sysadmin.view_user_report', report_id=report.id) }}"
+                                    <a href="{{ url_for('sysadmin.view_user_report', report_ref=report_ref_for(report.id)) }}"
                                        class="btn btn-sm btn-primary">
                                         <span class="material-symbols-outlined">visibility</span> View
                                     </a>
