@@ -53,9 +53,9 @@
     </div>
 
     <script>
-        function getTeacherId() {
+        function getTeacherPublicId() {
             const urlParams = new URLSearchParams(window.location.search);
-            return urlParams.get('teacher_id');
+            return urlParams.get('teacher');
         }
 
         function getTimeElapsed(isoString) {
@@ -133,10 +133,12 @@
         }
 
         function fetchActivePasses() {
-            const teacherId = getTeacherId();
-            const url = teacherId
-                ? `/api/hall-pass/verification/active?teacher_id=${teacherId}`
-                : '/api/hall-pass/verification/active';
+            const teacherPublicId = getTeacherPublicId();
+            if (!teacherPublicId) {
+                console.error('Missing teacher parameter for verification display');
+                return;
+            }
+            const url = `/api/hall-pass/verification/active?teacher=${encodeURIComponent(teacherPublicId)}`;
 
             fetch(url)
                 .then(response => response.json())

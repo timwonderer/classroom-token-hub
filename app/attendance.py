@@ -292,7 +292,7 @@ def get_all_block_statuses(student, join_code=None):
         duration = calculate_unpaid_attendance_seconds(student.id, blk, last_payroll_time, join_code=join_code)
 
         # Use block-specific payroll settings (fallback handled in helper)
-        rate_per_second = get_pay_rate_for_block(block_original, teacher_id=teacher_id)
+        rate_per_second = get_pay_rate_for_block(block_original, teacher_id=teacher_id, join_code=join_code)
         projected_pay = duration * rate_per_second
 
         # Get latest relevant hall pass for this period

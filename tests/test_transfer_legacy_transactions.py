@@ -11,7 +11,7 @@ not count toward balances in a class-scoped student session.
 
 from datetime import datetime, timezone
 from werkzeug.security import generate_password_hash
-from app.models import Student, Admin, Transaction, TeacherBlock, TransactionStatus
+from app.models import Student, Admin, Transaction, TeacherBlock, ClassEconomy, TransactionStatus
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
 
@@ -48,6 +48,16 @@ def setup_student_with_legacy_transactions(client):
 
 
     join_code = "MATH1A"
+    
+    # Create ClassEconomy first for FK constraint
+    economy = ClassEconomy(
+        join_code=join_code,
+        display_name='Math Period 1A',
+        status='active',
+        created_by_admin_id=teacher.id
+    )
+    db.session.add(economy)
+    db.session.flush()
     
     # Create TeacherBlock entry (claimed seat)
     seat = TeacherBlock(
@@ -87,7 +97,7 @@ def setup_student_with_legacy_transactions(client):
         join_code=join_code,
         amount=50.0,
         account_type='checking',
-        status=TransactionStatus.PENDING,  # PENDING so it gets settled
+        status=TransactionStatus.PENDING,
         type='Deposit',
         description='Additional deposit'
     )
@@ -102,8 +112,8 @@ def setup_student_with_legacy_transactions(client):
     }
 
 
-def test_transfer_uses_only_join_code_scoped_balance(client, setup_student_with_legacy_transactions):
-    """Transfer should use only join_code-scoped balance (legacy rows ignored)."""
+def test_transfer_with_legacy_transactions(client, setup_student_with_legacy_transactions):
+    """Test transfer succeeds when amount is within join_code-scoped balance."""
     data = setup_student_with_legacy_transactions
     student = data['student']
     join_code = data['join_code']
@@ -114,12 +124,12 @@ def test_transfer_uses_only_join_code_scoped_balance(client, setup_student_with_
         sess['current_join_code'] = join_code
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
     
-    # Student has $50 join_code-scoped checking ($100 legacy row is ignored)
-    # Try to transfer exactly $50 from checking to savings
+    # Student has only $50 available in this class economy.
+    # Legacy NULL join_code balance must not be used.
     response = client.post('/student/transfer', data={
         'from_account': 'checking',
         'to_account': 'savings',
-        'amount': '50.00',
+        'amount': '25.00',
         'passphrase': 'alice_pass'
     }, follow_redirects=False)
     
@@ -141,11 +151,11 @@ def test_transfer_uses_only_join_code_scoped_balance(client, setup_student_with_
     deposit = next((tx for tx in transactions if tx.amount > 0), None)
     
     assert withdrawal is not None
-    assert withdrawal.amount == -50.0
+    assert withdrawal.amount == -25.0
     assert withdrawal.account_type == 'checking'
     
     assert deposit is not None
-    assert deposit.amount == 50.0
+    assert deposit.amount == 25.0
     assert deposit.account_type == 'savings'
 
 
@@ -175,8 +185,8 @@ def test_insufficient_funds_with_only_new_transactions(client, setup_student_wit
     assert b'Insufficient checking funds' in response.data
 
 
-def test_transfer_does_not_include_legacy_null_join_code_balance(client, setup_student_with_legacy_transactions):
-    """Legacy NULL-join_code balance should not be spendable in class context."""
+def test_transfer_excludes_legacy_balance_without_join_code(client, setup_student_with_legacy_transactions):
+    """Test that legacy NULL join_code balances are excluded from transfer checks."""
     data = setup_student_with_legacy_transactions
     student = data['student']
     join_code = data['join_code']
@@ -187,7 +197,7 @@ def test_transfer_does_not_include_legacy_null_join_code_balance(client, setup_s
         sess['current_join_code'] = join_code
         sess['login_time'] = datetime.now(timezone.utc).isoformat()
     
-    # Try to transfer $150 (legacy $100 + new $50). Should fail now.
+    # Transfer exceeds join_code-scoped $50 balance, so it must be rejected.
     response = client.post('/student/transfer', data={
         'from_account': 'checking',
         'to_account': 'savings',

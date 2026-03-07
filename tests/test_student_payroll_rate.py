@@ -2,12 +2,17 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from app.extensions import db
-from app.models import Admin, PayrollSettings, Student, StudentTeacher, TeacherBlock
+from app.models import Admin, PayrollSettings, Student, StudentTeacher, TeacherBlock, ClassEconomy
 
 
 def test_student_payroll_uses_teacher_block_pay_rate(client):
     teacher = Admin(username="teacher_payrate_scope", totp_secret="secret")
     db.session.add(teacher)
+    db.session.flush()
+
+    # Create ClassEconomy to satisfy FK
+    economy = ClassEconomy(join_code="RATEA123", status="active")
+    db.session.add(economy)
     db.session.flush()
 
     student = Student(
@@ -40,6 +45,7 @@ def test_student_payroll_uses_teacher_block_pay_rate(client):
         PayrollSettings(
             teacher_id=teacher.id,
             block="A",
+            join_code="RATEA123",
             pay_rate=Decimal("0.50"),
             settings_mode="simple",
             is_active=True,

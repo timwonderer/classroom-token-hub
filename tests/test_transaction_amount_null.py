@@ -7,7 +7,7 @@ when a transaction has a NULL amount value.
 from decimal import Decimal
 from unittest.mock import PropertyMock, patch
 from app import db
-from app.models import Student, Transaction, Admin
+from app.models import Student, Transaction, Admin, ClassEconomy
 
 
 def test_get_total_earnings_defensive_checks(client, app):
@@ -26,6 +26,16 @@ def test_get_total_earnings_defensive_checks(client, app):
         db.session.commit()
         
         join_code = "TEST123"
+        
+        # Create ClassEconomy first for FK constraint
+        economy = ClassEconomy(
+            join_code=join_code,
+            display_name='Test Class',
+            status='active',
+            created_by_admin_id=teacher.id
+        )
+        db.session.add(economy)
+        db.session.flush()
         
         # Create a student
         from app.hash_utils import get_random_salt
@@ -55,13 +65,13 @@ def test_get_total_earnings_defensive_checks(client, app):
         earnings = student.get_total_earnings(join_code=join_code, teacher_id=teacher.id)
         assert earnings == 10.50
         
-        # Test with teacher_id parameter (deprecated path)
+        # Deprecated teacher-only path should not return cross-class aggregates.
         earnings_by_teacher = student.get_total_earnings(teacher_id=teacher.id)
-        assert earnings_by_teacher == 10.50
+        assert earnings_by_teacher == 0.0
         
-        # Test with no parameters (all classes)
+        # Unscoped path should not return cross-class aggregates.
         earnings_all = student.get_total_earnings()
-        assert earnings_all == 10.50
+        assert earnings_all == 0.0
         
         # Add another transaction to verify aggregation still works
         another_tx = Transaction(
@@ -92,6 +102,16 @@ def test_get_total_earnings_with_negative_amounts(client, app):
         db.session.commit()
         
         join_code = "TEST456"
+        
+        # Create ClassEconomy first for FK constraint
+        economy = ClassEconomy(
+            join_code=join_code,
+            display_name='Test Class 2',
+            status='active',
+            created_by_admin_id=teacher.id
+        )
+        db.session.add(economy)
+        db.session.flush()
         
         # Create a student
         from app.hash_utils import get_random_salt
@@ -164,6 +184,16 @@ def test_get_total_earnings_with_zero_amount(client, app):
         
         join_code = "TEST789"
         
+        # Create ClassEconomy first for FK constraint
+        economy = ClassEconomy(
+            join_code=join_code,
+            display_name='Test Class 3',
+            status='active',
+            created_by_admin_id=teacher.id
+        )
+        db.session.add(economy)
+        db.session.flush()
+        
         # Create a student
         from app.hash_utils import get_random_salt
         student = Student(
@@ -222,6 +252,16 @@ def test_get_total_earnings_with_mocked_null_amount(client, app):
         
         join_code = "TEST999"
         
+        # Create ClassEconomy first for FK constraint
+        economy = ClassEconomy(
+            join_code=join_code,
+            display_name='Test Class 4',
+            status='active',
+            created_by_admin_id=teacher.id
+        )
+        db.session.add(economy)
+        db.session.flush()
+        
         # Create a student
         from app.hash_utils import get_random_salt
         student = Student(
@@ -271,11 +311,10 @@ def test_get_total_earnings_with_mocked_null_amount(client, app):
             # Should return 20.00 + 15.00 = 35.00, skipping the NULL amount
             assert earnings == 35.00
             
-            # Test with teacher_id only (deprecated path)
+            # Deprecated teacher-only path should not return cross-class aggregates.
             earnings_by_teacher = student.get_total_earnings(teacher_id=teacher.id)
-            assert earnings_by_teacher == 35.00
+            assert earnings_by_teacher == 0.0
             
-            # Test with no parameters (all classes path)
+            # Unscoped path should not return cross-class aggregates.
             earnings_all = student.get_total_earnings()
-            assert earnings_all == 35.00
-
+            assert earnings_all == 0.0

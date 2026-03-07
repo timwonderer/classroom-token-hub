@@ -26,9 +26,11 @@
 **Description:**
 The `purchase_item` route authorizes purchases by checking `student.checking_balance` (a global property summing funds across all classes) against the item price, instead of using the class-scoped balance calculated earlier.
 
+
 **Why This Violates Financial Invariants:**
 This allows a student with funds in Class A to purchase items in Class B even if they have $0 or negative balance in Class B. The transaction is then recorded in Class B (correctly scoped), driving Class B's ledger into negative territory based on funds that exist only in Class A. This breaks tenant isolation and fund segregation.
 **Worst Case Scenario:**
+
 A student uses funds earned in a high-paying class to drain the economy of a stricter class, effectively counterfeiting currency across tenant boundaries.
 
 **Confidence:** 100%
@@ -141,12 +143,12 @@ A teacher deletes a class by mistake or maliciously to hide embezzlement/fraud, 
 > [!IMPORTANT]
 > Join code is the sole multitenancy boundary of this application. Destruction of join code necessitates the destruction all data scoped under that join code. No global ledger or archival storage is allowed via any route of the application. Any future changes to this design principle must be explicitly written and justified.
 
-**Why was this risk downgraded:** Join code is the sole boundary in which a "Class" is defined. "Teachers" and "Students" are merely tenants within the scope of that boundary. When a join code is deleted, everything derived from that join code ceases to exist. If a financial record is kept without join code, it would be useless since it would be devoid of join code (and therefore the users under that join code). If historic financial record can be traced back to its user without join code, that would render join code a mere facade that does not, in fact, define multitenancy boundary. This behavior is not only appropriate, but necessary to uphold the grounding principle of this application: minimal data retention. This means if a teacher delete the class, they are effectively deleting the join code and everything related to that join code. This application does not have hidden global ledger, but tiny scoped universe wrapped with join code.
+**Why was this risk downgraded:** Join code is the sole boundary in which a "Class" is defined. "Teachers" and "Students" are merely tenants within the scope of that boundary. When a join code is deleted, everything derived from that join code cease to exist. If a financial record is kept without join code, it would be useless since it would be devoid of join code (and therefore the users under that join code). If historic financial record can be traced back to its user without join code, that would render join code a mere facade that does not, in fact, define multitenancy boundary. This behavior is not only appropriate, but necessary to uphold the grounding principle of this application: minimal data retention. This means if a teacher delete the class, they are effectively deleting the join code and everything related to that join code. This application does not have hidden global ledger, but tiny scoped universe wrapped with join code.
 
-**Additional Precaution:** The main concern of this behavior is not, in fact, concealment of malicious activity. Because teachers are constantly making decisions and could suffer from decision fatigue (or just being tired), it is very likely that a teacher could, in theory, accidentally delete the class without the intent to delete the class. Without secondary prompts and explicit confirmation from the teacher, it would be an UX landmine and UI failure. Therefore, a couple of UX designs must be in place:
-
-1. A highly visible modal must open up and clearly state the consequences of such action, preferably with a simple sentence no longer than one line.
+**Additional Precaution:** The main concern of this behavior is not, in fact, concealment of malicious activity. Because teachers are constantly making decisions and could suffer from decision fatigue (or just being tired), it is very likely a teacher could, in theory, accidentally delete the class without the intent to delete the class. Without secondary prompts and explicit confirmation from the teacher, it would be an UX landmine and UI failure. Therefore, a couple of UX designs must be in place:
+1. A highly visible modal must open up and clearly state the consequences of such action, preferably with simple sentence no longer than a line.
 2. A countdown timer of at least 30 seconds must be displayed in the modal. During the 30 second period, the `Yes, I am sure` button is disabled (the `cancel` button is always available). The behavior of the `return` key on this modal should be the same as `cancel`
-3. Once the teacher clicks on `Yes, I am sure`, open a second modal that has the teacher type in *Delete [insert class name here]* in a textbox. Disable copying and pasting within the modal so the teacher must type it in. 
+3. Once the teacher click on `Yes, I am sure`, open a second modal that have the teacher type in *Delete [insert class name here]* in a textbox. Disable copy and pasting within the modal so the teacher must type it in. 
 4. After the positive explicitly typed confirmation, the teacher must click and hold the `Confirm Deletion` button for 10 seconds with visible timer. The `cancel` button is always available and instant. The behavior of the `return` key on this modal should be the same as `cancel`
-5. Once the `Confirm Deletion` is held for 10 seconds, the modal will close and proceed with the `_hard_delete_join_code_scope`
+5. Once the `Confirm Deletion` is held for 10 seconds, the modal will close and proceed with the current deletion workflow.
+

@@ -16,14 +16,31 @@ branch_labels = None
 depends_on = None
 
 
+
+from sqlalchemy.exc import ProgrammingError
+
 def upgrade():
     # Add display_name to admins table
-    with op.batch_alter_table('admins', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('display_name', sa.String(length=100), nullable=True))
+    # NOTE: Commented out because column already exists in production DB and try/except failed to catch DuplicateColumn
+    try:
+        pass
+        # op.add_column('admins', sa.Column('display_name', sa.String(length=100), nullable=True))
+    except ProgrammingError as e:
+        if "already exists" in str(e) or "DuplicateColumn" in str(e):
+             print("Column display_name already exists in admins, skipping.")
+        else:
+             raise e
 
     # Add class_label to teacher_blocks table
-    with op.batch_alter_table('teacher_blocks', schema=None) as batch_op:
-        batch_op.add_column(sa.Column('class_label', sa.String(length=50), nullable=True))
+    # NOTE: Commented out because column already exists
+    try:
+        pass
+        # op.add_column('teacher_blocks', sa.Column('class_label', sa.String(length=50), nullable=True))
+    except ProgrammingError as e:
+        if "already exists" in str(e) or "DuplicateColumn" in str(e):
+             print("Column class_label already exists in teacher_blocks, skipping.")
+        else:
+             raise e
 
 
 def downgrade():

@@ -12,6 +12,7 @@ from app.models import (
 )
 from app.extensions import db
 from app.hash_utils import get_random_salt, hash_username
+from app.models import ClassEconomy, ClassMembership
 
 
 @pytest.fixture
@@ -78,6 +79,27 @@ def setup_multi_teacher_hall_pass_history(client):
     db.session.add(StudentTeacher(student_id=student4.id, admin_id=teacher2.id))
     db.session.commit()
 
+    # Create Class Contexts
+    join_code1 = "CLASS-A"
+    join_code2 = "CLASS-B"
+    join_code3 = "CLASS-C"
+    join_code4 = "CLASS-D"
+    db.session.add_all([
+        ClassEconomy(join_code=join_code1, status="active", created_by_admin_id=teacher1.id),
+        ClassEconomy(join_code=join_code2, status="active", created_by_admin_id=teacher1.id),
+        ClassEconomy(join_code=join_code3, status="active", created_by_admin_id=teacher2.id),
+        ClassEconomy(join_code=join_code4, status="active", created_by_admin_id=teacher2.id),
+        ClassMembership(join_code=join_code1, admin_id=teacher1.id, role="admin", status="active"),
+        ClassMembership(join_code=join_code2, admin_id=teacher1.id, role="admin", status="active"),
+        ClassMembership(join_code=join_code3, admin_id=teacher2.id, role="admin", status="active"),
+        ClassMembership(join_code=join_code4, admin_id=teacher2.id, role="admin", status="active"),
+        ClassMembership(join_code=join_code1, student_id=student1.id, role="student", status="active"),
+        ClassMembership(join_code=join_code2, student_id=student2.id, role="student", status="active"),
+        ClassMembership(join_code=join_code3, student_id=student3.id, role="student", status="active"),
+        ClassMembership(join_code=join_code4, student_id=student4.id, role="student", status="active"),
+    ])
+    db.session.flush()
+
     # Create hall pass history for teacher1's students
     now = datetime.now(timezone.utc)
     
@@ -87,6 +109,7 @@ def setup_multi_teacher_hall_pass_history(client):
         student_id=student1.id,
         reason="Restroom",
         status="returned",
+        join_code=join_code1,
         period="A",
         request_time=now - timedelta(hours=2),
         decision_time=now - timedelta(hours=2) + timedelta(minutes=5),
@@ -98,6 +121,7 @@ def setup_multi_teacher_hall_pass_history(client):
         student_id=student2.id,
         reason="Office",
         status="returned",
+        join_code=join_code2,
         period="B",
         request_time=now - timedelta(hours=1),
         decision_time=now - timedelta(hours=1) + timedelta(minutes=5),
@@ -110,6 +134,7 @@ def setup_multi_teacher_hall_pass_history(client):
         student_id=student3.id,
         reason="Nurse",
         status="returned",
+        join_code=join_code3,
         period="C",
         request_time=now - timedelta(hours=3),
         decision_time=now - timedelta(hours=3) + timedelta(minutes=5),
@@ -121,6 +146,7 @@ def setup_multi_teacher_hall_pass_history(client):
         student_id=student4.id,
         reason="Locker",
         status="returned",
+        join_code=join_code4,
         period="D",
         request_time=now - timedelta(minutes=30),
         decision_time=now - timedelta(minutes=25),
@@ -241,10 +267,10 @@ def test_hall_pass_history_with_shared_student(client, setup_multi_teacher_hall_
     
     response2 = client.get('/api/hall-pass/history')
     json_data2 = response2.get_json()
-    # Teacher2 now has 3 records: Charlie, Diana (their original) + Alice (shared)
-    assert json_data2['total'] == 3
+    # Teacher2 now has 2 records: Charlie, Diana. Alice's pass is in CLASS-A (Teacher1), so Teacher2 shouldn't see it.
+    assert json_data2['total'] == 2
     student_names2 = [record['student_name'] for record in json_data2['records']]
-    assert 'Alice A.' in student_names2
+    assert 'Alice A.' not in student_names2
     assert 'Charlie C.' in student_names2
     assert 'Diana D.' in student_names2
 

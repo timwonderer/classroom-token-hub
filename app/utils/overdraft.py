@@ -34,12 +34,14 @@ def evaluate_overdraft_allowance(student, debit_amount, banking_settings, teache
     return False, shortfall, checking_balance, savings_balance
 
 
-def charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, join_code=None, force=False):
+def charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, join_code=None, force=False, actor_membership_id=None):
     """
     Charge an overdraft fee if enabled.
 
     Args:
         force: Charge fee even if balance is non-negative (declined transaction).
+        actor_membership_id: ClassMembership.id of the admin who triggered the declined
+            transaction, for audit trail purposes.
     """
     if not banking_settings or not banking_settings.overdraft_fee_enabled:
         return False, Decimal('0.00')
@@ -117,7 +119,8 @@ def charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, j
                 f'Overdraft fee (declined transaction balance: ${current_balance:.2f})'
                 if force else
                 f'Overdraft fee (balance: ${current_balance:.2f})'
-            )
+            ),
+            actor_membership_id=actor_membership_id,  # Audit Anchor: who caused the declined tx
         )
         db.session.add(overdraft_fee_tx)
         db.session.flush()

@@ -9,7 +9,7 @@ import pyotp
 from datetime import datetime, timezone
 
 from app import db
-from app.models import Admin, TeacherBlock
+from app.models import Admin, TeacherBlock, ClassEconomy
 from app.hash_utils import get_random_salt, hash_hmac
 
 
@@ -28,6 +28,19 @@ def _create_unclaimed_teacher_block(first_name: str, teacher: Admin, block: str 
     credential = f"{first_name[0].upper()}2025"
     first_half_hash = hash_hmac(credential.encode(), salt)
     
+    join_code = f"TEST{teacher.id}{block}"
+    
+    # Create ClassEconomy for FK constraint if it doesn't exist
+    if not db.session.get(ClassEconomy, join_code):
+        economy = ClassEconomy(
+            join_code=join_code,
+            display_name=f'Test Class {teacher.id}{block}',
+            status='active',
+            created_by_admin_id=teacher.id
+        )
+        db.session.add(economy)
+        db.session.flush()
+    
     teacher_block = TeacherBlock(
         teacher_id=teacher.id,
         block=block,
@@ -37,7 +50,7 @@ def _create_unclaimed_teacher_block(first_name: str, teacher: Admin, block: str 
         dob_sum_hash=None,
         salt=salt,
         first_half_hash=first_half_hash,
-        join_code=f"TEST{teacher.id}{block}",
+        join_code=join_code,
         is_claimed=False,
         student_id=None,  # Explicitly None for unclaimed
     )
@@ -139,6 +152,16 @@ def test_delete_pending_student_already_claimed(client):
     st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
     db.session.add(st)
 
+    # Create ClassEconomy for FK constraint
+    join_code = f"TEST{teacher.id}D"
+    economy = ClassEconomy(
+        join_code=join_code,
+        display_name=f'Test Class {teacher.id}D',
+        status='active',
+        created_by_admin_id=teacher.id
+    )
+    db.session.add(economy)
+    db.session.flush()
 
     # Create a claimed TeacherBlock (simulate a student having claimed it)
     salt = get_random_salt()
