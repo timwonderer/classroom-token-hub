@@ -99,37 +99,73 @@ def get_block_for_join_code(join_code: str):
     return None
 
 
-def get_pay_cycle_days(teacher_id: int, join_code: str) -> int:
+def _get_payroll_settings_for_join_code(teacher_id: int, join_code: str):
+    """Resolve payroll settings for a selected class using join-code-first precedence."""
+    if not teacher_id or not join_code:
+        return None
+
+    # Primary: explicit join-code scoped settings (block-specific preferred over join-code default).
+    payroll_settings = (
+        PayrollSettings.query.filter(
+            PayrollSettings.teacher_id == teacher_id,
+            PayrollSettings.join_code == join_code,
+        )
+        .order_by(desc(PayrollSettings.block.isnot(None)))
+        .first()
+    )
+    if payroll_settings:
+        return payroll_settings
+
+    # Legacy compatibility: block-scoped row when join_code column is not backfilled yet.
     block = get_block_for_join_code(join_code)
-    payroll_settings = None
     if block:
-        payroll_settings = PayrollSettings.query.filter_by(
+        return PayrollSettings.query.filter_by(
             teacher_id=teacher_id,
+            join_code=None,
             block=block
         ).first()
-    if not payroll_settings:
-        payroll_settings = PayrollSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=None
-        ).first()
+
+    return None
+
+
+def get_pay_cycle_days(teacher_id: int, join_code: str) -> int:
+    payroll_settings = _get_payroll_settings_for_join_code(teacher_id, join_code)
     if payroll_settings and payroll_settings.payroll_frequency_days:
         return payroll_settings.payroll_frequency_days
     return 7
 
 
-def get_rent_cycle_days(teacher_id: int, join_code: str) -> int:
+def _get_rent_settings_for_join_code(teacher_id: int, join_code: str):
+    """Resolve rent settings for a selected class using join-code-first precedence."""
+    if not teacher_id or not join_code:
+        return None
+
+    # Primary: explicit join-code scoped settings (block-specific preferred over join-code default).
+    rent_settings = (
+        RentSettings.query.filter(
+            RentSettings.teacher_id == teacher_id,
+            RentSettings.join_code == join_code,
+        )
+        .order_by(desc(RentSettings.block.isnot(None)))
+        .first()
+    )
+    if rent_settings:
+        return rent_settings
+
+    # Legacy compatibility: block-scoped row when join_code column is not backfilled yet.
     block = get_block_for_join_code(join_code)
-    rent_settings = None
     if block:
-        rent_settings = RentSettings.query.filter_by(
+        return RentSettings.query.filter_by(
             teacher_id=teacher_id,
+            join_code=None,
             block=block
         ).first()
-    if not rent_settings:
-        rent_settings = RentSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=None
-        ).first()
+
+    return None
+
+
+def get_rent_cycle_days(teacher_id: int, join_code: str) -> int:
+    rent_settings = _get_rent_settings_for_join_code(teacher_id, join_code)
     if not rent_settings:
         return 30
     frequency_type = rent_settings.frequency_type or 'monthly'

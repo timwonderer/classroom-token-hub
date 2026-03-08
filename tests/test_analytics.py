@@ -13,8 +13,9 @@ from sqlalchemy import event
 from app import db
 from app.models import (
     Admin, Student, StudentBlock, StudentTeacher, TeacherBlock,
-    Transaction, PayrollSettings, AnalyticsAlert
+    Transaction, PayrollSettings, RentSettings, AnalyticsAlert
 )
+from app.routes.analytics import get_pay_cycle_days, get_rent_cycle_days
 from app.utils.analytics_engine import AnalyticsEngine
 from app.hash_utils import get_random_salt, hash_username
 
@@ -62,7 +63,7 @@ def setup_analytics_test(client):
         db.session.add(student)
         db.session.flush()
 
-        db.session.add(StudentTeacher(student_id=student.id, admin_id=admin.id))
+        db.session.add(StudentTeacher(student_id=student.id, teacher_id=admin.id))
         
         # Link student to period
         student_block = StudentBlock(
@@ -355,7 +356,7 @@ def test_block_resolution_falls_back_to_student_block(client, setup_analytics_te
     )
     db.session.add(legacy_student)
     db.session.flush()
-    db.session.add(StudentTeacher(student_id=legacy_student.id, admin_id=admin.id))
+    db.session.add(StudentTeacher(student_id=legacy_student.id, teacher_id=admin.id))
     db.session.add(StudentBlock(
         student_id=legacy_student.id,
         period="C",
@@ -381,7 +382,7 @@ def test_enrolled_students_include_null_join_code_with_matching_block(client, se
     )
     db.session.add(null_student)
     db.session.flush()
-    db.session.add(StudentTeacher(student_id=null_student.id, admin_id=admin.id))
+    db.session.add(StudentTeacher(student_id=null_student.id, teacher_id=admin.id))
     db.session.add(StudentBlock(
         student_id=null_student.id,
         period=block,
@@ -418,3 +419,91 @@ def test_enrolled_students_distinct_uses_id_only(client, setup_analytics_test):
     assert any("select distinct students.id" in query for query in distinct_student_queries)
     assert all("select distinct students.first_name" not in query for query in distinct_student_queries)
     assert all("select distinct students.last_name_hash_by_part" not in query for query in distinct_student_queries)
+
+
+def test_analytics_pay_cycle_prefers_join_code_scoped_settings(client, setup_analytics_test):
+    admin, join_code, block, students, payroll = setup_analytics_test
+
+    db.session.add(PayrollSettings(
+        teacher_id=admin.id,
+        join_code=join_code,
+        block=None,
+        pay_rate=0.25,
+        expected_weekly_hours=5.0,
+        payroll_frequency_days=11,
+        settings_mode='simple',
+        is_active=True
+    ))
+    db.session.add(PayrollSettings(
+        teacher_id=admin.id,
+        join_code=None,
+        block=None,
+        pay_rate=0.25,
+        expected_weekly_hours=5.0,
+        payroll_frequency_days=30,
+        settings_mode='simple',
+        is_active=True
+    ))
+    db.session.commit()
+
+    assert get_pay_cycle_days(admin.id, join_code) == 11
+
+
+def test_analytics_pay_cycle_ignores_teacher_global_for_unscoped_join_code(client, setup_analytics_test):
+    admin, join_code, block, students, payroll = setup_analytics_test
+    join_code2 = "NOGLOBAL1"
+
+    db.session.add(TeacherBlock(
+        teacher_id=admin.id,
+        block="B",
+        first_name="Seat",
+        last_initial="B",
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
+        salt=b'salt',
+        first_half_hash="mock",
+        join_code=join_code2,
+        is_claimed=False
+    ))
+    db.session.add(PayrollSettings(
+        teacher_id=admin.id,
+        join_code=None,
+        block=None,
+        pay_rate=0.25,
+        expected_weekly_hours=5.0,
+        payroll_frequency_days=30,
+        settings_mode='simple',
+        is_active=True
+    ))
+    db.session.commit()
+
+    # Selected-class analytics should default when no class-scoped or class-block setting exists.
+    assert get_pay_cycle_days(admin.id, join_code2) == 7
+
+
+def test_analytics_rent_cycle_ignores_teacher_global_for_unscoped_join_code(client, setup_analytics_test):
+    admin, join_code, block, students, payroll = setup_analytics_test
+    join_code2 = "NORENTG1"
+
+    db.session.add(TeacherBlock(
+        teacher_id=admin.id,
+        block="B",
+        first_name="Seat",
+        last_initial="R",
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
+        salt=b'salt',
+        first_half_hash="mock",
+        join_code=join_code2,
+        is_claimed=False
+    ))
+    db.session.add(RentSettings(
+        teacher_id=admin.id,
+        join_code=None,
+        block=None,
+        frequency_type='weekly'
+    ))
+    db.session.commit()
+
+    # Selected-class analytics should default monthly when no class-scoped or class-block setting exists.
+    assert get_rent_cycle_days(admin.id, join_code2) == 30

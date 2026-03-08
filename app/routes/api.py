@@ -20,7 +20,7 @@ from werkzeug.security import check_password_hash
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
+    Admin, Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
     TapEventReasonCode, HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
     StudentTeacher, TeacherBlock, StudentBlock, StoreItemBlock,
     RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource, _quantize_currency
@@ -1880,14 +1880,65 @@ def rotate_hall_pass_verify_token():
 @api_bp.route('/hall-pass/available-types', methods=['GET'])
 @login_required
 def get_available_hall_pass_types():
-    """Get available pass types for a teacher (endpoint for authenticated student use)"""
-    teacher_id = request.args.get('teacher_id', type=int)
+    """Get available pass types for the current class or public teacher identity."""
+    join_code = (request.args.get('join_code') or '').strip().upper()
+    teacher_public_id = (request.args.get('teacher_public_id') or '').strip()
+    teacher_id = request.args.get('teacher_id', type=int)  # Legacy compatibility only
 
-    if not teacher_id:
-        return jsonify({"status": "error", "message": "teacher_id is required"}), 400
+    resolved_teacher_id = None
+    context = get_current_class_context()
 
-    # Get settings for this teacher
-    settings = HallPassSettings.query.filter_by(teacher_id=teacher_id, block=None).first()
+    if join_code:
+        if context:
+            if context.get('join_code') != join_code:
+                return jsonify({"status": "error", "message": "join_code is out of scope for this session"}), 403
+            resolved_teacher_id = context.get('teacher_id')
+        else:
+            seat_row = TeacherBlock.query.with_entities(TeacherBlock.teacher_id).filter(
+                TeacherBlock.join_code == join_code
+            ).first()
+            if seat_row:
+                resolved_teacher_id = seat_row[0]
+
+    if not resolved_teacher_id and teacher_public_id:
+        teacher = Admin.query.filter_by(teacher_public_id=teacher_public_id).first()
+        if teacher:
+            resolved_teacher_id = teacher.id
+
+    if not resolved_teacher_id and teacher_id:
+        resolved_teacher_id = teacher_id
+
+    if not resolved_teacher_id:
+        return jsonify({
+            "status": "error",
+            "message": "join_code, teacher_public_id, or teacher_id is required"
+        }), 400
+
+    settings = None
+    if join_code:
+        settings = (
+            HallPassSettings.query.filter(
+                HallPassSettings.teacher_id == resolved_teacher_id,
+                HallPassSettings.join_code == join_code,
+            )
+            .order_by(sa.desc(HallPassSettings.block.isnot(None)))
+            .first()
+        )
+        if not settings:
+            block_row = TeacherBlock.query.with_entities(TeacherBlock.block).filter(
+                TeacherBlock.teacher_id == resolved_teacher_id,
+                TeacherBlock.join_code == join_code,
+            ).first()
+            block = block_row[0] if block_row and block_row[0] else None
+            if block:
+                settings = HallPassSettings.query.filter_by(
+                    teacher_id=resolved_teacher_id,
+                    join_code=None,
+                    block=block
+                ).first()
+
+    if not settings:
+        settings = HallPassSettings.query.filter_by(teacher_id=resolved_teacher_id, block=None).first()
 
     if not settings:
         # Return defaults if not configured

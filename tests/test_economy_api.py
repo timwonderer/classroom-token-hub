@@ -11,7 +11,7 @@ expected_weekly_hours from payroll_settings rather than hardcoded values.
 import pytest
 from datetime import datetime, timezone
 from app import db
-from app.models import Admin, PayrollSettings
+from app.models import Admin, PayrollSettings, TeacherBlock
 from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
 
 
@@ -754,3 +754,148 @@ def test_analyze_endpoint_error_does_not_leak_exception_details(client):
     assert 'AttributeError' not in data['message']
     assert 'Exception' not in data['message']
     assert 'Traceback' not in data['message']
+
+
+def test_analyze_block_ignores_teacher_global_payroll_settings(client):
+    """Block-scoped analyze requests must not fall back to teacher-global payroll settings."""
+    admin = Admin(username="globalfallbackanalyze", totp_secret="TESTSECRET123456")
+    db.session.add(admin)
+    db.session.flush()
+
+    db.session.add(PayrollSettings(
+        teacher_id=admin.id,
+        block=None,
+        pay_rate=0.25,
+        expected_weekly_hours=7.0,
+        payroll_frequency_days=7,
+        settings_mode='simple',
+        is_active=True
+    ))
+    db.session.add(TeacherBlock(
+        teacher_id=admin.id,
+        block="A",
+        class_label="A",
+        first_name="Scoped",
+        last_initial="T",
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
+        salt=b'salt',
+        first_half_hash="hash-a",
+        join_code="SCOPEA1",
+        student_id=None,
+        is_claimed=False
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['is_admin'] = True
+        sess['admin_id'] = admin.id
+        sess['is_system_admin'] = False
+        sess['last_activity'] = datetime.now(timezone.utc).isoformat()
+
+    response = client.post('/admin/api/economy/analyze', json={'block': 'A'})
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['status'] == 'error'
+    assert 'configure payroll settings' in data['message'].lower()
+
+
+def test_validate_block_ignores_teacher_global_payroll_settings(client):
+    """Block-scoped validate requests must not fall back to teacher-global payroll settings."""
+    admin = Admin(username="globalfallbackvalidate", totp_secret="TESTSECRET123456")
+    db.session.add(admin)
+    db.session.flush()
+
+    db.session.add(PayrollSettings(
+        teacher_id=admin.id,
+        block=None,
+        pay_rate=0.25,
+        expected_weekly_hours=7.0,
+        payroll_frequency_days=7,
+        settings_mode='simple',
+        is_active=True
+    ))
+    db.session.add(TeacherBlock(
+        teacher_id=admin.id,
+        block="A",
+        class_label="A",
+        first_name="Scoped",
+        last_initial="V",
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
+        salt=b'salt',
+        first_half_hash="hash-v",
+        join_code="SCOPEV1",
+        student_id=None,
+        is_claimed=False
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['is_admin'] = True
+        sess['admin_id'] = admin.id
+        sess['is_system_admin'] = False
+        sess['last_activity'] = datetime.now(timezone.utc).isoformat()
+
+    response = client.post('/admin/api/economy/validate/rent', json={'block': 'A', 'value': 50.0})
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['status'] == 'warning'
+    assert 'configure payroll first' in data['message'].lower()
+
+
+def test_analyze_block_prefers_join_code_scoped_payroll_settings(client):
+    """Join-code-scoped payroll settings should take precedence over legacy block-only rows."""
+    admin = Admin(username="joincodescopewins", totp_secret="TESTSECRET123456")
+    db.session.add(admin)
+    db.session.flush()
+
+    db.session.add(TeacherBlock(
+        teacher_id=admin.id,
+        block="A",
+        class_label="A",
+        first_name="Scoped",
+        last_initial="J",
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
+        salt=b'salt',
+        first_half_hash="hash-j",
+        join_code="JOINA123",
+        student_id=None,
+        is_claimed=False
+    ))
+    # Legacy block-only row: should lose precedence.
+    db.session.add(PayrollSettings(
+        teacher_id=admin.id,
+        join_code=None,
+        block="A",
+        pay_rate=0.25,
+        expected_weekly_hours=5.0,
+        payroll_frequency_days=7,
+        settings_mode='simple',
+        is_active=True
+    ))
+    # Join-code scoped row: should win.
+    db.session.add(PayrollSettings(
+        teacher_id=admin.id,
+        join_code="JOINA123",
+        block=None,
+        pay_rate=0.25,
+        expected_weekly_hours=9.0,
+        payroll_frequency_days=7,
+        settings_mode='simple',
+        is_active=True
+    ))
+    db.session.commit()
+
+    with client.session_transaction() as sess:
+        sess['is_admin'] = True
+        sess['admin_id'] = admin.id
+        sess['is_system_admin'] = False
+        sess['last_activity'] = datetime.now(timezone.utc).isoformat()
+
+    response = client.post('/admin/api/economy/analyze', json={'block': 'A'})
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['status'] == 'success'
+    assert data['cwi_breakdown']['expected_weekly_hours'] == 9.0

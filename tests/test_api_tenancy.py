@@ -8,7 +8,7 @@ import pyotp
 from datetime import datetime, timezone
 
 from app import app, db
-from app.models import Admin, Student, StudentTeacher, TapEvent, TeacherBlock, StudentBlock
+from app.models import Admin, Student, StudentTeacher, TapEvent, TeacherBlock, StudentBlock, HallPassSettings
 from app.hash_utils import get_random_salt, hash_username
 
 
@@ -45,10 +45,10 @@ def _create_student(first_name: str, primary_teacher: Admin = None, linked_teach
     # Add student_teachers links
     if linked_teachers:
         for teacher in linked_teachers:
-            db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+            db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     elif primary_teacher:
         # If no explicit links but has primary, create link
-        db.session.add(StudentTeacher(student_id=student.id, admin_id=primary_teacher.id))
+        db.session.add(StudentTeacher(student_id=student.id, teacher_id=primary_teacher.id))
     
     db.session.commit()
     return student
@@ -100,6 +100,16 @@ def _create_claimed_seat(teacher: Admin, student: Student, join_code: str, block
     db.session.add(seat)
     db.session.commit()
     return seat
+
+
+def _login_student(client, student: Student, join_code: str | None = None):
+    now = datetime.now(timezone.utc).isoformat()
+    with client.session_transaction() as sess:
+        sess["student_id"] = student.id
+        sess["login_time"] = now
+        sess["last_activity"] = now
+        if join_code:
+            sess["current_join_code"] = join_code
 
 
 def test_attendance_history_api_scoped_to_teacher(client):
@@ -461,3 +471,67 @@ def test_admin_block_tap_settings_post_preserves_out_of_scope_join_code_row(clie
         join_code="JOIN_A",
     ).first()
     assert scoped_row is None
+
+
+def test_hall_pass_available_types_accepts_join_code_without_teacher_id(client):
+    teacher, _ = _create_admin("teacher-hall-types")
+    student = _create_student("JoinCodePassTypes", primary_teacher=teacher)
+    _create_claimed_seat(teacher, student, "HALLA1", block="A")
+
+    db.session.add(HallPassSettings(
+        teacher_id=teacher.id,
+        join_code="HALLA1",
+        block=None,
+        pass_types=[
+            {"name": "Bathroom", "enabled": True},
+            {"name": "Office", "enabled": False},
+            {"name": "Nurse", "enabled": True},
+        ],
+    ))
+    db.session.commit()
+
+    _login_student(client, student, join_code="HALLA1")
+    response = client.get("/api/hall-pass/available-types?join_code=HALLA1")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "success"
+    assert payload["pass_types"] == [{"name": "Bathroom"}, {"name": "Nurse"}]
+
+
+def test_hall_pass_available_types_rejects_out_of_scope_join_code(client):
+    teacher, _ = _create_admin("teacher-hall-scope")
+    student = _create_student("JoinCodeScope", primary_teacher=teacher)
+    _create_claimed_seat(teacher, student, "HALLS1", block="A")
+
+    _login_student(client, student, join_code="HALLS1")
+    response = client.get("/api/hall-pass/available-types?join_code=OTHER999")
+
+    assert response.status_code == 403
+    payload = response.get_json()
+    assert payload["status"] == "error"
+
+
+def test_hall_pass_available_types_supports_teacher_public_id(client):
+    teacher, _ = _create_admin("teacher-hall-public")
+    teacher.teacher_public_id = "crisp-otter-leaf"
+    student = _create_student("PublicIdPassTypes", primary_teacher=teacher)
+    _create_claimed_seat(teacher, student, "HALLP1", block="A")
+
+    db.session.add(HallPassSettings(
+        teacher_id=teacher.id,
+        block=None,
+        pass_types=[
+            {"name": "Bathroom", "enabled": True},
+            {"name": "Counselor", "enabled": True},
+        ],
+    ))
+    db.session.commit()
+
+    _login_student(client, student, join_code="HALLP1")
+    response = client.get("/api/hall-pass/available-types?teacher_public_id=crisp-otter-leaf")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["status"] == "success"
+    assert payload["pass_types"] == [{"name": "Bathroom"}, {"name": "Counselor"}]

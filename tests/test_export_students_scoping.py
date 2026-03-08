@@ -25,7 +25,7 @@ def _create_student(first_name: str, teacher: Admin) -> Student:
     )
     db.session.add(student)
     db.session.flush()
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
     return student
 

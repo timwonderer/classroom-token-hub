@@ -155,20 +155,25 @@ class AnalyticsEngine:
     
     def _get_cwi(self) -> float:
         """Calculate current CWI for this class."""
-        # PayrollSettings may be linked by block or teacher_id
-        # Try to find by block first (since block is period identifier)
-        block = self._get_block_for_join_code()
-        payroll_settings = None
-        if block:
-            payroll_settings = PayrollSettings.query.filter_by(
-                teacher_id=self.teacher_id,
-                block=block
-            ).first()
+        # Prefer join-code scoped payroll settings for selected class context.
+        payroll_settings = (
+            PayrollSettings.query.filter(
+                PayrollSettings.teacher_id == self.teacher_id,
+                PayrollSettings.join_code == self.join_code,
+            )
+            .order_by(sa.desc(PayrollSettings.block.isnot(None)))
+            .first()
+        )
+
+        # Legacy compatibility: block-only rows where join_code backfill has not landed.
         if not payroll_settings:
-            payroll_settings = PayrollSettings.query.filter_by(
-                teacher_id=self.teacher_id,
-                block=None
-            ).first()
+            block = self._get_block_for_join_code()
+            if block:
+                payroll_settings = PayrollSettings.query.filter_by(
+                    teacher_id=self.teacher_id,
+                    join_code=None,
+                    block=block
+                ).first()
         
         if not payroll_settings:
             return 0.0
