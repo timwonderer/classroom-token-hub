@@ -65,3 +65,21 @@ Branch: `codex/v2.0`
 1. Continue sysadmin route audit and lower-priority query inversion cleanup.
 2. Clarify archived-economy behavior and complete remaining compatibility cleanup.
 3. Consolidate or supersede stale historical audit notes with cross-links to current SOPs.
+
+## Deferred Main-Branch Feature Reconciliation
+
+Track features present on `origin/main` but not yet intentionally reconciled into `codex/v2.0`. This is separate from v2 stabilization so feature divergence stays visible without obscuring readiness gates.
+
+| Source | Feature / Commit | Classification | Status | Notes |
+|---|---|---|---|---|
+| `origin/main` | `589d6ba7` - economy policy mode and rebalance hardening (`#1077`) | Must evaluate before production | Deferred | Review `app/utils/economy_policy.py`, `app/utils/economy_balance.py`, `tests/test_economy_policy_mode.py`, and related migration/doc changes before deciding whether to port before live testing or after live-test feedback. |
+
+### Reconciliation Workflow
+
+1. Diff `origin/main...codex/v2.0` before each major v2 milestone.
+2. Group unique `origin/main` commits by feature, not by file count.
+3. Classify each as:
+   - must-port before live testing
+   - must-port before production
+   - safe to defer
+4. Record owner, source commit/PR, and merge strategy before implementation starts.
