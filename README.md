@@ -16,6 +16,24 @@ An interactive banking and classroom management platform for teaching students a
 
 ---
 
+## Design Principles
+
+Classroom Token Hub is built around a small set of architectural principles that guide both feature development and operational decisions.
+
+**Minimal Personal Data**  
+The system intentionally stores as little personally identifiable information as possible. Student identities are encrypted at rest, verification data is purged after account setup, and the platform avoids unnecessary linkage to real‑world identity systems.
+
+**Strong Classroom Isolation**  
+Each classroom operates as its own isolated economic environment. Join codes act as the boundary for data access, ensuring that teachers and students only interact with records belonging to their own class context.
+
+**Transparent Economic Systems**  
+All financial activity is logged and auditable within the scope of a classroom. Students can see how balances change over time, reinforcing transparency and helping the platform function as a teaching tool rather than a black box.
+
+**Operational Simplicity**  
+The platform favors simple, reliable technologies and predictable infrastructure. This keeps the system understandable for educators, maintainable for developers, and resilient in real classroom environments where networks, devices, and usage patterns can be unpredictable.
+
+---
+
 ## Features
 
 ### Core Features
@@ -184,23 +202,23 @@ This enables the repo-managed hooks used by the local development workflow, incl
 
 ### For Users
 
-- **[Student Guide](docs/user-guides/student_guide.md)** — How students use the platform
-- **[Teacher Manual](docs/user-guides/teacher_manual.md)** — Comprehensive admin guide
-- **[Sysadmin Manual](docs/user-guides/sysadmin_manual.md)** — System administrator guide
+- **[Student Guide](docs/user-guides/student_guide.md)** for students using the platform
+- **[Teacher Manual](docs/user-guides/teacher_manual.md)** for teacher facilitating the platform
+- **[Sysadmin Manual](docs/user-guides/sysadmin_manual.md)** for local maintainer
 
 ### For Developers
 
-- **[Architecture Guide](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)** — System design and patterns
-- **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)** — Up-to-date database reference
-- **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)** — REST API documentation
-- **[Development Priorities](DEVELOPMENT.md)** — Current priorities, roadmap, and tasks
-- **[Changelog](CHANGELOG.md)** — Version history and notable changes
+- **[Architecture Guide](docs/ARCHITECTURE/ARC-CORE-000_Architecture_Foundation.md)** for complete explanation of system design and patterns
+- **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)** for current database tables and columns
+- **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)** for complete API used by this platform
+- **[Development Priorities](DEVELOPMENT.md)** for current priorities, roadmap, and tasks
+- **[Changelog](CHANGELOG.md)** for most up-to-date version history and notable changes
 
 ### Deployment & Operations
 
-- **[Deployment Guide](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)** — Production deployment instructions
-- **[Operations Guides](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/)** — Operational procedures and troubleshooting
-- **[Contributing Guide](CONTRIBUTING.md)** — How to contribute to the project
+- **[Deployment Guide](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)** used for production deployment
+- **[Operations Guides](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/)** with practical pperational procedures and troubleshooting
+- **[Contributing Guide](CONTRIBUTING.md)** for essential know-hows when contributing to the project
 
 ---
 
@@ -293,7 +311,12 @@ Operational script behavior and arguments are documented in [docs/LOGS/AUDITS/LO
 
 Active development priorities, architectural follow-up work, and operational tasks are tracked in [DEVELOPMENT.md](DEVELOPMENT.md).
 
-This repository is under active maintenance. Current capability and release history are reflected in [CHANGELOG.md](CHANGELOG.md) and the canonical docs under [`docs/`](docs/README.md), rather than a fixed "path to 1.0" milestone.
+This repository is under active maintenance. Current capability and release history are reflected in [CHANGELOG.md](CHANGELOG.md) and the canonical docs under [`docs/`](docs/README.md).
+
+v2.0 is under active development with brand new join-code centric schema design, complete API rework, and with even more privacy invariants and even less PII stored. 
+
+> [!NOTE]
+> v2.0 is on track to begin testing by June 2026. Until then, v1.x remains under active maintenance with occasional feature push.
 
 ---
 
@@ -350,13 +373,15 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 ## Support
 
 **Documentation:** [docs/README.md](docs/README.md)
+
 **Issues:** Use GitHub Issues for bug reports and feature requests
+
 **Security:** Report security issues privately to project maintainers
 
 ---
 
 ## Acknowledgments
 
-Built for educators and students to make learning about finance engaging and practical.
+This project is dedicated to all of the young pentesters who are relentless in testing the stability of the system and validating the invariants embedded in all the features.
 
 ![Last Updated](https://img.shields.io/github/last-commit/timwonderer/classroom-economy?label=last%20updated&color=blue)
