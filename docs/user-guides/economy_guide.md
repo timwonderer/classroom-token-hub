@@ -1,86 +1,196 @@
 ---
 title: Classroom Economy Guide
-description: Teacher-friendly ranges and examples for pricing, rent, insurance, and balance checks.
+description: Teacher-friendly CWI guidance for policy modes, rent, store pricing, insurance, fines, and affordability.
 roles: [teacher]
 ---
 
 # Classroom Economy Guide
 
-This guide helps teachers set prices and fees that keep the classroom economy balanced and motivating. Use it alongside the Economy Health page.
+This guide explains how to use the Classroom Wage Index (CWI), economy policy mode, and the Economy Health page to keep classroom prices and expenses coherent.
 
 ## Quick start
-1. Set payroll first so you have a baseline for weekly earnings.
-2. Note your Classroom Wage Index (CWI).
-3. Use the ranges below to set rent, utilities, store pricing, fines, and insurance.
-4. Do a quick affordability check before you announce changes.
+
+1. Configure payroll so CWI can be calculated.
+2. Open Economy Health and note the current CWI for the class you are reviewing.
+3. Pick an economy policy mode: Tight, Default, or Comfortable.
+4. Use the live tips in rent, store, and insurance settings to compare your values to the active policy.
+5. Run a rebalance review if your current settings no longer match the policy you selected.
 
 ## Key concept: Classroom Wage Index (CWI)
 
 CWI is the expected weekly pay for a student who attends all sessions.
 
-```
-CWI = expected week_total_pay for perfect attendance
+```text
+CWI = expected weekly pay for perfect attendance
 ```
 
-## Recommended ranges (based on CWI)
+The system uses weekly CWI as the baseline for rent, fixed fees, store pricing, insurance, fines, and affordability checks.
 
-Use these ranges as starting points and adjust for your class goals. The ratios below apply to your chosen billing or pricing cycle.
+## Economy policy modes
+
+Policy mode changes the recommendation bands the system uses. It does not rewrite old transactions.
+
+### Tight
+
+Use this when you want more budgeting pressure.
+
+- Higher rent and fee pressure
+- Lower savings target
+- Tighter store and insurance guidance
+
+### Default
+
+Use this for the standard balanced economy.
+
+- Moderate pressure
+- Baseline savings target
+- Balanced pricing bands across the economy
+
+### Comfortable
+
+Use this when you want more breathing room.
+
+- Lower fixed pressure
+- Higher savings target
+- More forgiving store and insurance bands
+
+## Recommended ranges by policy mode
+
+All percentages below are weekly-CWI guidance.
 
 ### Rent
 
-- Recommended range: 2.0x to 2.5x CWI per rent cycle
-- Typical default: 2.25x CWI
+| Policy | Range | Typical midpoint |
+| --- | --- | --- |
+| Tight | 70%-80% | 75% |
+| Default | 60%-75% | 67.5% |
+| Comfortable | 50%-65% | 57.5% |
 
-Example: If CWI is 100, a rent cycle in the 200-250 range is a good starting point.
+The app converts these weekly targets into monthly-equivalent recommendations when your rent is billed monthly.
 
-### Utilities or fixed fees
+### Utilities or recurring fixed fees
 
-- Recommended range: 0.20x to 0.30x CWI per rent cycle
-- Typical default: 0.25x CWI
+| Policy | Range | Typical midpoint |
+| --- | --- | --- |
+| Tight | 7%-12% | 9.5% |
+| Default | 5%-10% | 7.5% |
+| Comfortable | 4%-8% | 6% |
 
-### Store item pricing tiers
+### Store pricing tiers
+
+#### Tight
 
 | Tier | Range |
 | --- | --- |
-| Basic | 0.02x to 0.05x CWI |
-| Standard | 0.05x to 0.10x CWI |
-| Premium | 0.10x to 0.25x CWI |
-| Luxury | 0.25x to 0.50x CWI |
+| Basic | 1%-3% |
+| Standard | 2%-4% |
+| Premium | 4%-12% |
+| Luxury | 12%-24% |
 
-Example with CWI 100: basic items are 2-5, standard 5-10, premium 10-25, luxury 25-50.
+#### Default
+
+| Tier | Range |
+| --- | --- |
+| Basic | 1%-3% |
+| Standard | 2%-5% |
+| Premium | 5%-15% |
+| Luxury | 15%-30% |
+
+#### Comfortable
+
+| Tier | Range |
+| --- | --- |
+| Basic | 2%-4% |
+| Standard | 3%-6% |
+| Premium | 6%-18% |
+| Luxury | 18%-35% |
 
 ### Insurance
 
-- Premiums: 0.05x to 0.12x CWI (default 0.08x)
-- Coverage: 3x to 5x premium (default 4x)
-- Period payout cap: 6x to 10x premium (default 8x)
+#### Premium band
 
-If you set coverage above 5x premium or a cap outside 6x-10x, expect more volatility.
+| Policy | Range | Typical midpoint |
+| --- | --- | --- |
+| Tight | 6%-14% | 9% |
+| Default | 5%-12% | 8% |
+| Comfortable | 4%-10% | 7% |
+
+#### Maximum claim guidance
+
+| Policy | Range vs premium |
+| --- | --- |
+| Tight | 2.5x-4.0x |
+| Default | 3.0x-5.0x |
+| Comfortable | 4.0x-6.0x |
+
+#### Period cap guidance
+
+| Policy | Range vs premium |
+| --- | --- |
+| Tight | 5.0x-8.0x |
+| Default | 6.0x-10.0x |
+| Comfortable | 8.0x-12.0x |
+
+#### Waiting period guidance
+
+| Policy | Recommended range |
+| --- | --- |
+| Tight | 10-14 days |
+| Default | 7 days |
+| Comfortable | 3-7 days |
 
 ### Fines
 
-- Recommended range: 0.05x to 0.15x CWI (default 0.10x)
-
-Try to keep fine sizes consistent so students can predict consequences.
-
-### Savings interest
-
-Savings interest is a motivation tool. Keep it modest.
-
-- APY: 6% to 18%
-- Monthly rate: 0.5% to 1.5% (default about 1%)
+| Policy | Range | Typical midpoint |
+| --- | --- | --- |
+| Tight | 7%-18% | 11% |
+| Default | 5%-15% | 10% |
+| Comfortable | 4%-12% | 8% |
 
 ## Affordability check
 
-A student with perfect attendance should still save around 10% of CWI after core costs.
+A student with perfect attendance should still be able to save money after fixed costs and ordinary spending.
 
-```
-weekly_savings = CWI - (rent / weeks_in_rent_cycle) - utilities - average_store_cost
-weekly_savings >= 0.10 * CWI
+Minimum savings targets:
+
+- Tight: about 5% of weekly CWI
+- Default: about 10% of weekly CWI
+- Comfortable: about 15% of weekly CWI
+
+Conceptually, the system checks:
+
+```text
+weekly_savings = CWI - weekly_rent - weekly_insurance - average_store_cost
 ```
 
-If students are consistently broke, lower rent or fines, reduce utilities, or raise wages.
+If students are consistently broke, lower rent, lower recurring fees, narrow fines, or review whether the selected policy mode matches the classroom pressure you actually want.
+
+## Where the live tips appear
+
+The shared CWI validation tool is available in:
+
+- Rent settings
+- Store item pricing
+- Insurance policy creation and editing
+- Payroll fine configuration
+
+Insurance guidance is the most detailed. It checks:
+
+- premium
+- maximum claim amount
+- maximum payout per period
+- waiting period days
+
+## Rebalancing
+
+Changing policy mode updates the target profile immediately, but your class settings stay where they are until you change them.
+
+Use the rebalance review when you want the system to propose updated values for supported settings.
 
 ## For developers and tooling
 
-For automated tooling and balancing rules, see the [Economy Specification](../DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification.md).
+For authoritative economy rules, see:
+
+- [DOM-ECON-001_Economy_Balance_Checker.md](../DOMAINS/ECONOMY_DESIGN/DOM-ECON-001_Economy_Balance_Checker.md)
+- [DOM-ECON-002_Economy_Specification.md](../DOMAINS/ECONOMY_DESIGN/DOM-ECON-002_Economy_Specification.md)
+- [FEAT-ECON-001_Policy_Mode_and_Rebalancer.md](../FEATURES/ECONOMY/FEAT-ECON-001_Policy_Mode_and_Rebalancer.md)

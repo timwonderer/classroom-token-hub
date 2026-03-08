@@ -7,6 +7,7 @@ store management, insurance, payroll, attendance tracking, and data import/expor
 
 import csv
 import io
+import json
 import os
 import re
 import base64
@@ -57,6 +58,11 @@ from app.utils.helpers import is_safe_url, format_utc_iso, generate_anonymous_co
 from app.utils.store import refund_pending_collective_purchases, process_expired_collective_goals
 from app.utils.join_code import generate_join_code
 from app.utils.economy_balance import EconomyBalanceChecker
+from app.utils.economy_policy import (
+    POLICY_MODES,
+    get_feature_settings_row,
+    normalize_policy_mode,
+)
 from app.utils.claim_credentials import (
     compute_primary_claim_hash,
     match_claim_hash,
@@ -1053,6 +1059,196 @@ def _get_feature_settings(teacher_id, block=None):
 
     # Return defaults if no settings exist
     return FeatureSettings.get_defaults()
+
+
+def _inverse_weekly_amount(value, frequency, custom_frequency_value=None, custom_frequency_unit=None):
+    from app.models import _quantize_currency
+
+    amount = _quantize_currency(value)
+    frequency = (frequency or 'weekly').lower()
+
+    if frequency == 'monthly':
+        return _quantize_currency(amount * Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH)))
+    if frequency == 'weekly':
+        return amount
+    if frequency == 'biweekly':
+        return _quantize_currency(amount * Decimal('2'))
+    if frequency == 'daily':
+        return _quantize_currency(amount / Decimal('7'))
+    if frequency == 'custom':
+        unit = (custom_frequency_unit or 'days').lower()
+        freq_value = Decimal(str(custom_frequency_value or 1))
+        if unit == 'weeks':
+            return _quantize_currency(amount * freq_value)
+        if unit == 'months':
+            return _quantize_currency(amount * Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH)) * freq_value)
+        return _quantize_currency(amount / (Decimal('7') / freq_value))
+    return amount
+
+
+def _format_money(value):
+    if value is None:
+        return "-"
+    return f"${Decimal(str(value)):.2f}"
+
+
+def _format_frequency_label(frequency, custom_frequency_value=None, custom_frequency_unit=None):
+    frequency = (frequency or '').lower()
+    if frequency == 'custom':
+        unit = (custom_frequency_unit or 'days').lower()
+        count = custom_frequency_value or 1
+        return f"every {count} {unit}"
+    if frequency:
+        return frequency
+    return "configured cadence"
+
+
+def _warning_to_alignment(level_value):
+    if level_value == 'critical':
+        return 'significantly_off'
+    if level_value == 'warning':
+        return 'slightly_off'
+    return 'aligned'
+
+
+def _max_alignment(statuses):
+    rank = {'aligned': 0, 'slightly_off': 1, 'significantly_off': 2}
+    return max(statuses, key=lambda item: rank.get(item, 0)) if statuses else 'aligned'
+
+
+def _build_policy_summary(admin_id, selected_block, analysis, rent_settings, insurance_policies, fines):
+    settings_row = get_feature_settings_row(admin_id, block=selected_block, create=False)
+    policy_mode = normalize_policy_mode(getattr(settings_row, 'economy_policy_mode', 'default'))
+
+    categories = []
+
+    def add_category(key, label, warnings):
+        if not warnings:
+            return
+        severity = _max_alignment([_warning_to_alignment(w.level.value) for w in warnings])
+        categories.append({
+            'key': key,
+            'label': label,
+            'status': severity,
+            'warning_count': len(warnings),
+        })
+
+    warnings = analysis.warnings if analysis else []
+    add_category('rent', 'Rent', [w for w in warnings if w.feature == 'Rent'] if rent_settings else [])
+    add_category('insurance', 'Insurance', [w for w in warnings if w.feature.startswith('Insurance:')] if insurance_policies else [])
+    add_category('fine', 'Fees', [w for w in warnings if w.feature.startswith('Fine:')] if fines else [])
+    overall_status = _max_alignment([category['status'] for category in categories])
+
+    return {
+        'settings_row': settings_row,
+        'mode': policy_mode,
+        'profile': POLICY_MODES[policy_mode],
+        'categories': categories,
+        'overall_status': overall_status,
+        'is_aligned': overall_status == 'aligned',
+        'updated_at': getattr(settings_row, 'economy_policy_updated_at', None),
+        'pending_rebalance_json': getattr(settings_row, 'economy_pending_rebalance_json', None),
+    }
+
+
+def _build_rebalance_preview(admin_id, selected_block, checker, cwi, rent_settings, insurance_policies):
+    preview_items = []
+    recommendations = checker._generate_recommendations(cwi, [])
+
+    if rent_settings and rent_settings.is_enabled:
+        recommended_monthly = Decimal(str(recommendations['rent']['recommended']))
+        recommended_weekly = recommended_monthly / Decimal(str(EconomyBalanceChecker.AVERAGE_WEEKS_PER_MONTH))
+        recommended_amount = _inverse_weekly_amount(
+            recommended_weekly,
+            rent_settings.frequency_type,
+            rent_settings.custom_frequency_value,
+            getattr(rent_settings, 'custom_frequency_unit', None),
+        )
+        current_amount = Decimal(str(rent_settings.rent_amount or 0))
+        if current_amount != recommended_amount:
+            preview_items.append({
+                'key': 'rent',
+                'label': 'Rent',
+                'current': f"{_format_money(current_amount)} / {_format_frequency_label(rent_settings.frequency_type, rent_settings.custom_frequency_value, getattr(rent_settings, 'custom_frequency_unit', None))}",
+                'recommended': f"{_format_money(recommended_amount)} / {_format_frequency_label(rent_settings.frequency_type, rent_settings.custom_frequency_value, getattr(rent_settings, 'custom_frequency_unit', None))}",
+                'apply_by_default': True,
+                'change': {
+                    'type': 'rent',
+                    'block': selected_block,
+                    'current_value': str(current_amount),
+                    'new_value': str(recommended_amount),
+                },
+            })
+
+    recommended_insurance_weekly = Decimal(str(recommendations['insurance_premium_weekly']['recommended']))
+    for policy in insurance_policies or []:
+        if not policy.is_active:
+            continue
+        current_premium = Decimal(str(policy.premium or 0))
+        recommended_premium = _inverse_weekly_amount(recommended_insurance_weekly, policy.charge_frequency)
+        if current_premium == recommended_premium:
+            continue
+        preview_items.append({
+            'key': f'insurance_{policy.id}',
+            'label': f'Insurance Premium: {policy.title}',
+            'current': f"{_format_money(current_premium)} / {_format_frequency_label(policy.charge_frequency)}",
+            'recommended': f"{_format_money(recommended_premium)} / {_format_frequency_label(policy.charge_frequency)}",
+            'apply_by_default': True,
+            'change': {
+                'type': 'insurance',
+                'policy_id': policy.id,
+                'current_value': str(current_premium),
+                'new_value': str(recommended_premium),
+                'title': policy.title,
+            },
+        })
+
+    return preview_items
+
+
+def _apply_rebalance_plan(admin_id, settings_row, change_plan, activation_mode):
+    applied_labels = []
+
+    for change in change_plan:
+        change_type = change.get('type')
+        if change_type == 'rent':
+            rent_settings = None
+            if change.get('block'):
+                rent_settings = RentSettings.query.filter_by(
+                    teacher_id=admin_id,
+                    block=change.get('block'),
+                    is_enabled=True,
+                ).first()
+            if not rent_settings:
+                rent_settings = RentSettings.query.filter_by(
+                    teacher_id=admin_id,
+                    block=None,
+                    is_enabled=True,
+                ).first()
+            if rent_settings:
+                rent_settings.rent_amount = Decimal(str(change.get('new_value')))
+                applied_labels.append('Rent')
+        elif change_type == 'insurance':
+            policy = InsurancePolicy.query.filter_by(
+                teacher_id=admin_id,
+                id=change.get('policy_id'),
+                is_active=True,
+            ).first()
+            if policy:
+                policy.premium = Decimal(str(change.get('new_value')))
+                applied_labels.append(f"Insurance: {policy.title}")
+
+    settings_row.economy_pending_rebalance_json = None
+    settings_row.economy_last_rebalanced_at = utc_now()
+    settings_row.economy_last_rebalanced_by = admin_id
+    current_app.logger.info(
+        "Applied economy rebalance for teacher=%s block=%s activation=%s changes=%s",
+        admin_id,
+        settings_row.block,
+        activation_mode,
+        applied_labels,
+    )
+    return applied_labels
 
 
 def _get_or_create_onboarding(teacher_id):
@@ -6526,6 +6722,78 @@ def hall_pass_setup():
 
 # -------------------- ECONOMY HEALTH --------------------
 
+@admin_bp.route('/economy-policy', methods=['POST'])
+@admin_required
+def update_economy_policy():
+    admin_id = session.get('admin_id')
+    selected_block = (request.form.get('block') or '').strip().upper() or None
+    policy_mode = normalize_policy_mode(request.form.get('policy_mode'))
+    settings_row = get_feature_settings_row(admin_id, block=selected_block, create=True)
+    settings_row.economy_policy_mode = policy_mode
+    settings_row.economy_policy_updated_at = utc_now()
+    settings_row.economy_pending_rebalance_json = None
+    db.session.commit()
+    current_app.logger.info(
+        "Economy policy mode changed teacher=%s block=%s mode=%s",
+        admin_id,
+        selected_block,
+        policy_mode,
+    )
+    flash(f"Economy policy updated to {POLICY_MODES[policy_mode]['label']}.", "success")
+    return redirect(url_for('admin.economy_health', block=selected_block, review_rebalance=1))
+
+
+@admin_bp.route('/economy-policy/rebalance', methods=['POST'])
+@admin_required
+def apply_economy_rebalance():
+    admin_id = session.get('admin_id')
+    selected_block = (request.form.get('block') or '').strip().upper() or None
+    activation_mode = (request.form.get('activation_mode') or 'next_payroll').strip().lower()
+    selected_keys = set(request.form.getlist('selected_changes'))
+    preview_payload = request.form.get('preview_payload') or '[]'
+    settings_row = get_feature_settings_row(admin_id, block=selected_block, create=True)
+
+    try:
+        preview_items = json.loads(preview_payload)
+    except json.JSONDecodeError:
+        flash("Rebalance preview expired. Review the recommendations again.", "warning")
+        return redirect(url_for('admin.economy_health', block=selected_block, review_rebalance=1))
+
+    change_plan = [
+        item['change']
+        for item in preview_items
+        if item.get('key') in selected_keys and item.get('change')
+    ]
+
+    if not change_plan:
+        flash("No rebalance changes were selected.", "warning")
+        return redirect(url_for('admin.economy_health', block=selected_block, review_rebalance=1))
+
+    if activation_mode == 'immediate' and request.form.get('confirm_immediate') != 'yes':
+        flash("Confirm the immediate change warning before applying now.", "warning")
+        return redirect(url_for('admin.economy_health', block=selected_block, review_rebalance=1))
+
+    if activation_mode == 'immediate':
+        applied_labels = _apply_rebalance_plan(admin_id, settings_row, change_plan, activation_mode='immediate')
+        db.session.commit()
+        flash(f"Applied economy rebalance now for {len(applied_labels)} setting(s).", "success")
+    else:
+        settings_row.economy_pending_rebalance_json = json.dumps({
+            'activation_mode': 'next_payroll',
+            'changes': change_plan,
+            'scheduled_at': utc_now().isoformat(),
+        })
+        db.session.commit()
+        current_app.logger.info(
+            "Scheduled economy rebalance teacher=%s block=%s changes=%s",
+            admin_id,
+            selected_block,
+            [change.get('type') for change in change_plan],
+        )
+        flash(f"Scheduled economy rebalance for the next payroll run ({len(change_plan)} setting(s)).", "success")
+
+    return redirect(url_for('admin.economy_health', block=selected_block))
+
 @admin_bp.route('/economy-health')
 @admin_required
 def economy_health():
@@ -6653,6 +6921,27 @@ def economy_health():
             warnings_by_level[warning.level.value].append(warning)
             warnings_by_feature.setdefault(warning.feature, []).append(warning)
 
+    policy_summary = _build_policy_summary(
+        admin_id,
+        selected_block,
+        analysis,
+        rent_settings,
+        insurance_policies,
+        fines,
+    )
+    rebalance_preview = []
+    show_rebalance_review = request.args.get('review_rebalance') == '1'
+    if payroll_settings and show_rebalance_review:
+        checker = EconomyBalanceChecker(admin_id, selected_block, policy_mode=policy_summary['mode'])
+        rebalance_preview = _build_rebalance_preview(
+            admin_id,
+            selected_block,
+            checker,
+            cwi_calc.cwi,
+            rent_settings,
+            insurance_policies,
+        )
+
     feature_links = {
         'rent': url_for('admin.rent_settings', settings_block=selected_block),
         'insurance': url_for('admin.insurance_management', settings_block=selected_block),
@@ -6681,6 +6970,11 @@ def economy_health():
         warnings_by_level=warnings_by_level,
         warnings_by_feature=warnings_by_feature,
         recommendations=recommendations,
+        policy_modes=POLICY_MODES,
+        policy_summary=policy_summary,
+        rebalance_preview=rebalance_preview,
+        show_rebalance_review=show_rebalance_review,
+        preview_payload=json.dumps(rebalance_preview),
         feature_links=feature_links,
         payroll_link=url_for('admin.payroll', cwi_block=selected_block),
         banking_link=url_for('admin.banking'),
@@ -6825,10 +7119,37 @@ def run_payroll():
             db.session.add(tx)
             count += 1
 
+        pending_rows = FeatureSettings.query.filter(
+            FeatureSettings.teacher_id == current_admin_id,
+            FeatureSettings.economy_pending_rebalance_json.isnot(None),
+        ).all()
+        scheduled_rebalances_applied = 0
+        for settings_row in pending_rows:
+            try:
+                payload = json.loads(settings_row.economy_pending_rebalance_json or '{}')
+            except json.JSONDecodeError:
+                current_app.logger.warning(
+                    "Skipping invalid pending economy rebalance for teacher=%s block=%s",
+                    current_admin_id,
+                    settings_row.block,
+                )
+                settings_row.economy_pending_rebalance_json = None
+                continue
+
+            changes = payload.get('changes') or []
+            if not changes:
+                settings_row.economy_pending_rebalance_json = None
+                continue
+
+            _apply_rebalance_plan(current_admin_id, settings_row, changes, activation_mode='next_payroll')
+            scheduled_rebalances_applied += 1
+
         db.session.commit()
         current_app.logger.info(f"Payroll complete. Created {count} transactions.")
 
         success_message = f"Payroll complete. Processed {count} payments."
+        if scheduled_rebalances_applied:
+            success_message += f" Activated {scheduled_rebalances_applied} scheduled economy update(s)."
         if is_json:
             return jsonify(status="success", message=success_message), 200
 
@@ -10139,6 +10460,7 @@ def api_economy_validate(feature):
             'max_claim_amount': data.get('max_claim_amount'),
             'max_payout_per_period': data.get('max_payout_per_period'),
             'claim_type': data.get('claim_type'),
+            'waiting_period_days': data.get('waiting_period_days'),
         }
 
         warnings, recommendations, ratio = checker.validate_feature_value(
