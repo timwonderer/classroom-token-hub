@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SEC-CORE-000     | 1.0     | 2026-03-01     | N/A        | Constitutional  |
+|SEC-CORE-000| 1.1 | 2026-03-08 | 1.0 |Constitutional|
 
 ## I. Purpose
 To establish the foundational rules and methodologies for security audits, threat models, incident responses, and vulnerability disclosures across the Classroom Token Hub.

@@ -2,15 +2,25 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SEC-CONT-021     | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SEC-CONT-021| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 **Date:** 2025-12-27
 **Branch:** claude/fix-security-alerts-REJSJ
 
-## Overview
+## I. Purpose
+
+TBD
+## II. Scope
+
+TBD
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Overview
 This document summarizes the resolution of 62 CodeQL security alerts across the Classroom Token Hub codebase.
 
-## Fixed Issues
+## VI. Fixed Issues
 
 ### 1. Clear-text Logging of Sensitive Information (High Priority)  FIXED
 
@@ -75,7 +85,7 @@ This document summarizes the resolution of 62 CodeQL security alerts across the 
 
 ---
 
-## Remaining Alerts (False Positives / Already Mitigated)
+## VII. Remaining Alerts (False Positives / Already Mitigated)
 
 ### 1. URL Redirection from Remote Source (Medium Priority)  REVIEWED
 
@@ -131,7 +141,7 @@ response = Response(resp.iter_content(chunk_size=8192), resp.status_code, respon
 
 ---
 
-## Summary Statistics
+## VIII. Summary Statistics
 
 | Category | Count | Status |
 |----------|-------|--------|
@@ -146,7 +156,7 @@ response = Response(resp.iter_content(chunk_size=8192), resp.status_code, respon
 
 ---
 
-## Testing Recommendations
+## IX. Testing Recommendations
 
 1. **Verify TOTP creation still works** without exposing secrets:
    ```bash
@@ -167,7 +177,7 @@ response = Response(resp.iter_content(chunk_size=8192), resp.status_code, respon
 
 ---
 
-## Security Best Practices Maintained
+## X. Security Best Practices Maintained
 
  All PII (student names) remain encrypted at rest
  All passwords use salted + peppered hashing
@@ -179,7 +189,7 @@ response = Response(resp.iter_content(chunk_size=8192), resp.status_code, respon
 
 ---
 
-## References
+## XI. References
 
 - CodeQL Security Alerts: https://github.com/timwonderer/classroom-economy/security/code-scanning
 - OWASP XSS Prevention: https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
@@ -189,3 +199,5 @@ response = Response(resp.iter_content(chunk_size=8192), resp.status_code, respon
 
 **Reviewed by:** Claude (AI Assistant)
 **Approved by:** [Pending Human Review]
+## XII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| FEAT-CORE-000    | 1.0     | 2026-03-01     | N/A        | Normative       |
+|FEAT-CORE-000| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 ## I. Purpose
 To govern the creation, format, dependencies, and rollout scope of any new user-facing functionality proposed for the application.
@@ -13,7 +13,9 @@ All formal feature proposals targeting additions to UI interfaces, economic para
 ## III. Authority Level
 Authoritative (FEAT-ARC Tier). Must not conflict with any ARC or DOM documents. 
 
-## IV. Feature Specification Requirements
+## IV. Dependencies
+None specified.
+## V. Feature Specification Requirements
 
 ### 1. Mandatory Specification Framework
 Every submitted FEAT specification must clearly define the following structural segments (observed in standard implementations like Hall Pass):
@@ -27,3 +29,5 @@ Every submitted FEAT specification must clearly define the following structural 
 
 ### 2. Constraints
 Features may never define behaviors that permit users to perform actions outside of their designated role-bound scopes. (e.g., A teacher cannot access system administration configurations within a classroom feature.)
+## VI. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

@@ -2,9 +2,19 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-010       | 1.1     | 2026-03-08     | 1.0        | Normative       |
+|SOP-DB-010| 1.2 | 2026-03-08 | 1.1 |Normative|
 
-## Automatic Branch-Based Database Switching
+## I. Purpose
+
+TBD
+## II. Scope
+
+TBD
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Automatic Branch-Based Database Switching
 
 This repository uses branch-based database switching through the shared git hooks.
 
@@ -30,11 +40,11 @@ All other branches may use:
 
 - `postgresql://postgres:postgres@localhost/production_dev`
 
-## How It Works
+## VI. How It Works
 
 When you checkout a branch, the `hooks/post-checkout` hook updates `DATABASE_URL` in `.env` for the branch class it recognizes.
 
-## Manual Switching
+## VII. Manual Switching
 
 ```bash
 # Switch to production_dev (blocked on protected v2 branch)
@@ -47,13 +57,13 @@ When you checkout a branch, the `hooks/post-checkout` hook updates `DATABASE_URL
 ./scripts/switch-db.sh
 ```
 
-## Operator Truth
+## VIII. Operator Truth
 
 - `classroom_economy` is the v2 dev and migration rehearsal database.
 - `classroom_economy_test` is the required PostgreSQL test database.
 - `production_dev` is for non-v2 development branches.
 
-## Setup for Contributors
+## IX. Setup for Contributors
 
 1. Run `./scripts/setup-hooks.sh`.
 2. Checkout your branch.
@@ -64,7 +74,7 @@ When you checkout a branch, the `hooks/post-checkout` hook updates `DATABASE_URL
 export DATABASE_URL=<team-test-db-url>
 ```
 
-## Troubleshooting
+## X. Troubleshooting
 
 If automatic switching is not working:
 
@@ -73,3 +83,5 @@ If automatic switching is not working:
 3. Verify the hook is executable: `chmod +x hooks/post-checkout`
 4. Use `./scripts/switch-db.sh` manually for the dev database
 5. Set the test database explicitly in the shell before running pytest
+## XI. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

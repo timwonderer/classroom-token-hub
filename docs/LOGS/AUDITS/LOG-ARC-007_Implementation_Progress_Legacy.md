@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-ARC-007      | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-ARC-007| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 ## Overview
 This document tracks the implementation of the new Issue Resolution & Escalation system for student help and support, replacing the previous simple bug reporting system with a structured, teacher-mediated issue resolution workflow.

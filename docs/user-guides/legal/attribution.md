@@ -18,7 +18,7 @@ It is built on the work of many open-source contributors and services, whose eff
 
 ---
 
-## Purpose
+## I. Purpose
 
 **Classroom Token Hub** was created to fill a gap in educational technology: a free, transparent, and privacy-respecting platform for teaching financial literacy through hands-on classroom banking simulations.
 

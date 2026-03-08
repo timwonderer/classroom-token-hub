@@ -2,13 +2,23 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-ECON-001     | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|DOM-ECON-001| 1.1 | 2026-03-08 | 1.0 |Normative|
 
-## Overview
+## I. Purpose
+
+TBD
+## II. Scope
+
+TBD
+## III. Authority Level
+Constitutional. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Overview
 
 The Economy Balance Checker is a centralized system that validates all economy settings against the **Classroom Wage Index (CWI)** per the AGENTS financial setup specification.
 
-## What is CWI?
+## VI. What is CWI?
 
 **CWI (Classroom Wage Index)** is the expected weekly income for a student with perfect attendance. All economy features (rent, insurance, fines, store items) must scale proportionally from CWI to maintain balance.
 
@@ -23,7 +33,7 @@ Teachers must specify their **expected weekly hours** (or minutes) in payroll se
 
 This field is stored in `PayrollSettings.expected_weekly_hours` (default: 5.0 hours).
 
-## Components
+## VII. Components
 
 ### 1. Backend Utility (`app/utils/economy_balance.py`)
 
@@ -233,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 ```
 
-## Integrated Pages
+## VIII. Integrated Pages
 
 The balance checker is currently integrated into:
 
@@ -269,7 +279,7 @@ The balance checker is currently integrated into:
    - Ensures fines are meaningful but not excessive
    - Global: Same fine amounts across all blocks
 
-## Budget Survival Test
+## IX. Budget Survival Test
 
 The system performs a "Budget Survival Test" to ensure students can:
 
@@ -280,13 +290,13 @@ The system performs a "Budget Survival Test" to ensure students can:
 
 If this test fails, teachers receive a **CRITICAL** warning.
 
-## Warning Levels
+## X. Warning Levels
 
 - **INFO**: Setting is balanced and within recommended range
 - **WARNING**: Setting deviates from recommended range (15-30%)
 - **CRITICAL**: Setting deviates significantly (>30%) or fails budget test
 
-## Customization
+## XI. Customization
 
 ### Adjusting Ratios
 
@@ -317,7 +327,7 @@ class EconomyBalanceChecker:
     MAJOR_DEVIATION_THRESHOLD = 0.30  # 30%
 ```
 
-## Future Enhancements
+## XII. Future Enhancements
 
 1. **Onboarding Integration**: Add CWI calculator to teacher onboarding
 2. **Dashboard Widget**: Show overall economy health on admin dashboard
@@ -326,7 +336,7 @@ class EconomyBalanceChecker:
 5. **Utilities Feature**: Add utilities feature (not yet implemented)
 6. **Batch Validation**: Validate all settings at once
 
-## Testing
+## XIII. Testing
 
 To test the balance checker:
 
@@ -335,7 +345,7 @@ To test the balance checker:
 3. Adjust values and observe real-time warnings
 4. Check that recommendations update dynamically
 
-## Troubleshooting
+## XIV. Troubleshooting
 
 **Issue: "Payroll not configured yet" message**
 
@@ -374,7 +384,7 @@ To test the balance checker:
 - **Fix**: Updated template to pass current block parameter
 - **Action**: Update to latest version
 
-## Technical Notes
+## XV. Technical Notes
 
 - CWI is calculated weekly, regardless of payroll frequency
 - Pay rates are stored as **per-minute** in the database
@@ -421,10 +431,12 @@ economyChecker.analyzeEconomy(expectedHours, currentBlock).then(analysis => {
 - This is by design since these features are not block-scoped in pricing
 - Teachers should ensure consistent pay rates if using shared pricing across blocks
 
-## References
+## XVI. References
 
 - AGENTS financial setup specification: `/AGENTS financial setup.md`
 - Original feature request: [Add economy balance checker]
 - Backend utility: `app/utils/economy_balance.py`
 - Frontend module: `static/js/economy-balance.js`
 - API endpoints: `app/routes/admin.py`
+## XVII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

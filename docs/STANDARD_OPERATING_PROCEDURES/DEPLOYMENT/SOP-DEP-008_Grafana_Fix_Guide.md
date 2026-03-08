@@ -2,13 +2,23 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-008      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DEP-008| 1.1 | 2026-03-08 | 1.0 |Normative|
 
-## Problem
+## I. Purpose
+
+TBD
+## II. Scope
+
+TBD
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Problem
 
 Clicking the Grafana link in the system admin dashboard results in "connection refused" errors with infinite redirect loops.
 
-## Root Cause
+## VI. Root Cause
 
 **Nginx Configuration Issue**: The `proxy_pass` directive has a trailing slash that strips the URL path:
 
@@ -19,7 +29,7 @@ proxy_pass http://127.0.0.1:3000/;
 
 Grafana is configured to serve from subpath `/sysadmin/grafana/` (via `serve_from_sub_path = true`), but Nginx removes this path when proxying, causing Grafana to redirect back, creating an infinite loop.
 
-## Solution: Dual-Layer Approach (Best Practice)
+## VII. Solution: Dual-Layer Approach (Best Practice)
 
 This branch implements **both solutions** for maximum reliability:
 
@@ -104,7 +114,7 @@ If not set, defaults to `http://localhost:3000`.
 4. Flask proxies request to Grafana service
 5. Response flows back through Flask to browser
 
-## Quick Reference
+## VIII. Quick Reference
 
 ### Deploy Flask Proxy (Immediate Fix)
 ```bash
@@ -130,7 +140,7 @@ sudo nano /etc/nginx/sites-available/default
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-## Comparison
+## IX. Comparison
 
 | Feature | Nginx Fix | Flask Proxy | **Both (Recommended)** |
 |---------|-----------|-------------|------------------------|
@@ -140,7 +150,7 @@ sudo nginx -t && sudo systemctl reload nginx
 | **Maintenance** | One config change | Zero config | One config change |
 | **Recommended For** | Production only | Dev/Quick fix |  **All scenarios** |
 
-## Testing
+## X. Testing
 
 After implementing either solution, test by:
 
@@ -150,19 +160,19 @@ After implementing either solution, test by:
 4. Log out from sysadmin dashboard
 5. Try accessing Grafana directly - should redirect to login
 
-## Files Changed (Flask Proxy Solution)
+## XI. Files Changed (Flask Proxy Solution)
 
 - `app/routes/system_admin.py`: Added `grafana_proxy()` function
 - `requirements.txt`: Added `requests==2.32.3`
 - `../CHANGELOG.md`: Documented fix
 
-## Additional Notes
+## XII. Additional Notes
 
 - The Flask `auth-check` endpoint at `/sysadmin/grafana/auth-check` is rate-limit exempt
 - Session cookies use `SESSION_COOKIE_PATH="/"` for proper sharing
 - Grafana configuration has `serve_from_sub_path = true` enabled
 
-## Troubleshooting
+## XIII. Troubleshooting
 
 **Still seeing redirects?**
 
@@ -181,8 +191,10 @@ After implementing either solution, test by:
 - Check session cookies in browser DevTools
 - Ensure `/sysadmin/auth-check` endpoint returns 200
 
-## References
+## XIV. References
 
 - Nginx config: `codex/fix-grafana-infinite-redirect` branch → `nginx settings.txt`
 - Grafana config: `codex/fix-grafana-infinite-redirect` branch → `grafana settings.txt`
 - Flask implementation: This branch → `app/routes/system_admin.py`
+## XV. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

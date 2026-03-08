@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SEC-INC-013      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SEC-INC-013| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 **Severity:** P0 CRITICAL (Originally)
 **Date Identified:** 2025-11-29

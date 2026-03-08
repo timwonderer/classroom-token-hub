@@ -3,26 +3,33 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-005      | 1.1     | 2026-03-08     | 1.0        | Constitutional  |
+|ARC-OPS-005| 1.2 | 2026-03-08 | 1.1 |Constitutional|
 
 ## I. Purpose
 
 This document captures the current v2.0 API contract with emphasis on class scoping, public teacher identity, and join-code authority.
 
-## II. Authentication Classes
+## II. Scope
+
+TBD
+## III. Authority Level
+Constitutional. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Authentication Classes
 
 - **Public**: No authenticated session required
 - **Student**: Student session required
 - **Admin**: Teacher/admin session required
 - **System Admin**: System-admin session required
 
-## III. Runtime Contract Rules
+## VI. Runtime Contract Rules
 
 - `current_join_code` is the active class context for session-based teacher and student flows.
 - Class-scoped admin and student APIs are membership-gated, not `teacher_id`-gated.
 - Public teacher references must use `teacher_public_id` / `Admin.public_id`, not numeric teacher IDs.
 
-## IV. Key Public Endpoints
+## VII. Key Public Endpoints
 
 ### `GET /api/hall-pass/verification/active`
 
@@ -39,7 +46,7 @@ This document captures the current v2.0 API contract with emphasis on class scop
 - **Auth**: Public
 - **Purpose**: Set timezone in session for localized rendering
 
-## V. Key Student Endpoints
+## VIII. Key Student Endpoints
 
 ### `POST /api/purchase-item`
 
@@ -75,7 +82,7 @@ This document captures the current v2.0 API contract with emphasis on class scop
   - no numeric teacher ID is required for the intended path
   - student sessions reject out-of-scope join codes
 
-## VI. Key Admin Endpoints
+## IX. Key Admin Endpoints
 
 ### `POST /api/approve-redemption`
 
@@ -120,7 +127,7 @@ This document captures the current v2.0 API contract with emphasis on class scop
   - writes are constrained to admin-owned class scope
   - out-of-scope `StudentBlock` rows are ignored rather than mutated
 
-## VII. Admin HTML Route Behaviors with API Significance
+## X. Admin HTML Route Behaviors with API Significance
 
 These are not pure JSON APIs but define important v2 class contracts:
 
@@ -135,7 +142,9 @@ These are not pure JSON APIs but define important v2 class contracts:
 - `/admin/issues`
   - current issue queue respects selected authorized class
 
-## VIII. Transitional Notes
+## XI. Transitional Notes
 
 - Some older capability-token surfaces still exist, including `hall_pass_verify_token`, but public teacher identity for current verification flows is centered on `teacher_public_id`.
 - Compatibility aliases and legacy parameters may still exist in parts of the codebase, but they are not the intended v2 contract for new behavior or documentation.
+## XII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

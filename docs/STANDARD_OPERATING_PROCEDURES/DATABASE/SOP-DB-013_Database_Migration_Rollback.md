@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-013       | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DB-013| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 ## I. Purpose
 To define the strict protocols governing the downgrade of Alembic database migrations.
@@ -29,3 +29,5 @@ Prior to any downgrade in production, a fresh pg_dump backup must be captured fr
 ## VII. Data Validation
 - Post-downgrade, cross-check total user counts to ensure no orphaned rows were inadvertently wiped (unless such drop was intended).
 - Re-run `flask db current` to verify successful reversion.
+## VIII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

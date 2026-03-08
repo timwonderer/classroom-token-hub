@@ -2,14 +2,24 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-001      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|ARC-OPS-001| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 This document defines the **architecture** for transaction-based insurance reimbursement (claim type: `transaction_monetary` or of similar type).
 
 It focuses on **specification**, **invariants**, and **system boundaries** so the implementation remains correct under manual review, retries, and future feature growth.
 
 ---
-## 1. Definitions
+## I. Purpose
+
+TBD
+## II. Scope
+
+TBD
+## III. Authority Level
+Constitutional. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Definitions
 
 ### 1.1 Core Objects
 
@@ -27,7 +37,7 @@ It does not define behavior for:
 - `legacy_monetary`
 
 ---
-## 2. Architectural Goals
+## VI. Architectural Goals
 
 1. **Ledger Integrity**: All money movement is represented as transactions.
 2. **Determinism**: For a given transaction + policy state, eligibility and payout amount are deterministic.
@@ -36,7 +46,7 @@ It does not define behavior for:
 5. **Explainability**: Every decision is traceable to rules (system + teacher + policy).
 
 ---
-## 3. System Components
+## VII. System Components
 
 ### 3.1 Ledger (Transactions)
 The ledger is the sole authority on spending and payouts.
@@ -74,7 +84,7 @@ Responsibilities:
 - Enforce 1:1 transaction→claim.
 - Store decision state (pending/approved/paid/rejected).
 
-## 4. Data Contracts
+## VIII. Data Contracts
 
 ### 4.1 Transaction Classification Contract
 
@@ -107,7 +117,7 @@ Every reimbursement transaction must reference the source debit transaction:
 This enables idempotency and audit.
 
 ---
-## 5. Non-Negotiable Invariants
+## IX. Non-Negotiable Invariants
 
 ### INV-1: Ledger-Only Money Movement
 No balances may be changed directly.
@@ -172,7 +182,7 @@ The same eligibility logic must govern:
 No duplicated eligibility logic in templates/controllers.
 
 ---
-## 6. End-to-End Flows
+## X. End-to-End Flows
 
 ### 6.1 Manual (Teacher Approval)
 
@@ -186,7 +196,7 @@ No duplicated eligibility logic in templates/controllers.
    - mark claim paid
 
 ---
-## 7. Eligibility Model (Layered)
+## XI. Eligibility Model (Layered)
 
 Eligibility is the conjunction of:
 
@@ -212,7 +222,7 @@ Eligibility is the conjunction of:
 If any layer fails, the transaction is not claimable.
 
 ---
-## 8. Observability & Debugging Requirements
+## XII. Observability & Debugging Requirements
 
 Every skipped transaction must produce a single primary reason code:
 
@@ -233,7 +243,7 @@ Every skipped transaction must produce a single primary reason code:
 Admin tools must allow filtering by reason.
 
 ---
-## 9. Backfill & Migration Notes
+## XIII. Backfill & Migration Notes
 
 Transaction classification must be backfilled before enabling automation.
 
@@ -241,7 +251,7 @@ Transaction classification must be backfilled before enabling automation.
 - Unclassified transactions remain ineligible.
 
 ---
-## 10. Security & Abuse Resistance
+## XIV. Security & Abuse Resistance
 
 - Students cannot claim transactions they did not generate.
 - Students cannot claim the same transaction twice.
@@ -250,3 +260,5 @@ Transaction classification must be backfilled before enabling automation.
 
 ---
 # End of Architecture Specification
+## XV. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

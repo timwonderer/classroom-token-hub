@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-ARC-002      | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-ARC-002| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 **Branch**: `claude/fix-multi-tenancy-leaks-015yz9WmT5SE8EFgAzU8Au32`
 **Date**: 2025-11-29

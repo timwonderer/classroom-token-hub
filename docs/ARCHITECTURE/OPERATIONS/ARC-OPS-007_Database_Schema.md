@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-007      | 1.2     | 2026-03-08     | 1.1        | Constitutional  |
+|ARC-OPS-007| 1.3 | 2026-03-08 | 1.2 |Constitutional|
 
 ## I. Purpose
 
@@ -13,7 +13,11 @@ This document summarizes the current database contract for v2.0 live-test work, 
 
 This document covers the runtime-significant models and tables used to enforce class isolation, teacher identity, and core student/admin workflows.
 
-## III. Core Authority Model
+## III. Authority Level
+Constitutional. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Core Authority Model
 
 ### Class Boundary
 
@@ -26,7 +30,7 @@ This document covers the runtime-significant models and tables used to enforce c
 
 The schema still contains compatibility fields and aliases used to ease migration or preserve older call sites. These are transitional and must not be treated as the intended v2 runtime contract.
 
-## IV. Key Tables
+## VI. Key Tables
 
 ### `class_economies`
 
@@ -131,12 +135,12 @@ These tables rely on `join_code` as their class boundary and must not be treated
 
 Many of these tables also carry transitional fields such as `teacher_id`, `seat_id`, or historical block references. Those fields may remain useful for migration or reporting, but `join_code` is the class-isolation authority for current v2 runtime behavior.
 
-## V. Migration Notes
+## VII. Migration Notes
 
 - `a11213ca4afb_harden_class_economy_membership_checks.py` hardens `ClassEconomy` / `ClassMembership` enum and check-constraint behavior.
 - `e8f1a2b3c4d5_merge_remaining_v2_heads.py` resolves the remaining active v2 migration heads in repo.
 
-## VI. Current Transitional Fields and Aliases
+## VIII. Current Transitional Fields and Aliases
 
 These remain intentionally present but should not be used to define new v2 behavior:
 
@@ -146,10 +150,12 @@ These remain intentionally present but should not be used to define new v2 behav
 - `TeacherBlock.dob_sum` compatibility alias for `dob_sum_hash`
 - legacy plaintext `username` fields on `teachers` and `system_admins`
 
-## VII. v2 Contract Summary
+## IX. v2 Contract Summary
 
 - `ClassEconomy` + `ClassMembership` define class scope.
 - `student_teachers` defines teacher ownership.
 - `current_join_code` defines selected class context in session.
 - Public teacher identity is `teacher_public_id` / `public_id`, not numeric teacher ID.
 - Compatibility aliases remain in schema and ORM, but they are transitional.
+## X. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

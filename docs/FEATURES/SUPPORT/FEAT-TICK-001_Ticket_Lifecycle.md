@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| FEAT-TICK-001    | 1.0     | 2026-03-07     | N/A        | Normative       |
+|FEAT-TICK-001| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 ## I. Purpose
 To define the required lifecycle, role boundaries, and integrity constraints for student support tickets and system bug escalation.

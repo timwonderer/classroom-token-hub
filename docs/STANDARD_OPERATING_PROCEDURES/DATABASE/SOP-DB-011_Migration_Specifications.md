@@ -2,14 +2,24 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-011       | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DB-011| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 > [!IMPORTANT]
 > This is the **Single Source of Truth** for all database migration policies, best practices, and workflows in the Classroom Economy project. All contributors must adhere to these standards.
 
 ---
 
-## 1. The Golden Rules
+## I. Purpose
+
+TBD
+## II. Scope
+
+TBD
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. The Golden Rules
 
 1.  **NEVER modify `app/models.py` without creating a migration.**
 2.  **ALWAYS test migrations before committing** (upgrade AND downgrade).
@@ -22,7 +32,7 @@
 
 ---
 
-## 2. Migration Best Practices
+## VI. Migration Best Practices
 
 ### Core Principle: Migrations Must Be Idempotent
 
@@ -112,7 +122,7 @@ def downgrade():
 
 ---
 
-## 3. Implementation Guidelines
+## VII. Implementation Guidelines
 
 ### Migration Naming Conventions
 Use descriptive names that clearly state changes:
@@ -170,7 +180,7 @@ def upgrade():
 
 ---
 
-## 4. Policy Standards
+## VIII. Policy Standards
 
 ### Schema Change Gate
 This gate is **PR‑blocking**.
@@ -220,7 +230,7 @@ for fk in inspector.get_foreign_keys('students'):
 
 ---
 
-## 5. Workflows
+## IX. Workflows
 
 ### Standard Cycle
 1.  **Sync:** `git fetch origin main && git merge origin/main`
@@ -249,7 +259,7 @@ for fk in inspector.get_foreign_keys('students'):
 
 ---
 
-## 6. Deprecation Standards
+## X. Deprecation Standards
 
 **Registry:** `docs/development/DEPRECATED_SYMBOLS.txt`
 
@@ -260,6 +270,8 @@ for fk in inspector.get_foreign_keys('students'):
 
 ---
 
-## 7. Resources
+## XI. Resources
 - [Alembic Documentation](https://alembic.sqlalchemy.org/)
 - [SQLAlchemy Inspector API](https://docs.sqlalchemy.org/en/20/core/reflection.html)
+## XII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

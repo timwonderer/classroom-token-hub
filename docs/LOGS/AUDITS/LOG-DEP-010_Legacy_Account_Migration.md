@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-010      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DEP-010| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 **Date:** 2025-12-19
 **Version:** 1.2.x

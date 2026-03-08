@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-ARC-028      | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-ARC-028| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 This directory contains historical documentation, bug fix reports, and PR summaries from the project's development history.
 
@@ -17,7 +17,7 @@ Detailed release notes for all versions, providing context and migration guides 
 ### Root Level
 Individual bug fix reports, migration summaries, and implementation reports from significant project milestones.
 
-## Purpose
+## I. Purpose
 
 Archive documentation:
 

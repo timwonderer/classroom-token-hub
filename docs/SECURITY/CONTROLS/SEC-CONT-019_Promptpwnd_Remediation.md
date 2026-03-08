@@ -2,17 +2,27 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SEC-CONT-019     | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SEC-CONT-019| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 **Date:** 2025-12-22
 **Severity:** CRITICAL
 **Status:** FIXED
 
-## Summary
+## I. Purpose
+
+TBD
+## II. Scope
+
+TBD
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Summary
 
 This document details the identification and remediation of a critical AI prompt injection vulnerability in the Classroom Token Hub GitHub Actions workflows, following the PromptPwnd vulnerability pattern first disclosed by Aikido Security in December 2025.
 
-## Vulnerability Description
+## VI. Vulnerability Description
 
 ### What is PromptPwnd?
 
@@ -82,7 +92,7 @@ The AI model might interpret this as legitimate instructions and:
 2. Leak the `GITHUB_TOKEN` to the issue comment
 3. Allow the attacker to use the token for repository access
 
-## Remediation Actions Taken
+## VII. Remediation Actions Taken
 
 ### 1. Disabled Vulnerable Workflow
 
@@ -109,7 +119,7 @@ The AI model might interpret this as legitimate instructions and:
 - Only `summary.yml` was affected
 - No other AI agent integrations found
 
-## Prevention Guidelines
+## VIII. Prevention Guidelines
 
 To prevent similar vulnerabilities in the future:
 
@@ -181,20 +191,20 @@ If AI integration is absolutely necessary:
      API_KEY: ${{ secrets.READ_ONLY_API_KEY }}
    ```
 
-## Detection with Aikido Security
+## IX. Detection with Aikido Security
 
 Organizations can detect PromptPwnd vulnerabilities using:
 
 1. **Aikido Security Platform** - Automatic scanning of GitHub/GitLab repos
 2. **OpenGrep Rules** - Open-source rules for detecting these patterns
 
-## References
+## X. References
 
 - [Aikido Security Blog (PromptPwnd coverage)](https://www.aikido.dev/blog) (December 2025)
 - [Google Gemini CLI Patch](https://github.com/google-gemini/gemini-cli) (Fixed within 4 days)
 - [GitHub Actions Security Hardening](https://docs.github.com/en/actions/security-guides/security-hardening-for-github-actions)
 
-## Impact Assessment
+## XI. Impact Assessment
 
 **For Classroom Token Hub:**
 
@@ -207,14 +217,14 @@ Organizations can detect PromptPwnd vulnerabilities using:
 - **Actual Impact:** None detected - vulnerability fixed before exploitation
 - **Remediation Status:**  Complete
 
-## Lessons Learned
+## XII. Lessons Learned
 
 1. **AI in CI/CD is High Risk** - Any AI agent with access to secrets or privileged actions creates significant attack surface
 2. **Untrusted Input is Dangerous** - User-controlled content (issues, PRs) should never be directly inserted into AI prompts
 3. **Defense in Depth** - Even with sanitization, AI-powered workflows should have minimal permissions
 4. **Value vs. Risk** - Convenience features (auto-summarization) may not justify security risks
 
-## Conclusion
+## XIII. Conclusion
 
 The PromptPwnd vulnerability in `summary.yml` has been completely remediated by disabling the vulnerable workflow. No similar patterns exist in other workflows. Future AI integrations will follow strict security guidelines to prevent prompt injection attacks.
 
@@ -223,3 +233,5 @@ The PromptPwnd vulnerability in `summary.yml` has been completely remediated by 
 **Last Updated:** 2025-12-22
 **Reviewed By:** Claude Code Security Analysis
 **Next Review:** Before any future AI agent integration
+## XIV. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

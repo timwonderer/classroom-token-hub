@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-REL-004      | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-REL-004| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 **Release Date:** December 2025
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/)

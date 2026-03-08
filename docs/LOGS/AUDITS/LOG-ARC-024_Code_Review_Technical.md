@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-ARC-024      | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-ARC-024| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 **Reviewer:** Claude
 **Date:** 2025-11-24

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|------------------|
-| SOP-DOC-003     | 1.0     | 2026-03-01     | N/A        | Normative        |
+|SOP-DOC-003| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 ---
 
@@ -27,7 +27,11 @@ This division model applies to:
 
 ---
 
-## III. Division Definitions
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Division Definitions
 
 ### 1. ARCHITECTURE (ARC)
 
@@ -208,7 +212,7 @@ LOG preserves institutional memory.
 
 ---
 
-## IV. Division Relationship Model
+## VI. Division Relationship Model
 
 Authority flows downward as defined in INV-CORE-001:
 
@@ -222,3 +226,5 @@ Informative (LOG / SEC-Records)
 
 Higher authority levels constrain all lower levels. Lower levels may not redefine or override higher levels.
 
+## VII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

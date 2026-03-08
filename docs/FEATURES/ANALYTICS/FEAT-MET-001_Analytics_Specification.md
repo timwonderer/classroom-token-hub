@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| FEAT-MET-001     | 1.0     | 2026-03-01     | N/A        | Normative       |
+|FEAT-MET-001| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 ## I. Purpose
 

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-REL-008      | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-REL-008| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 **Release Date**: December 21, 2025  
 **Focus**: Multi-tenancy hardening, legacy migration completion, operational clarity

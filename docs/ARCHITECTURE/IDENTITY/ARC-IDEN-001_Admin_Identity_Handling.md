@@ -2,13 +2,20 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-IDEN-001     | 1.1     | 2026-03-08     | 1.0        | Constitutional  |
+|ARC-IDEN-001| 1.2 | 2026-03-08 | 1.1 |Constitutional|
 
-## 1. Purpose
+## I. Purpose
 
 Define the current v2 teacher identity model, including authentication identity, public teacher identity, and transitional compatibility fields that still exist in the codebase.
 
-## 2. Canonical Identity Fields
+## II. Scope
+
+TBD
+## III. Authority Level
+Constitutional. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Canonical Identity Fields
 
 Teacher/admin (`teachers`):
 
@@ -26,7 +33,7 @@ System admin (`system_admins`):
 - hashed login fields remain canonical
 - plaintext `username` may still exist on legacy rows during compatibility windows
 
-## 3. Identity Semantics
+## VI. Identity Semantics
 
 ### Authentication Identity
 
@@ -46,13 +53,13 @@ System admin (`system_admins`):
 - If `display_name` is absent, the app falls back to `teacher_public_id`.
 - Sysadmin views should prefer `teacher_public_id` rather than auth usernames.
 
-## 4. v2 Public-Facing Contract
+## VII. v2 Public-Facing Contract
 
 - Public hall-pass verification flows identify teachers by public teacher identity.
 - Current class scope for public verification is derived from teacher-owned `ClassMembership`, not numeric teacher IDs.
 - Numeric teacher IDs are internal-only.
 
-## 5. Transitional Compatibility
+## VIII. Transitional Compatibility
 
 These remain in code but are not intended as the long-term v2 public contract:
 
@@ -62,15 +69,17 @@ These remain in code but are not intended as the long-term v2 public contract:
 
 Documentation must describe these as compatibility surfaces, not preferred runtime behavior.
 
-## 6. Security Requirements
+## IX. Security Requirements
 
 - Public routes must not require or reveal numeric teacher primary keys.
 - Public teacher identity must be non-enumerable enough for classroom use and must not be tied to login usernames.
 - Identity updates must be committed atomically.
 - Username uniqueness and lookup must account for the transitional legacy window where plaintext usernames may still exist.
 
-## 7. Acceptance Criteria
+## X. Acceptance Criteria
 
 - New and current v2-facing docs use `teacher_public_id` / `public_id` as the public teacher identifier.
 - Sysadmin and app display rules are consistent with minimal-PII display.
 - Compatibility fields are clearly labeled as transitional anywhere they appear in documentation.
+## XI. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| FEAT-ARC-002     | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|FEAT-ARC-002| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 **Feature:** Rent Item Type Extension (Privilege / Per-Use / Hall Pass)
 **Date:** 2026-02-06
@@ -10,13 +10,23 @@
 
 ---
 
-## Overview
+## I. Purpose
+
+TBD
+## II. Scope
+
+TBD
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Overview
 
 This feature extends the existing itemized rent system by adding three distinct **item types** to each rent item. Currently, rent items have a simple store integration with `is_available_in_store` and `purchase_duration` (per_use/per_period). This extension replaces that with a richer type system that drives different behaviors for each rent item.
 
 ---
 
-## Three Item Types
+## VI. Three Item Types
 
 ### 1. Privilege (Badge/Monthly Pass)
 
@@ -61,7 +71,7 @@ This feature extends the existing itemized rent system by adding three distinct 
 
 ---
 
-## Data Model Changes
+## VII. Data Model Changes
 
 ### Modified Models
 
@@ -115,7 +125,7 @@ Per-use free uses are tracked directly on `StudentItem.uses_remaining` for rent-
 
 ---
 
-## Route Changes
+## VIII. Route Changes
 
 ### Rent Item Edit Guardrail (Mid-Period Lock)
 
@@ -232,7 +242,7 @@ Wherever hall passes are decremented (in hall pass routes):
 
 ---
 
-## Template Changes
+## IX. Template Changes
 
 ### `admin_rent_settings.html`
 
@@ -288,7 +298,7 @@ Wherever hall passes are decremented (in hall pass routes):
 
 ---
 
-## Migration
+## X. Migration
 
 **Name:** `add_rent_item_types_and_allocation` + `add_uses_remaining_to_student_item`
 
@@ -314,7 +324,7 @@ Wherever hall passes are decremented (in hall pass routes):
 
 ---
 
-## Testing Plan
+## XI. Testing Plan
 
 ### Unit Tests
 
@@ -360,7 +370,7 @@ Wherever hall passes are decremented (in hall pass routes):
 
 ---
 
-## Edge Cases
+## XII. Edge Cases
 
 1. **Teacher changes item type after students paid rent:**  
    Once rent has been paid for a given coverage period (month/year), the `rent_item_type` and its type-specific fields (`use_limit`, `hall_pass_count`) are **locked for that period**.  
@@ -374,3 +384,5 @@ Wherever hall passes are decremented (in hall pass routes):
 3. **Hall pass top-off when student has 0 passes:** Simply grants the full `hall_pass_count`.
 4. **Incremental rent payment with per-use items:** Allocations are only created when rent is **fully paid** for the period.
 5. **Apply to all blocks:** Item type and settings sync across all blocks (same as current name/price sync behavior).
+## XIII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

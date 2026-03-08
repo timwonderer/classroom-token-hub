@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-007       | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DB-007| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 **Performed By:** Jules (AI Assistant)
 **Date:** 2025-11-24

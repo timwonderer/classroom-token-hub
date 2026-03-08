@@ -2,11 +2,21 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-012      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DEP-012| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 This guide explains how to set up UptimeRobot monitoring for your Classroom Economy app.
 
-## Why UptimeRobot?
+## I. Purpose
+
+TBD
+## II. Scope
+
+TBD
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Why UptimeRobot?
 
 Your app already has public health check endpoints that don't require authentication. UptimeRobot can monitor these endpoints and provide:
 
@@ -15,7 +25,7 @@ Your app already has public health check endpoints that don't require authentica
 - **Response time tracking** - Monitor app performance over time
 - **Incident history** - Track outages and uptime percentage
 
-## Available Health Endpoints
+## VI. Available Health Endpoints
 
 ### 1. Basic Health Check (Recommended for UptimeRobot)
 - **URL:** `https://yourdomain.com/health`
@@ -50,7 +60,7 @@ Example response:
 }
 ```
 
-## UptimeRobot Setup Steps
+## VII. UptimeRobot Setup Steps
 
 ### Step 1: Create a Monitor
 
@@ -132,7 +142,7 @@ STATUS_PAGE_URL=https://status.yourdomain.com
 
 **With this variable:** Error pages show a "Check System Status" button that links to your status page.
 
-## Testing Your Setup
+## VIII. Testing Your Setup
 
 ### Test Locally
 
@@ -160,7 +170,7 @@ Run the included test script:
    - Check that you receive an alert
    - Check that status page shows "Down"
 
-## Advanced Monitoring Options
+## IX. Advanced Monitoring Options
 
 ### Multiple Monitors
 
@@ -194,7 +204,7 @@ Configure when you get notified:
    - "Alert when down" (immediate)
    - "Alert when down for X minutes" (reduces false alarms)
 
-## How Authentication Works
+## X. How Authentication Works
 
 ### Why `/health` endpoints don't require sign-in:
 
@@ -232,7 +242,7 @@ If you want to monitor that authentication works:
 - Actually fill in forms and test login
 - ~$10-50/month depending on features
 
-## Status Page Best Practices
+## XI. Status Page Best Practices
 
 ### Share your status page:
 
@@ -260,7 +270,7 @@ If you want to monitor that authentication works:
 > Resolved: All systems operational. Monitoring for stability.
 > *Posted: 2:40 PM*
 
-## Troubleshooting
+## XII. Troubleshooting
 
 ### Monitor shows "Down" but app works fine
 
@@ -322,7 +332,7 @@ doctl compute firewall get <firewall-id> | grep -E "46.137|52.62|54.79"
 - Check "Public Status Pages" → your page → ensure monitors are selected
 - Wait a few minutes for cache to clear
 
-## Quick Reference
+## XIII. Quick Reference
 
 | What | URL |
 |------|-----|
@@ -331,8 +341,10 @@ doctl compute firewall get <firewall-id> | grep -E "46.137|52.62|54.79"
 | Status page (default) | `https://stats.uptimerobot.com/your-subdomain` |
 | Test script | `./test_monitoring.sh https://yourdomain.com` |
 
-## Need Help?
+## XIV. Need Help?
 
 - **UptimeRobot Docs:** https://uptimerobot.com/help/
 - **UptimeRobot Support:** support@uptimerobot.com
 - **App Support:** timothy.cs.chang@gmail.com
+## XV. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

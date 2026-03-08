@@ -2,12 +2,22 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| FEAT-ARC-003     | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|FEAT-ARC-003| 1.1 | 2026-03-08 | 1.0 |Normative|
 
-## Overview
+## I. Purpose
+
+TBD
+## II. Scope
+
+TBD
+## III. Authority Level
+Constitutional. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Overview
 The System Admin interface is the super-user control panel for the Classroom Token Hub. It provides complete visibility and control over all aspects of the system.
 
-## Current Capabilities (Implemented)
+## VI. Current Capabilities (Implemented)
 -  Generate admin invite codes
 -  View invite code status
 -  View system admins list
@@ -18,7 +28,7 @@ The System Admin interface is the super-user control panel for the Classroom Tok
 -  **Manage teachers (admins)** - View list, delete with cascade
 -  **Track admin timestamps** - Signup date, last login
 
-## Design Philosophy
+## VII. Design Philosophy
 
 **Simplified Role Separation:**
 
@@ -33,7 +43,7 @@ The System Admin interface is the super-user control panel for the Classroom Tok
 - Privacy boundaries
 - Proper delegation to teachers
 
-## Proposed New Capabilities
+## VIII. Proposed New Capabilities
 
 ### 1. User Management
 
@@ -207,7 +217,7 @@ The simplified delete approach (always delete students with teacher) is intentio
 - Message to all teachers
 - Message to all students
 
-## UI Layout Proposal
+## IX. UI Layout Proposal
 
 ### Main Dashboard Structure
 
@@ -305,7 +315,7 @@ The simplified delete approach (always delete students with teacher) is intentio
 
 ```
 
-## Navigation Structure
+## X. Navigation Structure
 
 ```
 System Admin Dashboard
@@ -341,7 +351,7 @@ System Admin Dashboard
      Health Check
 ```
 
-## Color Scheme
+## XI. Color Scheme
 
 - **Primary (Blue):** General actions, navigation
 - **Success (Green):** Successful operations, create
@@ -350,7 +360,7 @@ System Admin Dashboard
 - **Info (Light Blue):** Information, stats
 - **Dark:** System admins, advanced features
 
-## Security Considerations
+## XII. Security Considerations
 
 1. **All admin deletion requires confirmation**
 2. **Show impact before any destructive action**
@@ -360,7 +370,7 @@ System Admin Dashboard
 6. **Rate limiting on bulk operations**
 7. **Backup before major deletions**
 
-## Implementation Priority
+## XIII. Implementation Priority
 
 ### Phase 1 (Completed) 
 - [x] Error testing and monitoring
@@ -383,11 +393,11 @@ System Admin Dashboard
 - [ ] Advanced analytics
 - [ ] **Multi-tenancy support** (see MULTI_TENANCY_TODO.md)
 
-## Mockups / Wireframes
+## XIV. Mockups / Wireframes
 
 (To be added: Screenshots of actual implementation)
 
-## User Stories
+## XV. User Stories
 
 1. **As a system admin, I want to delete a teacher account and reassign their students, so I can clean up after staff changes.**
 
@@ -401,10 +411,12 @@ System Admin Dashboard
 
 6. **As a system admin, I want to audit who did what, so I can track accountability.**
 
-## Success Metrics
+## XVI. Success Metrics
 
 -  Sysadmin can perform all user management tasks
 -  No accidental data loss (confirmations work)
 -  All actions are logged for audit
 -  Interface is intuitive and requires no training
 -  Performance remains good with large datasets
+## XVII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

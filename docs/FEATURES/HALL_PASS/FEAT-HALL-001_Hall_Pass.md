@@ -2,18 +2,18 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| FEAT-ARC-001     | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|FEAT-ARC-001| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 Status: Active (Normative)
 Last Updated: 2026-02-24
 Owner: Platform / Identity & Classroom Flows
 
-## 1. Purpose
+## I. Purpose
 
 Define the full hall pass feature contract across student, teacher, and public verification flows.
 This spec is the source of truth for lifecycle states, API behavior, data invariants, and deprecation policy.
 
-## 2. Scope
+## II. Scope
 
 In scope:
 - Student hall pass request, cancel, checkout, and checkin flows.
@@ -26,7 +26,11 @@ Out of scope:
 - Broader attendance policy semantics unrelated to hall pass events.
 - Store/rent economics except where hall pass balance is consumed.
 
-## 3. Canonical Data Model
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Canonical Data Model
 
 Primary table: `hall_pass_logs`
 - `student_id` (required)
@@ -51,7 +55,7 @@ Teacher public verification token:
 - `admins.hall_pass_verify_token` (rotatable, random capability token).
 - Exposed as `/verify/hallpass/<token>`.
 
-## 4. Lifecycle State Machine
+## VI. Lifecycle State Machine
 
 Allowed transitions:
 1. `pending` -> `approved`
@@ -65,7 +69,7 @@ Forbidden transitions:
 - `pending` -> `left` without teacher approval.
 - `approved` -> `returned` without `left`.
 
-## 5. Primary User Flow (Required)
+## VII. Primary User Flow (Required)
 
 Primary flow:
 1. Student initiates request (creates `pending` record).
@@ -76,7 +80,7 @@ Primary flow:
 Deprecated compatibility flow:
 - Terminal and queue endpoints are removed from active use and must return `410 Gone`.
 
-## 6. Behavior Rules
+## VIII. Behavior Rules
 
 Request-time gating:
 - Request must be scoped to current class context (`join_code`).
@@ -93,7 +97,7 @@ Checkout/checkin side effects:
 - Checkin creates `TapEvent(status='active')`.
 - Start-work flow auto-returns any active (`left`) pass in the same class context.
 
-## 7. Public Verification Contract
+## IX. Public Verification Contract
 
 Endpoint: `GET/POST /verify/hallpass/<teacher_public_token>`
 
@@ -110,7 +114,7 @@ Requirements:
 Rate limiting:
 - Public verification route must be rate-limited.
 
-## 8. Public Verification Portal — Claim-Based Model
+## X. Public Verification Portal — Claim-Based Model
 
 Design principle:
 - Does not display lists.
@@ -143,7 +147,7 @@ Non-goals:
 - No audit display.
 - No roster enumeration.
 
-## 9. API Surface (Current Contract)
+## XI. API Surface (Current Contract)
 
 Teacher actions:
 - `POST /api/hall-pass/<pass_id>/approve`
@@ -173,13 +177,13 @@ Deprecated endpoints (must return `410 Gone`):
 - `POST /api/hall-pass/terminal/use`
 - `POST /api/hall-pass/terminal/return`
 
-## 10. Security and Privacy Requirements
+## XII. Security and Privacy Requirements
 
 - All hall pass operations must remain tenant-scoped by class context (`join_code`) and role auth.
 - Public verify endpoint must use capability token, never teacher username or internal numeric IDs.
 - Verification outputs must avoid exposing non-essential PII or roster-level data.
 
-## 11. Observability and Audit
+## XIII. Observability and Audit
 
 Minimum events to log:
 - Request create, approve, reject, checkout, checkin, cancel.
@@ -188,7 +192,7 @@ Minimum events to log:
 
 All timestamps are UTC at rest and converted at read time for user display.
 
-## 12. Acceptance Criteria
+## XIV. Acceptance Criteria
 
 Functional:
 - Student can complete request -> approve -> checkout -> checkin without terminal dependencies.
@@ -205,3 +209,5 @@ Security:
 Data integrity:
 - Status transitions follow the allowed state machine only.
 - Tap events are generated exactly once per checkout/checkin.
+## XV. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

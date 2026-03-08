@@ -2,11 +2,21 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-005      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DEP-005| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 This guide explains how to configure DigitalOcean firewall rules to work with Cloudflare's proxy service (orange cloud enabled).
 
-## Overview
+## I. Purpose
+
+TBD
+## II. Scope
+
+TBD
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Overview
 
 When you enable Cloudflare's proxy for your domain:
 
@@ -15,7 +25,7 @@ When you enable Cloudflare's proxy for your domain:
 - The real visitor IP is passed in the `CF-Connecting-IP` header
 - Direct access to your origin server IP should be blocked for security
 
-## Benefits
+## VI. Benefits
 
 1. **DDoS Protection**: Cloudflare filters malicious traffic before it reaches your server
 2. **Geographic Load Balancing**: Cloudflare's global network routes traffic efficiently
@@ -23,13 +33,13 @@ When you enable Cloudflare's proxy for your domain:
 4. **Origin IP Protection**: Your actual server IP is hidden from attackers
 5. **Reduced Server Load**: Cloudflare caches static assets and filters attacks
 
-## Prerequisites
+## VII. Prerequisites
 
 - DigitalOcean account with a running droplet
 - Domain managed by Cloudflare with proxy enabled (orange cloud icon)
 - SSH access to your droplet
 
-## Step 1: Create DigitalOcean Firewall
+## VIII. Step 1: Create DigitalOcean Firewall
 
 ### 1.1 Navigate to Firewall Settings
 
@@ -42,7 +52,7 @@ When you enable Cloudflare's proxy for your domain:
 
 Give it a descriptive name like `cloudflare-proxy-firewall`
 
-## Step 2: Configure Inbound Rules
+## IX. Step 2: Configure Inbound Rules
 
 ### 2.1 Remove Default HTTP/HTTPS Rules
 
@@ -117,7 +127,7 @@ Add a rule to allow SSH access from your management IP:
 
 If you run other services (e.g., database, monitoring), add rules for those ports as needed.
 
-## Step 3: Configure Outbound Rules
+## X. Step 3: Configure Outbound Rules
 
 ### 3.1 Default Outbound Rules
 
@@ -130,12 +140,12 @@ If you need to restrict outbound traffic:
 - TCP port 80/443 for HTTP/HTTPS (API calls, package updates)
 - TCP port 5432 if using external PostgreSQL
 
-## Step 4: Apply Firewall to Droplets
+## XI. Step 4: Apply Firewall to Droplets
 
 1. In the **Apply to Droplets** section, search for and select your droplet
 2. Click **Create Firewall**
 
-## Step 5: Verify Configuration
+## XII. Step 5: Verify Configuration
 
 ### 5.1 Test Cloudflare Access
 
@@ -161,7 +171,7 @@ tail -f /var/log/classroom-token-hub/app.log
 grep "Request not from Cloudflare IP" /var/log/classroom-token-hub/app.log
 ```
 
-## Step 6: Application Configuration
+## XIII. Step 6: Application Configuration
 
 The Classroom Token Hub application automatically detects and extracts real visitor IPs from Cloudflare headers.
 
@@ -185,7 +195,7 @@ The `get_real_ip()` function is used throughout the application:
 
 No manual configuration is needed - the application handles this automatically.
 
-## Updating Cloudflare IP Ranges
+## XIV. Updating Cloudflare IP Ranges
 
 Cloudflare occasionally updates their IP ranges. The application automatically fetches updated ranges from Cloudflare's API every 24 hours.
 
@@ -209,7 +219,7 @@ If Cloudflare adds new IP ranges:
 2. The application will automatically pick up the changes within 24 hours
 3. Consider setting up monitoring to alert when Cloudflare publishes IP changes
 
-## Security Best Practices
+## XV. Security Best Practices
 
 ### 1. Restore Visitor IP Addresses
 
@@ -257,7 +267,7 @@ Regularly review logs for:
 - Non-Cloudflare traffic reaching your server
 - Unusual traffic patterns
 
-## Cloudflare Dashboard Settings
+## XVI. Cloudflare Dashboard Settings
 
 ### Recommended Security Settings
 
@@ -283,7 +293,7 @@ Regularly review logs for:
    - Cache everything for static assets
    - Bypass cache for admin/student dashboards
 
-## Testing
+## XVII. Testing
 
 ### Test Real IP Detection
 
@@ -325,7 +335,7 @@ In Cloudflare dashboard → **Analytics & Logs**:
 - Check cache hit rate
 - Review security events
 
-## Troubleshooting
+## XVIII. Troubleshooting
 
 ### Site Not Loading
 
@@ -354,7 +364,7 @@ If you see "Request not from Cloudflare IP" warnings in production:
 2. Check if Cloudflare updated their IP ranges
 3. Update firewall rules if needed
 
-## Emergency Procedures
+## XIX. Emergency Procedures
 
 ### Disable Cloudflare Proxy (Emergency Only)
 
@@ -374,21 +384,21 @@ If you disabled Cloudflare and allowed all traffic:
 3. Remove the "all sources" rule for ports 80/443
 4. Verify Cloudflare IPs are still in the firewall rules
 
-## Related Documentation
+## XX. Related Documentation
 
 - [Cloudflare IP Ranges](https://www.cloudflare.com/ips/)
 - [DigitalOcean Firewall Documentation](https://docs.digitalocean.com/products/networking/firewalls/)
 - [Cloudflare SSL/TLS Documentation](https://developers.cloudflare.com/ssl/)
 - [Authenticated Origin Pulls](https://developers.cloudflare.com/ssl/origin-configuration/authenticated-origin-pull/)
 
-## Additional Resources
+## XXI. Additional Resources
 
 - Application IP Handler: `app/utils/ip_handler.py`
 - Middleware Implementation: `app/__init__.py:306-330`
 - Turnstile Integration: `app/utils/turnstile.py`
 - Security Documentation: `docs/security/`
 
-## Summary Checklist
+## XXII. Summary Checklist
 
 - [ ] Create DigitalOcean firewall with Cloudflare IP ranges
 - [ ] Add SSH access rule for management IP
@@ -402,3 +412,5 @@ If you disabled Cloudflare and allowed all traffic:
 - [ ] Monitor Cloudflare analytics for normal traffic patterns
 - [ ] Document emergency procedures for your team
 - [ ] Set calendar reminder to review Cloudflare IP ranges quarterly
+## XXIII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

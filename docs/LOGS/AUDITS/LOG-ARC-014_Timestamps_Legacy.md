@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-ARC-014      | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-ARC-014| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 ## Goal
 Ensure timestamps display correctly across the app regardless of server or user timezone.

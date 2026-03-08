@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SEC-AUD-001      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SEC-AUD-001| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 **Date:** 2025-12-30
 **Branch:** fix-multitenancy-violations

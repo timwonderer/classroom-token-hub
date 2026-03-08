@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-000      | 1.0     | 2026-03-01     | N/A        | Constitutional            |
+|ARC-OPS-000| 1.1 | 2026-03-08 | 1.0 |Constitutional|
 
 ## I. Purpose
 Define non-negotiable operational constraints for the Classroom Token Hub application, setting the baseline for performance, resources, limits, dependencies, time zone handling, and data retention.
@@ -34,3 +34,5 @@ Authoritative (ARC Tier). Subordinate to INV-CORE-000.
 
 ### 5. Data Retention
 - Data retention must conform to the policies outlined in INV-CORE-000. Stale accounts must be securely purged according to their lifecycle.
+## VI. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

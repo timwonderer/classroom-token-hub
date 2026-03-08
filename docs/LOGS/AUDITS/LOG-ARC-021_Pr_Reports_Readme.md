@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-ARC-021      | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-ARC-021| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 This directory contains historical pull request reports and documentation that were generated during specific development cycles. These files are kept for historical reference but are no longer actively maintained. For the current PR template, see `.github/PULL_REQUEST_TEMPLATE.md`.
 
@@ -33,7 +33,7 @@ This directory contains historical pull request reports and documentation that w
 - `SECURITY_FIX_VERIFICATION.md` - Initial security fix verification
 - `SECURITY_FIX_VERIFICATION_UPDATED.md` - Updated security fix verification
 
-## Purpose
+## I. Purpose
 
 These reports were moved here during repository housekeeping to:
 
