@@ -12,18 +12,25 @@ related:
 # Switch Classes
 
 ## Overview
-If you participate in multiple classroom economies (with different teachers), you can easily switch between them without having to log out.
+If you participate in multiple classroom economies, you can switch your active class without logging out. Your dashboard, balances, store, payroll, and class-specific settings all follow the class you select.
 
 ## Step-by-Step Instructions
 
 ### Switching Between Active Classes
 1. Look at the top of the student sidebar for the **Current Class** drop-down menu.
 2. Click the menu to see a list of all the classes you are enrolled in.
-3. Select the class you want to view. Your dashboard, balances, and store will instantly update to reflect that specific class's economy.
+3. Select the class you want to view. The app updates to that class's `current_join_code` context.
+
+### What Changes When You Switch
+
+- balances and transaction history
+- store and redemption context
+- payroll and attendance views
+- class-scoped settings such as hall pass, rent, and feature availability
 
 ## Important Notes
 > [!NOTE]
-> **Missing a class?:** If a class you expect to see is missing from this drop-down, use the **Add Class** button and your teacher's join code to link it to your account.
+> **Missing a class?:** If a class you expect to see is missing from this drop-down, use **Add Class** with that teacher’s join code first.
 
 ## Related guides
 - [Join or Add a Class](join-class.md)

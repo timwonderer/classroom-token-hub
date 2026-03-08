@@ -1,5 +1,8 @@
 # Join Code Migration: Refinement Plan (Final)
 
+> [!NOTE]
+> Historical planning artifact. The active v2 runtime contract is now tracked on `codex/v2.0`, and current docs no longer treat TeacherBlock fallback as intended runtime behavior.
+
 The primary objective is to transition from `teacher_id` (audit) to a `join_code`-centric model (scoping), establishing `join_code` as the primary identifier for a class economy.
 
 ## 1. Governance & Principles
@@ -63,7 +66,7 @@ Students are limited to rows where:
 - The migration script MUST include a `validate_backfill_safety()` pre-flight function that detects and reports these conflicts before mutating data.
 
 ### TeacherBlock Fallback Deprecation
-- Gate legacy TeacherBlock fallbacks with a feature flag (`USE_LEGACY_TB_FALLBACK`). Log a warning on each invocation. Schedule removal when the log rate reaches zero for two weeks post-migration.
+- Historical planning note only. Current v2 live-test docs assume no TeacherBlock fallback as intended runtime behavior.
 
 ## 5. Class Deletion Architecture
 

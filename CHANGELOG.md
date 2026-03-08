@@ -9,6 +9,7 @@ and this project follows semantic versioning principles.
 ## [Unreleased]
 
 ### Changed
+- **v2.0 live-test candidate documentation refresh** - Updated the living engineering docs to reflect the consolidated `codex/v2.0` branch, current PostgreSQL test evidence (`664 passed, 1 skipped`), resolved migration heads, and the v2 authority model where `ClassEconomy` and `ClassMembership` define class scope. Added explicit live-test and production transition runbooks, refreshed architecture/API/schema references, and updated user guides that previously implied numeric teacher IDs, teacher-global class behavior, or legacy fallback semantics.
 - **ClassEconomy and ClassMembership data-integrity hardening** — Added SQLAlchemy `Enum` types for `ClassEconomy.status` (active, archived), `ClassMembership.role` (admin, student), and `ClassMembership.status` (active, archived). Aligned the membership XOR check constraint name with existing DB constraints and added migration `a11213ca4afb` to normalize invalid values and enforce strict DB check constraints for class economy status, membership status, and membership role consistency. (Addresses PR #1078 review comments)
 
 ### Fixed

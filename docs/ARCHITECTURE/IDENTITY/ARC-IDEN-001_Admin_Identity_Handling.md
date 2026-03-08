@@ -2,182 +2,75 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-IDEN-001     | 1.0     | 2026-03-01     | N/A        | Constitutional  |
+| ARC-IDEN-001     | 1.1     | 2026-03-08     | 1.0        | Constitutional  |
 
 ## 1. Purpose
 
-Define the identity model for teacher/admin and system admin accounts with minimal PII exposure.
-This spec covers authentication identity, public-facing teacher identity, sysadmin-facing identity, and legacy migration behavior.
+Define the current v2 teacher identity model, including authentication identity, public teacher identity, and transitional compatibility fields that still exist in the codebase.
 
-## 2. Design Goals
+## 2. Canonical Identity Fields
 
-- Remove plaintext usernames from durable storage for authentication.
-- Separate authentication identity from display identity.
-- Minimize PII exposure for students and sysadmins.
-- Keep deterministic login behavior during legacy migration.
-- Preserve account continuity without lockout for valid users.
+Teacher/admin (`teachers`):
 
-## 3. Canonical Identity Fields
-
-Teacher/admin (`admins`):
-- `username` (legacy plaintext, nullable, deprecated).
-- `username_hash` (auth hash, required for migrated records).
-- `username_lookup_hash` (deterministic lookup hash for login).
-- `salt` (per-account salt for username hashing).
-- `teacher_public_id` (public identifier, unique).
-- `display_name` (teacher-managed app name; privacy handling applies).
-- `hall_pass_verify_token` (public verification capability token, unique, rotatable).
-
-Logical capability token name:
-- `hallpass_public_token` (maps to DB field `admins.hall_pass_verify_token`).
+- `username` - legacy plaintext username, nullable, transitional only
+- `username_hash` - hashed auth username
+- `username_lookup_hash` - deterministic lookup hash for login
+- `salt` - per-account salt for username hashing
+- `teacher_public_id` - canonical public teacher identifier
+- `public_id` - ORM synonym alias for `teacher_public_id`
+- `display_name` - teacher-managed app-facing label
+- `hall_pass_verify_token` - older public verification capability token
 
 System admin (`system_admins`):
-- `username` (legacy plaintext, nullable, deprecated).
-- `username_hash` (auth hash).
-- `username_lookup_hash` (login lookup hash).
-- `salt` (per-account salt).
-- `totp_secret` (encrypted at rest).
 
-## 4. Identifier Semantics
+- hashed login fields remain canonical
+- plaintext `username` may still exist on legacy rows during compatibility windows
 
-Authentication username:
-- Used only for authentication and credential recovery flows where needed.
-- Must not be used as the app-facing identifier for students or sysadmins.
+## 3. Identity Semantics
 
-Teacher public identifier (`teacher_public_id`):
-- Generated as three words from approved preset dictionary.
-- Format: `word1_word2_word3`.
-- Unique across teachers.
-- Default app display name when teacher has not set custom display name.
-- Required display identifier for sysadmin views (always).
+### Authentication Identity
 
-Teacher display name (`display_name`):
-- Teacher-managed label shown in teacher/student app contexts.
-- If not set, app display falls back to `teacher_public_id`.
-- If set, app shows display name; sysadmin still sees `teacher_public_id`.
-- Must be encrypted at rest as PII.
+- Login uses `username_lookup_hash` first.
+- Legacy plaintext username support exists only as transitional compatibility behavior.
+- Public product flows must not use authentication usernames as public identity.
 
-## 5. Generation Rules
+### Public Teacher Identity
 
-On teacher account creation:
-1. Normalize input username.
-2. Generate `salt`.
-3. Compute/store `username_hash` and `username_lookup_hash`.
-4. Do not persist plaintext `username`.
-5. Generate unique `teacher_public_id` from preset word list.
-6. Generate `hall_pass_verify_token`.
+- `teacher_public_id` is the canonical public teacher identifier.
+- `Admin.public_id` is the stable runtime alias for the same value.
+- Public teacher references in v2 documentation should use `public_id` / `teacher_public_id`, never numeric teacher ID.
 
-On system admin account creation:
-1. Normalize input username.
-2. Generate `salt`.
-3. Compute/store `username_hash` and `username_lookup_hash`.
-4. Do not persist plaintext `username`.
-5. Encrypt and store TOTP secret.
+### Display Identity
 
-## 6. Login and Lookup Rules
+- Student-facing and teacher-facing displays use `display_name` if set.
+- If `display_name` is absent, the app falls back to `teacher_public_id`.
+- Sysadmin views should prefer `teacher_public_id` rather than auth usernames.
 
-Teacher/system admin login lookup order:
-1. Find by `username_lookup_hash` (normalized input).
-2. Fallback to legacy plaintext `username` only for pre-migration accounts.
+## 4. v2 Public-Facing Contract
 
-Post-migration record requirements:
-- `username_hash` and `username_lookup_hash` must both be non-null.
-- `username` should be null.
+- Public hall-pass verification flows identify teachers by public teacher identity.
+- Current class scope for public verification is derived from teacher-owned `ClassMembership`, not numeric teacher IDs.
+- Numeric teacher IDs are internal-only.
 
-## 7. Legacy Migration UX Contract
+## 5. Transitional Compatibility
 
-When a legacy account logs in and lacks hashed username fields:
-- Show mandatory one-time migration screen before normal dashboard access.
-- Offer two actions:
-  1. Continue using current username (hash and store it).
-  2. Update to a new username (validate uniqueness, then hash/store).
+These remain in code but are not intended as the long-term v2 public contract:
 
-Teacher-specific warning:
-- If teacher has no students linked, show explicit no-recovery warning before migration confirmation.
+- `hall_pass_verify_token` capability-token flow
+- legacy plaintext `username` fields
+- compatibility fallbacks required only to preserve older rows or flows during transition
 
-After confirmation:
-- Persist `username_hash`, `username_lookup_hash`, and `salt`.
-- Set legacy plaintext `username` to null.
-- Ensure teacher has `teacher_public_id` and `hall_pass_verify_token`.
+Documentation must describe these as compatibility surfaces, not preferred runtime behavior.
 
-## 8. Display Policy (PII Minimization)
+## 6. Security Requirements
 
-Student-facing:
-- Show teacher `display_name` if set.
-- Else show `teacher_public_id`.
+- Public routes must not require or reveal numeric teacher primary keys.
+- Public teacher identity must be non-enumerable enough for classroom use and must not be tied to login usernames.
+- Identity updates must be committed atomically.
+- Username uniqueness and lookup must account for the transitional legacy window where plaintext usernames may still exist.
 
-Teacher-facing self context:
-- Show `display_name` if set.
-- Else show `teacher_public_id`.
+## 7. Acceptance Criteria
 
-System admin-facing:
-- Always show `teacher_public_id` for teacher identity display.
-- Never require or prefer teacher auth username for display.
-
-## 9. Security Requirements
-
-- Username hashing must use account salt plus project pepper strategy.
-- TOTP secrets must remain encrypted at rest.
-- Public verify URLs must use `hall_pass_verify_token`, not teacher username or numeric ID.
-- No public endpoint may accept numeric primary keys or `teacher_id` for routing.
-- Identity updates must be committed atomically to avoid partial migration states.
-- Username uniqueness checks must include hashed-lookup and legacy fallback windows.
-
-## 10. Public Capability Tokens
-
-Certain features may expose public, unauthenticated endpoints scoped to a teacher account.
-These endpoints must use high-entropy capability tokens rather than internal identifiers.
-
-`hallpass_public_token`:
-- Purpose: allows office staff to verify same-day hall pass records without authentication.
-- Storage mapping: `admins.hall_pass_verify_token`.
-
-Properties:
-- 256-bit cryptographically secure random value.
-- Generated using secure random source.
-- Unique indexed.
-- Stored in teacher table.
-- Not derived from `teacher_id`.
-- Not derived from `join_code`.
-- Not guessable.
-- Rotatable by teacher.
-- Invalidated upon teacher deletion.
-
-Security invariants:
-- Token alone grants read-only access to limited, same-day operational data.
-- Token does not expose historical multi-day records.
-- Token does not expose lists or roster.
-- Token does not expose internal identifiers.
-- Token cannot mutate system state.
-
-Rotation policy:
-- Teacher may regenerate at any time.
-- Old token immediately invalid.
-- Migration ensures all teachers have token populated.
-
-Non-goals:
-- Token is not an authentication credential.
-- Token is not tied to login identity.
-- Token is not reused across features.
-
-## 11. Operational Requirements
-
-- CLI/admin creation commands must create hashed username records, not plaintext.
-- Migrations must be idempotent and tested with upgrade/downgrade rehearsal.
-- Sysadmin and teacher auth flows must continue to function for migrated and unmigrated records during transition.
-
-## 12. Acceptance Criteria
-
-Functional:
-- New teacher and sysadmin accounts persist no plaintext username.
-- New teacher receives unique `teacher_public_id` and `hall_pass_verify_token`.
-- Legacy accounts are prompted once and migrated successfully at next login.
-
-Privacy:
-- Sysadmin UI shows `teacher_public_id`, not teacher auth username.
-- App display behavior follows: display name if set, otherwise `teacher_public_id`.
-- Teacher custom display name is encrypted at rest.
-
-Resilience:
-- Migration path does not lock out valid users who know current credentials.
-- Duplicate username prevention works across migrated and legacy records.
+- New and current v2-facing docs use `teacher_public_id` / `public_id` as the public teacher identifier.
+- Sysadmin and app display rules are consistent with minimal-PII display.
+- Compatibility fields are clearly labeled as transitional anywhere they appear in documentation.

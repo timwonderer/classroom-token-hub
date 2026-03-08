@@ -1,7 +1,7 @@
 # LOG-ARC-042: Legacy Lookup Burndown and Reporting Validation
 
 **Date:** 2026-03-07  
-**Branch:** `codex/fix-database-model-for-dob-sum-storage`
+**Branch:** `codex/v2.0`
 
 ## Scope
 
@@ -106,7 +106,7 @@ Updated [app/routes/api.py](/Users/timothychang/Documents/GitHub/classroom-econo
 
 - `/api/hall-pass/available-types` now supports `join_code` and `teacher_public_id` as primary identity inputs.
 - Student sessions with explicit class context reject out-of-scope `join_code` values.
-- Numeric `teacher_id` remains as compatibility fallback.
+- Numeric `teacher_id` fallback was later removed from the intended v2 documentation contract; this section should be read as an implementation snapshot, not the preferred long-term public interface.
 
 Validation tests added:
 

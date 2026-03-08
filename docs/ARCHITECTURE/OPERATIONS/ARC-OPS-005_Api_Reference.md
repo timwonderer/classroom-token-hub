@@ -3,330 +3,139 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-005      | 1.0     | 2026-03-01     | N/A        | Constitutional  |
+| ARC-OPS-005      | 1.1     | 2026-03-08     | 1.0        | Constitutional  |
 
 ## I. Purpose
 
-This document provides a reference for all the API endpoints available in the Classroom Token Hub application.
+This document captures the current v2.0 API contract with emphasis on class scoping, public teacher identity, and join-code authority.
 
-## II. Scope
+## II. Authentication Classes
 
-All HTTP API endpoints and routes exposed by the application, including public, student, admin, and system admin routes.
+- **Public**: No authenticated session required
+- **Student**: Student session required
+- **Admin**: Teacher/admin session required
+- **System Admin**: System-admin session required
 
-## III. Authority Level
+## III. Runtime Contract Rules
 
-Constitutional (ARC Tier). Subordinate to INV-CORE-000.
+- `current_join_code` is the active class context for session-based teacher and student flows.
+- Class-scoped admin and student APIs are membership-gated, not `teacher_id`-gated.
+- Public teacher references must use `teacher_public_id` / `Admin.public_id`, not numeric teacher IDs.
 
-## IV. Dependencies
+## IV. Key Public Endpoints
 
-- `INV-CORE-000_Core_Invariants.md`
-- `ARC-OPS-000_Operational_Constraints.md`
+### `GET /api/hall-pass/verification/active`
 
-## V. Authentication
+- **Auth**: Public
+- **Purpose**: Return active/recent hall-pass records for a teacher identified by public teacher identity.
+- **Required Query Param**: `teacher=<teacher_public_id>`
+- **Behavior**:
+  - resolves teacher by `teacher_public_id` / `public_id`
+  - derives join-code scope from teacher-owned active `ClassMembership`
+  - returns only passes within that scope
 
-API endpoints are protected based on user roles. The required authentication is noted for each endpoint.
+### `POST /api/set-timezone`
 
--   **Public**: No authentication required.
--   **Student**: Requires a valid student session (`@login_required`).
--   **Admin**: Requires a valid administrator session (`@admin_required`).
--   **System Admin**: Requires a valid system administrator session (`@system_admin_required`).
+- **Auth**: Public
+- **Purpose**: Set timezone in session for localized rendering
 
----
+## V. Key Student Endpoints
 
-## VI. Public API Endpoints
+### `POST /api/purchase-item`
 
-### 1. Set Timezone
+- **Auth**: Student
+- **Purpose**: Purchase a store item in the active class scope
+- **v2 Contract**:
+  - spending authorization is scoped by `join_code`
+  - live v2 flows do not use `join_code IS NULL` fallback settings rows
 
--   **Endpoint**: `POST /api/set-timezone`
--   **Description**: Sets the user's timezone in the session for localized date and time formatting. This is typically called once by the frontend.
--   **Authentication**: Public (CSRF exempt).
--   **Request Body (JSON)**:
-    ```json
-    {
-      "timezone": "America/New_York"
-    }
-    ```
+### `POST /api/use-item`
 
--   **Responses**:
-    -   **200 OK**:
-        ```json
-        {
-          "status": "success",
-          "message": "Timezone set to America/New_York"
-        }
-        ```
+- **Auth**: Student
+- **Purpose**: Submit delayed redemptions for teacher approval
 
-    -   **400 Bad Request**:
-        ```json
-        {
-          "status": "error",
-          "message": "Timezone not provided"
-        }
-        ```
-        ```json
-        {
-          "status": "error",
-          "message": "Invalid timezone"
-        }
-        ```
+### `POST /api/tap`
 
----
+- **Auth**: Student
+- **Purpose**: Append attendance/tap events for the active class period
 
-## VII. Student API Endpoints
+### `GET /api/student-status`
 
-These endpoints require an active student login session.
+- **Auth**: Student
+- **Purpose**: Return per-class attendance/work state and projected pay
+- **v2 Contract**:
+  - class-specific state is driven by the student’s `current_join_code` context and class membership
 
-### 1. Purchase Store Item
+### `GET /api/hall-pass/available-types`
 
--   **Endpoint**: `POST /api/purchase-item`
--   **Description**: Allows a student to purchase an item from the classroom store.
--   **Authentication**: Student.
--   **Request Body (JSON)**:
-    ```json
-    {
-      "item_id": 1,
-      "passphrase": "student-secret-passphrase"
-    }
-    ```
+- **Auth**: Public or Student, depending on caller context
+- **Purpose**: Resolve available hall-pass types for a class
+- **v2 Contract**:
+  - accepts `join_code` and `teacher_public_id`
+  - no numeric teacher ID is required for the intended path
+  - student sessions reject out-of-scope join codes
 
--   **Responses**:
-    -   **200 OK**:
-        ```json
-        {
-          "status": "success",
-          "message": "You purchased Example Item!"
-        }
-        ```
+## VI. Key Admin Endpoints
 
-    -   **400 Bad Request**: Insufficient funds, purchase limit reached, etc.
-        ```json
-        { "status": "error", "message": "Insufficient funds." }
-        ```
+### `POST /api/approve-redemption`
 
-    -   **403 Forbidden**: Incorrect passphrase.
-        ```json
-        { "status": "error", "message": "Incorrect passphrase." }
-        ```
+- **Auth**: Admin
+- **Purpose**: Approve a student redemption request
+- **v2 Contract**:
+  - admin must have class scope for `student_item.join_code`
+  - scope failures return `"You do not have access to this class."`
+  - teacher ownership of the underlying item is still validated
 
-    -   **404 Not Found**: Item does not exist or is not active.
-        ```json
-        { "status": "error", "message": "This item is not available." }
-        ```
+### `POST /api/reject-redemption`
 
-### 2. Use Store Item
+- **Auth**: Admin
+- **Purpose**: Reject a student redemption request
+- **v2 Contract**:
+  - class access must match the redemption’s `join_code`
 
--   **Endpoint**: `POST /api/use-item`
--   **Description**: Allows a student to use a "delayed" type item they have purchased, submitting it for admin approval.
--   **Authentication**: Student.
--   **Request Body (JSON)**:
-    ```json
-    {
-      "student_item_id": 1,
-      "redemption_details": "I would like to use this for the upcoming assignment."
-    }
-    ```
+### `GET /api/attendance/history`
 
--   **Responses**:
-    -   **200 OK**:
-        ```json
-        {
-          "status": "success",
-          "message": "Your request to use Example Item has been submitted for approval."
-        }
-        ```
+- **Auth**: Admin
+- **Purpose**: Return attendance history for the selected class or owned class fan-out
+- **v2 Contract**:
+  - explicit class selection is scoped by authorized `join_code`
+  - all-sections behavior must fan out over owned join codes only
 
-    -   **400 Bad Request**: Item cannot be used in its current state.
-        ```json
-        { "status": "error", "message": "This item cannot be used (status: processing)." }
-        ```
+### `GET /api/admin/tap-entries/<student_id>`
+### `DELETE /api/admin/tap-entries/<event_id>`
 
-    -   **403 Forbidden**: Student does not own this item.
-        ```json
-        { "status": "error", "message": "You do not own this item." }
-        ```
+- **Auth**: Admin
+- **Purpose**: Review and mutate tap entries for the active class
+- **v2 Contract**:
+  - current admin session must have `current_join_code`
+  - current class mismatch is rejected
+  - cross-class event mutation is denied
 
-### 3. Tap In / Tap Out
+### `GET|POST /api/admin/block-tap-settings`
+### `GET|POST /api/admin/student-block-settings`
 
--   **Endpoint**: `POST /api/tap`
--   **Description**: Records an attendance event for a student. This is an append-only log.
--   **Authentication**: Student (CSRF exempt).
--   **Request Body (JSON)**:
-    ```json
-    {
-      "pin": "1234",
-      "period": "A",
-      "action": "tap_in"
-    }
-    ```
-    or
-    ```json
-    {
-      "pin": "1234",
-      "period": "A",
-      "action": "tap_out",
-      "reason": "done"
-    }
-    ```
+- **Auth**: Admin
+- **Purpose**: Read or update tap/block settings for class members
+- **v2 Contract**:
+  - writes are constrained to admin-owned class scope
+  - out-of-scope `StudentBlock` rows are ignored rather than mutated
 
--   **Responses**:
-    -   **200 OK**:
-        ```json
-        {
-          "status": "ok",
-          "active": true,
-          "duration": 3600
-        }
-        ```
+## VII. Admin HTML Route Behaviors with API Significance
 
-    -   **400 Bad Request**: Invalid period or action.
-        ```json
-        { "error": "Invalid period or action" }
-        ```
+These are not pure JSON APIs but define important v2 class contracts:
 
-    -   **403 Forbidden**: Invalid PIN.
-        ```json
-        { "error": "Invalid PIN" }
-        ```
+- `/admin/current-class`
+  - sets current class by `join_code`
+  - requires active admin membership in that class
+- `/admin/join-code/delete`
+  - requires admin membership
+  - destructive delete is guarded by confirmation flow
+- `/admin/export-students`
+  - selected-class export computes balances and earnings in exact join-code scope
+- `/admin/issues`
+  - current issue queue respects selected authorized class
 
-### 4. Get Student Status
+## VIII. Transitional Notes
 
--   **Endpoint**: `GET /api/student-status`
--   **Description**: Retrieves the current attendance status (active, done, duration), projected pay (respecting block-level payroll settings), and current hall pass state for all of a student's class blocks.
--   **Authentication**: Student.
--   **Request Body**: None.
--   **Responses**:
-    -   **200 OK**:
-        ```json
-        {
-          "A": {
-            "active": true,
-            "done": false,
-            "duration": 3600,
-            "projected_pay": 2.5,
-            "hall_pass": {
-              "id": 123,
-              "status": "approved",
-              "reason": "Restroom",
-              "pass_number": "A12"
-            }
-          },
-          "B": {
-            "active": false,
-            "done": true,
-            "duration": 7200,
-            "projected_pay": 5.0,
-            "hall_pass": null
-          }
-        }
-        ```
-
----
-
-## VIII. Admin API Endpoints
-
-These endpoints require an active administrator login session.
-
-### 1. Approve Item Redemption
-
--   **Endpoint**: `POST /api/approve-redemption`
--   **Description**: Allows an admin to approve a student's request to use a store item.
--   **Authentication**: Admin.
--   **Request Body (JSON)**:
-    ```json
-    {
-      "student_item_id": 1
-    }
-    ```
-
--   **Responses**:
-    -   **200 OK**:
-        ```json
-        {
-          "status": "success",
-          "message": "Redemption approved."
-        }
-        ```
-
-    -   **404 Not Found**: The student item does not exist or is not in the 'processing' state.
-        ```json
-        {
-          "status": "error",
-          "message": "Invalid or already processed item."
-        }
-        ```
-
-    -   **500 Internal Server Error**:
-        ```json
-        {
-          "status": "error",
-          "message": "An error occurred."
-        }
-        ```
-
----
-
-## IX. Web Page Routes
-
-The following routes render HTML pages and are not part of the JSON API. They provide the user interface for the application.
-
-### 1. Public & Setup Routes
-
-These routes are accessible without logging in. They handle the initial setup and login for all user types.
-
--   **`GET /`**: Redirects to the student login page.
--   **`GET, POST /student/claim-account`**: The first step for a new student to claim their account using a code from the teacher.
--   **`GET, POST /student/create-username`**: The second step for a new student to create their unique username.
--   **`GET, POST /student/setup-pin-passphrase`**: The final setup step for a student to create their PIN and passphrase.
--   **`GET, POST /student/login`**: The login page for students.
--   **`GET, POST /admin/login`**: The login page for admins (teachers).
--   **`GET, POST /admin/signup`**: The signup page for new admins, requiring a valid invite code.
--   **`GET, POST /sysadmin/login`**: The login page for system administrators.
--   **`GET /privacy`**: Displays the privacy policy.
--   **`GET /terms`**: Displays the terms of service.
-
-### 2. Student Routes (`@login_required`)
-
-These routes require an active student login session.
-
--   **`GET /setup-complete`**: A confirmation page shown after a student successfully completes the setup process.
--   **`GET /student/dashboard`**: The main dashboard for students, showing balances, attendance status, and recent transactions.
--   **`GET, POST /student/transfer`**: Allows students to transfer funds between their checking and savings accounts.
--   **`GET, POST /student/insurance`**: The insurance marketplace where students can browse, purchase, and manage insurance policies.
--   **`GET /student/shop`**: The classroom store where students can purchase items with their earnings.
--   **`GET /student/logout`**: Logs the student out of their session.
-
-### 3. Admin Routes (`@admin_required`)
-
-These routes require an active admin (teacher) login session.
-
--   **`GET /admin` or `/admin/dashboard`**: The main dashboard for admins, showing an overview of the classroom.
--   **`POST /admin/bonuses`**: Applies a bonus or fee to all students.
--   **`GET /admin/students`**: Displays a list of all students.
--   **`POST /admin/upload-students`**: Handles the CSV upload for adding new students.
--   **`GET /admin/download-csv-template`**: Serves the CSV template file for adding students.
--   **`GET /admin/students/<int:student_id>`**: Displays the detailed view for a specific student.
--   **`POST /admin/void-transaction/<int:transaction_id>`**: Voids a specific transaction.
--   **`GET, POST /admin/store`**: The store management page for adding and editing items.
--   **`GET, POST /admin/store/edit/<int:item_id>`**: The page for editing a specific store item.
--   **`POST /admin/store/delete/<int:item_id>`**: Deactivates a specific store item.
--   **`GET /admin/transactions`**: Displays a filterable log of all student transactions.
--   **`GET /admin/payroll`**: The payroll management page, showing estimates and recent payrolls.
--   **`POST /admin/run-payroll`**: Manually triggers a payroll run.
--   **`GET /admin/payroll-history`**: Displays a detailed history of all past payrolls.
--   **`GET /admin/attendance-log`**: Shows a complete log of all student tap-in and tap-out events.
--   **`GET /admin/logout`**: Logs the admin out of their session.
-
-### 4. System Admin Routes (`@system_admin_required`)
-
-These routes require an active system administrator login session.
-
--   **`GET, POST /sysadmin/dashboard`**: The main dashboard for system admins, showing system-wide statistics and management options.
--   **`GET /sysadmin/logs`**: Displays the application's log file output.
--   **`GET /sysadmin/logout`**: Logs the system admin out of their session.
-
-## X. Amendment
-
-Revisions to this document must:
-1. Increment the version number.
-2. Update the Effective Date.
-3. Maintain consistency with `INV-CORE-000`.
+- Some older capability-token surfaces still exist, including `hall_pass_verify_token`, but public teacher identity for current verification flows is centered on `teacher_public_id`.
+- Compatibility aliases and legacy parameters may still exist in parts of the codebase, but they are not the intended v2 contract for new behavior or documentation.

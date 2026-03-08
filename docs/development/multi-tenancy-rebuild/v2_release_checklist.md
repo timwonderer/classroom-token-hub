@@ -1,81 +1,67 @@
 # v2 Multitenancy Go/No-Go Checklist
 
-Date: 2026-02-17  
-Branch: `join-code-centric-architecture-rebuild`
+Date: 2026-03-08
+Branch: `codex/v2.0`
 
 ## Release Gate
 
 | # | Checklist Item | Status | Pass Criteria | Primary Validation |
 |---|---|---|---|---|
-| 1 | Membership gate on all class-scoped routes | Complete | Every admin mutation route validates `join_code` membership via `_check_admin_join_code_access` or `_verify_membership_for_blocks`; identity-level routes documented | Route audit matrix + endpoint tests |
-| 2 | Query inversion complete (`teacher_id/block` removed as access control) | Complete | Access decisions no longer depend on `TeacherBlock`, `teacher_id`, `block` | Code sweep + targeted deny tests |
-| 3 | No class-scoped `join_code IS NULL` fallback paths | Complete | Settings helpers (`banking`, `rent`, `feature`) no longer fall back to `join_code=NULL` rows; return `None` or system defaults | `tests/test_settings_fallback_removal.py` (7 tests) |
-| 4 | “All sections” implemented as explicit fan-out over owned join-codes | In Progress | Batch operations iterate concrete owned join-codes only | Integration tests for multi-class teacher |
-| 4a | No global-balance property reads in live class-scoped displays | In Progress | Student/admin financial display surfaces render route-provided scoped totals only | Template + endpoint tests |
-| 5 | Actor audit anchor complete (`actor_membership_id`) | Complete | All state-changing writes persist actor membership or fail safely | Endpoint mutation tests |
-| 6 | Ledger immutability semantics complete | In Progress | Reversal-first behavior for voids; no destructive retroactive mutation as source-of-truth | Void flow tests + ledger reconciliation |
-| 7 | Monetary precision hardened | In Progress | Core financial calculations avoid float drift | Precision tests |
-| 8 | Legacy bypass routes removed/deprecated paths blocked | In Progress | No deprecated route can mutate/read class data without membership scope | Route tests + routing audit |
-| 9 | Join-code deletion UX guardrails implemented | Complete | Multi-step confirmation flow before hard delete | UI + endpoint tests |
-| 10 | CI multitenancy regression suite required for merge | Complete | Full 497-test suite passing with strict FK constraints and no warnings | CI validation |
-| 11 | DB CHECK constraints on ClassMembership | Complete | XOR and Role Consistency enforced at DB level | DB migration + tests |
-| 12 | Production Migration Runbook | Not Started | `V2_PRODUCTION_TRANSITION_RUNBOOK.md` complete | Doc review |
-| 13 | Join code rotation FK backfills | Not Started | Rotation safely backfills FK-scoped tables or aliases without breaking | Integration tests |
-| 14 | Backfill conflict detection | Not Started | `comprehensive_legacy_migration.py` detects conflicts before modifying data | Script verification |
-| 15 | Sweep read paths for `teacher_id` | Complete | Admin read paths use `join_code` scoping, not just `teacher_id` | Code sweep + tests |
-| 16 | Archived economy read-only access | Not Started | Archived economies permit reads but block mutations | Endpoint tests |
-| 17 | Harden `actor_membership_id = None` paths | Not Started | Silently dropped audits are logged or failed loudly | Code review + tests |
-| 18 | TeacherBlock fallback feature flag | Not Started | Legacy fallback is gated by `USE_LEGACY_TB_FALLBACK` | Code search |
-| 19 | Document/test StoreItem null join_code behavior | Not Started | Global items behavior is explicit and tested, or removed | Document + tests |
-| 20 | Audit `system_admin.py` routes | Not Started | Sysadmin routes audited for multi-tenancy compliance | Route audit matrix |
-| 21 | Class Deletion `collapse_universe` Primitive | Complete | `collapse_universe` used for all destructive paths, `ON DELETE CASCADE` enforced | Deletion tests + DB schema |
-| 22 | Observer Role & Pending Status Decision | Not Started | Conclude and document whether Observer role and Pending states are implemented or deferred | Doc / Schema |
-| 23 | Deprecate Global Balance Properties | Not Started | Legacy properties (checking/savings_balance) are safely deprecated | Code review |
+| 1 | `ClassEconomy` / `ClassMembership` model parity | Complete | ORM matches active class-economy schema and runtime imports succeed | `app/models.py`, migration review, full suite |
+| 2 | Membership gate on class-scoped routes | Complete | Class-scoped admin/student/API routes validate membership or owned join-code scope | Route audit + tenancy suites |
+| 3 | Query inversion complete for recent hardening scope | Complete | Active class decisions no longer depend on `TeacherBlock`, `teacher_id`, or `block` as access-control authority | Code sweep + regression tests |
+| 4 | No class-scoped `join_code IS NULL` fallback paths in live v2 flows | Complete | Student settings/purchase flows return scoped values or defaults, not null-join-code blends | `tests/test_settings_fallback_removal.py` |
+| 5 | Public teacher identity is non-numeric | Complete | Public teacher-facing verification uses `Admin.public_id` / `teacher_public_id` instead of numeric IDs | API tests + route inspection |
+| 6 | Join-code deletion guardrails and cleanup | Complete | Destructive class deletion requires confirmation and cleans the tenant boundary | deletion tests + route tests |
+| 7 | DB check constraints on `ClassMembership` | Complete | XOR and role/status consistency enforced at DB layer | migration review + tests |
+| 8 | Remaining v2 migration heads resolved | Complete | Repo contains a single coherent merge path for current heads | migration graph review |
+| 9 | Full PostgreSQL suite green on v2 branch | Complete | `pytest -q` passes on `classroom_economy_test` | `664 passed, 1 skipped` |
+| 10 | Live-test runbook published | Complete | Internal operator workflow exists for migration rehearsal, smoke checks, and rollback decisions | `SOP-DEP-022` |
+| 11 | Production transition runbook published | Complete | Production transition workflow exists with maintenance mode, backup, and sign-off steps | `SOP-DEP-023` |
+| 12 | Branch/database switching docs current | Complete | Docs describe `codex/v2.0` as the only active protected branch and distinguish dev vs test DBs | SOP update |
+| 13 | Migration compliance status current | In Progress | Historical audit is superseded by current status and remaining exceptions | `SOP-DB-009` |
+| 14 | Archived economy read-only policy | Not Started | Archived economies have explicit documented and tested runtime policy | contract doc + tests |
+| 15 | Full sysadmin tenancy audit | Not Started | `system_admin.py` routes are reviewed against v2 join-code contract | route audit matrix |
+| 16 | Global-balance property deprecation cleanup | Not Started | Legacy aggregate convenience properties are either retired or fully documented as transitional only | code/doc review |
 
-## Execution Order (Recommended)
+## Readiness Artifact
 
-1. Complete route-level authorization sweep (`admin`, `api`, `student`, `system_admin`).
-2. Finish query inversion and remove class-level legacy null-join-code blending.
-3. Enforce all-sections fan-out semantics everywhere (no implicit globals).
-4. Implement `collapse_universe` for class deletion and add DB CHECK constraints / FK Cascades.
-5. Complete audit-anchor coverage for every state-changing endpoint & harden None paths.
-6. Enhance migration script with conflict detection and write Production Migration Runbook.
-7. Finalize immutable-ledger, precision hardening, and archived economy read-only rules.
-8. Remove legacy bypass routes, implement join-code rotation backfill, gate TeacherBlock fallback.
-9. Add destructive delete UX guardrails.
-10. Lock CI gate for multitenancy regression suite.
+### Ready Now
 
-## Recent Completions
+- Validated branch consolidation is complete and only `codex/v2.0` remains active.
+- Full suite result on PostgreSQL test DB is `664 passed, 1 skipped`.
+- Current class authority is `ClassMembership` + `ClassEconomy`, with `current_join_code` as active session context.
+- Migration heads are resolved in repo with the current merge migration.
 
-- **Comprehensive admin mutation route audit**: Audited all 50+ POST routes and added join_code membership gates to every class-scoped mutation route.
-- **Settings fallback hardening**: Removed legacy `join_code=NULL` fallback queries from `get_banking_settings_for_context()`, `get_rent_settings_for_context()`, `get_feature_settings_for_student()`, and `purchase_item()` banking lookup.
-- **Config mutation gates**: Added `_verify_membership_for_blocks` to `store_management` POST (create), `edit_store_item` POST, `delete_store_item` POST (soft), `payroll_settings` POST, `update_expected_weekly_hours` POST, `edit_insurance_policy` POST, `deactivate_insurance_policy` POST, `delete_insurance_policy` POST.
-- **Financial state gates**: Added `_check_admin_join_code_access` to `rent_settings` POST, `insurance_management` POST (create), `add_rent_waiver` POST, `remove_rent_waiver` POST.
-- **Payroll reward/fine class scoping**: `payroll_add_reward` and `payroll_add_fine` now set `join_code` from session context; `delete`/`edit` routes verify membership on the record's `join_code`.
-- **Pending student cleanup gates**: `delete_pending_student`, `bulk_delete_pending_students`, `bulk_delete_legacy_unclaimed` now verify join_code membership before deletion.
-- **Shared helper**: Introduced `_verify_membership_for_blocks` (resolves blocks → join_codes via TeacherBlock, verifies admin ClassMembership for each).
-- **Test coverage**: Created `tests/test_settings_fallback_removal.py` (7 tests) verifying settings helpers refuse legacy `join_code=NULL` rows.
-- Scoped admin payroll display balances to owned join-codes.
-- Scoped student payroll/transfer lifetime earnings display to current join-code context.
-- Hardened admin tap/block settings APIs to require `current_join_code` admin membership and block cross-join-code student/event access.
-- Expanded authorization sweep coverage for attendance/redemption/hall-pass/insurance claim class scoping and added explicit join-code delete confirmation guardrail.
-- Removed deprecated hall-pass terminal routes/APIs and switched student dashboard queue polling to explicit `current_join_code` scope.
-- Updated verification display API to intentional unauthenticated teacher-wide scope via stable random teacher public-id URL across that teacher's join-codes.
-- Added random `Admin.public_id` and moved verification identity resolution off numeric teacher IDs.
-- Switched new `Admin.public_id` generation to readable 3-word slugs from local word list for stable QR/manual use.
-- **Class Deletion Guardrails**: Implemented the strict 2-step UI modals (30-second warning, explicit typed confirmation, 10-second hold) for `admin_students` and `admin_deletion_requests`.
-- **Class Deletion Primitive**: Verified `collapse_universe` properly cleans up associated records via integration tests (`test_class_deletion.py`).
-- **Query Inversion Phase 1**: Scoped settings reads and student shop logic to `join_code`. Removed fallback `teacher_id` leaks in those paths.
-- **Model Migration Safeguards**: Fixed testing models and modernized legacy queries (like `Query.get()`) to pass cleanly ahead of PostgreSQL foreign key constraints hardening.
-## Immediate Next Step
+### Must Finish Before Live Testing
 
-1. Complete query inversion sweep: remove remaining class-scope filters using `teacher_id` comparisons and `block=None` as access boundary.
-2. Ensure all state-changing writes set `actor_membership_id` universally.
-3. Lock CI gate for multitenancy regression suite.
+- Finish the migration compliance refresh so current exceptions are explicit and actionable.
+- Execute the v2 live-test runbook end-to-end on the dev/migration database and record the result.
+- Confirm smoke-route checklist ownership and sign-off path.
+- Complete a final stale-reference sweep to ensure no living docs still imply deleted branches or fallback design.
 
-## Definition of Done for v2
+### Can Wait Until After Live Testing
 
-- No class-scoped action executes without validated `join_code` + membership.
-- No access decision depends on `TeacherBlock`, `teacher_id`, or `block`.
-- No class-scoped reads/writes rely on `join_code IS NULL` fallback logic.
-- All hardening regression tests pass in CI and block merge on failure.
+- Broad historical audit cleanup and supersession notes.
+- Lower-priority user guide polish beyond the currently corrected flows.
+- Further compatibility-shim reduction where behavior is already correct but documentation still carries transitional notes.
+
+## Remaining Work by Phase
+
+### Required Before Live Testing
+
+1. Rehearse migration upgrade and verification on the team-configured v2 dev/migration database.
+2. Close the migration-compliance status gap with a current exception list and owner.
+3. Run the live-test smoke checklist from the new runbook and capture results.
+
+### Required Before Production
+
+1. Finalize production backup, maintenance-mode, and rollback rehearsal.
+2. Complete operator sign-off flow in the production transition runbook.
+3. Resolve any issues discovered during live testing that affect migration, authorization, or data integrity.
+
+### Post-Live-Test Cleanup
+
+1. Continue sysadmin route audit and lower-priority query inversion cleanup.
+2. Clarify archived-economy behavior and complete remaining compatibility cleanup.
+3. Consolidate or supersede stale historical audit notes with cross-links to current SOPs.

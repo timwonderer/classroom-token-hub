@@ -195,6 +195,8 @@ This document is the canonical index of all formal documentation.
 - [SOP-DEP-016_Rollback_Procedures.md](../DEPLOYMENT/SOP-DEP-016_Rollback_Procedures.md)
 - [SOP-DEP-020_Seeding_Instructions.md](../DEPLOYMENT/SOP-DEP-020_Seeding_Instructions.md)
 - [SOP-DEP-021_Pwa_Icon_Requirements.md](../DEPLOYMENT/SOP-DEP-021_Pwa_Icon_Requirements.md)
+- [SOP-DEP-022_V2_Live_Test_Runbook.md](../DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md)
+- [SOP-DEP-023_V2_Production_Transition_Runbook.md](../DEPLOYMENT/SOP-DEP-023_V2_Production_Transition_Runbook.md)
 ### STANDARD_OPERATING_PROCEDURES/DOCUMENTATION
 
 - [SOP-DOC-000_Writing_Specification.md](SOP-DOC-000_Writing_Specification.md)

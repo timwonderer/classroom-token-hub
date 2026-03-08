@@ -1,5 +1,8 @@
 # LOG-ARC-041: Join-Code-Centric Alignment Whitepaper
 
+> [!NOTE]
+> Historical branch-analysis artifact. The branches referenced below have since been consolidated into `codex/v2.0`.
+
 **Date:** 2026-03-07  
 **Primary Branch Reviewed:** `codex/fix-database-model-for-dob-sum-storage`  
 **Baseline / Related Branch:** `join-code-centric-architecture-rebuild`  

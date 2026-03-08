@@ -12,16 +12,21 @@ related:
 # Hall Pass
 
 ## Overview
-The Hall Pass queue allows you to review, approve, deny, or close student hall pass requests in real-time, functioning as a digital sign-out sheet.
+The Hall Pass queue allows you to review, approve, deny, or close student hall pass requests in real time for the class you currently have selected.
 
 ## Step-by-Step Instructions
 
 ### Managing Hall Pass Requests
 1. Navigate to **Classroom > Hall Pass** in the teacher sidebar.
-2. Review the live queue of active and pending requests.
-3. Open a specific request to see details (e.g., student name, destination, reason).
-4. Select **Approve** to allow the student to leave, or **Deny** if it is not a good time.
-5. When the student returns to the classroom, select **Close** on their active pass.
+2. Confirm you are in the correct class using the class selector.
+3. Review the live queue of active and pending requests for that class.
+4. Open a specific request to see details (e.g., student name, destination, reason).
+5. Select **Approve** to allow the student to leave, or **Deny** if it is not a good time.
+6. When the student returns to the classroom, select **Close** on their active pass.
+
+### Public Verification
+
+Teachers can also share a verification view that identifies the class owner by public teacher identity rather than an internal numeric teacher ID.
 
 ## Important Notes
 > [!IMPORTANT]

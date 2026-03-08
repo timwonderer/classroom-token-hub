@@ -6,7 +6,7 @@
 
 ## Summary
 
-This log records the current implementation status of the user/seat identity split and seat-scoped data migration work on branch `codex/fix-database-model-for-dob-sum-storage`.
+This log records the current implementation status of the user/seat identity split and seat-scoped data migration work as carried forward into branch `codex/v2.0`.
 
 ## Completed Work
 
@@ -21,7 +21,7 @@ This log records the current implementation status of the user/seat identity spl
   - `rent_payments`
   - `rent_waivers`
 - Added seat-scope helper utilities in `app/utils/seat_scope.py`.
-- Refactored student rent flows to use seat-first dual-read filtering with legacy fallback.
+- Refactored student rent flows to use seat-first dual-read filtering during the migration window. v2 runtime docs now treat join-code membership as the intended authority model, not legacy fallback behavior.
 - Added regression coverage:
   - `tests/test_user_seat_identity.py`
   - `tests/test_ledger_seat_scope.py`

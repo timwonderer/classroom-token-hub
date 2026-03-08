@@ -13,7 +13,7 @@ related:
 # Class Setup and Join Codes
 
 ## Overview
-This feature allows you to create class sections (periods), distribute join codes, and establish the roster data that your students must match when claiming their accounts.
+Each teacher class in v2.0 is a distinct join-code economy. Class setup is where you create those sections, distribute join codes, and establish the roster data students must match when they claim or add that class.
 
 ## Step-by-Step Instructions
 
@@ -24,13 +24,14 @@ This feature allows you to create class sections (periods), distribute join code
 4. If you need a new period, create the section *before* adding or importing students.
 
 ### Managing Join Codes
-Each class section automatically generates a unique join code. 
+Each class section automatically generates a unique join code.
 1. Locate the join code on your dashboard or roster page.
-2. Distribute this code to your students. They must enter it when claiming their account or adding a new class.
+2. Distribute this code to your students. They use it when claiming an account or adding your class to an existing account.
+3. Treat each join code as its own class economy. Settings, balances, attendance, and store behavior are scoped to that class.
 
 ## Important Notes
 > [!IMPORTANT]
-> **Keep roster data aligned:** The roster fields you enter are the *exact* values students must use to securely claim their accounts. Ensure the first name, last name, date of birth, and class section are completely accurate.
+> **Keep roster data aligned:** The roster fields you enter are the exact values students must use for that join code. Accurate roster data is required for secure class claiming.
 
 > [!TIP]
 > **When students cannot join:** If a student receives an error finding their account, confirm they are using the correct join code and that they are typing their roster details (like DOB) exactly as you input them.

@@ -2,36 +2,42 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-010       | 1.0     | 2026-03-01     | N/A        | Normative                 |
+| SOP-DB-010       | 1.1     | 2026-03-08     | 1.0        | Normative       |
 
 ## Automatic Branch-Based Database Switching
 
-This repository uses branch-based database switching.
+This repository uses branch-based database switching through the shared git hooks.
 
-Protected v2.0 branches:
+### Protected v2 Branch
 
-- `join-code-centric-architecture-rebuild`
-- `codex/fix-database-model-for-dob-sum-storage`
 - `codex/v2.0`
 
-These branches must always use:
+This branch must use:
 
-- `postgresql://postgres:postgres@localhost/classroom_economy`
+- the team-configured v2 dev database
+
+### Test Database
+
+Automated and manual tests for v2 must use:
+
+- the team-configured PostgreSQL test database
+
+This is not the same database as the protected dev/migration database.
+
+### All Other Branches
 
 All other branches may use:
 
 - `postgresql://postgres:postgres@localhost/production_dev`
 
-### How It Works
+## How It Works
 
-When you checkout a branch, the `hooks/post-checkout` hook automatically updates the `DATABASE_URL` in your `.env` file.
+When you checkout a branch, the `hooks/post-checkout` hook updates `DATABASE_URL` in `.env` for the branch class it recognizes.
 
-### Manual Database Switching
-
-Manual switch command:
+## Manual Switching
 
 ```bash
-# Switch to production_dev (blocked on protected branches)
+# Switch to production_dev (blocked on protected v2 branch)
 ./scripts/switch-db.sh production_dev
 
 # Switch to classroom_economy
@@ -41,23 +47,29 @@ Manual switch command:
 ./scripts/switch-db.sh
 ```
 
-### Database Purposes
+## Operator Truth
 
-- **`classroom_economy`**: Required for protected v2.0 architecture branches listed above
-- **`production_dev`**: Default for non-protected branches and current v1.x work
+- `classroom_economy` is the v2 dev and migration rehearsal database.
+- `classroom_economy_test` is the required PostgreSQL test database.
+- `production_dev` is for non-v2 development branches.
 
-### Setup for New Contributors
+## Setup for Contributors
 
-1. Run `./scripts/switch-db.sh production_dev` (or `classroom_economy` if on a protected branch)
-2. Confirm `.env` contains the expected `DATABASE_URL` for your current branch
+1. Run `./scripts/setup-hooks.sh`.
+2. Checkout your branch.
+3. Confirm `.env` contains the expected `DATABASE_URL`.
+4. Before running tests on v2 work, export:
 
-### Troubleshooting
+```bash
+export DATABASE_URL=<team-test-db-url>
+```
 
-If the automatic switching isn't working:
+## Troubleshooting
+
+If automatic switching is not working:
 
 1. Verify the hook exists: `ls -la hooks/post-checkout`
-2. Verify hooks path config: `git config --get core.hooksPath` (should be `hooks`)
-3. Verify it's executable: `chmod +x hooks/post-checkout`
-4. Manually switch using the script:
-   - Protected branches: `./scripts/switch-db.sh classroom_economy`
-   - Other branches: `./scripts/switch-db.sh production_dev`
+2. Verify hooks path config: `git config --get core.hooksPath`
+3. Verify the hook is executable: `chmod +x hooks/post-checkout`
+4. Use `./scripts/switch-db.sh` manually for the dev database
+5. Set the test database explicitly in the shell before running pytest
