@@ -1223,7 +1223,7 @@ class EconomyBalanceChecker:
             ))
 
         # Generate recommendations
-        recommendations = self._generate_recommendations(cwi, all_warnings)
+        recommendations = self.generate_recommendations(cwi, all_warnings)
 
         # Determine if economy is balanced
         # Balanced if: no critical warnings and survival test passed
@@ -1239,17 +1239,19 @@ class EconomyBalanceChecker:
             weekly_savings=weekly_savings
         )
 
-    def _generate_recommendations(self, cwi: float, warnings: List[BalanceWarning]) -> Dict[str, Any]:
+    def generate_recommendations(self, cwi: float, warnings: Optional[List[BalanceWarning]] = None) -> Dict[str, Any]:
         """
         Generate recommended configurations based on CWI and warnings.
 
         Args:
             cwi: Calculated CWI
-            warnings: List of balance warnings
+            warnings: Optional list of balance warnings
 
         Returns:
             Dictionary of recommendations per feature
         """
+        warnings = warnings or []
+
         rent_min_ratio_weekly, rent_max_ratio_weekly, rent_default_ratio_weekly = self._ratio_band(
             "rent_weekly",
             self.RENT_MIN_RATIO,

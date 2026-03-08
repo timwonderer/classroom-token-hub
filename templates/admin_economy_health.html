@@ -202,7 +202,6 @@
       <form method="post" action="{{ url_for('admin.apply_economy_rebalance') }}" class="mt-4">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="block" value="{{ selected_block or '' }}">
-        <input type="hidden" name="preview_payload" value="{{ preview_payload }}">
         <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
           <div>
             <h6 class="mb-1">Rebalance Preview</h6>

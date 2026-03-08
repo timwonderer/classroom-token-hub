@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 
 from app import db
-from app.models import Admin, FeatureSettings, PayrollSettings, RentSettings
+from app.models import Admin, FeatureSettings, InsurancePolicy, PayrollSettings, RentSettings
 from app.utils.economy_balance import EconomyBalanceChecker
 
 
@@ -42,6 +42,28 @@ def _create_admin_with_block(block='A'):
     return admin, payroll_settings, rent_settings
 
 
+def _create_insurance_policy(admin_id, title, premium, block='A'):
+    policy = InsurancePolicy(
+        teacher_id=admin_id,
+        policy_code=f"{title[:3].upper()}{admin_id}",
+        title=title,
+        premium=Decimal(str(premium)),
+        charge_frequency='monthly',
+        waiting_period_days=7,
+        max_claim_amount=Decimal('100.00'),
+        max_payout_per_period=Decimal('200.00'),
+        claim_type='legacy_monetary',
+        is_monetary=True,
+        settings_mode='advanced',
+        is_active=True,
+    )
+    db.session.add(policy)
+    db.session.flush()
+    policy.set_blocks([block])
+    db.session.commit()
+    return policy
+
+
 def test_checker_uses_feature_policy_mode_for_recommendations(client):
     admin, payroll_settings, _ = _create_admin_with_block()
 
@@ -70,7 +92,7 @@ def test_comfortable_policy_uses_requested_ratio_profile(client):
     checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='comfortable')
     recommendations = checker.analyze_economy(payroll_settings).recommendations
 
-    cwi = 75.0
+    cwi = float(payroll_settings.pay_rate) * payroll_settings.expected_weekly_hours * 60
     assert recommendations['utilities']['min'] == round(cwi * 0.04, 2)
     assert recommendations['utilities']['max'] == round(cwi * 0.08, 2)
     assert recommendations['fine']['max'] == round(cwi * 0.12, 2)
@@ -111,34 +133,64 @@ def test_update_economy_policy_creates_block_scoped_settings(client):
 
 
 def test_immediate_rebalance_updates_rent_setting(client):
-    admin, _, rent_settings = _create_admin_with_block()
+    admin, payroll_settings, rent_settings = _create_admin_with_block()
     _login_admin(client, admin.id)
     db.session.add(FeatureSettings(teacher_id=admin.id, block='A', economy_policy_mode='tight'))
     db.session.commit()
 
-    payload = json.dumps([
-        {
-            'key': 'rent',
-            'change': {
-                'type': 'rent',
-                'block': 'A',
-                'current_value': '500.00',
-                'new_value': '575.00',
-            },
-        }
-    ])
+    checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='tight')
+    expected_rent = Decimal(str(checker.analyze_economy(payroll_settings).recommendations['rent']['recommended']))
 
     response = client.post('/admin/economy-policy/rebalance', data={
         'block': 'A',
         'activation_mode': 'immediate',
         'confirm_immediate': 'yes',
         'selected_changes': ['rent'],
-        'preview_payload': payload,
     })
 
     assert response.status_code == 302
     db.session.refresh(rent_settings)
-    assert rent_settings.rent_amount == Decimal('575.00')
+    assert rent_settings.rent_amount == expected_rent
+
+
+def test_invalid_activation_mode_is_rejected(client):
+    admin, _, rent_settings = _create_admin_with_block()
+    _login_admin(client, admin.id)
+    db.session.add(FeatureSettings(teacher_id=admin.id, block='A', economy_policy_mode='tight'))
+    db.session.commit()
+
+    response = client.post('/admin/economy-policy/rebalance', data={
+        'block': 'A',
+        'activation_mode': 'later',
+        'selected_changes': ['rent'],
+    })
+
+    assert response.status_code == 302
+    db.session.refresh(rent_settings)
+    assert rent_settings.rent_amount == Decimal('500.00')
+
+
+def test_rebalance_ignores_cross_teacher_selected_ids(client):
+    admin_a, _, _ = _create_admin_with_block('A')
+    admin_b, _, _ = _create_admin_with_block('B')
+    policy_a = _create_insurance_policy(admin_a.id, 'Teacher A Policy', '20.00', block='A')
+    policy_b = _create_insurance_policy(admin_b.id, 'Teacher B Policy', '99.00', block='B')
+    _login_admin(client, admin_a.id)
+    db.session.add(FeatureSettings(teacher_id=admin_a.id, block='A', economy_policy_mode='tight'))
+    db.session.commit()
+
+    response = client.post('/admin/economy-policy/rebalance', data={
+        'block': 'A',
+        'activation_mode': 'immediate',
+        'confirm_immediate': 'yes',
+        'selected_changes': [f'insurance_{policy_b.id}'],
+    })
+
+    assert response.status_code == 302
+    db.session.refresh(policy_a)
+    db.session.refresh(policy_b)
+    assert policy_a.premium == Decimal('20.00')
+    assert policy_b.premium == Decimal('99.00')
 
 
 def test_run_payroll_applies_scheduled_rebalance(client):
