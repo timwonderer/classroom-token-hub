@@ -7,7 +7,7 @@
 
 ## I. Purpose
 
-This document summarizes the current database contract for v2.0 live-test work, with emphasis on class-scoping authority, public identity, and transitional compatibility fields.
+This document summarizes the current database contract for v2.0 live-test work, with emphasis on class-scoping authority, identity infrastructure, analytics/observability support, and transitional compatibility fields.
 
 ## II. Scope
 
@@ -78,6 +78,17 @@ Teacher/admin accounts.
 Runtime note:
 - `Admin.public_id` is a SQLAlchemy synonym for `teacher_public_id`.
 
+### Identity and onboarding support tables
+
+These models are active parts of the runtime identity layer:
+
+- `join_codes` - UUID-backed registry for class join-code lifecycle and cascade cleanup
+- `users` - generalized user container used by the newer identity layer
+- `identity_profiles` - centralized encrypted person-name identity records
+- `seats` - normalized claimed/unclaimed class seat records
+- `admin_invite_codes` - teacher signup invite mechanism
+- `teacher_onboarding` - persisted onboarding progress and widget state
+
 ### `student_teachers`
 
 Teacher ownership linkage for students.
@@ -100,11 +111,88 @@ Student record and credential container.
 Important fields:
 - `id`
 - encrypted identity fields
-- `dob_sum_hash` and related recovery/claim fields
-- transitional legacy columns still present for compatibility
+- `identity_id`
+- `block`
+- `join_code` / `join_code_id`
+- `salt`, `first_half_hash`, `second_half_hash`
+- `username_hash`, `username_lookup_hash`
+- recovery fields and second-factor settings
+- opaque/internal reference fields for non-PII workflows
 
 Runtime note:
 - Student financial and class-scoped reads must be interpreted through `join_code` and membership context, not the legacy global aggregate assumptions.
+
+### `balance_cache`
+
+Posted-balance snapshot table used for efficient balance reads.
+
+Important fields:
+- `student_id`
+- `seat_id`
+- `join_code`
+- `posted_checking_balance_cents`
+- `posted_savings_balance_cents`
+- `last_settlement_at`
+
+Runtime note:
+- This table is central to ledger settlement. Student balances are not stored on `StudentBlock`.
+
+### `payroll_cache`
+
+Cached payroll breakdown by teacher.
+
+Important fields:
+- `teacher_id`
+- `join_code`
+- `cached_breakdown`
+- `last_calculated_at`
+
+### `feature_settings`
+
+Class-scoped feature toggles.
+
+Important fields:
+- `teacher_id`
+- `join_code`
+- per-feature enablement fields used by student/admin flows
+
+### `announcements`
+
+Shared announcement table for both teacher-authored and sysadmin-authored messages.
+
+Important fields:
+- `teacher_id`
+- `system_admin_id`
+- `join_code`
+- `audience_type`
+- `target_teacher_id`
+- `is_active`, `priority`, `expires_at`
+
+Runtime note:
+- Teachers can author class-scoped announcements in `/admin/announcements/*`.
+- Sysadmins can author broader announcements in `/sysadmin/announcements/*`.
+
+### `analytics_*`
+
+Analytics storage models backing the teacher analytics surface.
+
+- `analytics_alerts` tracks alert state and acknowledgement lifecycle
+- `analytics_snapshots` stores precomputed metrics per class/window
+- `analytics_events` stores contextual events rendered alongside analytics data
+
+### Issue and observability tables
+
+Support and monitoring infrastructure includes:
+
+- `issues`
+- `issue_categories`
+- `ticket_correlation_packs`
+- `issue_status_history`
+- `issue_resolution_actions`
+- `error_logs`
+- `actor_request_traces`
+- `error_events`
+- `user_reports`
 
 ### `deletion_requests`
 
@@ -143,7 +231,7 @@ These remain intentionally present but should not be used to define new v2 behav
 - `Admin.public_id` -> synonym for `teacher_public_id`
 - `StudentTeacher.admin_id` -> synonym for `teacher_id`
 - `DeletionRequest.admin_id` -> synonym for `teacher_id`
-- `TeacherBlock.dob_sum` compatibility alias for `dob_sum_hash`
+- `TeacherBlock.dob_sum` -> Python compatibility shim for older fixtures; not a persisted DB column
 - legacy plaintext `username` fields on `teachers` and `system_admins`
 
 ## VII. v2 Contract Summary

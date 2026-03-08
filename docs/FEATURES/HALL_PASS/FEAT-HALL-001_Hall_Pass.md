@@ -1,4 +1,4 @@
-# FEAT-ARC-001: Hall Pass Feature Specification
+# FEAT-HALL-001: Hall Pass Feature Specification
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
@@ -44,8 +44,9 @@ Settings table: `hall_pass_settings`
 - `pass_types` JSON per destination (`name`, `enabled`, `queue_limit`, `simultaneous_limit`).
 
 Teacher public verification token:
-- `admins.hall_pass_verify_token` (rotatable, random capability token).
-- Exposed as `/verify/hallpass/<token>`.
+- Public verification flow is keyed by `teacher_public_token` / `Admin.public_id`.
+- Exposed as `/verify/hallpass/<teacher_public_token>`.
+- `hall_pass_verify_token` remains a legacy compatibility surface, not the primary documented public identifier.
 
 ## VI. Lifecycle State Machine
 
@@ -54,12 +55,14 @@ Allowed transitions:
 2. `pending` -> `rejected` (teacher reject or student cancel)
 3. `approved` -> `left` (student checkout or teacher/manual action)
 4. `left` -> `returned` (student checkin or auto-return on start-work)
-5. `left` -> `done for the day` (student forgot to checkin and time elapsed since initial start work is larger than set limit if there is one)
 
 Forbidden transitions:
 - Any transition from `rejected` to active states.
 - `pending` -> `left` without teacher approval.
 - `approved` -> `returned` without `left`.
+
+Related but separate state:
+- `StudentBlock.done_for_day_date` is a per-class student lock/state and is **not** a `HallPassLog.status` value.
 
 ## VII. Primary User Flow
 
@@ -78,7 +81,8 @@ Deprecated compatibility flow:
 - Request must be scoped to current class context (`join_code`).
 - Pass type must be enabled (or request denied).
 - Queue limits and destination limits must be enforced when configured.
-- For reasons other than `office`, `summons`, `done for the day`, student must have pass balance.
+- Default pass types are `Bathroom`, `Water Fountain`, `Office`, `Nurse`, and `Counselor`.
+- Balance exemptions, if any, are determined by the configured pass type and route logic; `done for the day` is not a hall-pass reason.
 
 ### Approval-time behavior:
 - On approve, hall pass balance is decremented when deduction applies.

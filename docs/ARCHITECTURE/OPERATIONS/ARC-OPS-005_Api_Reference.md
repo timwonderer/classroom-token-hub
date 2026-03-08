@@ -132,8 +132,20 @@ These are not pure JSON APIs but define important v2 class contracts:
   - destructive delete is guarded by confirmation flow
 - `/admin/export-students`
   - selected-class export computes balances and earnings in exact join-code scope
+- `/admin/help-support`
+  - teacher support intake route for class-scoped issue submission
+  - requires a valid teacher session and uses the current class context when present
 - `/admin/issues`
-  - current issue queue respects selected authorized class
+  - teacher issue review queue
+  - selected `current_join_code` narrows results to that authorized class; otherwise the queue fans out over the teacher's owned classes
+- `/admin/economy-health`
+  - teacher-facing diagnostics and economy analysis surface for the selected class
+- `/admin/feature-settings`
+  - class-scoped feature-flag management UI
+- `/admin/bonuses`
+  - teacher action that posts bonus adjustments in class scope
+- `/admin/backfill-transactions`
+  - teacher maintenance flow for ledger backfill/repair tasks
 
 ## VIII. Transitional Notes
 

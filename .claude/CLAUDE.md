@@ -25,7 +25,7 @@ This document provides essential guidance for Claude (or any AI assistant) worki
 - **Students** can be enrolled in multiple periods with different teachers
 - **System Admins** oversee the entire platform
 
-**Version:** 1.4.0 - Announcement System & UI Enhancements Release
+**Version:** 1.4.1 - Documentation alignment release
 **License:** PolyForm Noncommercial 1.0.0
 **Python:** 3.10+
 **Database:** PostgreSQL with Alembic migrations
@@ -78,31 +78,40 @@ The application uses Flask Blueprints for modular organization:
 app/
 ├── routes/
 │   ├── admin.py          # Teacher/admin routes
+│   ├── analytics.py      # Teacher analytics dashboard + APIs
 │   ├── student.py        # Student routes
 │   ├── system_admin.py   # System admin routes
 │   ├── api.py            # API endpoints
-│   └── auth.py           # Authentication
-├── models.py             # SQLAlchemy models (35+ models)
-├── utils/                # Utility functions
+│   ├── docs.py           # In-app documentation browser
+│   ├── main.py           # Public/site routes
+│   └── recovery.py       # Student recovery flow
+├── auth.py               # Auth helpers and scoped access helpers
+├── models.py             # SQLAlchemy models (55+ runtime models)
+├── services/             # Service-layer modules
+├── utils/                # Utility and domain helpers
+├── scheduled_tasks.py    # Background scheduler jobs
 └── __init__.py           # App factory
 ```
 
 ### Key Files
 
 - `wsgi.py` - Application entry point
-- `forms.py` - WTForms form definitions
-- `hash_utils.py` - Hashing and encryption utilities
-- `payroll.py` - Payroll automation logic
-- `attendance.py` - Attendance tracking logic
+- `app/forms.py` - WTForms form definitions
+- `app/auth.py` - Admin/student access helpers and auth/session utilities
+- `app/payroll.py` - Payroll automation logic
+- `app/services/balance_service.py` - Balance settlement/read helpers
+- `app/utils/analytics_engine.py` - Analytics computation backend
+- `app/scheduled_tasks.py` - Hourly and nightly background jobs
 
 ### Database Models
 
-**41 SQLAlchemy models** including:
-- Core: `Admin`, `Student`, `SystemAdmin`, `TeacherBlock`, `StudentBlock`
-- Financial: `Transaction`, `PayrollSettings`, `BankingSettings`
-- Features: `StoreItem`, `InsurancePolicy`, `RentSettings`, `HallPassLog`
-- Multi-tenancy: `StudentTeacher` (links students to multiple teachers)
-- Recovery: `RecoveryRequest`, `StudentRecoveryCode`
+**55+ SQLAlchemy models** including:
+- Identity and access: `Admin`, `SystemAdmin`, `User`, `IdentityProfile`, `Seat`
+- Class scope: `ClassEconomy`, `ClassMembership`, `TeacherBlock`, `StudentTeacher`, `JoinCode`
+- Student runtime: `Student`, `StudentBlock`, `Announcement`, `FeatureSettings`, `TeacherOnboarding`
+- Financial and attendance: `Transaction`, `BalanceCache`, `PayrollSettings`, `PayrollCache`, `BankingSettings`, `TapEvent`, `HallPassLog`
+- Support and observability: `Issue`, `IssueCategory`, `IssueStatusHistory`, `IssueResolutionAction`, `ErrorLog`, `ErrorEvent`, `ActorRequestTrace`, `UserReport`
+- Analytics: `AnalyticsAlert`, `AnalyticsSnapshot`, `AnalyticsEvent`
 
 ---
 
@@ -294,30 +303,32 @@ def test_feature_name(client, app):
 ### Examples of Proper Scoping
 
 ```python
-# ✅ CORRECT - Scoped by join_code
-students = Student.query.join(StudentBlock).filter(
-    StudentBlock.join_code == current_join_code
-).all()
+# ✅ CORRECT - ownership helper + class scope
+students = (
+    get_admin_student_query()
+    .join(ClassMembership, ClassMembership.student_id == Student.id)
+    .filter(ClassMembership.join_code == current_join_code)
+    .all()
+)
 
 # ✅ CORRECT - Transaction scoped by join_code
 transactions = Transaction.query.filter_by(
     join_code=current_join_code
 ).all()
 
-# ❌ WRONG - Not scoped, will leak data across periods
-students = Student.query.filter_by(
-    teacher_id=current_teacher_id
-).all()
+# ❌ WRONG - teacher ownership alone is not class scope
+students = get_admin_student_query().all()
 ```
 
 ### Tables That MUST Be Scoped
 
-- `Student` (via `StudentBlock`)
+- `Student` (via `ClassMembership` plus route-specific class checks)
 - `Transaction`
 - `TapEvent`
 - `PayrollSettings`
 - `RentSettings`
 - `BankingSettings`
+- `FeatureSettings`
 - `InsurancePolicy` (via `InsurancePolicyBlock`)
 - `StoreItem` (via `StoreItemBlock`)
 - All student-related data

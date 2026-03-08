@@ -36,12 +36,18 @@ The System Admin interface (`/sysadmin`) currently provides the following functi
 
 ### 1. User and Teacher Management
 - **Teacher List & Overview (`/manage-teachers`, `/teacher-overview`):** View all registered teachers, their active class periods, their signup dates, and recent logins.
+- **Admin Account List (`/admins`):** Review teacher/admin accounts in a management-focused listing.
+- **Invite Code Void (`/manage-teachers/void/<code_id>`):** Invalidate unused teacher signup invite codes.
+- **Teacher Deletion (`/manage-teachers/delete/<admin_id>`):** Remove teacher accounts through the sysadmin namespace.
+- **Period Deletion (`/delete-period/<admin_id>/<period>`):** Remove a teacher class period from the sysadmin interface.
 - **Username Migration (`/username-migration`):** Execute updates for the legacy username standard.
 
 ### 2. Authentication & Security
 - **Strict Access Control:** All routes gated strictly to System Admin accounts.
 - **WebAuthn Passkeys (`/passkey/*`):** Sysadmins can register and authenticate using biometric passkeys, list active passkeys, and manage their credential settings.
 - **TOTP Fallback:** Enforced Multi-Factor Authentication for non-passkey sign-ins.
+- **Teacher TOTP Reset (`/admins/<admin_id>/reset-totp`):** Reset a teacher/admin's TOTP enrollment when recovery is required.
+- **Teacher/Admin Deletion (`/admins/<admin_id>/delete`):** Remove teacher/admin credentials through the admin-account management flow.
 
 ### 3. Monitoring & Observability
 - **System Dashboard (`/dashboard`):** High-level metrics view.
@@ -50,6 +56,7 @@ The System Admin interface (`/sysadmin`) currently provides the following functi
   - File-based combined logs (`/combined-logs`)
   - Standard runtime logs (`/logs`)
   - Captured Error Logs (`/error-logs`)
+- **Log Testing (`/logs-testing`):** Emit test log traffic to validate the logging pipeline and viewer surfaces.
 - **Network Insights (`/network-activity`):** View active connections or incoming rate metrics.
 - **Error Simulators (`/test-errors/*`):** Safely trigger and verify custom 400, 401, 403, 404, 500, and 503 error handlers.
 
@@ -60,6 +67,10 @@ The System Admin interface (`/sysadmin`) currently provides the following functi
 
 ### 5. Platform Communication
 - **System Announcements (`/announcements/*`):** Create, edit, toggle visibility, and delete broadcast messages displayed across the platform to teachers and/or students.
+
+Implementation note:
+- The shared `Announcement` model supports both sysadmin-authored announcements and teacher-authored class announcements.
+- Teacher announcement management lives in the separate `/admin/announcements/*` namespace and is not a sysadmin capability.
 
 ## VII. Future Capabilities (Proposed Roadmap)
 - [ ] **Data Export Interfaces:** Web UI to trigger secure database dumps or CSV exports for backup compliance.
