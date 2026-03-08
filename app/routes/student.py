@@ -3851,8 +3851,13 @@ def switch_class(join_code):
 @student_bp.route('/switch-period/<int:teacher_id>', methods=['POST'])
 @login_required
 def switch_period(teacher_id):
-    """DEPRECATED: Numeric teacher-id route kept for backwards compatibility."""
-    return _switch_to_teacher_scope(teacher_id=teacher_id)
+    """Legacy numeric-ID switch route is disabled in strict join-code mode."""
+    current_app.logger.warning(
+        "Deprecated student switch-period route called with teacher_id=%s; route is disabled.",
+        teacher_id,
+    )
+    flash("This class switch path is no longer supported. Please switch using class context.", "warning")
+    return redirect(url_for('student.dashboard'))
 
 
 @student_bp.route('/switch-teacher/<string:teacher_public_id>', methods=['POST'])
