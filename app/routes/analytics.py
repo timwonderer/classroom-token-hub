@@ -104,8 +104,7 @@ def _get_payroll_settings_for_join_code(teacher_id: int, join_code: str):
     if not teacher_id or not join_code:
         return None
 
-    # Primary: explicit join-code scoped settings (block-specific preferred over join-code default).
-    payroll_settings = (
+    return (
         PayrollSettings.query.filter(
             PayrollSettings.teacher_id == teacher_id,
             PayrollSettings.join_code == join_code,
@@ -113,19 +112,6 @@ def _get_payroll_settings_for_join_code(teacher_id: int, join_code: str):
         .order_by(desc(PayrollSettings.block.isnot(None)))
         .first()
     )
-    if payroll_settings:
-        return payroll_settings
-
-    # Legacy compatibility: block-scoped row when join_code column is not backfilled yet.
-    block = get_block_for_join_code(join_code)
-    if block:
-        return PayrollSettings.query.filter_by(
-            teacher_id=teacher_id,
-            join_code=None,
-            block=block
-        ).first()
-
-    return None
 
 
 def get_pay_cycle_days(teacher_id: int, join_code: str) -> int:
@@ -140,8 +126,7 @@ def _get_rent_settings_for_join_code(teacher_id: int, join_code: str):
     if not teacher_id or not join_code:
         return None
 
-    # Primary: explicit join-code scoped settings (block-specific preferred over join-code default).
-    rent_settings = (
+    return (
         RentSettings.query.filter(
             RentSettings.teacher_id == teacher_id,
             RentSettings.join_code == join_code,
@@ -149,19 +134,6 @@ def _get_rent_settings_for_join_code(teacher_id: int, join_code: str):
         .order_by(desc(RentSettings.block.isnot(None)))
         .first()
     )
-    if rent_settings:
-        return rent_settings
-
-    # Legacy compatibility: block-scoped row when join_code column is not backfilled yet.
-    block = get_block_for_join_code(join_code)
-    if block:
-        return RentSettings.query.filter_by(
-            teacher_id=teacher_id,
-            join_code=None,
-            block=block
-        ).first()
-
-    return None
 
 
 def get_rent_cycle_days(teacher_id: int, join_code: str) -> int:

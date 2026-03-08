@@ -1883,7 +1883,6 @@ def get_available_hall_pass_types():
     """Get available pass types for the current class or public teacher identity."""
     join_code = (request.args.get('join_code') or '').strip().upper()
     teacher_public_id = (request.args.get('teacher_public_id') or '').strip()
-    teacher_id = request.args.get('teacher_id', type=int)  # Legacy compatibility only
 
     resolved_teacher_id = None
     context = get_current_class_context()
@@ -1905,13 +1904,10 @@ def get_available_hall_pass_types():
         if teacher:
             resolved_teacher_id = teacher.id
 
-    if not resolved_teacher_id and teacher_id:
-        resolved_teacher_id = teacher_id
-
     if not resolved_teacher_id:
         return jsonify({
             "status": "error",
-            "message": "join_code, teacher_public_id, or teacher_id is required"
+            "message": "join_code or teacher_public_id is required"
         }), 400
 
     settings = None
@@ -1924,20 +1920,7 @@ def get_available_hall_pass_types():
             .order_by(sa.desc(HallPassSettings.block.isnot(None)))
             .first()
         )
-        if not settings:
-            block_row = TeacherBlock.query.with_entities(TeacherBlock.block).filter(
-                TeacherBlock.teacher_id == resolved_teacher_id,
-                TeacherBlock.join_code == join_code,
-            ).first()
-            block = block_row[0] if block_row and block_row[0] else None
-            if block:
-                settings = HallPassSettings.query.filter_by(
-                    teacher_id=resolved_teacher_id,
-                    join_code=None,
-                    block=block
-                ).first()
-
-    if not settings:
+    elif teacher_public_id:
         settings = HallPassSettings.query.filter_by(teacher_id=resolved_teacher_id, block=None).first()
 
     if not settings:

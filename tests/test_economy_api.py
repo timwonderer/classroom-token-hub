@@ -26,9 +26,26 @@ def admin_with_payroll(client):
     db.session.add(admin)
     db.session.flush()
 
+    # Create class seat/join-code context for block-selected economy APIs
+    db.session.add(TeacherBlock(
+        teacher_id=admin.id,
+        block="A",
+        class_label="A",
+        first_name="Scope",
+        last_initial="A",
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
+        salt=b'salt',
+        first_half_hash="econ-fixture-a",
+        join_code="ECONA001",
+        student_id=None,
+        is_claimed=False
+    ))
+
     # Create payroll settings with specific expected_weekly_hours
     payroll_settings = PayrollSettings(
         teacher_id=admin.id,
+        join_code="ECONA001",
         block="A",
         pay_rate=0.25,  # $0.25/min = $15/hour
         expected_weekly_hours=8.0,  # Custom value, not 5.0
@@ -201,8 +218,38 @@ def test_different_expected_hours_per_block(client):
     db.session.flush()
 
     # Create payroll settings for different blocks with different hours
+    db.session.add(TeacherBlock(
+        teacher_id=admin.id,
+        block="A",
+        class_label="A",
+        first_name="Scope",
+        last_initial="A",
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
+        salt=b'salt',
+        first_half_hash="econ-multi-a",
+        join_code="ECONMULA",
+        student_id=None,
+        is_claimed=False
+    ))
+    db.session.add(TeacherBlock(
+        teacher_id=admin.id,
+        block="B",
+        class_label="B",
+        first_name="Scope",
+        last_initial="B",
+        last_name_hash_by_part=None,
+        dob_sum_hash=None,
+        salt=b'salt',
+        first_half_hash="econ-multi-b",
+        join_code="ECONMULB",
+        student_id=None,
+        is_claimed=False
+    ))
+
     payroll_a = PayrollSettings(
         teacher_id=admin.id,
+        join_code="ECONMULA",
         block="A",
         pay_rate=0.25,
         expected_weekly_hours=5.0,  # Block A: 5 hours
@@ -213,6 +260,7 @@ def test_different_expected_hours_per_block(client):
 
     payroll_b = PayrollSettings(
         teacher_id=admin.id,
+        join_code="ECONMULB",
         block="B",
         pay_rate=0.25,
         expected_weekly_hours=10.0,  # Block B: 10 hours

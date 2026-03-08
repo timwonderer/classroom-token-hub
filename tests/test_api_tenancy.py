@@ -535,3 +535,39 @@ def test_hall_pass_available_types_supports_teacher_public_id(client):
     payload = response.get_json()
     assert payload["status"] == "success"
     assert payload["pass_types"] == [{"name": "Bathroom"}, {"name": "Counselor"}]
+
+
+def test_switch_teacher_public_id_updates_join_code_context(client):
+    teacher_a, _ = _create_admin("teacher-switch-a")
+    teacher_b, _ = _create_admin("teacher-switch-b")
+    teacher_b.teacher_public_id = "teacher-switch-b-public"
+    db.session.commit()
+
+    student = _create_student(
+        "SwitchByPublicId",
+        primary_teacher=teacher_a,
+        linked_teachers=[teacher_a, teacher_b],
+    )
+    _create_claimed_seat(teacher_a, student, "SWITCHA1", block="A")
+    _create_claimed_seat(teacher_b, student, "SWITCHB1", block="B")
+
+    _login_student(client, student, join_code="SWITCHA1")
+    response = client.post("/student/switch-teacher/teacher-switch-b-public")
+
+    assert response.status_code == 302
+    with client.session_transaction() as sess:
+        assert sess["current_join_code"] == "SWITCHB1"
+        assert sess["current_teacher_id"] == teacher_b.id
+
+
+def test_switch_teacher_public_id_invalid_keeps_current_context(client):
+    teacher_a, _ = _create_admin("teacher-switch-invalid-a")
+    student = _create_student("SwitchInvalidPublicId", primary_teacher=teacher_a)
+    _create_claimed_seat(teacher_a, student, "SWITCHINV", block="A")
+
+    _login_student(client, student, join_code="SWITCHINV")
+    response = client.post("/student/switch-teacher/not-valid-public-id")
+
+    assert response.status_code == 302
+    with client.session_transaction() as sess:
+        assert sess["current_join_code"] == "SWITCHINV"

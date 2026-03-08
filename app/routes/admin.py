@@ -6578,70 +6578,49 @@ def economy_health():
         if not block_name:
             return None
         join_code = _resolve_join_code_for_block(block_name)
-        if join_code:
-            scoped = (
-                PayrollSettings.query.filter(
-                    PayrollSettings.teacher_id == admin_id,
-                    PayrollSettings.join_code == join_code,
-                    PayrollSettings.is_active.is_(True),
-                )
-                .order_by(desc(PayrollSettings.block.isnot(None)))
-                .first()
+        if not join_code:
+            return None
+        return (
+            PayrollSettings.query.filter(
+                PayrollSettings.teacher_id == admin_id,
+                PayrollSettings.join_code == join_code,
+                PayrollSettings.is_active.is_(True),
             )
-            if scoped:
-                return scoped
-        return PayrollSettings.query.filter_by(
-            teacher_id=admin_id,
-            join_code=None,
-            block=block_name,
-            is_active=True
-        ).first()
+            .order_by(desc(PayrollSettings.block.isnot(None)))
+            .first()
+        )
 
     def _resolve_rent_settings_for_block(block_name):
         if not block_name:
             return None
         join_code = _resolve_join_code_for_block(block_name)
-        if join_code:
-            scoped = (
-                RentSettings.query.filter(
-                    RentSettings.teacher_id == admin_id,
-                    RentSettings.join_code == join_code,
-                    RentSettings.is_enabled.is_(True),
-                )
-                .order_by(desc(RentSettings.block.isnot(None)))
-                .first()
+        if not join_code:
+            return None
+        return (
+            RentSettings.query.filter(
+                RentSettings.teacher_id == admin_id,
+                RentSettings.join_code == join_code,
+                RentSettings.is_enabled.is_(True),
             )
-            if scoped:
-                return scoped
-        return RentSettings.query.filter_by(
-            teacher_id=admin_id,
-            join_code=None,
-            block=block_name,
-            is_enabled=True
-        ).first()
+            .order_by(desc(RentSettings.block.isnot(None)))
+            .first()
+        )
 
     def _resolve_banking_settings_for_block(block_name):
         if not block_name:
             return None
         join_code = _resolve_join_code_for_block(block_name)
-        if join_code:
-            scoped = (
-                BankingSettings.query.filter(
-                    BankingSettings.teacher_id == admin_id,
-                    BankingSettings.join_code == join_code,
-                    BankingSettings.is_active.is_(True),
-                )
-                .order_by(desc(BankingSettings.block.isnot(None)))
-                .first()
+        if not join_code:
+            return None
+        return (
+            BankingSettings.query.filter(
+                BankingSettings.teacher_id == admin_id,
+                BankingSettings.join_code == join_code,
+                BankingSettings.is_active.is_(True),
             )
-            if scoped:
-                return scoped
-        return BankingSettings.query.filter_by(
-            teacher_id=admin_id,
-            join_code=None,
-            block=block_name,
-            is_active=True
-        ).first()
+            .order_by(desc(BankingSettings.block.isnot(None)))
+            .first()
+        )
 
     payroll_query = PayrollSettings.query.filter_by(teacher_id=admin_id, is_active=True)
     # Fetch all active payroll settings for this teacher once to avoid multiple DB queries
@@ -10195,7 +10174,7 @@ def _resolve_admin_payroll_settings_for_block(admin_id: int, block: str | None):
     """
     Resolve payroll settings with class-first precedence when a block is selected.
 
-    - If block is provided: prefer join-code scoped settings, then legacy block-only rows.
+    - If block is provided: resolve join-code scoped settings only.
     - If block is absent: preserve legacy teacher-level behavior.
     """
     if block:
@@ -10209,25 +10188,17 @@ def _resolve_admin_payroll_settings_for_block(admin_id: int, block: str | None):
             .first()
         )
         join_code = join_code_row[0] if join_code_row and join_code_row[0] else None
-        if join_code:
-            scoped_settings = (
-                PayrollSettings.query.filter(
-                    PayrollSettings.teacher_id == admin_id,
-                    PayrollSettings.join_code == join_code,
-                    PayrollSettings.is_active.is_(True),
-                )
-                .order_by(desc(PayrollSettings.block.isnot(None)))
-                .first()
+        if not join_code:
+            return None
+        return (
+            PayrollSettings.query.filter(
+                PayrollSettings.teacher_id == admin_id,
+                PayrollSettings.join_code == join_code,
+                PayrollSettings.is_active.is_(True),
             )
-            if scoped_settings:
-                return scoped_settings
-
-        return PayrollSettings.query.filter_by(
-            teacher_id=admin_id,
-            join_code=None,
-            block=block,
-            is_active=True
-        ).first()
+            .order_by(desc(PayrollSettings.block.isnot(None)))
+            .first()
+        )
 
     return PayrollSettings.query.filter_by(
         teacher_id=admin_id,

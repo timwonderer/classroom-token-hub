@@ -3851,8 +3851,32 @@ def switch_class(join_code):
 @student_bp.route('/switch-period/<int:teacher_id>', methods=['POST'])
 @login_required
 def switch_period(teacher_id):
-    """DEPRECATED: Use switch_class instead. Kept for backwards compatibility."""
+    """DEPRECATED: Numeric teacher-id route kept for backwards compatibility."""
+    return _switch_to_teacher_scope(teacher_id=teacher_id)
+
+
+@student_bp.route('/switch-teacher/<string:teacher_public_id>', methods=['POST'])
+@login_required
+def switch_teacher(teacher_public_id):
+    """Switch classes using teacher public identity instead of numeric teacher ID."""
+    from app.models import Admin
+
+    teacher = Admin.query.filter_by(teacher_public_id=teacher_public_id).first()
+    if not teacher:
+        flash("You don't have access to that class.", "error")
+        return redirect(url_for('student.dashboard'))
+
+    return _switch_to_teacher_scope(teacher_id=teacher.id)
+
+
+def _switch_to_teacher_scope(*, teacher_id: int):
+    """Resolve a teacher switch to a concrete claimed seat/join_code for this student."""
+    from app.models import TeacherBlock, Admin
+
     student = get_logged_in_student()
+    if not student:
+        flash("You must be logged in to switch classes.", "error")
+        return redirect(url_for('student.login'))
 
     # Verify student has access to this teacher
     teacher_ids = [t.id for t in student.get_all_teachers()]
@@ -3860,11 +3884,25 @@ def switch_period(teacher_id):
         flash("You don't have access to that class.", "error")
         return redirect(url_for('student.dashboard'))
 
-    # Update session with new teacher (old method)
+    # Resolve teacher switch to an explicit claimed seat context.
+    seats = (
+        TeacherBlock.query.filter_by(student_id=student.id, teacher_id=teacher_id, is_claimed=True)
+        .order_by(TeacherBlock.block.asc())
+        .all()
+    )
+    if not seats:
+        flash("You don't have access to that class.", "error")
+        return redirect(url_for('student.dashboard'))
+
+    current_join_code = session.get('current_join_code')
+    preferred_seat = next((seat for seat in seats if seat.join_code == current_join_code), None)
+    target_seat = preferred_seat or seats[0]
+
+    session['current_join_code'] = target_seat.join_code
+    # Kept for compatibility with older templates/routes that still inspect this session key.
     session['current_teacher_id'] = teacher_id
 
     # Get teacher name for flash message
-    from app.models import Admin
     teacher = db.session.get(Admin, teacher_id)
     if teacher:
         flash(f"Switched to {teacher.get_display_name()}'s class")

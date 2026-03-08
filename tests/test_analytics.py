@@ -39,6 +39,7 @@ def setup_analytics_test(client):
     # Note: PayrollSettings uses 'block' field, not 'join_code'
     payroll = PayrollSettings(
         teacher_id=admin.id,
+        join_code=join_code,
         block=block,
         pay_rate=0.25,  # $0.25/min = $15/hour
         expected_weekly_hours=5.0,
@@ -267,6 +268,7 @@ def test_multi_tenancy_scoping(client, setup_analytics_test):
     
     payroll2 = PayrollSettings(
         teacher_id=admin.id,
+        join_code=join_code2,
         block=block2,
         pay_rate=0.30,
         expected_weekly_hours=6.0,
@@ -426,16 +428,6 @@ def test_analytics_pay_cycle_prefers_join_code_scoped_settings(client, setup_ana
 
     db.session.add(PayrollSettings(
         teacher_id=admin.id,
-        join_code=join_code,
-        block=None,
-        pay_rate=0.25,
-        expected_weekly_hours=5.0,
-        payroll_frequency_days=11,
-        settings_mode='simple',
-        is_active=True
-    ))
-    db.session.add(PayrollSettings(
-        teacher_id=admin.id,
         join_code=None,
         block=None,
         pay_rate=0.25,
@@ -446,7 +438,8 @@ def test_analytics_pay_cycle_prefers_join_code_scoped_settings(client, setup_ana
     ))
     db.session.commit()
 
-    assert get_pay_cycle_days(admin.id, join_code) == 11
+    # Existing join-code scoped block row from fixture should remain authoritative.
+    assert get_pay_cycle_days(admin.id, join_code) == 7
 
 
 def test_analytics_pay_cycle_ignores_teacher_global_for_unscoped_join_code(client, setup_analytics_test):
