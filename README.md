@@ -169,9 +169,7 @@ After cloning, configure git to use the versioned `hooks/` directory:
 
 This enables:
 
-- `post-checkout`: branch-aware `DATABASE_URL` switching
-  - `join-code-centric-architecture-rebuild`, `codex/fix-database-model-for-dob-sum-storage`, and `codex/v2.0` -> `classroom_economy`
-  - other branches -> `production_dev`
+- `post-checkout`: branch-aware `DATABASE_URL` switching for local workflows
 - `pre-push`: migration-head safety checks
 
 ### Testing with Sample Data
@@ -183,7 +181,7 @@ This enables:
 
 ## Documentation
 
-📚 **[Complete Documentation →](docs/GITHUB_SITE/README.md)**
+📚 **[Complete Documentation →](docs/README.md)**
 
 ### For Users
 
@@ -292,9 +290,9 @@ python scripts/seed_dummy_students.py # Seed test data
 
 ## Roadmap
 
-Active development priorities and the path to version 1.0 are tracked in [DEVELOPMENT.md](DEVELOPMENT.md).
+Active development priorities, architectural follow-up work, and operational tasks are tracked in [DEVELOPMENT.md](DEVELOPMENT.md).
 
-**Version 1.0 Status:** All critical blockers (P0 and P1) have been resolved! The platform is ready for staging deployment and final validation before production release.
+This repository is under active maintenance. Current capability and release history are reflected in [CHANGELOG.md](CHANGELOG.md) and the canonical docs under [`docs/`](docs/README.md), rather than a fixed "path to 1.0" milestone.
 
 ---
 
@@ -350,7 +348,7 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 ## Support
 
-**Documentation:** [docs/README.md](docs/GITHUB_SITE/README.md)
+**Documentation:** [docs/README.md](docs/README.md)
 **Issues:** Use GitHub Issues for bug reports and feature requests
 **Security:** Report security issues privately to project maintainers
 
@@ -360,4 +358,4 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 Built for educators and students to make learning about finance engaging and practical.
 
-**Last Updated:** 2026-02-25
+**Last Updated:** 2026-03-08
