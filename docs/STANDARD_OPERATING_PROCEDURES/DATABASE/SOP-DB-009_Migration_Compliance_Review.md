@@ -7,11 +7,24 @@
 **Branch:** `codex/v2.0`
 **Status:** Current-state readiness summary for v2 live testing
 
-## Executive Summary
+## I. Purpose
+To serve as the compliance review report for database migrations prior to v2 deployment tracking readiness and unresolved operational gaps.
+
+## II. Scope
+Current v2 live-test preparations concerning the database state and testing runs.
+
+## III. Authority Level
+Normative (SOP Tier). Subordinate to INV-CORE-000.
+
+## IV. Dependencies
+- `INV-CORE-000_Core_Invariants.md`
+- `SOP-DB-011_Migration_Specifications.md`
+
+## V. Executive Summary
 
 The earlier migration-compliance audit remains historically useful, but it should not be read as the current branch-status summary. The current v2 branch is merge-consolidated, the active heads are resolved in repo, and the PostgreSQL test suite passes. The remaining migration concern is operational: documenting and rehearsing the exact upgrade, verification, and rollback workflow before live testing and production.
 
-## Current State
+## VI. Current State
 
 ### Confirmed Now
 
@@ -27,7 +40,7 @@ The earlier migration-compliance audit remains historically useful, but it shoul
 - A green test suite does not replace upgrade rehearsal on the dev/migration database.
 - Production safety depends on the runbooks in `SOP-DEP-022` and `SOP-DEP-023`, not on repository state alone.
 
-## Remaining Exceptions and Readiness Gaps
+## VII. Remaining Exceptions and Readiness Gaps
 
 ### Required Before Live Testing
 
@@ -42,7 +55,7 @@ The earlier migration-compliance audit remains historically useful, but it shoul
 - Confirm operator rollback decision points.
 - Re-run migration validation on a production-like snapshot or staging-equivalent environment.
 
-## Current Compliance Interpretation
+## VIII. Current Compliance Interpretation
 
 - The old audit remains a historical catalog of migration-policy debt.
 - The current v2 release-readiness question is narrower:
@@ -50,7 +63,7 @@ The earlier migration-compliance audit remains historically useful, but it shoul
   - can operators rehearse upgrade and verification safely?
   - are the remaining exceptions documented and accepted before live testing?
 
-## Required Validation Commands
+## IX. Required Validation Commands
 
 ```bash
 flask db heads
@@ -59,7 +72,7 @@ flask db upgrade
 DATABASE_URL=<team-test-db-url> pytest -q
 ```
 
-## Owner Action
+## X. Owner Action
 
 Before live testing, attach the output of the live-test runbook and record:
 
@@ -67,3 +80,6 @@ Before live testing, attach the output of the live-test runbook and record:
 - head state after upgrade
 - smoke-check result
 - rollback decision: not needed / needed / blocked
+
+## XI. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

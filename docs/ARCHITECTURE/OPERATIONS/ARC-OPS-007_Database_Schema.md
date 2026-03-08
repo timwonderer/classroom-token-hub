@@ -153,3 +153,6 @@ These remain intentionally present but should not be used to define new v2 behav
 - `current_join_code` defines selected class context in session.
 - Public teacher identity is `teacher_public_id` / `public_id`, not numeric teacher ID.
 - Compatibility aliases remain in schema and ORM, but they are transitional.
+
+## VIII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

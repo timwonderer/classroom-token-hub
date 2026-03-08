@@ -29,3 +29,6 @@ Prior to any downgrade in production, a fresh pg_dump backup must be captured fr
 ## VII. Data Validation
 - Post-downgrade, cross-check total user counts to ensure no orphaned rows were inadvertently wiped (unless such drop was intended).
 - Re-run `flask db current` to verify successful reversion.
+
+## VIII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

@@ -1,410 +1,70 @@
-# System Admin Interface - Comprehensive Design
+# ARC-SYS-001: System Admin Interface Specification
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| FEAT-ARC-003     | 1.0     | 2026-03-01     | N/A        | Normative                 |
+| ARC-SYS-001      | 1.1     | 2026-03-08     | 1.0        | Constitutional  |
 
-## Overview
-The System Admin interface is the super-user control panel for the Classroom Token Hub. It provides complete visibility and control over all aspects of the system.
+## I. Purpose
+This document defines the comprehensive architecture and capability set of the System Admin interface, the super-user control panel for the Classroom Token Hub.
 
-## Current Capabilities (Implemented)
--  Generate admin invite codes
--  View invite code status
--  View system admins list
--  View system logs (file-based)
--  View error logs (database)
--  Test error pages
--  TOTP-based authentication
--  **Manage teachers (admins)** - View list, delete with cascade
--  **Track admin timestamps** - Signup date, last login
+## II. Scope
+This specification governs the `/sysadmin` namespace, defining authentication requirements, implemented monitoring capabilities, user management tools, and support workflows available to super-users. It strictly defines the separation between teacher (admin) capabilities and system administrator capabilities.
 
-## Design Philosophy
+## III. Authority Level
+Constitutional (ARC Tier). This document is subordinate only to `INV-CORE-000` and `ARC-CORE-000`.
 
-**Simplified Role Separation:**
+## IV. Dependencies
+- `INV-CORE-000_Core_Invariants.md` (Authority and Multi-tenancy isolation policies)
+- `ARC-IDEN-001_Admin_Identity_Handling.md`
 
-- **System Admins** manage teachers and system-wide settings
-- **Teachers (Admins)** manage their own students
-- **Students** use the system
+## V. Design Philosophy
 
-**Key Decision:** Sysadmins should NOT see individual student data. This maintains:
+### Role Separation
+- **System Admins** manage the platform, infrastructure, teacher accounts, system-wide announcements, and escalated support issues.
+- **Teachers (Admins)** manage their own distinct class economies and students.
+- **Students** interact with their assigned class economy.
 
+### Key Privacy Boundary
+System Admins should not inherently manage individual student data directly. This ensures:
 - Clear separation of responsibilities
-- Simplified interface
-- Privacy boundaries
-- Proper delegation to teachers
-
-## Proposed New Capabilities
-
-### 1. User Management
-
-#### A. Admin (Teacher) Management  IMPLEMENTED
-**Route:** `/sysadmin/admins`
-
-**Features (Implemented):**
-
--  View all admin accounts with details:
-  - Username
-  - Signup date (created_at)
-  - Last login timestamp
-  - Number of students (currently shows total, will be per-teacher after multi-tenancy)
-
--  **Delete Admin Account:**
-  - Confirmation modal with clear warnings
-  - **Simplified approach:** Deleting admin always deletes all their students
-  - Shows student count and impact before deletion
-  - Cascades to all student data (transactions, items, insurance, rent, etc.)
-  - Permanent action (no soft delete - keeps things simple)
-  - No reassignment options (keeps interface simple)
-
-**Features (Future):**
-
-- [ ] Reset Admin TOTP (for emergency access if authenticator lost)
-- [ ] View Admin Activity (recent actions, payroll runs, etc.)
-- [ ] Total login count tracking
-- [ ] Export teacher list to CSV
-
-**Design Rationale:**
-The simplified delete approach (always delete students with teacher) is intentional:
-
-- Keeps interface simple and predictable
-- Matches real-world use case (teacher leaves = class ends)
-- Avoids complex reassignment logic before multi-tenancy
-- Clear warning prevents accidents
-
-#### B. Student Management - INTENTIONALLY REMOVED
-**Design Decision:** Sysadmins do NOT manage students directly.
-
-**Reasoning:**
-
-- Students belong to teachers, not system admins
-- Deleting a teacher automatically handles their students
-- Keeps sysadmin interface focused on system management
-- Teachers are responsible for their own student data
-- Maintains proper role hierarchy
-
-**If you need student management:**
-
-- Log in as the teacher who owns the students
-- Or delete the teacher (which deletes all their students)
-
-#### C. Orphaned Data Cleanup
-**Route:** `/sysadmin/cleanup`
-
-**Features:**
-
-- Identify orphaned records:
-  - Students with no teacher (after multi-tenancy)
-  - Transactions with deleted students
-  - Store items with deleted owners
-  - Hall pass logs with deleted students
-
-- Cleanup tools:
-  - Reassign orphaned students
-  - Archive old transactions
-  - Purge soft-deleted records
-
-### 2. System Statistics Dashboard
-**Route:** `/sysadmin/stats`
-
-**Features:**
-
-- **Overview Cards:**
-  - Total System Admins
-  - Total Admins (Teachers)
-  - Total Students
-  - Total Active Students (logged in last 30 days)
-  - Total Transactions
-  - Total Tokens in Circulation
-
-- **Charts/Graphs:**
-  - Student registrations over time
-  - Transaction volume over time
-  - Error rates by type
-  - Login activity by hour/day
-
-- **Database Statistics:**
-  - Table sizes
-  - Database size
-  - Index health
-  - Query performance (if available)
-
-### 3. System Configuration
-**Route:** `/sysadmin/config`
-
-**Features:**
-
-- **Global Settings:**
-  - Session timeout duration
-  - Token to display ($ or tokens)
-  - Timezone settings
-  - Date/time formats
-
-- **Feature Flags:**
-  - Enable/disable insurance system
-  - Enable/disable rent system
-  - Enable/disable store
-  - Enable/disable hall passes
-
-- **Email Settings:**
-  - Support email address
-  - SMTP configuration (future)
-
-- **Security Settings:**
-  - Password requirements
-  - Session security
-  - TOTP enforcement
-
-### 4. Audit Log
-**Route:** `/sysadmin/audit`
-
-**Features:**
-
-- Track critical actions:
-  - Admin account creation/deletion
-  - Student account deletion
-  - Payroll runs
-  - Transaction voids
-  - Configuration changes
-  - TOTP resets
-
-- Filter by:
-  - Action type
-  - User (who did it)
-  - Date range
-  - Target (what was affected)
-
-- Export audit log to CSV
-
-### 5. Database Maintenance
-**Route:** `/sysadmin/maintenance`
-
-**Features:**
-
-- **Backup/Export:**
-  - Export full database to SQL dump
-  - Export student data to CSV
-  - Export transaction history
-
-- **Data Archival:**
-  - Archive old transactions (> 1 year)
-  - Archive deleted students
-  - Purge error logs older than X months
-
-- **Database Health:**
-  - Check for data inconsistencies
-  - Verify foreign key integrity
-  - Find duplicate records
-  - Optimize tables
-
-### 6. Communication (Future)
-**Route:** `/sysadmin/announcements`
-
-**Features:**
-
-- System-wide announcements
-- Maintenance notifications
-- Emergency alerts
-- Message to all teachers
-- Message to all students
-
-## UI Layout Proposal
-
-### Main Dashboard Structure
-
-```
-
-  System Admin Dashboard                          [Logout]    
-
-                                                               
-           
-    Admin      Students     Errors      Stats      
-    Mgmt         Mgmt        Logs     Dashboard    
-                                            
-    5 admins  120 stud.     12 err.     Live       
-           
-                                                               
-     
-    Quick Actions                                          
-    • Generate Invite Code                                
-    • Create System Admin                                 
-    • View Audit Log                                      
-    • Test Error Pages                                    
-    • Database Backup                                     
-     
-                                                               
-     
-    Recent Activity                                        
-    • Admin "teacher1" logged in (2 min ago)              
-    • Payroll run by "teacher2" (1 hour ago)              
-    • Student deleted by sysadmin (3 hours ago)           
-     
-                                                               
-     
-    System Health                                          
-    Database:   Healthy (2.3 GB)                         
-    Errors:     12 in last 24h                           
-    Uptime:     15 days 3 hours                          
-     
-
-```
-
-### Admin Management Page
-
-```
-
-  Admin (Teacher) Management                  [Back]          
-
-  [Search...]  [Filter: All ]  [+ Create Admin]             
-
-  Username    Students  Created     Last Login  Actions  
-
-  teacher1      45      2024-01-15  2 hrs ago   [View]   
-                                                [Delete] 
-
-  teacher2      38      2024-02-20  1 day ago   [View]   
-                                                [Delete] 
-
-```
-
-### Delete Admin Modal
-
-```
-
-    Delete Admin: teacher1                                 
-
-  This admin has:                                             
-  • 45 students                                              
-  • 1,234 transactions                                       
-  • Last login: 2 hours ago                                  
-                                                               
-  What should happen to their students?                      
-   Reassign to another teacher: [Select ]                 
-   Delete all students and their data (CANNOT BE UNDONE)   
-   Leave students orphaned (requires cleanup later)        
-                                                               
-   I understand this action is permanent                   
-                                                               
-  [Cancel]  [Delete Admin]                                   
-
-```
-
-### Student Management Page
-
-```
-
-  Student Management                          [Back]          
-
-  [Search...]  [Teacher: All ]  [Status: All ]             
-  [Export CSV]  [Bulk Actions ]                             
-
-  Name     Teacher    Balance  Last Login  Actions       
-
-  Alice    teacher1    $45.50  1 hour ago  [View] [Del]  
-  Bob      teacher1    $23.00  2 days ago  [View] [Del]  
-  Charlie  teacher2    $67.25  30 min ago  [View] [Del]  
-
-```
-
-## Navigation Structure
-
-```
-System Admin Dashboard
- Dashboard (Home)
- User Management
-    Admins (Teachers)
-       View All
-       Create New
-       Invite Codes
-    Students
-       View All
-       Search
-       Bulk Operations
-    System Admins
-        View All
-        Create New
- Monitoring
-    Error Logs (Database)
-    System Logs (File)
-    Audit Log
-    Statistics Dashboard
- Testing & Tools
-    Test Error Pages
-    Database Cleanup
-    Data Export
- System Configuration
-    Global Settings
-    Feature Flags
-    Security Settings
- Maintenance
-     Database Backup
-     Data Archival
-     Health Check
-```
-
-## Color Scheme
-
-- **Primary (Blue):** General actions, navigation
-- **Success (Green):** Successful operations, create
-- **Warning (Yellow/Orange):** Caution, test actions
-- **Danger (Red):** Delete, critical errors
-- **Info (Light Blue):** Information, stats
-- **Dark:** System admins, advanced features
-
-## Security Considerations
-
-1. **All admin deletion requires confirmation**
-2. **Show impact before any destructive action**
-3. **Audit log for all critical actions**
-4. **TOTP required for sysadmin login**
-5. **Session timeout for inactive sysadmins**
-6. **Rate limiting on bulk operations**
-7. **Backup before major deletions**
-
-## Implementation Priority
-
-### Phase 1 (Completed) 
-- [x] Error testing and monitoring
-- [x] Error logs database viewer
-- [x] Admin (teacher) management page
-- [x] Delete admin functionality with cascade
-- [x] Track admin signup date and last login
-- [x] Student management REMOVED (by design - sysadmins don't manage students)
-
-### Phase 2 (Next Session) - Medium Priority
-- [ ] Statistics dashboard
-- [ ] Audit log for critical actions
-- [ ] Database cleanup tools
-- [ ] Data export features (CSV export)
-- [ ] Admin TOTP reset functionality
-
-### Phase 3 (Future) - Low Priority
-- [ ] System configuration UI
-- [ ] Communication/announcements
-- [ ] Advanced analytics
-- [ ] **Multi-tenancy support** (see MULTI_TENANCY_TODO.md)
-
-## Mockups / Wireframes
-
-(To be added: Screenshots of actual implementation)
-
-## User Stories
-
-1. **As a system admin, I want to delete a teacher account and reassign their students, so I can clean up after staff changes.**
-
-2. **As a system admin, I want to see all students across all teachers, so I can monitor the entire system.**
-
-3. **As a system admin, I want to view error logs in a friendly interface, so I can debug issues quickly.**
-
-4. **As a system admin, I want to test error pages without breaking anything, so I can verify the user experience.**
-
-5. **As a system admin, I want to see system statistics, so I can monitor growth and usage.**
-
-6. **As a system admin, I want to audit who did what, so I can track accountability.**
-
-## Success Metrics
-
--  Sysadmin can perform all user management tasks
--  No accidental data loss (confirmations work)
--  All actions are logged for audit
--  Interface is intuitive and requires no training
--  Performance remains good with large datasets
+- Reduced privacy exposure
+- Proper delegation to the teacher level
+
+## VI. Implemented Capabilities
+
+The System Admin interface (`/sysadmin`) currently provides the following functional areas:
+
+### 1. User and Teacher Management
+- **Teacher List & Overview (`/manage-teachers`, `/teacher-overview`):** View all registered teachers, their active class periods, their signup dates, and recent logins.
+- **Username Migration (`/username-migration`):** Execute updates for the legacy username standard.
+
+### 2. Authentication & Security
+- **Strict Access Control:** All routes gated strictly to System Admin accounts.
+- **WebAuthn Passkeys (`/passkey/*`):** Sysadmins can register and authenticate using biometric passkeys, list active passkeys, and manage their credential settings.
+- **TOTP Fallback:** Enforced Multi-Factor Authentication for non-passkey sign-ins.
+
+### 3. Monitoring & Observability
+- **System Dashboard (`/dashboard`):** High-level metrics view.
+- **Grafana Integration (`/grafana/*`):** Proxied interface to an embedded or external Grafana dashboards for performance metrics.
+- **Log Viewers:** 
+  - File-based combined logs (`/combined-logs`)
+  - Standard runtime logs (`/logs`)
+  - Captured Error Logs (`/error-logs`)
+- **Network Insights (`/network-activity`):** View active connections or incoming rate metrics.
+- **Error Simulators (`/test-errors/*`):** Safely trigger and verify custom 400, 401, 403, 404, 500, and 503 error handlers.
+
+### 4. Support and Escalations
+- **Support Dashboard (`/support`):** Aggregate view of operations.
+- **User Reports (`/user-reports/*`):** Review and update the status of incoming abuse, bug, or feedback reports.
+- **Escalated Issues (`/issues/*`):** Triage technical issues escalated from teachers or system flags. Start reviews and mark resolutions.
+
+### 5. Platform Communication
+- **System Announcements (`/announcements/*`):** Create, edit, toggle visibility, and delete broadcast messages displayed across the platform to teachers and/or students.
+
+## VII. Future Capabilities (Proposed Roadmap)
+- [ ] **Data Export Interfaces:** Web UI to trigger secure database dumps or CSV exports for backup compliance.
+- [ ] **Feature Flags Configuration:** UI to dynamically toggle systemic capabilities (e.g., maintenance mode, global signups) without code deployment.
+- [ ] **Audit Trail Expansion:** While backend logging tracks these, a fully searchable Sysadmin UI for the internal Audit Log is desired.
+
+## VIII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. All modifications to the sysadmin capabilities must be strictly reviewed for multi-tenancy and privacy compliance before amending this document.

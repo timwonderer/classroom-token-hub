@@ -140,7 +140,7 @@ Agents must:
 
 ---
 
-## XII. Savings Interest Guidance
+## X. Savings Interest Guidance
 
 Savings interest is an engagement incentive, not a CWI-based ratio. Use modest ranges to avoid overpowering wages.
 
@@ -158,7 +158,7 @@ If a teacher sets rates outside these ranges, agents should warn or request conf
 
 ---
 
-## XIII. Affordability Constraints (Global Rule)
+## XI. Affordability Constraints (Global Rule)
 
 Agents must validate economic stability:
 
@@ -186,7 +186,7 @@ Agents adjust or warn as needed.
 
 ---
 
-## XIV. Output Requirements
+## XII. Output Requirements
 
 All agent-generated values must:
 
@@ -200,7 +200,7 @@ Agents should *never* output arbitrary values without referencing this framework
 
 ---
 
-## XV. Non-Negotiable Design Rules
+## XIII. Non-Negotiable Design Rules
 
 Agents must always enforce:
 
@@ -210,7 +210,7 @@ Agents must always enforce:
 4. Every tool must calculate and surface impacts before applying changes.
 5. All inflation and economy tools must maintain coherent proportionality across categories.
 
-## XVI. Amendment
+## XIV. Amendment
 
 Revisions to this document must:
 1. Increment the version number.

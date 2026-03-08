@@ -4,17 +4,26 @@
 |------------------|---------|----------------|------------|-----------------|
 | SOP-DEP-022      | 1.0     | 2026-03-08     | N/A        | Normative       |
 
-## Purpose
-
+## I. Purpose
 Provide the exact operator workflow for preparing the current v2 branch for live testing.
 
-## Environment Truth
+## II. Scope
+All testing deployments from the current branch running against v2 operational databases.
+
+## III. Authority Level
+Normative (SOP Tier). Subordinate to INV-CORE-000.
+
+## IV. Dependencies
+- `INV-CORE-000_Core_Invariants.md`
+- `SOP-DB-011_Migration_Specifications.md`
+
+## V. Environment Truth
 
 - Branch: `codex/v2.0`
 - Dev/migration DB: the team-configured v2 dev database for migration rehearsal
 - Test DB: the team-configured PostgreSQL test database used for v2 validation
 
-## Pre-Live-Test Checklist
+## VI. Pre-Live-Test Checklist
 
 1. Confirm branch and clean worktree.
 2. Confirm migration head state:
@@ -39,7 +48,7 @@ DATABASE_URL=<team-test-db-url> pytest -q
 5. Record the result and confirm it matches or exceeds the latest validated baseline:
    - `664 passed, 1 skipped`
 
-## Smoke Routes
+## VII. Smoke Routes
 
 Verify these paths manually after upgrade:
 
@@ -51,7 +60,7 @@ Verify these paths manually after upgrade:
 - admin export in a selected class
 - hall-pass verification by public teacher identifier
 
-## Seed and Fixture Expectations
+## VIII. Seed and Fixture Expectations
 
 - Use canonical v2 class scope:
   - `ClassEconomy`
@@ -59,7 +68,7 @@ Verify these paths manually after upgrade:
   - student `ClassMembership`
 - Do not assume TeacherBlock-only authority for class access.
 
-## Backup and Rollback Decision
+## IX. Backup and Rollback Decision
 
 Before live testing:
 
@@ -67,7 +76,7 @@ Before live testing:
 2. If migration rehearsal fails, stop and rollback before exposing testers.
 3. If smoke checks fail after upgrade, revert to backup or hold the environment in maintenance mode until resolved.
 
-## Required Output Record
+## X. Required Output Record
 
 Capture and store:
 
@@ -76,3 +85,6 @@ Capture and store:
 - pytest summary
 - smoke-check status
 - final go/no-go decision for live testing
+
+## XI. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

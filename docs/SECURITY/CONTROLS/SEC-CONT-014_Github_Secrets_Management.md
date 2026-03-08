@@ -4,13 +4,26 @@
 |------------------|---------|----------------|------------|-----------------|
 | SEC-CONT-014     | 1.0     | 2026-03-01     | N/A        | Normative                 |
 
-## Quick Start (5 Minutes)
+## I. Purpose
+To provide declarative instructions for securely adding SSH host keys to GitHub Secrets, ensuring MITM protection during deployments.
+
+## II. Scope
+All GitHub Actions deployment workflows accessing production resources via SSH.
+
+## III. Authority Level
+Normative (SEC-CONT Tier). Subordinate to INV-CORE-000.
+
+## IV. Dependencies
+- `INV-CORE-000_Core_Invariants.md`
+- `SEC-CORE-000_Security_Foundation.md`
+
+## V. Quick Start (5 Minutes)
 
 This guide shows you exactly how to add the `KNOWN_HOSTS` secret to GitHub.
 
 ---
 
-## Step 1: Get Your Server's SSH Host Key
+## VI. Step 1: Get Your Server's SSH Host Key
 
 ### Option A: Use the Automated Script (Easiest)
 
@@ -62,7 +75,7 @@ Copy the entire contents of the file.
 
 ---
 
-## Step 2: Navigate to GitHub Repository Settings
+## VII. Step 2: Navigate to GitHub Repository Settings
 
 ### 2.1 Open Your Repository
 
@@ -81,7 +94,7 @@ Copy the entire contents of the file.
 
 ---
 
-## Step 3: Navigate to Actions Secrets
+## VIII. Step 3: Navigate to Actions Secrets
 
 ### 3.1 Find Secrets Section
 
@@ -117,7 +130,7 @@ Repository secrets:
 
 ---
 
-## Step 4: Add the KNOWN_HOSTS Secret
+## IX. Step 4: Add the KNOWN_HOSTS Secret
 
 ### 4.1 Click "New repository secret"
 
@@ -170,7 +183,7 @@ Paste the **ENTIRE contents** from Step 1.
 
 ---
 
-## Step 5: Verify the Secret Was Added
+## X. Step 5: Verify the Secret Was Added
 
 ### 5.1 Check Secrets List
 
@@ -196,7 +209,7 @@ If you need to update it later, click the **"Update"** button next to `KNOWN_HOS
 
 ---
 
-## Step 6: Update Your Workflow Files
+## XI. Step 6: Update Your Workflow Files
 
 Now that the secret is added, you need to use it in your workflows.
 
@@ -231,7 +244,7 @@ git push
 
 ---
 
-## Step 7: Test the Configuration
+## XII. Step 7: Test the Configuration
 
 ### 7.1 Trigger a Test Deployment
 
@@ -266,7 +279,7 @@ Warning: Permanently added 'xxx.xxx.xxx.xxx' (ED25519) to the list of known host
 
 ---
 
-## Troubleshooting
+## XIII. Troubleshooting
 
 ### Issue 1: "Secret name is invalid"
 
@@ -361,7 +374,7 @@ ssh root@YOUR_SERVER_IP
 
 ---
 
-## Visual Guide (What to Look For)
+## XIV. Visual Guide (What to Look For)
 
 ### GitHub Settings Page Layout
 
@@ -430,7 +443,7 @@ ssh root@YOUR_SERVER_IP
 
 ---
 
-## Quick Reference
+## XV. Quick Reference
 
 **Secret Name (exactly):** `KNOWN_HOSTS`
 
@@ -454,7 +467,7 @@ Repository → Settings → Secrets and variables → Actions → New repository
 
 ---
 
-## Next Steps After Adding Secret
+## XVI. Next Steps After Adding Secret
 
 1.  Secret added to GitHub
 2. ⏭ Replace workflow files (`.FIXED` → regular)
@@ -467,3 +480,6 @@ Repository → Settings → Secrets and variables → Actions → New repository
 **Last Updated:** 2025-12-22
 **Difficulty:** Easy (5 minutes)
 **Required Access:** Repository admin/owner
+
+## XVII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

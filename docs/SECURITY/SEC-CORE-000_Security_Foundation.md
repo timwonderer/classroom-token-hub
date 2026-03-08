@@ -26,3 +26,6 @@ Public-facing forms (login, claim verification) must implement Cloudflare Turnst
 
 ### 4. Code Immutability
 Security mandates parameterized queries (SQLAlchemy ORM) universally. Dynamic SQL string interpolation is unconditionally prohibited to eliminate SQL injection vulnerabilities. All state-mutating requests enforce CSRF.
+
+## V. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

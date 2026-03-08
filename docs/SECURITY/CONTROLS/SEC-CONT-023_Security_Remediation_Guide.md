@@ -8,9 +8,19 @@
 **Purpose:** Step-by-step instructions to fix critical and high-severity security issues
 **Reference:** COMPREHENSIVE_ATTACK_SURFACE_AUDIT_2025.md
 
----
+## I. Purpose
+To serve as a step-by-step remediation guide for fixing critical and high-severity security issues from ASA audits.
 
-## Quick Navigation
+## II. Scope
+Configuration and code corrections addressing SSH host key verification, cryptography packages, secrets management, and rate limiting.
+
+## III. Authority Level
+Normative (SEC-CONT Tier).
+
+## IV. Dependencies
+- `SEC-CORE-000_Security_Foundation.md`
+
+## V. Quick Navigation
 
 - [Critical: SSH Host Key Verification](#critical-ssh-host-key-verification-asa-002)
 - [High: Update Cryptography Package](#high-update-cryptography-package-asa-004)
@@ -20,7 +30,7 @@
 
 ---
 
-## CRITICAL: SSH Host Key Verification (ASA-002)
+## VI. CRITICAL: SSH Host Key Verification (ASA-002)
 
 ### Priority:  URGENT - Must fix before next production deployment
 
@@ -298,7 +308,7 @@ Add to `deploy.yml`:
 
 ---
 
-## HIGH: Update Cryptography Package (ASA-004)
+## VII. HIGH: Update Cryptography Package (ASA-004)
 
 ### Priority:  HIGH - Fix this week
 
@@ -421,7 +431,7 @@ Add to `../CHANGELOG.md`:
 
 ---
 
-## HIGH: Improve Secrets Management (ASA-003)
+## VIII. HIGH: Improve Secrets Management (ASA-003)
 
 ### Priority:  HIGH - Fix this month
 
@@ -532,7 +542,7 @@ load_dotenv('.env.encrypted', password='your-encryption-password')
 
 ---
 
-## MEDIUM: Add Rate Limiting (ASA-006)
+## IX. MEDIUM: Add Rate Limiting (ASA-006)
 
 ### Priority:  MEDIUM - Fix this month
 
@@ -621,7 +631,7 @@ def get_tips(user_type):
 
 ---
 
-## Testing After Fixes
+## X. Testing After Fixes
 
 ### 1. Local Testing
 
@@ -665,7 +675,7 @@ Before deploying to production:
 
 ---
 
-## Verification Checklist
+## XI. Verification Checklist
 
 After implementing fixes, verify:
 
@@ -701,7 +711,7 @@ After implementing fixes, verify:
 
 ---
 
-## Rollback Plan
+## XII. Rollback Plan
 
 If anything goes wrong:
 
@@ -744,7 +754,7 @@ sudo systemctl restart gunicorn
 
 ---
 
-## Support
+## XIII. Support
 
 If you encounter issues:
 
@@ -755,7 +765,7 @@ If you encounter issues:
 
 ---
 
-## Summary
+## XIV. Summary
 
 **Immediate Actions (Before Next Deploy):**
 
@@ -780,3 +790,6 @@ If you encounter issues:
 
 **Last Updated:** 2025-12-22
 **Maintainer:** DevOps/Security Team
+
+## XV. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

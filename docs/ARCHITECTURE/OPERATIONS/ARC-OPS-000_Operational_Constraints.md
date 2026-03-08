@@ -34,3 +34,6 @@ Authoritative (ARC Tier). Subordinate to INV-CORE-000.
 
 ### 5. Data Retention
 - Data retention must conform to the policies outlined in INV-CORE-000. Stale accounts must be securely purged according to their lifecycle.
+
+## VI. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

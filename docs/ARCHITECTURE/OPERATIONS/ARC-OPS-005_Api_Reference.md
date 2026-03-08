@@ -139,3 +139,6 @@ These are not pure JSON APIs but define important v2 class contracts:
 
 - Some older capability-token surfaces still exist, including `hall_pass_verify_token`, but public teacher identity for current verification flows is centered on `teacher_public_id`.
 - Compatibility aliases and legacy parameters may still exist in parts of the codebase, but they are not the intended v2 contract for new behavior or documentation.
+
+## IX. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

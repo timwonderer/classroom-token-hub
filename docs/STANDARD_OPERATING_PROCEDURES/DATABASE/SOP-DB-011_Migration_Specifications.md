@@ -9,7 +9,19 @@
 
 ---
 
-## 1. The Golden Rules
+## I. Purpose
+To be the Single Source of Truth for all database migration policies, best practices, and workflows in the Classroom Economy project. Idempotency is strict and enforced.
+
+## II. Scope
+All Alembic migrations authored by developers modifying the application database.
+
+## III. Authority Level
+Normative (SOP Tier). Subordinate to INV-CORE-000.
+
+## IV. Dependencies
+- `INV-CORE-000_Core_Invariants.md`
+
+## V. The Golden Rules
 
 1.  **NEVER modify `app/models.py` without creating a migration.**
 2.  **ALWAYS test migrations before committing** (upgrade AND downgrade).
@@ -22,7 +34,7 @@
 
 ---
 
-## 2. Migration Best Practices
+## VI. Migration Best Practices
 
 ### Core Principle: Migrations Must Be Idempotent
 
@@ -112,7 +124,7 @@ def downgrade():
 
 ---
 
-## 3. Implementation Guidelines
+## VII. Implementation Guidelines
 
 ### Migration Naming Conventions
 Use descriptive names that clearly state changes:
@@ -170,7 +182,7 @@ def upgrade():
 
 ---
 
-## 4. Policy Standards
+## VIII. Policy Standards
 
 ### Schema Change Gate
 This gate is **PR‑blocking**.
@@ -220,7 +232,7 @@ for fk in inspector.get_foreign_keys('students'):
 
 ---
 
-## 5. Workflows
+## IX. Workflows
 
 ### Standard Cycle
 1.  **Sync:** `git fetch origin main && git merge origin/main`
@@ -249,7 +261,7 @@ for fk in inspector.get_foreign_keys('students'):
 
 ---
 
-## 6. Deprecation Standards
+## X. Deprecation Standards
 
 **Registry:** `docs/development/DEPRECATED_SYMBOLS.txt`
 
@@ -260,6 +272,8 @@ for fk in inspector.get_foreign_keys('students'):
 
 ---
 
-## 7. Resources
+## XI. Resources
 - [Alembic Documentation](https://alembic.sqlalchemy.org/)
 - [SQLAlchemy Inspector API](https://docs.sqlalchemy.org/en/20/core/reflection.html)
+## XII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

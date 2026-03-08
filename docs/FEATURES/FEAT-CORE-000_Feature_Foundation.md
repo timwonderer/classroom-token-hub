@@ -27,3 +27,6 @@ Every submitted FEAT specification must clearly define the following structural 
 
 ### 2. Constraints
 Features may never define behaviors that permit users to perform actions outside of their designated role-bound scopes. (e.g., A teacher cannot access system administration configurations within a classroom feature.)
+
+## V. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.

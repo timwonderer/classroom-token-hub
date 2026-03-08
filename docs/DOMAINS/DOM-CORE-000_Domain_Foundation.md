@@ -24,3 +24,6 @@ Regardless of the domain, every financial operation, claim, or configuration MUS
 
 ### 3. Shared Ledgers
 Domains do not maintain isolated ledgers. All financial mutations across domains (payroll, rent, store purchases) converge on the unified `Transaction` log to ensure a deterministic financial history. Any domain generating a state mutation must emit a clearly annotated `Transaction` record.
+
+## V. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field.
