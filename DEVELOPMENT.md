@@ -41,7 +41,9 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 - Updated teacher reset flow to redirect to Student Detail after generating a reset code, where the active code remains visible until expiration.
 - Improved mobile responsiveness for student recovery pages by tightening spacing and collapsing the right panel on small screens.
 - Hardened analytics and economy report APIs to use class-scoped settings precedence (join-code first, then legacy block-scoped rows) instead of teacher-global fallback during class-selected requests.
-- Updated hall-pass available-types API to support `join_code` and `teacher_public_id` identity inputs, with active class scope enforcement for student sessions.
+- Updated hall-pass available-types API to support `join_code` and `teacher_public_id` identity inputs, with active class scope enforcement for student sessions and no numeric `teacher_id` fallback.
+- Enforced join-code strict settings resolution in student flows (transfer, savings interest, insurance purchase, shop rent checks, and rent payment) by removing remaining teacher-only settings queries.
+- Disabled legacy numeric student teacher switch route (`/student/switch-period/<int:teacher_id>`) in favor of join-code/public-id scoped switching only.
 
 ---
 

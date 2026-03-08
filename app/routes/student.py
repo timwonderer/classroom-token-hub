@@ -153,24 +153,49 @@ def _prime_student_teacher_display_name_cache(student_id: int) -> None:
 
 
 def get_rent_settings_for_context(context):
-    """Return rent settings scoped to the current class context."""
+    """Return rent settings scoped strictly to the current class join_code."""
     if not context:
         return None
 
     teacher_id = context.get('teacher_id')
-    if not teacher_id:
+    join_code = context.get('join_code')
+    current_block = (context.get('block') or '').strip().upper()
+    if not teacher_id or not join_code:
         return None
 
-    current_block = (context.get('block') or '').strip().upper()
+    base_query = RentSettings.query.filter(
+        RentSettings.teacher_id == teacher_id,
+        RentSettings.join_code == join_code,
+    )
     if current_block:
-        settings = RentSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=current_block
-        ).first()
-        if settings:
-            return settings
+        scoped = base_query.filter(func.upper(RentSettings.block) == current_block).first()
+        if scoped:
+            return scoped
 
-    return RentSettings.query.filter_by(teacher_id=teacher_id).first()
+    return base_query.filter(RentSettings.block.is_(None)).first()
+
+
+def get_banking_settings_for_context(context):
+    """Return banking settings scoped strictly to the current class join_code."""
+    if not context:
+        return None
+
+    teacher_id = context.get('teacher_id')
+    join_code = context.get('join_code')
+    current_block = (context.get('block') or '').strip().upper()
+    if not teacher_id or not join_code:
+        return None
+
+    base_query = BankingSettings.query.filter(
+        BankingSettings.teacher_id == teacher_id,
+        BankingSettings.join_code == join_code,
+    )
+    if current_block:
+        scoped = base_query.filter(func.upper(BankingSettings.block) == current_block).first()
+        if scoped:
+            return scoped
+
+    return base_query.filter(BankingSettings.block.is_(None)).first()
 
 
 def get_current_teacher_id():
@@ -216,25 +241,22 @@ def get_feature_settings_for_student():
     if not teacher_id:
         return FeatureSettings.get_defaults()
 
-    current_block = (context.get('block') or '').strip().upper() or None
+    join_code = context.get('join_code')
+    if not join_code:
+        return FeatureSettings.get_defaults()
 
-    # Try block-specific settings first
+    current_block = (context.get('block') or '').strip().upper()
+    base_query = FeatureSettings.query.filter(
+        FeatureSettings.teacher_id == teacher_id,
+        FeatureSettings.join_code == join_code,
+    )
+    scoped_settings = None
     if current_block:
-        block_settings = FeatureSettings.query.filter(
-            FeatureSettings.teacher_id == teacher_id,
-            func.upper(FeatureSettings.block) == func.upper(current_block)
-        ).first()
-        if block_settings:
-            return block_settings.to_dict()
-
-    # Fall back to global settings for this teacher
-    global_settings = FeatureSettings.query.filter_by(
-        teacher_id=teacher_id,
-        block=None
-    ).first()
-
-    if global_settings:
-        return global_settings.to_dict()
+        scoped_settings = base_query.filter(func.upper(FeatureSettings.block) == current_block).first()
+    if not scoped_settings:
+        scoped_settings = base_query.filter(FeatureSettings.block.is_(None)).first()
+    if scoped_settings:
+        return scoped_settings.to_dict()
 
     # Return system defaults
     return FeatureSettings.get_defaults()
@@ -1562,7 +1584,7 @@ def transfer():
 
         # CRITICAL FIX: Calculate balances using join_code scoping
         checking_balance, savings_balance = calculate_scoped_balances(student, join_code, teacher_id)
-        banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+        banking_settings = get_banking_settings_for_context(context)
 
         if from_account == to_account:
             if is_json:
@@ -1650,7 +1672,7 @@ def transfer():
     savings_transactions = [t for t in transactions if t.account_type == 'savings']
 
     # Get banking settings for interest rate display
-    settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    settings = get_banking_settings_for_context(context)
     # Convert APY to decimal rate (e.g., 5% = 0.05)
     from app.models import _quantize_currency
     annual_rate = _quantize_currency(settings.savings_apy / Decimal('100')) if settings and settings.savings_apy is not None else Decimal('0.045')
@@ -1726,7 +1748,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
     Supports both simple and compound interest with configurable frequency.
     All time calculations are in UTC.
     """
-    from app.models import BankingSettings, _quantize_currency
+    from app.models import _quantize_currency
 
     now = utc_now()
     this_month = now.month
@@ -1734,9 +1756,14 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
 
 
 
-    # Get banking settings for current teacher
-    teacher_id = get_current_teacher_id()
-    settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    context = get_current_class_context()
+    if not context:
+        return
+    teacher_id = context.get('teacher_id')
+    join_code = context.get('join_code')
+
+    # Get banking settings for current class context
+    settings = get_banking_settings_for_context(context)
     if not settings:
         # Use default simple interest if no settings
         calculation_type = 'simple'
@@ -1811,7 +1838,7 @@ def apply_savings_interest(student, annual_rate=Decimal('0.045')):
             interest_tx = Transaction(
                 student_id=student.id,
                 teacher_id=teacher_id,
-                join_code=context['join_code'],  # CRITICAL: Add join_code for period isolation
+                join_code=join_code,  # CRITICAL: Add join_code for period isolation
                 amount=interest,
                 account_type='savings',
                 status=TransactionStatus.PENDING,
@@ -2010,7 +2037,7 @@ def purchase_insurance(policy_id):
     # CRITICAL FIX v2: Check sufficient funds using join_code scoped balance
     checking_balance = student.get_checking_balance(teacher_id=teacher_id, join_code=join_code)
     savings_balance = student.get_savings_balance(teacher_id=teacher_id, join_code=join_code)
-    banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    banking_settings = get_banking_settings_for_context(context)
     overdraft_shortfall = Decimal('0.00')
 
     allowed, shortfall, _, _ = evaluate_overdraft_allowance(
@@ -2504,7 +2531,7 @@ def shop():
 
     if teacher_id and join_code and current_block:
         seat_ids = get_seat_ids_for_student_join(student.id, join_code)
-        rent_settings = RentSettings.query.filter_by(teacher_id=teacher_id, block=current_block).first()
+        rent_settings = get_rent_settings_for_context(context)
         if rent_settings and rent_settings.is_enabled:
             now = utc_now()
 
@@ -3480,7 +3507,7 @@ def rent_pay(period):
         payment_amount = remaining_amount
 
     # Get banking settings for overdraft handling (reuse teacher_id from above)
-    banking_settings = BankingSettings.query.filter_by(teacher_id=teacher_id).first() if teacher_id else None
+    banking_settings = get_banking_settings_for_context(context)
 
     # Check if student has enough funds for this payment using shared utility
     overdraft_shortfall = Decimal('0.00')
