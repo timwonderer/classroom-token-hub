@@ -2,7 +2,7 @@
 
 An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.
 
-**Version:** 1.9.0
+**Version:** 1.9.0 (current public release)
 
 ---
 
@@ -12,7 +12,7 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Version 1.9.0 Released with active security hardening and performance work in progress. The 1.9.0 documentation release consolidates canonical taxonomy across `/docs`, resolves navigation integrity issues, and standardizes release/archive placement. Recent unreleased improvements include: post-claim PII minimisation (DOB and name hashes automatically deleted after account setup), comprehensive class deletion audit with P1/P2/P3 security fixes, timed deletion confirmation gates, hall pass and admin identity boundary hardening, and a major read-path performance optimization reducing student roster queries from ~1225 to ~10 for a class of 60 students. See [LOG-REL-016_Release_Notes_V1.9.0.md](docs/LOGS/RELEASES/LOG-REL-016_Release_Notes_V1.9.0.md) for the full release and [CHANGELOG.md](CHANGELOG.md) for all changes.
+**Project Status:** Version 1.9.0 is the current public release. Internal engineering work is currently centered on a **v2.0 live-test candidate** on `codex/v2.0`, where class scope is defined by `ClassEconomy` and `ClassMembership`, session class context is driven by `current_join_code`, and public teacher references use `teacher_public_id` / `public_id` instead of numeric teacher IDs. The current validated v2 branch state passed the PostgreSQL suite with `664 passed, 1 skipped`. See [DEVELOPMENT.md](DEVELOPMENT.md) for current readiness status, [LOG-REL-016_Release_Notes_V1.9.0.md](docs/LOGS/RELEASES/LOG-REL-016_Release_Notes_V1.9.0.md) for the public release, and [CHANGELOG.md](CHANGELOG.md) for ongoing changes.
 
 ---
 
@@ -28,7 +28,7 @@ An interactive banking and classroom management platform for teaching students a
 - **Shared Students** — Link multiple teachers to the same student via `student_teachers`
 - **Attendance Tracking** — Start Work/Break Done system with automatic time logging
 - **Automated Payroll** — Configurable pay rates, schedules, and rewards/fines
-- **Transaction Logging** — Complete audit trail of all financial activities scoped by teacher
+- **Transaction Logging** — Complete audit trail of financial activities scoped by class and join code
 - **Classroom Store** — Virtual/physical items with bundles, expirations, and redemption tracking
 - **Rent Itemization** — Specify what rent covers with store alternatives and privilege tracking
 - **Hall Pass System** — Time-limited passes with automatic tracking
@@ -170,7 +170,7 @@ After cloning, configure git to use the versioned `hooks/` directory:
 This enables:
 
 - `post-checkout`: branch-aware `DATABASE_URL` switching
-  - `join-code-centric-architecture-rebuild`, `codex/fix-database-model-for-dob-sum-storage`, and `codex/v2.0` -> `classroom_economy`
+  - `codex/v2.0` -> the protected v2 dev database
   - other branches -> `production_dev`
 - `pre-push`: migration-head safety checks
 
@@ -183,7 +183,7 @@ This enables:
 
 ## Documentation
 
-📚 **[Complete Documentation →](docs/GITHUB_SITE/README.md)**
+📚 **[Complete Documentation →](docs/user-guides/README.md)**
 
 ### For Users
 
@@ -196,6 +196,7 @@ This enables:
 - **[Database Schema](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)** — Up-to-date database reference
 - **[API Reference](docs/ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)** — REST API documentation
 - **[Development Priorities](DEVELOPMENT.md)** — Current priorities, roadmap, and tasks
+- **[v2 Live-Test Runbook](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-022_V2_Live_Test_Runbook.md)** — Operator workflow before live testing
 - **[Changelog](CHANGELOG.md)** — Version history and notable changes
 
 ### Deployment & Operations
