@@ -1,21 +1,20 @@
----
 # DOM-ECON-002: Economy Specification
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-ECON-002     | 1.0     | 2026-03-01     | N/A        | Constitutional  |
+| DOM-ECON-002     | 1.1     | 2026-03-08     | DOM-ECON-002 v1.0 | Constitutional |
 
 ## I. Purpose
 
-This document defines the formulas, constraints, ratios, and rules used by automated tools when generating or modifying monetary values in the Classroom Economy App.
+This document defines the constitutional economy model for CWI-derived pricing, policy-mode ratio bands, insurance proportionality, and solvency validation used by Classroom Token Hub.
 
 ## II. Scope
 
-This specification applies to all economy-related calculations, including price calculators, inflation engines, rent generators, insurance logic, and economic simulation events. In this document, "agents" refers to automated tools and internal workflows.
+This specification applies to all economy-related calculations, recommendations, validation workflows, teacher-facing balance tooling, and automated configuration helpers that evaluate or propose rent, utilities, store prices, insurance settings, or fines.
 
 ## III. Authority Level
 
-Constitutional (DOM Tier). Subordinate to INV-CORE-000.
+Constitutional (DOM Tier). This document is subordinate to `INV-CORE-000_Core_Invariants.md` and `DOM-CORE-000_Domain_Foundation.md`. No FEAT, SOP, UI workflow, or informative guide may override the ratio bands or solvency rules defined here.
 
 ## IV. Dependencies
 
@@ -24,195 +23,204 @@ Constitutional (DOM Tier). Subordinate to INV-CORE-000.
 
 ## V. Core Reference Variable
 
-All monetary outputs must derive from:
+All monetary outputs shall derive from the Classroom Wage Index (`CWI`).
 
-### CWI (Classroom Wage Index)
+### 1. CWI Definition
 
 ```
-CWI = expected week_total_pay for a student who attends all sessions
+CWI = expected weekly pay for a student with perfect attendance
 ```
 
-Agents must compute or retrieve CWI before evaluating any cost structure.
+All economy validators, recommendations, and previews shall compute or retrieve CWI before evaluating any cost structure.
 
----
+### 2. Normalization Rule
 
-## VI. Standard Pricing Ratios
+CWI is weekly. Any monthly, biweekly, daily, semester, yearly, or custom configuration shall be normalized to a weekly equivalent before ratio comparison.
 
-Agents must follow the ratios below unless explicitly overridden by a rule or teacher input.
+## VI. Policy Mode Framework
+
+The economy engine shall support exactly three internal policy modes:
+
+1. `tight`
+2. `default`
+3. `comfortable`
+
+Policy mode shall modify recommendation bands and validation targets. Policy mode shall not rewrite historical transactions, frozen insurance snapshots, or prior ledger entries.
+
+### 1. Default Policy Ratios
+
+The default policy shall use the following weekly-CWI bands:
+
+- Rent: `60%` to `75%` of weekly CWI
+- Utilities / fixed recurring fees: `5%` to `10%` of weekly CWI
+- Store standard tier: `2%` to `5%` of weekly CWI
+- Insurance premium: `5%` to `12%` of weekly CWI
+- Fines: `5%` to `15%` of weekly CWI
+- Minimum weekly savings target: `10%` of weekly CWI
+
+### 2. Tight Policy Ratios
+
+The tight policy shall use the following weekly-CWI bands:
+
+- Rent: `70%` to `80%` of weekly CWI
+- Utilities / fixed recurring fees: `7%` to `12%` of weekly CWI
+- Store standard tier: `2%` to `4%` of weekly CWI
+- Insurance premium: `6%` to `14%` of weekly CWI
+- Fines: `7%` to `18%` of weekly CWI
+- Minimum weekly savings target: `5%` of weekly CWI
+
+### 3. Comfortable Policy Ratios
+
+The comfortable policy shall use the following weekly-CWI bands:
+
+- Rent: `50%` to `65%` of weekly CWI
+- Utilities / fixed recurring fees: `4%` to `8%` of weekly CWI
+- Store standard tier: `3%` to `6%` of weekly CWI
+- Insurance premium: `4%` to `10%` of weekly CWI
+- Fines: `4%` to `12%` of weekly CWI
+- Minimum weekly savings target: `15%` of weekly CWI
+
+## VII. Category Ratio Bands
 
 ### 1. Rent
 
-```
-rent_min = 2.0 * CWI
-rent_max = 2.5 * CWI
-default_rent = 2.25 * CWI
-```
+Rent shall be validated against the active policy mode's rent band using weekly normalization. Monthly-equivalent recommendations shall be derived by multiplying the weekly burden target by average weeks per month.
 
-### 2. Utilities / Property Tax / Fixed Fees
+### 2. Utilities and Fixed Recurring Fees
 
-```
-utilities_min = 0.20 * CWI
-utilities_max = 0.30 * CWI
-default_utilities = 0.25 * CWI
-```
+Utilities guidance shall use the active policy mode's utilities band. If a surface presents utilities, property taxes, or equivalent fixed recurring costs, it shall validate them against the same weekly band.
 
-### 3. Store Item Pricing Tiers
+### 3. Store Pricing Tiers
 
-Agents must classify item tiers based on requested purpose:
+All store tier recommendations shall remain CWI-relative and policy-aware.
 
-```
-BASIC:        0.02–0.05 * CWI
-STANDARD:     0.05–0.10 * CWI
-PREMIUM:      0.10–0.25 * CWI
-LUXURY:       0.25–0.50 * CWI
-```
+#### a. Default Store Tiers
 
-If a teacher does not specify a tier, agents infer based on item description tags.
+- Basic: `1%` to `3%` of CWI
+- Standard: `2%` to `5%` of CWI
+- Premium: `5%` to `15%` of CWI
+- Luxury: `15%` to `30%` of CWI
 
----
+#### b. Tight Store Tiers
 
-## VII. Insurance Structure
+- Basic: `1%` to `3%` of CWI
+- Standard: `2%` to `4%` of CWI
+- Premium: `4%` to `12%` of CWI
+- Luxury: `12%` to `24%` of CWI
 
-### 1. Premium Calculation
+#### c. Comfortable Store Tiers
 
-```
-premium_min = 0.05 * CWI
-premium_max = 0.12 * CWI
-default_premium = 0.08 * CWI
-```
+- Basic: `2%` to `4%` of CWI
+- Standard: `3%` to `6%` of CWI
+- Premium: `6%` to `18%` of CWI
+- Luxury: `18%` to `35%` of CWI
 
-### 2. Coverage Boundaries
+### 4. Fines
 
-```
-coverage_min = premium * 3
-coverage_max = premium * 5
-default_coverage = premium * 4
-```
+Fine recommendations shall use the active policy mode's fine band. Fine validation shall remain proportional and shall warn when a fine is so low it loses instructional meaning or so high it materially threatens solvency.
 
-If a teacher specifies coverage exceeding 5× premium, agents must warn or request confirmation.
+## VIII. Insurance Structure
 
-### 3. Period Payout Cap
+Insurance guidance shall remain bounded, policy-aware, and premium-proportional.
 
-```
-period_cap_min = premium * 6
-period_cap_max = premium * 10
-default_period_cap = premium * 8
-```
+### 1. Premium Bands
 
-If a teacher sets the period cap outside 6–10× premium, agents must warn or request confirmation.
+Insurance premium validation shall use the active policy mode's premium band defined in Section VI.
 
----
+### 2. Coverage Multipliers
 
-## VIII. Fines
+Maximum claim amount shall be evaluated against the configured premium using the following policy-specific multiplier bands.
 
-```
-fine_min = 0.05 * CWI
-fine_max = 0.15 * CWI
-default_fine = 0.10 * CWI
-```
+#### a. Default
 
-Agents must apply proportional scaling across all fines.
+- Minimum: `3.0x` premium
+- Maximum: `5.0x` premium
+- Recommended center: `4.0x` premium
 
----
+#### b. Tight
 
-## IX. Inflation & Economic Events
+- Minimum: `2.5x` premium
+- Maximum: `4.0x` premium
+- Recommended center: `3.25x` premium
 
-Agents must implement inflation as a **percentage multiplier** applied to all price categories simultaneously unless selective inflation is intentionally triggered.
+#### c. Comfortable
 
-### 1. Inflation Formula
+- Minimum: `4.0x` premium
+- Maximum: `6.0x` premium
+- Recommended center: `5.0x` premium
 
-```
-new_price = old_price * (1 + inflation_rate)
-```
+### 3. Period Cap Multipliers
 
-### 2. Valid inflation ranges
+Maximum payout per period shall be evaluated against the configured premium using the following policy-specific multiplier bands.
 
-```
-mild:      0.01–0.03
-moderate:  0.03–0.06
-severe:    0.06–0.10
-```
+#### a. Default
 
-Agents must:
+- Minimum: `6.0x` premium
+- Maximum: `10.0x` premium
+- Recommended center: `8.0x` premium
 
-* Adjust store, rent, utilities, and insurance premiums uniformly unless instructed otherwise.
-* Prevent student insolvency by analyzing affordability thresholds (see section 8).
+#### b. Tight
 
----
+- Minimum: `5.0x` premium
+- Maximum: `8.0x` premium
+- Recommended center: `6.5x` premium
 
-## XII. Savings Interest Guidance
+#### c. Comfortable
 
-Savings interest is an engagement incentive, not a CWI-based ratio. Use modest ranges to avoid overpowering wages.
+- Minimum: `8.0x` premium
+- Maximum: `12.0x` premium
+- Recommended center: `10.0x` premium
 
-```
-apy_min = 0.06
-apy_max = 0.18
-default_apy = 0.10–0.12
+### 4. Waiting Period Bands
 
-monthly_rate_min = 0.005
-monthly_rate_max = 0.015
-default_monthly_rate = 0.010
-```
+Waiting period guidance shall be policy-aware.
 
-If a teacher sets rates outside these ranges, agents should warn or request confirmation.
+- Default: `7` days
+- Tight: `10` to `14` days
+- Comfortable: `3` to `7` days
 
----
+### 5. Frozen Enrollment Invariant
 
-## XIII. Affordability Constraints (Global Rule)
+Policy-mode changes shall not mutate frozen policy terms already attached to an existing student enrollment. Policy mode shall affect recommendations, future policy edits, and future enrollments only.
 
-Agents must validate economic stability:
+## IX. Solvency Constraints
 
 ### 1. Budget Survival Test
 
-A student with perfect attendance must be able to:
+A student with perfect attendance shall remain able to save at least the active policy mode's minimum weekly savings target after normalized fixed costs and conservative store spending.
 
 ```
-weekly_savings = CWI - (rent/number_of_weeks_in_month) - utilities - average_store_cost
-weekly_savings >= 0.10 * CWI
+weekly_savings = CWI - weekly_rent - weekly_insurance - average_store_cost
+weekly_savings >= policy_mode_minimum_savings_ratio * CWI
 ```
 
-If not, agents must lower rent or fines, or increase wages.
+### 2. Catastrophe Rule
 
-### 2. Catastrophe Test
+A student experiencing two fines, an uninsured loss event, and a discretionary store purchase shall not be driven below zero for more than one cycle under system-recommended settings.
 
-A student experiencing:
+## X. Output Requirements
 
-* two fines
-* loss of insurance
-* unexpected store need
+All automated recommendations and validation outputs shall:
 
-…must **not** fall below zero balance for more than one cycle.
-Agents adjust or warn as needed.
+1. identify the active policy mode
+2. identify the CWI used
+3. identify the normalized ratio band applied
+4. identify the resulting recommendation range
+5. surface warnings when configuration falls outside the active band
 
----
+## XI. Non-Negotiable Rules
 
-## XIV. Output Requirements
+1. All monetary values shall remain CWI-relative.
+2. Policy mode shall modify recommendation targets, not history.
+3. Insurance proportionality shall remain premium-relative.
+4. Rebalancing workflows shall surface impacts before application.
+5. Economy tooling shall preserve student solvency under the active policy profile.
 
-All agent-generated values must:
+## XII. Amendment
 
-* list **inputs** used
-* list **ratios applied**
-* show **resulting calculated values**
-* include **justification using this specification**
-* surface warnings when constraints are violated
+Revisions to this document shall:
 
-Agents should *never* output arbitrary values without referencing this framework.
-
----
-
-## XV. Non-Negotiable Design Rules
-
-Agents must always enforce:
-
-1. All monetary values scale from CWI.
-2. All pricing must follow ratio bands unless overridden.
-3. Economic operations must preserve student solvency.
-4. Every tool must calculate and surface impacts before applying changes.
-5. All inflation and economy tools must maintain coherent proportionality across categories.
-
-## XVI. Amendment
-
-Revisions to this document must:
-1. Increment the version number.
-2. Update the Effective Date.
-3. Maintain consistency with `DOM-CORE-000`.
+1. increment the version number
+2. update the Effective Date
+3. maintain consistency with `DOM-CORE-000_Domain_Foundation.md`
+4. preserve compatibility with higher-authority invariant documents
