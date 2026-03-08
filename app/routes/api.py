@@ -1070,9 +1070,15 @@ def approve_redemption():
     if not student_item or student_item.status != 'processing':
         return jsonify({"status": "error", "message": "Invalid or already processed item."}), 404
 
-    # SECURITY: Verify the current admin owns the store item
     current_admin = get_current_admin()
-    if not current_admin or student_item.store_item.teacher_id != current_admin.id:
+    if not current_admin:
+        return jsonify({"status": "error", "message": "Unauthorized."}), 403
+
+    has_membership = _admin_has_join_code_scope(current_admin.id, student_item.join_code)
+    if not has_membership:
+        return jsonify({"status": "error", "message": "You do not have access to this class."}), 403
+
+    if student_item.store_item.teacher_id != current_admin.id:
         return jsonify({"status": "error", "message": "Unauthorized."}), 403
 
     try:
@@ -1958,6 +1964,45 @@ def get_available_hall_pass_types():
     return jsonify({
         "status": "success",
         "pass_types": enabled_pass_types
+    })
+
+
+@api_bp.route('/hall-pass/verification/active', methods=['GET'])
+def hall_pass_verification_active():
+    """Return active/recent hall passes for a teacher identified by public ID."""
+    teacher_public_id = (request.args.get('teacher') or '').strip()
+    if not teacher_public_id:
+        return jsonify({"status": "error", "message": "teacher is required"}), 400
+
+    teacher = Admin.query.filter(
+        sa.or_(
+            Admin.teacher_public_id == teacher_public_id,
+            Admin.public_id == teacher_public_id,
+        )
+    ).first()
+    if not teacher:
+        return jsonify({"status": "error", "message": "Teacher not found"}), 404
+
+    join_code_scope, _ = _get_teacher_join_code_scope(teacher.id)
+    passes = (
+        HallPassLog.query
+        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
+        .order_by(HallPassLog.request_time.desc())
+        .all()
+    )
+
+    return jsonify({
+        "status": "success",
+        "passes": [
+            {
+                "id": log.id,
+                "student_id": log.student_id,
+                "destination": log.reason,
+                "status": log.status,
+                "join_code": log.join_code,
+            }
+            for log in passes
+        ],
     })
 
 

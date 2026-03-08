@@ -10307,15 +10307,25 @@ def _resolve_admin_payroll_settings_for_block(admin_id: int, block: str | None):
             .first()
         )
         join_code = join_code_row[0] if join_code_row and join_code_row[0] else None
-        if not join_code:
-            return None
+        if join_code:
+            scoped_settings = (
+                PayrollSettings.query.filter(
+                    PayrollSettings.teacher_id == admin_id,
+                    PayrollSettings.join_code == join_code,
+                    PayrollSettings.is_active.is_(True),
+                )
+                .order_by(desc(PayrollSettings.block.isnot(None)))
+                .first()
+            )
+            if scoped_settings:
+                return scoped_settings
+
         return (
             PayrollSettings.query.filter(
                 PayrollSettings.teacher_id == admin_id,
-                PayrollSettings.join_code == join_code,
+                PayrollSettings.block == block,
                 PayrollSettings.is_active.is_(True),
             )
-            .order_by(desc(PayrollSettings.block.isnot(None)))
             .first()
         )
 
@@ -10774,6 +10784,8 @@ def passkey_settings():
 # ==================== ISSUE RESOLUTION SYSTEM - TEACHER ROUTES ====================
 
 def _resolve_issue_id_from_ref(issue_ref: str) -> int | None:
+    if issue_ref.isdigit():
+        return int(issue_ref)
     return resolve_opaque_ref('issue', issue_ref)
 
 @admin_bp.route('/issues')
@@ -10903,7 +10915,52 @@ def resolve_issue(issue_ref):
 
     try:
         # Apply resolution based on action type
-        if action_type == 'compensating_transaction' and issue.related_transaction_id:
+        if action_type == 'reverse_transaction' and issue.related_transaction_id:
+            transaction = db.session.get(Transaction, issue.related_transaction_id)
+            if (
+                not transaction
+                or transaction.student_id != issue.student_id
+                or transaction.is_void
+                or transaction.join_code != issue.join_code
+            ):
+                flash("The related transaction could not be reversed for this issue.", "error")
+                return redirect(url_for('admin.view_issue', issue_ref=issue_ref))
+
+            reversal_tx = Transaction(
+                student_id=transaction.student_id,
+                teacher_id=transaction.teacher_id,
+                join_code=transaction.join_code,
+                amount=Decimal('0.00') - Decimal(transaction.amount),
+                account_type=transaction.account_type,
+                description=f"Issue #{issue.id} reversal for transaction #{transaction.id}",
+                status=TransactionStatus.PENDING,
+                type='issue_reversal',
+                original_transaction_id=transaction.id,
+                timestamp=utc_now(),
+                effective_at=utc_now(),
+                posted_at=None,
+                is_void=False,
+            )
+            db.session.add(reversal_tx)
+            db.session.flush()
+
+            transaction.reversal_transaction_id = reversal_tx.id
+            transaction.is_void = True
+
+            issue.teacher_resolution = 'Transaction Reversed'
+            record_resolution_action(
+                issue,
+                'reverse_transaction',
+                'teacher',
+                admin_id,
+                action_description=f"Reversed transaction #{transaction.id} with reversal #{reversal_tx.id}",
+                related_transaction_id=reversal_tx.id,
+                amount_changed=float(reversal_tx.amount),
+                before_value=str(transaction.amount),
+                after_value=str(reversal_tx.amount),
+            )
+
+        elif action_type == 'compensating_transaction' and issue.related_transaction_id:
             # Append-only correction: create a compensating ledger entry.
             transaction = db.session.get(Transaction, issue.related_transaction_id)
             if not transaction or transaction.student_id != issue.student_id or transaction.is_void:

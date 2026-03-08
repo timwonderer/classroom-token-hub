@@ -81,6 +81,7 @@ def _collective_item(teacher, name, join_code='JOINEXP1', goal_type='fixed', tar
     """Create a collective StoreItem."""
     item = StoreItem(
         teacher_id=teacher.id,
+        join_code=join_code,
         name=name,
         price=Decimal('10.00'),
         item_type='collective',

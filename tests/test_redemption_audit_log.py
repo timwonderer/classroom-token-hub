@@ -8,6 +8,8 @@ from werkzeug.security import generate_password_hash
 from app.extensions import db
 from app.models import (
     Admin,
+    ClassEconomy,
+    ClassMembership,
     RedemptionAuditLog,
     StoreItem,
     Student,
@@ -33,6 +35,24 @@ def student_in_class(client, teacher_admin):
     db.session.add(student)
     db.session.flush()
 
+    db.session.add(ClassEconomy(
+        join_code='AUDIT123',
+        display_name='A',
+        status='active',
+        created_by_admin_id=teacher_admin.id,
+    ))
+    db.session.add(ClassMembership(
+        join_code='AUDIT123',
+        admin_id=teacher_admin.id,
+        role='admin',
+        status='active',
+    ))
+    db.session.add(ClassMembership(
+        join_code='AUDIT123',
+        student_id=student.id,
+        role='student',
+        status='active',
+    ))
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher_admin.id))
     db.session.add(TeacherBlock(
         teacher_id=teacher_admin.id,
