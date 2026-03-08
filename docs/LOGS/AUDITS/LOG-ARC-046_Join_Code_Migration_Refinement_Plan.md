@@ -1,4 +1,25 @@
-# Join Code Migration: Refinement Plan (Final)
+---
+title: Join Code Migration Refinement Plan (Historical Snapshot)
+category: logs
+roles: [developer]
+description: Historical join-code migration planning artifact migrated from the legacy development tree.
+---
+
+# LOG-ARC-046: Join Code Migration Refinement Plan
+
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-046 | 1.0 | 2026-03-08 | N/A | Informative |
+
+## I. Purpose
+
+Preserve a historical migration-planning artifact for the v2 join-code transition.
+
+## II. Scope
+
+This record documents planning assumptions and migration ideas from the legacy development tree. Current runtime contracts are defined elsewhere.
+
+## III. Historical Plan
 
 > [!NOTE]
 > Historical planning artifact. The active v2 runtime contract is now tracked on `codex/v2.0`, and current docs no longer treat TeacherBlock fallback as intended runtime behavior.

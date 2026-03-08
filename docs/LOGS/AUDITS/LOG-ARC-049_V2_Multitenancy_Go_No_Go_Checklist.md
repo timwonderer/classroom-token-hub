@@ -1,4 +1,25 @@
-# v2 Multitenancy Go/No-Go Checklist
+---
+title: V2 Multitenancy Go/No-Go Checklist
+category: logs
+roles: [developer]
+description: Historical go/no-go checklist for the v2 multi-tenancy rollout.
+---
+
+# LOG-ARC-049: V2 Multitenancy Go/No-Go Checklist
+
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-049 | 1.0 | 2026-03-08 | N/A | Informative |
+
+## I. Purpose
+
+Preserve the historical release-readiness checklist for the v2 multi-tenancy rollout.
+
+## II. Scope
+
+This document is a historical release artifact and does not supersede active SOP runbooks.
+
+## III. Historical Checklist
 
 Date: 2026-03-08
 Branch: `codex/v2.0`

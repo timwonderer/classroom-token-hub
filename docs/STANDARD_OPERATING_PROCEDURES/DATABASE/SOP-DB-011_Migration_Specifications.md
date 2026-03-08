@@ -263,7 +263,7 @@ for fk in inspector.get_foreign_keys('students'):
 
 ## X. Deprecation Standards
 
-**Registry:** `docs/development/DEPRECATED_SYMBOLS.txt`
+**Registry:** `docs/STANDARD_OPERATING_PROCEDURES/DATABASE/SOP-DB-014_Deprecated_Symbols_Registry.md`
 
 **Deprecated Patterns:**
 

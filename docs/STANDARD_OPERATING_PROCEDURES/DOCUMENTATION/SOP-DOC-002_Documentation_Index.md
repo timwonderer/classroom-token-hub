@@ -1,7 +1,7 @@
 # SOP-DOC-002: Documentation Index
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-|SOP-DOC-002| 2.1 | 2026-03-08 | 2.0 |Normative|
+|SOP-DOC-002| 2.2 | 2026-03-08 | 2.1 |Normative|
 
 ## I. Purpose
 
@@ -9,7 +9,12 @@ This document is the canonical index of all formal documentation.
 
 ## II. Scope
 
-TBD
+This index tracks formally registered, numbered documents in the constitutional, normative, and informative namespace system, plus the root invariant documents.
+
+The following documentation trees are intentionally out of scope for this formal numbered index:
+
+- `docs/user-guides/` user-facing documentation
+- `docs/README.md` repository navigation
 ## III. Authority Level
 Normative. Subordinate to CORE invariant definitions.
 ## IV. Dependencies
@@ -30,6 +35,7 @@ None specified.
 - [ARC-OPS-005_Api_Reference.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-005_Api_Reference.md)
 - [ARC-OPS-007_Database_Schema.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-007_Database_Schema.md)
 - [ARC-OPS-012_Datetime_Handling_Specification.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-012_Datetime_Handling_Specification.md)
+- [ARC-OPS-013_Money_Handling.md](../../ARCHITECTURE/OPERATIONS/ARC-OPS-013_Money_Handling.md)
 ### ARCHITECTURE/SYSADMIN
 
 - [ARC-SYS-001_Sysadmin_Interface.md](../../ARCHITECTURE/SYSADMIN/ARC-SYS-001_Sysadmin_Interface.md)
@@ -105,6 +111,12 @@ None specified.
 - [LOG-ARC-041_Join_Code_Centric_Alignment_Whitepaper.md](../../LOGS/AUDITS/LOG-ARC-041_Join_Code_Centric_Alignment_Whitepaper.md)
 - [LOG-ARC-042_Legacy_Lookup_Burndown_and_Reporting_Validation.md](../../LOGS/AUDITS/LOG-ARC-042_Legacy_Lookup_Burndown_and_Reporting_Validation.md)
 - [LOG-ARC-043_Doc_Code_Cross_Reference_Audit_2026_03.md](../../LOGS/AUDITS/LOG-ARC-043_Doc_Code_Cross_Reference_Audit_2026_03.md)
+- [LOG-ARC-044_Testing_Best_Practices_2026_02.md](../../LOGS/AUDITS/LOG-ARC-044_Testing_Best_Practices_2026_02.md)
+- [LOG-ARC-045_Teacher_Student_Shadow_Spec_V2.md](../../LOGS/AUDITS/LOG-ARC-045_Teacher_Student_Shadow_Spec_V2.md)
+- [LOG-ARC-046_Join_Code_Migration_Refinement_Plan.md](../../LOGS/AUDITS/LOG-ARC-046_Join_Code_Migration_Refinement_Plan.md)
+- [LOG-ARC-047_Multi_Tenancy_Hardening_Progress_Log.md](../../LOGS/AUDITS/LOG-ARC-047_Multi_Tenancy_Hardening_Progress_Log.md)
+- [LOG-ARC-048_Multitenancy_Hardening_Matrix.md](../../LOGS/AUDITS/LOG-ARC-048_Multitenancy_Hardening_Matrix.md)
+- [LOG-ARC-049_V2_Multitenancy_Go_No_Go_Checklist.md](../../LOGS/AUDITS/LOG-ARC-049_V2_Multitenancy_Go_No_Go_Checklist.md)
 - [LOG-DB-001_Migration_Fix_Summary.md](../../LOGS/AUDITS/LOG-DB-001_Migration_Fix_Summary.md)
 - [LOG-DB-002_Migration_Note_Expected_Weekly_Hours.md](../../LOGS/AUDITS/LOG-DB-002_Migration_Note_Expected_Weekly_Hours.md)
 - [LOG-DB-003_Migration_Status_Report.md](../../LOGS/AUDITS/LOG-DB-003_Migration_Status_Report.md)
@@ -114,6 +126,7 @@ None specified.
 - [LOG-DB-007_Migration_Report_Staging.md](../../LOGS/AUDITS/LOG-DB-007_Migration_Report_Staging.md)
 - [LOG-DB-008_Legacy_Student_Migration.md](../../LOGS/AUDITS/LOG-DB-008_Legacy_Student_Migration.md)
 - [LOG-DB-012_Migration_Totp_Encryption.md](../../LOGS/AUDITS/LOG-DB-012_Migration_Totp_Encryption.md)
+- [LOG-DB-013_Deprecated_Symbols_Machine_Registry_Legacy.md](../../LOGS/AUDITS/LOG-DB-013_Deprecated_Symbols_Machine_Registry_Legacy.md)
 - [LOG-DEP-002_Cleanup_Duplicates.md](../../LOGS/AUDITS/LOG-DEP-002_Cleanup_Duplicates.md)
 - [LOG-DEP-010_Legacy_Account_Migration.md](../../LOGS/AUDITS/LOG-DEP-010_Legacy_Account_Migration.md)
 - [LOG-DEP-011_Multi_Tenancy_Fix_Deployment.md](../../LOGS/AUDITS/LOG-DEP-011_Multi_Tenancy_Fix_Deployment.md)
@@ -213,6 +226,7 @@ None specified.
 - [SOP-DOC-002_Documentation_Index.md](SOP-DOC-002_Documentation_Index.md)
 - [SOP-DOC-003_Division_Definition.md](SOP-DOC-003_Division_Definition.md)
 - [SOP-DOC-005_Codebase_Organization_Playbook.md](SOP-DOC-005_Codebase_Organization_Playbook.md)
+- [SOP-DOC-006_User_Guide_Authoring_Standard.md](SOP-DOC-006_User_Guide_Authoring_Standard.md)
 ### STANDARD_OPERATING_PROCEDURES
 
 - [SOP-CORE-000_Sop_Foundation.md](../SOP-CORE-000_Sop_Foundation.md)

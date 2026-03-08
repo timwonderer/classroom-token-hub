@@ -1,4 +1,25 @@
-# Multi-Tenancy Hardening Progress Log (v2.0)
+---
+title: Multi-Tenancy Hardening Progress Log
+category: logs
+roles: [developer]
+description: Historical progress log for the v2 multi-tenancy hardening effort.
+---
+
+# LOG-ARC-047: Multi-Tenancy Hardening Progress Log
+
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-047 | 1.0 | 2026-03-08 | N/A | Informative |
+
+## I. Purpose
+
+Preserve the historical status log for the v2 multi-tenancy hardening effort.
+
+## II. Scope
+
+This document records branch-era progress and readiness notes. It is informative only.
+
+## III. Historical Log
 
 Date: 2026-03-08
 Branch: `codex/v2.0`

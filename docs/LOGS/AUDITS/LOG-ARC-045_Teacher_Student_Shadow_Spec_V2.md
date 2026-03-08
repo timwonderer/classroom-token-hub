@@ -1,10 +1,31 @@
-# Feature Specification
+---
+title: Teacher-Student Shadow Spec V2 (Historical Snapshot)
+category: logs
+roles: [developer]
+description: Historical draft for teacher-shadow identity behavior migrated from the legacy development tree.
+---
+
+# LOG-ARC-045: Teacher-Student Shadow Spec V2
+
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-045 | 1.0 | 2026-03-08 | N/A | Informative |
+
+## I. Purpose
+
+Preserve a historical design draft for teacher-shadow identity behavior.
+
+## II. Scope
+
+This document is a historical planning/spec artifact and does not define active feature policy by itself.
+
+## III. Historical Draft
 
 ## Teacher-Student Shadow Identity (Revised with Cross-Universe Enrollment Clarification)
 
 ---
 
-## I. Purpose
+## IV. Original Purpose
 
 Replace demo students with a structurally consistent mechanism that allows teachers to experience the student interface exactly as regular students do.
 
@@ -12,7 +33,7 @@ A teacher-student is a standard student identity with a boolean flag that exclud
 
 ---
 
-## 2. Identity Model Clarification
+## V. Identity Model Clarification
 
 ### 2.1 Platform-Level Identity
 
@@ -268,4 +289,3 @@ Although a shadow student follows the standard student lifecycle, it has the fol
    - Badge is informational only and does not imply additional permissions.
 
 These constraints preserve identity consistency while maintaining a single unified student lifecycle.
-

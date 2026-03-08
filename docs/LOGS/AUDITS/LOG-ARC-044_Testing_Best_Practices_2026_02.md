@@ -1,4 +1,25 @@
-# Testing Best Practices
+---
+title: Testing Best Practices (Historical Snapshot)
+category: logs
+roles: [developer]
+description: Historical testing guidance migrated from the legacy development planning tree.
+---
+
+# LOG-ARC-044: Testing Best Practices
+
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-044 | 1.0 | 2026-03-08 | N/A | Informative |
+
+## I. Purpose
+
+Preserve a historical snapshot of project testing guidance that originally lived in `docs/development/`.
+
+## II. Scope
+
+This document is retained as historical engineering guidance. It is not the canonical testing policy for current work.
+
+## III. Historical Context
 
 **Last Updated:** 2026-02-19
 

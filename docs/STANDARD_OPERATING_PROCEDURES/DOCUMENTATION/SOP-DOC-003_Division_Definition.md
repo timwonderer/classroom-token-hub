@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|------------------|
-|SOP-DOC-003| 1.1 | 2026-03-08 | 1.0 |Normative|
+|SOP-DOC-003| 1.2 | 2026-03-08 | 1.1 |Normative|
 
 ---
 
@@ -20,10 +20,15 @@ This document does not define system identity or architectural invariants. All a
 
 This division model applies to:
 
-- All documentation artifacts
-- All future document creation
-- All document refactoring efforts
-- All namespace placement decisions
+- All formally registered, numbered documentation artifacts
+- All future numbered document creation
+- All numbered-document refactoring efforts
+- All namespace placement decisions for tracked documents
+
+This document does not require every file under `docs/` to belong to a numbered division. In particular:
+
+- `docs/user-guides/` is a separately governed user-documentation tree
+- `docs/README.md` is navigational and not a numbered record
 
 ---
 
@@ -196,6 +201,7 @@ Preserves institutional memory and system history.
 - Postmortems
 - Historical change logs
 - Archived summaries
+- Historical planning artifacts and superseded working drafts once they are preserved as records rather than active policy
 
 #### Does Not Contain
 - Policy
@@ -209,6 +215,31 @@ Informative
 If it describes what happened rather than what must happen, it belongs in LOG.
 
 LOG preserves institutional memory.
+
+---
+
+### Non-Indexed Informative Trees
+
+Some documentation is intentionally informative without entering the numbered namespace registry.
+
+#### `user-guides/`
+
+Purpose:
+- Teacher, student, sysadmin, legal, and diagnostic help content intended for end users
+
+Governance:
+- Informative
+- May use lightweight or no metadata when that improves readability
+- Is discoverable through navigation and search, not through the formal numbered index in `SOP-DOC-002`
+
+#### `docs/README.md`
+
+Purpose:
+- Entry-point navigation for the documentation tree
+
+Governance:
+- Informative
+- Not treated as a formal numbered document
 
 ---
 

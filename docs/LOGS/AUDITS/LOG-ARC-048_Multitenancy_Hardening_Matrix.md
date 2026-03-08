@@ -1,4 +1,25 @@
-# v2 Multitenancy Hardening Matrix
+---
+title: Multitenancy Hardening Matrix
+category: logs
+roles: [developer]
+description: Historical hardening matrix for v2 multi-tenancy readiness.
+---
+
+# LOG-ARC-048: Multitenancy Hardening Matrix
+
+| Reference Number | Version | Effective Date | Supersedes | Authority Level |
+|------------------|---------|----------------|------------|-----------------|
+| LOG-ARC-048 | 1.0 | 2026-03-08 | N/A | Informative |
+
+## I. Purpose
+
+Preserve the historical v2 hardening matrix used to track readiness workstreams.
+
+## II. Scope
+
+This matrix is retained as an institutional-memory record and is not a current normative checklist.
+
+## III. Historical Matrix
 
 Date: 2026-03-08
 Branch: `codex/v2.0`
