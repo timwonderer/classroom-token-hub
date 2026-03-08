@@ -2,7 +2,7 @@
 
 An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.
 
-**Release Track:** Active development (`1.9.x` line)
+**Release Track:** Active development — see [CHANGELOG.md](CHANGELOG.md) for current version
 
 ---
 
@@ -35,6 +35,7 @@ An interactive banking and classroom management platform for teaching students a
 - **Insurance System** — Policies, enrollments, and claims managed in-app
 - **Rent & Fees** — Optional recurring rent with waivers and late-fee configuration
 - **TOTP Authentication** — Secure admin access with two-factor authentication
+- **Passkey Support** — Passwordless sign-in for admins and system admins via Passwordless.dev
 
 ### Performance
 
@@ -185,6 +186,7 @@ This enables the repo-managed hooks used by the local development workflow, incl
 
 - **[Student Guide](docs/user-guides/student_guide.md)** — How students use the platform
 - **[Teacher Manual](docs/user-guides/teacher_manual.md)** — Comprehensive admin guide
+- **[Sysadmin Manual](docs/user-guides/sysadmin_manual.md)** — System administrator guide
 
 ### For Developers
 
@@ -239,7 +241,7 @@ classroom-economy/
 │   ├── extensions.py         # Flask extensions
 │   ├── models.py             # Database models (students, tenancy, payroll, rent, insurance)
 │   ├── auth.py               # Authentication decorators and scoped queries
-│   ├── routes/               # Blueprint-based routes (admin, student, system_admin, api, main)
+│   ├── routes/               # Blueprint-based routes (admin, student, system_admin, api, main, analytics, docs, recovery)
 │   └── utils/                # Utilities (encryption, helpers, constants)
 ├── templates/                # Jinja2 templates
 ├── static/                   # CSS, JS, images
@@ -357,4 +359,4 @@ This project is licensed under the [PolyForm Noncommercial License 1.0.0](https:
 
 Built for educators and students to make learning about finance engaging and practical.
 
-**Last Updated:** 2026-03-08
+![Last Updated](https://img.shields.io/github/last-commit/timwonderer/classroom-economy?label=last%20updated&color=blue)
