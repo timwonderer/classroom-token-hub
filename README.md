@@ -2,7 +2,7 @@
 
 An interactive banking and classroom management platform for teaching students about money while tracking classroom participation.
 
-**Version:** 1.9.0
+**Release Track:** Active development (`1.9.x` line)
 
 ---
 
@@ -12,7 +12,7 @@ An interactive banking and classroom management platform for teaching students a
 
 **License:** [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0/) - Free for educational and nonprofit use, not for commercial applications.
 
-**Project Status:** Version 1.9.0 Released with active security hardening and performance work in progress. The 1.9.0 documentation release consolidates canonical taxonomy across `/docs`, resolves navigation integrity issues, and standardizes release/archive placement. Recent unreleased improvements include: post-claim PII minimisation (DOB and name hashes automatically deleted after account setup), comprehensive class deletion audit with P1/P2/P3 security fixes, timed deletion confirmation gates, hall pass and admin identity boundary hardening, and a major read-path performance optimization reducing student roster queries from ~1225 to ~10 for a class of 60 students. See [LOG-REL-016_Release_Notes_V1.9.0.md](docs/LOGS/RELEASES/LOG-REL-016_Release_Notes_V1.9.0.md) for the full release and [CHANGELOG.md](CHANGELOG.md) for all changes.
+**Project Status:** Actively maintained classroom-economy platform with ongoing security hardening, documentation cleanup, and feature work. For the current release history, see [CHANGELOG.md](CHANGELOG.md). For the canonical system and feature docs, start at [docs/README.md](docs/README.md).
 
 ---
 
@@ -167,15 +167,13 @@ After cloning, configure git to use the versioned `hooks/` directory:
 ./scripts/setup-hooks.sh
 ```
 
-This enables:
-
-- `post-checkout`: branch-aware `DATABASE_URL` switching for local workflows
-- `pre-push`: migration-head safety checks
+This enables the repo-managed hooks used by the local development workflow, including migration safety checks on push. See [CONTRIBUTING.md](CONTRIBUTING.md) for workflow details.
 
 ### Testing with Sample Data
 
 - Use `student_upload_template.csv` as a reference for CSV roster uploads
 - Run `python scripts/seed_dummy_students.py` to seed the database with sample students
+- For operational script details, see [docs/LOGS/AUDITS/LOG-DEP-022_Scripts_Operations_Reference.md](docs/LOGS/AUDITS/LOG-DEP-022_Scripts_Operations_Reference.md)
 
 ---
 
@@ -226,7 +224,6 @@ This enables:
 - pytest and pytest-flask
 
 **Deployment:**
-- Docker support with multi-stage builds
 - GitHub Actions CI/CD pipeline
 - Production-ready for Linux servers (tested on Ubuntu/Debian)
 - Compatible with major cloud providers
@@ -285,6 +282,8 @@ python scripts/create_admin.py        # Create teacher account
 python scripts/manage_invites.py      # Manage admin invites
 python scripts/seed_dummy_students.py # Seed test data
 ```
+
+Operational script behavior and arguments are documented in [docs/LOGS/AUDITS/LOG-DEP-022_Scripts_Operations_Reference.md](docs/LOGS/AUDITS/LOG-DEP-022_Scripts_Operations_Reference.md).
 
 ---
 
