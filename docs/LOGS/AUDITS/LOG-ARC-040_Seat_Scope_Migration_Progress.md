@@ -27,6 +27,12 @@ This log records the current implementation status of the user/seat identity spl
   - `tests/test_ledger_seat_scope.py`
   - `tests/test_attendance_seat_scope.py`
   - `tests/test_hall_rent_seat_scope.py`
+- Hardened selected-class analytics/economy APIs to prevent teacher-global fallback when class context is explicitly selected.
+- Extended hall-pass available-types API to resolve class/teacher identity via `join_code` and `teacher_public_id` (with `teacher_id` retained as compatibility fallback).
+- Added regression tests for:
+  - class-scoped analytics cycle resolution
+  - block-scoped economy API payroll resolution behavior
+  - hall-pass available-types join-code/public-id routing and out-of-scope rejection
 
 ## Remaining Work
 
@@ -34,7 +40,7 @@ This log records the current implementation status of the user/seat identity spl
 - Continue replacing classroom/economic table read paths that still rely on `student_id`-only filtering.
 - Finalize migration graph hygiene and rehearsal behavior for local test-db runs where legacy multi-head version rows persist in `alembic_version`.
 - Add expanded regression tests for join-code isolation in remaining admin flows.
-- Complete external identifier policy rollout (`public_id` usage in routes/URLs that still expose integer IDs).
+- Complete external identifier policy rollout (`public_id` usage in routes/URLs that still expose integer IDs), including remaining student route parameters and legacy link surfaces.
 
 ## Validation Snapshot
 

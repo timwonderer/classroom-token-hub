@@ -78,8 +78,45 @@ Executed and passing:
 - `pytest -q tests/test_export_students_scoping.py`  
   Result: **2 passed**
 
+## 4) Class-Scoped Analytics and Economy API Hardening (2026-03-08)
+
+Updated [app/routes/analytics.py](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/analytics.py) and [app/utils/analytics_engine.py](/Users/timothychang/Documents/GitHub/classroom-economy/app/utils/analytics_engine.py):
+
+- Selected-class analytics windows (`pay_cycle`, `rent_cycle`) now resolve settings with join-code-first precedence.
+- `AnalyticsEngine._get_cwi()` now resolves payroll settings using join-code-first precedence, with legacy block-scoped fallback only.
+
+Updated [app/routes/admin.py](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/admin.py):
+
+- `/admin/economy-health`, `/admin/api/economy/analyze`, and `/admin/api/economy/validate/<feature>` now resolve selected-class payroll/rent/banking settings with join-code-first precedence.
+- Block-selected requests no longer fall through to teacher-global `block=None` settings.
+
+Validation tests added/updated:
+
+- [tests/test_analytics.py](/Users/timothychang/Documents/GitHub/classroom-economy/tests/test_analytics.py)
+- [tests/test_economy_api.py](/Users/timothychang/Documents/GitHub/classroom-economy/tests/test_economy_api.py)
+
+Verification:
+
+- `pytest -q tests/test_analytics.py` -> **16 passed**
+- `pytest -q tests/test_economy_api.py` -> **26 passed**
+
+## 5) Public Identity Surface Hardening (2026-03-08)
+
+Updated [app/routes/api.py](/Users/timothychang/Documents/GitHub/classroom-economy/app/routes/api.py):
+
+- `/api/hall-pass/available-types` now supports `join_code` and `teacher_public_id` as primary identity inputs.
+- Student sessions with explicit class context reject out-of-scope `join_code` values.
+- Numeric `teacher_id` remains as compatibility fallback.
+
+Validation tests added:
+
+- [tests/test_api_tenancy.py](/Users/timothychang/Documents/GitHub/classroom-economy/tests/test_api_tenancy.py)
+  - `test_hall_pass_available_types_accepts_join_code_without_teacher_id`
+  - `test_hall_pass_available_types_rejects_out_of_scope_join_code`
+  - `test_hall_pass_available_types_supports_teacher_public_id`
+
 ## Next Burndown Targets
 
-1. Reduce route-level `teacher_id` dependency in `app/routes/admin.py` by preferring join-code-first helper interfaces.
-2. Audit analytics/report windows for any teacher-global fallback that should be class-scoped when a join code is selected.
+1. Continue route-level `teacher_id` dependency reduction in `app/routes/admin.py` and `app/routes/student.py` by preferring join-code-first helper interfaces.
+2. Complete external identity rollout by replacing remaining user-facing numeric teacher route parameters (for example legacy student switching paths) with `teacher_public_id` or `join_code`.
 3. Continue shrinking compatibility shims where schema and session guarantees now make legacy fallback unnecessary.

@@ -1,6 +1,6 @@
 # Classroom Token Hub - Development Priorities
 
-**Last Updated:** 2026-03-04
+**Last Updated:** 2026-03-08
 **Current Version:** 1.9.0
 **Target:** 1.10.0 Future Enhancements
 
@@ -40,6 +40,8 @@ This sets `core.hooksPath=hooks` and enables shared repo hooks, including branch
 - Fixed student recovery identity updates to preserve claimed class seats, preventing post-claim "No class selected" errors on next login.
 - Updated teacher reset flow to redirect to Student Detail after generating a reset code, where the active code remains visible until expiration.
 - Improved mobile responsiveness for student recovery pages by tightening spacing and collapsing the right panel on small screens.
+- Hardened analytics and economy report APIs to use class-scoped settings precedence (join-code first, then legacy block-scoped rows) instead of teacher-global fallback during class-selected requests.
+- Updated hall-pass available-types API to support `join_code` and `teacher_public_id` identity inputs, with active class scope enforcement for student sessions.
 
 ---
 
