@@ -763,12 +763,34 @@ class StudentTeacher(db.Model):
     )
 
 
+class ClassEconomyStatus(enum.Enum):
+    """Enum for class economy statuses."""
+    ACTIVE = 'active'
+    ARCHIVED = 'archived'
+
+
+class ClassMembershipRole(enum.Enum):
+    """Enum for class membership roles."""
+    ADMIN = 'admin'
+    STUDENT = 'student'
+
+
+class ClassMembershipStatus(enum.Enum):
+    """Enum for class membership statuses."""
+    ACTIVE = 'active'
+    ARCHIVED = 'archived'
+
+
 class ClassEconomy(db.Model):
     """Represents a class economy identified by its unique join_code."""
     __tablename__ = 'class_economies'
     join_code = db.Column(db.String(20), primary_key=True)
     display_name = db.Column(db.String(100), nullable=True)
-    status = db.Column(db.String(20), nullable=False, default='active')
+    status = db.Column(
+        db.Enum(ClassEconomyStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ClassEconomyStatus.ACTIVE
+    )
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
     created_by_admin_id = db.Column(
@@ -793,14 +815,25 @@ class ClassMembership(db.Model):
     )
     admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=True, index=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=True, index=True)
-    role = db.Column(db.String(20), nullable=False)
-    status = db.Column(db.String(20), nullable=False, default='active')
+    role = db.Column(
+        db.Enum(ClassMembershipRole, values_callable=lambda x: [e.value for e in x]),
+        nullable=False
+    )
+    status = db.Column(
+        db.Enum(ClassMembershipStatus, values_callable=lambda x: [e.value for e in x]),
+        nullable=False,
+        default=ClassMembershipStatus.ACTIVE
+    )
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
 
     __table_args__ = (
         db.UniqueConstraint('join_code', 'admin_id', name='uq_class_membership_admin'),
         db.UniqueConstraint('join_code', 'student_id', name='uq_class_membership_student'),
+        db.CheckConstraint(
+            '(admin_id IS NOT NULL AND student_id IS NULL) OR (admin_id IS NULL AND student_id IS NOT NULL)',
+            name='ck_membership_xor'
+        ),
         db.Index('ix_class_memberships_join_code', 'join_code'),
         db.Index('ix_class_memberships_admin_id', 'admin_id'),
         db.Index('ix_class_memberships_student_id', 'student_id'),

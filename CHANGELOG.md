@@ -8,6 +8,9 @@ and this project follows semantic versioning principles.
 
 ## [Unreleased]
 
+### Changed
+- **ClassEconomy and ClassMembership data-integrity hardening** — Added SQLAlchemy `Enum` types for `ClassEconomy.status` (active, archived), `ClassMembership.role` (admin, student), and `ClassMembership.status` (active, archived). Aligned the membership XOR check constraint name with existing DB constraints and added migration `a11213ca4afb` to normalize invalid values and enforce strict DB check constraints for class economy status, membership status, and membership role consistency. (Addresses PR #1078 review comments)
+
 ### Fixed
 - **Pre-merge fix: Missing ClassEconomy and ClassMembership models** — Added `ClassEconomy` and `ClassMembership` SQLAlchemy models to `app/models.py` to match the `class_economies` and `class_memberships` tables created in prior migrations. These models were referenced in `app/utils/deletion.py`, multiple test files, and `tmp_admin.py` but were absent from the model layer, causing `ImportError` at startup.
 - **Pre-merge fix: Stale `admin_id` column name in test fixtures** — Updated 58 test files (121 occurrences) to use `teacher_id` instead of `admin_id` when constructing or querying `StudentTeacher`, `DeletionRequest`, and `RecoveryRequest` records, after migration `c4e1a2b3d4f6` renamed those columns.
