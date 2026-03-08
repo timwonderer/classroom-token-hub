@@ -172,6 +172,11 @@ def get_rent_settings_for_context(context):
         if scoped:
             return scoped
 
+    if not current_block:
+        scoped = base_query.filter(RentSettings.block.is_not(None)).first()
+        if scoped:
+            return scoped
+
     return base_query.filter(RentSettings.block.is_(None)).first()
 
 
@@ -1464,6 +1469,8 @@ def dashboard():
         spending_this_week=float(round(spending_this_week, 2)),
         spending_this_month=float(round(spending_this_month, 2)),
         announcements=announcements,
+        current_join_code=join_code,
+        scoped_total_earnings=student.get_total_earnings(join_code=join_code, teacher_id=teacher_id),
     )
 
 
@@ -1541,7 +1548,9 @@ def payroll():
             ("2 hours", round(pay_rate_per_minute * 120, 2)),
             ("4 hours", round(pay_rate_per_minute * 240, 2)),
         ],
-        now=utc_now()
+        now=utc_now(),
+        current_join_code=join_code,
+        scoped_total_earnings=student.get_total_earnings(join_code=join_code, teacher_id=teacher_id),
     )
 
 
@@ -1735,6 +1744,7 @@ def transfer():
                          checking_balance=checking_balance,
                          savings_balance=savings_balance,
                          forecast_interest=forecast_interest,
+                         scoped_total_earnings=student.get_total_earnings(join_code=join_code, teacher_id=teacher_id),
                          settings=settings,
                          calculation_type=calculation_type,
                          compound_frequency=compound_frequency,

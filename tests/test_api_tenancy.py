@@ -8,7 +8,17 @@ import pyotp
 from datetime import datetime, timezone
 
 from app import app, db
-from app.models import Admin, Student, StudentTeacher, TapEvent, TeacherBlock, StudentBlock, HallPassSettings
+from app.models import (
+    Admin,
+    ClassEconomy,
+    ClassMembership,
+    HallPassSettings,
+    Student,
+    StudentBlock,
+    StudentTeacher,
+    TapEvent,
+    TeacherBlock,
+)
 from app.hash_utils import get_random_salt, hash_username
 
 
@@ -100,6 +110,28 @@ def _create_claimed_seat(teacher: Admin, student: Student, join_code: str, block
     db.session.add(seat)
     db.session.commit()
     return seat
+
+
+def _create_class_scope(teacher: Admin, student: Student, join_code: str):
+    """Create the v2 class economy and memberships for a teacher/student pair."""
+    db.session.add(ClassEconomy(
+        join_code=join_code,
+        status="active",
+        created_by_admin_id=teacher.id,
+    ))
+    db.session.add(ClassMembership(
+        join_code=join_code,
+        admin_id=teacher.id,
+        role="admin",
+        status="active",
+    ))
+    db.session.add(ClassMembership(
+        join_code=join_code,
+        student_id=student.id,
+        role="student",
+        status="active",
+    ))
+    db.session.commit()
 
 
 def _login_student(client, student: Student, join_code: str | None = None):
@@ -254,6 +286,8 @@ def test_admin_tap_entries_scoped_by_join_code(client):
         primary_teacher=teacher_a,
         linked_teachers=[teacher_a, teacher_b],
     )
+    _create_class_scope(teacher_a, shared_student, "JOIN_A")
+    _create_class_scope(teacher_b, shared_student, "JOIN_B")
     _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
     _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="B")
 
@@ -298,6 +332,8 @@ def test_admin_delete_tap_entry_enforces_join_code_scope(client):
         primary_teacher=teacher_a,
         linked_teachers=[teacher_a, teacher_b],
     )
+    _create_class_scope(teacher_a, shared_student, "JOIN_A")
+    _create_class_scope(teacher_b, shared_student, "JOIN_B")
     _create_claimed_seat(teacher_a, shared_student, "JOIN_A", block="A")
     _create_claimed_seat(teacher_b, shared_student, "JOIN_B", block="B")
 

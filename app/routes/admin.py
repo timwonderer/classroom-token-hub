@@ -44,7 +44,7 @@ from app.models import (
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
     RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent, Seat,
-    BalanceCache,
+    BalanceCache, ClassMembership, ClassEconomy,
 )
 from app.auth import admin_required, get_admin_student_query, get_student_for_admin
 from app.forms import (
@@ -605,10 +605,12 @@ def _hard_delete_join_code_scope(join_code, teacher_id):
         ).delete(synchronize_session=False)
 
     # Seats/ownership for this class
+    ClassMembership.query.filter_by(join_code=join_code).delete(synchronize_session=False)
     TeacherBlock.query.filter(
         TeacherBlock.teacher_id == teacher_id,
         TeacherBlock.join_code == join_code
     ).delete(synchronize_session=False)
+    ClassEconomy.query.filter_by(join_code=join_code).delete(synchronize_session=False)
 
     if class_blocks and scoped_student_ids:
         # Only delete legacy StudentBlocks (no join_code) that match the period names.
@@ -815,13 +817,49 @@ def _sanitize_csv_field(value):
     return text
 
 
+def _get_admin_owned_join_codes(admin_id):
+    """Return active class economies owned by the current admin via membership."""
+    if not admin_id:
+        return []
+
+    return [
+        join_code
+        for (join_code,) in db.session.query(ClassMembership.join_code)
+        .filter(
+            ClassMembership.admin_id == admin_id,
+            ClassMembership.role == 'admin',
+            ClassMembership.status == 'active',
+        )
+        .distinct()
+        .all()
+        if join_code
+    ]
+
+
+def _admin_owns_join_code(admin_id, join_code):
+    """Return True when the admin has an active admin membership for the join_code."""
+    if not admin_id or not join_code:
+        return False
+
+    return db.session.query(
+        sa.exists().where(
+            sa.and_(
+                ClassMembership.admin_id == admin_id,
+                ClassMembership.join_code == join_code,
+                ClassMembership.role == 'admin',
+                ClassMembership.status == 'active',
+            )
+        )
+    ).scalar()
+
+
 def _validate_destruction_gate(data, expected_phrase):
     """Require timed in-app gate proof for destructive operations."""
     phrase = str((data or {}).get("gate_phrase", "")).strip().upper()
     if phrase != expected_phrase:
         return jsonify({
             "status": "error",
-            "message": "Deletion blocked: confirmation phrase did not match."
+            "message": "Confirmation failed: confirmation phrase did not match."
         }), 400
 
     try:
@@ -1261,12 +1299,7 @@ def dashboard():
     # Optimized balance calculation (scoped to teacher's classes)
     student_ids = [s.id for s in students]
     # Fetch all join codes for this teacher
-    teacher_join_codes = [
-        code for (code,) in db.session.query(TeacherBlock.join_code)
-        .filter(TeacherBlock.teacher_id == current_admin_id, TeacherBlock.join_code.isnot(None))
-        .distinct()
-        .all()
-    ]
+    teacher_join_codes = _get_admin_owned_join_codes(current_admin_id)
     join_code_scope = TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
         TeacherBlock.teacher_id == current_admin_id,
         TeacherBlock.join_code.isnot(None),
@@ -1296,7 +1329,7 @@ def dashboard():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
-        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
+        .filter(HallPassLog.join_code.in_(join_code_scope))
         .filter(HallPassLog.status == 'pending')
         .count()
     )
@@ -1323,7 +1356,7 @@ def dashboard():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
-        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
+        .filter(HallPassLog.join_code.in_(join_code_scope))
         .filter(HallPassLog.status == 'pending')
         .order_by(HallPassLog.request_time.desc())
         .limit(5)
@@ -3069,12 +3102,8 @@ def set_current_class():
         return jsonify({'status': 'error', 'message': 'Join code required'}), 400
 
     admin_id = session.get('admin_id')
-    teacher_block = TeacherBlock.query.filter_by(
-        teacher_id=admin_id,
-        join_code=join_code
-    ).first()
-    if not teacher_block:
-        return jsonify({'status': 'error', 'message': 'Class period not found'}), 404
+    if not _admin_owns_join_code(admin_id, join_code):
+        return jsonify({'status': 'error', 'message': 'Access denied'}), 403
 
     session['current_join_code'] = join_code
     return jsonify({'status': 'success'}), 200
@@ -3682,13 +3711,20 @@ def delete_join_code():
     if not join_code:
         return jsonify({"status": "error", "message": "join_code is required."}), 400
 
-    gate_error = _validate_destruction_gate(data, expected_phrase=f"DELETE JOIN CODE {join_code}")
-    if gate_error:
-        return gate_error
+    if not _admin_owns_join_code(current_admin_id, join_code):
+        return jsonify({"status": "error", "message": "Join code not found or access denied."}), 403
 
-    seat = TeacherBlock.query.filter_by(teacher_id=current_admin_id, join_code=join_code).first()
-    if not seat:
-        return jsonify({"status": "error", "message": "Join code not found or access denied."}), 404
+    legacy_confirm_join_code = str((data or {}).get("confirm_join_code", "")).strip().upper()
+    if legacy_confirm_join_code:
+        if legacy_confirm_join_code != join_code:
+            return jsonify({
+                "status": "error",
+                "message": "Confirmation failed: join code did not match."
+            }), 400
+    else:
+        gate_error = _validate_destruction_gate(data, expected_phrase=f"DELETE JOIN CODE {join_code}")
+        if gate_error:
+            return gate_error
 
     try:
         _hard_delete_join_code_scope(join_code, current_admin_id)
@@ -5668,6 +5704,20 @@ def insurance_management():
             .count()
         )
 
+    policy_enrollment_counts = {}
+    for enrollment in active_enrollments:
+        policy_enrollment_counts[enrollment.policy_id] = (
+            policy_enrollment_counts.get(enrollment.policy_id, 0) + 1
+        )
+
+    policy_pending_claim_counts = {}
+    for claim in claims:
+        if claim.status != 'pending':
+            continue
+        policy_pending_claim_counts[claim.policy_id] = (
+            policy_pending_claim_counts.get(claim.policy_id, 0) + 1
+        )
+
     return render_template('admin_insurance.html',
                           form=form,
                           policies=policies,
@@ -5675,6 +5725,8 @@ def insurance_management():
                           cancelled_enrollments=cancelled_enrollments,
                           claims=claims,
                           pending_claims_count=pending_claims_count,
+                          policy_enrollment_counts=policy_enrollment_counts,
+                          policy_pending_claim_counts=policy_pending_claim_counts,
                           tier_groups=tier_groups,
                           next_tier_category_id=next_tier_category_id,
                           teacher_blocks=teacher_blocks,
@@ -6472,15 +6524,12 @@ def void_transaction(transaction_id):
 def hall_pass():
     """Manage hall pass requests and active passes."""
     student_ids_subq = _student_scope_subquery()
-    join_code_scope = TeacherBlock.query.with_entities(TeacherBlock.join_code).filter(
-        TeacherBlock.teacher_id == session.get('admin_id'),
-        TeacherBlock.join_code.isnot(None),
-    ).distinct()
+    join_code_scope = _get_admin_owned_join_codes(session.get('admin_id'))
     pending_requests = (
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
-        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
+        .filter(HallPassLog.join_code.in_(join_code_scope))
         .filter(HallPassLog.status == 'pending')
         .order_by(HallPassLog.request_time.asc())
         .all()
@@ -6489,7 +6538,7 @@ def hall_pass():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
-        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
+        .filter(HallPassLog.join_code.in_(join_code_scope))
         .filter(HallPassLog.status == 'approved')
         .order_by(HallPassLog.decision_time.asc())
         .all()
@@ -6498,7 +6547,7 @@ def hall_pass():
         HallPassLog.query
         .join(Student, HallPassLog.student_id == Student.id)
         .filter(Student.id.in_(sa.select(student_ids_subq)))
-        .filter(HallPassLog.join_code.in_(sa.select(join_code_scope)))
+        .filter(HallPassLog.join_code.in_(join_code_scope))
         .filter(HallPassLog.status == 'left')
         .order_by(HallPassLog.left_time.asc())
         .all()
@@ -6983,14 +7032,7 @@ def payroll():
     # Recent payroll activity
     # CRITICAL: Filter by join_code as it is the source of truth for class isolation
     # Get all join codes for this teacher (from active blocks)
-    my_join_codes = [
-        res.join_code for res in 
-        db.session.query(TeacherBlock.join_code)
-        .filter_by(teacher_id=admin_id)
-        .filter(TeacherBlock.join_code.isnot(None))
-        .distinct()
-        .all()
-    ]
+    my_join_codes = _get_admin_owned_join_codes(admin_id)
     
     recent_payrolls = (
         Transaction.query
@@ -7032,6 +7074,19 @@ def payroll():
 
     # Pre-fetch payroll earnings and last payroll dates in batch
     student_ids = [s.id for s in students]
+    raw_balances = get_batch_balances(my_join_codes, student_ids)
+    scoped_balances_by_student = {}
+    for student in students:
+        checking_total = Decimal('0.00')
+        savings_total = Decimal('0.00')
+        for join_code in my_join_codes:
+            balances = raw_balances[(student.id, join_code)]
+            checking_total += Decimal(balances['checking_cents']) / 100
+            savings_total += Decimal(balances['savings_cents']) / 100
+        scoped_balances_by_student[student.id] = {
+            'checking': checking_total,
+            'savings': savings_total,
+        }
 
     # Batch: Total Earned
     earnings_rows = db.session.query(
@@ -7173,6 +7228,7 @@ def payroll():
         show_setup_banner=show_setup_banner,
         # Students tab
         student_stats=student_stats,
+        scoped_balances_by_student=scoped_balances_by_student,
         # Rewards & Fines tab
         rewards=rewards,
         fines=fines,
@@ -8184,13 +8240,10 @@ def export_students():
     admin_id = session.get('admin_id')
     requested_join_code = (request.args.get('join_code') or '').strip()
     selected_join_code = None
+    teacher_join_codes = _get_admin_owned_join_codes(admin_id)
 
     if requested_join_code:
-        has_scope = TeacherBlock.query.filter(
-            TeacherBlock.teacher_id == admin_id,
-            TeacherBlock.join_code == requested_join_code,
-        ).first()
-        if not has_scope:
+        if requested_join_code not in teacher_join_codes:
             return jsonify({"error": "Invalid class scope"}), 403
         selected_join_code = requested_join_code
 
@@ -8210,20 +8263,37 @@ def export_students():
     if selected_join_code:
         students_query = students_query.filter(
             Student.id.in_(
-                db.session.query(TeacherBlock.student_id).filter(
-                    TeacherBlock.teacher_id == admin_id,
-                    TeacherBlock.join_code == selected_join_code,
-                    TeacherBlock.student_id.isnot(None),
-                    TeacherBlock.is_claimed.is_(True),
+                db.session.query(ClassMembership.student_id).filter(
+                    ClassMembership.join_code == selected_join_code,
+                    ClassMembership.role == 'student',
+                    ClassMembership.status == 'active',
+                    ClassMembership.student_id.isnot(None),
                 )
             )
         )
 
     students = students_query.all()
     teacher_id = admin_id
+    student_ids = [s.id for s in students]
+    scoped_join_codes = [selected_join_code] if selected_join_code else teacher_join_codes
+    raw_balances = get_batch_balances(scoped_join_codes, student_ids)
+    scoped_balances_by_student = {}
+    for student in students:
+        checking_total = Decimal('0.00')
+        savings_total = Decimal('0.00')
+        earnings_total = Decimal('0.00')
+        for join_code in scoped_join_codes:
+            balances = raw_balances[(student.id, join_code)]
+            checking_total += Decimal(balances['checking_cents']) / 100
+            savings_total += Decimal(balances['savings_cents']) / 100
+            earnings_total += Decimal(balances.get('earnings', Decimal('0.00')))
+        scoped_balances_by_student[student.id] = {
+            'checking': checking_total,
+            'savings': savings_total,
+            'earnings': earnings_total,
+        }
 
     # Prefetch active insurances to avoid N+1 queries
-    student_ids = [s.id for s in students]
     active_insurances_map = {}
     if teacher_id and student_ids:
         scoped_insurances = StudentInsurance.query.join(
@@ -8257,14 +8327,10 @@ def export_students():
         active_insurance = active_insurances_map.get(student.id)
         insurance_name = active_insurance.policy.title if active_insurance else 'None'
 
-        if selected_join_code:
-            checking_balance = student.get_checking_balance(join_code=selected_join_code)
-            savings_balance = student.get_savings_balance(join_code=selected_join_code)
-            total_earnings = student.get_total_earnings(join_code=selected_join_code)
-        else:
-            checking_balance = student.checking_balance
-            savings_balance = student.savings_balance
-            total_earnings = student.total_earnings
+        scoped_balances = scoped_balances_by_student.get(student.id, {})
+        checking_balance = scoped_balances.get('checking', Decimal('0.00'))
+        savings_balance = scoped_balances.get('savings', Decimal('0.00'))
+        total_earnings = scoped_balances.get('earnings', Decimal('0.00'))
 
         writer.writerow([
             _sanitize_csv_field(student.first_name),
@@ -10668,7 +10734,9 @@ def issues_queue():
     from app.utils.issue_categories import init_default_categories
 
     admin_id = session.get('admin_id')
-    join_code = session.get('join_code')
+    join_code = session.get('current_join_code')
+    if join_code and not _admin_owns_join_code(admin_id, join_code):
+        join_code = None
 
     # Initialize default categories if they don't exist
     init_default_categories()

@@ -61,7 +61,7 @@ def _link_student_to_teacher(student: Student, admin: Admin, join_code: str, blo
             first_name=student.first_name,
             last_initial=student.last_initial,
             last_name_hash_by_part=[],
-            dob_sum=0,
+            dob_sum_hash=None,
             salt=b"seat-salt",
             first_half_hash="seat-hash",
         )
@@ -388,9 +388,11 @@ def test_rent_payment_creates_rent_obligation_record(client):
     admin = _create_admin("rent-admin")
     student = _create_student("Renter")
     _link_student_to_teacher(student, admin, "JOIN-RENT", block="A")
+    student.is_rent_enabled = True
 
     settings = RentSettings(
         teacher_id=admin.id,
+        join_code="JOIN-RENT",
         block="A",
         is_enabled=True,
         rent_amount=Decimal("10.00"),

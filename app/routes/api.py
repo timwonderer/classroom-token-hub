@@ -23,7 +23,8 @@ from app.models import (
     Admin, Student, StoreItem, StudentItem, Transaction, TransactionStatus, TapEvent,
     TapEventReasonCode, HallPassLog, HallPassSettings, InsuranceClaim, BankingSettings,
     StudentTeacher, TeacherBlock, StudentBlock, StoreItemBlock,
-    RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource, _quantize_currency
+    RedemptionAuditLog, RedemptionAuditAction, RedemptionAuditSource, _quantize_currency,
+    ClassMembership,
 )
 from app.auth import login_required, admin_required, get_logged_in_student, get_current_admin, SESSION_TIMEOUT_MINUTES
 from app.routes.student import (
@@ -159,11 +160,12 @@ def _append_redemption_audit_log(*, student_item, student, teacher_id, action, n
 def _get_teacher_join_code_scope(admin_id):
     """Return (join_code_scope_subquery, has_join_code_scope) for a teacher admin."""
     join_code_scope = (
-        TeacherBlock.query
-        .with_entities(TeacherBlock.join_code)
+        db.session.query(ClassMembership.join_code)
         .filter(
-            TeacherBlock.teacher_id == admin_id,
-            TeacherBlock.join_code.isnot(None),
+            ClassMembership.admin_id == admin_id,
+            ClassMembership.role == 'admin',
+            ClassMembership.status == 'active',
+            ClassMembership.join_code.isnot(None),
         )
         .distinct()
         .subquery()
@@ -171,12 +173,31 @@ def _get_teacher_join_code_scope(admin_id):
     has_join_code_scope = db.session.query(
         sa.exists().where(
             sa.and_(
-                TeacherBlock.teacher_id == admin_id,
-                TeacherBlock.join_code.isnot(None),
+                ClassMembership.admin_id == admin_id,
+                ClassMembership.role == 'admin',
+                ClassMembership.status == 'active',
+                ClassMembership.join_code.isnot(None),
             )
         )
     ).scalar()
     return join_code_scope, has_join_code_scope
+
+
+def _admin_has_join_code_scope(admin_id, join_code):
+    """Return True when admin owns the join_code via active admin membership."""
+    if not admin_id or not join_code:
+        return False
+
+    return db.session.query(
+        sa.exists().where(
+            sa.and_(
+                ClassMembership.admin_id == admin_id,
+                ClassMembership.join_code == join_code,
+                ClassMembership.role == 'admin',
+                ClassMembership.status == 'active',
+            )
+        )
+    ).scalar()
 
 
 def _apply_admin_join_code_scope(query, model, admin_id, accessible_student_ids_query):
@@ -2501,6 +2522,25 @@ def get_tap_entries(student_id):
     if not student:
         return jsonify({"error": "Student not found or access denied"}), 404
 
+    current_join_code = (session.get("current_join_code") or "").strip()
+    if current_join_code:
+        has_join_scope = _admin_has_join_code_scope(admin.id, current_join_code)
+        if not has_join_scope:
+            return jsonify({"error": "Student not found or access denied"}), 404
+
+        has_student_membership = db.session.query(
+            sa.exists().where(
+                sa.and_(
+                    ClassMembership.join_code == current_join_code,
+                    ClassMembership.student_id == student_id,
+                    ClassMembership.role == 'student',
+                    ClassMembership.status == 'active',
+                )
+            )
+        ).scalar()
+        if not has_student_membership:
+            return jsonify({"error": "Student not found or access denied"}), 404
+
     accessible_student_ids_query = get_admin_student_query(include_unassigned=False).with_entities(Student.id)
 
     # Get all tap events for this student, scoped by teacher join_code when available.
@@ -2576,17 +2616,15 @@ def delete_tap_entry(event_id):
     from app.models import TapEvent
     from app.auth import get_student_for_admin, get_admin_student_query
 
-    accessible_student_ids_query = get_admin_student_query(include_unassigned=False).with_entities(Student.id)
-    event = (
-        _apply_admin_join_code_scope(
-            TapEvent.query.filter(TapEvent.id == event_id),
-            TapEvent,
-            admin.id,
-            accessible_student_ids_query,
-        )
-        .first()
-    )
+    event = TapEvent.query.filter(TapEvent.id == event_id).first()
     if not event:
+        return jsonify({"error": "Tap entry not found"}), 404
+
+    current_join_code = (session.get("current_join_code") or "").strip()
+    if current_join_code and event.join_code != current_join_code:
+        return jsonify({"error": "Access denied"}), 403
+
+    if not _admin_has_join_code_scope(admin.id, event.join_code):
         return jsonify({"error": "Tap entry not found"}), 404
 
     # SECURITY FIX: Use scoped helper to verify admin owns this student

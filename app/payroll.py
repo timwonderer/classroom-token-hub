@@ -17,8 +17,8 @@ from decimal import Decimal
 
 DEFAULT_PAY_RATE_PER_MINUTE = Decimal('0.25')
 DEFAULT_PAY_RATE_PER_SECOND_DECIMAL = DEFAULT_PAY_RATE_PER_MINUTE / Decimal('60')
-# Backward-compatible public constant used by tests and callers expecting float semantics.
-DEFAULT_PAY_RATE_PER_SECOND = float(DEFAULT_PAY_RATE_PER_SECOND_DECIMAL)
+# Public default constant kept as Decimal to match helper return types.
+DEFAULT_PAY_RATE_PER_SECOND = DEFAULT_PAY_RATE_PER_SECOND_DECIMAL
 
 
 def with_teacher_id_fallback(func):
@@ -34,7 +34,7 @@ def with_teacher_id_fallback(func):
 
 
 @with_teacher_id_fallback
-def get_pay_rate_for_block(block, teacher_id=None):
+def get_pay_rate_for_block(block, teacher_id=None, join_code=None):
     """
     Get the pay rate for a specific block from settings, falling back to global/default.
 
@@ -53,23 +53,19 @@ def get_pay_rate_for_block(block, teacher_id=None):
     if teacher_id is None:
         return DEFAULT_PAY_RATE_PER_SECOND_DECIMAL
 
+    base_query = PayrollSettings.query.filter_by(teacher_id=teacher_id, is_active=True)
+    if join_code is not None:
+        base_query = base_query.filter(PayrollSettings.join_code == join_code)
+
     # Try block-specific settings first
     if block:
-        setting = PayrollSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=block,
-            is_active=True
-        ).first()
+        setting = base_query.filter_by(block=block).first()
         if setting and setting.pay_rate:
             # Convert per-minute to per-second using Decimal arithmetic
             return setting.pay_rate / Decimal('60')
 
-    # Fall back to global settings for this teacher
-    global_setting = PayrollSettings.query.filter_by(
-        teacher_id=teacher_id,
-        block=None,
-        is_active=True
-    ).first()
+    # Fall back to join-code-scoped/global settings for this teacher
+    global_setting = base_query.filter_by(block=None).first()
     if global_setting and global_setting.pay_rate:
         return global_setting.pay_rate / Decimal('60')
 
@@ -78,7 +74,7 @@ def get_pay_rate_for_block(block, teacher_id=None):
 
 
 @with_teacher_id_fallback
-def get_daily_limit_seconds(block, teacher_id=None):
+def get_daily_limit_seconds(block, teacher_id=None, join_code=None):
     """
     Get the daily time limit in seconds for a specific block from settings.
 
@@ -95,13 +91,13 @@ def get_daily_limit_seconds(block, teacher_id=None):
     if teacher_id is None:
         return None
 
+    base_query = PayrollSettings.query.filter_by(teacher_id=teacher_id, is_active=True)
+    if join_code is not None:
+        base_query = base_query.filter(PayrollSettings.join_code == join_code)
+
     # Try block-specific settings first
     if block:
-        setting = PayrollSettings.query.filter_by(
-            teacher_id=teacher_id,
-            block=block,
-            is_active=True
-        ).first()
+        setting = base_query.filter_by(block=block).first()
         if setting:
             # Simple mode: daily_limit_hours
             if setting.settings_mode == 'simple' and setting.daily_limit_hours:
@@ -118,11 +114,7 @@ def get_daily_limit_seconds(block, teacher_id=None):
                 return int(setting.max_time_per_day * multiplier)
 
     # Fall back to global settings for this teacher
-    global_setting = PayrollSettings.query.filter_by(
-        teacher_id=teacher_id,
-        block=None,
-        is_active=True
-    ).first()
+    global_setting = base_query.filter_by(block=None).first()
     if global_setting:
         if global_setting.settings_mode == 'simple' and global_setting.daily_limit_hours:
             return int(global_setting.daily_limit_hours * 3600)

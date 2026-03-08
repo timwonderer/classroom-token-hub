@@ -19,7 +19,7 @@ from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Session, validates
 from sqlalchemy import event
 from app.extensions import db
-from app.hash_utils import get_random_salt, hash_username, hash_username_lookup
+from app.hash_utils import get_random_salt, hash_hmac, hash_username, hash_username_lookup
 from app.utils.encryption import PIIEncryptedType, normalize_totp_for_storage
 from app.utils.time import utc_now, ensure_utc
 
@@ -327,6 +327,15 @@ class TeacherBlock(db.Model):
     @property
     def display_last_initial(self):
         return self.identity_profile.last_initial if self.identity_profile else ""
+
+    @property
+    def dob_sum(self):
+        """Legacy compatibility shim for older fixture/setup code."""
+        return getattr(self, "_legacy_dob_sum", None)
+
+    @dob_sum.setter
+    def dob_sum(self, value):
+        self._legacy_dob_sum = value
 
 
 class Student(db.Model):
@@ -673,22 +682,13 @@ class Student(db.Model):
                 Decimal('0.00')
             ), 2))
         elif teacher_id:
-            # DEPRECATED: Only use this for backward compatibility during migration
-            # This will show aggregated earnings across all periods with same teacher
-            return float(round(sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.teacher_id == teacher_id and tx.amount is not None and _quantize_currency(tx.amount) > Decimal('0') and not tx.is_void
-                and not (tx.description or "").startswith("Transfer")),
-                Decimal('0.00')
-            ), 2))
+            # Deprecated teacher-only lookups are intentionally disabled to avoid
+            # cross-class aggregation leaks during the join-code migration.
+            return 0.0
         else:
-            # No scope provided - return total across all classes
-            return float(round(sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.amount is not None and _quantize_currency(tx.amount) > Decimal('0') and not tx.is_void
-                and not (tx.description or "").startswith("Transfer")),
-                Decimal('0.00')
-            ), 2))
+            # Unscoped totals are disabled under join-code scoping to avoid
+            # leaking or conflating balances across distinct class economies.
+            return 0.0
 
     def get_all_teachers(self):
         """
@@ -762,6 +762,9 @@ class StudentTeacher(db.Model):
         db.Index('ix_student_teachers_teacher_id', 'teacher_id'),
     )
 
+    # Transitional alias for legacy call sites that still use admin_id.
+    admin_id = sa.orm.synonym('teacher_id')
+
 
 class ClassEconomyStatus(enum.Enum):
     """Enum for class economy statuses."""
@@ -834,9 +837,6 @@ class ClassMembership(db.Model):
             '(admin_id IS NOT NULL AND student_id IS NULL) OR (admin_id IS NULL AND student_id IS NOT NULL)',
             name='ck_membership_xor'
         ),
-        db.Index('ix_class_memberships_join_code', 'join_code'),
-        db.Index('ix_class_memberships_admin_id', 'admin_id'),
-        db.Index('ix_class_memberships_student_id', 'student_id'),
     )
 
 
@@ -1537,6 +1537,16 @@ def _sync_rent_payment_seat(_mapper, connection, target):
     seat_id = _resolve_seat_id(connection, getattr(target, "student_id", None), getattr(target, "join_code", None))
     if seat_id:
         target.seat_id = seat_id
+
+
+@sa.event.listens_for(TeacherBlock, "before_insert")
+@sa.event.listens_for(TeacherBlock, "before_update")
+def _sync_teacher_block_legacy_dob_sum(_mapper, _connection, target):
+    """Backfill dob_sum_hash when legacy code still assigns dob_sum."""
+    pending_dob_sum = getattr(target, "_legacy_dob_sum", None)
+    if pending_dob_sum is None or target.dob_sum_hash is not None or not target.salt:
+        return
+    target.dob_sum_hash = hash_hmac(str(pending_dob_sum).encode(), target.salt)
 
 
 @sa.event.listens_for(RentWaiver, "before_insert")
@@ -2489,6 +2499,7 @@ class FeatureSettings(db.Model):
     __tablename__ = 'feature_settings'
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
+    join_code = db.Column(db.String(20), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global defaults for teacher
 
     # Feature toggles - all default to True (enabled)
@@ -2512,13 +2523,14 @@ class FeatureSettings(db.Model):
 
     # Unique constraint: one settings row per teacher-block combination
     __table_args__ = (
-        db.UniqueConstraint('teacher_id', 'block', name='uq_feature_settings_teacher_block'),
+        db.UniqueConstraint('teacher_id', 'join_code', 'block', name='uq_feature_settings_teacher_join_code_block'),
         db.Index('ix_feature_settings_teacher_id', 'teacher_id'),
     )
 
     def __repr__(self):
+        scope = self.join_code or 'legacy'
         block_str = self.block or 'Global'
-        return f'<FeatureSettings teacher={self.teacher_id} block={block_str}>'
+        return f'<FeatureSettings teacher={self.teacher_id} join={scope} block={block_str}>'
 
     def to_dict(self):
         """Return feature settings as a dictionary."""
