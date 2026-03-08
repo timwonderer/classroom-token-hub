@@ -39,7 +39,7 @@ def setup_student_with_disabled_banking(client):
     
     # Link student to teacher
     from app.models import StudentTeacher
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
 
     join_code = "MATH1B"
@@ -218,7 +218,7 @@ def setup_student_with_enabled_banking(client):
 
     # Link student to teacher
     from app.models import StudentTeacher
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
 
     join_code = "MATH2C"

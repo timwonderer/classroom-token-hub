@@ -46,7 +46,7 @@ def _create_legacy_unclaimed_student(first_name: str, teacher: Admin, block: str
     db.session.flush()
     
     # Create StudentTeacher association
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
         block=block,
@@ -86,7 +86,7 @@ def _create_claimed_student(first_name: str, username: str, teacher: Admin, bloc
     db.session.flush()
     
     # Create StudentTeacher association
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
         block=block,
@@ -225,7 +225,7 @@ def test_delete_block_with_shared_students(client):
     student_id = student.id
     
     # Add second teacher association
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher2.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher2.id))
     db.session.commit()
     
     # Verify student has two associations

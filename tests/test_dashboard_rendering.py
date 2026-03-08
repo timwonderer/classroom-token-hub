@@ -82,7 +82,7 @@ def test_student_dashboard_rendering(client):
     db.session.add(student)
     db.session.flush()
     # Create StudentTeacher link instead of deprecated teacher_id
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
 
     seat = TeacherBlock(

@@ -27,8 +27,8 @@ def test_attendance_status_isolation(client):
     db.session.commit()
 
     # 3. Create Links & Seats
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=t1.id))
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=t2.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=t1.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=t2.id))
     
     tb1 = TeacherBlock(
         teacher_id=t1.id, block="PERIOD 1", join_code="JC1", student_id=student.id, is_claimed=True,

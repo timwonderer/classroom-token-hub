@@ -52,8 +52,8 @@ def test_export_students_uses_only_teacher_owned_join_codes(client):
     db.session.flush()
 
     db.session.add_all([
-        StudentTeacher(student_id=student.id, admin_id=teacher_a.id),
-        StudentTeacher(student_id=student.id, admin_id=teacher_b.id),
+        StudentTeacher(student_id=student.id, teacher_id=teacher_a.id),
+        StudentTeacher(student_id=student.id, teacher_id=teacher_b.id),
     ])
 
     _attach_student_to_class(student, teacher_a, "JOINEXPA")

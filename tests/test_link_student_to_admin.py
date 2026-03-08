@@ -58,7 +58,7 @@ def test_link_student_creates_relationships_and_teacher_block(client):
     _link_student_to_admin(student, admin.id)
     db.session.commit()
 
-    assert StudentTeacher.query.filter_by(student_id=student.id, admin_id=admin.id).count() == 1
+    assert StudentTeacher.query.filter_by(student_id=student.id, teacher_id=admin.id).count() == 1
     teacher_block = TeacherBlock.query.filter_by(student_id=student.id, teacher_id=admin.id, block=student.block).one()
     assert teacher_block.join_code is not None
     assert teacher_block.is_claimed is True
@@ -99,5 +99,5 @@ def test_link_student_skips_when_block_missing(client, caplog):
     with caplog.at_level("WARNING"):
         _link_student_to_admin(student, admin.id)
 
-    assert StudentTeacher.query.filter_by(student_id=student.id, admin_id=admin.id).count() == 0
+    assert StudentTeacher.query.filter_by(student_id=student.id, teacher_id=admin.id).count() == 0
     assert TeacherBlock.query.filter_by(teacher_id=admin.id).count() == 0

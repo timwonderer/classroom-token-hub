@@ -22,7 +22,7 @@ def _build_multi_class_student():
     db.session.add(student)
     db.session.flush()
 
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.add_all([
         ClassEconomy(join_code="STUDSC1", status="active", created_by_admin_id=teacher.id),
         ClassEconomy(join_code="STUDSC2", status="active", created_by_admin_id=teacher.id),

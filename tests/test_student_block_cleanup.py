@@ -59,7 +59,7 @@ def _create_student_with_student_block(first_name: str, teacher: Admin, block: s
     db.session.flush()
     
     # Create StudentTeacher link
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
 
     join_code = f"JOIN{teacher.id}{block}"
     db.session.add(TeacherBlock(
@@ -225,7 +225,7 @@ def test_bulk_delete_legacy_unclaimed_deletes_students(client):
     db.session.flush()
     
     # Create StudentTeacher link
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     
     # Create StudentBlock for this student
     student_block = StudentBlock(

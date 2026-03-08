@@ -31,7 +31,7 @@ def test_new_admin_cannot_see_unassigned_students(client):
     db.session.commit()
 
     # Link to Teacher B (Simulate proper ownership via StudentTeacher)
-    link = StudentTeacher(student_id=student_b.id, admin_id=teacher_b.id)
+    link = StudentTeacher(student_id=student_b.id, teacher_id=teacher_b.id)
     db.session.add(link)
     db.session.commit()
 
@@ -75,7 +75,7 @@ def test_owner_can_see_unassigned_students_if_linked(client):
     db.session.add(student_b)
     db.session.commit()
 
-    link = StudentTeacher(student_id=student_b.id, admin_id=teacher_b.id)
+    link = StudentTeacher(student_id=student_b.id, teacher_id=teacher_b.id)
     db.session.add(link)
     db.session.commit()
 

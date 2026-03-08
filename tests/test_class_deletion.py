@@ -46,8 +46,8 @@ def test_collapse_universe_cascades_and_cleans_up(client):
     db.session.add_all([economy_survive, student_b_membership_survive])
     
     # Bridge row
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=admin.id))
-    db.session.add(StudentTeacher(student_id=student_b.id, admin_id=admin.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=admin.id))
+    db.session.add(StudentTeacher(student_id=student_b.id, teacher_id=admin.id))
 
     # TeacherBlock
     db.session.add(TeacherBlock(teacher_id=admin.id, block="A", join_code=join_code, is_claimed=True, student_id=student.id, first_name="C", last_initial="S", last_name_hash_by_part=[], dob_sum=0, salt=b"s", first_half_hash="h"))

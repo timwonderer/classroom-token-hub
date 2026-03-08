@@ -45,7 +45,7 @@ def _create_legacy_unclaimed_student(first_name: str, teacher: Admin, block: str
     db.session.flush()
     
     # Create StudentTeacher association (replaces deprecated teacher_id)
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     existing_seat = TeacherBlock.query.filter_by(teacher_id=teacher.id, block=block).first()
     join_code = existing_seat.join_code if existing_seat else f"JOIN{teacher.id}{block}"
     db.session.add(TeacherBlock(
@@ -110,7 +110,7 @@ def _create_claimed_student(first_name: str, username: str, teacher: Admin, bloc
     db.session.flush()
     
     # Create StudentTeacher association
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     existing_seat = TeacherBlock.query.filter_by(teacher_id=teacher.id, block=block).first()
     join_code = existing_seat.join_code if existing_seat else f"JOIN{teacher.id}{block}"
     db.session.add(TeacherBlock(

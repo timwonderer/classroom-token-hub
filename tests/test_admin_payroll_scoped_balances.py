@@ -23,8 +23,8 @@ def test_admin_payroll_displays_scoped_balances_only(client):
     db.session.flush()
 
     db.session.add_all([
-        StudentTeacher(student_id=student.id, admin_id=teacher_a.id),
-        StudentTeacher(student_id=student.id, admin_id=teacher_b.id),
+        StudentTeacher(student_id=student.id, teacher_id=teacher_a.id),
+        StudentTeacher(student_id=student.id, teacher_id=teacher_b.id),
         ClassEconomy(join_code="PAYA01", status="active", created_by_admin_id=teacher_a.id),
         ClassEconomy(join_code="PAYB01", status="active", created_by_admin_id=teacher_b.id),
         ClassMembership(join_code="PAYA01", admin_id=teacher_a.id, role="admin", status="active"),

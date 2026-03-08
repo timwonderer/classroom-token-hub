@@ -378,7 +378,7 @@ class TestDecimalTypeErrors:
         db.session.flush()
 
         # Associate student with teacher
-        st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+        st = StudentTeacher(student_id=student.id, teacher_id=teacher.id)
         db.session.add(st)
         db.session.flush()
 

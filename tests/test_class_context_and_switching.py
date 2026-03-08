@@ -49,9 +49,9 @@ def setup_multi_class_student(client):
 
     # Link student to teachers
     from app.models import StudentTeacher
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher1.id))
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher2.id))
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher3.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher1.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher2.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher3.id))
     db.session.commit()
 
     # Create Class Economies
@@ -143,7 +143,7 @@ def setup_single_class_student(client):
 
     # Link student to teacher
     from app.models import StudentTeacher
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
 
     # Create Class Economy

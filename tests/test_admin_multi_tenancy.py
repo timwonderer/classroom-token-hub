@@ -295,7 +295,7 @@ def test_orphaned_students_from_deleted_teacher(client):
     
     # Step 2: Delete teacher1
     # First, delete StudentTeacher records (these have CASCADE delete)
-    StudentTeacher.query.filter_by(admin_id=teacher1_id).delete()
+    StudentTeacher.query.filter_by(teacher_id=teacher1_id).delete()
     # Then delete the teacher
     db.session.delete(teacher1)
     db.session.commit()

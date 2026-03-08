@@ -59,7 +59,7 @@ def recovery_data(client):
         is_claimed=True,
     )
     db.session.add(tb)
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
 
     return {

@@ -78,7 +78,7 @@ def _create_student(teacher: Admin, first_name: str, block: str, join_code: str)
     db.session.add(student)
     db.session.flush()
 
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
         block=block,
@@ -211,7 +211,7 @@ def test_sysadmin_period_deletion_endpoint_is_disabled(client):
     )
     db.session.add(student)
     db.session.flush()
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
         block="Z",
@@ -328,7 +328,7 @@ def test_payroll_settings_preserved_when_other_join_code_for_block_exists(client
     )
     db.session.add(student2)
     db.session.flush()
-    db.session.add(StudentTeacher(student_id=student2.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student2.id, teacher_id=teacher.id))
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
         block="A",

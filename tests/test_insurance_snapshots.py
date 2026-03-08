@@ -79,7 +79,7 @@ def test_admin_claim_approval_uses_frozen_claim_cap(client, test_student):
     db.session.add(admin)
     db.session.flush()
 
-    db.session.add(StudentTeacher(student_id=test_student.id, admin_id=admin.id))
+    db.session.add(StudentTeacher(student_id=test_student.id, teacher_id=admin.id))
     db.session.commit()
 
     policy = _create_policy(admin.id, title="Claim Cap Policy", max_claim_amount=Decimal("100.00"))

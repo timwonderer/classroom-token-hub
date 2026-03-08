@@ -27,7 +27,7 @@ def _create_student(first_name: str, teacher: Admin) -> Student:
     )
     db.session.add(student)
     db.session.flush()
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
     return student
 
@@ -80,7 +80,7 @@ def test_shared_student_accessible_to_multiple_teachers(client):
     shared_student = _create_student("Shared", teacher_a)
 
     # Grant teacher B access to the shared student without changing the primary teacher
-    db.session.add(StudentTeacher(student_id=shared_student.id, admin_id=teacher_b.id))
+    db.session.add(StudentTeacher(student_id=shared_student.id, teacher_id=teacher_b.id))
     db.session.commit()
 
     _login_admin(client, teacher_b, secret_b)
@@ -156,7 +156,7 @@ def test_tap_out_students_rejects_cross_scope_student_block(client):
     teacher_a, secret_a = _create_admin("teacher-a")
     teacher_b, _ = _create_admin("teacher-b")
     shared_student = _create_student("Shared", teacher_a)
-    db.session.add(StudentTeacher(student_id=shared_student.id, admin_id=teacher_b.id))
+    db.session.add(StudentTeacher(student_id=shared_student.id, teacher_id=teacher_b.id))
 
     db.session.add_all([
         TeacherBlock(
@@ -294,7 +294,7 @@ def test_tap_in_students_rejects_cross_scope_student_block(client):
     teacher_a, secret_a = _create_admin("teacher-a")
     teacher_b, _ = _create_admin("teacher-b")
     shared_student = _create_student("SharedIn", teacher_a)
-    db.session.add(StudentTeacher(student_id=shared_student.id, admin_id=teacher_b.id))
+    db.session.add(StudentTeacher(student_id=shared_student.id, teacher_id=teacher_b.id))
 
     db.session.add_all([
         TeacherBlock(
@@ -432,7 +432,7 @@ def test_enforce_daily_limits_ignores_other_join_code_activity(client):
     teacher_a, secret_a = _create_admin("teacher-a")
     teacher_b, _ = _create_admin("teacher-b")
     shared_student = _create_student("SharedLimit", teacher_a)
-    db.session.add(StudentTeacher(student_id=shared_student.id, admin_id=teacher_b.id))
+    db.session.add(StudentTeacher(student_id=shared_student.id, teacher_id=teacher_b.id))
 
     db.session.add_all([
         TeacherBlock(
@@ -574,7 +574,7 @@ def test_student_detail_ignores_student_block_from_other_join_code(client):
     teacher_a, secret_a = _create_admin("teacher-a")
     teacher_b, _ = _create_admin("teacher-b")
     shared_student = _create_student("SharedDetail", teacher_a)
-    db.session.add(StudentTeacher(student_id=shared_student.id, admin_id=teacher_b.id))
+    db.session.add(StudentTeacher(student_id=shared_student.id, teacher_id=teacher_b.id))
 
     db.session.add_all([
         TeacherBlock(

@@ -48,7 +48,7 @@ def _create_student_with_teacher_block(first_name: str, teacher: Admin, block: s
     db.session.flush()
     
     # Create StudentTeacher link
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     
     # Create ClassEconomy for FK constraint
     join_code = f"TEST{teacher.id}{block}"

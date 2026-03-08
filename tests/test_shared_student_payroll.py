@@ -23,8 +23,8 @@ def test_shared_student_diff_teacher_diff_period(client):
     db.session.commit()
 
     # Links & Seats
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=t1.id))
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=t2.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=t1.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=t2.id))
     
     # T1 -> Period 1 (JC1)
     tb1 = TeacherBlock(
@@ -85,7 +85,7 @@ def test_same_teacher_same_block_diff_context(client):
     db.session.commit()
 
     # Links & Seats
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=t1.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=t1.id))
     
     # Seat 1: Algebra (Period 1) -> JC1
     tb1 = TeacherBlock(

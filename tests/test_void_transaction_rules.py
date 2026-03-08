@@ -41,7 +41,7 @@ def _build_teacher_student(join_code='VOID123'):
     db.session.add(student)
     db.session.flush()
 
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,
         block='A',

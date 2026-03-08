@@ -37,7 +37,7 @@ def admin_with_students(client):
         db.session.flush()
         
         # Add to student_teachers association
-        assoc = StudentTeacher(student_id=student.id, admin_id=admin.id)
+        assoc = StudentTeacher(student_id=student.id, teacher_id=admin.id)
         db.session.add(assoc)
         students.append(student)
     

@@ -33,7 +33,7 @@ def student_in_class(client, teacher_admin):
     db.session.add(student)
     db.session.flush()
 
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher_admin.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher_admin.id))
     db.session.add(TeacherBlock(
         teacher_id=teacher_admin.id,
         block='A',

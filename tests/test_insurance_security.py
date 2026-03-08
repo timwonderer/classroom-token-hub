@@ -85,7 +85,7 @@ def test_duplicate_transaction_claim_blocked(client, test_student, admin_user):
     from app.models import StudentTeacher
 
     # Create StudentTeacher association for proper scoping
-    st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
+    st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
 
@@ -111,7 +111,7 @@ def test_voided_transaction_cannot_be_approved(client, test_student, admin_user)
     from app.models import StudentTeacher
 
     # Create StudentTeacher association for proper scoping
-    st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
+    st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
 
@@ -147,7 +147,7 @@ def test_voided_transaction_cannot_be_approved(client, test_student, admin_user)
 def test_hard_deny_transaction_type_cannot_be_approved(client, test_student, admin_user):
     from app.models import StudentTeacher
 
-    st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
+    st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
 
@@ -239,7 +239,7 @@ def test_duplicate_reimbursement_for_same_source_and_policy_blocked(client, test
 def test_pending_transaction_cannot_be_approved(client, test_student, admin_user):
     from app.models import StudentTeacher
 
-    st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
+    st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
 
@@ -280,7 +280,7 @@ def test_pending_transaction_cannot_be_approved(client, test_student, admin_user
 def test_rent_privilege_purchase_cannot_be_approved(client, test_student, admin_user):
     from app.models import StudentTeacher
 
-    st = StudentTeacher(student_id=test_student.id, admin_id=admin_user.id)
+    st = StudentTeacher(student_id=test_student.id, teacher_id=admin_user.id)
     db.session.add(st)
     db.session.commit()
 

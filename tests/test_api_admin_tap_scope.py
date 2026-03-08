@@ -24,8 +24,8 @@ def _setup_shared_student_with_split_membership():
 
     # Shared student-teacher association but student class membership only in TAPB01.
     db.session.add_all([
-        StudentTeacher(student_id=student.id, admin_id=admin_a.id),
-        StudentTeacher(student_id=student.id, admin_id=admin_b.id),
+        StudentTeacher(student_id=student.id, teacher_id=admin_a.id),
+        StudentTeacher(student_id=student.id, teacher_id=admin_b.id),
         ClassEconomy(join_code="TAPA01", status="active", created_by_admin_id=admin_a.id),
         ClassEconomy(join_code="TAPB01", status="active", created_by_admin_id=admin_b.id),
         ClassMembership(join_code="TAPA01", admin_id=admin_a.id, role="admin", status="active"),

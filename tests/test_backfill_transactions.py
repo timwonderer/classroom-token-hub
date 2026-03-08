@@ -81,7 +81,7 @@ def _make_teacher_block(admin_id: int, block: str, join_code: str, student: Stud
 
 
 def _link(student: Student, admin: Admin) -> None:
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=admin.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=admin.id))
     db.session.commit()
 
 

@@ -20,7 +20,7 @@ def student_in_class(client, teacher_admin):
     db.session.add(student)
     db.session.flush()
 
-    link = StudentTeacher(student_id=student.id, admin_id=teacher_admin.id)
+    link = StudentTeacher(student_id=student.id, teacher_id=teacher_admin.id)
     db.session.add(link)
     
     seat = TeacherBlock(

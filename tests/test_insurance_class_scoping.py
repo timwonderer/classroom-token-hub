@@ -81,7 +81,7 @@ def students_in_two_classes(client, teacher_with_two_classes):
     db.session.flush()
 
     # StudentTeacher relationship
-    st_a = StudentTeacher(student_id=student_a.id, admin_id=teacher.id)
+    st_a = StudentTeacher(student_id=student_a.id, teacher_id=teacher.id)
     db.session.add(st_a)
 
     # StudentBlock for Period A with join_code JOINA123
@@ -117,7 +117,7 @@ def students_in_two_classes(client, teacher_with_two_classes):
     db.session.flush()
 
     # StudentTeacher relationship
-    st_b = StudentTeacher(student_id=student_b.id, admin_id=teacher.id)
+    st_b = StudentTeacher(student_id=student_b.id, teacher_id=teacher.id)
     db.session.add(st_b)
 
     # StudentBlock for Period B with join_code JOINB456

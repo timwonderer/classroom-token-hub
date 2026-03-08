@@ -75,7 +75,7 @@ def test_deletion_request_status_can_be_stored_and_retrieved():
         db.session.commit()
         
         # Retrieve the deletion request
-        retrieved = DeletionRequest.query.filter_by(admin_id=admin.id).first()
+        retrieved = DeletionRequest.query.filter_by(teacher_id=admin.id).first()
         
         # Verify the status is correct
         assert retrieved is not None, "Deletion request not found"
@@ -88,7 +88,7 @@ def test_deletion_request_status_can_be_stored_and_retrieved():
         db.session.commit()
         
         # Re-retrieve and verify
-        updated = DeletionRequest.query.filter_by(admin_id=admin.id).first()
+        updated = DeletionRequest.query.filter_by(teacher_id=admin.id).first()
         assert updated.status == DeletionRequestStatus.APPROVED, (
             f"Status update failed. Expected APPROVED, got {updated.status}"
         )

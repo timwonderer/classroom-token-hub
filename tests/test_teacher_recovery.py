@@ -45,7 +45,7 @@ def create_student(teacher, username="student1", block="A"):
     db.session.flush()
 
     # Link
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     return student
 
 @pytest.mark.skip(reason="Test harness issue: session transaction not persisting correctly for student verification step in SQLite memory DB")
@@ -69,7 +69,7 @@ def test_teacher_recovery_full_flow(client, app):
     assert '/admin/recovery-status' in response.location
 
     # Verify request
-    req = RecoveryRequest.query.filter_by(admin_id=teacher.id).first()
+    req = RecoveryRequest.query.filter_by(teacher_id=teacher.id).first()
     assert req.dob_sum_hash == teacher.dob_sum_hash
 
     # Verify students codes

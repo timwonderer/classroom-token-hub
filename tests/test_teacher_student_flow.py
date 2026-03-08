@@ -164,7 +164,7 @@ def test_teacher_student_lifecycle(client, teacher, app):
 
         # Add StudentTeacher link
         from app.models import StudentTeacher
-        st1 = StudentTeacher(student_id=regular_student.id, admin_id=teacher.id)
+        st1 = StudentTeacher(student_id=regular_student.id, teacher_id=teacher.id)
         db.session.add(st1)
 
         db.session.commit()
@@ -220,7 +220,7 @@ def test_teacher_student_lifecycle(client, teacher, app):
         db.session.add(lazy_tb)
 
         # Add StudentTeacher link
-        st2 = StudentTeacher(student_id=lazy_student.id, admin_id=teacher.id)
+        st2 = StudentTeacher(student_id=lazy_student.id, teacher_id=teacher.id)
         db.session.add(st2)
 
         db.session.commit()

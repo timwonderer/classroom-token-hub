@@ -62,7 +62,7 @@ def test_dynamic_blocks_and_tap_flow(client):
     db.session.flush()
 
     # Link student to teacher via StudentTeacher
-    st = StudentTeacher(student_id=stu.id, admin_id=teacher.id)
+    st = StudentTeacher(student_id=stu.id, teacher_id=teacher.id)
     db.session.add(st)
 
     # Create TeacherBlocks for the student (required for join_code context)
@@ -159,7 +159,7 @@ def test_server_state_json(client):
     db.session.flush()
 
     # Link student to teacher via StudentTeacher
-    st = StudentTeacher(student_id=stu.id, admin_id=teacher.id)
+    st = StudentTeacher(student_id=stu.id, teacher_id=teacher.id)
     db.session.add(st)
 
     # Create TeacherBlock
@@ -224,7 +224,7 @@ def test_auto_tapout_skips_when_join_code_missing(client, caplog):
     
     # Link to teacher
     from app.models import StudentTeacher
-    st = StudentTeacher(student_id=stu.id, admin_id=teacher.id)
+    st = StudentTeacher(student_id=stu.id, teacher_id=teacher.id)
     db.session.add(st)
     
     db.session.commit()

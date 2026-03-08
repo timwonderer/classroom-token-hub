@@ -50,7 +50,7 @@ def _create_student(first_name: str, block: str = "A") -> Student:
 
 
 def _link_student_to_teacher(student: Student, admin: Admin, join_code: str, block: str = "A") -> None:
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=admin.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=admin.id))
     db.session.add(
         TeacherBlock(
             teacher_id=admin.id,

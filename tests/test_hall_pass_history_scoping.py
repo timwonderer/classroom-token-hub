@@ -73,10 +73,10 @@ def setup_multi_teacher_hall_pass_history(client):
     db.session.flush()
 
     # CRITICAL FIX: Create StudentTeacher associations for multi-tenancy
-    db.session.add(StudentTeacher(student_id=student1.id, admin_id=teacher1.id))
-    db.session.add(StudentTeacher(student_id=student2.id, admin_id=teacher1.id))
-    db.session.add(StudentTeacher(student_id=student3.id, admin_id=teacher2.id))
-    db.session.add(StudentTeacher(student_id=student4.id, admin_id=teacher2.id))
+    db.session.add(StudentTeacher(student_id=student1.id, teacher_id=teacher1.id))
+    db.session.add(StudentTeacher(student_id=student2.id, teacher_id=teacher1.id))
+    db.session.add(StudentTeacher(student_id=student3.id, teacher_id=teacher2.id))
+    db.session.add(StudentTeacher(student_id=student4.id, teacher_id=teacher2.id))
     db.session.commit()
 
     # Create Class Contexts

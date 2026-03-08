@@ -44,7 +44,7 @@ def teacher_with_legacy_and_scoped_settings(client):
     db.session.add(student)
     db.session.flush()
 
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
 
     join_code = "FALL01"
     db.session.add(ClassEconomy(join_code=join_code, status="active", created_by_admin_id=teacher.id))

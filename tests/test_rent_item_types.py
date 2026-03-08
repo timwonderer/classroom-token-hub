@@ -26,7 +26,7 @@ def student_in_class(client, teacher_admin):
     db.session.flush()
 
     # Link to teacher
-    link = StudentTeacher(student_id=student.id, admin_id=teacher_admin.id)
+    link = StudentTeacher(student_id=student.id, teacher_id=teacher_admin.id)
     db.session.add(link)
 
     # Create seat
@@ -711,7 +711,7 @@ def test_mid_period_lock_blocks_semantic_changes(client, teacher_admin):
     db.session.add(student)
     db.session.flush()
 
-    link = StudentTeacher(student_id=student.id, admin_id=teacher_admin.id)
+    link = StudentTeacher(student_id=student.id, teacher_id=teacher_admin.id)
     db.session.add(link)
 
     now = datetime.now(timezone.utc)
@@ -777,7 +777,7 @@ def test_mid_period_lock_allows_new_items(client, teacher_admin):
     db.session.add(student)
     db.session.flush()
 
-    link = StudentTeacher(student_id=student.id, admin_id=teacher_admin.id)
+    link = StudentTeacher(student_id=student.id, teacher_id=teacher_admin.id)
     db.session.add(link)
 
     now = datetime.now(timezone.utc)

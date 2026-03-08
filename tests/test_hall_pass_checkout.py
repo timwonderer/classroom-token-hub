@@ -39,7 +39,7 @@ def setup_hall_pass_checkout_test(client):
     db.session.commit()
 
     # Link student to teacher
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
 
     # Create hall pass settings

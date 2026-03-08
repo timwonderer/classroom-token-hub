@@ -65,7 +65,7 @@ def _create_student(first_name: str, teacher: Admin, block: str = "A") -> Studen
     db.session.flush()
     
     # Create StudentTeacher link (replaces deprecated teacher_id)
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
     
     return student
@@ -145,11 +145,11 @@ def test_sysadmin_teacher_deletion_is_blocked_preserves_deletion_requests(client
     assert db.session.get(DeletionRequest, account_request_id) is not None
     assert db.session.get(DeletionRequest, another_period_request_id) is not None
     
-    # Verify no orphaned DeletionRequest records with NULL admin_id exist
+    # Verify no orphaned DeletionRequest records with NULL teacher_id exist
     orphaned_requests = DeletionRequest.query.filter(
-        DeletionRequest.admin_id.is_(None)
+        DeletionRequest.teacher_id.is_(None)
     ).all()
-    assert len(orphaned_requests) == 0, "Found orphaned DeletionRequest records with NULL admin_id"
+    assert len(orphaned_requests) == 0, "Found orphaned DeletionRequest records with NULL teacher_id"
 
 
 def test_delete_teacher_with_no_deletion_requests(client):

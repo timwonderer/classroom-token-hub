@@ -38,7 +38,7 @@ def _create_student_for_teacher(teacher: Admin, block: str = "A", first_name: st
     )
     db.session.add(student)
     db.session.flush()
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
     return student
 

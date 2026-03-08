@@ -763,6 +763,50 @@ class StudentTeacher(db.Model):
     )
 
 
+class ClassEconomy(db.Model):
+    """Represents a class economy identified by its unique join_code."""
+    __tablename__ = 'class_economies'
+    join_code = db.Column(db.String(20), primary_key=True)
+    display_name = db.Column(db.String(100), nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='active')
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+    created_by_admin_id = db.Column(
+        db.Integer,
+        db.ForeignKey('teachers.id', ondelete='SET NULL'),
+        nullable=True,
+        index=True,
+    )
+
+    memberships = db.relationship('ClassMembership', backref='economy', cascade='all, delete-orphan', lazy='dynamic')
+
+
+class ClassMembership(db.Model):
+    """Represents a teacher or student membership in a class economy."""
+    __tablename__ = 'class_memberships'
+    id = db.Column(db.Integer, primary_key=True)
+    join_code = db.Column(
+        db.String(20),
+        db.ForeignKey('class_economies.join_code', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    admin_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=True, index=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id', ondelete='CASCADE'), nullable=True, index=True)
+    role = db.Column(db.String(20), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='active')
+    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
+    updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
+
+    __table_args__ = (
+        db.UniqueConstraint('join_code', 'admin_id', name='uq_class_membership_admin'),
+        db.UniqueConstraint('join_code', 'student_id', name='uq_class_membership_student'),
+        db.Index('ix_class_memberships_join_code', 'join_code'),
+        db.Index('ix_class_memberships_admin_id', 'admin_id'),
+        db.Index('ix_class_memberships_student_id', 'student_id'),
+    )
+
+
 class DeletionRequestType(enum.Enum):
     """Enum for deletion request types."""
     PERIOD = 'period'

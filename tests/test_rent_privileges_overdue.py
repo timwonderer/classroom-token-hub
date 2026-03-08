@@ -36,7 +36,7 @@ def test_overdue_rent_payment_restores_privileges(client):
     db.session.add(student)
     db.session.commit()
 
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
 
     join_code = "JOINA"
@@ -160,7 +160,7 @@ def test_voided_payment_does_not_restore_privileges(client):
     db.session.add(student)
     db.session.commit()
 
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
 
     join_code = "JOINV"
@@ -313,7 +313,7 @@ def test_overdue_rent_payment_with_timestamp_drift_restores_privileges(client):
     db.session.add(student)
     db.session.commit()
 
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.commit()
 
     join_code = "JOIND"

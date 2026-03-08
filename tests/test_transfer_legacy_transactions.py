@@ -42,7 +42,7 @@ def setup_student_with_legacy_transactions(client):
 
     # Link student to teacher
     from app.models import StudentTeacher
-    st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+    st = StudentTeacher(student_id=student.id, teacher_id=teacher.id)
     db.session.add(st)
     db.session.commit()
 

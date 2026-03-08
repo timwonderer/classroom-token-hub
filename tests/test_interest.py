@@ -59,7 +59,7 @@ def test_dashboard_renders_recent_deposit(client, test_student):
     test_student.join_code = join_code
 
     # Link student to teacher
-    st = StudentTeacher(student_id=test_student.id, admin_id=teacher.id)
+    st = StudentTeacher(student_id=test_student.id, teacher_id=teacher.id)
     db.session.add(st)
 
     # Create TeacherBlock (required for dashboard context)

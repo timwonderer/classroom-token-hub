@@ -149,7 +149,7 @@ def test_delete_pending_student_already_claimed(client):
     
     # Link student to teacher
     from app.models import StudentTeacher
-    st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+    st = StudentTeacher(student_id=student.id, teacher_id=teacher.id)
     db.session.add(st)
 
     # Create ClassEconomy for FK constraint
@@ -301,7 +301,7 @@ def test_bulk_delete_skips_claimed_students(client):
 
     # Link student to teacher
     from app.models import StudentTeacher
-    st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+    st = StudentTeacher(student_id=student.id, teacher_id=teacher.id)
     db.session.add(st)
 
 
@@ -373,7 +373,7 @@ def test_bulk_delete_by_block_only_deletes_unclaimed(client):
 
     # Link student to teacher
     from app.models import StudentTeacher
-    st = StudentTeacher(student_id=student.id, admin_id=teacher.id)
+    st = StudentTeacher(student_id=student.id, teacher_id=teacher.id)
     db.session.add(st)
 
 

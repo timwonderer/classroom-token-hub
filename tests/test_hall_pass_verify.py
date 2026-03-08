@@ -48,7 +48,7 @@ def hp_student(client, hp_teacher):
     db.session.add(student)
     db.session.flush()
 
-    db.session.add(StudentTeacher(student_id=student.id, admin_id=hp_teacher.id))
+    db.session.add(StudentTeacher(student_id=student.id, teacher_id=hp_teacher.id))
 
     block = TeacherBlock(
         teacher_id=hp_teacher.id,
@@ -214,7 +214,7 @@ def test_post_verify_ambiguous(client, hp_teacher, hp_student):
     )
     db.session.add(student2)
     db.session.flush()
-    db.session.add(StudentTeacher(student_id=student2.id, admin_id=hp_teacher.id))
+    db.session.add(StudentTeacher(student_id=student2.id, teacher_id=hp_teacher.id))
 
     now = datetime.now(timezone.utc)
     for s in [hp_student, student2]:
@@ -323,7 +323,7 @@ def test_post_verify_finds_match_beyond_first_20_records(client, hp_teacher, hp_
         )
         db.session.add(other)
         db.session.flush()
-        db.session.add(StudentTeacher(student_id=other.id, admin_id=hp_teacher.id))
+        db.session.add(StudentTeacher(student_id=other.id, teacher_id=hp_teacher.id))
         db.session.add(HallPassLog(
             student_id=other.id,
             reason="Office",
