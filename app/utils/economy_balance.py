@@ -308,8 +308,8 @@ class EconomyBalanceChecker:
         monthly_ratio = float(monthly_rent / Decimal(cwi)) if cwi > 0 else 0
 
         # Recommended monthly rent bounds based on weekly CWI ratios
-        recommended_min = cwi * rent_min_ratio * self.AVERAGE_WEEKS_PER_MONTH
-        recommended_max = cwi * rent_max_ratio * self.AVERAGE_WEEKS_PER_MONTH
+        recommended_min = cwi * rent_min_ratio
+        recommended_max = cwi * rent_max_ratio
 
         # Check if within bounds
         if monthly_ratio < rent_min_ratio:

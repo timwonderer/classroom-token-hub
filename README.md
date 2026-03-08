@@ -217,7 +217,7 @@ This enables the repo-managed hooks used by the local development workflow, incl
 ### Deployment & Operations
 
 - **[Deployment Guide](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/SOP-DEP-006_Deployment_Guide.md)** used for production deployment
-- **[Operations Guides](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/)** with practical pperational procedures and troubleshooting
+- **[Operations Guides](docs/STANDARD_OPERATING_PROCEDURES/DEPLOYMENT/)** with practical operational procedures and troubleshooting
 - **[Contributing Guide](CONTRIBUTING.md)** for essential know-hows when contributing to the project
 
 ---

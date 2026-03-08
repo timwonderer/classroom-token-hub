@@ -135,7 +135,6 @@ Required form values:
 
 Required form values:
 
-- `preview_payload`
 - `selected_changes`
 - `activation_mode`
 - `block` (optional)

@@ -107,7 +107,18 @@ class EconomyBalanceChecker {
 
             getParamValue(coverageTarget, 'max_claim_amount');
             getParamValue(periodTarget, 'max_payout_per_period');
-            getParamValue(waitingTarget, 'waiting_period_days');
+            if (waitingTarget) {
+                const waitingField = document.querySelector(waitingTarget);
+                if (waitingField) {
+                    const rawValue = waitingField.value != null ? waitingField.value.trim() : '';
+                    if (rawValue !== '' && /^\d+$/.test(rawValue)) {
+                        const parsedDays = parseInt(rawValue, 10);
+                        if (!isNaN(parsedDays) && parsedDays > 0) {
+                            additionalParams.waiting_period_days = parsedDays;
+                        }
+                    }
+                }
+            }
         }
 
         // For rent validation, collect additional frequency parameters from the form

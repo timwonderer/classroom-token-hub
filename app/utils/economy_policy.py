@@ -98,7 +98,7 @@ def get_feature_settings_row(teacher_id: int, block: Optional[str] = None, creat
             block=normalized_block,
         ).first()
 
-    if row is None:
+    if row is None and (not normalized_block or not create):
         row = FeatureSettings.query.filter_by(
             teacher_id=teacher_id,
             block=None,

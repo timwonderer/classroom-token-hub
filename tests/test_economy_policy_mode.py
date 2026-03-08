@@ -4,7 +4,8 @@ from decimal import Decimal
 
 from app import db
 from app.models import Admin, FeatureSettings, InsurancePolicy, PayrollSettings, RentSettings
-from app.utils.economy_balance import EconomyBalanceChecker
+from app.utils.economy_balance import EconomyBalanceChecker, WarningLevel
+from app.utils.economy_policy import get_feature_settings_row
 
 
 def _login_admin(client, admin_id):
@@ -130,6 +131,39 @@ def test_update_economy_policy_creates_block_scoped_settings(client):
     settings_row = FeatureSettings.query.filter_by(teacher_id=admin.id, block='A').first()
     assert settings_row is not None
     assert settings_row.economy_policy_mode == 'comfortable'
+
+
+def test_get_feature_settings_row_create_preserves_global_fallback_for_reads(client):
+    admin, _, _ = _create_admin_with_block()
+    global_row = FeatureSettings(teacher_id=admin.id, block=None, economy_policy_mode='default')
+    db.session.add(global_row)
+    db.session.commit()
+
+    read_row = get_feature_settings_row(admin.id, block='A', create=False)
+    created_row = get_feature_settings_row(admin.id, block='A', create=True)
+    db.session.commit()
+
+    assert read_row.id == global_row.id
+    assert created_row.id != global_row.id
+    assert created_row.block == 'A'
+
+
+def test_rent_warnings_report_single_monthly_conversion(client):
+    admin, payroll_settings, _ = _create_admin_with_block()
+    checker = EconomyBalanceChecker(admin.id, 'A', policy_mode='default')
+    cwi = checker.calculate_cwi(payroll_settings).cwi
+    high_rent = RentSettings(
+        teacher_id=admin.id,
+        block='A',
+        is_enabled=True,
+        rent_amount=Decimal('600.00'),
+        frequency_type='monthly',
+    )
+
+    warnings = checker.check_rent_balance(high_rent, cwi)
+
+    rent_warning = next(w for w in warnings if w.feature == 'Rent' and w.level in (WarningLevel.WARNING, WarningLevel.CRITICAL))
+    assert round(float(rent_warning.recommended_max), 2) == round(cwi * 0.75 * checker.AVERAGE_WEEKS_PER_MONTH, 2)
 
 
 def test_immediate_rebalance_updates_rent_setting(client):
