@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-002       | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DB-002| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 ## New Field Added
 
@@ -19,7 +19,7 @@ ALTER TABLE payroll_settings
 ADD COLUMN expected_weekly_hours FLOAT DEFAULT 5.0;
 ```
 
-## Purpose
+## I. Purpose
 
 This field stores the expected hours per week that students attend class. It is used **ONLY** for economy balance checking (CWI calculation), not for actual payroll processing.
 

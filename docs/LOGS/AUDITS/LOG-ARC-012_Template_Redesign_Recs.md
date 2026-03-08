@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-ARC-012      | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-ARC-012| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 ## Summary
 This document outlines templates that have been redesigned or could benefit from redesign to improve UX, reduce clutter, and prevent overflow issues.

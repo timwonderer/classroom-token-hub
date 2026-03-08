@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-REL-012      | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-REL-012| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 **Release Date**: January 1, 2026  
 **Focus**: Repository organization, multi-tenancy fixes, and operational stability

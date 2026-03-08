@@ -3,7 +3,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| DOM-ECON-002     | 1.0     | 2026-03-01     | N/A        | Constitutional  |
+|DOM-ECON-002| 1.1 | 2026-03-08 | 1.0 |Constitutional|
 
 ## I. Purpose
 

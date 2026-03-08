@@ -2,13 +2,23 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-007      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DEP-007| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 This document explains how to configure and maintain the GitHub Pages site for Classroom Token Hub.
 
 ---
 
-## Quick Setup
+## I. Purpose
+
+TBD
+## II. Scope
+
+TBD
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Quick Setup
 
 1. **Enable GitHub Pages**
    - Repository Settings → Pages
@@ -23,7 +33,7 @@ This document explains how to configure and maintain the GitHub Pages site for C
 
 ---
 
-## Landing Pages
+## VI. Landing Pages
 
 GitHub Pages serves static HTML:
 
@@ -35,7 +45,7 @@ Markdown documentation is **not** served publicly.
 
 ---
 
-## Customizing Content
+## VII. Customizing Content
 
 ### Update Version Banner
 
@@ -57,7 +67,7 @@ Check all sign-in and docs links in both `index.html` and `about.html`:
 
 ---
 
-## Local Preview
+## VIII. Local Preview
 
 ```bash
 cd docs
@@ -68,7 +78,7 @@ Visit: `http://localhost:8000`
 
 ---
 
-## Troubleshooting
+## IX. Troubleshooting
 
 ### Site not updating
 - Clear browser cache
@@ -82,3 +92,5 @@ Visit: `http://localhost:8000`
 ---
 
 **Last Updated:** 2026-02-09
+## X. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

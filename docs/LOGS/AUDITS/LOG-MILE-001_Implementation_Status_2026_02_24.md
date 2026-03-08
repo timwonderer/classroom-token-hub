@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-MILE-001     | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-MILE-001| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 Scope:
 - `docs/development/HALL_PASS_FEATURE_SPEC.md`

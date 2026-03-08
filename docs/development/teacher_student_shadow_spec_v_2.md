@@ -4,7 +4,7 @@
 
 ---
 
-## 1. Purpose
+## I. Purpose
 
 Replace demo students with a structurally consistent mechanism that allows teachers to experience the student interface exactly as regular students do.
 

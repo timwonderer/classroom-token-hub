@@ -6,7 +6,7 @@ searchable: false
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-002      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DEP-002| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 ## Problem
 Due to an algorithm bug in a previous commit, duplicate students were created when the roster was uploaded twice. The duplicate detection failed because it was using a different hashing algorithm.

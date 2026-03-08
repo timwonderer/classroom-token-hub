@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SEC-AUD-008      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SEC-AUD-008| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 This directory contains all formal audit reports for the Classroom Economy codebase.
 

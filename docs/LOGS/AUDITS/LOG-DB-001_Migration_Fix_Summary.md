@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-001       | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DB-001| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 ## Branch Analyzed
 `claude/fix-multi-tenancy-leaks-015yz9WmT5SE8EFgAzU8Au32`

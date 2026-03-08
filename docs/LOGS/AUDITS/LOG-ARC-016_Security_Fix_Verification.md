@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-ARC-016      | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-ARC-016| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 **Branch Evaluated:** `codex/add-insurance-claim-processing-modes-rtnkcy`
 **Base Branch:** `codex/add-insurance-claim-processing-modes`

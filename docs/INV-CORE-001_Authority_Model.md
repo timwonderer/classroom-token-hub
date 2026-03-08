@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|------------------|
-| INV-CORE-001     | 1.0     | 2026-03-01     | N/A        | Foundational     |
+|INV-CORE-001| 1.1 | 2026-03-08 | 1.0 |Foundational|
 
 ---
 

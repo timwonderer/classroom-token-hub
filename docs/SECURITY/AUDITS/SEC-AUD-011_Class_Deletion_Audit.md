@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SEC-AUD-011      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SEC-AUD-011| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 **Date:** 2026-02-21
 **Author:** Claude (automated audit)

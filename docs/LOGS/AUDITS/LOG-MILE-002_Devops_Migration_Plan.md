@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-MILE-002     | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-MILE-002| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 **Status:** ✅ Completed (Archived)
 **Date:** 2026-03-01

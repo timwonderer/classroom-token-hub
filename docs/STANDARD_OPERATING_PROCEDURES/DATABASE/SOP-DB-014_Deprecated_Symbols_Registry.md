@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DB-014       | 1.0     | 2026-03-01     | N/A        | Normative       |
+|SOP-DB-014| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 ## I. Purpose
 

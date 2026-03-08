@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-CORE-000     | 1.0     | 2026-03-01     | N/A        | Informative     |
+|LOG-CORE-000| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 ## I. Purpose
 To classify, categorize, and define the storage of historical project notes, milestone completions, and version changelogs across the application's infrastructure.

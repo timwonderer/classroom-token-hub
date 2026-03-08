@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-ARC-029      | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-ARC-029| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 **Document Date**: January 1, 2026  
 **Current Version**: 1.6.0  

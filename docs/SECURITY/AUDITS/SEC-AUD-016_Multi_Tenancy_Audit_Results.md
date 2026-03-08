@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SEC-AUD-016      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SEC-AUD-016| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 **Date:** 2025-12-23
 **Auditor:** Claude Code

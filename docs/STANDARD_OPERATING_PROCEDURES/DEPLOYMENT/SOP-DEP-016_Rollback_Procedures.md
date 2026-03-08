@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-016      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DEP-016| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 ## I. Purpose
 Establish a repeatable workflow for rolling back non-functional or severely bugged deployments to a prior stable state across staging and production environments.
@@ -36,3 +36,5 @@ A rollback must be initiated if:
 ## VII. Verification Post-Rollback
 - Verify the system health dashboards.
 - Execute validation smoke tests.
+## VIII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

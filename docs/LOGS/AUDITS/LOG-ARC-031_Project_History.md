@@ -9,7 +9,7 @@ roles: [developer, teacher]
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| LOG-ARC-031      | 1.0     | 2026-03-01     | N/A        | Informative                |
+|LOG-ARC-031| 1.1 | 2026-03-08 | 1.0 |Informative|
 
 **Note:** This file has been consolidated and moved to the repository root.
 

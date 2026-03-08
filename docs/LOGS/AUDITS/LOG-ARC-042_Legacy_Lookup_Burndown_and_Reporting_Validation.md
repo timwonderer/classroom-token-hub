@@ -3,7 +3,7 @@
 **Date:** 2026-03-07  
 **Branch:** `codex/v2.0`
 
-## Scope
+## II. Scope
 
 This snapshot tracks progress on three priorities:
 

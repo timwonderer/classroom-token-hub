@@ -2,13 +2,20 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-023      | 1.0     | 2026-03-08     | N/A        | Normative       |
+|SOP-DEP-023| 1.1 | 2026-03-08 | 1.0 |Normative|
 
-## Purpose
+## I. Purpose
 
 Provide the explicit operator workflow for moving the current v2 branch from live-test candidate to production transition.
 
-## Preconditions
+## II. Scope
+
+TBD
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Preconditions
 
 - `codex/v2.0` is the approved deployment branch.
 - Live-test runbook has been executed successfully.
@@ -16,7 +23,7 @@ Provide the explicit operator workflow for moving the current v2 branch from liv
 - Backup, maintenance window, and rollback contacts are confirmed.
 - Team-owned production and pre-production database targets are identified before any migration step begins.
 
-## Pre-Production Checklist
+## VI. Pre-Production Checklist
 
 1. Enable maintenance mode if the deployment requires a protected window.
 2. Verify current production backup or snapshot and test restore instructions.
@@ -24,14 +31,14 @@ Provide the explicit operator workflow for moving the current v2 branch from liv
 4. Confirm operator sign-off from engineering and operations.
 5. Reconfirm smoke checklist and escalation path.
 
-## Upgrade Flow
+## VII. Upgrade Flow
 
 1. Put the environment into maintenance mode.
 2. Apply migrations.
 3. Deploy application code.
 4. Run post-deploy smoke checks before reopening the app.
 
-## Post-Migration Verification
+## VIII. Post-Migration Verification
 
 Verify:
 
@@ -42,13 +49,13 @@ Verify:
 - hall-pass verification path works with public teacher identifier
 - no unexpected migration head drift is present
 
-## Rollback Policy
+## IX. Rollback Policy
 
 - If migration fails before app reopen, rollback to the pre-deploy backup/snapshot.
 - If post-deploy smoke checks fail and cannot be corrected within the maintenance window, rollback.
 - If migration is structurally successful but business behavior is incorrect, hold maintenance mode until rollback or fix-forward is approved.
 
-## Sign-Off Record
+## X. Sign-Off Record
 
 Record:
 
@@ -59,3 +66,5 @@ Record:
 - smoke-check status
 - reopen time
 - rollback decision
+## XI. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

@@ -6,7 +6,7 @@ searchable: false
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| ARC-OPS-009      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|ARC-OPS-009| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 **Last Updated:** 2025-12-04
 **Priority:** High (P1)

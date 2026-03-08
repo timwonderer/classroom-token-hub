@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SEC-AUD-005      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SEC-AUD-005| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 **Date:** 2025-02-22
 **Focus:** Verification of Read-Path Optimizations (Balance Service & Write-on-Read Removal)

@@ -2,11 +2,11 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-020      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DEP-020| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 This document explains how to use the `seed_multi_tenancy_test_data.py` script to populate your database with comprehensive test data for validating the join_code-based multi-tenancy fixes.
 
-##  Purpose
+## I. Purpose
 
 The seeding script creates realistic test data specifically designed to validate:
 
@@ -14,7 +14,14 @@ The seeding script creates realistic test data specifically designed to validate
 2. **Same-teacher multi-period isolation** - Students with the same teacher in different periods see isolated data per period
 3. **Join code as source of truth** - All data (transactions, balances, items, insurance) properly scoped by join_code
 
-##  Prerequisites
+## II. Scope
+
+TBD
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Prerequisites
 
 Before running the script:
 
@@ -34,7 +41,7 @@ Before running the script:
    pip install -r requirements.txt
    ```
 
-##  Running the Script
+## VI. Running the Script
 
 ### Basic Usage
 
@@ -93,7 +100,7 @@ Rent settings: 10
  Seeding complete!
 ```
 
-##  Test Data Structure
+## VII. Test Data Structure
 
 ### Teachers Created
 
@@ -154,7 +161,7 @@ For each student enrollment (student + teacher + period):
   - Payroll rate and schedule
   - Rent amount and frequency
 
-##  Credentials Output
+## VIII. Credentials Output
 
 All login credentials are written to `TEST_CREDENTIALS.txt`:
 
@@ -200,7 +207,7 @@ ms_johnson - Period A: English 1st Period
   Join Code: A7K2M9
 ```
 
-##  Validation Checklist
+## IX. Validation Checklist
 
 After seeding, test the following scenarios:
 
@@ -305,7 +312,7 @@ GROUP BY join_code;
 
 **Expected Result**:  UI balances match per-join_code database calculations
 
-##  Troubleshooting
+## X. Troubleshooting
 
 ### Import Errors
 
@@ -343,7 +350,7 @@ flask db upgrade
 export PEPPER_KEY="your_pepper_key_here"
 ```
 
-##  Data Analysis Queries
+## XI. Data Analysis Queries
 
 After seeding, use these queries to analyze the data:
 
@@ -402,7 +409,7 @@ GROUP BY s.id, s.first_name, s.last_initial, ip.title, si.status,
 ORDER BY s.first_name;
 ```
 
-##  Testing Workflow
+## XII. Testing Workflow
 
 Recommended testing workflow after seeding:
 
@@ -439,14 +446,14 @@ Recommended testing workflow after seeding:
    - Test session management
    - Verify no session bleed between contexts
 
-##  Notes
+## XIII. Notes
 
 - **All transactions include join_code** - This is the key fix!
 - **Session tracks current_join_code** - Not just teacher_id
 - **Queries filter by join_code** - For proper isolation
 - **Balance calculations scoped by join_code** - No aggregation across periods
 
-##  Red Flags to Watch For
+## XIV. Red Flags to Watch For
 
 If you see any of these, the multi-tenancy fix is broken:
 
@@ -458,7 +465,7 @@ If you see any of these, the multi-tenancy fix is broken:
  Session shows wrong period after switching
  Balance changes when switching periods (should be recalculated per period)
 
-##  Success Indicators
+## XV. Success Indicators
 
  Each period shows isolated balance
  Switching periods changes visible transactions
@@ -470,3 +477,5 @@ If you see any of these, the multi-tenancy fix is broken:
 ---
 
 **For detailed test credentials, see `TEST_CREDENTIALS.txt` after running the script.**
+## XVI. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

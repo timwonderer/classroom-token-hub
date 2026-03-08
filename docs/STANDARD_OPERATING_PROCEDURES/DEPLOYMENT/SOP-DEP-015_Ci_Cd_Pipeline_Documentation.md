@@ -2,7 +2,7 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-015      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DEP-015| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 ## I. Purpose
 Document the Continuous Integration and Continuous Deployment (CI/CD) pipelines, primarily configured via GitHub Actions, defining automated tests, staging deploy processes, and failure handling.
@@ -30,3 +30,5 @@ SOP Tier. Guides operational practice but cannot override ARC invariants.
 ### 3. Failure Handling & Notifications
 - Failed checks block merge requests.
 - Administrators are notified on workflow completion failures.
+## VI. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

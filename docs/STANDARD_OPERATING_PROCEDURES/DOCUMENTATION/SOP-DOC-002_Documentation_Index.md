@@ -1,13 +1,20 @@
 # SOP-DOC-002: Documentation Index
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DOC-002      | 2.0     | 2026-03-01     | N/A        | Normative       |
+|SOP-DOC-002| 2.1 | 2026-03-08 | 2.0 |Normative|
 
 ## I. Purpose
 
 This document is the canonical index of all formal documentation.
 
-## II. Document Index
+## II. Scope
+
+TBD
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Document Index
 
 ### ARCHITECTURE
 
@@ -206,3 +213,5 @@ This document is the canonical index of all formal documentation.
 ### STANDARD_OPERATING_PROCEDURES
 
 - [SOP-CORE-000_Sop_Foundation.md](../SOP-CORE-000_Sop_Foundation.md)
+## VI. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.

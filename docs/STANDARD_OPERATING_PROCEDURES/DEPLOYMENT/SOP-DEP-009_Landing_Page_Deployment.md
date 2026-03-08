@@ -2,14 +2,24 @@
 
 | Reference Number | Version | Effective Date | Supersedes | Authority Level |
 |------------------|---------|----------------|------------|-----------------|
-| SOP-DEP-009      | 1.0     | 2026-03-01     | N/A        | Normative                 |
+|SOP-DEP-009| 1.1 | 2026-03-08 | 1.0 |Normative|
 
 **Version:** 1.7.0
 **Last Updated:** January 9, 2026
 
 ---
 
-## Overview
+## I. Purpose
+
+TBD
+## II. Scope
+
+TBD
+## III. Authority Level
+Normative. Subordinate to CORE invariant definitions.
+## IV. Dependencies
+None specified.
+## V. Overview
 
 The Classroom Token Hub landing page is hosted on **GitHub Pages** but served at the root of your custom domain `classroomtokenhub.com`. This setup provides:
 
@@ -20,7 +30,7 @@ The Classroom Token Hub landing page is hosted on **GitHub Pages** but served at
 
 ---
 
-## Architecture
+## VI. Architecture
 
 ```
 User visits classroomtokenhub.com
@@ -40,7 +50,7 @@ User visits classroomtokenhub.com
 
 ---
 
-## Option 1: Nginx Configuration (Recommended)
+## VII. Option 1: Nginx Configuration (Recommended)
 
 ### Full Nginx Config
 
@@ -135,7 +145,7 @@ sudo systemctl status nginx
 
 ---
 
-## Option 2: Apache Configuration
+## VIII. Option 2: Apache Configuration
 
 ### Apache VirtualHost Config
 
@@ -214,7 +224,7 @@ sudo systemctl status apache2
 
 ---
 
-## Option 3: Cloudflare Workers (Advanced)
+## IX. Option 3: Cloudflare Workers (Advanced)
 
 If using Cloudflare, you can use Workers to route traffic:
 
@@ -256,7 +266,7 @@ async function handleRequest(request) {
 
 ---
 
-## Testing the Setup
+## X. Testing the Setup
 
 ### 1. Test Landing Page
 
@@ -301,7 +311,7 @@ Visit: `https://classroomtokenhub.com/health`
 
 ---
 
-## Troubleshooting
+## XI. Troubleshooting
 
 ### Issue: Landing page shows 404
 
@@ -347,7 +357,7 @@ Visit: `https://classroomtokenhub.com/health`
 
 ---
 
-## Updating the Landing Page
+## XII. Updating the Landing Page
 
 When you want to update the landing page:
 
@@ -361,7 +371,7 @@ When you want to update the landing page:
 
 ---
 
-## Alternative: Simple Nginx Landing Page Fallback
+## XIII. Alternative: Simple Nginx Landing Page Fallback
 
 If GitHub Pages proxying doesn't work, you can copy `index.html` to your server:
 
@@ -398,7 +408,7 @@ sudo chown -R www-data:www-data /var/www/landing
 
 ---
 
-## Security Considerations
+## XIV. Security Considerations
 
 ### 1. Rate Limiting
 
@@ -427,7 +437,7 @@ Ensure all HTTP traffic redirects to HTTPS (shown in configs above).
 
 ---
 
-## Monitoring
+## XV. Monitoring
 
 ### Check Landing Page Availability
 
@@ -466,7 +476,7 @@ journalctl -u classroom-economy -f
 
 ---
 
-## Summary
+## XVI. Summary
 
 **Landing Page:** GitHub Pages at root of `classroomtokenhub.com`
 **Flask App:** All login and app routes on same domain
@@ -485,3 +495,5 @@ journalctl -u classroom-economy -f
 
 **Last Updated:** January 9, 2026
 **Version:** 1.7.0
+## XVII. Amendment
+Revisions to this document require incrementing the version number, updating the Effective Date, and populating the Supersedes field. Subordinate to CORE changes.
