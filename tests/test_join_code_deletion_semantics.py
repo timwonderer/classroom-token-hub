@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 from app import db
 from app.models import (
     Admin,
+    ClassEconomy,
+    ClassMembership,
     Student,
     StudentTeacher,
     TeacherBlock,
@@ -40,6 +42,24 @@ def _create_student(teacher: Admin, first_name: str, block: str, join_code: str)
     db.session.add(student)
     db.session.flush()
 
+    db.session.add(ClassEconomy(
+        join_code=join_code,
+        display_name=block,
+        status="active",
+        created_by_admin_id=teacher.id,
+    ))
+    db.session.add(ClassMembership(
+        join_code=join_code,
+        admin_id=teacher.id,
+        role="admin",
+        status="active",
+    ))
+    db.session.add(ClassMembership(
+        join_code=join_code,
+        student_id=student.id,
+        role="student",
+        status="active",
+    ))
     db.session.add(StudentTeacher(student_id=student.id, teacher_id=teacher.id))
     db.session.add(TeacherBlock(
         teacher_id=teacher.id,

@@ -3,7 +3,7 @@ from io import StringIO
 
 from app import db
 from app.hash_utils import get_random_salt, hash_username
-from app.models import Admin, Student, StudentTeacher, TeacherBlock, Transaction
+from app.models import Admin, ClassEconomy, ClassMembership, Student, StudentTeacher, TeacherBlock, Transaction
 
 
 def _create_admin(username: str) -> Admin:
@@ -31,6 +31,31 @@ def _create_student(first_name: str, teacher: Admin) -> Student:
 
 
 def _add_claimed_seat(admin: Admin, student: Student, block: str, join_code: str):
+    if db.session.get(ClassEconomy, join_code) is None:
+        db.session.add(ClassEconomy(
+            join_code=join_code,
+            display_name=block,
+            status="active",
+            created_by_admin_id=admin.id,
+        ))
+        db.session.add(ClassMembership(
+            join_code=join_code,
+            admin_id=admin.id,
+            role="admin",
+            status="active",
+        ))
+    existing_student_membership = ClassMembership.query.filter_by(
+        join_code=join_code,
+        student_id=student.id,
+    ).first()
+    if existing_student_membership is None:
+        db.session.add(ClassMembership(
+            join_code=join_code,
+            student_id=student.id,
+            role="student",
+            status="active",
+        ))
+
     seat = TeacherBlock(
         teacher_id=admin.id,
         block=block,

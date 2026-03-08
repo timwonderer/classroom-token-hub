@@ -141,6 +141,7 @@ LEGACY_PLACEHOLDER_LAST_INITIAL = "P"  # "P" for Placeholder
 
 # Module-level cache for schema table-name lookups (keyed by DB URL to be app-config safe).
 _table_names_cache: dict[str, set[str]] = {}
+_table_columns_cache: dict[tuple[str, str], set[str]] = {}
 _table_names_cache_lock = threading.Lock()
 
 # Create blueprint
@@ -966,6 +967,20 @@ def _get_table_names() -> set[str]:
         return _table_names_cache[db_url]
 
 
+def _get_table_columns(table_name: str) -> set[str]:
+    """Return the set of column names for a table on the current engine."""
+    db_url = str(db.engine.url)
+    cache_key = (db_url, table_name)
+    with _table_names_cache_lock:
+        if cache_key not in _table_columns_cache:
+            conn = db.session.connection()
+            inspector = sa.inspect(conn)
+            _table_columns_cache[cache_key] = {
+                column["name"] for column in inspector.get_columns(table_name)
+            }
+        return _table_columns_cache[cache_key]
+
+
 def _ensure_join_code_anchors(teacher_id, join_code, class_label=None):
     """Ensure legacy and canonical join code parent rows exist before child inserts."""
     if not teacher_id or not join_code:
@@ -975,29 +990,62 @@ def _ensure_join_code_anchors(teacher_id, join_code, class_label=None):
     table_names = _get_table_names()
 
     if "class_economies" in table_names:
+        class_economy_columns = _get_table_columns("class_economies")
+        ownership_column = None
+        if "created_by_admin_id" in class_economy_columns:
+            ownership_column = "created_by_admin_id"
+        elif "created_by_teacher_id" in class_economy_columns:
+            ownership_column = "created_by_teacher_id"
+
+        insert_columns = ["join_code", "display_name", "status", "created_at", "updated_at"]
+        insert_values = [":join_code", ":display_name", ":status", ":created_at", ":updated_at"]
+        params = {
+            "join_code": join_code,
+            "display_name": class_label,
+            "status": "active",
+            "created_at": now.replace(tzinfo=None),
+            "updated_at": now.replace(tzinfo=None),
+        }
+        if ownership_column:
+            insert_columns.append(ownership_column)
+            insert_values.append(f":{ownership_column}")
+            params[ownership_column] = teacher_id
+
         # Legacy FK compatibility: some environments still enforce teacher_blocks.join_code -> class_economies.join_code.
         db.session.execute(
             text(
-                """
+                f"""
                 INSERT INTO class_economies (
-                    join_code, display_name, status, created_at, updated_at, created_by_teacher_id
+                    {", ".join(insert_columns)}
                 )
                 VALUES (
-                    :join_code, :display_name, :status, :created_at, :updated_at, :created_by_teacher_id
+                    {", ".join(insert_values)}
                 )
                 ON CONFLICT (join_code) DO UPDATE
                 SET updated_at = EXCLUDED.updated_at
                 """
             ),
-            {
-                "join_code": join_code,
-                "display_name": class_label,
-                "status": "active",
-                "created_at": now.replace(tzinfo=None),
-                "updated_at": now.replace(tzinfo=None),
-                "created_by_teacher_id": teacher_id,
-            },
+            params,
         )
+
+        economy = db.session.get(ClassEconomy, join_code)
+        if economy is not None:
+            if class_label and not economy.display_name:
+                economy.display_name = class_label
+            if getattr(economy, "created_by_admin_id", None) is None:
+                economy.created_by_admin_id = teacher_id
+
+            admin_membership = ClassMembership.query.filter_by(
+                join_code=join_code,
+                admin_id=teacher_id,
+            ).first()
+            if not admin_membership:
+                db.session.add(ClassMembership(
+                    join_code=join_code,
+                    admin_id=teacher_id,
+                    role="admin",
+                    status="active",
+                ))
 
     if "join_codes" not in table_names:
         return None
@@ -8327,10 +8375,15 @@ def export_students():
         active_insurance = active_insurances_map.get(student.id)
         insurance_name = active_insurance.policy.title if active_insurance else 'None'
 
-        scoped_balances = scoped_balances_by_student.get(student.id, {})
-        checking_balance = scoped_balances.get('checking', Decimal('0.00'))
-        savings_balance = scoped_balances.get('savings', Decimal('0.00'))
-        total_earnings = scoped_balances.get('earnings', Decimal('0.00'))
+        if selected_join_code:
+            checking_balance = student.get_checking_balance(join_code=selected_join_code)
+            savings_balance = student.get_savings_balance(join_code=selected_join_code)
+            total_earnings = Decimal(str(student.get_total_earnings(join_code=selected_join_code)))
+        else:
+            scoped_balances = scoped_balances_by_student.get(student.id, {})
+            checking_balance = scoped_balances.get('checking', Decimal('0.00'))
+            savings_balance = scoped_balances.get('savings', Decimal('0.00'))
+            total_earnings = scoped_balances.get('earnings', Decimal('0.00'))
 
         writer.writerow([
             _sanitize_csv_field(student.first_name),

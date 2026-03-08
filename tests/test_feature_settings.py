@@ -107,13 +107,13 @@ class TestFeatureSettings:
         assert settings_b.payroll_enabled is False
 
     def test_unique_constraint_teacher_block(self, client, test_admin):
-        """Test that duplicate teacher-block combinations are prevented."""
-        settings1 = FeatureSettings(teacher_id=test_admin.id, block='A')
+        """Test that duplicate teacher-join_code-block combinations are prevented."""
+        settings1 = FeatureSettings(teacher_id=test_admin.id, join_code='JOIN_A', block='A')
         db.session.add(settings1)
         db.session.commit()
 
-        # Try to add another settings for the same teacher-block
-        settings2 = FeatureSettings(teacher_id=test_admin.id, block='A')
+        # Try to add another settings for the same teacher-join_code-block
+        settings2 = FeatureSettings(teacher_id=test_admin.id, join_code='JOIN_A', block='A')
         db.session.add(settings2)
 
         with pytest.raises(Exception):  # Should raise IntegrityError

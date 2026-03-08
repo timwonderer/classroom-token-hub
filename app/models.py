@@ -872,6 +872,7 @@ class DeletionRequest(db.Model):
     __tablename__ = 'deletion_requests'
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
+    admin_id = sa.orm.synonym('teacher_id')
     join_code = db.Column(db.String(20), nullable=True, index=True)
     request_type = db.Column(db.Enum(DeletionRequestType, values_callable=lambda x: [e.value for e in x]), nullable=False)
     period = db.Column(db.String(10), nullable=True)  # Specified for period deletions only

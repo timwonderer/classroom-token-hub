@@ -1148,6 +1148,8 @@ def dashboard():
 
     join_code = context['join_code']
     teacher_id = context['teacher_id']
+    join_code = context['join_code']
+    join_code = context['join_code']
     current_block = context['block']  # Get current class block
 
     _, _, hall_pass_reconciled = _ensure_rent_hall_pass_top_off(student, context)
@@ -1168,7 +1170,7 @@ def dashboard():
         StoreItem, StudentItem.store_item_id == StoreItem.id
     ).filter(
         StudentItem.status.in_(['purchased', 'pending', 'processing', 'redeemed', 'completed', 'expired']),
-        StoreItem.teacher_id == teacher_id
+        StudentItem.join_code == join_code,
     ).order_by(StudentItem.purchase_date.desc()).all()
 
     checking_transactions = [tx for tx in transactions if tx.account_type == 'checking']
@@ -1881,6 +1883,7 @@ def insurance_marketplace():
         return redirect(url_for('student.dashboard'))
 
     teacher_id = context['teacher_id']
+    join_code = context['join_code']
     now_utc = utc_now()
 
     # FIX: Get student's active policies scoped to current class only
@@ -1889,13 +1892,13 @@ def insurance_marketplace():
     ).filter(
         StudentInsurance.student_id == student.id,
         StudentInsurance.status == 'active',
-        InsurancePolicy.teacher_id == teacher_id  # FIX: Only show current class policies
+        StudentInsurance.join_code == join_code,
     ).all()
 
     # FIX: Get available policies (only from current teacher)
     available_policies = InsurancePolicy.query.filter(
         InsurancePolicy.is_active == True,
-        InsurancePolicy.teacher_id == teacher_id  # FIX: Only current class
+        InsurancePolicy.join_code == join_code,
     ).all()
 
     # Check which policies can be purchased
@@ -1937,7 +1940,7 @@ def insurance_marketplace():
         InsurancePolicy, InsuranceClaim.policy_id == InsurancePolicy.id
     ).filter(
         InsuranceClaim.student_id == student.id,
-        InsurancePolicy.teacher_id == teacher_id  # FIX: Only current class claims
+        InsuranceClaim.join_code == join_code,
     ).all()
 
     # Group policies by tier for display
@@ -1994,7 +1997,7 @@ def purchase_insurance(policy_id):
     policy = db.get_or_404(InsurancePolicy, policy_id)
 
     # FIX: Verify policy belongs to CURRENT teacher only
-    if policy.teacher_id != teacher_id:
+    if policy.join_code != join_code:
         flash("This insurance policy is not available in your current class.", "danger")
         return redirect(url_for('student.student_insurance'))
 
@@ -2037,7 +2040,7 @@ def purchase_insurance(policy_id):
             StudentInsurance.student_id == student.id,
             StudentInsurance.status == 'active',
             InsurancePolicy.tier_category_id == policy.tier_category_id,
-            InsurancePolicy.teacher_id == teacher_id  # Scope to current class only
+            StudentInsurance.join_code == join_code,
         ).first()
 
         if existing_tier_enrollment:
@@ -2500,6 +2503,7 @@ def shop():
         return redirect(url_for('student.dashboard'))
 
     teacher_id = context['teacher_id']
+    join_code = context['join_code']
 
     # Lazily expire collective goals whose deadline has passed, refunding pending purchases.
     process_expired_collective_goals(teacher_id)
@@ -2509,7 +2513,7 @@ def shop():
     now = utc_now()
     now_db = normalize_for_db(now)
     items_query = StoreItem.query.filter(
-        StoreItem.teacher_id == teacher_id,
+        StoreItem.join_code == join_code,
         StoreItem.is_active == True,
         or_(StoreItem.auto_delist_date == None, StoreItem.auto_delist_date > now_db),
     )
@@ -2527,12 +2531,11 @@ def shop():
         StoreItem, StudentItem.store_item_id == StoreItem.id
     ).filter(
         StudentItem.status.in_(['purchased', 'pending', 'processing', 'redeemed', 'completed', 'expired']),
-        StoreItem.teacher_id == teacher_id  # FIX: Only current class items
+        StudentItem.join_code == join_code,
     ).order_by(StudentItem.purchase_date.desc()).all()
 
     # Check if student has paid rent this month and get per-period rent item IDs
     from app.models import RentSettings, RentPayment, RentItem
-    join_code = context.get('join_code')
     current_block = context.get('block')
     has_paid_rent = False
     per_period_rent_item_ids = set()
@@ -3139,20 +3142,12 @@ def _ensure_rent_hall_pass_top_off(student, context, settings=None, now=None):
     student_block = StudentBlock.query.filter(
         StudentBlock.student_id == student.id,
         StudentBlock.period == current_block,
-        db.or_(
-            StudentBlock.join_code == join_code,
-            StudentBlock.join_code.is_(None),
-        ),
-    ).order_by(
-        db.case((StudentBlock.join_code == join_code, 0), else_=1)
+        StudentBlock.join_code == join_code,
     ).first()
 
     state_changed = False
 
-    if student_block and not student_block.join_code and join_code:
-        student_block.join_code = join_code
-        state_changed = True
-    elif not student_block and (is_paid and total_grant > 0):
+    if not student_block and (is_paid and total_grant > 0):
         student_block = StudentBlock(
             student_id=student.id,
             period=current_block,

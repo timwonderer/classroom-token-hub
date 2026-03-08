@@ -107,7 +107,7 @@ def charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, j
                 fee_amount = max(Decimal('0.00'), cap - abs(total_fees_this_month))
 
     if fee_amount > 0:
-        overdraft_fee_tx = Transaction(
+        tx_kwargs = dict(
             student_id=student.id,
             teacher_id=teacher_id,
             join_code=join_code,
@@ -120,8 +120,11 @@ def charge_overdraft_fee_if_needed(student, banking_settings, teacher_id=None, j
                 if force else
                 f'Overdraft fee (balance: ${current_balance:.2f})'
             ),
-            actor_membership_id=actor_membership_id,  # Audit Anchor: who caused the declined tx
         )
+        if hasattr(Transaction, 'actor_membership_id'):
+            tx_kwargs['actor_membership_id'] = actor_membership_id
+
+        overdraft_fee_tx = Transaction(**tx_kwargs)
         db.session.add(overdraft_fee_tx)
         db.session.flush()
         return True, fee_amount
