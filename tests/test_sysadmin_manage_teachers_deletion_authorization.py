@@ -64,4 +64,3 @@ def test_manage_teachers_hides_delete_actions(client):
 
     assert f"/sysadmin/manage-teachers/delete/{teacher.id}" not in html
     assert f"/sysadmin/delete-period/{teacher.id}/A" not in html
-    assert "Teacher-managed" in html

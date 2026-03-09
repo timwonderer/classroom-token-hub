@@ -1124,6 +1124,9 @@ def _link_student_to_admin(student: Student, admin_id):
             class_label = None
         join_code_id = _resolve_join_code_id(admin_id, join_code)
 
+        # Ensure ClassEconomy record exists before creating TeacherBlock
+        _ensure_join_code_anchors(admin_id, join_code, class_label=class_label)
+
         # Create new TeacherBlock record
         new_teacher_block = TeacherBlock(
             teacher_id=admin_id,
@@ -4375,6 +4378,10 @@ def add_individual_student():
         db.session.add(new_student)
         db.session.flush()
         _link_student_to_admin(new_student, current_admin_id)
+        
+        # Ensure ClassEconomy record exists before creating TeacherBlock
+        _ensure_join_code_anchors(current_admin_id, join_code)
+        
         new_tb = TeacherBlock(
             teacher_id=current_admin_id,
             block=block,
@@ -4538,6 +4545,10 @@ def add_manual_student():
         db.session.add(new_student)
         db.session.flush()
         _link_student_to_admin(new_student, current_admin_id)
+        
+        # Ensure ClassEconomy record exists before creating TeacherBlock
+        _ensure_join_code_anchors(current_admin_id, join_code)
+        
         # Student is claimed if they have a username set
         is_claimed = bool(username)
         

@@ -7,12 +7,7 @@
 <div class="container-fluid px-0">
 
     <!-- ── Privacy Notice ── -->
-    <div class="alert alert-info d-flex gap-2 mb-4 border-0 shadow-sm" style="font-size:0.875rem;">
-        <span class="material-symbols-outlined flex-shrink-0" style="font-size:20px;">info</span>
-        <div>
-            <strong>Privacy notice:</strong> Teacher accounts may provide access to student information. Only invite staff who should have this access and follow your organization's privacy and data protection policies.
-        </div>
-    </div>
+    
 
     <!-- ── Invite Codes ── -->
     <div class="card border-0 shadow-sm mb-4" id="invite-codes">
@@ -180,11 +175,10 @@
                     <thead class="table-light">
                         <tr>
                             <th class="ps-3">Teacher ID</th>
-                            <th>Classes</th>
-                            <th>Students</th>
+                          
                             <th>Last Login</th>
                             <th>Status</th>
-                            <th>Actions</th>
+                           
                         </tr>
                     </thead>
                     <tbody>
@@ -193,21 +187,7 @@
                             <td class="ps-3">
                                 <div class="fw-semibold">{{ teacher.username }}</div>
                             </td>
-                            <td>
-                                {% if teacher.periods %}
-                                    <div class="d-flex flex-wrap gap-1">
-                                        {% for period, count in teacher.periods.items() %}
-                                            <span class="badge bg-info-subtle text-info-emphasis" style="font-size:0.7rem;">{{ period|upper }}</span>
-                                        {% endfor %}
-                                    </div>
-                                    <div class="text-muted mt-1" style="font-size:0.72rem;">{{ teacher.periods|length }} class(es)</div>
-                                {% else %}
-                                    <span class="text-muted" style="font-size:0.85rem;">No classes</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                <span class="badge bg-secondary">{{ teacher.total_students }}</span>
-                            </td>
+                           
                             <td>
                                 <small class="text-muted">
                                     {% if teacher.last_login %}
@@ -224,18 +204,14 @@
                                     <span class="badge bg-success">Active</span>
                                 {% endif %}
                             </td>
-                            <td>
-                                <span class="text-muted" style="font-size:0.78rem;">
-                                    <span class="material-symbols-outlined align-middle" style="font-size:13px;">person</span>
-                                    Teacher-managed
-                                </span>
-                            </td>
+                           
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
         </div>
+        
 
         <!-- Mobile Cards -->
         <div class="d-lg-none">
@@ -252,35 +228,13 @@
                     {% endif %}
                 </div>
 
-                <div class="row g-2 mb-3" style="font-size:0.82rem;">
-                    <div class="col-4 text-muted">Classes</div>
-                    <div class="col-8">
-                        {% if teacher.periods %}
-                            {{ teacher.periods|length }} class(es)
-                            <div class="d-flex flex-wrap gap-1 mt-1">
-                                {% for period in teacher.periods %}
-                                    <span class="badge bg-info-subtle text-info-emphasis" style="font-size:0.65rem;">{{ period|upper }}</span>
-                                {% endfor %}
-                            </div>
-                        {% else %}
-                            <span class="text-muted">None</span>
-                        {% endif %}
-                    </div>
-                    <div class="col-4 text-muted">Students</div>
-                    <div class="col-8"><strong>{{ teacher.total_students }}</strong></div>
-                    <div class="col-4 text-muted">Last Login</div>
+\                    <div class="col-4 text-muted">Last Login</div>
                     <div class="col-8 text-muted">
                         {% if teacher.last_login %}{{ teacher.last_login.strftime('%b %d, %Y') }}{% else %}Never{% endif %}
                     </div>
                 </div>
 
-                <!-- Actions -->
-                <div class="d-flex gap-2 flex-wrap">
-                    <span class="text-muted" style="font-size:0.78rem;">
-                        <span class="material-symbols-outlined align-middle" style="font-size:13px;">person</span>
-                        Teacher-managed
-                    </span>
-                </div>
+               
             </div>
             {% endfor %}
         </div>
@@ -294,4 +248,10 @@
     </div>
 
 </div>
+<div class="alert alert-info d-flex gap-2 mb-4 border-0 shadow-sm" style="font-size:0.875rem;">
+        <span class="material-symbols-outlined flex-shrink-0" style="font-size:20px;">info</span>
+        <div>
+            <strong>Inactive Teachers?</strong> Teacher accounts that are inactive for 6 months (180 days) are automatically deleted along with any join codes created under those accounts.
+        </div>
+    </div>
 {% endblock %}
