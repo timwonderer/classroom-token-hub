@@ -114,8 +114,8 @@ class RequestIdFilter(logging.Filter):
             record.actor_type = context.get("actor_type", "-") if context else "-"
         if not hasattr(record, "actor_opaque_id"):
             record.actor_opaque_id = context.get("actor_opaque_id", "-") if context else "-"
-        if not hasattr(record, "join_code_id"):
-            record.join_code_id = context.get("join_code_id", "-") if context else "-"
+        if not hasattr(record, "class_id"):
+            record.class_id = context.get("class_id", "-") if context else "-"
         if not hasattr(record, "endpoint"):
             if has_request_context():
                 if request.url_rule and request.url_rule.rule:
@@ -166,7 +166,7 @@ def register_error_handlers(app):
                 "request_id": getattr(g, "request_id", None),
                 "actor_type": context.get("actor_type"),
                 "actor_opaque_id": context.get("actor_opaque_id"),
-                "join_code_id": context.get("join_code_id"),
+                "class_id": context.get("class_id"),
                 "endpoint": endpoint,
                 "error_class": e.__class__.__name__,
                 "error_message": sanitized_message,
@@ -187,11 +187,11 @@ def register_error_handlers(app):
                         sa.text(
                             """
                             INSERT INTO error_events
-                                (request_id, actor_type, actor_opaque_id, join_code_id,
+                                (request_id, actor_type, actor_opaque_id, class_id,
                                  endpoint, method, error_class, error_message,
                                  correlation_version, created_at)
                             VALUES
-                                (:request_id, :actor_type, :actor_opaque_id, :join_code_id,
+                                (:request_id, :actor_type, :actor_opaque_id, :class_id,
                                  :endpoint, :method, :error_class, :error_message,
                                  :correlation_version, :created_at)
                             """
@@ -200,7 +200,7 @@ def register_error_handlers(app):
                             "request_id": getattr(g, "request_id", None),
                             "actor_type": context.get("actor_type"),
                             "actor_opaque_id": context.get("actor_opaque_id"),
-                            "join_code_id": context.get("join_code_id"),
+                            "class_id": context.get("class_id"),
                             "endpoint": endpoint,
                             "method": request.method,
                             "error_class": e.__class__.__name__,
@@ -280,7 +280,7 @@ def create_app():
     log_format = os.getenv(
         "LOG_FORMAT",
         "[%(asctime)s] %(levelname)s in %(module)s [%(request_id)s] "
-        "[actor=%(actor_type)s:%(actor_opaque_id)s join_code_id=%(join_code_id)s] "
+        "[actor=%(actor_type)s:%(actor_opaque_id)s class_id=%(class_id)s] "
         "[endpoint=%(endpoint)s method=%(method)s] "
         "[error_class=%(error_class)s correlation_version=%(correlation_version)s]: %(message)s",
     )

@@ -6,7 +6,7 @@ from app.models import (
     ActorRequestTrace,
     ErrorEvent,
     IssueCategory,
-    JoinCode,
+    ClassEconomy,
     Student,
     TeacherBlock,
 )
@@ -20,7 +20,7 @@ def _create_student_issue_context():
     db.session.add(admin)
     db.session.flush()
 
-    join_code = JoinCode(join_code_token="TLCP-JOIN", teacher_id=admin.id)
+    join_code = ClassEconomy(join_code="TLCP-JOIN", teacher_id=admin.id)
     db.session.add(join_code)
     db.session.flush()
 
@@ -28,8 +28,8 @@ def _create_student_issue_context():
         first_name="Student",
         last_initial="S",
         block="A",
-        join_code=join_code.join_code_token,
-        join_code_id=join_code.join_code_id,
+        join_code=join_code.join_code,
+        class_id=join_code.class_id,
         salt=b"1234567890123456",
         pin_hash="pin",
     )
@@ -43,8 +43,8 @@ def _create_student_issue_context():
         last_initial="S",
         salt=b"1234567890123456",
         first_half_hash="seat-hash",
-        join_code=join_code.join_code_token,
-        join_code_id=join_code.join_code_id,
+        join_code=join_code.join_code,
+        class_id=join_code.class_id,
         student_id=student.id,
         is_claimed=True,
     )
@@ -65,7 +65,7 @@ def test_create_issue_attaches_correlation_pack_with_trace_and_error(app):
         ActorRequestTrace(
             actor_type="student",
             actor_opaque_id=actor_opaque_id,
-            join_code_id=join_code.join_code_id,
+            class_id=join_code.class_id,
             request_id="req-test-1",
             method="POST",
             endpoint="/store/buy",
@@ -78,7 +78,7 @@ def test_create_issue_attaches_correlation_pack_with_trace_and_error(app):
             request_id="req-test-1",
             actor_type="student",
             actor_opaque_id=actor_opaque_id,
-            join_code_id=join_code.join_code_id,
+            class_id=join_code.class_id,
             endpoint="/store/buy",
             method="POST",
             error_class="RuntimeError",
@@ -93,7 +93,7 @@ def test_create_issue_attaches_correlation_pack_with_trace_and_error(app):
         issue = create_issue(
             student=student,
             teacher_id=admin.id,
-            join_code=join_code.join_code_token,
+            join_code=join_code.join_code,
             category_id=category.id,
             explanation="Something broke",
             expected_outcome="It should work",
@@ -117,7 +117,7 @@ def test_create_issue_can_skip_recent_error_refs(app):
             request_id="req-test-2",
             actor_type="student",
             actor_opaque_id=actor_opaque_id,
-            join_code_id=join_code.join_code_id,
+            class_id=join_code.class_id,
             endpoint="/store/buy",
             method="POST",
             error_class="RuntimeError",
@@ -132,7 +132,7 @@ def test_create_issue_can_skip_recent_error_refs(app):
         issue = create_issue(
             student=student,
             teacher_id=admin.id,
-            join_code=join_code.join_code_token,
+            join_code=join_code.join_code,
             category_id=category.id,
             explanation="Something broke",
             include_recent_error=False,
@@ -164,7 +164,7 @@ def test_authenticated_request_writes_trace_row(app, client):
         "actor_type": "student",
         "actor_id": student.id,
         "actor_opaque_id": actor_opaque_id,
-        "join_code_id": None,
+        "class_id": None,
         "endpoint": "/_tlcp_ping",
         "method": "GET",
     }

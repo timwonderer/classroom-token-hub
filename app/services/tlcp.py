@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from flask import has_request_context, request, session
 
 from app.extensions import db
-from app.models import ActorRequestTrace, ErrorEvent, JoinCode, Student, TicketCorrelationPack
+from app.models import ActorRequestTrace, ErrorEvent, ClassEconomy, Student, TicketCorrelationPack
 from app.utils.helpers import generate_anonymous_code
 from app.utils.time import utc_now
 
@@ -41,11 +41,11 @@ def _int_env(name: str, default: int) -> int:
     return value if value > 0 else default
 
 
-def _resolve_join_code_id(join_code_token: str | None) -> str | None:
-    if not join_code_token:
+def _resolve_class_id(join_code: str | None) -> str | None:
+    if not join_code:
         return None
-    join_code = JoinCode.query.filter_by(join_code_token=join_code_token).first()
-    return join_code.join_code_id if join_code else None
+    join_code = ClassEconomy.query.filter_by(join_code=join_code).first()
+    return join_code.class_id if join_code else None
 
 
 def _sanitize_error_message(raw_message: str | None) -> str:
@@ -76,23 +76,23 @@ def resolve_actor_context() -> dict | None:
 
     actor_type = None
     actor_id = None
-    join_code_token = None
-    join_code_id = None
+    join_code = None
+    class_id = None
 
     if session.get("student_id"):
         actor_type = "student"
         actor_id = session.get("student_id")
-        join_code_token = session.get("current_join_code")
-        join_code_id = _resolve_join_code_id(join_code_token)
-        if not join_code_id and actor_id:
+        join_code = session.get("current_join_code")
+        class_id = _resolve_class_id(join_code)
+        if not class_id and actor_id:
             student = db.session.get(Student, actor_id)
-            join_code_id = student.join_code_id if student else None
+            class_id = student.class_id if student else None
         actor_opaque_id = generate_anonymous_code(f"student_issue:{actor_id}")
     elif session.get("is_admin") and session.get("admin_id"):
         actor_type = "teacher"
         actor_id = session.get("admin_id")
-        join_code_token = session.get("current_join_code")
-        join_code_id = _resolve_join_code_id(join_code_token)
+        join_code = session.get("current_join_code")
+        class_id = _resolve_class_id(join_code)
         actor_opaque_id = generate_anonymous_code(f"teacher:{actor_id}")
     elif session.get("is_system_admin") and session.get("sysadmin_id"):
         actor_type = "sysadmin"
@@ -106,7 +106,7 @@ def resolve_actor_context() -> dict | None:
         "actor_type": actor_type,
         "actor_id": actor_id,
         "actor_opaque_id": actor_opaque_id,
-        "join_code_id": join_code_id,
+        "class_id": class_id,
         "endpoint": endpoint,
         "method": request.method,
     }
@@ -140,7 +140,7 @@ def persist_request_trace(
     trace = ActorRequestTrace(
         actor_type=context.get("actor_type"),
         actor_opaque_id=context.get("actor_opaque_id"),
-        join_code_id=context.get("join_code_id"),
+        class_id=context.get("class_id"),
         request_id=request_id,
         method=context.get("method"),
         endpoint=context.get("endpoint"),
@@ -183,7 +183,7 @@ def save_error_event(
     request_id: str | None,
     actor_type: str | None,
     actor_opaque_id: str | None,
-    join_code_id: str | None,
+    class_id: str | None,
     endpoint: str | None,
     method: str | None,
     error_class: str,
@@ -198,7 +198,7 @@ def save_error_event(
             request_id=request_id,
             actor_type=actor_type,
             actor_opaque_id=actor_opaque_id,
-            join_code_id=join_code_id,
+            class_id=class_id,
             endpoint=endpoint,
             method=method,
             error_class=error_class,
@@ -234,7 +234,7 @@ def create_ticket_correlation_pack(
     issue_id: int,
     actor_type: str,
     actor_opaque_id: str,
-    join_code_id: str | None,
+    class_id: str | None,
     ticket_created_at,
     include_recent_error: bool = True,
 ) -> TicketCorrelationPack:
@@ -265,7 +265,7 @@ def create_ticket_correlation_pack(
             "endpoint": row.endpoint,
             "request_id": row.request_id,
             "status_code": row.status_code,
-            "join_code_id": row.join_code_id,
+            "class_id": row.class_id,
         }
         for row in ranked_rows
     ]
@@ -304,7 +304,7 @@ def create_ticket_correlation_pack(
             "error_class": row.error_class,
             "error_message": row.error_message,
             "method": row.method,
-            "join_code_id": row.join_code_id,
+            "class_id": row.class_id,
         }
         for row in error_rows
     ]
@@ -314,7 +314,7 @@ def create_ticket_correlation_pack(
         correlation_version=CORRELATION_VERSION,
         actor_type=actor_type,
         actor_opaque_id=actor_opaque_id,
-        join_code_id=join_code_id,
+        class_id=class_id,
         request_trace_json=request_trace_json,
         error_refs_json=error_refs_json,
         created_at=utc_now(),

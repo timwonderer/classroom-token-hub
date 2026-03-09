@@ -413,7 +413,7 @@ def test_account_deletion_requires_gate(client):
     client.application.config["RATELIMIT_ENABLED"] = False
     try:
         resp = client.post(
-            "/admin/deletion-requests",
+            "/admin/account-delete",
             data={
                 "request_type": "account",
             },
@@ -423,7 +423,7 @@ def test_account_deletion_requires_gate(client):
     finally:
         client.application.config["RATELIMIT_ENABLED"] = previous_ratelimit_enabled
     assert resp.status_code == 200
-    assert b"Deletion request blocked: confirmation phrase did not match." in resp.data
+    assert b"Account deletion blocked: confirmation phrase did not match." in resp.data
     assert db.session.get(Admin, teacher.id) is not None
 
 def test_account_deletion_executes_with_valid_gate(client):
@@ -435,7 +435,7 @@ def test_account_deletion_executes_with_valid_gate(client):
     client.application.config["RATELIMIT_ENABLED"] = False
     try:
         resp = client.post(
-            "/admin/deletion-requests",
+            "/admin/account-delete",
             data={
                 "request_type": "account",
                 "gate_phrase": f"CONFIRM DELETE {teacher.get_display_name()} ACCOUNT",

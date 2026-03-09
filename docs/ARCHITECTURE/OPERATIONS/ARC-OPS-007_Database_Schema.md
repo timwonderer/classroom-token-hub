@@ -194,15 +194,6 @@ Support and monitoring infrastructure includes:
 - `error_events`
 - `user_reports`
 
-### `deletion_requests`
-
-Teacher-originated deletion requests.
-
-Important fields:
-- `teacher_id` is the canonical FK
-- `admin_id` remains as an ORM synonym alias for compatibility
-- `join_code` is present to bind period/class deletions to a tenant boundary
-
 ### Class-Scoped Transactional Tables
 
 These tables rely on `join_code` as their class boundary and must not be treated as teacher-global in v2 flows:
@@ -230,7 +221,6 @@ These remain intentionally present but should not be used to define new v2 behav
 
 - `Admin.public_id` -> synonym for `teacher_public_id`
 - `StudentTeacher.admin_id` -> synonym for `teacher_id`
-- `DeletionRequest.admin_id` -> synonym for `teacher_id`
 - `TeacherBlock.dob_sum` -> Python compatibility shim for older fixtures; not a persisted DB column
 - legacy plaintext `username` fields on `teachers` and `system_admins`
 

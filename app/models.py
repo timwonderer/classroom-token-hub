@@ -169,23 +169,6 @@ class AnalyticsAlert(db.Model):
         )
 
 
-class JoinCode(db.Model):
-    """
-    Canonical class-universe anchor.
-    A join code belongs to exactly one teacher and defines the tenancy boundary.
-    """
-    __tablename__ = 'join_codes'
-
-    join_code_id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    join_code_token = db.Column(db.String(20), nullable=False, unique=True, index=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False, index=True)
-    is_active = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
-    metadata_json = db.Column(db.JSON, nullable=True)
-    created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-
-    teacher = db.relationship('Admin', backref=db.backref('join_codes', lazy='dynamic', passive_deletes=True))
-
-
 class User(db.Model):
     """
     Global login principal for V2.0+ unified identity architecture.
@@ -295,7 +278,7 @@ class TeacherBlock(db.Model):
 
     # Join code for this period (shared across all students in same teacher-block)
     join_code = db.Column(db.String(20), nullable=False)
-    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     dedupe_key = db.Column(db.String(64), nullable=True, index=True)
 
     # Claim status
@@ -355,7 +338,7 @@ class Student(db.Model):
     identity_id = db.Column(db.Integer, db.ForeignKey('identity_profiles.id', ondelete='RESTRICT'), nullable=False, index=True)
     block = db.Column(db.String(10), nullable=False)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
 
     # Hash and credential fields
     # Credential: CONCAT(first_initial, DOB_sum) - simpler than old name_code system
@@ -475,8 +458,7 @@ class Student(db.Model):
         """
         Get checking balance scoped to a specific class economy.
 
-        CRITICAL: For proper period isolation, callers should pass join_code.
-        The teacher_id parameter is deprecated and only kept for backward compatibility.
+        Financial reads must be scoped to a single join_code.
 
         Args:
             teacher_id: DEPRECATED - Only for backward compatibility
@@ -516,7 +498,7 @@ class Student(db.Model):
             if cache:
                 posted = Decimal(cache.posted_checking_balance_cents) / 100
             else:
-                # Legacy fallback: derive posted as (all non-void) - (pending).
+                # Recompute from class-scoped transactions if cache is not populated yet.
                 all_non_void = db.session.query(func.sum(Transaction.amount)).filter(
                     tx_scope,
                     Transaction.join_code == join_code,
@@ -543,46 +525,13 @@ class Student(db.Model):
 
             return _quantize_currency(posted + pending)
 
-        elif teacher_id:
-            # DEPRECATED: Only use this for backward compatibility during migration
-            # This will show aggregated balance across all periods with same teacher
-            total = sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.account_type == 'checking' and not tx.is_void and tx.teacher_id == teacher_id),
-                Decimal('0.00')
-            )
-            return _quantize_currency(total)
-        else:
-            # No scope provided - return total across all classes
-            # Optimized: Sum all BalanceCaches + All Pending Transactions
-            from app.models import BalanceCache, Transaction, TransactionStatus
-            
-            # Post-migration, most data should be in BalanceCache.
-            # But we can't easily iterate all joins to settle them.
-            # So just summing BalanceCache + Transaction(Pending) + Transaction(Legacy/NullJoin)
-            
-            # To be safe and compatible with legacy (which iterates transactions), 
-            # we can stick to iterating transactions for global sum 
-            # UNTIL we are sure BalanceCache covers everything.
-            # Since we verified UNKNOWN cache is 0, logic implies we can trust cache?
-            # But global view might include "legacy" transactions that are not in cache (if any existed)?
-            # My check showed 0 UNKNOWN cache, meaning NO transactions had NULL join code (assuming script correct).
-            
-            # For now, keep the old iterative logic for global/legacy to be safe, 
-            # as global view is rarely performance critical (or if it is, we optimize later).
-            total = sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.account_type == 'checking' and not tx.is_void),
-                Decimal('0.00')
-            )
-            return _quantize_currency(total)
+        return Decimal('0.00')
 
     def get_savings_balance(self, teacher_id=None, join_code=None):
         """
         Get savings balance scoped to a specific class economy.
 
-        CRITICAL: For proper period isolation, callers should pass join_code.
-        The teacher_id parameter is deprecated and only kept for backward compatibility.
+        Financial reads must be scoped to a single join_code.
 
         Args:
             teacher_id: DEPRECATED - Only for backward compatibility
@@ -622,7 +571,7 @@ class Student(db.Model):
             if cache:
                 posted = Decimal(cache.posted_savings_balance_cents) / 100
             else:
-                # Legacy fallback: derive posted as (all non-void) - (pending).
+                # Recompute from class-scoped transactions if cache is not populated yet.
                 all_non_void = db.session.query(func.sum(Transaction.amount)).filter(
                     tx_scope,
                     Transaction.join_code == join_code,
@@ -649,23 +598,7 @@ class Student(db.Model):
 
             return _quantize_currency(posted + pending)
 
-        elif teacher_id:
-            # DEPRECATED: Only use this for backward compatibility during migration
-            # This will show aggregated balance across all periods with same teacher
-            total = sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.account_type == 'savings' and not tx.is_void and tx.teacher_id == teacher_id),
-                Decimal('0.00')
-            )
-            return _quantize_currency(total)
-        else:
-            # No scope provided - return total across all classes
-            total = sum(
-                (_quantize_currency(tx.amount) for tx in self.transactions
-                if tx.account_type == 'savings' and not tx.is_void),
-                Decimal('0.00')
-            )
-            return _quantize_currency(total)
+        return Decimal('0.00')
 
     def get_total_earnings(self, teacher_id=None, join_code=None):
         """
@@ -794,15 +727,25 @@ class ClassMembershipStatus(enum.Enum):
 
 
 class ClassEconomy(db.Model):
-    """Represents a class economy identified by its unique join_code."""
+    """Canonical class anchor identified by a public join code and internal class_id."""
     __tablename__ = 'class_economies'
+
+    class_id = db.Column(db.String(36), unique=True, nullable=False, index=True, default=lambda: str(uuid.uuid4()))
     join_code = db.Column(db.String(20), primary_key=True)
+    teacher_id = db.Column(
+        db.Integer,
+        db.ForeignKey('teachers.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
     display_name = db.Column(db.String(100), nullable=True)
     status = db.Column(
         db.Enum(ClassEconomyStatus, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
         default=ClassEconomyStatus.ACTIVE
     )
+    is_active = db.Column(db.Boolean, nullable=False, default=True, server_default='true')
+    metadata_json = db.Column(db.JSON, nullable=True)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
     updated_at = db.Column(db.DateTime(timezone=True), default=utc_now, onupdate=utc_now, nullable=False)
     created_by_admin_id = db.Column(
@@ -813,6 +756,12 @@ class ClassEconomy(db.Model):
     )
 
     memberships = db.relationship('ClassMembership', backref='economy', cascade='all, delete-orphan', lazy='dynamic')
+    teacher = db.relationship(
+        'Admin',
+        foreign_keys=[teacher_id],
+        backref=db.backref('class_economies', lazy='dynamic', passive_deletes=True),
+    )
+    created_by_admin = db.relationship('Admin', foreign_keys=[created_by_admin_id])
 
 
 class ClassMembership(db.Model):
@@ -847,62 +796,6 @@ class ClassMembership(db.Model):
             name='ck_membership_xor'
         ),
     )
-
-
-class DeletionRequestType(enum.Enum):
-    """Enum for deletion request types."""
-    PERIOD = 'period'
-    ACCOUNT = 'account'
-    
-    @classmethod
-    def from_string(cls, value):
-        """Convert string to enum, raising ValueError if invalid."""
-        if isinstance(value, cls):
-            return value
-        for member in cls:
-            if member.value == value:
-                return member
-        raise ValueError(f"Invalid DeletionRequestType: {value}")
-
-
-class DeletionRequestStatus(enum.Enum):
-    """Enum for deletion request statuses."""
-    PENDING = 'pending'
-    APPROVED = 'approved'
-    REJECTED = 'rejected'
-
-
-class DeletionRequest(db.Model):
-    """
-    Tracks teacher requests for period/block or account deletion.
-    System admins can only approve deletions that have been requested by teachers
-    or for accounts that have been inactive beyond the threshold.
-    """
-    __tablename__ = 'deletion_requests'
-    id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False)
-    admin_id = sa.orm.synonym('teacher_id')
-    join_code = db.Column(db.String(20), nullable=True, index=True)
-    request_type = db.Column(db.Enum(DeletionRequestType, values_callable=lambda x: [e.value for e in x]), nullable=False)
-    period = db.Column(db.String(10), nullable=True)  # Specified for period deletions only
-    reason = db.Column(db.Text, nullable=True)  # Optional reason from teacher
-    status = db.Column(db.Enum(DeletionRequestStatus, values_callable=lambda x: [e.value for e in x]), default=DeletionRequestStatus.PENDING, nullable=False)
-    requested_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
-    resolved_at = db.Column(db.DateTime(timezone=True), nullable=True)
-    resolved_by = db.Column(db.Integer, db.ForeignKey('system_admins.id'), nullable=True)
-
-    # Relationships
-    # No ORM cascade needed - explicit deletion in system_admin.py:871 + DB CASCADE
-    teacher = db.relationship('Admin', backref=db.backref('deletion_requests', lazy='dynamic'))
-    resolver = db.relationship('SystemAdmin', backref=db.backref('resolved_deletion_requests', lazy='dynamic'))
-
-    __table_args__ = (
-        db.Index('ix_deletion_requests_teacher_id', 'teacher_id'),
-        db.Index('ix_deletion_requests_status', 'status'),
-    )
-
-    def __repr__(self):
-        return f'<DeletionRequest {self.request_type} for Teacher {self.teacher_id} - {self.status}>'
 
 
 # -------------------- SYSTEM ADMIN MODEL --------------------
@@ -1209,7 +1102,7 @@ class HallPassSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Queue system toggle
@@ -1261,7 +1154,7 @@ class PayrollCache(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False, unique=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     cached_breakdown = db.Column(db.JSON, nullable=True)  # Stores the breakdown: {"(id, code)": amount}
     last_calculated_at = db.Column(db.DateTime(timezone=True), default=utc_now)
 
@@ -1278,7 +1171,7 @@ class StoreItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
     price = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
@@ -1439,7 +1332,7 @@ class RentSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Main toggle
@@ -1580,7 +1473,7 @@ class RentItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     rent_setting_id = db.Column(db.Integer, db.ForeignKey('rent_settings.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
 
     # Item details
     name = db.Column(db.String(100), nullable=False)
@@ -1617,7 +1510,7 @@ class InsurancePolicy(db.Model):
     version_number = db.Column(db.Integer, nullable=False, default=1)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=True)  # Owner teacher
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     title = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text, nullable=True)
     premium = db.Column(db.Numeric(precision=12, scale=2), nullable=False)  # Monthly cost
@@ -1879,7 +1772,7 @@ class ActorRequestTrace(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     actor_type = db.Column(db.String(20), nullable=False, index=True)
     actor_opaque_id = db.Column(db.String(64), nullable=False, index=True)
-    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='SET NULL'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='SET NULL'), nullable=True, index=True)
     request_id = db.Column(db.String(128), nullable=False, index=True)
     method = db.Column(db.String(10), nullable=False)
     endpoint = db.Column(db.String(500), nullable=False)
@@ -1900,7 +1793,7 @@ class ErrorEvent(db.Model):
     request_id = db.Column(db.String(128), nullable=True, index=True)
     actor_type = db.Column(db.String(20), nullable=True, index=True)
     actor_opaque_id = db.Column(db.String(64), nullable=True, index=True)
-    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='SET NULL'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='SET NULL'), nullable=True, index=True)
     endpoint = db.Column(db.String(500), nullable=True)
     method = db.Column(db.String(10), nullable=True)
     error_class = db.Column(db.String(200), nullable=False)
@@ -2134,7 +2027,7 @@ class TicketCorrelationPack(db.Model):
     correlation_version = db.Column(db.Integer, nullable=False, default=1, server_default='1')
     actor_type = db.Column(db.String(20), nullable=False)
     actor_opaque_id = db.Column(db.String(64), nullable=False)
-    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='SET NULL'), nullable=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='SET NULL'), nullable=True)
     request_trace_json = db.Column(db.JSON, nullable=False, default=list)
     error_refs_json = db.Column(db.JSON, nullable=False, default=list)
     created_at = db.Column(db.DateTime(timezone=True), default=utc_now, nullable=False)
@@ -2366,7 +2259,7 @@ class PayrollSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global/default settings
     pay_rate = db.Column(db.Numeric(precision=12, scale=2), nullable=False, default=0.25)  # $ per minute
     payroll_frequency_days = db.Column(db.Integer, nullable=False, default=14)
@@ -2454,7 +2347,7 @@ class BankingSettings(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    join_code_id = db.Column(db.String(36), db.ForeignKey('join_codes.join_code_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
     block = db.Column(db.String(10), nullable=True)  # NULL = global default, otherwise period/block identifier
 
     # Interest settings for savings

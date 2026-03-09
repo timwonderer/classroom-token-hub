@@ -38,10 +38,10 @@ import pytz
 
 from app.extensions import db, limiter
 from app.models import (
-    Student, Admin, JoinCode, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
+    Student, Admin, ClassEconomy, AdminInviteCode, StudentTeacher, Transaction, TransactionStatus, TapEvent, StoreItem, StudentItem,
     InsurancePolicy, InsurancePolicyBlock, RentItem, RentPayment, RentSettings, RentWaiver, StoreItemBlock,
     StudentInsurance, InsuranceClaim, HallPassLog, HallPassSettings, PayrollSettings, PayrollReward, PayrollFine,
-    BankingSettings, TeacherBlock, DeletionRequest,
+    BankingSettings, TeacherBlock,
     UserReport, FeatureSettings, TeacherOnboarding, StudentBlock, RecoveryRequest, StudentRecoveryCode,
     Announcement, AdminCredential, RedemptionAuditLog, RedemptionAuditAction,
     RedemptionAuditSource, Issue, IssueStatusHistory, IssueResolutionAction, AnalyticsSnapshot, AnalyticsEvent, Seat,
@@ -228,25 +228,31 @@ def _normalize_full_name_for_dedupe(first_name: str, last_name: str) -> str:
     return re.sub(r"[^a-z]", "", f"{first_name}{last_name}".lower())
 
 
-def _resolve_join_code_id(teacher_id: int, join_code: str) -> str:
-    """Get or create the canonical JoinCode row and return join_code_id."""
-    row = JoinCode.query.filter_by(join_code_token=join_code).first()
+def _resolve_class_id(teacher_id: int, join_code: str) -> str:
+    """Get or create the canonical ClassEconomy row and return class_id."""
+    row = ClassEconomy.query.filter_by(join_code=join_code).first()
     if row:
         if row.teacher_id != teacher_id:
             raise ValueError("Join code belongs to a different teacher.")
-        return row.join_code_id
+        return row.class_id
 
-    row = JoinCode(join_code_token=join_code, teacher_id=teacher_id, is_active=True)
+    row = ClassEconomy(
+        join_code=join_code,
+        teacher_id=teacher_id,
+        created_by_admin_id=teacher_id,
+        is_active=True,
+        status="active",
+    )
     db.session.add(row)
     db.session.flush()
-    return row.join_code_id
+    return row.class_id
 
 
-def _build_teacher_block_dedupe_key(join_code_id: str, first_name: str, last_name: str, dob_date) -> str:
-    """Build deterministic dedupe key: join_code_id|normalized_full_name|YYYYMMDD."""
+def _build_teacher_block_dedupe_key(class_id: str, first_name: str, last_name: str, dob_date) -> str:
+    """Build deterministic dedupe key: class_id|normalized_full_name|YYYYMMDD."""
     normalized_full_name = _normalize_full_name_for_dedupe(first_name, last_name)
     dob_yyyymmdd = dob_date.strftime("%Y%m%d")
-    dedupe_input = f"{join_code_id}|{normalized_full_name}|{dob_yyyymmdd}".encode()
+    dedupe_input = f"{class_id}|{normalized_full_name}|{dob_yyyymmdd}".encode()
     return hash_hmac(dedupe_input, b"")
 
 
@@ -671,7 +677,6 @@ def _delete_teacher_residual_ownership_rows(teacher_id):
     """Delete teacher-owned link rows not already removed by join-code scoped deletion."""
     TeacherBlock.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
     StudentTeacher.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
-    DeletionRequest.query.filter_by(teacher_id=teacher_id).delete(synchronize_session=False)
 
 
 def _delete_teacher_settings_activity_and_audit_rows(teacher_id):
@@ -913,7 +918,7 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
     if not join_code:
         return
 
-    join_code_id = _resolve_join_code_id(teacher_id, join_code)
+    class_id = _resolve_class_id(teacher_id, join_code)
 
     existing_seat = TeacherBlock.query.filter_by(
         teacher_id=teacher_id,
@@ -924,7 +929,7 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
     if existing_seat:
         return
 
-    join_code_id = _ensure_join_code_anchors(teacher_id, join_code, class_label=block)
+    class_id = _ensure_join_code_anchors(teacher_id, join_code, class_label=block)
 
     # Create the teacher student seat
     # Default Identity: Teacher Student, DOB 01/01/2001
@@ -942,7 +947,7 @@ def _ensure_teacher_student_seat(teacher_id, join_code, block):
         teacher_id=teacher_id,
         block=block,
         join_code=join_code,
-        join_code_id=join_code_id,
+        class_id=class_id,
         class_label=f"Teacher's Student Account",
         first_name=first_name,
         last_initial=last_initial,
@@ -988,94 +993,50 @@ def _get_table_columns(table_name: str) -> set[str]:
 
 
 def _ensure_join_code_anchors(teacher_id, join_code, class_label=None):
-    """Ensure legacy and canonical join code parent rows exist before child inserts."""
+    """Ensure the canonical class row and membership exist before child inserts."""
     if not teacher_id or not join_code:
         return None
 
-    now = utc_now()
-    table_names = _get_table_names()
-
-    if "class_economies" in table_names:
-        class_economy_columns = _get_table_columns("class_economies")
-        ownership_column = None
-        if "created_by_admin_id" in class_economy_columns:
-            ownership_column = "created_by_admin_id"
-        elif "created_by_teacher_id" in class_economy_columns:
-            ownership_column = "created_by_teacher_id"
-
-        insert_columns = ["join_code", "display_name", "status", "created_at", "updated_at"]
-        insert_values = [":join_code", ":display_name", ":status", ":created_at", ":updated_at"]
-        params = {
-            "join_code": join_code,
-            "display_name": class_label,
-            "status": "active",
-            "created_at": now.replace(tzinfo=None),
-            "updated_at": now.replace(tzinfo=None),
-        }
-        if ownership_column:
-            insert_columns.append(ownership_column)
-            insert_values.append(f":{ownership_column}")
-            params[ownership_column] = teacher_id
-
-        # Legacy FK compatibility: some environments still enforce teacher_blocks.join_code -> class_economies.join_code.
-        db.session.execute(
-            text(
-                f"""
-                INSERT INTO class_economies (
-                    {", ".join(insert_columns)}
-                )
-                VALUES (
-                    {", ".join(insert_values)}
-                )
-                ON CONFLICT (join_code) DO UPDATE
-                SET updated_at = EXCLUDED.updated_at
-                """
-            ),
-            params,
+    economy = ClassEconomy.query.filter_by(join_code=join_code).first()
+    if economy is not None:
+        if economy.teacher_id != teacher_id:
+            raise ValueError("Join code belongs to a different teacher.")
+        if class_label and not economy.display_name:
+            economy.display_name = class_label
+        if economy.created_by_admin_id is None:
+            economy.created_by_admin_id = teacher_id
+    else:
+        economy = ClassEconomy(
+            join_code=join_code,
+            teacher_id=teacher_id,
+            created_by_admin_id=teacher_id,
+            display_name=class_label,
+            status="active",
+            is_active=True,
         )
+        db.session.add(economy)
 
-        economy = db.session.get(ClassEconomy, join_code)
-        if economy is not None:
-            if class_label and not economy.display_name:
-                economy.display_name = class_label
-            if getattr(economy, "created_by_admin_id", None) is None:
-                economy.created_by_admin_id = teacher_id
+    admin_membership = ClassMembership.query.filter_by(
+        join_code=join_code,
+        admin_id=teacher_id,
+    ).first()
+    if not admin_membership:
+        db.session.add(ClassMembership(
+            join_code=join_code,
+            admin_id=teacher_id,
+            role="admin",
+            status="active",
+        ))
 
-            admin_membership = ClassMembership.query.filter_by(
-                join_code=join_code,
-                admin_id=teacher_id,
-            ).first()
-            if not admin_membership:
-                db.session.add(ClassMembership(
-                    join_code=join_code,
-                    admin_id=teacher_id,
-                    role="admin",
-                    status="active",
-                ))
-
-    if "join_codes" not in table_names:
-        return None
-
-    join_code_row = JoinCode.query.filter_by(join_code_token=join_code).first()
-    if join_code_row:
-        return join_code_row.join_code_id
-
-    # Create join_code row with concurrency-safe pattern: handle race on unique(join_code_token).
-    new_join_code = JoinCode(
-        join_code_token=join_code,
-        teacher_id=teacher_id,
-    )
     try:
         with db.session.begin_nested():
-            db.session.add(new_join_code)
             db.session.flush()
     except IntegrityError:
-        # Another transaction likely inserted the same join_code_token concurrently.
-        existing = JoinCode.query.filter_by(join_code_token=join_code).first()
+        existing = ClassEconomy.query.filter_by(join_code=join_code).first()
         if existing:
-            return existing.join_code_id
+            return existing.class_id
         raise
-    return new_join_code.join_code_id
+    return economy.class_id
 
 
 def _link_student_to_admin(student: Student, admin_id):
@@ -1122,7 +1083,7 @@ def _link_student_to_admin(student: Student, admin_id):
             # Generate new join_code for this teacher+block
             join_code = generate_join_code()
             class_label = None
-        join_code_id = _resolve_join_code_id(admin_id, join_code)
+        class_id = _resolve_class_id(admin_id, join_code)
 
         # Ensure ClassEconomy record exists before creating TeacherBlock
         _ensure_join_code_anchors(admin_id, join_code, class_label=class_label)
@@ -1133,7 +1094,7 @@ def _link_student_to_admin(student: Student, admin_id):
             student_id=student.id,
             block=student.block,
             join_code=join_code,
-            join_code_id=join_code_id,
+            class_id=class_id,
             class_label=class_label,  # Preserve class_label if it exists
             is_claimed=True,  # Mark as claimed since teacher manually added them
             first_name=student.first_name,
@@ -3846,7 +3807,7 @@ def edit_student():
             # Ensure the teacher student seat exists for this new join code
             if join_code:
                 _ensure_teacher_student_seat(current_admin_id, join_code, block)
-            join_code_id = _ensure_join_code_anchors(current_admin_id, join_code, class_label=block)
+            class_id = _ensure_join_code_anchors(current_admin_id, join_code, class_label=block)
 
             # Preserve existing claim hash; edit flow no longer accepts DOB input.
             if not student.first_half_hash:
@@ -3870,7 +3831,7 @@ def edit_student():
                 salt=student.salt,
                 first_half_hash=student.first_half_hash,
                 join_code=join_code,
-                join_code_id=join_code_id,
+                class_id=class_id,
                 is_claimed=is_claimed,
                 student_id=student.id,  # Always link since student record exists
                 claimed_at=utc_now() if is_claimed else None
@@ -4310,12 +4271,12 @@ def add_individual_student():
                 timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
                 join_code = f"B{block_initial}{timestamp_suffix:04d}"
 
-        join_code_id = _resolve_join_code_id(current_admin_id, join_code)
-        dedupe_key = _build_teacher_block_dedupe_key(join_code_id, first_name, last_name, dob_date)
+        class_id = _resolve_class_id(current_admin_id, join_code)
+        dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name, dob_date)
 
         existing_seat_in_class = TeacherBlock.query.filter_by(
             teacher_id=current_admin_id,
-            join_code_id=join_code_id,
+            class_id=class_id,
             dedupe_key=dedupe_key,
         ).first()
         if existing_seat_in_class:
@@ -4390,7 +4351,7 @@ def add_individual_student():
             salt=salt,
             first_half_hash=first_half_hash,
             join_code=join_code,
-            join_code_id=join_code_id,
+            class_id=class_id,
             dedupe_key=dedupe_key,
             is_claimed=False,  # Student hasn't set up username yet
             student_id=new_student.id,
@@ -4471,12 +4432,12 @@ def add_manual_student():
                 timestamp_suffix = int(time.time()) % FALLBACK_CODE_MODULO
                 join_code = f"B{block_initial}{timestamp_suffix:04d}"
 
-        join_code_id = _resolve_join_code_id(current_admin_id, join_code)
-        dedupe_key = _build_teacher_block_dedupe_key(join_code_id, first_name, last_name, dob_date)
+        class_id = _resolve_class_id(current_admin_id, join_code)
+        dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name, dob_date)
 
         existing_seat_in_class = TeacherBlock.query.filter_by(
             teacher_id=current_admin_id,
-            join_code_id=join_code_id,
+            class_id=class_id,
             dedupe_key=dedupe_key,
         ).first()
         if existing_seat_in_class:
@@ -4560,7 +4521,7 @@ def add_manual_student():
             salt=salt,
             first_half_hash=first_half_hash,
             join_code=join_code,
-            join_code_id=join_code_id,
+            class_id=class_id,
             dedupe_key=dedupe_key,
             is_claimed=is_claimed,
             student_id=new_student.id,
@@ -8494,7 +8455,7 @@ def upload_students():
 
     # Get or generate join codes for each block in this upload
     join_codes_by_block = {}
-    join_code_ids_by_block = {}
+    class_ids_by_block = {}
 
     for row in csv_input:
         try:
@@ -8546,11 +8507,11 @@ def upload_students():
                 # Ensure the teacher student seat exists for this new or existing join code
                 _ensure_teacher_student_seat(teacher_id, join_codes_by_block[block], block)
 
-            if block not in join_code_ids_by_block:
-                join_code_ids_by_block[block] = _resolve_join_code_id(teacher_id, join_codes_by_block[block])
+            if block not in class_ids_by_block:
+                class_ids_by_block[block] = _resolve_class_id(teacher_id, join_codes_by_block[block])
 
             join_code = join_codes_by_block[block]
-            join_code_id = join_code_ids_by_block[block]
+            class_id = class_ids_by_block[block]
 
             # Generate dob_sum first (needed for duplicate detection)
             # Handle both mm/dd/yy and mm/dd/yyyy formats
@@ -8567,12 +8528,12 @@ def upload_students():
 
             dob_sum = mm + dd + yyyy
             dob_date = datetime.strptime(f"{yyyy:04d}-{mm:02d}-{dd:02d}", "%Y-%m-%d").date()
-            dedupe_key = _build_teacher_block_dedupe_key(join_code_id, first_name, last_name, dob_date)
+            dedupe_key = _build_teacher_block_dedupe_key(class_id, first_name, last_name, dob_date)
 
             # Check if this seat already exists in this join code.
             existing_seat = TeacherBlock.query.filter_by(
                 teacher_id=teacher_id,
-                join_code_id=join_code_id,
+                class_id=class_id,
                 dedupe_key=dedupe_key,
             ).first()
 
@@ -8603,7 +8564,7 @@ def upload_students():
                 salt=salt,
                 first_half_hash=first_half_hash,
                 join_code=join_code,
-                join_code_id=join_code_id,
+                class_id=class_id,
                 dedupe_key=dedupe_key,
                 is_claimed=False,
             )
@@ -9558,10 +9519,10 @@ def banking_settings_update():
 
 # -------------------- DELETION REQUESTS --------------------
 
-@admin_bp.route('/deletion-requests', methods=['GET', 'POST'])
+@admin_bp.route('/account-delete', methods=['GET', 'POST'])
 @limiter.limit("3 per hour")
 @admin_required
-def deletion_requests():
+def account_delete():
     """
     Teacher-managed account deletion.
 
@@ -9580,29 +9541,29 @@ def deletion_requests():
         # Validate
         if request_type != 'account':
             flash('Invalid request type. Only account deletion is supported.', 'error')
-            return redirect(url_for('admin.deletion_requests'))
+            return redirect(url_for('admin.account_delete'))
 
         expected_phrase = f'CONFIRM DELETE {admin_username} ACCOUNT'.upper()
         gate_phrase = str(request.form.get('gate_phrase', '')).strip().upper()
         if gate_phrase != expected_phrase:
-            flash('Deletion request blocked: confirmation phrase did not match.', 'error')
-            return redirect(url_for('admin.deletion_requests'))
+            flash('Account deletion blocked: confirmation phrase did not match.', 'error')
+            return redirect(url_for('admin.account_delete'))
 
         try:
             gate_countdown_seconds = int(request.form.get('gate_countdown_seconds', 0))
         except (TypeError, ValueError):
             gate_countdown_seconds = 0
         if gate_countdown_seconds < 30:
-            flash('Deletion request blocked: 30-second safety countdown is required.', 'error')
-            return redirect(url_for('admin.deletion_requests'))
+            flash('Account deletion blocked: 30-second safety countdown is required.', 'error')
+            return redirect(url_for('admin.account_delete'))
 
         try:
             gate_hold_seconds = float(request.form.get('gate_hold_seconds', 0))
         except (TypeError, ValueError):
             gate_hold_seconds = 0.0
         if gate_hold_seconds < 10:
-            flash('Deletion request blocked: 10-second hold is required.', 'error')
-            return redirect(url_for('admin.deletion_requests'))
+            flash('Account deletion blocked: 10-second hold is required.', 'error')
+            return redirect(url_for('admin.account_delete'))
 
         try:
             _hard_delete_teacher_account_scope(admin_id)
@@ -9618,11 +9579,11 @@ def deletion_requests():
             db.session.rollback()
             current_app.logger.exception(f"Error deleting teacher account: {e}")
             flash('Error deleting account.', 'error')
-            return redirect(url_for('admin.deletion_requests'))
+            return redirect(url_for('admin.account_delete'))
 
     return render_template(
         'admin_account_delete.html',
-        current_page="deletion_requests",
+        current_page="account_delete",
         admin_username=admin_username,
     )
 

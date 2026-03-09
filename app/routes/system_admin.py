@@ -1121,7 +1121,7 @@ def teacher_overview():
     - Total student count per teacher
     - Student counts by period/block
     - Last login date
-    - Pending deletion requests
+    - Teacher public IDs/display names and aggregate roster state only
 
     System admins CANNOT view:
     - Individual student names

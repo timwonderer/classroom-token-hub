@@ -139,7 +139,7 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
     ).first()
 
     class_label = seat.get_class_label() if seat else None
-    join_code_id = seat.join_code_id if seat else None
+    class_id = seat.class_id if seat else None
 
     # Generate opaque reference
     opaque_ref = generate_opaque_student_reference(student.id)
@@ -185,7 +185,7 @@ def create_issue(student, teacher_id, join_code, category_id, explanation, expec
                 issue_id=issue.id,
                 actor_type='student',
                 actor_opaque_id=opaque_ref,
-                join_code_id=join_code_id,
+                class_id=class_id,
                 ticket_created_at=now_utc,
                 include_recent_error=include_recent_error,
             )

@@ -105,7 +105,7 @@
             {% set classroom_open = current_page in ['students', 'attendance', 'hall_pass', 'announcements', 'issues'] %}
             {% set economy_open = current_page in ['economy_health', 'payroll', 'store', 'banking', 'analytics'] %}
             {% set bills_open = current_page in ['rent', 'insurance'] %}
-            {% set settings_open = current_page in ['settings', 'passkey_settings', 'feature_settings', 'deletion_requests'] %}
+            {% set settings_open = current_page in ['settings', 'passkey_settings', 'feature_settings', 'account_delete'] %}
 
             <!-- Dropdown Navigation -->
             <div class="d-flex flex-column gap-2 mt-2">
@@ -199,7 +199,7 @@
                         <a href="{{ url_for('admin.feature_settings') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'feature_settings' %}active{% endif %}">
                             <span class="material-symbols-outlined">tune</span> Economy Features
                         </a>
-                        <a href="{{ url_for('admin.deletion_requests') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'deletion_requests' %}active{% endif %}">
+                        <a href="{{ url_for('admin.account_delete') }}" class="nav-link nav-sub-link d-flex align-items-center gap-2 {% if current_page == 'account_delete' %}active{% endif %}">
                             <span class="material-symbols-outlined">person_cancel</span> Account Deletion
                         </a>
                     </div>
@@ -243,7 +243,7 @@
                 'settings': 'user-guides/diagnostics/teacher/onboarding',
                 'feature_settings': 'user-guides/diagnostics/teacher/onboarding',
                 'passkey_settings': 'user-guides/diagnostics/teacher/login',
-                'deletion_requests': 'user-guides/diagnostics/teacher/login',
+                'account_delete': 'user-guides/diagnostics/teacher/login',
                 'admin.dashboard': 'user-guides/diagnostics/teacher',
                 'admin.students': 'user-guides/diagnostics/teacher/students',
                 'admin.attendance_log': 'user-guides/diagnostics/teacher/attendance-payroll',
@@ -263,7 +263,7 @@
                 'admin.onboarding': 'user-guides/diagnostics/teacher/onboarding',
                 'admin.passkey_settings': 'user-guides/diagnostics/teacher/login',
                 'admin.help_support': 'user-guides/diagnostics/teacher',
-                'admin.deletion_requests': 'user-guides/diagnostics/teacher/login',
+                'admin.account_delete': 'user-guides/diagnostics/teacher/login',
                 'admin.setup_recovery': 'user-guides/diagnostics/teacher/login',
                 'admin.claim_students': 'user-guides/diagnostics/teacher/students',
                 'admin.view_issue': 'user-guides/diagnostics/teacher/announcements-issues',

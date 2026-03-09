@@ -23,7 +23,7 @@
                         <li>This action is permanent, irreversible, and unrecoverable.</li>
                     </ul>
 
-                    <form method="POST" action="{{ url_for('admin.deletion_requests') }}" id="deletion-request-form" data-admin-username="{{ admin_username }}">
+                    <form method="POST" action="{{ url_for('admin.account_delete') }}" id="account-delete-form" data-admin-username="{{ admin_username }}">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <input type="hidden" name="request_type" value="account">
                         <input type="hidden" name="gate_phrase" id="gate_phrase">
