@@ -1147,21 +1147,21 @@ class HallPassSettings(db.Model):
 class PayrollCache(db.Model):
     """
     Stores the cached result of the expensive payroll calculation.
-    One record per teacher.
+    One record per class.
     """
     __tablename__ = 'payroll_cache'
 
     id = db.Column(db.Integer, primary_key=True)
-    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False, unique=True)
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id', ondelete='CASCADE'), nullable=False, index=True)
     join_code = db.Column(db.String(20), nullable=True, index=True)
-    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=True, index=True)
+    class_id = db.Column(db.String(36), db.ForeignKey('class_economies.class_id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
     cached_breakdown = db.Column(db.JSON, nullable=True)  # Stores the breakdown: {"(id, code)": amount}
     last_calculated_at = db.Column(db.DateTime(timezone=True), default=utc_now)
 
-    teacher = db.relationship('Admin', backref=db.backref('payroll_cache', uselist=False, cascade='all, delete-orphan'))
+    teacher = db.relationship('Admin', backref=db.backref('payroll_caches', lazy='dynamic', cascade='all, delete-orphan'))
 
     def __repr__(self):
-        return f'<PayrollCache teacher_id={self.teacher_id} updated={self.last_calculated_at}>'
+        return f'<PayrollCache teacher_id={self.teacher_id} class_id={self.class_id} updated={self.last_calculated_at}>'
 
 
 # -------------------- STORE MODELS --------------------

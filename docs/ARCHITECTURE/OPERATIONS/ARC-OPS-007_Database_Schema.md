@@ -7,7 +7,7 @@
 
 ## I. Purpose
 
-This document summarizes the current database contract for v2.0 live-test work, with emphasis on class-scoping authority, identity infrastructure, analytics/observability support, and transitional compatibility fields.
+This document summarizes the current database contract for v2.0 live-test work, with emphasis on class-scoping authority, identity infrastructure, and analytics/observability support.
 
 ## II. Scope
 
@@ -18,27 +18,28 @@ This document covers the runtime-significant models and tables used to enforce c
 ### Class Boundary
 
 - `class_economies.join_code` is the class boundary.
+- `class_economies.class_id` is the internal class authority key.
 - `class_memberships` is the authority table for membership inside that boundary.
 - `student_teachers` remains the teacher-student ownership table, but it is not the class-boundary authority.
 - Session class selection is represented by `current_join_code`.
-
-### Transitional Compatibility
-
-The schema still contains compatibility fields and aliases used to ease migration or preserve older call sites. These are transitional and must not be treated as the intended v2 runtime contract.
 
 ## IV. Key Tables
 
 ### `class_economies`
 
-Represents a class economy keyed by join code.
+Represents the canonical class anchor.
 
 | Column | Type | Notes |
 |---|---|---|
-| `join_code` | String(20), PK | Canonical class identifier |
+| `class_id` | UUID/String(36), unique | Internal class authority key |
+| `join_code` | String(20), PK | Public class join token |
+| `teacher_id` | Integer | Owning teacher |
 | `display_name` | String(100), nullable | Human-readable class name |
-| `status` | Enum(`active`, `archived`) | Archived behavior is not yet fully specified in runtime docs |
+| `status` | Enum(`active`, `archived`) | Lifecycle status |
+| `is_active` | Boolean | Fast active-state flag |
 | `created_at` / `updated_at` | DateTime | UTC timestamps |
-| `created_by_admin_id` | Integer, nullable | FK to `teachers.id`, nullable for historical compatibility |
+| `created_by_admin_id` | Integer, nullable | Creation audit pointer |
+| `metadata_json` | JSON, nullable | Optional class metadata payload |
 
 ### `class_memberships`
 
@@ -82,7 +83,6 @@ Runtime note:
 
 These models are active parts of the runtime identity layer:
 
-- `join_codes` - UUID-backed registry for class join-code lifecycle and cascade cleanup
 - `users` - generalized user container used by the newer identity layer
 - `identity_profiles` - centralized encrypted person-name identity records
 - `seats` - normalized claimed/unclaimed class seat records
@@ -113,7 +113,7 @@ Important fields:
 - encrypted identity fields
 - `identity_id`
 - `block`
-- `join_code` / `join_code_id`
+- `join_code` / `class_id`
 - `salt`, `first_half_hash`, `second_half_hash`
 - `username_hash`, `username_lookup_hash`
 - recovery fields and second-factor settings
@@ -139,11 +139,12 @@ Runtime note:
 
 ### `payroll_cache`
 
-Cached payroll breakdown by teacher.
+Cached payroll breakdown by class scope.
 
 Important fields:
 - `teacher_id`
 - `join_code`
+- `class_id`
 - `cached_breakdown`
 - `last_calculated_at`
 

@@ -301,7 +301,7 @@ def test_get_pay_rate_for_block_no_teacher_id(client):
 def test_get_cached_payroll_with_meta(client):
     """Test the caching logic for payroll."""
     from app.payroll import get_cached_payroll_with_meta
-    from app.models import Admin, Student, TeacherBlock, PayrollCache, TapEvent
+    from app.models import Admin, Student, TeacherBlock, PayrollCache, TapEvent, ClassEconomy
     from datetime import datetime, timedelta, timezone
     
     # Setup Teacher
@@ -309,6 +309,16 @@ def test_get_cached_payroll_with_meta(client):
     db.session.add(teacher)
     db.session.commit()
     
+    class_economy = ClassEconomy(
+        join_code="CACHE1",
+        teacher_id=teacher.id,
+        created_by_admin_id=teacher.id,
+        status="active",
+        is_active=True,
+    )
+    db.session.add(class_economy)
+    db.session.flush()
+
     # Setup Student
     student = Student(first_name="CacheUser", last_initial="T", block="A", salt=b's', has_completed_setup=True)
     db.session.add(student)
@@ -317,6 +327,7 @@ def test_get_cached_payroll_with_meta(client):
     # Link
     tb = TeacherBlock(
         teacher_id=teacher.id, student_id=student.id, block="A", join_code="CACHE1", is_claimed=True,
+        class_id=class_economy.class_id,
         first_name="CacheUser", last_initial="T", last_name_hash_by_part=None, first_half_hash='h', salt=b's', dob_sum_hash=None
     )
     db.session.add(tb)
@@ -333,7 +344,7 @@ def test_get_cached_payroll_with_meta(client):
     last_payroll = now - timedelta(days=1)
     
     # 1. First Call: Cache Miss -> Calculation
-    summary, updated_at = get_cached_payroll_with_meta(students, last_payroll, teacher_id=teacher.id)
+    summary, updated_at = get_cached_payroll_with_meta(students, last_payroll, teacher_id=teacher.id, join_code="CACHE1")
     assert student.id in summary
     assert summary[student.id] > 0
     # Store initial values to compare later
@@ -341,8 +352,9 @@ def test_get_cached_payroll_with_meta(client):
     initial_updated_at = updated_at
     
     # Verify Cache Entry Exists
-    cache = PayrollCache.query.filter_by(teacher_id=teacher.id).first()
+    cache = PayrollCache.query.filter_by(class_id=class_economy.class_id).first()
     assert cache is not None
+    assert cache.join_code == "CACHE1"
     assert str(student.id) in cache.cached_breakdown
     
     # 2. Second Call: Cache Hit (Verify Staleness)
@@ -354,7 +366,7 @@ def test_get_cached_payroll_with_meta(client):
     db.session.commit()
     
     # Call again - should still return OLD value (Cache Hit)
-    summary_cached, updated_at_cached = get_cached_payroll_with_meta(students, last_payroll, teacher_id=teacher.id)
+    summary_cached, updated_at_cached = get_cached_payroll_with_meta(students, last_payroll, teacher_id=teacher.id, join_code="CACHE1")
     # Value should be unchanged
     assert summary_cached[student.id] == initial_amount 
     # Timestamp should be unchanged
@@ -366,7 +378,7 @@ def test_get_cached_payroll_with_meta(client):
     db.session.commit()
     
     # Call again - should Recalculate
-    summary_fresh, updated_at_fresh = get_cached_payroll_with_meta(students, last_payroll, teacher_id=teacher.id)
+    summary_fresh, updated_at_fresh = get_cached_payroll_with_meta(students, last_payroll, teacher_id=teacher.id, join_code="CACHE1")
     # Amount should increase due to new events
     assert summary_fresh[student.id] > initial_amount 
     # Timestamp should be newer

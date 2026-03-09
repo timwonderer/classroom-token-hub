@@ -1,7 +1,7 @@
 from functools import wraps
 
 from app.extensions import db
-from app.models import TapEvent, Student, Transaction, PayrollSettings
+from app.models import TapEvent, Student, Transaction, PayrollSettings, ClassEconomy
 from datetime import datetime, timezone
 from app.utils.time import ensure_utc
 from app.attendance import (
@@ -303,15 +303,49 @@ def calculate_payroll(students, last_payroll_time, teacher_id=None):
         summary[student_id] += amount
     return summary
 
-def get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=None):
+def _resolve_payroll_cache_scope(students, teacher_id, join_code=None):
+    """Return canonical (join_code, class_id) for a single-class payroll request."""
+    if not teacher_id:
+        return None, None
+
+    if join_code:
+        economy = ClassEconomy.query.filter_by(join_code=join_code, teacher_id=teacher_id).first()
+        if not economy:
+            return None, None
+        return economy.join_code, economy.class_id
+
+    student_ids = [s.id for s in students if getattr(s, "id", None)]
+    if not student_ids:
+        return None, None
+
+    rows = (
+        db.session.query(TeacherBlock.join_code, TeacherBlock.class_id)
+        .filter(
+            TeacherBlock.teacher_id == teacher_id,
+            TeacherBlock.student_id.in_(student_ids),
+            TeacherBlock.is_claimed == True,
+            TeacherBlock.join_code.isnot(None),
+            TeacherBlock.class_id.isnot(None),
+        )
+        .distinct()
+        .all()
+    )
+
+    if len(rows) != 1:
+        return None, None
+
+    return rows[0].join_code, rows[0].class_id
+
+
+def get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=None, join_code=None):
     """
     Cached version of calculate_payroll.
     Returns (summary, last_updated_datetime).
-    
+
     Cache Strategy:
-    - Stores the FULL payroll summary for a teacher (all their students).
-    - If valid (< 1 hour), returns cached data filtered by the requested 'students' list.
-    - If invalid, recalculates for ALL teacher's students, updates cache, then filters.
+    - Stores one cache row per class (`class_id`).
+    - Only single-class requests use the cache.
+    - Mixed-class requests fall back to direct calculation to avoid teacher-global leakage.
     """
     from app.models import PayrollCache, Student, TeacherBlock
     from app.extensions import db
@@ -322,65 +356,63 @@ def get_cached_payroll_with_meta(students, last_payroll_time, teacher_id=None):
         teacher_id = session.get("admin_id")
         
     if not teacher_id:
-        # Cannot cache without teacher_id, fallback
         return calculate_payroll(students, last_payroll_time, teacher_id=teacher_id), None
 
-    # 1. Check Cache
-    cache_entry = PayrollCache.query.filter_by(teacher_id=teacher_id).first()
+    scoped_join_code, scoped_class_id = _resolve_payroll_cache_scope(students, teacher_id, join_code=join_code)
+    if not scoped_join_code or not scoped_class_id:
+        return calculate_payroll(students, last_payroll_time, teacher_id=teacher_id), None
+
+    cache_entry = PayrollCache.query.filter_by(class_id=scoped_class_id).first()
     now = utc_now()
     cutoff = now - timedelta(hours=1)
-    
+
     use_cache = False
     if cache_entry and cache_entry.last_calculated_at and ensure_utc(cache_entry.last_calculated_at) > cutoff:
         if cache_entry.cached_breakdown:
             use_cache = True
-            
+
     summary = {}
     last_updated = now
-    
+
     if use_cache:
-        # Optimize: Use cached data
         raw_data = cache_entry.cached_breakdown
         last_updated = ensure_utc(cache_entry.last_calculated_at)
-        
-        # Request scope IDs
+
         requested_ids = {s.id for s in students}
-        
-        # Convert JSON keys (str) back to int and values to Decimal
+
         for s_id_str, amount_raw in raw_data.items():
             s_id = int(s_id_str)
             if s_id in requested_ids:
                 summary[s_id] = Decimal(str(amount_raw))
     else:
-        # Cache Miss/Stale: Recalculate EVERYTHING for this teacher
-        # We need to fetch ALL students for this teacher to build a complete cache
-        # This prevents partial caches if calling with subset
-        
-        # Find all student IDs for this teacher
-        all_creds = TeacherBlock.query.filter_by(teacher_id=teacher_id, is_claimed=True).all()
-        all_student_ids = [c.student_id for c in all_creds]
-        
-        # We need Student objects for calculation (optimize fetch?)
-        # calculate_payroll expects list of Student objects (mostly for .id and .block access)
-        # We can just fetch the Students
-        all_students = Student.query.filter(Student.id.in_(all_student_ids)).all()
-        
-        # Calculate full payroll
+        all_creds = TeacherBlock.query.filter_by(
+            teacher_id=teacher_id,
+            join_code=scoped_join_code,
+            class_id=scoped_class_id,
+            is_claimed=True,
+        ).all()
+        all_student_ids = sorted({c.student_id for c in all_creds if c.student_id})
+        all_students = Student.query.filter(Student.id.in_(all_student_ids)).all() if all_student_ids else []
+
         full_summary = calculate_payroll(all_students, last_payroll_time, teacher_id=teacher_id)
-        
-        # Serialize for cache as strings to preserve exact currency precision.
         cache_data = {str(k): str(v) for k, v in full_summary.items()}
-        
-        # Update/Create Cache Record
+
         if not cache_entry:
-            cache_entry = PayrollCache(teacher_id=teacher_id)
+            cache_entry = PayrollCache(
+                teacher_id=teacher_id,
+                join_code=scoped_join_code,
+                class_id=scoped_class_id,
+            )
             db.session.add(cache_entry)
-            
+        else:
+            cache_entry.teacher_id = teacher_id
+            cache_entry.join_code = scoped_join_code
+            cache_entry.class_id = scoped_class_id
+
         cache_entry.cached_breakdown = cache_data
         cache_entry.last_calculated_at = now
         db.session.commit()
-        
-        # Filter for return
+
         requested_ids = {s.id for s in students}
         summary = {k: v for k, v in full_summary.items() if k in requested_ids}
         last_updated = now
