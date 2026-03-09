@@ -13,6 +13,7 @@ This section groups all teacher economy tools in one place.
 
 ## Economy Health
 - [Economy Health](economy-health.md)
+- [Economy Policy and Rebalancing](policy-mode-rebalancer.md)
 - [Analytics Dashboard](analytics.md)
 
 ## Payroll

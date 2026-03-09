@@ -30,5 +30,6 @@ This page is a shortcut list. Use diagnostics for fast troubleshooting and featu
 - [Attendance and Payroll](features/teacher/economy/payroll-run.md)
 - [Store and Redemptions](features/teacher/economy/store-items.md)
 - [Economy Health and Analytics](features/teacher/economy/economy-health.md)
+- [Economy Policy and Rebalancing](features/teacher/economy/policy-mode-rebalancer.md)
 - [Rent and Insurance](features/teacher/bills/rent-settings.md)
 - [Settings and Feature Toggles](features/teacher/settings/personalization.md)

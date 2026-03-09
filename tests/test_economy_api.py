@@ -302,15 +302,13 @@ def test_different_expected_hours_per_block(client):
 
 
 def test_validate_rent_with_monthly_frequency(logged_in_admin_client, admin_with_payroll):
-    """Test that monthly rent recommendations are correctly calculated per AGENTS spec."""
+    """Test that monthly rent recommendations follow the default economy policy."""
     admin, payroll_settings = admin_with_payroll
     client = logged_in_admin_client
 
     # Test with monthly rent of $440
     # CWI = 0.25 * 8 * 60 = 120.0 per week
-    # Per AGENTS spec: monthly rent ratios are 2.0-2.5x CWI (weekly)
-    # Recommended MONTHLY rent range: $240 - $300 (2.0-2.5 × $120 weekly CWI)
-    # Weekly equivalent: $240/4.348 = ~$55.20/week to $300/4.348 = ~$69.00/week
+    # Default policy uses a 60-75% weekly burden converted to monthly-equivalent values.
     response = client.post(
         '/admin/api/economy/validate/rent',
         json={
@@ -326,14 +324,14 @@ def test_validate_rent_with_monthly_frequency(logged_in_admin_client, admin_with
     expected_cwi = 0.25 * 8.0 * 60  # 120.0 per week
     assert abs(data['cwi'] - expected_cwi) < 0.01
 
-    # Verify recommendations are MONTHLY values per AGENTS spec
-    # Monthly rent_min = 2.0 * CWI (weekly) = 2.0 * 120 = 240
+    # Verify recommendations are converted monthly values for the default policy mode.
     recommendations = data['recommendations']
-    assert abs(recommendations['min'] - (expected_cwi * 2.0)) < 0.01  # 240.0 per month
-    assert abs(recommendations['max'] - (expected_cwi * 2.5)) < 0.01  # 300.0 per month
-    assert abs(recommendations['recommended'] - (expected_cwi * 2.25)) < 0.01  # 270.0 per month
+    average_weeks_per_month = 365.25 / 12 / 7
+    assert abs(recommendations['min'] - (expected_cwi * 0.60 * average_weeks_per_month)) < 0.01
+    assert abs(recommendations['max'] - (expected_cwi * 0.75 * average_weeks_per_month)) < 0.01
+    assert abs(recommendations['recommended'] - (expected_cwi * 0.675 * average_weeks_per_month)) < 0.01
 
-    # Monthly rent of $440 is ABOVE the recommended maximum of $300/month
+    # Monthly rent of $440 is above the default-policy maximum.
     assert data['status'] == 'warning'
     assert len(data['warnings']) > 0
     warning_msg = data['warnings'][0]['message'].lower()

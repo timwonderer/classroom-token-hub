@@ -49,6 +49,9 @@ None specified.
 ### FEATURES/ANALYTICS
 
 - [FEAT-MET-001_Analytics_Specification.md](../../FEATURES/ANALYTICS/FEAT-MET-001_Analytics_Specification.md)
+### FEATURES/ECONOMY
+
+- [FEAT-ECON-001_Policy_Mode_and_Rebalancer.md](../../FEATURES/ECONOMY/FEAT-ECON-001_Policy_Mode_and_Rebalancer.md)
 ### FEATURES/DESIGN
 
 - [FEAT-DES-001_Design_System.md](../../FEATURES/DESIGN/FEAT-DES-001_Design_System.md)
