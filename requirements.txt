@@ -49,7 +49,7 @@ cryptography==46.0.5
 Flask-WTF==1.2.2
 python-dotenv==1.2.2
 
-qrcode[pil]==7.4.2
+qrcode[pil]==8.2
 APScheduler==3.11.2
 # TODO: [DEPENDABOT PR #648] Flask-Limiter 4.x introduces breaking changes:
 # - API changes for default_limits and decorator syntax
