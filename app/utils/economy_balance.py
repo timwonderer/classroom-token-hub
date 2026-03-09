@@ -701,10 +701,16 @@ class EconomyBalanceChecker:
         """
         Validate rent amount against CWI-based recommendations.
 
-        Policy mode defines weekly rent burden as a share of weekly CWI.
-        For stored monthly rent values we convert the weekly burden into the
-        monthly-equivalent recommendation using average weeks per month, then
-        convert back to the teacher's chosen frequency for display.
+        The input amount is normalized to weekly for ratio checking.
+
+        Recommendation source depends on scope:
+        - block-scoped validation uses AGENTS monthly multipliers
+          (2.0x-2.5x weekly CWI, with 2.25x default)
+        - global validation uses policy-mode weekly burden bands converted to
+          monthly-equivalent values
+
+        Monthly recommendations are converted to the teacher's chosen
+        frequency for display.
         """
         # Convert input rent to weekly for comparison
         from app.models import _quantize_currency
@@ -715,20 +721,31 @@ class EconomyBalanceChecker:
             custom_frequency_unit,
         )
 
-        rent_min_ratio_weekly, rent_max_ratio_weekly, rent_recommended_ratio_weekly = self._ratio_band(
-            "rent_weekly",
-            self.RENT_MIN_RATIO,
-            self.RENT_MAX_RATIO,
-            self.RENT_DEFAULT_RATIO,
-        )
-        monthly_min = cwi * rent_min_ratio_weekly * self.AVERAGE_WEEKS_PER_MONTH
-        monthly_max = cwi * rent_max_ratio_weekly * self.AVERAGE_WEEKS_PER_MONTH
-        monthly_recommended = cwi * rent_recommended_ratio_weekly * self.AVERAGE_WEEKS_PER_MONTH
+        if self.block:
+            # Block-scoped validation follows AGENTS monthly multipliers.
+            rent_min_ratio_monthly = Decimal(str(self.RENT_MIN_RATIO))
+            rent_max_ratio_monthly = Decimal(str(self.RENT_MAX_RATIO))
+            rent_recommended_ratio_monthly = Decimal(str(self.RENT_DEFAULT_RATIO))
+        else:
+            # Global validation preserves policy-mode weekly burden bands.
+            rent_min_ratio_weekly, rent_max_ratio_weekly, rent_recommended_ratio_weekly = self._ratio_band(
+                "rent_weekly",
+                self.RENT_MIN_RATIO,
+                self.RENT_MAX_RATIO,
+                self.RENT_DEFAULT_RATIO,
+            )
+            weeks_per_month = Decimal(str(self.AVERAGE_WEEKS_PER_MONTH))
+            rent_min_ratio_monthly = Decimal(str(rent_min_ratio_weekly)) * weeks_per_month
+            rent_max_ratio_monthly = Decimal(str(rent_max_ratio_weekly)) * weeks_per_month
+            rent_recommended_ratio_monthly = Decimal(str(rent_recommended_ratio_weekly)) * weeks_per_month
+
+        monthly_min = cwi * float(rent_min_ratio_monthly)
+        monthly_max = cwi * float(rent_max_ratio_monthly)
+        monthly_recommended = cwi * float(rent_recommended_ratio_monthly)
 
         # Convert to weekly for ratio calculation
 
         # Calculate ratio based on weekly equivalents
-        from decimal import Decimal
         cwi_decimal = Decimal(str(cwi)) if isinstance(cwi, (float, int)) else cwi
         
         ratio = weekly_rent / cwi_decimal if cwi_decimal > 0 else Decimal('0')
@@ -782,9 +799,6 @@ class EconomyBalanceChecker:
             }.get(frequency_type, frequency_type)
 
         warnings: List[Dict[str, str]] = []
-        rent_min_ratio_monthly = Decimal(str(rent_min_ratio_weekly)) * Decimal(str(self.AVERAGE_WEEKS_PER_MONTH))
-        rent_max_ratio_monthly = Decimal(str(rent_max_ratio_weekly)) * Decimal(str(self.AVERAGE_WEEKS_PER_MONTH))
-
         if monthly_ratio < rent_min_ratio_monthly:
             warnings.append({
                 'level': 'warning',
