@@ -1,34 +1,36 @@
-import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import sys
+from pathlib import Path
 
-from app import create_app, db
-from sqlalchemy import text
+from alembic import command
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 
-def fix_version():
-    app = create_app()
-    with app.app_context():
-        try:
-            # Check current version
-            result = db.session.execute(text("SELECT version_num FROM alembic_version"))
-            row = result.fetchone()
-            current = row[0] if row else "None"
-            print(f"Current version in DB: {current}")
-            
-            # Update to known head 'f5bf397b9d45'
-            target = 'f5bf397b9d45'
-            print(f"Forcing version to: {target}")
-            
-            if row:
-                db.session.execute(text("UPDATE alembic_version SET version_num = :v"), {'v': target})
-            else:
-                db.session.execute(text("INSERT INTO alembic_version (version_num) VALUES (:v)"), {'v': target})
-                
-            db.session.commit()
-            print("Successfully updated alembic_version.")
-        except Exception as e:
-            print(f"Error: {e}")
-            sys.exit(1)
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ALEMBIC_INI = PROJECT_ROOT / "migrations" / "alembic.ini"
+
+
+def _get_alembic_config() -> Config:
+    config = Config(str(ALEMBIC_INI))
+    config.set_main_option("script_location", str(PROJECT_ROOT / "migrations"))
+    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+    return config
+
+
+def fix_version() -> None:
+    config = _get_alembic_config()
+    script = ScriptDirectory.from_config(config)
+    head = script.get_current_head()
+
+    print(f"Upgrading database to current head: {head}")
+    command.upgrade(config, "head")
+    print("Database schema upgrade complete.")
+
 
 if __name__ == "__main__":
-    fix_version()
+    try:
+        fix_version()
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)

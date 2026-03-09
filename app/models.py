@@ -2198,7 +2198,13 @@ class Admin(db.Model):
     username_hash = db.Column(db.String(64), unique=True, nullable=True)
     username_lookup_hash = db.Column(db.String(64), unique=True, nullable=True, index=True)
     teacher_public_id = db.Column(db.String(120), unique=True, nullable=True, index=True)
-    public_id = sa.orm.synonym('teacher_public_id')
+    public_id = db.Column(
+        db.String(64),
+        unique=True,
+        nullable=False,
+        index=True,
+        default=lambda: secrets.token_urlsafe(18),
+    )
     display_name = db.Column(PIIEncryptedType(key_env_var='ENCRYPTION_KEY'), nullable=True)  # Teacher's display name (defaults to teacher_public_id if not set)
     # TOTP-only: store secret (base64-encoded encrypted data)
     totp_secret = db.Column(db.String(200), nullable=False)  # Stores base64-encoded encrypted TOTP secret

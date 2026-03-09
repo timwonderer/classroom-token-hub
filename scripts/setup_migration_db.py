@@ -1,25 +1,36 @@
-import sys
 import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import sys
+from pathlib import Path
 
-from app import create_app, db
-from sqlalchemy import text
+from alembic import command
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 
-app = create_app()
 
-with app.app_context():
-    # Create tables based on current models
-    db.create_all()
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+ALEMBIC_INI = PROJECT_ROOT / "migrations" / "alembic.ini"
 
-    # Create alembic_version table if not exists (it shouldn't)
-    db.session.execute(text("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) PRIMARY KEY)"))
-    db.session.execute(text("DELETE FROM alembic_version"))
 
-    # Insert HEAD revision
-    # I will get the head from flask db heads output passed as arg or hardcoded
-    # Hardcoding a7b8c9d0e1f2 based on previous output
-    head = "a7b8c9d0e1f2"
-    db.session.execute(text("INSERT INTO alembic_version (version_num) VALUES (:v)"), {"v": head})
+def _get_alembic_config() -> Config:
+    config = Config(str(ALEMBIC_INI))
+    config.set_main_option("script_location", str(PROJECT_ROOT / "migrations"))
+    config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
+    return config
 
-    db.session.commit()
-    print(f"Database initialized and stamped with head: {head}")
+
+def main() -> None:
+    config = _get_alembic_config()
+    script = ScriptDirectory.from_config(config)
+    head = script.get_current_head()
+
+    print(f"Applying Alembic migrations to head: {head}")
+    command.upgrade(config, "head")
+    print("Database schema is now at Alembic head.")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as exc:
+        print(f"Failed to initialize database: {exc}", file=sys.stderr)
+        raise

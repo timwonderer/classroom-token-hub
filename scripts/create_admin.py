@@ -4,6 +4,7 @@ Create admin accounts (SystemAdmin or Admin) with TOTP authentication.
 """
 import os
 import sys
+import secrets
 import pyotp
 import qrcode
 import select
@@ -145,6 +146,7 @@ def create_regular_admin(username):
             username_hash=username_hash,
             username_lookup_hash=lookup_hash,
             teacher_public_id=teacher_public_id,
+            public_id=secrets.token_urlsafe(18),
             totp_secret=encrypt_totp(totp_secret),  # Encrypt before storing
             salt=salt,
             hall_pass_verify_token=Admin.generate_verify_token(),

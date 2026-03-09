@@ -19,6 +19,13 @@ from app.extensions import db
 SESSION_TIMEOUT_MINUTES = 10
 
 
+def _table_exists(table_name: str) -> bool:
+    """Return whether the current database exposes the given table."""
+    conn = db.session.connection()
+    inspector = sa.inspect(conn)
+    return table_name in inspector.get_table_names()
+
+
 def _get_safe_next_path() -> str:
     """
     Return a safe relative path that can be used as a `next` parameter.
@@ -249,8 +256,10 @@ def ensure_admin_join_code(admin_id):
     if not admin_id:
         return
 
+    membership_table_exists = _table_exists('class_memberships')
+
     join_code = session.get('current_join_code')
-    if join_code:
+    if join_code and membership_table_exists:
         if db.session.query(
             sa.exists().where(
                 sa.and_(
@@ -264,20 +273,21 @@ def ensure_admin_join_code(admin_id):
             return
         session.pop('current_join_code', None)
 
-    owned_join_code = (
-        db.session.query(ClassMembership.join_code)
-        .filter(
-            ClassMembership.admin_id == admin_id,
-            ClassMembership.role == 'admin',
-            ClassMembership.status == 'active',
-            ClassMembership.join_code.isnot(None),
+    if membership_table_exists:
+        owned_join_code = (
+            db.session.query(ClassMembership.join_code)
+            .filter(
+                ClassMembership.admin_id == admin_id,
+                ClassMembership.role == 'admin',
+                ClassMembership.status == 'active',
+                ClassMembership.join_code.isnot(None),
+            )
+            .order_by(ClassMembership.join_code)
+            .first()
         )
-        .order_by(ClassMembership.join_code)
-        .first()
-    )
-    if owned_join_code and owned_join_code[0]:
-        session['current_join_code'] = owned_join_code[0]
-        return
+        if owned_join_code and owned_join_code[0]:
+            session['current_join_code'] = owned_join_code[0]
+            return
 
     teacher_block = (
         TeacherBlock.query

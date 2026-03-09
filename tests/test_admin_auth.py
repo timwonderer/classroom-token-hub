@@ -2,8 +2,8 @@ import pyotp
 from datetime import datetime, timezone
 
 from app import db
-from app.models import Admin
-from app.auth import get_current_admin
+from app.auth import ensure_admin_join_code, get_current_admin
+from app.models import Admin, IdentityProfile, TeacherBlock
 
 
 def test_admin_login_sets_session_identity(client):
@@ -41,3 +41,39 @@ def test_admin_required_blocks_missing_identity(client):
 
     assert response.status_code == 302
     assert "/admin/login" in response.headers.get("Location", "")
+
+
+def test_ensure_admin_join_code_falls_back_when_membership_table_missing(client, monkeypatch):
+    admin = Admin(username="teacher_fallback", totp_secret="TESTSECRET123456")
+    db.session.add(admin)
+    db.session.flush()
+
+    identity = IdentityProfile(profile_type="student", first_name="Policy", last_initial="S")
+    db.session.add(identity)
+    db.session.flush()
+
+    db.session.add(
+        TeacherBlock(
+            teacher_id=admin.id,
+            block="A",
+            class_label="Algebra",
+            first_name="Policy",
+            last_initial="S",
+            identity_id=identity.id,
+            last_name_hash_by_part=["hash"],
+            dob_sum_hash=None,
+            salt=b"1234567890123456",
+            first_half_hash="fallback-seat",
+            join_code="LEGACY123",
+        )
+    )
+    db.session.commit()
+
+    monkeypatch.setattr("app.auth._table_exists", lambda table_name: table_name != "class_memberships")
+
+    with client.application.test_request_context("/"):
+        from flask import session
+
+        ensure_admin_join_code(admin.id)
+
+        assert session["current_join_code"] == "LEGACY123"
