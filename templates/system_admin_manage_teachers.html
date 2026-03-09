@@ -175,19 +175,16 @@
                     <thead class="table-light">
                         <tr>
                             <th class="ps-3">Teacher ID</th>
-                          
                             <th>Last Login</th>
                             <th>Status</th>
-                           
                         </tr>
                     </thead>
                     <tbody>
                         {% for teacher in teachers %}
                         <tr>
                             <td class="ps-3">
-                                <div class="fw-semibold">{{ teacher.username }}</div>
+                                <div class="fw-semibold">{{ teacher.teacher_public_id or teacher.username or ('teacher_' ~ teacher.id) }}</div>
                             </td>
-                           
                             <td>
                                 <small class="text-muted">
                                     {% if teacher.last_login %}
@@ -204,7 +201,6 @@
                                     <span class="badge bg-success">Active</span>
                                 {% endif %}
                             </td>
-                           
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -219,7 +215,7 @@
             <div class="border-bottom p-3">
                 <div class="d-flex align-items-start justify-content-between mb-2">
                     <div>
-                        <div class="fw-semibold">{{ teacher.username }}</div>
+                        <div class="fw-semibold">{{ teacher.teacher_public_id or teacher.username or ('teacher_' ~ teacher.id) }}</div>
                     </div>
                     {% if teacher.is_inactive %}
                         <span class="badge bg-danger">Inactive</span>
@@ -228,13 +224,12 @@
                     {% endif %}
                 </div>
 
-\                    <div class="col-4 text-muted">Last Login</div>
-                    <div class="col-8 text-muted">
+                <div class="row small mt-2">
+                    <div class="col-4 text-muted">Last Login</div>
+                    <div class="col-8">
                         {% if teacher.last_login %}{{ teacher.last_login.strftime('%b %d, %Y') }}{% else %}Never{% endif %}
                     </div>
                 </div>
-
-               
             </div>
             {% endfor %}
         </div>

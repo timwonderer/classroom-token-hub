@@ -187,7 +187,16 @@ class JoinCode(db.Model):
 
 
 class User(db.Model):
-    """Global login principal. Owns one or more join-code scoped seats."""
+    """
+    Global login principal for V2.0+ unified identity architecture.
+    
+    NOTE: Not yet active in v2.0 launch. Current authentication uses
+    separate Admin/Student/SystemAdmin tables. This table exists for
+    future migration to unified identity model where one user can have
+    multiple seats (roles) across different join codes.
+    
+    Planned usage: One user → many seats (e.g., teacher in Period 1, student in Period 2)
+    """
 
     __tablename__ = 'users'
 
@@ -2911,8 +2920,13 @@ def _normalize_initial(value):
 def _sync_identity_profile(session, entity, profile_type):
     first_name = (entity.first_name or "").strip() if entity.first_name else None
     last_initial = _normalize_initial(entity.last_initial)
-    if not first_name or not last_initial:
-        return
+    
+    # Use placeholder values if first_name or last_initial is missing
+    # This prevents constraint violations when IdentityProfile can't sync
+    if not first_name:
+        first_name = "[Unknown]"
+    if not last_initial:
+        last_initial = "?"
 
     profile = entity.identity_profile
     if profile is None and getattr(entity, "identity_id", None):
